@@ -1,0 +1,20 @@
+# Node / package managers
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+
+# Build outputs
+packages/**/out/
+**/*.tsbuildinfo
+
+# VS Code / testing
+.vscode-test/
+.vscode/**.log
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/

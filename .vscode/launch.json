@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension (with Hello World workspace)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/client",
+        "${workspaceFolder}/fixtures/hello-world"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/client/out/**/*.js",
+        "${workspaceFolder}/packages/server/out/**/*.js"
+      ],
+      "preLaunchTask": "build:tsc"
+    },
+    {
+      "name": "Attach to Server",
+      "type": "node",
+      "request": "attach",
+      "port": 6009,
+      "restart": true,
+      "protocol": "inspector",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

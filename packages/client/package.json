@@ -1,0 +1,27 @@
+{
+  "name": "@aurelia-ls/client",
+  "displayName": "Aurelia Language Server (experimental)",
+  "description": "Diagnostics for Aurelia templates via a TypeScript overlay (experimental slice).",
+  "version": "0.0.1",
+  "publisher": "aurelia-experimental",
+  "type": "module",
+  "main": "./out/extension.js",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "activationEvents": [
+    "onLanguage:html"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
+      { "command": "aurelia.dumpState",   "title": "Aurelia: Dump Server State" }
+    ]
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "aurelia-ls",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "engines": {
+    "node": ">=18.17 <23"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b -w",
+    "clean": "node scripts/clean.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.5.4"
+  }
+}

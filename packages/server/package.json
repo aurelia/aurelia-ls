@@ -1,0 +1,15 @@
+{
+  "name": "@aurelia-ls/server",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./out/main.js",
+  "types": "./out/main.d.ts",
+  "dependencies": {
+    "@aurelia-ls/domain": "workspace:*",
+    "@aurelia-ls/shared": "workspace:*",
+    "typescript": "^5.5.4",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.11",
+    "vscode-uri": "^3.0.8"
+  }
+}
