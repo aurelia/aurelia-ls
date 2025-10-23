@@ -293,6 +293,18 @@ function compileLet(
         from: toBindingSource(a.value ?? "", loc, table, "IsProperty"),
         loc: toSpan(loc, table.file),
       });
+      continue;
+    }
+
+    const raw = a.value ?? "";
+    if (raw.includes("${")) {
+      const loc = attrLoc(el, a.name);
+      out.push({
+        type: "letBinding",
+        to: s.target, // attribute name
+        from: toInterpIR(splitInterpolation(raw)!, loc, table),
+        loc: toSpan(loc, table.file),
+      });
     }
   }
   return { instructions: out, toBindingContext };
@@ -1066,14 +1078,24 @@ function splitInterpolation(
       i += 2;
       depth = 1;
       const b = i;
+      let innerStr: '"' | "'" | "`" | null = null;
       while (i < text.length) {
         const c = text[i];
-        if (str) {
+        if (innerStr) {
           if (c === "\\") {
             i += 2;
             continue;
           }
-          if (c === str) str = null;
+          if (c === innerStr) {
+            innerStr = null;
+            i++;
+            continue;
+          }
+          i++;
+          continue;
+        }
+        if (c === '"' || c === "'" || c === "`") {
+          innerStr = c;
           i++;
           continue;
         }
