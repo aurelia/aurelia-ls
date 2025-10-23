@@ -10,6 +10,9 @@
       "types": "./out/index.d.ts"
     }
   },
+  "scripts": {
+    "build": "tsc -b"
+  },
   "dependencies": {
     "@aurelia-ls/shared": "workspace:*",
     "@aurelia/expression-parser": "2.0.0-beta.25",

@@ -1,7 +1,9 @@
 {
   "name": "aurelia-ls",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "engines": {
     "node": ">=18.17 <23"
   },
@@ -9,10 +11,15 @@
     "build": "tsc -b",
     "watch": "tsc -b -w",
     "clean": "node scripts/clean.mjs",
-    "test": "node --test"
+    "test": "pnpm -w build && node --test",
+    "test:spec": "pnpm -w build && node --test --test-reporter=spec",
+    "test:domain": "pnpm -w build && node --test packages/domain/test/**/*.test.mjs --test-reporter=spec",
+    "test:lower": "pnpm -F @aurelia-ls/domain build && node --test packages/domain/test/lower/lower.test.mjs --reporter=spec",
+    "test:lower:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/phases/10-lower/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/lower node --test packages/domain/test/lower/lower.test.mjs --reporter=spec"
   },
   "devDependencies": {
     "@types/node": "^22.5.4",
+    "c8": "^10.1.3",
     "typescript": "^5.5.4"
   }
 }
