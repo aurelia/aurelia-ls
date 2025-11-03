@@ -4,46 +4,16 @@
     "markup": "<div promise.bind=\"p\"><template then=\"r\"><span title.bind=\"a\"></span></template></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:promise@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        },
-        {
-          "label": "overlay:promise@2",
-          "parent": "overlay:promise@1",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promise@1", "parent": "root", "kind": "overlay", "overlay": "promise", "origin": "promise" },
+        { "label": "overlay:promise@2", "parent": "overlay:promise@1", "kind": "overlay", "overlay": "promise", "origin": "promise" }
       ],
       "locals": [
-        {
-          "frame": "overlay:promise@2",
-          "kind": "promiseAlias",
-          "name": "r"
-        }
+        { "frame": "overlay:promise@2", "kind": "promiseAlias", "name": "r" }
       ],
       "exprs": [
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@1",
-          "code": "p"
-        },
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@2",
-          "code": "a"
-        }
+        { "kind": "expr", "frame": "overlay:promise@1", "code": "p" },
+        { "kind": "expr", "frame": "overlay:promise@2", "code": "a" }
       ],
       "diags": []
     }
@@ -53,46 +23,16 @@
     "markup": "<div promise><template catch><i>${e}</i></template></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:promise@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        },
-        {
-          "label": "overlay:promise@2",
-          "parent": "overlay:promise@1",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promise@1", "parent": "root", "kind": "overlay", "overlay": "promise", "origin": "promise" },
+        { "label": "overlay:promise@2", "parent": "overlay:promise@1", "kind": "overlay", "overlay": "promise", "origin": "promise" }
       ],
       "locals": [
-        {
-          "frame": "overlay:promise@2",
-          "kind": "promiseAlias",
-          "name": "catch"
-        }
+        { "frame": "overlay:promise@2", "kind": "promiseAlias", "name": "catch" }
       ],
       "exprs": [
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@1",
-          "code": "promise"
-        },
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@2",
-          "code": "e"
-        }
+        { "kind": "expr", "frame": "overlay:promise@1", "code": "promise" },
+        { "kind": "expr", "frame": "overlay:promise@2", "code": "e" }
       ],
       "diags": []
     }
@@ -102,63 +42,19 @@
     "markup": "<div promise.bind=\"task\"><template then=\"val\"><b>${a}</b></template><template catch=\"err\"><i>${b}</i></template></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:promise@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        },
-        {
-          "label": "overlay:promise@2",
-          "parent": "overlay:promise@1",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        },
-        {
-          "label": "overlay:promise@3",
-          "parent": "overlay:promise@1",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promise@1", "parent": "root", "kind": "overlay", "overlay": "promise", "origin": "promise" },
+        { "label": "overlay:promise@2", "parent": "overlay:promise@1", "kind": "overlay", "overlay": "promise", "origin": "promise" },
+        { "label": "overlay:promise@3", "parent": "overlay:promise@1", "kind": "overlay", "overlay": "promise", "origin": "promise" }
       ],
       "locals": [
-        {
-          "frame": "overlay:promise@2",
-          "kind": "promiseAlias",
-          "name": "val"
-        },
-        {
-          "frame": "overlay:promise@3",
-          "kind": "promiseAlias",
-          "name": "err"
-        }
+        { "frame": "overlay:promise@2", "kind": "promiseAlias", "name": "val" },
+        { "frame": "overlay:promise@3", "kind": "promiseAlias", "name": "err" }
       ],
       "exprs": [
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@1",
-          "code": "task"
-        },
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@2",
-          "code": "a"
-        },
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@3",
-          "code": "b"
-        }
+        { "kind": "expr", "frame": "overlay:promise@1", "code": "task" },
+        { "kind": "expr", "frame": "overlay:promise@2", "code": "a" },
+        { "kind": "expr", "frame": "overlay:promise@3", "code": "b" }
       ],
       "diags": []
     }
@@ -168,58 +64,18 @@
     "markup": "<div with.bind=\"ctx\"><div promise.bind=\"p\"><template then><span>${x}</span></template></div></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:with@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": "with",
-          "origin": "with"
-        },
-        {
-          "label": "overlay:promise@2",
-          "parent": "overlay:with@1",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        },
-        {
-          "label": "overlay:promise@3",
-          "parent": "overlay:promise@2",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" },
+        { "label": "overlay:promise@2", "parent": "overlay:with@1", "kind": "overlay", "overlay": "promise", "origin": "promise" },
+        { "label": "overlay:promise@3", "parent": "overlay:promise@2", "kind": "overlay", "overlay": "promise", "origin": "promise" }
       ],
       "locals": [
-        {
-          "frame": "overlay:promise@3",
-          "kind": "promiseAlias",
-          "name": "then"
-        }
+        { "frame": "overlay:promise@3", "kind": "promiseAlias", "name": "then" }
       ],
       "exprs": [
-        {
-          "kind": "expr",
-          "frame": "root",
-          "code": "ctx"
-        },
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@2",
-          "code": "p"
-        },
-        {
-          "kind": "expr",
-          "frame": "overlay:promise@3",
-          "code": "x"
-        }
+        { "kind": "expr", "frame": "root", "code": "ctx" },
+        { "kind": "expr", "frame": "overlay:promise@2", "code": "p" },
+        { "kind": "expr", "frame": "overlay:promise@3", "code": "x" }
       ],
       "diags": []
     }
@@ -229,65 +85,19 @@
     "markup": "<div promise.bind=\"p\"><template then><section with.bind=\"w\"><i>${z}</i></section></template></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:promise@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        },
-        {
-          "label": "overlay:with@2",
-          "parent": "overlay:promise@1",
-          "kind": "overlay",
-          "overlay": "with",
-          "origin": "with"
-        },
-        {
-          "label": "overlay:promise@3",
-          "parent": "overlay:promise@1",
-          "kind": "overlay",
-          "overlay": "promise",
-          "origin": "promise"
-        },
-        {
-          "label": "overlay:with@4",
-          "parent": "overlay:promise@3",
-          "kind": "overlay",
-          "overlay": "with",
-          "origin": "with"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promise@1", "parent": "root", "kind": "overlay", "overlay": "promise", "origin": "promise" },
+        { "label": "overlay:with@2", "parent": "overlay:promise@1", "kind": "overlay", "overlay": "with", "origin": "with" },
+        { "label": "overlay:promise@3", "parent": "overlay:promise@1", "kind": "overlay", "overlay": "promise", "origin": "promise" },
+        { "label": "overlay:with@4", "parent": "overlay:promise@3", "kind": "overlay", "overlay": "with", "origin": "with" }
       ],
       "locals": [
-        {
-          "frame": "overlay:promise@2",
-          "kind": "promiseAlias",
-          "name": "then"
-        }
+        { "frame": "overlay:promise@3", "kind": "promiseAlias", "name": "then" }
       ],
       "exprs": [
-        {
-          "kind": "expr",
-          "code": "p",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "w",
-          "frame": "overlay:promise@2"
-        },
-        {
-          "kind": "expr",
-          "code": "z",
-          "frame": "overlay:with@3"
-        }
+        { "kind": "expr", "frame": "overlay:promise@1", "code": "p" },
+        { "kind": "expr", "frame": "overlay:promise@3", "code": "w" },
+        { "kind": "expr", "frame": "overlay:with@4", "code": "z" }
       ],
       "diags": []
     }

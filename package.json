@@ -20,7 +20,8 @@
     "test:resolve:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/phases/20-resolve-host/*.js\" --include \"packages/domain/out/compiler/phases/10-lower/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/resolve node --test --test-reporter=spec packages/domain/test/resolve/resolve.test.mjs",
     "test:resolve:dev": "pnpm -w build && node --test --inspect-brk --test-name-pattern=\"R-025\" --watch --test-reporter=spec packages/domain/test/resolve/*.test.mjs",
     "test:bind": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/bind/bind.test.mjs",
-    "test:bind:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/phases/30-bind/*.js\" --include \"packages/domain/out/compiler/phases/20-resolve-host/*.js\" --include \"packages/domain/out/compiler/phases/10-lower/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/bind node --test --test-reporter=spec packages/domain/test/bind/bind.test.mjs"
+    "test:bind:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/phases/30-bind/*.js\" --include \"packages/domain/out/compiler/phases/20-resolve-host/*.js\" --include \"packages/domain/out/compiler/phases/10-lower/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/bind node --test --test-reporter=spec packages/domain/test/bind/bind.test.mjs",
+    "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/domain/test"
   },
   "devDependencies": {
     "@types/node": "^22.5.4",

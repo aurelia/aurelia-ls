@@ -4,12 +4,7 @@
     "markup": "<div class=\"a ${b} c\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "class",
-          "to": "className",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
       ]
     }
   },
@@ -18,12 +13,7 @@
     "markup": "<div data-id=\"x ${y} z\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "data-id",
-          "to": "data-id",
-          "target": "attribute"
-        }
+        { "kind": "attr", "attr": "data-id", "to": "data-id", "target": "attribute" }
       ]
     }
   },
@@ -32,12 +22,7 @@
     "markup": "<div aria-label=\"Hi ${name}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "aria-label",
-          "to": "aria-label",
-          "target": "attribute"
-        }
+        { "kind": "attr", "attr": "aria-label", "to": "aria-label", "target": "attribute" }
       ]
     }
   },
@@ -46,12 +31,7 @@
     "markup": "<div textcontent.bind=\"x\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "textContent",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -60,12 +40,7 @@
     "markup": "<div class.bind=\"c\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "className",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -74,12 +49,7 @@
     "markup": "<div :class=\"c\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "className",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -88,12 +58,7 @@
     "markup": "<input value.bind=\"x\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "value",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -102,12 +67,7 @@
     "markup": "<input checked.bind=\"x\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "checked",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "checked", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -116,12 +76,7 @@
     "markup": "<textarea value.bind=\"x\"></textarea>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "value",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -130,12 +85,7 @@
     "markup": "<select value.bind=\"x\"></select>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "value",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -144,12 +94,7 @@
     "markup": "<div scrolltop.bind=\"n\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "scrollTop",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "scrollTop", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -158,11 +103,7 @@
     "markup": "<button @click=\"go()\"></button>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "click",
-          "type": "MouseEvent"
-        }
+        { "kind": "event", "to": "click", "type": "MouseEvent" }
       ]
     }
   },
@@ -171,12 +112,7 @@
     "markup": "<button click.capture=\"go()\"></button>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "click",
-          "type": "MouseEvent",
-          "capture": true
-        }
+        { "kind": "event", "to": "click", "type": "MouseEvent", "capture": true }
       ]
     }
   },
@@ -185,12 +121,7 @@
     "markup": "<button @click:once=\"go()\"></button>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "click",
-          "type": "MouseEvent",
-          "modifier": "once"
-        }
+        { "kind": "event", "to": "click", "type": "MouseEvent", "modifier": "once" }
       ]
     }
   },
@@ -199,16 +130,10 @@
     "markup": "<div @xyz=\"fn()\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "xyz",
-          "type": "unknown"
-        }
+        { "kind": "event", "to": "xyz", "type": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1103"
-        }
+        { "code": "AU1103" }
       ]
     }
   },
@@ -217,17 +142,10 @@
     "markup": "<div foo.bind=\"x\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "foo",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -236,12 +154,7 @@
     "markup": "<label for=\"x ${y}\"></label>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "for",
-          "to": "htmlFor",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "for", "to": "htmlFor", "target": "native" }
       ]
     }
   },
@@ -250,12 +163,7 @@
     "markup": "<img usemap=\"a ${b}\">",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "usemap",
-          "to": "useMap",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "usemap", "to": "useMap", "target": "native" }
       ]
     }
   },
@@ -264,12 +172,7 @@
     "markup": "<table><tr><td rowspan=\"a ${b}\"></td></tr></table>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "rowspan",
-          "to": "rowSpan",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "rowspan", "to": "rowSpan", "target": "native" }
       ]
     }
   },
@@ -278,17 +181,10 @@
     "markup": "<input inputmode=\"x ${y}\">",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "inputmode",
-          "to": "inputMode",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "inputmode", "to": "inputMode", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -297,17 +193,10 @@
     "markup": "<input readonly.bind=\"r\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "readOnly",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -316,17 +205,10 @@
     "markup": "<div contenteditable=\"a ${b}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "contenteditable",
-          "to": "contentEditable",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "contenteditable", "to": "contentEditable", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -335,11 +217,7 @@
     "markup": "<div bg.style=\"a + b\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "style",
-          "to": "bg",
-          "target": "style"
-        }
+        { "kind": "style", "to": "bg", "target": "style" }
       ]
     }
   },
@@ -348,10 +226,7 @@
     "markup": "<div ref=el></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ref",
-          "on": "element"
-        }
+        { "kind": "ref", "on": "element" }
       ]
     }
   },
@@ -360,10 +235,7 @@
     "markup": "<my-el view-model.ref=\"vm\"></my-el>",
     "expect": {
       "items": [
-        {
-          "kind": "ref",
-          "on": "component"
-        }
+        { "kind": "ref", "on": "component" }
       ]
     }
   },
@@ -372,12 +244,7 @@
     "markup": "<au-compose subject.bind=\"s\"></au-compose>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "subject",
-          "target": "bindable",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "subject", "target": "bindable", "effectiveMode": "toView" }
       ]
     }
   },
@@ -386,13 +253,7 @@
     "markup": "<div with.bind=\"ctx\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "with",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -401,13 +262,7 @@
     "markup": "<div if.bind=\"cond\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "if",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -416,13 +271,7 @@
     "markup": "<div promise.bind=\"p\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "promise",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -431,13 +280,7 @@
     "markup": "<div switch.bind=\"x\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "switch",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -446,13 +289,7 @@
     "markup": "<div portal.bind=\"t\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "portal",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "portal", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -461,11 +298,7 @@
     "markup": "<ul repeat.for=\"i of items\"></ul>",
     "expect": {
       "items": [
-        {
-          "kind": "iterator",
-          "res": "repeat",
-          "to": "items"
-        }
+        { "kind": "iterator", "res": "repeat", "to": "items" }
       ]
     }
   },
@@ -474,12 +307,7 @@
     "markup": "<div class.attr=\"a + b\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "class",
-          "to": "className",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
       ]
     }
   },
@@ -489,10 +317,7 @@
       "events": {
         "byElement": {
           "button": {
-            "click": {
-              "kind": "ts",
-              "name": "PointerEvent"
-            }
+            "click": { "kind": "ts", "name": "PointerEvent" }
           }
         }
       }
@@ -500,11 +325,7 @@
     "markup": "<button @click=\"go()\"></button>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "click",
-          "type": "PointerEvent"
-        }
+        { "kind": "event", "to": "click", "type": "PointerEvent" }
       ]
     }
   },
@@ -513,17 +334,10 @@
     "markup": "<input minlength.bind=\"x\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "minLength",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "minLength", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -532,17 +346,10 @@
     "markup": "<div title=\"a ${b}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "title",
-          "to": "title",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "title", "to": "title", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -551,17 +358,10 @@
     "markup": "<div tabindex.bind=\"i\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "tabIndex",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "tabIndex", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -570,17 +370,10 @@
     "markup": "<div outerhtml.bind=\"s\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "outerHTML",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "outerHTML", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -589,12 +382,7 @@
     "markup": "<div innerhtml.bind=\"s\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "innerHTML",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "innerHTML", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -603,12 +391,7 @@
     "markup": "<div :scroll-left=\"n\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "scrollLeft",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "scrollLeft", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -617,12 +400,7 @@
     "markup": "<div scrollleft.bind=\"n\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "scrollLeft",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "scrollLeft", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -631,12 +409,7 @@
     "markup": "<div :textcontent=\"s\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "textContent",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -645,17 +418,10 @@
     "markup": "<input formtarget.bind=\"t\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "formTarget",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "formTarget", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -664,17 +430,10 @@
     "markup": "<textarea maxlength.bind=\"n\"></textarea>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "maxLength",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "maxLength", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -683,17 +442,10 @@
     "markup": "<input minlength=\"x ${y}\">",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "minlength",
-          "to": "minLength",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "minlength", "to": "minLength", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -702,12 +454,7 @@
     "markup": "<input valueasnumber.bind=\"n\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "valueAsNumber",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "valueAsNumber", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -716,12 +463,7 @@
     "markup": "<input valueasdate.bind=\"d\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "valueAsDate",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "valueAsDate", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -730,12 +472,7 @@
     "markup": "<input files.bind=\"f\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "files",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "files", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -744,12 +481,7 @@
     "markup": "<input disabled.bind=\"d\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "disabled",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "disabled", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -758,12 +490,7 @@
     "markup": "<button disabled.bind=\"d\"></button>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "disabled",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "disabled", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -772,12 +499,7 @@
     "markup": "<option selected.bind=\"s\"></option>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "selected",
-          "target": "native",
-          "effectiveMode": "twoWay"
-        }
+        { "kind": "prop", "to": "selected", "target": "native", "effectiveMode": "twoWay" }
       ]
     }
   },
@@ -786,12 +508,7 @@
     "markup": "<option value.bind=\"v\"></option>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "value",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -800,12 +517,7 @@
     "markup": "<select multiple.bind=\"m\"></select>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "multiple",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "multiple", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -814,12 +526,7 @@
     "markup": "<select disabled.bind=\"d\"></select>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "disabled",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "disabled", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -828,12 +535,7 @@
     "markup": "<div style=\"a ${b} c\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "style",
-          "to": "style",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "style", "to": "style", "target": "native" }
       ]
     }
   },
@@ -842,12 +544,7 @@
     "markup": "<label for.bind=\"id\"></label>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "htmlFor",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "htmlFor", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -856,12 +553,7 @@
     "markup": "<img usemap.bind=\"m\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "useMap",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "useMap", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -870,12 +562,7 @@
     "markup": "<table><tr><td rowspan.bind=\"r\"></td></tr></table>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "rowSpan",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "rowSpan", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -884,12 +571,7 @@
     "markup": "<table><tr><th colspan.bind=\"c\"></th></tr></table>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "colSpan",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "colSpan", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -898,17 +580,10 @@
     "markup": "<div foo-bar=\"a ${b}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "foo-bar",
-          "to": "fooBar",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "foo-bar", "to": "fooBar", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -917,12 +592,7 @@
     "markup": "<div classname.bind=\"c\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "className",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -931,17 +601,10 @@
     "markup": "<input readonly.bind=\"r\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "readOnly",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -950,11 +613,7 @@
     "markup": "<input @input=\"onInput()\">",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "input",
-          "type": "InputEvent"
-        }
+        { "kind": "event", "to": "input", "type": "InputEvent" }
       ]
     }
   },
@@ -963,11 +622,7 @@
     "markup": "<div @keydown=\"k()\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "keydown",
-          "type": "KeyboardEvent"
-        }
+        { "kind": "event", "to": "keydown", "type": "KeyboardEvent" }
       ]
     }
   },
@@ -976,11 +631,7 @@
     "markup": "<div @keyup=\"k()\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "keyup",
-          "type": "KeyboardEvent"
-        }
+        { "kind": "event", "to": "keyup", "type": "KeyboardEvent" }
       ]
     }
   },
@@ -989,11 +640,7 @@
     "markup": "<form @submit=\"s()\"></form>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "submit",
-          "type": "SubmitEvent"
-        }
+        { "kind": "event", "to": "submit", "type": "SubmitEvent" }
       ]
     }
   },
@@ -1002,11 +649,7 @@
     "markup": "<input @change=\"c()\">",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "change",
-          "type": "Event"
-        }
+        { "kind": "event", "to": "change", "type": "Event" }
       ]
     }
   },
@@ -1014,13 +657,9 @@
     "name": "R-068 perTag > dom > global precedence (perTag wins)",
     "semOverrides": {
       "naming": {
-        "attrToPropGlobal": {
-          "x-map": "xMapGlobal"
-        },
+        "attrToPropGlobal": { "x-map": "xMapGlobal" },
         "perTag": {
-          "div": {
-            "x-map": "xMapPerTag"
-          }
+          "div": { "x-map": "xMapPerTag" }
         }
       },
       "dom": {
@@ -1028,9 +667,7 @@
           "div": {
             "tag": "div",
             "props": {},
-            "attrToProp": {
-              "x-map": "xMapDom"
-            }
+            "attrToProp": { "x-map": "xMapDom" }
           }
         }
       }
@@ -1038,17 +675,10 @@
     "markup": "<div x-map=\"${v}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "x-map",
-          "to": "xMapPerTag",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "x-map", "to": "xMapPerTag", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1056,18 +686,14 @@
     "name": "R-069 dom.attrToProp > global precedence (dom wins)",
     "semOverrides": {
       "naming": {
-        "attrToPropGlobal": {
-          "y-map": "yMapGlobal"
-        }
+        "attrToPropGlobal": { "y-map": "yMapGlobal" }
       },
       "dom": {
         "elements": {
           "div": {
             "tag": "div",
             "props": {},
-            "attrToProp": {
-              "y-map": "yMapDom"
-            }
+            "attrToProp": { "y-map": "yMapDom" }
           }
         }
       }
@@ -1075,17 +701,10 @@
     "markup": "<div y-map=\"${v}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "y-map",
-          "to": "yMapDom",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "y-map", "to": "yMapDom", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1094,13 +713,7 @@
     "markup": "<div with></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "with",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -1109,13 +722,7 @@
     "markup": "<div if></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "if",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -1124,13 +731,7 @@
     "markup": "<div portal></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "portal",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "portal", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -1139,13 +740,7 @@
     "markup": "<div promise></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "promise",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -1154,13 +749,7 @@
     "markup": "<div switch></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "switch",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -1169,11 +758,7 @@
     "markup": "<ol repeat.for=\"x of xs\"></ol>",
     "expect": {
       "items": [
-        {
-          "kind": "iterator",
-          "res": "repeat",
-          "to": "items"
-        }
+        { "kind": "iterator", "res": "repeat", "to": "items" }
       ]
     }
   },
@@ -1182,12 +767,7 @@
     "markup": "<div d.class=\"expr\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "class",
-          "to": "className",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
       ]
     }
   },
@@ -1196,12 +776,7 @@
     "markup": "<div class.attr=\"a+b\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "class",
-          "to": "className",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
       ]
     }
   },
@@ -1210,11 +785,7 @@
     "markup": "<div background-color.style=\"clr\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "style",
-          "to": "background-color",
-          "target": "style"
-        }
+        { "kind": "style", "to": "background-color", "target": "style" }
       ]
     }
   },
@@ -1223,10 +794,7 @@
     "markup": "<span ref=el></span>",
     "expect": {
       "items": [
-        {
-          "kind": "ref",
-          "on": "element"
-        }
+        { "kind": "ref", "on": "element" }
       ]
     }
   },
@@ -1235,10 +803,7 @@
     "markup": "<my-card view-model.ref=\"vm\"></my-card>",
     "expect": {
       "items": [
-        {
-          "kind": "ref",
-          "on": "component"
-        }
+        { "kind": "ref", "on": "component" }
       ]
     }
   },
@@ -1247,11 +812,7 @@
     "markup": "<input @focus=\"f()\">",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "focus",
-          "type": "FocusEvent"
-        }
+        { "kind": "event", "to": "focus", "type": "FocusEvent" }
       ]
     }
   },
@@ -1260,11 +821,7 @@
     "markup": "<input @blur=\"b()\">",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "blur",
-          "type": "FocusEvent"
-        }
+        { "kind": "event", "to": "blur", "type": "FocusEvent" }
       ]
     }
   },
@@ -1273,17 +830,10 @@
     "markup": "<span title=\"a ${b}\"></span>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "title",
-          "to": "title",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "title", "to": "title", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1292,12 +842,7 @@
     "markup": "<input type.bind=\"t\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "type",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "type", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -1306,12 +851,7 @@
     "markup": "<div :classname=\"cls\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "className",
-          "target": "native",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -1320,12 +860,7 @@
     "markup": "<img usemap=\"a ${b}\">",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "usemap",
-          "to": "useMap",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "usemap", "to": "useMap", "target": "native" }
       ]
     }
   },
@@ -1334,12 +869,7 @@
     "markup": "<label for=\"x ${y}\"></label>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "for",
-          "to": "htmlFor",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "for", "to": "htmlFor", "target": "native" }
       ]
     }
   },
@@ -1348,17 +878,10 @@
     "markup": "<input inputmode.bind=\"m\">",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "inputMode",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "inputMode", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1367,17 +890,10 @@
     "markup": "<textarea maxlength=\"a ${b}\"></textarea>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "maxlength",
-          "to": "maxLength",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "maxlength", "to": "maxLength", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1386,12 +902,7 @@
     "markup": "<table><tr><th rowspan=\"a ${b}\"></th></tr></table>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "rowspan",
-          "to": "rowSpan",
-          "target": "native"
-        }
+        { "kind": "attr", "attr": "rowspan", "to": "rowSpan", "target": "native" }
       ]
     }
   },
@@ -1400,12 +911,7 @@
     "markup": "<au-compose model.bind=\"m\"></au-compose>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "model",
-          "target": "bindable",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "model", "target": "bindable", "effectiveMode": "toView" }
       ]
     }
   },
@@ -1414,12 +920,7 @@
     "markup": "<au-slot name.bind=\"n\"></au-slot>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "name",
-          "target": "bindable",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" }
       ]
     }
   },
@@ -1433,16 +934,10 @@
     "markup": "<div @click=\"go()\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "click",
-          "type": "unknown"
-        }
+        { "kind": "event", "to": "click", "type": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1103"
-        }
+        { "code": "AU1103" }
       ]
     }
   },
@@ -1462,17 +957,10 @@
     "markup": "<div class.bind=\"c\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "className",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "className", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1484,9 +972,7 @@
           "label": {
             "tag": "label",
             "props": {},
-            "attrToProp": {
-              "for": "htmlFor"
-            }
+            "attrToProp": { "for": "htmlFor" }
           }
         }
       }
@@ -1494,17 +980,10 @@
     "markup": "<label for.bind=\"id\"></label>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "htmlFor",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "htmlFor", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1516,9 +995,7 @@
           "img": {
             "tag": "img",
             "props": {},
-            "attrToProp": {
-              "usemap": "useMap"
-            }
+            "attrToProp": { "usemap": "useMap" }
           }
         }
       }
@@ -1526,17 +1003,10 @@
     "markup": "<img usemap=\"a ${b}\">",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "usemap",
-          "to": "useMap",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "usemap", "to": "useMap", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1545,16 +1015,10 @@
     "markup": "<div @transitionend=\"onEnd()\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "transitionend",
-          "type": "unknown"
-        }
+        { "kind": "event", "to": "transitionend", "type": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1103"
-        }
+        { "code": "AU1103" }
       ]
     }
   },
@@ -1563,17 +1027,10 @@
     "markup": "<template title.bind=\"t\"></template>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "title",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "title", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1582,17 +1039,10 @@
     "markup": "<div foo=\"a ${b}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "foo",
-          "to": "foo",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "foo", "to": "foo", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1601,18 +1051,10 @@
     "markup": "<div if foo.bind=\"x\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "if",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1621,17 +1063,10 @@
     "markup": "<au-slot foo.bind=\"x\"></au-slot>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "foo",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1640,17 +1075,10 @@
     "markup": "<au-compose bogus.bind=\"x\"></au-compose>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "bogus",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "bogus", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1659,17 +1087,10 @@
     "markup": "<x-unknown bar.bind=\"y\"></x-unknown>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "bar",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "bar", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1684,16 +1105,10 @@
     "markup": "<input @input=\"h()\">",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "input",
-          "type": "unknown"
-        }
+        { "kind": "event", "to": "input", "type": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1103"
-        }
+        { "code": "AU1103" }
       ]
     }
   },
@@ -1707,17 +1122,10 @@
     "markup": "<div click.capture=\"go()\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "click",
-          "type": "unknown",
-          "capture": true
-        }
+        { "kind": "event", "to": "click", "type": "unknown", "capture": true }
       ],
       "diags": [
-        {
-          "code": "AU1103"
-        }
+        { "code": "AU1103" }
       ]
     }
   },
@@ -1729,9 +1137,7 @@
           "label": {
             "tag": "label",
             "props": {},
-            "attrToProp": {
-              "for": "htmlFor"
-            }
+            "attrToProp": { "for": "htmlFor" }
           }
         }
       }
@@ -1739,17 +1145,10 @@
     "markup": "<label for=\"x ${y}\"></label>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "for",
-          "to": "htmlFor",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "for", "to": "htmlFor", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1771,17 +1170,10 @@
     "markup": "<au-compose subject.bind=\"s\"></au-compose>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "subject",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "subject", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1801,17 +1193,10 @@
     "markup": "<select value.bind=\"x\"></select>",
     "expect": {
       "items": [
-        {
-          "kind": "prop",
-          "to": "value",
-          "target": "unknown",
-          "effectiveMode": "toView"
-        }
+        { "kind": "prop", "to": "value", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1828,16 +1213,10 @@
     "markup": "<button @click=\"go()\"></button>",
     "expect": {
       "items": [
-        {
-          "kind": "event",
-          "to": "click",
-          "type": "unknown"
-        }
+        { "kind": "event", "to": "click", "type": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1103"
-        }
+        { "code": "AU1103" }
       ]
     }
   },
@@ -1846,9 +1225,7 @@
     "semOverrides": {
       "naming": {
         "perTag": {
-          "div": {
-            "z-map": "zMapped"
-          }
+          "div": { "z-map": "zMapped" }
         }
       },
       "dom": {
@@ -1864,17 +1241,10 @@
     "markup": "<div z-map=\"x ${y}\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "attr",
-          "attr": "z-map",
-          "to": "zMapped",
-          "target": "unknown"
-        }
+        { "kind": "attr", "attr": "z-map", "to": "zMapped", "target": "unknown" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   },
@@ -1883,18 +1253,10 @@
     "markup": "<div with.bind=\"ctx\" foo.bind=\"x\"></div>",
     "expect": {
       "items": [
-        {
-          "kind": "ctrlProp",
-          "res": "with",
-          "to": "value",
-          "target": "controller",
-          "effectiveMode": "default"
-        }
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" }
       ],
       "diags": [
-        {
-          "code": "AU1104"
-        }
+        { "code": "AU1104" }
       ]
     }
   }

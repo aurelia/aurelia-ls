@@ -4,49 +4,19 @@
     "markup": "<div with.bind=\"ctx\"><let a.bind=\"x\"></let><let a.bind=\"y\"></let></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:with@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": "with",
-          "origin": "with"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
       ],
       "locals": [
-        {
-          "frame": "overlay:with@1",
-          "kind": "let",
-          "name": "a"
-        }
+        { "frame": "overlay:with@1", "kind": "let", "name": "a" }
       ],
       "exprs": [
-        {
-          "kind": "expr",
-          "code": "ctx",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "x",
-          "frame": "overlay:with@1"
-        },
-        {
-          "kind": "expr",
-          "code": "y",
-          "frame": "overlay:with@1"
-        }
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "x", "frame": "overlay:with@1" },
+        { "kind": "expr", "code": "y", "frame": "overlay:with@1" }
       ],
       "diags": [
-        {
-          "code": "AU1202"
-        }
+        { "code": "AU1202" }
       ]
     }
   }

@@ -4,26 +4,12 @@
     "markup": "<div switch><template default-case>${a}</template></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
       ],
       "locals": [],
       "exprs": [
-        {
-          "kind": "expr",
-          "code": "switch",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "a",
-          "frame": "root"
-        }
+        { "kind": "expr", "code": "switch", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "root" }
       ],
       "diags": []
     }
@@ -33,41 +19,15 @@
     "markup": "<div switch.bind=\"x\"><template case=\"1\"><b>${a}</b></template><template case=\"y\"><i>${b}</i></template></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
       ],
       "locals": [],
       "exprs": [
-        {
-          "kind": "expr",
-          "code": "x",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "1",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "a",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "y",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "b",
-          "frame": "root"
-        }
+        { "kind": "expr", "code": "x", "frame": "root" },
+        { "kind": "expr", "code": "1", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "root" },
+        { "kind": "expr", "code": "y", "frame": "root" },
+        { "kind": "expr", "code": "b", "frame": "root" }
       ],
       "diags": []
     }
@@ -77,38 +37,14 @@
     "markup": "<div with.bind=\"ctx\"><section portal><i>${z}</i></section></div>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:with@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": "with",
-          "origin": "with"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
       ],
       "locals": [],
       "exprs": [
-        {
-          "kind": "expr",
-          "code": "ctx",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "portal",
-          "frame": "overlay:with@1"
-        },
-        {
-          "kind": "expr",
-          "code": "z",
-          "frame": "overlay:with@1"
-        }
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "portal", "frame": "overlay:with@1" },
+        { "kind": "expr", "code": "z", "frame": "overlay:with@1" }
       ],
       "diags": []
     }
@@ -118,78 +54,23 @@
     "markup": "<ul repeat.for=\"i of items\"><li if.bind=\"cond\">${i}</li></ul>",
     "expect": {
       "frames": [
-        {
-          "label": "root",
-          "parent": null,
-          "kind": "root",
-          "overlay": null,
-          "origin": null
-        },
-        {
-          "label": "overlay:repeat@1",
-          "parent": "root",
-          "kind": "overlay",
-          "overlay": null,
-          "origin": "repeat"
-        }
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
       ],
       "locals": [
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatLocal",
-          "name": "i"
-        },
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatContextual",
-          "name": "$index"
-        },
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatContextual",
-          "name": "$first"
-        },
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatContextual",
-          "name": "$last"
-        },
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatContextual",
-          "name": "$even"
-        },
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatContextual",
-          "name": "$odd"
-        },
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatContextual",
-          "name": "$length"
-        },
-        {
-          "frame": "overlay:repeat@1",
-          "kind": "repeatContextual",
-          "name": "$middle"
-        }
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
       ],
       "exprs": [
-        {
-          "kind": "forOfHeader",
-          "frame": "root"
-        },
-        {
-          "kind": "expr",
-          "code": "cond",
-          "frame": "overlay:repeat@1"
-        },
-        {
-          "kind": "expr",
-          "code": "i",
-          "frame": "overlay:repeat@1"
-        }
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "cond", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "i", "frame": "overlay:repeat@1" }
       ],
       "diags": []
     }
