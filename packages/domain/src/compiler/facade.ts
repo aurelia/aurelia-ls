@@ -12,14 +12,14 @@ import type { SourceSpan, ExprId, BindingSourceIR, InterpIR, ExprRef } from "./m
 import type { VmReflection, OverlayPlanModule } from "./phases/50-plan/types.js";
 
 // Parsers
-import { getAureliaParsers } from "../parsers/aurelia.js";
+import { getExpressionParser } from "../parsers/expression-parser.js";
 import type {
-  IAttributeParser,
   IExpressionParser,
   BuildIrOptions,
 } from "./phases/10-lower/lower.js";
 
 import { DEFAULT as SEM_DEFAULT } from "./language/registry.js";
+import { DEFAULT_SYNTAX, type AttributeParser } from "./language/syntax.js";
 
 /* =======================================================================================
  * Public façade
@@ -30,7 +30,7 @@ export interface CompileOptions {
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  attrParser?: IAttributeParser;
+  attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   overlayBaseName?: string;
 }
@@ -42,16 +42,15 @@ export interface CompileOverlayResult {
 }
 
 export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayResult {
-  const parsers = (opts.attrParser && opts.exprParser)
-    ? { attrParser: opts.attrParser, exprParser: opts.exprParser }
-    : getAureliaParsers();
+  const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
+  const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
 
   // 1) HTML → IR
   const ir = lowerDocument(opts.html, {
     file: opts.templateFilePath,
     name: path.basename(opts.templateFilePath),
-    attrParser: parsers.attrParser,
-    exprParser: parsers.exprParser,
+    attrParser,
+    exprParser,
   } as BuildIrOptions); // lowerer reads both contracts.
 
   // 2) IR → Linked

@@ -16,23 +16,13 @@ import type {
   IsBindingBehavior,
   MultiAttrIR,
 } from "../../model/ir.js";
+import type { AttributeParser } from "../../language/syntax.js";
 
 /* =======================================================================================
  * HTML → IR builder (Lowering)
  * - Pure syntax shaping. No Semantics here.
  * - NodeId uniqueness is per TemplateIR (nested templates restart at '0').
  * ======================================================================================= */
-
-export interface IAttrSyntax {
-  rawName: string;
-  rawValue: string;
-  target: string;
-  command: string | null;
-  parts: readonly string[] | null;
-}
-export interface IAttributeParser {
-  parse(name: string, value: string): IAttrSyntax;
-}
 
 type ExpressionType = "None" | "Interpolation" | "IsIterator" | "IsChainable" | "IsFunction" | "IsProperty";
 export interface IExpressionParser {
@@ -48,7 +38,7 @@ export interface IExpressionParser {
 export interface BuildIrOptions {
   file?: string;
   name?: string;
-  attrParser: IAttributeParser;
+  attrParser: AttributeParser;
   exprParser: IExpressionParser;
 }
 
@@ -187,7 +177,7 @@ function mapStaticAttrs(
 function collectRows(
   p: { childNodes?: P5Node[] },
   ids: NodeIdGen,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[]
@@ -268,7 +258,7 @@ function collectRows(
 
 function compileLet(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable
 ): { instructions: LetBindingIR[]; toBindingContext: boolean } {
   const out: LetBindingIR[] = [];
@@ -312,7 +302,7 @@ function compileLet(
 
 function compileElementAttrs(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable
 ): (
   | PropertyBindingIR
@@ -457,12 +447,12 @@ function compileElementAttrs(
 
 function collectControllers(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): HydrateTemplateControllerIR[] {
   // 1) Gather controller-bearing attributes (preserve source order).
-  const candidates: { a: Token.Attribute; s: ReturnType<IAttributeParser["parse"]> }[] = [];
+  const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]> }[] = [];
   for (const a of el.attrs ?? []) {
     const s = attrParser.parse(a.name, a.value ?? "");
     if (isControllerAttr(s)) candidates.push({ a, s });
@@ -509,8 +499,8 @@ function collectControllers(
 
 function buildBaseInstructionsForRightmost(
   el: P5Element,
-  rightmost: { a: Token.Attribute; s: ReturnType<IAttributeParser["parse"]> },
-  attrParser: IAttributeParser,
+  rightmost: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]> },
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): HydrateTemplateControllerIR[] {
@@ -641,8 +631,8 @@ type ControllerPrototype = {
 function buildControllerPrototypes(
   _el: P5Element,
   a: Token.Attribute,
-  s: ReturnType<IAttributeParser["parse"]>,
-  _attrParser: IAttributeParser,
+  s: ReturnType<AttributeParser["parse"]>,
+  _attrParser: AttributeParser,
   table: ExprTable,
   loc: P5Loc
 ): ControllerPrototype[] {
@@ -697,7 +687,7 @@ function injectPromiseBranchesIntoDef(
   el: P5Element,
   def: TemplateIR,
   idMap: WeakMap<P5Node, NodeId>,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   valueProp: PropertyBindingIR
@@ -782,7 +772,7 @@ function injectSwitchBranchesIntoDef(
   el: P5Element,
   def: TemplateIR,
   idMap: WeakMap<P5Node, NodeId>,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   valueProp: PropertyBindingIR
@@ -898,7 +888,7 @@ function injectSwitchBranchesIntoDef(
 
 function templateOfElementChildren(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): TemplateIR {
@@ -912,7 +902,7 @@ function templateOfElementChildren(
 
 function templateOfElementChildrenWithMap(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
@@ -927,7 +917,7 @@ function templateOfElementChildrenWithMap(
 
 function stripControllerAttrsFromElement(
   el: P5Element,
-  attrParser: IAttributeParser
+  attrParser: AttributeParser
 ): P5Element {
   const filteredAttrs = (el.attrs ?? []).filter(
     (a) => !isControllerAttr(attrParser.parse(a.name, a.value ?? ""))
@@ -957,7 +947,7 @@ function stripControllerAttrsFromElement(
 
 function templateOfTemplateContent(
   t: P5Template,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): TemplateIR {
@@ -996,7 +986,7 @@ function buildTemplateFrom(
   rootLike: { childNodes?: P5Node[] } | P5Template["content"],
   ids: NodeIdGen,
   idMap: WeakMap<P5Node, NodeId> | undefined,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): TemplateIR {

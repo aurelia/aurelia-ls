@@ -9,7 +9,7 @@ import * as path from "node:path";
 import * as ts from "typescript";
 
 import {
-  compileTemplateToOverlay, PRELUDE_TS, getAureliaParsers,
+  compileTemplateToOverlay, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
 } from "@aurelia-ls/domain";
 import type { VmReflection } from "@aurelia-ls/domain";
 
@@ -137,7 +137,8 @@ function recreateLanguageService() {
 /* ============================================================================
  * Parsers (DI) — one-time
  * ========================================================================== */
-const PARSERS = getAureliaParsers();
+const exprParser = getExpressionParser();
+const attrParser = DEFAULT_SYNTAX;
 
 /* ============================================================================
  * Helpers
@@ -249,8 +250,8 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
       templateFilePath: fsPath,
       isJs: false,
       vm,
-      attrParser: PARSERS.attrParser,
-      exprParser: PARSERS.exprParser,
+      attrParser,
+      exprParser,
     });
   } catch (e: any) {
     err(`compileTemplateToOverlay threw: ${e?.stack || e}`);
