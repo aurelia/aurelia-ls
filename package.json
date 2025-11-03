@@ -13,9 +13,11 @@
     "clean": "node scripts/clean.mjs",
     "test": "pnpm -w build && node --test",
     "test:spec": "pnpm -w build && node --test --test-reporter=spec",
-    "test:domain": "pnpm -w build && node --test packages/domain/test/**/*.test.mjs --test-reporter=spec",
-    "test:lower": "pnpm -F @aurelia-ls/domain build && node --test packages/domain/test/lower/lower.test.mjs --reporter=spec",
-    "test:lower:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/phases/10-lower/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/lower node --test packages/domain/test/lower/lower.test.mjs --reporter=spec"
+    "test:domain": "pnpm -w build && node --test --test-reporter=spec packages/domain/test/**/*.test.mjs",
+    "test:lower": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/lower/lower.test.mjs",
+    "test:lower:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/phases/10-lower/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/lower node --test --test-reporter=spec packages/domain/test/lower/lower.test.mjs",
+    "test:resolve": "pnpm -w build && node --test --test-reporter=spec packages/domain/test/resolve/*.test.mjs",
+    "test:resolve:dev": "pnpm -w build && node --test --test-name-pattern=\"R-025\" --watch --test-reporter=spec packages/domain/test/resolve/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.5.4",
