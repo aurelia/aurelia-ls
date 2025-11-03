@@ -14,15 +14,16 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
         out.push(`type ${f.typeName} = ${f.typeExpr};`);
         for (const l of f.lambdas) out.push(`__au$access<${f.typeName}>(${l});`);
       } else {
-        // No 'type' in JS — inline the type as a JSDoc cast on the lambda param.
-        const casted = (lambda: string) => {
-          // lambda is "o => expr"; rewrite to "(/** @type {T} */ (o)) => expr"
+        // JS flavor: JSDoc on the arrow function parameter (supported by TS checkJs).
+        const withJSDocParam = (lambda: string) => {
           const idx = lambda.indexOf("=>");
-          const head = lambda.slice(0, idx).trim(); // "o"
-          const tail = lambda.slice(idx);           // "=> expr"
-          return `(${`/** @type {${f.typeExpr}} */ (${head})`}) ${tail}`;
+          const head = lambda.slice(0, idx).trim();  // "o"
+          const tail = lambda.slice(idx).trim();     // "=> <expr>"
+          return `/** @param {${f.typeExpr}} ${head} */ (${head}) ${tail}`;
         };
-        for (const l of f.lambdas) out.push(`__au$access(${casted(l)});`);
+        for (const l of f.lambdas) {
+          out.push(`__au$access(${withJSDocParam(l)});`);
+        }
       }
     }
   }
