@@ -1,0 +1,244 @@
+[
+  {
+    "name": "LET-01 root <let> with .bind and interpolation",
+    "markup": "<template><let a.bind=\"x\" b=\"y ${z}\"></let></template>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        }
+      ],
+      "locals": [
+        {
+          "frame": "root",
+          "kind": "let",
+          "name": "a"
+        },
+        {
+          "frame": "root",
+          "kind": "let",
+          "name": "b"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "code": "x",
+          "frame": "root"
+        },
+        {
+          "kind": "expr",
+          "code": "z",
+          "frame": "root"
+        }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "LET-02 <let to-binding-context> does not change lexical scope",
+    "markup": "<template><let to-binding-context a.bind=\"v\"></let></template>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        }
+      ],
+      "locals": [
+        {
+          "frame": "root",
+          "kind": "let",
+          "name": "a"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "code": "v",
+          "frame": "root"
+        }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "LET-03 duplicate <let> in same frame → AU1202",
+    "markup": "<template><let a.bind=\"x\"></let><let a.bind=\"y\"></let></template>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        }
+      ],
+      "locals": [
+        {
+          "frame": "root",
+          "kind": "let",
+          "name": "a"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "code": "x",
+          "frame": "root"
+        },
+        {
+          "kind": "expr",
+          "code": "y",
+          "frame": "root"
+        }
+      ],
+      "diags": [
+        {
+          "code": "AU1202"
+        }
+      ]
+    }
+  },
+  {
+    "name": "LET-04 same let name in different frames is allowed",
+    "markup": "<div with.bind=\"ctx\"><let a.bind=\"x\"></let></div><template><let a.bind=\"y\"></let></template>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        },
+        {
+          "label": "overlay:with@1",
+          "parent": "root",
+          "kind": "overlay",
+          "overlay": "with",
+          "origin": "with"
+        }
+      ],
+      "locals": [
+        {
+          "frame": "overlay:with@1",
+          "kind": "let",
+          "name": "a"
+        },
+        {
+          "frame": "root",
+          "kind": "let",
+          "name": "a"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "code": "ctx",
+          "frame": "root"
+        },
+        {
+          "kind": "expr",
+          "code": "x",
+          "frame": "overlay:with@1"
+        },
+        {
+          "kind": "expr",
+          "code": "y",
+          "frame": "root"
+        }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "LET-05 <let> inside repeat goes to repeat overlay",
+    "markup": "<ul repeat.for=\"i of items\"><let a.bind=\"x\"></let></ul>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        },
+        {
+          "label": "overlay:repeat@1",
+          "parent": "root",
+          "kind": "overlay",
+          "overlay": null,
+          "origin": "repeat"
+        }
+      ],
+      "locals": [
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatLocal",
+          "name": "i"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatContextual",
+          "name": "$index"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatContextual",
+          "name": "$first"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatContextual",
+          "name": "$last"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatContextual",
+          "name": "$even"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatContextual",
+          "name": "$odd"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatContextual",
+          "name": "$length"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "repeatContextual",
+          "name": "$middle"
+        },
+        {
+          "frame": "overlay:repeat@1",
+          "kind": "let",
+          "name": "a"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "forOfHeader",
+          "frame": "root"
+        },
+        {
+          "kind": "expr",
+          "code": "x",
+          "frame": "overlay:repeat@1"
+        }
+      ],
+      "diags": []
+    }
+  }
+]

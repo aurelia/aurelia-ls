@@ -1,0 +1,295 @@
+[
+  {
+    "name": "PR-01 promise.bind with then branch: value in root; alias + inner binding in nested promise overlay",
+    "markup": "<div promise.bind=\"p\"><template then=\"r\"><span title.bind=\"a\"></span></template></div>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        },
+        {
+          "label": "overlay:promise@1",
+          "parent": "root",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        },
+        {
+          "label": "overlay:promise@2",
+          "parent": "overlay:promise@1",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        }
+      ],
+      "locals": [
+        {
+          "frame": "overlay:promise@2",
+          "kind": "promiseAlias",
+          "name": "r"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@1",
+          "code": "p"
+        },
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@2",
+          "code": "a"
+        }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-02 promise (value-less) with catch branch only; default alias",
+    "markup": "<div promise><template catch><i>${e}</i></template></div>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        },
+        {
+          "label": "overlay:promise@1",
+          "parent": "root",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        },
+        {
+          "label": "overlay:promise@2",
+          "parent": "overlay:promise@1",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        }
+      ],
+      "locals": [
+        {
+          "frame": "overlay:promise@2",
+          "kind": "promiseAlias",
+          "name": "catch"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@1",
+          "code": "promise"
+        },
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@2",
+          "code": "e"
+        }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-03 promise with both then and catch branches",
+    "markup": "<div promise.bind=\"task\"><template then=\"val\"><b>${a}</b></template><template catch=\"err\"><i>${b}</i></template></div>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        },
+        {
+          "label": "overlay:promise@1",
+          "parent": "root",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        },
+        {
+          "label": "overlay:promise@2",
+          "parent": "overlay:promise@1",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        },
+        {
+          "label": "overlay:promise@3",
+          "parent": "overlay:promise@1",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        }
+      ],
+      "locals": [
+        {
+          "frame": "overlay:promise@2",
+          "kind": "promiseAlias",
+          "name": "val"
+        },
+        {
+          "frame": "overlay:promise@3",
+          "kind": "promiseAlias",
+          "name": "err"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@1",
+          "code": "task"
+        },
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@2",
+          "code": "a"
+        },
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@3",
+          "code": "b"
+        }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-04 promise inside with",
+    "markup": "<div with.bind=\"ctx\"><div promise.bind=\"p\"><template then><span>${x}</span></template></div></div>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        },
+        {
+          "label": "overlay:with@1",
+          "parent": "root",
+          "kind": "overlay",
+          "overlay": "with",
+          "origin": "with"
+        },
+        {
+          "label": "overlay:promise@2",
+          "parent": "overlay:with@1",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        },
+        {
+          "label": "overlay:promise@3",
+          "parent": "overlay:promise@2",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        }
+      ],
+      "locals": [
+        {
+          "frame": "overlay:promise@3",
+          "kind": "promiseAlias",
+          "name": "then"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "frame": "root",
+          "code": "ctx"
+        },
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@2",
+          "code": "p"
+        },
+        {
+          "kind": "expr",
+          "frame": "overlay:promise@3",
+          "code": "x"
+        }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-05 promise branch contains with",
+    "markup": "<div promise.bind=\"p\"><template then><section with.bind=\"w\"><i>${z}</i></section></template></div>",
+    "expect": {
+      "frames": [
+        {
+          "label": "root",
+          "parent": null,
+          "kind": "root",
+          "overlay": null,
+          "origin": null
+        },
+        {
+          "label": "overlay:promise@1",
+          "parent": "root",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        },
+        {
+          "label": "overlay:with@2",
+          "parent": "overlay:promise@1",
+          "kind": "overlay",
+          "overlay": "with",
+          "origin": "with"
+        },
+        {
+          "label": "overlay:promise@3",
+          "parent": "overlay:promise@1",
+          "kind": "overlay",
+          "overlay": "promise",
+          "origin": "promise"
+        },
+        {
+          "label": "overlay:with@4",
+          "parent": "overlay:promise@3",
+          "kind": "overlay",
+          "overlay": "with",
+          "origin": "with"
+        }
+      ],
+      "locals": [
+        {
+          "frame": "overlay:promise@2",
+          "kind": "promiseAlias",
+          "name": "then"
+        }
+      ],
+      "exprs": [
+        {
+          "kind": "expr",
+          "code": "p",
+          "frame": "root"
+        },
+        {
+          "kind": "expr",
+          "code": "w",
+          "frame": "overlay:promise@2"
+        },
+        {
+          "kind": "expr",
+          "code": "z",
+          "frame": "overlay:with@3"
+        }
+      ],
+      "diags": []
+    }
+  }
+]
