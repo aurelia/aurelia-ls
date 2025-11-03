@@ -45,7 +45,7 @@ export function reduceLinkedToIntent(linked) {
         case "refBinding":
           out.items.push({
             kind: "ref",
-            on: (ins.to === "view-model") ? "component" : "element",
+            on: ins.to,
           });
           break;
 

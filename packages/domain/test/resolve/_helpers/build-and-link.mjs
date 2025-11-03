@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
  */
 export async function linkMarkup(markup, { file = "mem.html", name = "mem", semOverrides = undefined } = {}) {
   const indexUrl = new URL("../../../out/index.js", import.meta.url);
-  const { getAureliaParsers } = await import(indexUrl.href);
+  const { getExpressionParser, DEFAULT_SYNTAX } = await import(indexUrl.href);
 
   const lowerUrl = new URL("../../../out/compiler/phases/10-lower/lower.js", import.meta.url);
   const { lowerDocument } = await import(lowerUrl.href);
@@ -19,7 +19,8 @@ export async function linkMarkup(markup, { file = "mem.html", name = "mem", semO
   const resolveUrl = new URL("../../../out/compiler/phases/20-resolve-host/resolve.js", import.meta.url);
   const { resolveHost } = await import(resolveUrl.href);
 
-  const { attrParser, exprParser } = getAureliaParsers();
+  const exprParser = getExpressionParser();
+  const attrParser = DEFAULT_SYNTAX;
 
   const ir = lowerDocument(markup, { attrParser, exprParser, file, name });
   assert.ok(ir && ir.templates?.length, "lowerDocument must produce a module with templates");

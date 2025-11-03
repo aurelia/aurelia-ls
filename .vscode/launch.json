@@ -19,7 +19,7 @@
       "name": "Attach to Server",
       "type": "node",
       "request": "attach",
-      "port": 6009,
+      "port": 9229,
       "restart": true,
       "protocol": "inspector",
       "skipFiles": ["<node_internals>/**"]
