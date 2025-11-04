@@ -456,9 +456,16 @@ function collectOneLambdaPerExpression(
 }
 
 /* ===================================================================================== */
-/* Expression rendering (unchanged from earlier MVP)                                      */
+/* Expression rendering                                                                   */
 /* ===================================================================================== */
 
+/**
+ * Render the authored expression once, rooted at `o`:
+ * - Behaviors/converters are treated as transparent (for TTC purposes).
+ * - `$parent` is represented via AccessThis/AccessScope.ancestor.
+ * - Optional chaining flags are preserved where present in the AST.
+ * If we cannot confidently render a node, return `null` (skip emission).
+ */
 function renderExpressionFromAst(ast: IsBindingBehavior): string | null {
   return printIsBindingBehavior(ast);
 }
@@ -482,7 +489,7 @@ function printIsBindingBehavior(n: IsBindingBehavior): string | null {
     case "CallScope":        return callScope(n);
     case "CallMember":       return callMember(n);
     case "CallFunction":     return callFunction(n);
-    case "CallGlobal":       return null; // skip globals
+    case "CallGlobal":       return callGlobal(n);
 
     case "New":              return newExpr(n);
     case "Binary":           return binary(n);
@@ -544,6 +551,12 @@ function callFunction(n: CallFunctionExpression): string | null {
   if (!f) return null;
   const args = joinArgs(n.args);
   return `${f}${n.optional ? "?." : ""}(${args})`;
+}
+
+function callGlobal(_n: CallGlobalExpression): string | null {
+  // Globals are not part of component scope; for TTC we skip emitting them.
+  // (If we later allow specific globals, thread a whitelist here.)
+  return null;
 }
 
 function newExpr(n: NewExpression): string | null {
@@ -635,10 +648,12 @@ function joinArgs(args: IsAssign[]): string {
 }
 
 function printIsAssign(n: IsAssign): string | null {
+  // IsAssign ⊂ IsBindingBehavior, so we can reuse the main printer
   return printIsBindingBehavior(n as IsBindingBehavior);
 }
 
 function printLeft(n: IsLeftHandSide): string | null {
+  // IsLeftHandSide ⊂ IsBindingBehavior
   return printIsBindingBehavior(n as IsBindingBehavior);
 }
 
@@ -647,6 +662,7 @@ function ancestorChain(ancestor: number): string {
 }
 
 function escapeBackticks(s: string): string {
+  // Escape ` and ${ inside template literal raw text
   return s.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 }
 
