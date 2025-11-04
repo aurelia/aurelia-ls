@@ -21,6 +21,11 @@ import type {
 import { DEFAULT as SEM_DEFAULT } from "./language/registry.js";
 import { DEFAULT_SYNTAX, type AttributeParser } from "./language/syntax.js";
 
+// SSR
+import { planSsr } from "./phases/50-plan/ssr-plan.js";
+import { emitSsr } from "./phases/60-emit/ssr.js";
+import type { SsrPlanModule } from "./phases/50-plan/ssr-types.js";
+
 /* =======================================================================================
  * Public façade
  * ======================================================================================= */
@@ -142,6 +147,49 @@ function collectExprSpansFromIr(ir: { templates: any[] }): Map<ExprId, SourceSpa
     return (x as InterpIR).kind === "interp";
   }
 }
+
+export interface CompileSsrResult {
+  htmlPath: string;
+  htmlText: string;
+  manifestPath: string;
+  manifestText: string;
+  plan: SsrPlanModule; // handy for debugging/tests
+}
+
+/** Build SSR “server emits” (HTML skeleton + JSON manifest) from a template. */
+export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
+  const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
+  const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
+
+  // 1) HTML → IR
+  const ir = lowerDocument(opts.html, {
+    file: opts.templateFilePath,
+    name: path.basename(opts.templateFilePath),
+    attrParser,
+    exprParser,
+  } as BuildIrOptions);
+
+  // 2) IR → Linked
+  const linked = resolveHost(ir, SEM_DEFAULT);
+
+  // 3) Linked → ScopeGraph
+  const scope = bindScopes(linked);
+
+  // 4) Linked+Scoped → SSR plan
+  const plan = planSsr(linked, scope);
+
+  // 5) Emit SSR artifacts
+  const { html, manifest } = emitSsr(plan, linked, { eol: "\n" });
+
+  // 6) Paths
+  const base = opts.overlayBaseName ?? `${path.basename(opts.templateFilePath, path.extname(opts.templateFilePath))}.__au.ssr`;
+  const dir = path.dirname(opts.templateFilePath);
+  const htmlPath = path.join(dir, `${base}.html`);
+  const manifestPath = path.join(dir, `${base}.json`);
+
+  return { htmlPath, htmlText: html, manifestPath, manifestText: manifest, plan };
+}
+
 
 function listExprIdsInPlanEmissionOrder(scope: any): ExprId[] {
   const st = scope.templates?.[0];
