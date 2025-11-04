@@ -1,20 +1,62 @@
 import * as ts from "typescript";
 
+const ASSET_MODULES_D_TS = `
+declare module '*.html' {
+  export const name: string;
+  export const template: string;
+  const _default: string;
+  export default _default;
+  export const dependencies: string[];
+  export const containerless: boolean | undefined;
+  export const shadowOptions: { mode: 'open' | 'closed'} | undefined;
+}
+declare module '*.css';
+`;
+
+const AURELIA_STUBS_D_TS = `
+declare module '@aurelia/runtime-html' {
+  export interface CustomElementOptions {
+    name?: string;
+    template?: string;
+    dependencies?: unknown[];
+    containerless?: boolean;
+    shadowOptions?: { mode: 'open'|'closed' } | undefined;
+  }
+  export function customElement(options: CustomElementOptions | string): ClassDecorator;
+  export const CustomElement: { define: (...args: any[]) => any };
+}
+declare module 'aurelia' {
+  export const customElement: any;
+  export const valueConverter: any;
+  export const bindingBehavior: any;
+  export const templateController: any;
+  export const inlineView: any;
+  export const noView: any;
+}
+`;
+
 function createLsSession({ checkJs }) {
   const files = new Map(); // path -> { text, version }
   const get = (f) => files.get(f);
   const put = (f, text) => files.set(f, { text, version: (get(f)?.version ?? 0) + 1 });
+  const has = (f) => files.has(f);
 
   const options = {
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
-    strict: true,
     allowJs: true,
     checkJs: !!checkJs,
+    experimentalDecorators: true,
     noResolve: true,   // no module resolution; overlays are self-contained
     noLib: false,
     skipLibCheck: true,
+    types: [], // don't load @types/*
   };
+
+  // Seed once per session
+  const ensureOnce = (path, text) => { if (!has(path)) put(path, text); };
+  ensureOnce("/mem/types/assets-modules.d.ts", ASSET_MODULES_D_TS);
+  ensureOnce("/mem/types/aurelia-stubs.d.ts", AURELIA_STUBS_D_TS);
 
   const serviceHost = {
     getCompilationSettings: () => options,
@@ -43,8 +85,9 @@ function createLsSession({ checkJs }) {
 
   return {
     ts,
-    setFile(path, text) { put(path, text); },
-    ensurePrelude(path, text) { if (!files.has(path)) put(path, text); },
+    setFile: put,
+    ensureFile: ensureOnce,
+    ensurePrelude(path, text) { ensureOnce(path, text); },
     getSemanticDiagnostics(path) { return service.getSemanticDiagnostics(path); },
     cleanup() { service.cleanupSemanticCache(); },
     dispose() { service.dispose(); },
@@ -65,30 +108,33 @@ export async function getSession(isJs) {
 }
 
 /**
- * Compile HTML → overlay, update the single warm LS, and return diagnostics.
- * overlayBaseName is used to create a unique in-memory filename to avoid races.
+ * Build a realistic entry module (TS or JS), then prepend the overlay text into
+ * that same module. Ambient stubs handle imports quickly.
  */
-export async function compileAndCheckFast({
+export async function compileFromEntry({
   html,
+  markupFile = "view.html",
   isJs,
-  vmTypeExpr,
+  className = "Foo",
+  // 'entrySource' should contain import(s), decorator(s), class Foo, and any helper classes/types.
+  entrySource,
   preludeText,
-  overlayBaseName = "overlay",
+  overlayBaseName = "entry",
   exprParser,
   attrParser,
-  typesText,
 }) {
   const domainIndexUrl = new URL("../../../out/index.js", import.meta.url);
   const { compileTemplateToOverlay } = await import(domainIndexUrl.href);
 
   const vm = {
-    getRootVmTypeExpr: () => vmTypeExpr,
+    // Crucial: refer to the class in the same file, not a synthetic type alias.
+    getRootVmTypeExpr: () => className,
     getSyntheticPrefix: () => "__AU_TTC_",
   };
 
-  const { text } = compileTemplateToOverlay({
+  const { text: overlay } = compileTemplateToOverlay({
     html,
-    templateFilePath: `C:/mem/${overlayBaseName}.html`,
+    templateFilePath: `C:/mem/${markupFile}`,
     isJs,
     vm,
     exprParser,
@@ -96,20 +142,20 @@ export async function compileAndCheckFast({
     overlayBaseName,
   });
 
+  // Prepare the full entry file (prelude is global; overlay is per-file)
   const sess = await getSession(isJs);
-  const overlayPath = `/mem/${overlayBaseName}.${isJs ? "js" : "ts"}`;
+  sess.ensurePrelude("/mem/types/ttc-prelude.d.ts", preludeText);
 
-  // Load prelude once per session
-  sess.ensurePrelude("/mem/__prelude.d.ts", preludeText);
-  // Load user-provided ambient types for this test case (mirrors real project types)
-  if (typeof typesText === "string" && typesText.trim().length > 0) {
-    sess.setFile("/mem/__types.d.ts", typesText);
-  }
-  // Update this test's overlay file
-  sess.setFile(overlayPath, text);
+  const ext = isJs ? (markupFile.endsWith(".mjs") ? "mjs" : "js") : "ts";
+  const entryPath = `/mem/${overlayBaseName}.${ext}`;
 
-  const diags = sess.getSemanticDiagnostics(overlayPath);
-  return { ts: sess.ts, diags, overlayText: text, overlayPath };
+  // Prepend the overlay to the entry source (same module scope).
+  const full = `${overlay}\n${entrySource}\n`;
+
+  sess.setFile(entryPath, full);
+
+  const diags = sess.getSemanticDiagnostics(entryPath);
+  return { ts: sess.ts, diags, overlayText: overlay, entryPath, fullSource: full };
 }
 
 export function assertSuccess(ts, diags) {
@@ -133,4 +179,14 @@ export function assertFailure(ts, diags, patterns) {
       "\nGot:\n" + msgs.map(m => "  - " + m).join("\n")
     );
   }
+}
+
+export function prop(name, type, isTs, access = 'public') {
+  if (isTs) return `${access} ${name}: ${type};`;
+  return `
+/**
+ * @${access}
+ * @type {${type}}
+ */
+${name};`;
 }
