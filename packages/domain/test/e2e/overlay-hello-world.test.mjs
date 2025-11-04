@@ -4,12 +4,13 @@ import { createProgramFromMemory } from "../_helpers/ts-harness.mjs";
 
 // Load compiled domain API (built JS)
 const domainIndexUrl = new URL("../../out/index.js", import.meta.url);
-const { compileTemplateToOverlay, PRELUDE_TS, getAureliaParsers } = await import(domainIndexUrl.href);
+const { compileTemplateToOverlay, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX } = await import(domainIndexUrl.href);
 
 test("E2E: generates overlay and TS reports property-not-found", () => {
   const html = `<div>\${sdf}</div>`;
   const templateFilePath = "C:/mem/my-app.html"; // only affects overlay filename
-  const { attrParser, exprParser } = getAureliaParsers();
+  const exprParser = getExpressionParser();
+  const attrParser = DEFAULT_SYNTAX;
 
   // Inline VM type keeps this test independent of module resolution
   const vm = {

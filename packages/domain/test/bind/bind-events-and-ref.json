@@ -1,0 +1,101 @@
+[
+  {
+    "name": "ER-01 event handler in with overlay",
+    "markup": "<div with.bind=\"ctx\"><button @click=\"go(a)\"></button></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "go(a)", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "ER-02 ref binding in repeat overlay",
+    "markup": "<ul repeat.for=\"i of items\"><li ref=el>${i}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "el", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "i", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "ER-03 style.prop binding in with overlay",
+    "markup": "<div with.bind=\"ctx\"><span color.style=\"c\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "c", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "ER-04 attribute interpolation in repeat overlay",
+    "markup": "<div repeat.for=\"i of items\"><span title=\"a ${b}\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "b", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "ER-05 view-model.ref mapping inside with overlay",
+    "markup": "<my-el with.bind=\"ctx\" view-model.ref=\"vm\"></my-el>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "vm", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  }
+]

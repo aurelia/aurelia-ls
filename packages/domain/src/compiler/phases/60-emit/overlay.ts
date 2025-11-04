@@ -11,18 +11,25 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
   for (const t of plan.templates) {
     for (const f of t.frames) {
       if (!isJs) {
-        out.push(`type ${f.typeName} = ${f.typeExpr};`);
-        for (const l of f.lambdas) out.push(`__au$access<${f.typeName}>(${l});`);
+        // Only define aliases for non-root frames (frame id !== 0).
+        // Root alias is omitted so TS diagnostics prefer to display the inline expression.
+        if (f.frame !== 0) {
+          out.push(`type ${f.typeName} = ${f.typeExpr};`);
+        }
+        for (const l of f.lambdas) {
+          out.push(`__au$access<${f.typeExpr}>(${l});`);
+        }
       } else {
-        // No 'type' in JS — inline the type as a JSDoc cast on the lambda param.
-        const casted = (lambda: string) => {
-          // lambda is "o => expr"; rewrite to "(/** @type {T} */ (o)) => expr"
+        // JS flavor: JSDoc on the arrow function parameter (supported by TS checkJs).
+        const withJSDocParam = (lambda: string) => {
           const idx = lambda.indexOf("=>");
-          const head = lambda.slice(0, idx).trim(); // "o"
-          const tail = lambda.slice(idx);           // "=> expr"
-          return `(${`/** @type {${f.typeExpr}} */ (${head})`}) ${tail}`;
+          const head = lambda.slice(0, idx).trim();  // "o"
+          const tail = lambda.slice(idx).trim();     // "=> <expr>"
+          return `/** @param {${f.typeExpr}} ${head} */ (${head}) ${tail}`;
         };
-        for (const l of f.lambdas) out.push(`__au$access(${casted(l)});`);
+        for (const l of f.lambdas) {
+          out.push(`__au$access(${withJSDocParam(l)});`);
+        }
       }
     }
   }
@@ -66,5 +73,7 @@ export function emitOverlayFile(
   const banner = opts.banner ? `${opts.banner}${eol}` : "";
   const ext = opts.isJs ? ".js" : ".ts";
   const filename = (opts.filename ?? "__au.ttc.overlay") + ext;
-  return { filename, text: `${banner}${body}` };
+  // TS variant: make the file a module to isolate top-level type aliases across overlays.
+  const moduleFooter = opts.isJs ? "" : `${eol}export {}${eol}`;
+  return { filename, text: `${banner}${body}${moduleFooter}` };
 }

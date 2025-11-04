@@ -14,8 +14,16 @@ type CollectionElement<T> =
   T extends Set<infer E> ? E :
   T extends ReadonlySet<infer E> ? E :
   T extends Map<infer K, infer V> ? [K, V] :
+  T extends ReadonlyMap<infer K, infer V> ? [K, V] :
+  T extends Iterable<infer E> ? E :
   T extends number ? number :
   T extends object ? any :
+  never;
+
+type TupleElement<T, I extends number> =
+  T extends readonly [...infer R] ? (I extends keyof R ? R[I] : never) :
+  T extends ReadonlyArray<infer E> ? E :
+  T extends Array<infer E> ? E :
   never;
 
 /** Internal - used as a type-check anchor. */
