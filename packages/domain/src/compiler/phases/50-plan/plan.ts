@@ -3,6 +3,10 @@
  * Linked+Scoped → OverlayPlanModule (pure)
  * - Build per-frame overlay type expressions
  * - Collect **one** validation lambda per authored expression in that frame
+ * - Frame-aware type environments (Env) with inheritance + shadowing
+ * - Env-aware expression → type inference (incl. ReturnType<> for calls)
+ * - $parent typed as the parent frame alias
+ * - Emit visible identifier surface for every frame (outer locals included)
  * ============================================================================= */
 
 import type {
@@ -19,6 +23,9 @@ import type {
   // Expression AST (discriminated by $kind)
   IsBindingBehavior,
   ForOfStatement,
+  BindingIdentifierOrPattern,
+  BindingIdentifier,
+  DestructuringAssignmentExpression,
   IsAssign,
   IsLeftHandSide,
   BindingBehaviorExpression,
@@ -26,6 +33,7 @@ import type {
   AssignExpression,
   ConditionalExpression,
   AccessThisExpression,
+  AccessBoundaryExpression,
   AccessScopeExpression,
   AccessMemberExpression,
   AccessKeyedExpression,
@@ -42,6 +50,7 @@ import type {
   TemplateExpression,
   TaggedTemplateExpression,
   ArrowFunction,
+  DestructuringAssignmentRestExpression,
 } from "../../model/ir.js";
 
 function assertUnreachable(_: never): never { throw new Error("unreachable"); }
@@ -64,11 +73,8 @@ export function plan(linked: LinkedSemanticsModule, scope: ScopeModule, opts: An
 
   /**
    * IMPORTANT:
-   * - ScopeGraph already maps *all* nested template expressions into the **root**
-   *   template's frames (it recurses into controller defs while staying in the
-   *   parent frame). Emitting per nested LinkedTemplate would duplicate work and
-   *   (worse) attach those expressions to a fresh root frame that lacks locals.
-   * - Therefore, we only analyze & emit for the **first (root) template** of the module.
+   * - Bind already models nested template expressions inside the **first (root) template**.
+   * - So we only analyze/emit for the root scope template.
    */
   const roots: ScopeTemplate[] = scope.templates.length > 0 ? [scope.templates[0]!] : [];
   for (let ti = 0; ti < roots.length; ti++) {
@@ -90,19 +96,29 @@ function analyzeTemplate(
   opts: AnalyzeOptions,
 ): TemplateOverlayPlan {
   const frames: FrameOverlayPlan[] = [];
-  const rootVm = opts.vm.getRootVmTypeExpr();
-  const prefix = (opts.syntheticPrefix ?? opts.vm.getSyntheticPrefix()) || "__AU_TTC_";
+  // Prefer a collision-safe, qualified VM expr if the adapter provides it.
+  const vmAny = opts.vm as unknown as {
+    getRootVmTypeExpr: () => string;
+    getQualifiedRootVmTypeExpr?: () => string;
+    getSyntheticPrefix?: () => string;
+  };
+  const rootVm = vmAny.getQualifiedRootVmTypeExpr?.() ?? vmAny.getRootVmTypeExpr();
+  const prefix = (opts.syntheticPrefix ?? vmAny.getSyntheticPrefix?.()) || "__AU_TTC_";
 
-  // Origin typing (repeat/with/promise)
-  const originTypes = deriveOriginTypes(st, exprIndex, rootVm);
+  // Stable per-frame alias names up front (root-first order already)
+  const typeAliasByFrame = new Map<FrameId, string>();
+  for (const f of st.frames) typeAliasByFrame.set(f.id, `${prefix}T${templateIndex}_F${f.id}`);
 
-  // <let> locals typing per frame
-  const letTypeMap = deriveLetTypes(st, exprIndex, rootVm);
+  // Build envs + typing hints for all frames
+  const analysis = buildFrameAnalysis(st, exprIndex, rootVm);
 
-  for (let i = 0; i < st.frames.length; i++) {
-    const f = st.frames[i]!;
+  // Emit overlays
+  const typeExprByFrame = new Map<FrameId, string>();
+  for (const f of st.frames) {
     const typeName = `${prefix}T${templateIndex}_F${f.id}`;
-    const typeExpr = buildFrameTypeExpr(f, rootVm, originTypes.get(f.id), letTypeMap.get(f.id));
+    const parentExpr = f.parent != null ? typeExprByFrame.get(f.parent) : undefined;
+    const typeExpr = buildFrameTypeExpr(f, rootVm, analysis.hints.get(f.id), analysis.envs, parentExpr);
+    typeExprByFrame.set(f.id, typeExpr);
     const lambdas = collectOneLambdaPerExpression(st, f.id, exprIndex);
     frames.push({ frame: f.id, typeName, typeExpr, lambdas });
   }
@@ -111,86 +127,223 @@ function analyzeTemplate(
 }
 
 /* ===================================================================================== */
-/* Origin typing (repeat / with / promise)                                                */
+/* Frame analysis: Env + origin typing                                                    */
 /* ===================================================================================== */
 
+type Env = ReadonlyMap<string, string>;        // name -> TS type expr
+type MutableEnv = Map<string, string>;
+
 type FrameTypingHints = {
-  /** For 'with': overlay value type; for 'promise': raw promise value type (before Awaited). */
+  /** For 'with': overlay value type; for 'promise': raw promise type (before Awaited). */
   overlayBase?: string;
-  /** For 'promise' then/catch to refine alias and $this. */
+  /** then/catch to refine $this and alias typing */
   promiseBranch?: "then" | "catch";
   /** For 'repeat': iterable type; element type computed via CollectionElement<>. */
   repeatIterable?: string;
 };
 
-function deriveOriginTypes(
+type FrameAnalysis = {
+  envs: Map<FrameId, Env>;
+  hints: Map<FrameId, FrameTypingHints>;
+};
+
+function buildFrameAnalysis(
   st: ScopeTemplate,
   exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
   rootVm: string,
-): Map<FrameId, FrameTypingHints> {
-  const out = new Map<FrameId, FrameTypingHints>();
+): FrameAnalysis {
+  const envs = new Map<FrameId, Env>();
+  const hints = new Map<FrameId, FrameTypingHints>();
 
-  for (const f of st.frames) {
-    const origin = f.origin;
-    if (!origin) continue;
+  // Helpers to navigate frame ancestry quickly
+  const frameById = new Map<FrameId, ScopeFrame>();
+  for (const f of st.frames) frameById.set(f.id, f);
 
-    switch (origin.kind) {
-      case "with": {
-        const e = exprIndex.get(origin.valueExprId);
-        if (!e || e.astKind !== "IsBindingBehavior") break;
-        const t = typeFromExprAst(e.ast, rootVm);
-        out.set(f.id, { overlayBase: t });
-        break;
-      }
-      case "promise": {
-        const e = exprIndex.get(origin.valueExprId);
-        if (!e || e.astKind !== "IsBindingBehavior") break;
-        const t = typeFromExprAst(e.ast, rootVm);
-        out.set(f.id, { overlayBase: t, promiseBranch: origin.branch! });
-        break;
-      }
-      case "repeat": {
-        const e = exprIndex.get(origin.forOfAstId);
-        if (!e || e.astKind !== "ForOfStatement") break;
-        const iterExpr = e.ast.iterable;
-        const iterType = typeFromExprAst(iterExpr, rootVm);
-        out.set(f.id, { repeatIterable: iterType });
-        break;
-      }
-      default:
-        assertUnreachable(origin as never);
+  const resolveEnvAt = (start: FrameId | null, up: number): Env | undefined => {
+    let id = start;
+    let steps = up;
+    while (steps > 0 && id != null) {
+      id = frameById.get(id!)?.parent ?? null;
+      steps--;
     }
-  }
+    return id != null ? envs.get(id) : undefined;
+  };
 
-  return out;
-}
+  // Evaluate a type in the context of a frame. Allow the *current* env to be seen for depth 0.
+  const evalTypeInFrame = (
+    frameId: FrameId,
+    ast: IsBindingBehavior | ForOfStatement | undefined,
+    currentEnv?: Env,
+  ): string => {
+    if (!ast) return "unknown";
+    const node = ast as IsBindingBehavior;
+    return typeFromExprAst(node, {
+      rootVm,
+      resolveEnv: (depth: number) => {
+        if (depth === 0 && currentEnv) return currentEnv;
+        return resolveEnvAt(frameId, depth);
+      },
+    });
+  };
 
-/* ===================================================================================== */
-/* <let> types                                                                            */
-/* ===================================================================================== */
-
-function deriveLetTypes(
-  st: ScopeTemplate,
-  exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
-  rootVm: string,
-): Map<FrameId, Record<string, string>> {
-  const out = new Map<FrameId, Record<string, string>>();
   for (const f of st.frames) {
-    const map: Record<string, string> = Object.create(null);
-    const valueMap = f.letValueExprs;
-    if (valueMap) {
-      for (const [name, id] of Object.entries(valueMap)) {
-        const e = exprIndex.get(id);
-        if (e && e.astKind === "IsBindingBehavior") {
-          map[name] = typeFromExprAst(e.ast, rootVm);
-        } else {
-          map[name] = "unknown";
+    const parentEnv: Env = f.parent != null ? (envs.get(f.parent) ?? new Map()) : new Map();
+    const env: MutableEnv = new Map(parentEnv); // start with inherited names
+    const h: FrameTypingHints = {};
+
+    // ---- Origin typing (repeat / with / promise) ----
+    if (f.origin?.kind === "repeat") {
+      const forOfAst = exprIndex.get(f.origin.forOfAstId);
+      if (forOfAst && forOfAst.astKind === "ForOfStatement") {
+        // Header evaluates in the *outer* frame
+        const iterType = evalTypeInFrame(f.parent ?? f.id, forOfAst.ast.iterable);
+        h.repeatIterable = iterType;
+      }
+    } else if (f.origin?.kind === "with") {
+      const e = exprIndex.get(f.origin.valueExprId);
+      if (e && e.astKind === "IsBindingBehavior") {
+        h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
+      }
+    } else if (f.origin?.kind === "promise") {
+      const e = exprIndex.get(f.origin.valueExprId);
+      if (e && e.astKind === "IsBindingBehavior") {
+        h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
+        h.promiseBranch = f.origin.branch!;
+      }
+    }
+    hints.set(f.id, h);
+
+    // ---- Populate env with this-frame names (shadowing parent) ----
+
+    // repeat locals / contextuals
+    if (h.repeatIterable) {
+      const iterT = h.repeatIterable;                  // e.g., Map<K,V> | T[] | Iterable<T>
+      const elemT = `CollectionElement<${iterT}>`;     // element/tuple/object view
+      // Project locals from the header declaration shape
+      const proj = f.origin?.kind === "repeat"
+        ? projectRepeatLocals(exprIndex.get(f.origin.forOfAstId)?.ast as ForOfStatement | undefined, elemT)
+        : new Map<string, string>();
+      for (const s of f.symbols) {
+        if (s.kind === "repeatLocal") {
+          const t = proj.get(s.name);
+          env.set(s.name, t ?? "unknown");
+        }
+      }
+    } else {
+      // Even if we don't know iterable type, surface unknown for locals
+      for (const s of f.symbols) {
+        if (s.kind === "repeatLocal") env.set(s.name, "unknown");
+      }
+    }
+    for (const s of f.symbols) {
+      if (s.kind === "repeatContextual") env.set(s.name, contextualType(s.name));
+    }
+
+    // promise alias (then/catch)
+    if (f.origin?.kind === "promise") {
+      const base = h.overlayBase;
+      const branch = h.promiseBranch;
+      for (const s of f.symbols) {
+        if (s.kind === "promiseAlias") {
+          if (branch === "then" && base) env.set(s.name, `Awaited<${base}>`);
+          else if (branch === "catch") env.set(s.name, "any");
+          else env.set(s.name, "unknown");
         }
       }
     }
-    out.set(f.id, map);
+
+    // <let> locals (value exprs evaluate in *current* frame)
+    if (f.letValueExprs) {
+      for (const [name, id] of Object.entries(f.letValueExprs)) {
+        const entry = exprIndex.get(id);
+        if (entry && entry.astKind === "IsBindingBehavior") {
+          // Use the in-construction env so let values can reference locals in the same frame
+          const t = evalTypeInFrame(f.id, entry.ast, env as Env);
+          env.set(name, t);
+        } else {
+          env.set(name, "unknown");
+        }
+      }
+    }
+
+    envs.set(f.id, env);
   }
-  return out;
+
+  return { envs, hints };
+}
+
+/**
+ * Compute name → type for repeat locals based on the header declaration.
+ *
+ * Supported shapes:
+ *   - BindingIdentifier('item')           → item: elemT
+ *   - ArrayDestructuring([...])           → leaves in order: TupleElement<elemT, 0>, TupleElement<elemT, 1>, ...
+ *   - ObjectDestructuring({...})          → leaf maps to elemT['prop'] (or numeric index)
+ */
+function projectRepeatLocals(forOf: ForOfStatement | undefined, elemT: string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!forOf) return out;
+  const decl = forOf.declaration as BindingIdentifierOrPattern | DestructuringAssignmentExpression;
+  switch (decl.$kind) {
+    case "BindingIdentifier": {
+      const name = (decl as BindingIdentifier).name;
+      if (name) out.set(name, wrap(elemT));
+      return out;
+    }
+    case "ArrayDestructuring":
+    case "ObjectDestructuring": {
+      projectFromDestructuring(decl as DestructuringAssignmentExpression, elemT, out);
+      return out;
+    }
+    default:
+      return out;
+  }
+}
+
+function projectFromDestructuring(node: DestructuringAssignmentExpression, elemT: string, out: Map<string, string>): void {
+  if (node.$kind === "ArrayDestructuring") {
+    // Assign consecutive indices to leaf targets.
+    let i = 0;
+    for (const entry of node.list) {
+      if (entry.$kind === "DestructuringAssignmentLeaf") {
+        const name = entry.target.name;         // AccessMemberExpression.name
+        if (name) out.set(name, tupleIndexType(elemT, i));
+        i++;
+      } else {
+        // For nested patterns, just advance the index for now
+        i++;
+      }
+    }
+    return;
+  }
+  if (node.$kind === "ObjectDestructuring") {
+    // Use first property or numeric index when available.
+    for (const entry of node.list) {
+      if (entry.$kind !== "DestructuringAssignmentLeaf") continue;
+      const name = entry.target.name;
+      if (!name) continue;
+      const props = (entry as DestructuringAssignmentRestExpression).indexOrProperties;
+      if (typeof props === "number") {
+        out.set(name, indexType(elemT, [String(props)]));
+      } else if (Array.isArray(props) && props.length > 0) {
+        out.set(name, indexType(elemT, [String(props[0]!)]));
+      } else {
+        out.set(name, wrap(elemT));
+      }
+    }
+  }
+}
+
+/** Extract a local identifier name from a binding pattern value. */
+function nameFromPatternValue(v: IsAssign): string | null {
+  switch (v.$kind) {
+    case "AccessScope":
+      return v.name || null;
+    case "Assign":
+      return v.target.$kind === "AccessScope" ? v.target.name : null;
+    default:
+      return null;
+  }
 }
 
 /* ===================================================================================== */
@@ -201,59 +354,42 @@ function buildFrameTypeExpr(
   frame: ScopeFrame,
   rootVm: string,
   hints: FrameTypingHints | undefined,
-  letTypes: Record<string, string> | undefined,
+  envs: Map<FrameId, Env>,
+  parentTypeExpr?: string,
 ): string {
-  const parts: string[] = [];
+  // Locals in this frame (already include shadowed parent names)
+  const env = envs.get(frame.id);
+  const localEntries = env ? [...env.entries()].filter(([k]) => k !== "$this" && k !== "$parent" && k !== "$vm") : [];
+  const localKeysUnion = localEntries.length > 0 ? localEntries.map(([k]) => `'${escapeKey(k)}'`).join(" | ") : "never";
+  const localsType = localEntries.length > 0 ? `{ ${localEntries.map(([n, t]) => `${safeProp(n)}: ${t}`).join("; ")} }` : "{}";
 
-  // Overlay ($this) for with/promise (then) — intersect overlay object with VM/root.
-  if (hints?.overlayBase) {
-    const overlayObj = hints.promiseBranch === "then" ? `Awaited<${hints.overlayBase}>` : hints.overlayBase;
-    parts.push(wrap(overlayObj));
-    parts.push(wrap(`{ $this: ${overlayObj} }`));
-  }
+  // Overlay object (with / promise then) if present
+  const overlayObj = hints?.overlayBase ? (hints.promiseBranch === "then" ? `Awaited<${hints.overlayBase}>` : hints.overlayBase) : null;
 
-  // Always include root VM + $parent
-  parts.push(wrap(rootVm));
-  parts.push(wrap(`{ $parent: unknown }`));
+  // Root after overlay shadow:  Omit<VM, keyof Overlay>
+  const rootAfterOverlay = overlayObj != null ? `Omit<${wrap(rootVm)}, keyof ${wrap(overlayObj)}>` : wrap(rootVm);
 
-  // Locals (let/repeat/promiseAlias/contextual)
-  if (frame.symbols.length > 0) {
-    const fields: string[] = [];
-    for (const s of frame.symbols) {
-      switch (s.kind) {
-        case "let": {
-          const t = letTypes?.[s.name] ?? "unknown";
-          fields.push(`${safeProp(s.name)}: ${t}`);
-          break;
-        }
-        case "repeatLocal": {
-          const elemT = hints?.repeatIterable ? `CollectionElement<${hints.repeatIterable}>` : "unknown";
-          fields.push(`${safeProp(s.name)}: ${elemT}`);
-          break;
-        }
-        case "repeatContextual":
-          fields.push(contextualField(s.name));
-          break;
+  // Root after overlay & locals shadow:  Omit<Root', 'k1'|'k2'|...>
+  const rootAfterAll = localEntries.length > 0 ? `Omit<${wrap(rootAfterOverlay)}, ${localKeysUnion}>` : rootAfterOverlay;
 
-        case "promiseAlias": {
-          if (hints?.overlayBase && hints.promiseBranch === "then") {
-            fields.push(`${safeProp(s.name)}: Awaited<${hints.overlayBase}>`);
-          } else if (hints?.promiseBranch === "catch") {
-            fields.push(`${safeProp(s.name)}: any`);
-          } else {
-            fields.push(`${safeProp(s.name)}: unknown`);
-          }
-          break;
-        }
+  // Overlay reduced by locals: Omit<Overlay, 'k1'|'k2'|...>
+  const overlayAfterLocals = overlayObj != null ? (localEntries.length > 0 ? `Omit<${wrap(overlayObj)}, ${localKeysUnion}>` : wrap(overlayObj)) : "{}";
 
-        default:
-          assertUnreachable(s as never);
-      }
-    }
-    if (fields.length) parts.push(wrap(`{ ${fields.join("; ")} }`));
-  }
+  // $parent & $vm segments
+  const parentSeg = parentTypeExpr ? `{ $parent: ${parentTypeExpr} }` : `{ $parent: unknown }`;
+  const vmSeg = `{ $vm: ${wrap(rootVm)} }`;
+  const thisSeg = overlayObj != null ? `{ $this: ${wrap(overlayObj)} }` : "{}";
 
-  return parts.join(" & ");
+  // Final frame type:
+  //   Omit<VM, keyof Overlay | LocalKeys> & Omit<Overlay, LocalKeys> & Locals & { $parent: ... } & { $vm: VM } & { $this?: Overlay }
+  return [
+    wrap(rootAfterAll),
+    wrap(overlayAfterLocals),
+    wrap(localsType),
+    wrap(parentSeg),
+    wrap(vmSeg),
+    wrap(thisSeg),
+  ].join(" & ");
 }
 
 function wrap(s: string): string {
@@ -262,16 +398,16 @@ function wrap(s: string): string {
   return `(${trimmed})`;
 }
 
-function contextualField(name: string): string {
+function contextualType(name: string): string {
   switch (name) {
-    case "$index":   return `${name}: number`;
-    case "$length":  return `${name}: number`;
-    case "$first":   return `${name}: boolean`;
-    case "$last":    return `${name}: boolean`;
-    case "$even":    return `${name}: boolean`;
-    case "$odd":     return `${name}: boolean`;
-    case "$middle":  return `${name}: boolean`;
-    default:         return `${safeProp(name)}: unknown`;
+    case "$index":   return "number";
+    case "$length":  return "number";
+    case "$first":   return "boolean";
+    case "$last":    return "boolean";
+    case "$even":    return "boolean";
+    case "$odd":     return "boolean";
+    case "$middle":  return "boolean";
+    default:         return "unknown";
   }
 }
 
@@ -345,6 +481,7 @@ function printIsBindingBehavior(n: IsBindingBehavior): string | null {
     case "Conditional":      return printConditional(n);
 
     case "AccessThis":       return baseThis(n);
+    case "AccessBoundary":   return boundaryVm();
     case "AccessScope":      return scopeWithName(n);
     case "AccessMember":     return member(n);
     case "AccessKeyed":      return keyed(n);
@@ -365,15 +502,15 @@ function printIsBindingBehavior(n: IsBindingBehavior): string | null {
     case "Template":         return template(n);
     case "TaggedTemplate":   return taggedTemplate(n);
 
-    // Not expected in TTC rendering path:
-    // - AccessBoundary: parser specific; skip emission
     default:
       return null;
   }
 }
 
 /* ---- Primitives / simple nodes ---- */
-
+function boundaryVm(): string {
+  return "o.$vm";
+}
 function baseThis(n: AccessThisExpression): string {
   return ancestorChain(n.ancestor);
 }
@@ -530,97 +667,144 @@ function escapeBackticks(s: string): string {
 }
 
 /* ===================================================================================== */
-/* Expression → type expressions                                                         */
+/* Env-aware Expression → type expressions                                               */
 /* ===================================================================================== */
 
+type TypeCtx = {
+  rootVm: string;
+  /**
+   * Resolve the *Env* at a given $parent depth from the frame where the expression is evaluated.
+   * depth 0 = current frame, 1 = parent, ...
+   */
+  resolveEnv(depth: number): Env | undefined;
+};
+
 /**
- * Produce a TS type expression for an expression:
- * - simple AccessScope/Member chains → bracket-index off root VM union
- * - AccessThis(0) → root VM
- * - AccessKeyed with literal keys included; dynamic keys → unknown
- * - any other shape → unknown
+ * Produce a TS type expression for an expression in the given frame context:
+ * - Locals first (via Env), then fall back to root VM bracket-indexing
+ * - AccessThis(0) → root VM (the overlay gets intersected into the frame type)
+ * - AccessScope with ancestor>0 resolves against ancestor Env
+ * - AccessMember/Keyed index into the base type
+ * - Calls → ReturnType<NonNullable<calleeType>>
+ * - Unknown/complex shapes → 'unknown'
  */
-function typeFromExprAst(ast: IsBindingBehavior, rootVm: string): string {
-  const path = bracketPathFromAst(ast);
-  if (path.kind === "root") return `(${rootVm})`;
-  if (path.kind === "path") return indexType(rootVm, path.parts);
-  return "unknown";
-}
+function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
+  return tIsBindingBehavior(ast);
 
-type BracketPath =
-  | { kind: "root" }
-  | { kind: "path"; parts: string[] }
-  | { kind: "unknown" };
+  function tIsBindingBehavior(n: IsBindingBehavior): string {
+    switch (n.$kind) {
+      case "BindingBehavior": return tIsBindingBehavior(n.expression);
+      case "ValueConverter":  return tIsBindingBehavior(n.expression);
 
-function bracketPathFromAst(ast: IsBindingBehavior): BracketPath {
-  // normalize through behaviors/converters
-  let n: IsBindingBehavior = ast;
-  while (n.$kind === "BindingBehavior" || n.$kind === "ValueConverter") n = n.expression;
+      case "Assign":          return "unknown";
+      case "Conditional":     return "unknown";
 
-  // AccessThis(0) → root
-  if (n.$kind === "AccessThis" && n.ancestor === 0) return { kind: "root" };
+      case "AccessThis":      return tAccessThis(n);
+      case "AccessBoundary":  return `(${ctx.rootVm})`;
+      case "AccessScope":     return tAccessScope(n);
+      case "AccessMember":    return tAccessMember(n);
+      case "AccessKeyed":     return tAccessKeyed(n);
 
-  // Simple AccessScope/Member/Keyed chain without calls
-  const parts: string[] = [];
-  let lhs: IsLeftHandSide | null;
+      case "CallScope":       return tCallScope(n);
+      case "CallMember":      return tCallMember(n);
+      case "CallFunction":    return tCallFunction(n);
+      case "CallGlobal":      return "unknown";
 
-  switch (n.$kind) {
-    case "AccessScope":
-    case "AccessMember":
-    case "AccessKeyed":
-    case "AccessThis":
-      lhs = n;
-      break;
-    default:
-      return { kind: "unknown" };
-  }
+      case "New":             return "unknown";
+      case "Binary":          return "unknown";
+      case "Unary":           return "unknown";
 
-  // $parent chain or AccessThis with ancestor>0 → unknown (we don't index into $parent type)
-  if (lhs.$kind === "AccessScope" && lhs.ancestor > 0) return { kind: "unknown" };
-  if (lhs.$kind === "AccessThis" && lhs.ancestor > 0) return { kind: "unknown" };
+      case "PrimitiveLiteral":return literalType(n);
+      case "ArrayLiteral":    return "unknown[]";
+      case "ObjectLiteral":   return "Record<string, unknown>";
 
-  while (lhs) {
-    switch (lhs.$kind) {
-      case "AccessMember":
-        parts.unshift(lhs.name);
-        lhs = lhs.object;
-        continue;
-
-      case "AccessKeyed": {
-        const k = lhs.key;
-        if (k.$kind === "PrimitiveLiteral") {
-          const t = k.value;
-          parts.unshift(String(t));
-        } else {
-          return { kind: "unknown" };
-        }
-        lhs = lhs.object;
-        continue;
-      }
-
-      case "AccessScope":
-        if (lhs.ancestor !== 0) return { kind: "unknown" };
-        if (!lhs.name) return { kind: "unknown" };
-        parts.unshift(lhs.name);
-        lhs = null;
-        continue;
-
-      case "AccessThis":
-        if (lhs.ancestor !== 0) return { kind: "unknown" };
-        lhs = null;
-        continue;
+      case "Template":        return "string";
+      case "TaggedTemplate":  return "unknown";
 
       default:
-        return { kind: "unknown" };
+        return "unknown";
     }
   }
 
-  return parts.length === 0 ? { kind: "root" } : { kind: "path", parts };
+  function tAccessThis(n: AccessThisExpression): string {
+    if (n.ancestor === 0) return `(${ctx.rootVm})`;
+    // Accessing $parent.$this is not modeled as a value path here; rely on frame $parent typing
+    return "unknown";
+  }
+
+  function tAccessScope(n: AccessScopeExpression): string {
+    const env = ctx.resolveEnv(n.ancestor);
+    if (n.name && env) {
+      const t = env.get(n.name);
+      if (t) return `(${t})`;
+    }
+    // Fallback to root VM only when ancestor === 0
+    return n.ancestor === 0 && n.name ? indexType(ctx.rootVm, [n.name]) : "unknown";
+  }
+
+  function tAccessMember(n: AccessMemberExpression): string {
+    const base = tIsBindingBehavior(n.object as unknown as IsBindingBehavior);
+    if (!base || base === "unknown") return "unknown";
+    return indexType(base, [n.name]);
+  }
+
+  function tAccessKeyed(n: AccessKeyedExpression): string {
+    const base = tIsBindingBehavior(n.object as unknown as IsBindingBehavior);
+    if (!base || base === "unknown") return "unknown";
+    if (n.key.$kind === "PrimitiveLiteral") {
+      const k = String((n.key as PrimitiveLiteralExpression).value as unknown);
+      return indexType(base, [k]);
+    }
+    return "unknown";
+  }
+
+  function tCallScope(n: CallScopeExpression): string {
+    // ReturnType of the callee found via scope lookup
+    const calleeT = tAccessScope({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor });
+    return returnTypeOf(calleeT);
+  }
+
+  function tCallMember(n: CallMemberExpression): string {
+    const base = tIsBindingBehavior(n.object as unknown as IsBindingBehavior);
+    if (!base || base === "unknown") return "unknown";
+    const calleeT = indexType(base, [n.name]);
+    return returnTypeOf(calleeT);
+  }
+
+  function tCallFunction(n: CallFunctionExpression): string {
+    const fnT = tIsBindingBehavior(n.func as unknown as IsBindingBehavior);
+    return returnTypeOf(fnT);
+  }
 }
 
-function indexType(rootVm: string, parts: string[]): string {
-  const idx = parts.map(p => `['${p}']`).join("");
-  return `(${rootVm})${idx}`;
+function literalType(n: PrimitiveLiteralExpression): string {
+  const v = n.value;
+  switch (typeof v) {
+    case "string":  return "string";
+    case "number":  return "number";
+    case "boolean": return "boolean";
+    default:        return v === null ? "null" : "unknown";
+  }
+}
+
+/** `ReturnType<NonNullable<T>>` */
+function returnTypeOf(fnType: string): string {
+  return `ReturnType<NonNullable<${wrap(fnType)}>>`;
+}
+
+/** Index like: `NonNullable<Base>[0]['b']` (numeric indices stay numeric). */
+function indexType(base: string, parts: string[]): string {
+  const idx = parts.map(p => `['${escapeKey(p)}']`).join("");
+  return `NonNullable<${wrap(base)}>${idx}`;
+}
+
+/** Tuple index like: `TupleElement<NonNullable<Base>, I>` */
+function tupleIndexType(base: string, i: number): string {
+  return `TupleElement<NonNullable<${wrap(base)}>, ${i}>`;
+}
+
+function escapeKey(s: string): string {
+  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 /* ===================================================================================== */

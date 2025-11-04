@@ -15,24 +15,15 @@ import type {
   AnyBindingExpression,
   IsBindingBehavior,
   MultiAttrIR,
+  InstructionIR,
 } from "../../model/ir.js";
+import type { AttributeParser } from "../../language/syntax.js";
 
 /* =======================================================================================
  * HTML → IR builder (Lowering)
  * - Pure syntax shaping. No Semantics here.
  * - NodeId uniqueness is per TemplateIR (nested templates restart at '0').
  * ======================================================================================= */
-
-export interface IAttrSyntax {
-  rawName: string;
-  rawValue: string;
-  target: string;
-  command: string | null;
-  parts: readonly string[] | null;
-}
-export interface IAttributeParser {
-  parse(name: string, value: string): IAttrSyntax;
-}
 
 type ExpressionType = "None" | "Interpolation" | "IsIterator" | "IsChainable" | "IsFunction" | "IsProperty";
 export interface IExpressionParser {
@@ -48,7 +39,7 @@ export interface IExpressionParser {
 export interface BuildIrOptions {
   file?: string;
   name?: string;
-  attrParser: IAttributeParser;
+  attrParser: AttributeParser;
   exprParser: IExpressionParser;
 }
 
@@ -187,7 +178,7 @@ function mapStaticAttrs(
 function collectRows(
   p: { childNodes?: P5Node[] },
   ids: NodeIdGen,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[]
@@ -268,7 +259,7 @@ function collectRows(
 
 function compileLet(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable
 ): { instructions: LetBindingIR[]; toBindingContext: boolean } {
   const out: LetBindingIR[] = [];
@@ -312,7 +303,7 @@ function compileLet(
 
 function compileElementAttrs(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable
 ): (
   | PropertyBindingIR
@@ -457,12 +448,12 @@ function compileElementAttrs(
 
 function collectControllers(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): HydrateTemplateControllerIR[] {
   // 1) Gather controller-bearing attributes (preserve source order).
-  const candidates: { a: Token.Attribute; s: ReturnType<IAttributeParser["parse"]> }[] = [];
+  const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]> }[] = [];
   for (const a of el.attrs ?? []) {
     const s = attrParser.parse(a.name, a.value ?? "");
     if (isControllerAttr(s)) candidates.push({ a, s });
@@ -509,8 +500,8 @@ function collectControllers(
 
 function buildBaseInstructionsForRightmost(
   el: P5Element,
-  rightmost: { a: Token.Attribute; s: ReturnType<IAttributeParser["parse"]> },
-  attrParser: IAttributeParser,
+  rightmost: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]> },
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): HydrateTemplateControllerIR[] {
@@ -641,8 +632,8 @@ type ControllerPrototype = {
 function buildControllerPrototypes(
   _el: P5Element,
   a: Token.Attribute,
-  s: ReturnType<IAttributeParser["parse"]>,
-  _attrParser: IAttributeParser,
+  s: ReturnType<AttributeParser["parse"]>,
+  _attrParser: AttributeParser,
   table: ExprTable,
   loc: P5Loc
 ): ControllerPrototype[] {
@@ -697,7 +688,7 @@ function injectPromiseBranchesIntoDef(
   el: P5Element,
   def: TemplateIR,
   idMap: WeakMap<P5Node, NodeId>,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   valueProp: PropertyBindingIR
@@ -707,73 +698,93 @@ function injectPromiseBranchesIntoDef(
       ? (el as P5Template).content.childNodes ?? []
       : el.childNodes ?? [];
 
-  for (const kid of kids) {
-    if (!isElement(kid) || kid.nodeName.toLowerCase() !== "template") continue;
+  const isBranchMarker = (ins: InstructionIR) => {
+    if (ins.type === "setAttribute") {
+      return ins.to === "then" || ins.to === "catch";
+    }
+    if (ins.type === "propertyBinding") {
+      return ins.to === "then" || ins.to === "catch";
+    }
+    if (ins.type === "attributeBinding") {
+      // authored attr could be 'then' or 'catch'
+      return ins.attr === "then" || ins.attr === "catch" || ins.to === "then" || ins.to === "catch";
+    }
+    return false;
+  };
 
-    const thenAttr = findAttr(kid, "then");
-    const catchAttr = findAttr(kid, "catch");
-    if (!thenAttr && !catchAttr) continue;
+  for (const kid of kids) {
+    if (!isElement(kid)) continue;
+
+    const isTpl = kid.nodeName.toLowerCase() === "template";
+
+    // Detect branch marker on this child element by parsing its attributes.
+    let branchKind: "then" | "catch" | null = null;
+    let aliasVar: string | null = null;
+    let branchAttrLoc: P5Loc | null | undefined = null;
+
+    if (isTpl) {
+      // <template then="x"> / <template catch="e">
+      const thenAttr = findAttr(kid, "then");
+      const catchAttr = findAttr(kid, "catch");
+      if (thenAttr) {
+        branchKind = "then";
+        aliasVar = (thenAttr.value?.length ? thenAttr.value : "then") ?? "then";
+        branchAttrLoc = (kid as P5Template).sourceCodeLocation;
+      } else if (catchAttr) {
+        branchKind = "catch";
+        aliasVar = (catchAttr.value?.length ? catchAttr.value : "catch") ?? "catch";
+        branchAttrLoc = (kid as P5Template).sourceCodeLocation;
+      }
+    } else {
+      // General case: any element with then[.from-view]/catch[.from-view]
+      for (const a of (kid as P5Element).attrs ?? []) {
+        const parsed = attrParser.parse(a.name, a.value ?? "");
+        if (parsed.target === "then" || parsed.target === "catch") {
+          branchKind = parsed.target as "then" | "catch";
+          aliasVar = (a.value?.length ? a.value : branchKind) ?? branchKind;
+          branchAttrLoc = attrLoc(kid as P5Element, a.name);
+          break;
+        }
+      }
+    }
+
+    if (!branchKind) continue;
 
     const target = idMap.get(kid as P5Node);
     if (!target) continue;
 
-    // prune SetAttribute for the branch attrs on this target
-    const row = def.rows.find((r) => r.target === target);
-    if (row) {
-      row.instructions = row.instructions.filter((ins) => {
-        if (ins.type === "setAttribute") return ins.to !== "then" && ins.to !== "catch";
-        return true;
-      });
+    // 1) Prune marker instructions for this child from the lifted 'def'
+    const hostRow = def.rows.find(r => r.target === target);
+    if (hostRow) {
+      hostRow.instructions = hostRow.instructions.filter(ins => !isBranchMarker(ins));
     }
 
-    if (thenAttr) {
-      const aliasVar = thenAttr.value?.length ? thenAttr.value : "then";
-      const branchDef = templateOfTemplateContent(
-        kid as P5Template,
-        attrParser,
-        table,
-        nestedTemplates
-      );
-      def.rows.push({
-        target,
-        instructions: [
-          {
-            type: "hydrateTemplateController",
-            res: "promise",
-            def: branchDef,
-            props: [valueProp],
-            alias: "then",
-            branch: { kind: "then", local: aliasVar },
-            containerless: false,
-            loc: toSpan((kid as P5Template).sourceCodeLocation, table.file),
-          },
-        ],
-      });
+    // 2) Build the branch view 'def' from either <template> content or the element itself.
+    const branchDef = isTpl
+      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates)
+      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates);
+
+    // Also prune marker artifacts inside the branch def itself (the cloned element/template).
+    for (const row of branchDef.rows) {
+      row.instructions = row.instructions.filter(ins => !isBranchMarker(ins));
     }
-    if (catchAttr) {
-      const aliasVar = catchAttr.value?.length ? catchAttr.value : "catch";
-      const branchDef = templateOfTemplateContent(
-        kid as P5Template,
-        attrParser,
-        table,
-        nestedTemplates
-      );
-      def.rows.push({
-        target,
-        instructions: [
-          {
-            type: "hydrateTemplateController",
-            res: "promise",
-            def: branchDef,
-            props: [valueProp],
-            alias: "catch",
-            branch: { kind: "catch", local: aliasVar },
-            containerless: false,
-            loc: toSpan((kid as P5Template).sourceCodeLocation, table.file),
-          },
-        ],
-      });
-    }
+
+    // 3) Inject the branch controller on this child
+    def.rows.push({
+      target,
+      instructions: [
+        {
+          type: "hydrateTemplateController",
+          res: "promise",
+          def: branchDef,
+          props: [valueProp],
+          alias: branchKind,
+          branch: { kind: branchKind, local: aliasVar! },
+          containerless: false,
+          loc: toSpan(branchAttrLoc ?? (isTpl ? (kid as P5Template).sourceCodeLocation : (kid as P5Element).sourceCodeLocation), table.file),
+        },
+      ],
+    });
   }
 }
 
@@ -782,7 +793,7 @@ function injectSwitchBranchesIntoDef(
   el: P5Element,
   def: TemplateIR,
   idMap: WeakMap<P5Node, NodeId>,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   valueProp: PropertyBindingIR
@@ -898,7 +909,7 @@ function injectSwitchBranchesIntoDef(
 
 function templateOfElementChildren(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): TemplateIR {
@@ -912,7 +923,7 @@ function templateOfElementChildren(
 
 function templateOfElementChildrenWithMap(
   el: P5Element,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
@@ -927,7 +938,7 @@ function templateOfElementChildrenWithMap(
 
 function stripControllerAttrsFromElement(
   el: P5Element,
-  attrParser: IAttributeParser
+  attrParser: AttributeParser
 ): P5Element {
   const filteredAttrs = (el.attrs ?? []).filter(
     (a) => !isControllerAttr(attrParser.parse(a.name, a.value ?? ""))
@@ -957,7 +968,7 @@ function stripControllerAttrsFromElement(
 
 function templateOfTemplateContent(
   t: P5Template,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): TemplateIR {
@@ -996,7 +1007,7 @@ function buildTemplateFrom(
   rootLike: { childNodes?: P5Node[] } | P5Template["content"],
   ids: NodeIdGen,
   idMap: WeakMap<P5Node, NodeId> | undefined,
-  attrParser: IAttributeParser,
+  attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[]
 ): TemplateIR {

@@ -484,18 +484,46 @@ function normalizeAttrToProp(host: NodeSem, rawAttr: string, sem: Semantics): st
   if (host.kind !== "element") return camelCase(attr);
 
   const tag = host.tag;
+
   // 1) naming.perTag (highest precedence)
   const perTag = sem.naming.perTag?.[tag]?.[attr];
   if (perTag) return perTag;
+
   // 2) dom.elements[tag].attrToProp overrides
   const elt = sem.dom.elements[tag];
   const domOverride = elt?.attrToProp?.[attr];
   if (domOverride) return domOverride;
+
   // 3) naming.global
   const global = sem.naming.attrToPropGlobal[attr];
   if (global) return global;
-  // 4) fallback camelCase
+
+  // 4) host-aware case-insensitive canonicalization
+  //    (handles 'classname' → 'className', 'valueasnumber' → 'valueAsNumber', etc.)
+  const hostKey = lookupHostPropCaseInsensitive(host, attr);
+  if (hostKey) return hostKey;
+
+  // 5) fallback camelCase (kebab → camel)
   return camelCase(attr);
+}
+
+function lookupHostPropCaseInsensitive(host: NodeSem, raw: string): string | null {
+  if (host.kind !== "element") return null;
+  const needle = raw.toLowerCase();
+
+  // 1) Prefer custom element bindables (component props)
+  if (host.custom) {
+    for (const k of Object.keys(host.custom.def.bindables)) {
+      if (k.toLowerCase() === needle) return k;
+    }
+  }
+  // 2) Then native DOM props for this tag
+  if (host.native) {
+    for (const k of Object.keys(host.native.def.props)) {
+      if (k.toLowerCase() === needle) return k;
+    }
+  }
+  return null;
 }
 
 /**
