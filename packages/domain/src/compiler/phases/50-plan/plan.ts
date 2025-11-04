@@ -112,10 +112,12 @@ function analyzeTemplate(
   const analysis = buildFrameAnalysis(st, exprIndex, rootVm);
 
   // Emit overlays
+  const typeExprByFrame = new Map<FrameId, string>();
   for (const f of st.frames) {
-    const typeName = typeAliasByFrame.get(f.id)!;
-    const parentAlias = f.parent != null ? typeAliasByFrame.get(f.parent) : undefined;
-    const typeExpr = buildFrameTypeExpr(f, rootVm, analysis.hints.get(f.id), analysis.envs, parentAlias);
+    const typeName = `${prefix}T${templateIndex}_F${f.id}`;
+    const parentExpr = f.parent != null ? typeExprByFrame.get(f.parent) : undefined;
+    const typeExpr = buildFrameTypeExpr(f, rootVm, analysis.hints.get(f.id), analysis.envs, parentExpr);
+    typeExprByFrame.set(f.id, typeExpr);
     const lambdas = collectOneLambdaPerExpression(st, f.id, exprIndex);
     frames.push({ frame: f.id, typeName, typeExpr, lambdas });
   }
@@ -166,12 +168,20 @@ function buildFrameAnalysis(
     return id != null ? envs.get(id) : undefined;
   };
 
-  const evalTypeInFrame = (frameId: FrameId, ast: IsBindingBehavior | ForOfStatement | undefined): string => {
+  // Evaluate a type in the context of a frame. Allow the *current* env to be seen for depth 0.
+  const evalTypeInFrame = (
+    frameId: FrameId,
+    ast: IsBindingBehavior | ForOfStatement | undefined,
+    currentEnv?: Env,
+  ): string => {
     if (!ast) return "unknown";
     const node = ast as IsBindingBehavior;
     return typeFromExprAst(node, {
       rootVm,
-      resolveEnv: (depth: number) => resolveEnvAt(frameId, depth),
+      resolveEnv: (depth: number) => {
+        if (depth === 0 && currentEnv) return currentEnv;
+        return resolveEnvAt(frameId, depth);
+      },
     });
   };
 
@@ -246,7 +256,8 @@ function buildFrameAnalysis(
       for (const [name, id] of Object.entries(f.letValueExprs)) {
         const entry = exprIndex.get(id);
         if (entry && entry.astKind === "IsBindingBehavior") {
-          const t = evalTypeInFrame(f.id, entry.ast);
+          // Use the in-construction env so let values can reference locals in the same frame
+          const t = evalTypeInFrame(f.id, entry.ast, env as Env);
           env.set(name, t);
         } else {
           env.set(name, "unknown");
@@ -343,7 +354,7 @@ function buildFrameTypeExpr(
   rootVm: string,
   hints: FrameTypingHints | undefined,
   envs: Map<FrameId, Env>,
-  parentAlias?: string,
+  parentTypeExpr?: string,
 ): string {
   const parts: string[] = [];
 
@@ -354,15 +365,19 @@ function buildFrameTypeExpr(
     parts.push(wrap(`{ $this: ${overlayObj} }`));
   }
 
-  // Always include root VM
-  parts.push(wrap(rootVm));
+  // Always include root VM, but *shadow* any names present in this frame's env:
+  // Omit<Root, 'k1'|'k2'> & { k1: T1; k2: T2 }
+  const env = envs.get(frame.id);
+  const shadowKeys = env ? [...env.keys()].filter(k => k !== "$this" && k !== "$parent") : [];
+  const omitKeys = shadowKeys.length > 0 ? shadowKeys.map(k => `'${escapeKey(k)}'`).join(" | ") : "";
+  const rootSegment = shadowKeys.length > 0 ? `Omit<${wrap(rootVm)}, ${omitKeys}>` : wrap(rootVm);
+  parts.push(rootSegment);
 
-  // $parent typed as parent alias when present
-  if (parentAlias) parts.push(wrap(`{ $parent: ${parentAlias} }`));
+  // $parent typed as parent type expression when present
+  if (parentTypeExpr) parts.push(wrap(`{ $parent: ${parentTypeExpr} }`));
   else             parts.push(wrap(`{ $parent: unknown }`));
 
   // Visible names for this frame (env already includes shadowed parent names)
-  const env = envs.get(frame.id);
   if (env && env.size > 0) {
     const fields: string[] = [];
     for (const [name, type] of env) {
