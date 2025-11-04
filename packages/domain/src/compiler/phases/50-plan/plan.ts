@@ -33,6 +33,7 @@ import type {
   AssignExpression,
   ConditionalExpression,
   AccessThisExpression,
+  AccessBoundaryExpression,
   AccessScopeExpression,
   AccessMemberExpression,
   AccessKeyedExpression,
@@ -356,38 +357,39 @@ function buildFrameTypeExpr(
   envs: Map<FrameId, Env>,
   parentTypeExpr?: string,
 ): string {
-  const parts: string[] = [];
-
-  // Overlay ($this) for with/promise then — intersect overlay object with VM/root.
-  if (hints?.overlayBase) {
-    const overlayObj = hints.promiseBranch === "then" ? `Awaited<${hints.overlayBase}>` : hints.overlayBase;
-    parts.push(wrap(overlayObj));
-    parts.push(wrap(`{ $this: ${overlayObj} }`));
-  }
-
-  // Always include root VM, but *shadow* any names present in this frame's env:
-  // Omit<Root, 'k1'|'k2'> & { k1: T1; k2: T2 }
+  // Locals in this frame (already include shadowed parent names)
   const env = envs.get(frame.id);
-  const shadowKeys = env ? [...env.keys()].filter(k => k !== "$this" && k !== "$parent") : [];
-  const omitKeys = shadowKeys.length > 0 ? shadowKeys.map(k => `'${escapeKey(k)}'`).join(" | ") : "";
-  const rootSegment = shadowKeys.length > 0 ? `Omit<${wrap(rootVm)}, ${omitKeys}>` : wrap(rootVm);
-  parts.push(rootSegment);
+  const localEntries = env ? [...env.entries()].filter(([k]) => k !== "$this" && k !== "$parent" && k !== "$vm") : [];
+  const localKeysUnion = localEntries.length > 0 ? localEntries.map(([k]) => `'${escapeKey(k)}'`).join(" | ") : "never";
+  const localsType = localEntries.length > 0 ? `{ ${localEntries.map(([n, t]) => `${safeProp(n)}: ${t}`).join("; ")} }` : "{}";
 
-  // $parent typed as parent type expression when present
-  if (parentTypeExpr) parts.push(wrap(`{ $parent: ${parentTypeExpr} }`));
-  else             parts.push(wrap(`{ $parent: unknown }`));
+  // Overlay object (with / promise then) if present
+  const overlayObj = hints?.overlayBase ? (hints.promiseBranch === "then" ? `Awaited<${hints.overlayBase}>` : hints.overlayBase) : null;
 
-  // Visible names for this frame (env already includes shadowed parent names)
-  if (env && env.size > 0) {
-    const fields: string[] = [];
-    for (const [name, type] of env) {
-      if (name === "$this" || name === "$parent") continue;
-      fields.push(`${safeProp(name)}: ${type}`);
-    }
-    if (fields.length) parts.push(wrap(`{ ${fields.join("; ")} }`));
-  }
+  // Root after overlay shadow:  Omit<VM, keyof Overlay>
+  const rootAfterOverlay = overlayObj != null ? `Omit<${wrap(rootVm)}, keyof ${wrap(overlayObj)}>` : wrap(rootVm);
 
-  return parts.join(" & ");
+  // Root after overlay & locals shadow:  Omit<Root', 'k1'|'k2'|...>
+  const rootAfterAll = localEntries.length > 0 ? `Omit<${wrap(rootAfterOverlay)}, ${localKeysUnion}>` : rootAfterOverlay;
+
+  // Overlay reduced by locals: Omit<Overlay, 'k1'|'k2'|...>
+  const overlayAfterLocals = overlayObj != null ? (localEntries.length > 0 ? `Omit<${wrap(overlayObj)}, ${localKeysUnion}>` : wrap(overlayObj)) : "{}";
+
+  // $parent & $vm segments
+  const parentSeg = parentTypeExpr ? `{ $parent: ${parentTypeExpr} }` : `{ $parent: unknown }`;
+  const vmSeg = `{ $vm: ${wrap(rootVm)} }`;
+  const thisSeg = overlayObj != null ? `{ $this: ${wrap(overlayObj)} }` : "{}";
+
+  // Final frame type:
+  //   Omit<VM, keyof Overlay | LocalKeys> & Omit<Overlay, LocalKeys> & Locals & { $parent: ... } & { $vm: VM } & { $this?: Overlay }
+  return [
+    wrap(rootAfterAll),
+    wrap(overlayAfterLocals),
+    wrap(localsType),
+    wrap(parentSeg),
+    wrap(vmSeg),
+    wrap(thisSeg),
+  ].join(" & ");
 }
 
 function wrap(s: string): string {
@@ -472,6 +474,7 @@ function printIsBindingBehavior(n: IsBindingBehavior): string | null {
     case "Conditional":      return printConditional(n);
 
     case "AccessThis":       return baseThis(n);
+    case "AccessBoundary":   return boundaryVm();
     case "AccessScope":      return scopeWithName(n);
     case "AccessMember":     return member(n);
     case "AccessKeyed":      return keyed(n);
@@ -498,7 +501,9 @@ function printIsBindingBehavior(n: IsBindingBehavior): string | null {
 }
 
 /* ---- Primitives / simple nodes ---- */
-
+function boundaryVm(): string {
+  return "o.$vm";
+}
 function baseThis(n: AccessThisExpression): string {
   return ancestorChain(n.ancestor);
 }
@@ -679,6 +684,7 @@ function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
       case "Conditional":     return "unknown";
 
       case "AccessThis":      return tAccessThis(n);
+      case "AccessBoundary":  return `(${ctx.rootVm})`;
       case "AccessScope":     return tAccessScope(n);
       case "AccessMember":    return tAccessMember(n);
       case "AccessKeyed":     return tAccessKeyed(n);
