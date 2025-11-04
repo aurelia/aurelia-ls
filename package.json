@@ -25,6 +25,8 @@
     "test:bind:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/phases/30-bind/*.js\" --include \"packages/domain/out/compiler/phases/20-resolve-host/*.js\" --include \"packages/domain/out/compiler/phases/10-lower/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/bind node --test --test-reporter=spec packages/domain/test/bind/bind.test.mjs",
     "test:typecheck": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/typecheck/*.test.mjs",
     "test:typecheck:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/**/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/typecheck node --test --test-reporter=spec packages/domain/test/typecheck/*.test.mjs",
+    "test:ssr": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/ssr/*.test.mjs",
+    "dump:ssr": "pnpm -w build && node scripts/dump-ssr.mjs",
     "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/domain/test"
   },
   "devDependencies": {

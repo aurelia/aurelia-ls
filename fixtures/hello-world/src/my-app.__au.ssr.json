@@ -1,0 +1,16 @@
+{
+  "version": "aurelia-ssr-manifest@0",
+  "templates": [
+    {
+      "name": "my-app.html",
+      "nodes": [
+        {
+          "hid": 1,
+          "nodeId": "0/0#text@0",
+          "text": true,
+          "controllers": []
+        }
+      ]
+    }
+  ]
+}
