@@ -76,6 +76,7 @@ export async function compileAndCheckFast({
   overlayBaseName = "overlay",
   exprParser,
   attrParser,
+  typesText,
 }) {
   const domainIndexUrl = new URL("../../../out/index.js", import.meta.url);
   const { compileTemplateToOverlay } = await import(domainIndexUrl.href);
@@ -100,6 +101,10 @@ export async function compileAndCheckFast({
 
   // Load prelude once per session
   sess.ensurePrelude("/mem/__prelude.d.ts", preludeText);
+  // Load user-provided ambient types for this test case (mirrors real project types)
+  if (typeof typesText === "string" && typesText.trim().length > 0) {
+    sess.setFile("/mem/__types.d.ts", typesText);
+  }
   // Update this test's overlay file
   sess.setFile(overlayPath, text);
 
