@@ -578,5 +578,61 @@
         { "kind": "text", "code": "i" }
       ]
     }
+  },
+  {
+    "name": "L-55 promise branches on elements (.from-view)",
+    "markup": "<div promise.bind=\"p\"><span then.from-view=\"data\">${data.toUpperCase()}</span><i catch.from-view=\"err\">${err}</i><span pending>loading</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "data.toUpperCase()" },
+        { "kind": "text", "code": "err" }
+      ]
+    }
+  },
+  {
+    "name": "L-56 promise branches on elements (plain attr)",
+    "markup": "<div promise.bind=\"p\"><span then=\"d\">${d}</span><b catch=\"e\">${e}</b></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "d" },
+        { "kind": "text", "code": "e" }
+      ]
+    }
+  },
+  {
+    "name": "L-57 promise (value-less) with element branches (value-less)",
+    "markup": "<div promise><span then>${a}</span><span catch>${b}</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "promise" },
+        { "kind": "text", "code": "a" },
+        { "kind": "text", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "L-58 promise with mixed branch authoring (template + element)",
+    "markup": "<div promise.bind=\"p\"><template then=\"x\"><em>${x}</em></template><span catch.from-view=\"y\">${y}</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "x" },
+        { "kind": "text", "code": "y" }
+      ]
+    }
   }
 ]
