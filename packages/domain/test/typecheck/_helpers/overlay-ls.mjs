@@ -170,7 +170,7 @@ export function assertSuccess(ts, diags) {
 }
 
 export function assertFailure(ts, diags, patterns) {
-  const msgs = diags.map(d => String(d.messageText));
+  const msgs = diags.map(d => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
   const ok = patterns.every(rx => msgs.some(m => rx.test(m)));
   if (!ok) {
     throw new Error(

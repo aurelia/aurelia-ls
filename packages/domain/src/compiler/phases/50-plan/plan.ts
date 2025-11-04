@@ -23,6 +23,9 @@ import type {
   // Expression AST (discriminated by $kind)
   IsBindingBehavior,
   ForOfStatement,
+  BindingIdentifierOrPattern,
+  BindingIdentifier,
+  DestructuringAssignmentExpression,
   IsAssign,
   IsLeftHandSide,
   BindingBehaviorExpression,
@@ -46,6 +49,7 @@ import type {
   TemplateExpression,
   TaggedTemplateExpression,
   ArrowFunction,
+  DestructuringAssignmentRestExpression,
 } from "../../model/ir.js";
 
 function assertUnreachable(_: never): never { throw new Error("unreachable"); }
@@ -202,9 +206,17 @@ function buildFrameAnalysis(
 
     // repeat locals / contextuals
     if (h.repeatIterable) {
-      const elemT = `CollectionElement<${h.repeatIterable}>`;
+      const iterT = h.repeatIterable;                  // e.g., Map<K,V> | T[] | Iterable<T>
+      const elemT = `CollectionElement<${iterT}>`;     // element/tuple/object view
+      // Project locals from the header declaration shape
+      const proj = f.origin?.kind === "repeat"
+        ? projectRepeatLocals(exprIndex.get(f.origin.forOfAstId)?.ast as ForOfStatement | undefined, elemT)
+        : new Map<string, string>();
       for (const s of f.symbols) {
-        if (s.kind === "repeatLocal") env.set(s.name, elemT);
+        if (s.kind === "repeatLocal") {
+          const t = proj.get(s.name);
+          env.set(s.name, t ?? "unknown");
+        }
       }
     } else {
       // Even if we don't know iterable type, surface unknown for locals
@@ -246,6 +258,80 @@ function buildFrameAnalysis(
   }
 
   return { envs, hints };
+}
+
+/**
+ * Compute name → type for repeat locals based on the header declaration.
+ *
+ * Supported shapes:
+ *   - BindingIdentifier('item')           → item: elemT
+ *   - ArrayDestructuring([...])           → leaves in order: TupleElement<elemT, 0>, TupleElement<elemT, 1>, ...
+ *   - ObjectDestructuring({...})          → leaf maps to elemT['prop'] (or numeric index)
+ */
+function projectRepeatLocals(forOf: ForOfStatement | undefined, elemT: string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!forOf) return out;
+  const decl = forOf.declaration as BindingIdentifierOrPattern | DestructuringAssignmentExpression;
+  switch (decl.$kind) {
+    case "BindingIdentifier": {
+      const name = (decl as BindingIdentifier).name;
+      if (name) out.set(name, wrap(elemT));
+      return out;
+    }
+    case "ArrayDestructuring":
+    case "ObjectDestructuring": {
+      projectFromDestructuring(decl as DestructuringAssignmentExpression, elemT, out);
+      return out;
+    }
+    default:
+      return out;
+  }
+}
+
+function projectFromDestructuring(node: DestructuringAssignmentExpression, elemT: string, out: Map<string, string>): void {
+  if (node.$kind === "ArrayDestructuring") {
+    // Assign consecutive indices to leaf targets.
+    let i = 0;
+    for (const entry of node.list) {
+      if (entry.$kind === "DestructuringAssignmentLeaf") {
+        const name = entry.target.name;         // AccessMemberExpression.name
+        if (name) out.set(name, tupleIndexType(elemT, i));
+        i++;
+      } else {
+        // For nested patterns, just advance the index for now
+        i++;
+      }
+    }
+    return;
+  }
+  if (node.$kind === "ObjectDestructuring") {
+    // Use first property or numeric index when available.
+    for (const entry of node.list) {
+      if (entry.$kind !== "DestructuringAssignmentLeaf") continue;
+      const name = entry.target.name;
+      if (!name) continue;
+      const props = (entry as DestructuringAssignmentRestExpression).indexOrProperties;
+      if (typeof props === "number") {
+        out.set(name, indexType(elemT, [String(props)]));
+      } else if (Array.isArray(props) && props.length > 0) {
+        out.set(name, indexType(elemT, [String(props[0]!)]));
+      } else {
+        out.set(name, wrap(elemT));
+      }
+    }
+  }
+}
+
+/** Extract a local identifier name from a binding pattern value. */
+function nameFromPatternValue(v: IsAssign): string | null {
+  switch (v.$kind) {
+    case "AccessScope":
+      return v.name || null;
+    case "Assign":
+      return v.target.$kind === "AccessScope" ? v.target.name : null;
+    default:
+      return null;
+  }
 }
 
 /* ===================================================================================== */
@@ -669,10 +755,15 @@ function returnTypeOf(fnType: string): string {
   return `ReturnType<NonNullable<${wrap(fnType)}>>`;
 }
 
-/** Index like: `NonNullable<Base>['a']['b']` */
+/** Index like: `NonNullable<Base>[0]['b']` (numeric indices stay numeric). */
 function indexType(base: string, parts: string[]): string {
   const idx = parts.map(p => `['${escapeKey(p)}']`).join("");
   return `NonNullable<${wrap(base)}>${idx}`;
+}
+
+/** Tuple index like: `TupleElement<NonNullable<Base>, I>` */
+function tupleIndexType(base: string, i: number): string {
+  return `TupleElement<NonNullable<${wrap(base)}>, ${i}>`;
 }
 
 function escapeKey(s: string): string {
