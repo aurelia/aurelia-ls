@@ -67,5 +67,7 @@ export function emitOverlayFile(
   const banner = opts.banner ? `${opts.banner}${eol}` : "";
   const ext = opts.isJs ? ".js" : ".ts";
   const filename = (opts.filename ?? "__au.ttc.overlay") + ext;
-  return { filename, text: `${banner}${body}` };
+  // TS variant: make the file a module to isolate top-level type aliases across overlays.
+  const moduleFooter = opts.isJs ? "" : `${eol}export {}${eol}`;
+  return { filename, text: `${banner}${body}${moduleFooter}` };
 }
