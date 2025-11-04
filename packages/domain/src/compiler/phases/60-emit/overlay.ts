@@ -11,8 +11,14 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
   for (const t of plan.templates) {
     for (const f of t.frames) {
       if (!isJs) {
-        out.push(`type ${f.typeName} = ${f.typeExpr};`);
-        for (const l of f.lambdas) out.push(`__au$access<${f.typeName}>(${l});`);
+        // Only define aliases for non-root frames (frame id !== 0).
+        // Root alias is omitted so TS diagnostics prefer to display the inline expression.
+        if (f.frame !== 0) {
+          out.push(`type ${f.typeName} = ${f.typeExpr};`);
+        }
+        for (const l of f.lambdas) {
+          out.push(`__au$access<${f.typeExpr}>(${l});`);
+        }
       } else {
         // JS flavor: JSDoc on the arrow function parameter (supported by TS checkJs).
         const withJSDocParam = (lambda: string) => {

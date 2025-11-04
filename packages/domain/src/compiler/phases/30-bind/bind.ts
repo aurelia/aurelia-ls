@@ -84,7 +84,7 @@ function buildTemplateScopes(
   });
 
   // Walk rows at the root template
-  walkRows(t.rows, rootId, frames, exprToFrame, diags, domToLinked, forOfIndex);
+  walkRows(t.rows, rootId, frames, exprToFrame, diags, domToLinked, forOfIndex, /*allowLets*/ true);
 
   return { name: t.name!, frames, root: rootId, exprToFrame };
 }
@@ -97,6 +97,7 @@ function walkRows(
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   forOfIndex: ReadonlyMap<ExprId, ForOfStatement>,
+  allowLets: boolean,
 ): void {
   for (const r of rows) {
     for (const ins of r.instructions) {
@@ -130,7 +131,9 @@ function walkRows(
 
         // ---- <let> introduces locals in the current frame ----
         case "hydrateLetElement":
-          materializeLetSymbols(ins, currentFrame, frames, exprToFrame, diags);
+          // Only materialize <let> names into the env when the current traversal context allows it.
+          // Reuse-scoped nested templates (if/switch/portal) should not leak their <let> names to the whole frame.
+          materializeLetSymbols(ins, currentFrame, frames, exprToFrame, diags, /*publishEnv*/ allowLets);
           break;
 
         // ---- Standalone iteratorBinding should not appear (repeat packs it as a prop) ----
@@ -226,7 +229,11 @@ function walkRows(
           // 4) Recurse into nested template view using the chosen frame
           const linkedNested = domToLinked.get(ins.def.dom);
           if (linkedNested) {
-            walkRows(linkedNested.rows, nextFrame, frames, exprToFrame, diags, domToLinked, forOfIndex);
+            // For nested views:
+            // - overlay scope (repeat/with/promise): their <let> belong to that overlay frame
+            // - reuse scope (if/switch/portal): their <let> must not leak to the whole frame
+            const childAllowsLets = ins.controller.spec.scope === "overlay";
+            walkRows(linkedNested.rows, nextFrame, frames, exprToFrame, diags, domToLinked, forOfIndex, childAllowsLets);
           }
           break;
         }
@@ -294,6 +301,7 @@ function materializeLetSymbols(
   frames: ScopeFrame[],
   exprToFrame: Record<string, FrameId>,
   diags: ScopeDiagnostic[],
+  publishEnv: boolean,
 ): void {
   // Record each <let> value expr in the current frame and surface names as locals.
   const f = frames[currentFrame]!;
@@ -301,16 +309,22 @@ function materializeLetSymbols(
 
   for (const lb of ins.instructions) {
     mapBindingSource(lb.from, currentFrame, exprToFrame);
-    const ids = exprIdsOf(lb.from);
-    if (ids.length > 0) {
-      map = { ...map, [lb.to]: ids[0]! }; // if interpolation, take first expr id as representative
+    if (publishEnv) {
+      const ids = exprIdsOf(lb.from);
+      if (ids.length > 0) {
+        map = { ...map, [lb.to]: ids[0]! }; // if interpolation, take first expr id as representative
+      }
     }
   }
-  frames[currentFrame] = { ...f, letValueExprs: map } as ScopeFrame;;
+  if (publishEnv) {
+    frames[currentFrame] = { ...f, letValueExprs: map } as ScopeFrame;
+  }
 
   // Surface all <let> names as locals in the current frame.
-  const names = ins.instructions.map(lb => lb.to);
-  addUniqueSymbols(currentFrame, frames, names.map(n => ({ kind: "let" as const, name: n, span: spanOfLet(ins, n)! })), diags);
+  if (publishEnv) {
+    const names = ins.instructions.map(lb => lb.to);
+    addUniqueSymbols(currentFrame, frames, names.map(n => ({ kind: "let" as const, name: n, span: spanOfLet(ins, n)! })), diags);
+  }
 }
 
 function spanOfLet(ins: LinkedHydrateLetElement, _name: string): SourceSpan | null | undefined {
