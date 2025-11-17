@@ -19,7 +19,7 @@ type Brand<T, N extends string> = T & { __brand: N };
 // NOTE: NodeId uniqueness is **per TemplateIR** (template-local). If a module-global id is
 // ever needed, extend with (templateIndex|fileId) disambiguators.
 export type NodeId = Brand<string, 'NodeId'>; // e.g. '0/2/1', '0/3#text@0', '0/1@attr:value'
-export type ExprId = Brand<string, 'ExprId'>; // deterministic (e.g., hash of file+loc+code+mode)
+export type ExprId = Brand<string, 'ExprId'>; // deterministic (e.g., hash of file+loc+expressionType+code)
 
 // TODO: Builder currently hardcodes 'html'. Add ns detection for SVG/MathML when needed.
 export type Namespace = 'html' | 'svg' | 'mathml';
@@ -373,12 +373,6 @@ export type IsPrimary =
   | TemplateExpression
   | NewExpression;
 
-export type IsLiteral =
-  | ArrayLiteralExpression
-  | ObjectLiteralExpression
-  | PrimitiveLiteralExpression
-  | TemplateExpression;
-
 export type IsLeftHandSide =
   | IsPrimary
   | CallGlobalExpression
@@ -392,28 +386,32 @@ export type IsLeftHandSide =
 export type IsUnary = IsLeftHandSide | UnaryExpression;
 export type IsBinary = IsUnary | BinaryExpression;
 export type IsConditional = IsBinary | ConditionalExpression;
-export type IsAssign = IsConditional | AssignExpression | ArrowFunction;
+export type IsAssign = IsConditional | AssignExpression | ArrowFunction | BadExpression;
 export type IsValueConverter = IsAssign | ValueConverterExpression;
 export type IsBindingBehavior = IsValueConverter | BindingBehaviorExpression;
 export type IsAssignable = AccessScopeExpression | AccessKeyedExpression | AccessMemberExpression | AssignExpression;
 export type BindingIdentifierOrPattern = BindingIdentifier | ArrayBindingPattern | ObjectBindingPattern;
 export type IsExpression = IsBindingBehavior | Interpolation;
-export type AnyBindingExpression<TCustom extends CustomExpression = CustomExpression> =
+export type AnyBindingExpression =
   | Interpolation
   | ForOfStatement
-  | TCustom
+  | CustomExpression
   | IsBindingBehavior;
 
-/* ---- AST nodes (derived flags removed) ---- */
+/* ---- AST nodes ---- */
 
-export interface CustomExpression {
-  $kind: 'Custom';
-  value: unknown;
+export interface TextSpan {
+  /**
+   * Offsets into the expression string being parsed.
+   * 0-based UTF-16 code units, [start, end) (end is exclusive).
+   */
+  start: number;
+  end: number;
 }
 
 export interface BindingBehaviorExpression {
   $kind: 'BindingBehavior';
-  key: string; // `_bb_${name}`; may be recomputed by producer
+  span: TextSpan;
   expression: IsBindingBehavior;
   name: string;
   args: IsAssign[];
@@ -421,6 +419,7 @@ export interface BindingBehaviorExpression {
 
 export interface ValueConverterExpression {
   $kind: 'ValueConverter';
+  span: TextSpan;
   expression: IsValueConverter;
   name: string;
   args: IsAssign[];
@@ -428,6 +427,7 @@ export interface ValueConverterExpression {
 
 export interface AssignExpression {
   $kind: 'Assign';
+  span: TextSpan;
   target: IsAssignable;
   value: IsAssign;
   op: AssignmentOperator;
@@ -435,35 +435,39 @@ export interface AssignExpression {
 
 export interface ConditionalExpression {
   $kind: 'Conditional';
+  span: TextSpan;
   condition: IsBinary;
   yes: IsAssign;
   no: IsAssign;
 }
 
-// NOTE: Analysis v0: not produced/handled. Keep type for future support.
 export interface AccessGlobalExpression {
   $kind: 'AccessGlobal';
+  span: TextSpan;
   name: string;
 }
 
 export interface AccessThisExpression {
   $kind: 'AccessThis';
+  span: TextSpan;
   ancestor: number;
 }
 
-// NOTE: Analysis v0: ignored. $parent-depth boundaries to be added in a later pass.
 export interface AccessBoundaryExpression {
   $kind: 'AccessBoundary';
+  span: TextSpan;
 }
 
 export interface AccessScopeExpression {
   $kind: 'AccessScope';
+  span: TextSpan;
   name: string;
   ancestor: number;
 }
 
 export interface AccessMemberExpression {
   $kind: 'AccessMember';
+  span: TextSpan;
   object: IsLeftHandSide;
   name: string;
   optional: boolean;
@@ -471,6 +475,7 @@ export interface AccessMemberExpression {
 
 export interface AccessKeyedExpression {
   $kind: 'AccessKeyed';
+  span: TextSpan;
   object: IsLeftHandSide;
   key: IsAssign;
   optional: boolean;
@@ -478,12 +483,14 @@ export interface AccessKeyedExpression {
 
 export interface NewExpression {
   $kind: 'New';
+  span: TextSpan;
   func: IsLeftHandSide;
   args: IsAssign[];
 }
 
 export interface CallScopeExpression {
   $kind: 'CallScope';
+  span: TextSpan;
   name: string;
   args: IsAssign[];
   ancestor: number;
@@ -492,6 +499,7 @@ export interface CallScopeExpression {
 
 export interface CallMemberExpression {
   $kind: 'CallMember';
+  span: TextSpan;
   object: IsLeftHandSide;
   name: string;
   args: IsAssign[];
@@ -501,6 +509,7 @@ export interface CallMemberExpression {
 
 export interface CallFunctionExpression {
   $kind: 'CallFunction';
+  span: TextSpan;
   func: IsLeftHandSide;
   args: IsAssign[];
   optional: boolean;
@@ -508,12 +517,14 @@ export interface CallFunctionExpression {
 
 export interface CallGlobalExpression {
   $kind: 'CallGlobal';
+  span: TextSpan;
   name: string;
   args: IsAssign[];
 }
 
 export interface BinaryExpression {
   $kind: 'Binary';
+  span: TextSpan;
   operation: BinaryOperator;
   left: IsBinary;
   right: IsBinary;
@@ -521,38 +532,41 @@ export interface BinaryExpression {
 
 export interface UnaryExpression {
   $kind: 'Unary';
+  span: TextSpan;
   operation: UnaryOperator;
   expression: IsLeftHandSide;
   pos: 0 | 1; // 0: prefix, 1: suffix
 }
 
-export interface PrimitiveLiteralExpression<
-  TValue extends null | undefined | number | boolean | string =
-    null | undefined | number | boolean | string
-> {
+export interface PrimitiveLiteralExpression {
   $kind: 'PrimitiveLiteral';
-  value: TValue;
+  span: TextSpan;
+  value: null | undefined | number | boolean | string;
 }
 
 export interface ArrayLiteralExpression {
   $kind: 'ArrayLiteral';
+  span: TextSpan;
   elements: IsAssign[];
 }
 
 export interface ObjectLiteralExpression {
   $kind: 'ObjectLiteral';
+  span: TextSpan;
   keys: (number | string)[];
   values: IsAssign[];
 }
 
 export interface TemplateExpression {
   $kind: 'Template';
+  span: TextSpan;
   cooked: string[];
   expressions: IsAssign[];
 }
 
 export interface TaggedTemplateExpression {
   $kind: 'TaggedTemplate';
+  span: TextSpan;
   cooked: (string[] & { raw?: string[] });
   func: IsLeftHandSide;
   expressions: IsAssign[];
@@ -560,23 +574,27 @@ export interface TaggedTemplateExpression {
 
 export interface ArrayBindingPattern {
   $kind: 'ArrayBindingPattern';
+  span: TextSpan;
   elements: IsAssign[];
 }
 
 export interface ObjectBindingPattern {
   $kind: 'ObjectBindingPattern';
+  span: TextSpan;
   keys: (string | number)[];
   values: IsAssign[];
 }
 
 export interface BindingIdentifier {
   $kind: 'BindingIdentifier';
+  span: TextSpan;
   name: string;
 }
 
 // Kept in expr table for precise scoping of repeat; IR also carries a lighter ForOfIR.
 export interface ForOfStatement {
   $kind: 'ForOfStatement';
+  span: TextSpan;
   declaration: BindingIdentifierOrPattern | DestructuringAssignmentExpression;
   iterable: IsBindingBehavior;
   semiIdx: number;
@@ -585,54 +603,89 @@ export interface ForOfStatement {
 // Text interpolation is lowered to TextBindingIR with InterpIR (parts + expr refs).
 export interface Interpolation {
   $kind: 'Interpolation';
+  span: TextSpan;
   parts: string[];
   expressions: IsBindingBehavior[];
 }
 
 export interface DestructuringAssignmentExpression {
   $kind: 'ArrayDestructuring' | 'ObjectDestructuring';
-  list: (DestructuringAssignmentExpression | DestructuringAssignmentSingleExpression | DestructuringAssignmentRestExpression)[];
-  source: AccessMemberExpression | AccessKeyedExpression | undefined;
-  initializer: IsBindingBehavior | undefined;
+  span: TextSpan;
+  list: DestructuringAssignmentNode[];
+  source?: AccessMemberExpression | AccessKeyedExpression;
+  initializer?: IsBindingBehavior;
 }
+
+export type DestructuringAssignmentNode =
+  | DestructuringAssignmentExpression
+  | DestructuringAssignmentSingleExpression
+  | DestructuringAssignmentRestExpression;
 
 export interface DestructuringAssignmentSingleExpression {
   $kind: 'DestructuringAssignmentLeaf';
+  leafKind: 'single';
+  span: TextSpan;
   target: AccessMemberExpression;
   source: AccessMemberExpression | AccessKeyedExpression;
-  initializer: IsBindingBehavior | undefined;
+  initializer?: IsBindingBehavior;
 }
 
 export interface DestructuringAssignmentRestExpression {
   $kind: 'DestructuringAssignmentLeaf';
+  leafKind: 'rest';
+  span: TextSpan;
   target: AccessMemberExpression;
   indexOrProperties: string[] | number;
 }
 
 export interface ArrowFunction {
   $kind: 'ArrowFunction';
+  span: TextSpan;
   args: BindingIdentifier[];
   body: IsAssign;
   rest: boolean;
 }
 
+export interface BadExpression {
+  $kind: 'BadExpression';
+  span: TextSpan;
+  /** Raw text of the segment that failed to parse (optional). */
+  text?: string;
+  /** Human-readable parser message (optional). */
+  message?: string;
+}
+
+/**
+ * Plugin-owned expression (e.g. i18n, custom binding commands).
+ * In the future, lowerer may wrap a binding in CustomExpression instead of parsing it.
+ * Tooling / analyzers should treat `value` as opaque and not descend into it.
+ */
+export interface CustomExpression {
+  $kind: 'Custom';
+  span: TextSpan;
+  value: unknown;
+}
+
+export type ExpressionType =
+  | 'IsProperty'
+  | 'IsFunction'
+  | 'IsIterator'
+  | 'Interpolation'
+  | 'IsCustom';
+
+
 /* ===========================================
  * Expression Table (module-level, dev/LSP)
  * =========================================== */
 
-export type AureliaAst =
-  | IsExpression
-  | ForOfStatement
-  | BindingIdentifierOrPattern
-  | DestructuringAssignmentExpression
-  | DestructuringAssignmentSingleExpression
-  | DestructuringAssignmentRestExpression
-  | ArrowFunction;
-
-// NOTE: ast may be undefined at runtime in slim builds; consumers must not rely on runtime shapes.
-// Consider adding a minimal schema version to gate future AST changes.
-export interface ExprTableEntry {
+type ExprTableEntry_T<TType extends ExpressionType, TAst> = {
   id: ExprId;
-  astKind: 'IsBindingBehavior' | 'IsAssign' | 'Interpolation' | 'ForOfStatement' | 'Unknown';
-  ast: AureliaAst;
-}
+  expressionType: TType;
+  ast: TAst;
+};
+
+export type ExprTableEntry =
+  | ExprTableEntry_T<'IsProperty' | 'IsFunction', IsBindingBehavior>
+  | ExprTableEntry_T<'Interpolation', Interpolation>
+  | ExprTableEntry_T<'IsIterator', ForOfStatement>
+  | ExprTableEntry_T<'IsCustom', CustomExpression>;
