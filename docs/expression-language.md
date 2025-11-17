@@ -433,8 +433,6 @@ Concrete errors raised by the runtime parser (names exactly as emitted):
 
 These match the calls from both the runtime TemplateCompiler and the domain lowerer.
 
-Note: in this LSP repo, `lower.ts` currently uses a small helper (`splitInterpolation`) instead of calling the runtime `'Interpolation'` mode. The new LSP parser is free to centralize interpolation handling (while keeping the observable behavior the same).
-
 ---
 
 ## 11. Notes and nuances
