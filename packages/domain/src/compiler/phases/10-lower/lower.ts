@@ -20,6 +20,7 @@ import type {
 } from "../../model/ir.js";
 import type { AttributeParser } from "../../language/syntax.js";
 import type { IExpressionParser, ExpressionType } from "../../../parsers/expression-api.js";
+import { splitInterpolationText } from "../../../parsers/interpolation.js";
 
 /* =======================================================================================
  * HTML → IR builder (Lowering)
@@ -233,9 +234,9 @@ function collectRows(
 
     if (isText(n)) {
       const target = `${ids.current()}#text@${textIdx++}` as NodeId;
-      const inter = splitInterpolation(n.value ?? "");
-      if (inter) {
-        const from = toInterpIR(inter, n.sourceCodeLocation, table);
+      const raw = n.value ?? "";
+      if (raw.includes("${")) {
+        const from = toInterpIR(raw, n.sourceCodeLocation, table);
         rows.push({
           target,
           instructions: [
@@ -284,7 +285,7 @@ function compileLet(
       out.push({
         type: "letBinding",
         to: s.target, // attribute name
-        from: toInterpIR(splitInterpolation(raw)!, loc, table),
+        from: toInterpIR(raw, loc, table),
         loc: toSpan(loc, table.file),
       });
     }
@@ -398,7 +399,7 @@ function compileElementAttrs(
         type: "attributeBinding",
         attr: a.name,
         to: camelCase(a.name),
-        from: toInterpIR(splitInterpolation(raw)!, loc, table),
+        from: toInterpIR(raw, loc, table),
         loc: toSpan(loc, table.file),
       });
       continue;
@@ -1049,79 +1050,6 @@ function attrLoc(el: P5Element, attrName: string): P5Loc {
   return (attrLocTable?.[attrName] ?? loc) ?? null;
 }
 
-/** Split interpolation `${...}` parts; returns null when none are found. */
-function splitInterpolation(
-  text: string
-): { parts: string[]; exprs: string[] } | null {
-  let i = 0,
-    depth = 0,
-    start = 0,
-    str: '"' | "'" | "`" | null = null;
-  const parts: string[] = [], exprs: string[] = [];
-  while (i < text.length) {
-    const ch = text[i];
-    if (str) {
-      if (ch === "\\") {
-        i += 2;
-        continue;
-      }
-      if (ch === str) str = null;
-      i++;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === "`") {
-      str = ch;
-      i++;
-      continue;
-    }
-    if (ch === "$" && text[i + 1] === "{") {
-      parts.push(text.slice(start, i));
-      i += 2;
-      depth = 1;
-      const b = i;
-      let innerStr: '"' | "'" | "`" | null = null;
-      while (i < text.length) {
-        const c = text[i];
-        if (innerStr) {
-          if (c === "\\") {
-            i += 2;
-            continue;
-          }
-          if (c === innerStr) {
-            innerStr = null;
-            i++;
-            continue;
-          }
-          i++;
-          continue;
-        }
-        if (c === '"' || c === "'" || c === "`") {
-          innerStr = c;
-          i++;
-          continue;
-        }
-        if (c === "{") {
-          depth++;
-          i++;
-          continue;
-        }
-        if (c === "}" && --depth === 0) {
-          exprs.push(text.slice(b, i));
-          i++;
-          start = i;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-    i++;
-  }
-  if (!exprs.length) return null;
-  parts.push(text.slice(start));
-  return { parts, exprs };
-}
-
 function toBindingSource(
   val: string,
   loc: P5Loc,
@@ -1134,13 +1062,28 @@ function toBindingSource(
 }
 
 function toInterpIR(
-  inter: { parts: string[]; exprs: string[] },
+  text: string,
   loc: P5Loc,
   table: ExprTable
 ): InterpIR {
-  const exprs: ExprRef[] = inter.exprs.map((code) => table.add(code, loc, "IsProperty"));
-  return { kind: "interp", parts: inter.parts, exprs, loc: toSpan(loc, table.file) };
+  const split = splitInterpolationText(text);
+
+  // No complete `${...}` blocks found – treat as a single literal part
+  // with no expressions. This is slightly more tolerant than the old
+  // helper (which returned null), but keeps InterpIR shape consistent.
+  const parts = split ? split.parts : [text];
+  const exprs: ExprRef[] = [];
+
+  if (split) {
+    for (const span of split.exprSpans) {
+      const code = text.slice(span.start, span.end);
+      exprs.push(table.add(code, loc, "IsProperty"));
+    }
+  }
+
+  return { kind: "interp", parts, exprs, loc: toSpan(loc, table.file) };
 }
+
 function toExprRef(
   code: string,
   loc: P5Loc,

@@ -43,8 +43,10 @@ import type {
   ArrayBindingPattern,
   ObjectBindingPattern,
   BindingIdentifierOrPattern,
+  BadExpression,
 } from "../compiler/model/ir.js";
 
+import { parseInterpolationAst } from "./interpolation.js";
 
 /**
  * Core expression parser for Aurelia's binding expression language, tailored
@@ -1652,12 +1654,30 @@ export class LspExpressionParser implements IExpressionParser {
         return core.parseIteratorHeader();
       }
 
-      case "Interpolation":
-      case "IsCustom": {
-        // These modes will be implemented in later steps.
-        throw new Error(
-          `[LspExpressionParser] ExpressionType '${expressionType}' is not implemented yet.`,
+      case "Interpolation": {
+        // `${...}` interpolation; reuse CoreParser for each inner segment and
+        // offset spans so they are relative to the full interpolation string.
+        return parseInterpolationAst(
+          expression,
+          (segment, baseOffset) => {
+            const core = new CoreParser(segment);
+            const expr = core.parseBindingExpression();
+            this.offsetExpressionSpans(expr, baseOffset);
+            return expr;
+          },
         );
+      }
+
+      case "IsCustom": {
+        // For v1, a custom expression simply wraps the raw text. Higher-level
+        // plugins can later extend this to attach richer payloads.
+        const span: TextSpan = { start: 0, end: expression.length };
+        const node: CustomExpression = {
+          $kind: "Custom",
+          span,
+          value: expression,
+        };
+        return node;
       }
 
       default:
@@ -1668,4 +1688,55 @@ export class LspExpressionParser implements IExpressionParser {
     }
   }
 
+  /**
+   * Recursively offset all `span` fields in an expression tree by `delta`.
+   * This is used so that expressions parsed out of `${...}` segments get
+   * spans relative to the full interpolation string instead of the sliced
+   * segment.
+   */
+  private offsetExpressionSpans(
+    expr: IsBindingBehavior | BadExpression,
+    delta: number,
+  ): void {
+    this.offsetNodeSpans(expr as unknown as Record<string, unknown>, delta);
+  }
+
+  private offsetNodeSpans(node: Record<string, unknown>, delta: number): void {
+    if (node == null) {
+      return;
+    }
+
+    const anyNode = node as any;
+    if (typeof anyNode !== "object") {
+      return;
+    }
+
+    if (
+      anyNode.span &&
+      typeof anyNode.span.start === "number" &&
+      typeof anyNode.span.end === "number"
+    ) {
+      anyNode.span = {
+        start: anyNode.span.start + delta,
+        end: anyNode.span.end + delta,
+      };
+    }
+
+    for (const key of Object.keys(anyNode)) {
+      if (key === "span") continue;
+      const value = anyNode[key];
+      if (value == null) continue;
+
+      if (Array.isArray(value)) {
+        for (const child of value) {
+          if (child && typeof child === "object") {
+            this.offsetNodeSpans(child as Record<string, unknown>, delta);
+          }
+        }
+      } else if (typeof value === "object") {
+        this.offsetNodeSpans(value as Record<string, unknown>, delta);
+      }
+    }
+  }
 }
+
