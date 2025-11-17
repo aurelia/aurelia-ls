@@ -96,8 +96,15 @@ export class CoreParser {
 
   // AssignExpr ::= ConditionalExpr
   //              | LeftHandSide AssignmentOperator AssignExpr
-  //              | ArrowFunction    (single identifier param only for v1)
+  //              | ArrowFunction (identifier or parenthesized parameters)
   private parseAssignExpr(): IsAssign {
+    const first = this.peekToken();
+
+    // Parenthesized arrow head: (a, b) => expr
+    if (first.type === TokenType.OpenParen && this.isParenthesizedArrowHead(first)) {
+      return this.parseParenthesizedArrowFunction(first);
+    }
+
     const left = this.parseConditionalExpr();
 
     const next = this.peekToken();
@@ -130,6 +137,7 @@ export class CoreParser {
     };
     return assign;
   }
+
 
   // ConditionalExpr ::= BinaryExpr [ "?" AssignExpr ":" AssignExpr ]
   private parseConditionalExpr(): IsBinary | ConditionalExpression {
@@ -964,6 +972,133 @@ export class CoreParser {
       $kind: "ArrowFunction",
       span,
       args: [arg],
+      body,
+      rest: false,
+    };
+    return fn;
+  }
+
+  /**
+   * Fast lookahead to distinguish a parenthesized expression from an arrow
+   * parameter list without mutating the main scanner. We allow:
+   *
+   *   () => expr
+   *   (a) => expr
+   *   (a, b, c) => expr
+   *
+   * and reject anything that looks like a grouped expression instead, e.g.
+   *   (a + b) =>   // not treated as arrow head here
+   */
+  private isParenthesizedArrowHead(openParen: Token): boolean {
+    const probe = new Scanner(this.source);
+    probe.reset(openParen.start);
+
+    // Consume '('
+    let t = probe.next();
+    if (t.type !== TokenType.OpenParen) {
+      return false;
+    }
+
+    t = probe.peek();
+
+    // Empty parameter list: () => expr
+    if (t.type === TokenType.CloseParen) {
+      probe.next(); // ')'
+    } else {
+      // One or more identifiers separated by commas.
+      while (true) {
+        if (t.type !== TokenType.Identifier) {
+          return false;
+        }
+        probe.next(); // identifier
+
+        t = probe.peek();
+        if (t.type === TokenType.Comma) {
+          probe.next(); // ','
+          t = probe.peek();
+          continue;
+        }
+
+        if (t.type === TokenType.CloseParen) {
+          probe.next(); // ')'
+          break;
+        }
+
+        // Anything else (operators, literals, etc.) → not an arrow head.
+        return false;
+      }
+    }
+
+    const afterParen = probe.peek();
+    return afterParen.type === TokenType.EqualsGreaterThan;
+  }
+
+  /**
+   * Parse an arrow function whose head starts with a '(' we already know is an
+   * arrow parameter list, e.g. `(a, b) => body`.
+   */
+  private parseParenthesizedArrowFunction(openParen: Token): ArrowFunction {
+    // Consume '('
+    this.nextToken();
+
+    const params: BindingIdentifier[] = [];
+    const start = openParen.start;
+
+    let t = this.peekToken();
+
+    // () => expr
+    if (t.type === TokenType.CloseParen) {
+      this.nextToken(); // ')'
+    } else {
+      while (true) {
+        const idTok = this.peekToken();
+        if (idTok.type !== TokenType.Identifier) {
+          this.error(
+            "Invalid arrow function parameter; expected identifier",
+            idTok,
+          );
+        }
+        this.nextToken(); // identifier
+
+        const param: BindingIdentifier = {
+          $kind: "BindingIdentifier",
+          span: this.spanFromToken(idTok),
+          name: idTok.value as string,
+        };
+        params.push(param);
+
+        t = this.peekToken();
+        if (t.type === TokenType.Comma) {
+          this.nextToken(); // ','
+          t = this.peekToken();
+          continue;
+        }
+
+        if (t.type === TokenType.CloseParen) {
+          this.nextToken(); // ')'
+          break;
+        }
+
+        this.error("Expected ',' or ')' in arrow parameter list", t);
+      }
+    }
+
+    const arrowTok = this.peekToken();
+    if (arrowTok.type !== TokenType.EqualsGreaterThan) {
+      this.error("Expected '=>'", arrowTok);
+    }
+    this.nextToken(); // '=>'
+
+    const body = this.parseAssignExpr();
+    const span: TextSpan = {
+      start,
+      end: this.getEndSpan(body),
+    };
+
+    const fn: ArrowFunction = {
+      $kind: "ArrowFunction",
+      span,
+      args: params,
       body,
       rest: false,
     };
