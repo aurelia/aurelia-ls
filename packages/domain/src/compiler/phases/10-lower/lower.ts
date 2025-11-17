@@ -9,32 +9,23 @@ import type {
   ListenerBindingIR, RefBindingIR, SetAttributeIR, SetClassAttributeIR, SetStyleAttributeIR,
   LetBindingIR, HydrateLetElementIR, HydrateTemplateControllerIR, IteratorBindingIR,
   ForOfIR,
-  ExprTableEntry, AureliaAst,
+  ExprTableEntry,
   ForOfStatement,
   Interpolation,
   AnyBindingExpression,
   IsBindingBehavior,
   MultiAttrIR,
   InstructionIR,
+  CustomExpression,
 } from "../../model/ir.js";
 import type { AttributeParser } from "../../language/syntax.js";
+import type { IExpressionParser, ExpressionType } from "../../../parsers/expression-api.js";
 
 /* =======================================================================================
  * HTML → IR builder (Lowering)
  * - Pure syntax shaping. No Semantics here.
  * - NodeId uniqueness is per TemplateIR (nested templates restart at '0').
  * ======================================================================================= */
-
-type ExpressionType = "None" | "Interpolation" | "IsIterator" | "IsChainable" | "IsFunction" | "IsProperty";
-export interface IExpressionParser {
-  parse(expression: string, expressionType: "IsIterator"): ForOfStatement;
-  parse(expression: string, expressionType: "Interpolation"): Interpolation;
-  parse(
-    expression: string,
-    expressionType: Exclude<ExpressionType, "IsIterator" | "Interpolation">
-  ): IsBindingBehavior;
-  parse(expression: string, expressionType: ExpressionType): AnyBindingExpression;
-}
 
 export interface BuildIrOptions {
   file?: string;
@@ -542,7 +533,7 @@ function buildBaseInstructionsForRightmost(
   const valueProp: PropertyBindingIR = {
     type: "propertyBinding",
     to: "value",
-    from: toExprRef(exprText, loc, table, "None"),
+    from: toExprRef(exprText, loc, table, "IsProperty"),
     mode: "default",
     loc: toSpan(loc, table.file),
   };
@@ -659,7 +650,7 @@ function buildControllerPrototypes(
   const valueProp: PropertyBindingIR = {
     type: "propertyBinding",
     to: "value",
-    from: toExprRef(exprText, loc, table, "None"),
+    from: toExprRef(exprText, loc, table, "IsProperty"),
     mode: "default",
     loc: toSpan(loc, table.file),
   };
@@ -1066,8 +1057,7 @@ function splitInterpolation(
     depth = 0,
     start = 0,
     str: '"' | "'" | "`" | null = null;
-  const parts: string[] = [],
-    exprs: string[] = [];
+  const parts: string[] = [], exprs: string[] = [];
   while (i < text.length) {
     const ch = text[i];
     if (str) {
@@ -1220,25 +1210,15 @@ class ExprTable {
   public entries: ExprTableEntry[] = [];
   private readonly seen = new Map<string, ExprId>();
   public constructor(private readonly parser: IExpressionParser, public readonly file: string) {}
-  public add(code: string, loc: P5Loc, mode: ExpressionType): ExprRef {
+  public add(code: string, loc: P5Loc, expressionType: ExpressionType): ExprRef {
     const start = loc?.startOffset ?? 0;
     const end = loc?.endOffset ?? 0;
-    const key = `${this.file}|${start}|${end}|${mode}|${code}`;
+    const key = `${this.file}|${start}|${end}|${expressionType}|${code}`;
     let id = this.seen.get(key);
     if (!id) {
       id = `expr_${hash64(key)}` as ExprId;
-      const ast = this.parser.parse(code, mode);
-      const astKind: ExprTableEntry["astKind"] =
-        mode === "IsIterator"
-          ? "ForOfStatement"
-          : mode === "Interpolation"
-          ? "Interpolation"
-          : "IsBindingBehavior";
-      this.entries.push({
-        id,
-        astKind,
-        ast: (ast ?? undefined) as AureliaAst,
-      });
+      const ast = this.parser.parse(code, expressionType);
+      this.entries.push({ id, expressionType, ast } as ExprTableEntry);
     }
     return { id, code, loc: toSpan(loc, this.file) };
   }
