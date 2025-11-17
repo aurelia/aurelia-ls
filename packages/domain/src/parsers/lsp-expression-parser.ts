@@ -40,7 +40,11 @@ import type {
   ObjectLiteralExpression,
   ArrowFunction,
   CustomExpression,
+  ArrayBindingPattern,
+  ObjectBindingPattern,
+  BindingIdentifierOrPattern,
 } from "../compiler/model/ir.js";
+
 
 /**
  * Core expression parser for Aurelia's binding expression language, tailored
@@ -88,6 +92,47 @@ export class CoreParser {
     }
 
     return withTails;
+  }
+
+  /**
+   * Parse a complete repeat.for header: `lhs of rhs[; tail...]`.
+   *
+   * - LHS: BindingIdentifier | ArrayBindingPattern | ObjectBindingPattern
+   * - RHS: parsed like a normal binding expression, but stops at first top‑level ';'
+   * - semiIdx: character index of that ';' in the header string, or -1 if none
+   *
+   * The returned ForOfStatement.span covers the entire header string (0..source.length).
+   */
+  public parseIteratorHeader(): ForOfStatement {
+    const first = this.peekToken();
+    if (first.type === TokenType.EOF) {
+      this.error("Empty iterator header", first);
+    }
+
+    const declaration = this.parseLhsBinding();
+
+    const ofTok = this.peekToken();
+    if (ofTok.type !== TokenType.KeywordOf) {
+      this.error("Expected 'of' in iterator header", ofTok);
+    }
+    this.nextToken(); // 'of'
+
+    const { expr: iterable, semiIdx } = this.parseChainableRhs();
+
+    const span: TextSpan = {
+      start: 0,
+      end: this.source.length,
+    };
+
+    const node: ForOfStatement = {
+      $kind: "ForOfStatement",
+      span,
+      declaration,
+      iterable,
+      semiIdx,
+    };
+
+    return node;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -927,6 +972,266 @@ export class CoreParser {
   }
 
   // ------------------------------------------------------------------------------------------
+  // Iterator header helpers: LHS binding + chainable RHS
+  // ------------------------------------------------------------------------------------------
+
+  /**
+   * LHS binding for repeat.for:
+   *   - BindingIdentifier:  item
+   *   - ArrayBindingPattern: [item, index]
+   *   - ObjectBindingPattern: { key, value } / { key: alias }
+   *
+   * Very complex destructuring (deep nesting, rest, etc.) is currently rejected.
+   */
+  private parseLhsBinding(): BindingIdentifierOrPattern {
+    const t = this.peekToken();
+
+    switch (t.type) {
+      case TokenType.Identifier:
+        return this.parseBindingIdentifier();
+
+      case TokenType.OpenBracket:
+        return this.parseArrayBindingPattern();
+
+      case TokenType.OpenBrace:
+        return this.parseObjectBindingPattern();
+
+      default:
+        this.error(
+          "Invalid repeat.for left-hand side; expected identifier, array pattern, or object pattern",
+          t,
+        );
+    }
+  }
+
+  /** Parse a simple binding identifier (no destructuring) used on the LHS of repeat.for or in patterns. */
+  private parseBindingIdentifier(): BindingIdentifier {
+    const t = this.peekToken();
+    if (t.type !== TokenType.Identifier) {
+      this.error("Expected identifier", t);
+    }
+    this.nextToken();
+    return this.bindingIdentifierFromToken(t);
+  }
+
+  /**
+   * Create a BindingIdentifier from an already-consumed identifier token,
+   * enforcing the same 'import' restriction as identifier primaries.
+   */
+  private bindingIdentifierFromToken(t: Token): BindingIdentifier {
+    const name = t.value as string;
+    if (name === "import") {
+      this.error("Bare 'import' is not allowed in binding expressions", t);
+    }
+    const id: BindingIdentifier = {
+      $kind: "BindingIdentifier",
+      span: this.spanFromToken(t),
+      name,
+    };
+    return id;
+  }
+
+  /**
+   * Simple array binding pattern for repeat.for:
+   *   [item]       → elements: [BindingIdentifier("item")]
+   *   [item, idx]  → elements: [BindingIdentifier("item"), BindingIdentifier("idx")]
+   *
+   * Anything more complex (holes, >2 elements, trailing comma, etc.) is rejected.
+   */
+  private parseArrayBindingPattern(): ArrayBindingPattern {
+    const open = this.peekToken();
+    this.nextToken(); // '['
+    const start = open.start;
+
+    const elements: IsAssign[] = [];
+
+    const firstTok = this.peekToken();
+    if (firstTok.type === TokenType.CloseBracket) {
+      this.error(
+        "Array binding pattern must contain at least one identifier",
+        firstTok,
+      );
+    }
+
+    // First element
+    const firstBinding = this.parseBindingIdentifier();
+    elements.push(firstBinding as unknown as IsAssign);
+
+    let t = this.peekToken();
+
+    // Optional second element
+    if (t.type === TokenType.Comma) {
+      this.nextToken(); // ','
+      const secondTok = this.peekToken();
+      if (secondTok.type === TokenType.CloseBracket) {
+        this.error(
+          "Array binding pattern cannot have a trailing comma",
+          secondTok,
+        );
+      }
+
+      const secondBinding = this.parseBindingIdentifier();
+      elements.push(secondBinding as unknown as IsAssign);
+      t = this.peekToken();
+    }
+
+    // No more elements or syntax allowed in v1
+    if (t.type !== TokenType.CloseBracket) {
+      this.error(
+        "Array binding pattern in iterator header currently supports at most two identifiers '[item, index]'",
+        t,
+      );
+    }
+    this.nextToken(); // ']'
+
+    const span: TextSpan = { start, end: this.lastTokenEnd };
+    const pattern: ArrayBindingPattern = {
+      $kind: "ArrayBindingPattern",
+      span,
+      elements,
+    };
+    return pattern;
+  }
+
+  /**
+   * Simple object binding pattern for repeat.for:
+   *   { key, value }      → keys: ["key","value"], values: [id("key"), id("value")]
+   *   { key: alias }      → keys: ["key"],         values: [id("alias")]
+   *
+   * No nested patterns, no defaults, no rest, no trailing comma.
+   */
+  private parseObjectBindingPattern(): ObjectBindingPattern {
+    const open = this.peekToken();
+    this.nextToken(); // '{'
+    const start = open.start;
+
+    const keys: (string | number)[] = [];
+    const values: IsAssign[] = [];
+
+    let t = this.peekToken();
+    if (t.type === TokenType.CloseBrace) {
+      this.error(
+        "Object binding pattern must contain at least one property",
+        t,
+      );
+    }
+
+    while (true) {
+      const keyTok = this.peekToken();
+      if (
+        keyTok.type !== TokenType.Identifier &&
+        keyTok.type !== TokenType.StringLiteral &&
+        keyTok.type !== TokenType.NumericLiteral
+      ) {
+        this.error(
+          "Invalid object binding pattern key; expected identifier, string, or number",
+          keyTok,
+        );
+      }
+      this.nextToken(); // consume key
+
+      let key: string | number;
+      if (keyTok.type === TokenType.NumericLiteral) {
+        key = keyTok.value as number;
+      } else {
+        key = String(keyTok.value);
+      }
+
+      const afterKey = this.peekToken();
+      let binding: BindingIdentifier;
+
+      if (afterKey.type === TokenType.Colon) {
+        // { key: alias }
+        this.nextToken(); // ':'
+        const valueTok = this.peekToken();
+        if (valueTok.type !== TokenType.Identifier) {
+          this.error(
+            "Invalid object binding pattern value; expected identifier after ':'",
+            valueTok,
+          );
+        }
+        this.nextToken(); // identifier
+        binding = this.bindingIdentifierFromToken(valueTok);
+      } else {
+        // Shorthand { key } – only allowed for identifier keys
+        if (keyTok.type !== TokenType.Identifier) {
+          this.error(
+            "Object binding pattern shorthand requires an identifier key",
+            keyTok,
+          );
+        }
+        binding = this.bindingIdentifierFromToken(keyTok);
+      }
+
+      keys.push(key);
+      values.push(binding as unknown as IsAssign);
+
+      const sep = this.peekToken();
+      if (sep.type === TokenType.Comma) {
+        this.nextToken(); // ','
+        const next = this.peekToken();
+        if (next.type === TokenType.CloseBrace) {
+          this.error(
+            "Object binding pattern cannot have a trailing comma",
+            next,
+          );
+        }
+        continue;
+      }
+
+      if (sep.type === TokenType.CloseBrace) {
+        this.nextToken();
+        break;
+      }
+
+      this.error("Expected ',' or '}' in object binding pattern", sep);
+    }
+
+    const span: TextSpan = { start, end: this.lastTokenEnd };
+    const pattern: ObjectBindingPattern = {
+      $kind: "ObjectBindingPattern",
+      span,
+      keys,
+      values,
+    };
+    return pattern;
+  }
+
+  /**
+   * Parse the RHS of a repeat.for header with "chainable" semantics:
+   *   - parse CoreExpression + tails (value converters / behaviors)
+   *   - stop at the first top‑level ';' (if any)
+   *   - record semiIdx = index of that ';', or -1 if no semicolon
+   *
+   * A bare trailing ';' with nothing after it is rejected.
+   */
+  private parseChainableRhs(): { expr: IsBindingBehavior; semiIdx: number } {
+    const core = this.parseAssignExpr();
+    const expr = this.parseTails(core);
+
+    let semiIdx = -1;
+    const t = this.peekToken();
+
+    if (t.type === TokenType.Semicolon) {
+      semiIdx = t.start;
+      this.nextToken(); // consume ';'
+
+      const afterSemi = this.peekToken();
+      if (afterSemi.type === TokenType.EOF) {
+        this.error(
+          "Expected tail after ';' in iterator header",
+          afterSemi,
+        );
+      }
+      // Tokens after the semicolon (e.g. `key: id; trackBy: foo`) are not
+      // parsed by the expression parser; they are handled by the lowerer.
+    }
+
+    return { expr, semiIdx };
+  }
+
+
+  // ------------------------------------------------------------------------------------------
   // Arrow functions (single identifier parameter for v1)
   // ------------------------------------------------------------------------------------------
 
@@ -1342,7 +1647,11 @@ export class LspExpressionParser implements IExpressionParser {
         return core.parseBindingExpression();
       }
 
-      case "IsIterator":
+      case "IsIterator": {
+        const core = new CoreParser(expression);
+        return core.parseIteratorHeader();
+      }
+
       case "Interpolation":
       case "IsCustom": {
         // These modes will be implemented in later steps.
@@ -1358,4 +1667,5 @@ export class LspExpressionParser implements IExpressionParser {
         );
     }
   }
+
 }
