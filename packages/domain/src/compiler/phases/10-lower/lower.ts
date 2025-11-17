@@ -17,7 +17,9 @@ import type {
   MultiAttrIR,
   InstructionIR,
   CustomExpression,
+  BadExpression,
 } from "../../model/ir.js";
+
 import type { AttributeParser } from "../../language/syntax.js";
 import type { IExpressionParser, ExpressionType } from "../../../parsers/expression-api.js";
 import { splitInterpolationText } from "../../../parsers/interpolation.js";
@@ -1152,20 +1154,53 @@ class NodeIdGen {
 class ExprTable {
   public entries: ExprTableEntry[] = [];
   private readonly seen = new Map<string, ExprId>();
-  public constructor(private readonly parser: IExpressionParser, public readonly file: string) {}
+
+  public constructor(
+    private readonly parser: IExpressionParser,
+    public readonly file: string,
+  ) {}
+
   public add(code: string, loc: P5Loc, expressionType: ExpressionType): ExprRef {
     const start = loc?.startOffset ?? 0;
     const end = loc?.endOffset ?? 0;
     const key = `${this.file}|${start}|${end}|${expressionType}|${code}`;
+
     let id = this.seen.get(key);
     if (!id) {
       id = `expr_${hash64(key)}` as ExprId;
-      const ast = this.parser.parse(code, expressionType);
+
+      let ast: AnyBindingExpression;
+
+      try {
+        // Normal path: let the LSP parser do its thing.
+        ast = this.parser.parse(code, expressionType);
+      } catch (e: unknown) {
+        // IMPORTANT:
+        //  - The LSP must not crash on malformed binding expressions.
+        //  - For now we treat *any* parser exception as a parse failure and
+        //    record a top-level BadExpression node instead of rethrowing.
+        //
+        // If we later introduce a dedicated parser error type, we can
+        // tighten this to only catch that and rethrow everything else.
+        const bad: BadExpression = {
+          $kind: "BadExpression",
+          // Spans are always relative to the expression string.
+          span: { start: 0, end: code.length },
+          text: code,
+          message: e instanceof Error ? e.message : String(e),
+        };
+        ast = bad;
+      }
+
       this.entries.push({ id, expressionType, ast } as ExprTableEntry);
+      // Also actually remember we saw this (the old code never set `seen`).
+      this.seen.set(key, id);
     }
+
     return { id, code, loc: toSpan(loc, this.file) };
   }
 }
+
 
 // Expr table IDs are stable based on file+span+kind+code. This keeps deduping deterministic.
 function hash64(s: string): string {

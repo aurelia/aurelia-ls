@@ -113,10 +113,16 @@ export type BindingMode = 'default' | 'oneTime' | 'toView' | 'fromView' | 'twoWa
 
 // Analysis uses ForOfStatement via expr table; IR also carries a lighter ForOfIR.
 export interface ForOfIR {
-  /** ExprId of the parsed ForOfStatement (full `lhs of rhs` header) in the module expr table. */
-  astId: ExprId; // → ForOfStatement in exprTable
+  /**
+   * ExprId of the parsed repeat header (`lhs of rhs`) in the module expr table.
+   * Normally this points at a ForOfStatement; if parsing the header fails,
+   * the corresponding entry will be a BadExpression instead.
+   */
+  astId: ExprId;
   loc?: SourceSpan | null;
 }
+
+
 
 /* ===========================
  * Instruction IR (slim set)
@@ -687,5 +693,5 @@ type ExprTableEntry_T<TType extends ExpressionType, TAst> = {
 export type ExprTableEntry =
   | ExprTableEntry_T<'IsProperty' | 'IsFunction', IsBindingBehavior>
   | ExprTableEntry_T<'Interpolation', Interpolation>
-  | ExprTableEntry_T<'IsIterator', ForOfStatement>
+  | ExprTableEntry_T<'IsIterator', ForOfStatement | BadExpression>
   | ExprTableEntry_T<'IsCustom', CustomExpression>;
