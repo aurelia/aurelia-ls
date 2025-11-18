@@ -1,7 +1,6 @@
 export { compileTemplateToOverlay } from "./compiler/facade.js";
 export { PRELUDE_TS } from "./prelude.js";
 
-// Export the DI-backed parser so the server can construct once and reuse.
 export { getExpressionParser } from "./parsers/expression-parser.js";
 export { DEFAULT_SYNTAX } from "./compiler/language/syntax.js";
 
