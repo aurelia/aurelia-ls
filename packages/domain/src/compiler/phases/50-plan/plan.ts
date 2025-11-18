@@ -60,8 +60,8 @@ function assertUnreachable(_: never): never { throw new Error("unreachable"); }
 /* ===================================================================================== */
 
 type ExprTableEntry =
-  | { id: ExprId; astKind: "IsBindingBehavior"; ast: IsBindingBehavior }
-  | { id: ExprId; astKind: "ForOfStatement";    ast: ForOfStatement };
+  | { id: ExprId; expressionType: "IsBindingBehavior"; ast: IsBindingBehavior }
+  | { id: ExprId; expressionType: "ForOfStatement";    ast: ForOfStatement };
 
 /* ===================================================================================== */
 /* Public API                                                                             */
@@ -194,19 +194,19 @@ function buildFrameAnalysis(
     // ---- Origin typing (repeat / with / promise) ----
     if (f.origin?.kind === "repeat") {
       const forOfAst = exprIndex.get(f.origin.forOfAstId);
-      if (forOfAst && forOfAst.astKind === "ForOfStatement") {
+      if (forOfAst && forOfAst.expressionType === "ForOfStatement") {
         // Header evaluates in the *outer* frame
         const iterType = evalTypeInFrame(f.parent ?? f.id, forOfAst.ast.iterable);
         h.repeatIterable = iterType;
       }
     } else if (f.origin?.kind === "with") {
       const e = exprIndex.get(f.origin.valueExprId);
-      if (e && e.astKind === "IsBindingBehavior") {
+      if (e && e.expressionType === "IsBindingBehavior") {
         h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
       }
     } else if (f.origin?.kind === "promise") {
       const e = exprIndex.get(f.origin.valueExprId);
-      if (e && e.astKind === "IsBindingBehavior") {
+      if (e && e.expressionType === "IsBindingBehavior") {
         h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
         h.promiseBranch = f.origin.branch!;
       }
@@ -256,7 +256,7 @@ function buildFrameAnalysis(
     if (f.letValueExprs) {
       for (const [name, id] of Object.entries(f.letValueExprs)) {
         const entry = exprIndex.get(id);
-        if (entry && entry.astKind === "IsBindingBehavior") {
+        if (entry && entry.expressionType === "IsBindingBehavior") {
           // Use the in-construction env so let values can reference locals in the same frame
           const t = evalTypeInFrame(f.id, entry.ast, env as Env);
           env.set(name, t);
@@ -436,7 +436,7 @@ function collectOneLambdaPerExpression(
     const entry = exprIndex.get(id);
     if (!entry) continue;
 
-    switch (entry.astKind) {
+    switch (entry.expressionType) {
       case "ForOfStatement":
         // headers are mapped for scope only; no overlay lambda
         break;
@@ -533,7 +533,7 @@ function keyed(n: AccessKeyedExpression): string | null {
 }
 
 function callScope(n: CallScopeExpression): string | null {
-  const callee = scopeWithName({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor });
+  const callee = scopeWithName({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: null! /* TODO: integrate spans */ });
   const args = joinArgs(n.args);
   return `${callee}${n.optional ? "?." : ""}(${args})`;
 }
@@ -619,7 +619,7 @@ function template(n: TemplateExpression): string | null {
 function taggedTemplate(n: TaggedTemplateExpression): string | null {
   const f = printLeft(n.func);
   if (!f) return null;
-  const t = template({ $kind: "Template", cooked: n.cooked, expressions: n.expressions });
+  const t = template({ $kind: "Template", cooked: n.cooked, expressions: n.expressions, span: null! /* TODO: integrate spans */ });
   if (!t) return null;
   return `${f}${t}`;
 }
@@ -760,7 +760,7 @@ function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
 
   function tCallScope(n: CallScopeExpression): string {
     // ReturnType of the callee found via scope lookup
-    const calleeT = tAccessScope({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor });
+    const calleeT = tAccessScope({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: null! /* TODO: integrate spans */ });
     return returnTypeOf(calleeT);
   }
 

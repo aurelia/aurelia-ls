@@ -1,16 +1,18 @@
-import { DI } from "@aurelia/kernel";
-import { ExpressionParser } from "@aurelia/expression-parser";
-
-import type {
-  IExpressionParser,
-} from "../compiler/phases/10-lower/lower.js";
+import type { IExpressionParser } from "./expression-api.js";
+import { LspExpressionParser } from "./lsp-expression-parser.js";
 
 /**
- * Construct Aurelia's expression parser via DI.
+ * Construct / reuse the LSP expression parser.
+ *
+ * We keep this behind a small factory so the server can share a single
+ * instance safely across compilations. The parser itself is re‑entrant:
+ * each call to `parse` allocates a fresh CoreParser with its own Scanner.
  */
-export function getExpressionParser(): IExpressionParser {
-  const container = DI.createContainer()
-  const exprParser = container.get(ExpressionParser) as unknown as IExpressionParser;
+let singleton: IExpressionParser | null = null;
 
-  return exprParser;
+export function getExpressionParser(): IExpressionParser {
+  if (singleton == null) {
+    singleton = new LspExpressionParser();
+  }
+  return singleton;
 }

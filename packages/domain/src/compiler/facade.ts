@@ -13,10 +13,8 @@ import type { VmReflection, OverlayPlanModule } from "./phases/50-plan/types.js"
 
 // Parsers
 import { getExpressionParser } from "../parsers/expression-parser.js";
-import type {
-  IExpressionParser,
-  BuildIrOptions,
-} from "./phases/10-lower/lower.js";
+import type { IExpressionParser } from "../parsers/expression-api.js";
+import type { BuildIrOptions } from "./phases/10-lower/lower.js";
 
 import { DEFAULT as SEM_DEFAULT } from "./language/registry.js";
 import { DEFAULT_SYNTAX, type AttributeParser } from "./language/syntax.js";
