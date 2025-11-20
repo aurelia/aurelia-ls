@@ -18,6 +18,7 @@ import type {
   DestructuringAssignmentRestExpression,
   IsAssign,
   BadExpression,
+  BindingIdentifier,
 } from "../../model/ir.js";
 
 import type {
@@ -410,8 +411,9 @@ function bindingNamesFromDeclaration(
 }
 
 /** Extract a local from a single pattern slot (array/object value). */
-function bindingNamesFromPatternValue(v: IsAssign): string[] {
+function bindingNamesFromPatternValue(v: IsAssign | BindingIdentifier): string[] {
   switch (v.$kind) {
+    case "BindingIdentifier":
     case "AccessScope": {
       const name = v.name;
       return name ? [name] : [];
