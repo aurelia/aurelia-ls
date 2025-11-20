@@ -28,12 +28,6 @@ These are **hard constraints**:
   - Target TS 5.x idioms.
   - No legacy `namespace` or ambient junk.
 
-- **No editor/runtime coupling in domain**
-  - `packages/domain` is editor‑agnostic and must not depend on:
-    - Node, VS Code, or LSP types.
-    - `fs`, `path`, etc.
-  - All editor/TS LS wiring lives in `packages/server` and `packages/client`.
-
 When in doubt, copy the style of the phase you’re touching.
 
 ---
