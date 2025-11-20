@@ -22,7 +22,7 @@ import type {
 
 import type { AttributeParser } from "../../language/syntax.js";
 import type { IExpressionParser, ExpressionType } from "../../../parsers/expression-api.js";
-import { splitInterpolationText } from "../../../parsers/interpolation.js";
+import { extractInterpolationSegments } from "../../../parsers/interpolation.js";
 
 /* =======================================================================================
  * HTML → IR builder (Lowering)
@@ -1046,7 +1046,7 @@ function toMode(cmd: string | null, name: string): BindingMode {
 function camelCase(n: string): string {
   return n.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase());
 }
-function attrLoc(el: P5Element, attrName: string): P5Loc {
+function attrLoc(el: P5Element, attrName: string): P5Loc | null {
   const loc = el.sourceCodeLocation;
   const attrLocTable = loc?.attrs;
   return (attrLocTable?.[attrName] ?? loc) ?? null;
@@ -1065,21 +1065,22 @@ function toBindingSource(
 
 function toInterpIR(
   text: string,
-  loc: P5Loc,
+  loc: P5Loc | null,
   table: ExprTable
 ): InterpIR {
-  const split = splitInterpolationText(text);
+  const split = extractInterpolationSegments(text);
 
-  // No complete `${...}` blocks found – treat as a single literal part
-  // with no expressions. This is slightly more tolerant than the old
-  // helper (which returned null), but keeps InterpIR shape consistent.
+  // No complete `${...}` blocks found - treat as a single literal part.
   const parts = split ? split.parts : [text];
   const exprs: ExprRef[] = [];
 
   if (split) {
-    for (const span of split.exprSpans) {
-      const code = text.slice(span.start, span.end);
-      exprs.push(table.add(code, loc, "IsProperty"));
+    const locStart = loc?.startOffset ?? 0;
+    for (const { span, code } of split.expressions) {
+      const exprLoc: P5Loc | null = loc
+        ? { ...loc, startOffset: locStart + span.start, endOffset: locStart + span.end }
+        : null;
+      exprs.push(table.add(code, exprLoc, "IsProperty"));
     }
   }
 
@@ -1088,7 +1089,7 @@ function toInterpIR(
 
 function toExprRef(
   code: string,
-  loc: P5Loc,
+  loc: P5Loc | null,
   table: ExprTable,
   parseKind: ExpressionType
 ): ExprRef {
@@ -1113,7 +1114,7 @@ function parseRepeatTailProps(
   return [{ type: "multiAttr", to, command: null, from, value: val, loc: toSpan(loc, table.file) }];
 }
 
-function toSpan(loc: P5Loc, file?: string): SourceSpan | null {
+function toSpan(loc: P5Loc | null, file?: string): SourceSpan | null {
   if (!loc) return null;
   return { start: loc.startOffset, end: loc.endOffset, file: file! };
 }
@@ -1160,7 +1161,7 @@ class ExprTable {
     public readonly file: string,
   ) {}
 
-  public add(code: string, loc: P5Loc, expressionType: ExpressionType): ExprRef {
+  public add(code: string, loc: P5Loc | null, expressionType: ExpressionType): ExprRef {
     const start = loc?.startOffset ?? 0;
     const end = loc?.endOffset ?? 0;
     const key = `${this.file}|${start}|${end}|${expressionType}|${code}`;

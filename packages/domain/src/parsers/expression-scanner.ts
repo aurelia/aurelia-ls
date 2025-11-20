@@ -692,7 +692,7 @@ export class Scanner {
 // CharCode constants
 // ----------------------------------------------------------------------------------------
 
-const enum CharCode {
+export const enum CharCode {
   // ASCII control & whitespace
   Tab = 0x0009,
   LineFeed = 0x000a,
