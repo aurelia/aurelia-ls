@@ -52,7 +52,7 @@ describe("Lower (10)", () => {
         fmtList("missing.expressions", missing.expressions) +
         fmtList("missing.controllers", missing.controllers) +
         fmtList("missing.lets",       missing.lets) +
-        "\nSee lower-failures.json for full snapshot."
+        "\nSee failures.json for full snapshot."
       );
 
       assert.ok(
@@ -61,7 +61,7 @@ describe("Lower (10)", () => {
         fmtList("extra.expressions", extra.expressions) +
         fmtList("extra.controllers", extra.controllers) +
         fmtList("extra.lets",       extra.lets) +
-        "\nSee lower-failures.json for full snapshot."
+        "\nSee failures.json for full snapshot."
       );
     });
   }

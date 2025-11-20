@@ -27,7 +27,7 @@ export function fmtList(label, arr) {
  * Create a simple per-suite failure recorder that writes a JSON file on exit.
  *
  * Usage in a test file:
- *   const { recordFailure, attachWriter } = createFailureRecorder(__dirname, "bind-failures.json");
+ *   const { recordFailure, attachWriter } = createFailureRecorder(__dirname, "failures.json");
  *   attachWriter();
  *   ...
  *   if (mismatch) recordFailure({ ... });

@@ -14,7 +14,7 @@ import { resolveHost } from "../../out/compiler/phases/20-resolve-host/resolve.j
 import { bindScopes } from "../../out/compiler/phases/30-bind/bind.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const vectorFiles = fs.readdirSync(__dirname).filter(f => f.endsWith(".json")).sort();
+const vectorFiles = fs.readdirSync(__dirname).filter(f => f.endsWith(".json") && !f.endsWith("failures.json")).sort();
 
 const { recordFailure, attachWriter } = createFailureRecorder(__dirname, "failures.json");
 attachWriter();
@@ -69,7 +69,7 @@ describe("Bind (30)", () => {
           "Bind FRAMES mismatch." +
           fmtList("missingFrames", missingFrames) +
           fmtList("extraFrames",   extraFrames) +
-          "\nSee bind-failures.json for full snapshot."
+          "\nSee failures.json for full snapshot."
         );
 
         assert.ok(
@@ -77,7 +77,7 @@ describe("Bind (30)", () => {
           "Bind LOCALS mismatch." +
           fmtList("missingLocals", missingLocals) +
           fmtList("extraLocals",   extraLocals) +
-          "\nSee bind-failures.json for full snapshot."
+          "\nSee failures.json for full snapshot."
         );
 
         assert.ok(
@@ -85,7 +85,7 @@ describe("Bind (30)", () => {
           "Bind EXPRS mismatch." +
           fmtList("missingExprs", missingExprs) +
           fmtList("extraExprs",   extraExprs) +
-          "\nSee bind-failures.json for full snapshot."
+          "\nSee failures.json for full snapshot."
         );
 
         assert.ok(
@@ -93,7 +93,7 @@ describe("Bind (30)", () => {
           "Bind DIAGS mismatch." +
           fmtList("missingDiags", missingDiags) +
           fmtList("extraDiags",   extraDiags) +
-          "\nSee bind-failures.json for full snapshot."
+          "\nSee failures.json for full snapshot."
         );
       });
     }
