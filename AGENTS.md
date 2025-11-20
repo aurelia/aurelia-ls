@@ -57,7 +57,15 @@ When in doubt, copy the style of the phase you’re touching.
   - Provides commands (`aurelia.showOverlay`, `aurelia.dumpState`).
 
 - **`packages/shared`**
-  Small cross‑package utilities shared by client/server.
+  Small cross-package utilities shared by client/server.
+
+### Reference docs (read-only runtime specs)
+
+- `docs/expression-language.md` — binding expression grammar/runtime behavior.
+- `docs/template-lowering-and-binding.md` — lowering + bind contracts for templates.
+- `docs/errors.md` — diagnostic codes/messages.
+
+Use these as authoritative descriptions of current runtime semantics; code and tests should align, and extensions should be additive.
 
 ---
 
@@ -358,7 +366,7 @@ Core interface:
 
 ```ts
 export interface IExpressionParser {
-  parse(expr: string, type: "IsIterator"): ForOfStatement;
+  parse(expr: string, type: "IsIterator"): ForOfStatement | BadExpression;
   parse(expr: string, type: "Interpolation"): Interpolation;
   parse(expr: string, type: "IsFunction" | "IsProperty"): IsBindingBehavior;
   parse(expr: string, type: "IsCustom"): CustomExpression;
@@ -368,8 +376,9 @@ export interface IExpressionParser {
 
 Important:
 
-* The parser should be **re‑entrant**: each `parse` call can allocate internal state, but the object itself is safe to reuse across compilations.
-* On failure, the lowerer wraps failures in `BadExpression` via `ExprTable` and **never throws**.
+* The parser is **feature-complete for runtime parity** with the Aurelia expression language; error-tolerant / LSP-only behaviors can be layered later without changing the spec shape.
+* The parser should be **re-entrant**: each `parse` call can allocate internal state, but the object itself is safe to reuse across compilations.
+* On failure, the lowerer wraps failures in `BadExpression` via `ExprTable` and **never throws**. Iterator headers can also surface `BadExpression` when parsing fails.
 * Any change to AST shape must keep the discriminated union `$kind` intact.
 
 ---
