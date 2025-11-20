@@ -47,6 +47,7 @@ import type {
   PrimitiveLiteralExpression,
   ArrayLiteralExpression,
   ObjectLiteralExpression,
+  ParenExpression,
   TemplateExpression,
   TaggedTemplateExpression,
   ArrowFunction,
@@ -491,6 +492,7 @@ function printIsBindingBehavior(n: IsBindingBehavior): string | null {
     case "PrimitiveLiteral": return primitive(n);
     case "ArrayLiteral":     return arrayLit(n);
     case "ObjectLiteral":    return objectLit(n);
+    case "Paren":            return paren(n);
 
     case "Template":         return template(n);
     case "TaggedTemplate":   return taggedTemplate(n);
@@ -595,6 +597,12 @@ function objectLit(n: ObjectLiteralExpression): string | null {
     parts.push(`${key}: ${v}`);
   }
   return `{ ${parts.join(", ")} }`;
+}
+
+function paren(n: ParenExpression): string | null {
+  const inner = printIsAssign(n.expression);
+  if (!inner) return null;
+  return `(${inner})`;
 }
 
 function template(n: TemplateExpression): string | null {
@@ -710,6 +718,7 @@ function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
       case "PrimitiveLiteral":return literalType(n);
       case "ArrayLiteral":    return "unknown[]";
       case "ObjectLiteral":   return "Record<string, unknown>";
+      case "Paren":           return tIsBindingBehavior(n.expression);
 
       case "Template":        return "string";
       case "TaggedTemplate":  return "unknown";

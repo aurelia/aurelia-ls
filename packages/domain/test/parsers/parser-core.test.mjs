@@ -216,6 +216,34 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   //
+  // Parenthesized expressions
+  //
+  test("parenthesized expression produces Paren node", () => {
+    const src = "(foo)";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "Paren");
+    assert.equal(ast.expression.$kind, "AccessScope");
+    assert.equal(ast.expression.name, "foo");
+    assert.equal(ast.span.start, 0);
+    assert.equal(ast.span.end, src.length);
+    assert.equal(src.slice(ast.expression.span.start, ast.expression.span.end), "foo");
+  });
+
+  test("paren can wrap a member target", () => {
+    const src = "(foo).bar";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "AccessMember");
+    assert.equal(ast.name, "bar");
+
+    const obj = ast.object;
+    assert.equal(obj.$kind, "Paren");
+    assert.equal(obj.expression.$kind, "AccessScope");
+    assert.equal(obj.expression.name, "foo");
+  });
+
+  //
   // Binary / precedence
   //
   test("binary precedence: 1 + 2 * 3", () => {
@@ -300,12 +328,14 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(ast.operation, "*");
 
     const left = ast.left;
-    assert.equal(left.$kind, "Binary");
-    assert.equal(left.operation, "+");
-    assert.equal(left.left.$kind, "PrimitiveLiteral");
-    assert.equal(left.left.value, 1);
-    assert.equal(left.right.$kind, "PrimitiveLiteral");
-    assert.equal(left.right.value, 2);
+    assert.equal(left.$kind, "Paren");
+    assert.equal(left.expression.$kind, "Binary");
+    assert.equal(left.expression.operation, "+");
+    assert.equal(left.expression.left.$kind, "PrimitiveLiteral");
+    assert.equal(left.expression.left.value, 1);
+    assert.equal(left.expression.right.$kind, "PrimitiveLiteral");
+    assert.equal(left.expression.right.value, 2);
+    assert.equal(src.slice(left.span.start, left.span.end), "(1 + 2)");
 
     assert.equal(ast.right.$kind, "PrimitiveLiteral");
     assert.equal(ast.right.value, 3);
@@ -321,12 +351,14 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(ast.operation, "&&");
 
     const right = ast.right;
-    assert.equal(right.$kind, "Binary");
-    assert.equal(right.operation, "||");
-    assert.equal(right.left.$kind, "AccessScope");
-    assert.equal(right.left.name, "b");
-    assert.equal(right.right.$kind, "AccessScope");
-    assert.equal(right.right.name, "c");
+    assert.equal(right.$kind, "Paren");
+    assert.equal(right.expression.$kind, "Binary");
+    assert.equal(right.expression.operation, "||");
+    assert.equal(right.expression.left.$kind, "AccessScope");
+    assert.equal(right.expression.left.name, "b");
+    assert.equal(right.expression.right.$kind, "AccessScope");
+    assert.equal(right.expression.right.name, "c");
+    assert.equal(src.slice(right.span.start, right.span.end), "(b || c)");
 
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
   });
