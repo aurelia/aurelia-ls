@@ -61,7 +61,7 @@ describe("Resolve Host (20)", () => {
         "Resolve intent mismatch for items." +
         fmtList("missingItems", missingItems) +
         fmtList("extraItems",   extraItems) +
-        "\nSee resolve-failures.json for full snapshot."
+        "\nSee failures.json for full snapshot."
       );
 
       assert.ok(
@@ -69,7 +69,7 @@ describe("Resolve Host (20)", () => {
         "Resolve diagnostics mismatch." +
         fmtList("missingDiags", missingDiags) +
         fmtList("extraDiags",   extraDiags) +
-        "\nSee resolve-failures.json for full snapshot."
+        "\nSee failures.json for full snapshot."
       );
     });
   }
