@@ -228,13 +228,19 @@ function indexExprCodeFromIr(ir) {
             if (ins.from) map.set(ins.from.id, ins.from.code);
             break;
 
-          case "hydrateTemplateController":
+        case "hydrateTemplateController":
+          for (const p of ins.props ?? []) {
+            if (p.type === "propertyBinding") visitSource(p.from);
+            // iteratorBinding carries ForOfIR.astId only; code resolved via exprTable classification
+          }
+          if (ins.branch?.kind === "case" && ins.branch.expr) {
+            map.set(ins.branch.expr.id, ins.branch.expr.code);
+          }
+          break;
+
+          case "hydrateElement":
             for (const p of ins.props ?? []) {
-              if (p.type === "propertyBinding") visitSource(p.from);
-              // iteratorBinding carries ForOfIR.astId only; code resolved via exprTable classification
-            }
-            if (ins.branch?.kind === "case" && ins.branch.expr) {
-              map.set(ins.branch.expr.id, ins.branch.expr.code);
+              if (p.kind === "propertyBinding" || p.type === "propertyBinding") visitSource(p.from);
             }
             break;
 

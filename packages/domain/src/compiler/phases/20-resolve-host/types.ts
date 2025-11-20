@@ -19,6 +19,7 @@ import type {
 
 import type {
   ElementRes,
+  AttrRes,
   DomElement,
   DomProp,
   RepeatController,
@@ -83,6 +84,7 @@ export type NodeSem =
 
 export interface ElementResRef { def: ElementRes }
 export interface DomElementRef   { def: DomElement }
+export interface AttrResRef      { def: AttrRes }
 
 /* ===========================
  * Instruction linking
@@ -99,6 +101,8 @@ export type LinkedInstruction =
   | LinkedSetProperty
   | LinkedSetClassAttribute
   | LinkedSetStyleAttribute
+  | LinkedHydrateElement
+  | LinkedHydrateAttribute
   | LinkedHydrateTemplateController
   | LinkedHydrateLetElement
   | LinkedIteratorBinding;
@@ -190,9 +194,30 @@ export interface LinkedSetStyleAttribute extends BaseLinked {
   value: string;
 }
 
+export interface LinkedHydrateElement extends BaseLinked {
+  kind: "hydrateElement";
+  res: ElementResRef | null;
+  props: LinkedElementBindable[];
+  projections?: { slot?: string | null; def: TemplateIR }[] | null;
+  containerless?: boolean;
+}
+
+export interface LinkedHydrateAttribute extends BaseLinked {
+  kind: "hydrateAttribute";
+  res: AttrResRef | null;
+  alias: string | null;
+  props: LinkedElementBindable[];
+}
+
+export type LinkedElementBindable =
+  | LinkedPropertyBinding
+  | LinkedAttributeBinding
+  | LinkedStylePropertyBinding
+  | LinkedSetProperty;
+
 /**
  * Hydrate a <let> element.
- * - Transparent at host‑semantics level; the Bind phase consumes the inner let bindings directly.
+ * - Transparent at host-semantics level; the Bind phase consumes the inner let bindings directly.
  */
 export interface LinkedHydrateLetElement extends BaseLinked {
   kind: "hydrateLetElement";
@@ -254,6 +279,7 @@ export type ControllerBranch =
  */
 export type TargetSem =
   | { kind: "element.bindable"; element: ElementResRef; bindable: Bindable }
+  | { kind: "attribute.bindable"; attribute: AttrResRef; bindable: Bindable }
   | { kind: "element.nativeProp"; element: DomElementRef; prop: DomProp }
   | { kind: "controller.prop"; controller: ControllerSem; bindable: Bindable }
   | { kind: "attribute"; attr: string }

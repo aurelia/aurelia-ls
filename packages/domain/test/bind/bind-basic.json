@@ -161,5 +161,19 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "B-11 custom element bindable evaluates in root frame",
+    "markup": "<au-compose subject.bind=\"vm\"></au-compose>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "vm" }
+      ],
+      "diags": []
+    }
   }
 ]

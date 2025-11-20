@@ -17,6 +17,7 @@ import type {
   BindingMode, NodeId,
   InstructionIR,
   SetPropertyIR,
+  HydrateElementIR, HydrateAttributeIR, ElementBindableIR,
 } from "../../model/ir.js";
 
 import type { Semantics, TypeRef, Bindable } from "../../language/registry.js";
@@ -25,11 +26,11 @@ import type {
   LinkedSemanticsModule, LinkedTemplate, LinkedRow, NodeSem, LinkedInstruction,
   LinkedPropertyBinding, LinkedAttributeBinding, LinkedStylePropertyBinding, LinkedListenerBinding, LinkedRefBinding,
   LinkedTextBinding, LinkedSetAttribute, LinkedSetClassAttribute, LinkedSetStyleAttribute, LinkedIteratorBinding,
-  LinkedHydrateTemplateController, TargetSem, ControllerSem,
+  LinkedHydrateTemplateController, LinkedHydrateElement, LinkedHydrateAttribute, LinkedElementBindable, TargetSem, ControllerSem,
   SemDiagnostic,
   LinkedHydrateLetElement,
   LinkedSetProperty,
-  ElementResRef, DomElementRef,
+  ElementResRef, DomElementRef, AttrResRef,
 } from "./types.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
@@ -84,7 +85,8 @@ function resolveNodeSem(n: DOMNode | undefined, sem: Semantics): NodeSem {
   if (!n) return { kind: "comment" }; // rows may target synthetic nodes (e.g., wrapper templates)
   switch (n.kind) {
     case "element": {
-      const tag = n.tag.toLowerCase();
+      const asElement = n.attrs?.find((a) => a.name === "as-element")?.value;
+      const tag = (asElement ?? n.tag).toLowerCase();
       // Custom component wins when both exist
       const custom = sem.resources.elements[tag] ?? null;
       const native = sem.dom.elements[tag] ?? null;
@@ -123,13 +125,14 @@ function linkInstruction(
     case "setProperty":           return linkSetProperty(ins, host, sem, diags);
     case "setClassAttribute":     return linkSetClassAttribute(ins);
     case "setStyleAttribute":     return linkSetStyleAttribute(ins);
+    case "hydrateElement":        return linkHydrateElement(ins, host, sem, diags);
+    case "hydrateAttribute":      return linkHydrateAttribute(ins, host, sem, diags);
     case "iteratorBinding":       return linkIteratorBinding(ins, host, sem, diags);
     case "hydrateTemplateController":
       return linkHydrateTemplateController(ins, host, sem, diags);
     case "hydrateLetElement":
       return linkHydrateLetElement(ins);
     default:
-      // hydrateElement/hydrateAttribute not produced by the current builder (MVP)
       return assertUnreachable(ins as never);
   }
 }
@@ -278,6 +281,119 @@ function linkSetProperty(
     });
   }
   return { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
+}
+
+function linkHydrateElement(
+  ins: HydrateElementIR,
+  host: NodeSem,
+  sem: Semantics,
+  diags: SemDiagnostic[],
+): LinkedHydrateElement {
+  const res = resolveElementResRef(ins.res, sem);
+  const props = ins.props.map((p) => linkElementBindable(p, host, sem, diags));
+  return {
+    kind: "hydrateElement",
+    res,
+    props,
+    projections: ins.projections ?? null,
+    containerless: ins.containerless ?? false,
+    loc: ins.loc ?? null,
+  };
+}
+
+function linkHydrateAttribute(
+  ins: HydrateAttributeIR,
+  host: NodeSem,
+  sem: Semantics,
+  diags: SemDiagnostic[],
+): LinkedHydrateAttribute {
+  const res = resolveAttrResRef(ins.res, sem);
+  const props = ins.props.map((p) => linkAttributeBindable(p, res, sem, diags));
+  return {
+    kind: "hydrateAttribute",
+    res,
+    alias: ins.alias ?? null,
+    props,
+    loc: ins.loc ?? null,
+  };
+}
+
+function linkElementBindable(
+  ins: ElementBindableIR,
+  host: NodeSem,
+  sem: Semantics,
+  diags: SemDiagnostic[],
+): LinkedElementBindable {
+  switch (ins.type) {
+    case "propertyBinding":
+      return linkPropertyBinding(ins, host, sem, diags);
+    case "attributeBinding":
+      return linkAttributeBinding(ins, host, sem, diags);
+    case "stylePropertyBinding":
+      return linkStylePropertyBinding(ins);
+    case "setProperty":
+      return linkSetProperty(ins, host, sem, diags);
+    default:
+      return assertUnreachable(ins as never);
+  }
+}
+
+function linkAttributeBindable(
+  ins: ElementBindableIR,
+  attr: AttrResRef | null,
+  sem: Semantics,
+  diags: SemDiagnostic[],
+): LinkedElementBindable {
+  switch (ins.type) {
+    case "propertyBinding": {
+      const to = ins.to;
+      const bindable = attr ? resolveAttrBindable(attr, to) : null;
+      const target: TargetSem = bindable
+        ? { kind: "attribute.bindable", attribute: attr!, bindable }
+        : { kind: "unknown", reason: "no-bindable" };
+      const effectiveMode = resolveBindableMode(ins.mode, bindable);
+      return {
+        kind: "propertyBinding",
+        to,
+        from: ins.from,
+        mode: ins.mode,
+        effectiveMode,
+        target,
+        loc: ins.loc ?? null,
+      };
+    }
+    case "attributeBinding": {
+      const bindable = attr ? resolveAttrBindable(attr, ins.to) : null;
+      const target: TargetSem = bindable
+        ? { kind: "attribute.bindable", attribute: attr!, bindable }
+        : { kind: "unknown", reason: "no-bindable" };
+      return {
+        kind: "attributeBinding",
+        attr: ins.attr,
+        to: ins.to,
+        from: ins.from,
+        target,
+        loc: ins.loc ?? null,
+      };
+    }
+    case "stylePropertyBinding":
+      return linkStylePropertyBinding(ins);
+    case "setProperty": {
+      const bindable = attr ? resolveAttrBindable(attr, ins.to) : null;
+      const target: TargetSem = bindable
+        ? { kind: "attribute.bindable", attribute: attr!, bindable }
+        : { kind: "unknown", reason: "no-bindable" };
+      return {
+        kind: "setProperty",
+        to: ins.to,
+        value: ins.value,
+        target,
+        loc: ins.loc ?? null,
+      };
+    }
+    default:
+      return assertUnreachable(ins as never);
+  }
 }
 
 /* ---- IteratorBinding (repeat) ---- */
@@ -592,6 +708,9 @@ function resolveEffectiveMode(
     case "controller.prop":
       return target.bindable.mode ?? "toView";
 
+    case "attribute.bindable":
+      return target.bindable.mode ?? "toView";
+
     case "attribute":
       return "toView";
 
@@ -605,4 +724,42 @@ function resolveEffectiveMode(
 
 function camelCase(n: string): string {
   return n.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase());
+}
+
+function resolveElementResRef(res: HydrateElementIR["res"], sem: Semantics): ElementResRef | null {
+  if (!res) return null;
+  const name = typeof res === "string" ? res.toLowerCase() : res;
+  const direct =
+    typeof name === "string"
+      ? sem.resources.elements[name]
+      : null;
+  if (direct) return { def: direct };
+  for (const candidate of Object.values(sem.resources.elements)) {
+    if (candidate.aliases?.includes(typeof name === "string" ? name : "")) return { def: candidate };
+  }
+  return null;
+}
+
+function resolveAttrResRef(res: HydrateAttributeIR["res"], sem: Semantics): AttrResRef | null {
+  if (!res) return null;
+  const name = typeof res === "string" ? res.toLowerCase() : res;
+  const direct =
+    typeof name === "string"
+      ? sem.resources.attributes[name]
+      : null;
+  if (direct) return { def: direct };
+  for (const candidate of Object.values(sem.resources.attributes)) {
+    if (candidate.aliases?.includes(typeof name === "string" ? name : "")) return { def: candidate };
+  }
+  return null;
+}
+
+function resolveAttrBindable(attr: AttrResRef, to: string): Bindable | null {
+  const camel = camelCase(to);
+  return attr.def.bindables[camel] ?? null;
+}
+
+function resolveBindableMode(mode: BindingMode, bindable: Bindable | null | undefined): BindingMode {
+  if (mode !== "default") return mode;
+  return bindable?.mode ?? "toView";
 }

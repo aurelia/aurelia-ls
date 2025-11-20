@@ -19,7 +19,7 @@ import type {
 
 import type {
   LinkedSemanticsModule, LinkedTemplate, LinkedRow,
-  LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement,
+  LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement, LinkedHydrateElement, LinkedHydrateAttribute, LinkedElementBindable,
 } from "../20-resolve-host/types.js";
 
 import type {
@@ -256,6 +256,14 @@ function walkRows(
           }
           break;
         }
+        case "hydrateElement": {
+          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame);
+          break;
+        }
+        case "hydrateAttribute": {
+          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame);
+          break;
+        }
 
         default:
           assertUnreachable(ins);
@@ -372,6 +380,19 @@ function getValueProp(ctrl: LinkedHydrateTemplateController): _LinkedValueProp {
  * Expression → Frame mapping
  * ============================================================================= */
 
+function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: Record<string, FrameId>): void {
+  switch (b.kind) {
+    case "propertyBinding":
+    case "attributeBinding":
+    case "stylePropertyBinding":
+      mapBindingSource(b.from, frame, out);
+      return;
+    case "setProperty":
+      return;
+    default:
+      assertUnreachable(b as never);
+  }
+}
 function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: Record<string, FrameId>): void {
   for (const id of exprIdsOf(src)) out[id] = frame;
 }
@@ -461,3 +482,4 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
       return assertUnreachable(pattern as never);
   }
 }
+
