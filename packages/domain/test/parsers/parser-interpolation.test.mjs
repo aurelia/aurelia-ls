@@ -46,6 +46,8 @@ describe("interpolation splitting", () => {
 
     const span0 = split.exprSpans[0];
     assert.equal(src.slice(span0.start, span0.end), "name");
+    assert.equal(span0.start, 8);
+    assert.equal(span0.end, 12);
   });
 
   test("adjacent interpolations ${a}${b}", () => {
@@ -57,6 +59,8 @@ describe("interpolation splitting", () => {
     assert.equal(split.exprSpans.length, 2);
     assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "a");
     assert.equal(src.slice(split.exprSpans[1].start, split.exprSpans[1].end), "b");
+    assert.equal(split.exprSpans[0].start, 2);
+    assert.equal(split.exprSpans[0].end, 3);
   });
 
   test("nested braces and strings inside interpolation", () => {
@@ -68,6 +72,7 @@ describe("interpolation splitting", () => {
     assert.equal(split.exprSpans.length, 1);
     const exprText = src.slice(split.exprSpans[0].start, split.exprSpans[0].end);
     assert.equal(exprText, " foo ? { y: 1 } : { y: 2 } ");
+    assert.equal(split.exprSpans[0].start, 4);
   });
 });
 
@@ -163,5 +168,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse(src, "Interpolation");
     assert.equal(ast.expressions[0].$kind, "BadExpression");
+    assert.equal(ast.expressions[0].message, "Left-hand side is not assignable");
+    assert.ok(ast.expressions[0].span.start >= 7);
   });
 });
