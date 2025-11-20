@@ -14,6 +14,7 @@ import type {
   ForOfIR,
   LetBindingIR,
   JsonValue,
+  ExprTableEntry,
 } from "../../model/ir.js";
 
 import type {
@@ -56,8 +57,7 @@ export interface SemDiagnostic {
 export interface LinkedSemanticsModule {
   version: "aurelia-linked@1";
   templates: LinkedTemplate[];
-  /** Passthrough for Analysis tooling; opaque to this phase. */
-  exprTable?: unknown;
+  exprTable?: ExprTableEntry[];
   diags: SemDiagnostic[];
 }
 

@@ -44,7 +44,7 @@ export function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule
   return {
     version: "aurelia-linked@1",
     templates,
-    exprTable: ir.exprTable, // passthrough for Analysis/tooling
+    exprTable: ir.exprTable!, // passthrough for Analysis/tooling
     diags,
   };
 }
