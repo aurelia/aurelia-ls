@@ -422,7 +422,10 @@ When modifying or adding code:
      * Bind: `pnpm test:bind`
      * Typecheck-ish flows: `pnpm test:typecheck`
      * SSR: `pnpm test:ssr`
-   * Tests are in `packages/domain/test/**` and mostly data‑driven JSON vectors.
+     * Parsers: `pnpm test:parsers`
+     * E2E fixtures: `pnpm test:e2e`
+   * Tests are in `packages/domain/test/**` and mostly data-driven JSON vectors.
+   * Coverage flavors exist for most suites (e.g., `*:cov` scripts in `package.json`); use them when changing parser/phases heavily.
 
 5. **Safe areas vs. dangerous areas**
 
