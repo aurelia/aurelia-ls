@@ -19,6 +19,16 @@ export interface InterpolationSplitResult {
 }
 
 /**
+ * Structured interpolation split that also materializes the raw expression
+ * substrings next to their spans. This avoids duplicating slice logic for
+ * callers that need both the text and offsets.
+ */
+export interface InterpolationSegments {
+  parts: string[];
+  expressions: { span: TextSpan; code: string }[];
+}
+
+/**
  * Split a string containing `${...}` interpolations into literal parts and
  * expression spans.
  *
@@ -142,6 +152,23 @@ export function splitInterpolationText(text: string): InterpolationSplitResult |
 }
 
 /**
+ * Convenience wrapper over `splitInterpolationText` that also returns the
+ * expression substrings for each span. Returns `null` when no complete
+ * `${...}` pairs are present.
+ */
+export function extractInterpolationSegments(text: string): InterpolationSegments | null {
+  const split = splitInterpolationText(text);
+  if (!split) return null;
+
+  const expressions = split.exprSpans.map((span) => ({
+    span,
+    code: text.slice(span.start, span.end),
+  }));
+
+  return { parts: split.parts, expressions };
+}
+
+/**
  * Build an `Interpolation` AST node for the given text.
  *
  * The caller supplies a `parseExpr` delegate that parses each `${...}`
@@ -152,15 +179,14 @@ export function parseInterpolationAst(
   text: string,
   parseExpr: (segment: string, baseOffset: number) => IsBindingBehavior | BadExpression,
 ): Interpolation {
-  const split = splitInterpolationText(text);
+  const split = extractInterpolationSegments(text);
 
   const parts: string[] = split ? split.parts : [text];
   const expressions: IsBindingBehavior[] = [];
 
   if (split) {
-    for (const span of split.exprSpans) {
-      const segment = text.slice(span.start, span.end);
-      const expr = parseExpr(segment, span.start);
+    for (const { code, span } of split.expressions) {
+      const expr = parseExpr(code, span.start);
       expressions.push(expr as IsBindingBehavior);
     }
   }

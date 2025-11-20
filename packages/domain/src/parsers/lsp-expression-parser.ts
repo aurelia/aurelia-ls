@@ -1,5 +1,5 @@
 import type { IExpressionParser } from "./expression-api.js";
-import { Scanner, TokenType, type Token } from "./expression-scanner.js";
+import { Scanner, TokenType, type Token, CharCode } from "./expression-scanner.js";
 
 import type {
   AnyBindingExpression,
@@ -44,6 +44,8 @@ import type {
   BindingPatternDefault,
   BindingPatternHole,
   ParenExpression,
+  TemplateExpression,
+  TaggedTemplateExpression,
   ArrowFunction,
   CustomExpression,
   BadExpression,
@@ -386,14 +388,39 @@ export class CoreParser {
             end: this.lastTokenEnd,
           };
 
-          const call: CallFunctionExpression = {
-            $kind: "CallFunction",
-            span,
-            func: expr,
-            args,
-            optional: true,
-          };
-          expr = call;
+          if (this.isAccessScope(expr)) {
+            const scope = expr;
+            const call: CallScopeExpression = {
+              $kind: "CallScope",
+              span,
+              name: scope.name,
+              args,
+              ancestor: scope.ancestor,
+              optional: true,
+            };
+            expr = call;
+          } else if (this.isAccessMember(expr)) {
+            const member = expr;
+            const call: CallMemberExpression = {
+              $kind: "CallMember",
+              span,
+              object: member.object,
+              name: member.name,
+              args,
+              optionalMember: member.optional,
+              optionalCall: true,
+            };
+            expr = call;
+          } else {
+            const call: CallFunctionExpression = {
+              $kind: "CallFunction",
+              span,
+              func: expr,
+              args,
+              optional: true,
+            };
+            expr = call;
+          }
           continue;
         }
 
@@ -485,12 +512,21 @@ export class CoreParser {
         continue;
       }
 
-      // TODO: Tagged templates (expr`...`) – not implemented yet.
       if (t.type === TokenType.Backtick) {
-        this.error(
-          "Template literals / tagged templates are not supported yet",
-          t,
-        );
+        const tpl = this.parseTemplateLiteral();
+        const span: TextSpan = {
+          start: this.getNodeStart(expr),
+          end: tpl.span.end,
+        };
+        const tagged: TaggedTemplateExpression = {
+          $kind: "TaggedTemplate",
+          span,
+          func: expr,
+          cooked: tpl.cooked,
+          expressions: tpl.expressions,
+        };
+        expr = tagged;
+        continue;
       }
 
       break;
@@ -631,7 +667,7 @@ export class CoreParser {
       }
 
       case TokenType.Backtick: {
-        this.error("Template literals are not implemented yet", t);
+        return this.parseTemplateLiteral();
       }
     }
 
@@ -1212,6 +1248,75 @@ export class CoreParser {
     };
   }
 
+  /**
+   * Parse a template literal (with expressions) starting at the backtick.
+   * Produces a TemplateExpression with cooked strings (raw text slices) and
+   * expressions parsed as AssignExpr with proper span offsets.
+   */
+  private parseTemplateLiteral(): TemplateExpression {
+    const open = this.peekToken();
+    if (open.type !== TokenType.Backtick) {
+      this.error("Expected '`' to start template literal", open);
+    }
+    this.nextToken(); // consume '`'
+
+    const cooked: string[] = [];
+    const expressions: IsAssign[] = [];
+
+    let chunkStart = open.end;
+    let i = chunkStart;
+    const src = this.source;
+
+    const flushChunk = (end: number) => {
+      cooked.push(src.slice(chunkStart, end));
+    };
+
+    while (i < src.length) {
+      const ch = src.charCodeAt(i);
+      // `${` starts an expression
+      if (ch === CharCode.Dollar && src.charCodeAt(i + 1) === CharCode.OpenBrace) {
+        flushChunk(i);
+        // find matching }
+        let depth = 1;
+        let j = i + 2;
+        while (j < src.length && depth > 0) {
+          const code = src.charCodeAt(j);
+          if (code === CharCode.OpenBrace) depth++;
+          else if (code === CharCode.CloseBrace) depth--;
+          j++;
+        }
+        if (depth !== 0) {
+          this.error("Unterminated ${ in template literal", open);
+        }
+        const exprSrc = src.slice(i + 2, j - 1);
+        const inner = new CoreParser(exprSrc);
+        const expr = inner.parseAssignExpr();
+        offsetNodeSpans(expr as unknown as Record<string, unknown>, i + 2);
+        expressions.push(expr);
+        chunkStart = j;
+        i = j;
+        continue;
+      }
+      // closing backtick
+      if (ch === CharCode.Backtick) {
+        flushChunk(i);
+        i++; // include closing
+        this.scanner.reset(i);
+        this.lastTokenEnd = i;
+        const span: TextSpan = { start: open.start, end: i };
+        return { $kind: "Template", span, cooked, expressions };
+      }
+      // handle escape of backtick/dollar by skipping next char
+      if (ch === CharCode.Backslash) {
+        i += 2;
+        continue;
+      }
+      i++;
+    }
+
+    this.error("Unterminated template literal", open);
+  }
+
   private parseBindingPatternWithOptionalDefault(): BindingPattern {
     const pattern = this.parseBindingPatternBase();
     const maybeDefault = this.peekToken();
@@ -1763,7 +1868,7 @@ export class LspExpressionParser implements IExpressionParser {
           (segment, baseOffset) => {
             const core = new CoreParser(segment);
             const expr = core.parseBindingExpression();
-            this.offsetExpressionSpans(expr, baseOffset);
+            offsetNodeSpans(expr as unknown as Record<string, unknown>, baseOffset);
             return expr;
           },
         );
@@ -1789,54 +1894,46 @@ export class LspExpressionParser implements IExpressionParser {
     }
   }
 
-  /**
-   * Recursively offset all `span` fields in an expression tree by `delta`.
-   * This is used so that expressions parsed out of `${...}` segments get
-   * spans relative to the full interpolation string instead of the sliced
-   * segment.
-   */
-  private offsetExpressionSpans(
-    expr: IsBindingBehavior | BadExpression,
-    delta: number,
-  ): void {
-    this.offsetNodeSpans(expr as unknown as Record<string, unknown>, delta);
+}
+
+/**
+ * Recursively offset all span fields in an AST node by `delta`.
+ * Shared between CoreParser (template literals) and LspExpressionParser (interpolation).
+ */
+function offsetNodeSpans(node: Record<string, unknown>, delta: number): void {
+  if (node == null) {
+    return;
   }
 
-  private offsetNodeSpans(node: Record<string, unknown>, delta: number): void {
-    if (node == null) {
-      return;
-    }
+  const anyNode = node as any;
+  if (typeof anyNode !== "object") {
+    return;
+  }
 
-    const anyNode = node as any;
-    if (typeof anyNode !== "object") {
-      return;
-    }
+  if (
+    anyNode.span &&
+    typeof anyNode.span.start === "number" &&
+    typeof anyNode.span.end === "number"
+  ) {
+    anyNode.span = {
+      start: anyNode.span.start + delta,
+      end: anyNode.span.end + delta,
+    };
+  }
 
-    if (
-      anyNode.span &&
-      typeof anyNode.span.start === "number" &&
-      typeof anyNode.span.end === "number"
-    ) {
-      anyNode.span = {
-        start: anyNode.span.start + delta,
-        end: anyNode.span.end + delta,
-      };
-    }
+  for (const key of Object.keys(anyNode)) {
+    if (key === "span") continue;
+    const value = anyNode[key];
+    if (value == null) continue;
 
-    for (const key of Object.keys(anyNode)) {
-      if (key === "span") continue;
-      const value = anyNode[key];
-      if (value == null) continue;
-
-      if (Array.isArray(value)) {
-        for (const child of value) {
-          if (child && typeof child === "object") {
-            this.offsetNodeSpans(child as Record<string, unknown>, delta);
-          }
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        if (child && typeof child === "object") {
+          offsetNodeSpans(child as Record<string, unknown>, delta);
         }
-      } else if (typeof value === "object") {
-        this.offsetNodeSpans(value as Record<string, unknown>, delta);
       }
+    } else if (typeof value === "object") {
+      offsetNodeSpans(value as Record<string, unknown>, delta);
     }
   }
 }

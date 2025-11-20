@@ -164,6 +164,48 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
   });
 
+  test("optional call on scope binding: foo?.()", () => {
+    const src = "foo?.()";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "CallScope");
+    assert.equal(ast.name, "foo");
+    assert.equal(ast.optional, true);
+    assert.equal(ast.ancestor, 0);
+    assert.equal(ast.args.length, 0);
+  });
+
+  test("optional call on member: user.get?.(id)", () => {
+    const src = "user.get?.(id)";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "CallMember");
+    assert.equal(ast.name, "get");
+    assert.equal(ast.optionalMember, false);
+    assert.equal(ast.optionalCall, true);
+
+    assert.equal(ast.object.$kind, "AccessScope");
+    assert.equal(ast.object.name, "user");
+
+    assert.equal(ast.args.length, 1);
+    assert.equal(ast.args[0].$kind, "AccessScope");
+    assert.equal(ast.args[0].name, "id");
+  });
+
+  test("optional chaining + optional call: user?.get?.()", () => {
+    const src = "user?.get?.()";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "CallMember");
+    assert.equal(ast.name, "get");
+    assert.equal(ast.optionalMember, true);
+    assert.equal(ast.optionalCall, true);
+
+    assert.equal(ast.object.$kind, "AccessScope");
+    assert.equal(ast.object.name, "user");
+    assert.equal(ast.args.length, 0);
+  });
+
   //
   // Unary expressions
   //
@@ -621,5 +663,79 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(innerExpr.name, "amount");
 
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
+  });
+
+  //
+  // Template literals
+  //
+  test("template literal", () => {
+    const src = "`hello ${name}!`";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "Template");
+    assert.deepEqual(ast.cooked, ["hello ", "!"]);
+    assert.equal(ast.expressions.length, 1);
+    assert.equal(ast.expressions[0].$kind, "AccessScope");
+    assert.equal(ast.expressions[0].name, "name");
+    assert.equal(src.slice(ast.span.start, ast.span.end), src);
+  });
+
+  test("template literal with no expressions", () => {
+    const src = "`plain text`";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "Template");
+    assert.deepEqual(ast.cooked, ["plain text"]);
+    assert.equal(ast.expressions.length, 0);
+  });
+
+  test("template literal with escaped backtick", () => {
+    const src = "`hi \\` there`";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "Template");
+    assert.deepEqual(ast.cooked, ["hi \\` there"]);
+    assert.equal(ast.expressions.length, 0);
+  });
+
+  test("template literal with multiple expressions", () => {
+    const src = "`a${x}b${y}c`";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "Template");
+    assert.deepEqual(ast.cooked, ["a", "b", "c"]);
+    assert.equal(ast.expressions.length, 2);
+    assert.equal(ast.expressions[0].$kind, "AccessScope");
+    assert.equal(ast.expressions[0].name, "x");
+    assert.equal(ast.expressions[1].$kind, "AccessScope");
+    assert.equal(ast.expressions[1].name, "y");
+  });
+
+  test("tagged template literal", () => {
+    const src = "format`a${x}b`";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "TaggedTemplate");
+    assert.equal(ast.func.$kind, "AccessScope");
+    assert.equal(ast.func.name, "format");
+    assert.deepEqual(ast.cooked, ["a", "b"]);
+    assert.equal(ast.expressions.length, 1);
+    assert.equal(ast.expressions[0].$kind, "AccessScope");
+    assert.equal(ast.expressions[0].name, "x");
+  });
+
+  test("tagged template literal with multiple expressions", () => {
+    const src = "fmt`a${x}b${y}c`";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "TaggedTemplate");
+    assert.equal(ast.func.$kind, "AccessScope");
+    assert.equal(ast.func.name, "fmt");
+    assert.deepEqual(ast.cooked, ["a", "b", "c"]);
+    assert.equal(ast.expressions.length, 2);
+    assert.equal(ast.expressions[0].$kind, "AccessScope");
+    assert.equal(ast.expressions[0].name, "x");
+    assert.equal(ast.expressions[1].$kind, "AccessScope");
+    assert.equal(ast.expressions[1].name, "y");
   });
 });
