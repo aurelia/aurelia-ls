@@ -50,6 +50,7 @@ import type {
   TaggedTemplateExpression,
   ArrowFunction,
   ExprTableEntry,
+  BadExpression,
 } from "../../model/ir.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
@@ -186,11 +187,11 @@ function buildFrameAnalysis(
     if (f.origin?.kind === "repeat") {
       const forOfAst = exprIndex.get(f.origin.forOfAstId);
       if (forOfAst?.expressionType === "IsIterator") {
-        // TODO: handle this properly with a diag
-        if (forOfAst.ast.$kind === "BadExpression") throw new Error(forOfAst.ast.message);
-        // Header evaluates in the *outer* frame
-        const iterType = evalTypeInFrame(f.parent ?? f.id, forOfAst.ast.iterable);
-        h.repeatIterable = iterType;
+        if (forOfAst.ast.$kind !== "BadExpression") {
+          // Header evaluates in the *outer* frame
+          const iterType = evalTypeInFrame(f.parent ?? f.id, forOfAst.ast.iterable);
+          h.repeatIterable = iterType;
+        }
       }
     } else if (f.origin?.kind === "with") {
       const e = exprIndex.get(f.origin.valueExprId);
@@ -283,6 +284,8 @@ function projectRepeatLocals(forOf: ForOfStatement | undefined, elemT: string): 
 
 function projectPatternTypes(pattern: BindingIdentifierOrPattern, baseType: string, out: Map<string, string>): void {
   switch (pattern.$kind) {
+    case "BadExpression":
+      return;
     case "BindingIdentifier": {
       const name = pattern.name;
       if (name) out.set(name, wrap(baseType));

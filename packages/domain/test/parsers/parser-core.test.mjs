@@ -738,4 +738,16 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(ast.expressions[1].$kind, "AccessScope");
     assert.equal(ast.expressions[1].name, "y");
   });
+
+  test("malformed expression returns BadExpression (no throw)", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("foo(", "IsProperty");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("bad nested segment in interpolation returns BadExpression", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("hello ${foo(}", "Interpolation");
+    assert.equal(ast.expressions[0].$kind, "BadExpression");
+  });
 });

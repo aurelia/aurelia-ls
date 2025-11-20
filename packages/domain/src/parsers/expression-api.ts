@@ -4,6 +4,7 @@ import type {
   IsBindingBehavior,
   CustomExpression,
   AnyBindingExpression,
+  BadExpression,
 } from "../compiler/model/ir.js";
 
 export type { ExpressionType } from "../compiler/model/ir.js";
@@ -25,7 +26,7 @@ import type { ExpressionType } from "../compiler/model/ir.js";
  * - 'IsCustom'                  → CustomExpression
  */
 export interface IExpressionParser {
-  parse(expression: string, expressionType: "IsIterator"): ForOfStatement;
+  parse(expression: string, expressionType: "IsIterator"): ForOfStatement | BadExpression;
   parse(expression: string, expressionType: "Interpolation"): Interpolation;
   parse(expression: string, expressionType: "IsFunction" | "IsProperty"): IsBindingBehavior;
   parse(expression: string, expressionType: "IsCustom"): CustomExpression;
