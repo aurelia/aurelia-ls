@@ -8,7 +8,9 @@ import type {
   PropertyBindingIR, AttributeBindingIR, StylePropertyBindingIR,
   ListenerBindingIR, RefBindingIR, SetAttributeIR, SetClassAttributeIR, SetStyleAttributeIR,
   LetBindingIR, HydrateLetElementIR, HydrateTemplateControllerIR, IteratorBindingIR,
+  HydrateElementIR, HydrateAttributeIR, ElementBindableIR,
   ForOfIR,
+  SetPropertyIR,
   ExprTableEntry,
   ForOfStatement,
   Interpolation,
@@ -21,6 +23,8 @@ import type {
 } from "../../model/ir.js";
 
 import type { AttributeParser } from "../../language/syntax.js";
+import type { Semantics, ElementRes, AttrRes } from "../../language/registry.js";
+import { DEFAULT as DEFAULT_SEMANTICS } from "../../language/registry.js";
 import type { IExpressionParser, ExpressionType } from "../../../parsers/expression-api.js";
 import { extractInterpolationSegments } from "../../../parsers/interpolation.js";
 
@@ -35,10 +39,12 @@ export interface BuildIrOptions {
   name?: string;
   attrParser: AttributeParser;
   exprParser: IExpressionParser;
+  sem?: Semantics;
 }
 
 export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
   const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
+  const sem = opts.sem ?? DEFAULT_SEMANTICS;
   const ids = new NodeIdGen();
   const table = new ExprTable(opts.exprParser, opts.file ?? "");
   const nestedTemplates: TemplateIR[] = [];
@@ -53,7 +59,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
   };
 
   const rows: InstructionRow[] = [];
-  collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows);
+  collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, sem);
 
   const root: TemplateIR = { dom: domRoot, rows, name: opts.name! };
 
@@ -175,7 +181,8 @@ function collectRows(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  rows: InstructionRow[]
+  rows: InstructionRow[],
+  sem: Semantics
 ): void {
   const kids = p.childNodes ?? [];
   let elIdx = 0,
@@ -211,8 +218,8 @@ function collectRows(
       }
 
       // Controllers (repeat/with/promise/if/switch/portal) or regular attrs
-      const ctrlRows = collectControllers(n, attrParser, table, nestedTemplates);
-      const nodeRows = ctrlRows.length ? ctrlRows : compileElementAttrs(n, attrParser, table);
+      const ctrlRows = collectControllers(n, attrParser, table, nestedTemplates, sem);
+      const nodeRows = ctrlRows.length ? ctrlRows : compileElementAttrs(n, attrParser, table, sem);
       if (nodeRows.length) rows.push({ target, instructions: nodeRows });
 
       // Only recurse into children when there is NO template controller on this element.
@@ -224,10 +231,11 @@ function collectRows(
             attrParser,
             table,
             nestedTemplates,
-            rows
+            rows,
+            sem
           );
         } else {
-          collectRows(n, ids, attrParser, table, nestedTemplates, rows);
+          collectRows(n, ids, attrParser, table, nestedTemplates, rows, sem);
         }
       }
       ids.pop();
@@ -298,41 +306,73 @@ function compileLet(
 function compileElementAttrs(
   el: P5Element,
   attrParser: AttributeParser,
-  table: ExprTable
-): (
-  | PropertyBindingIR
-  | AttributeBindingIR
-  | StylePropertyBindingIR
-  | ListenerBindingIR
-  | RefBindingIR
-  | SetAttributeIR
-  | SetClassAttributeIR
-  | SetStyleAttributeIR
-)[] {
-  const out: (
-    | PropertyBindingIR
-    | AttributeBindingIR
-    | StylePropertyBindingIR
-    | ListenerBindingIR
-    | RefBindingIR
-    | SetAttributeIR
-    | SetClassAttributeIR
-    | SetStyleAttributeIR
-  )[] = [];
+  table: ExprTable,
+  sem: Semantics
+): InstructionIR[] {
+  const attrs = el.attrs ?? [];
+  const authoredTag = el.nodeName.toLowerCase();
+  const asElement = findAttr(el, "as-element");
+  const effectiveTag = (asElement?.value ?? authoredTag).toLowerCase();
+  const elementDef = resolveElementDef(effectiveTag, sem);
+  const containerless = !!elementDef?.containerless || !!findAttr(el, "containerless");
 
-  for (const a of el.attrs ?? []) {
-    const s = attrParser.parse(a.name, a.value ?? "");
+  const hydrateElementProps: ElementBindableIR[] = [];
+  const hydrateAttributes: HydrateAttributeIR[] = [];
+  const tail: InstructionIR[] = [];
+
+  const lowerBindable = (
+    sink: ElementBindableIR[],
+    target: string,
+    attrName: string,
+    raw: string,
+    loc: P5Loc,
+    command: string | null
+  ) => {
+    const to = camelCase(target);
+    if (isBindingCommand(command) || isColonBind(attrName)) {
+      sink.push({
+        type: "propertyBinding",
+        to,
+        from: toBindingSource(raw, loc, table, "IsProperty"),
+        mode: toMode(command, attrName),
+        loc: toSpan(loc, table.file),
+      });
+      return;
+    }
+    if (raw.includes("${")) {
+      sink.push({
+        type: "attributeBinding",
+        attr: attrName,
+        to,
+        from: toInterpIR(raw, loc, table),
+        loc: toSpan(loc, table.file),
+      });
+      return;
+    }
+    if (raw.length === 0) return;
+    sink.push({
+      type: "setProperty",
+      to,
+      value: raw,
+      loc: toSpan(loc, table.file),
+    } as SetPropertyIR);
+  };
+
+  for (const a of attrs) {
     const loc = attrLoc(el, a.name);
+    const s = attrParser.parse(a.name, a.value ?? "");
+    const raw = a.value ?? "";
 
-    // Skip template-controller attributes; handled by collectControllers.
+    // Skip structural markers; handled elsewhere.
+    if (a.name === "as-element" || a.name === "containerless") continue;
     if (isControllerAttr(s)) continue;
 
     // Events: .trigger / .capture and @event[:modifier]
     if (s.command === "trigger" || s.command === "capture") {
-      out.push({
+      tail.push({
         type: "listenerBinding",
         to: s.target,
-        from: toExprRef(a.value ?? "", loc, table, "IsFunction"),
+        from: toExprRef(raw, loc, table, "IsFunction"),
         capture: s.command === "capture",
         modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
         loc: toSpan(loc, table.file),
@@ -342,10 +382,10 @@ function compileElementAttrs(
 
     // ref / view-model.ref
     if (s.command === "ref") {
-      out.push({
+      tail.push({
         type: "refBinding",
         to: s.target,
-        from: toExprRef(a.value ?? "", loc, table, "IsProperty"),
+        from: toExprRef(raw, loc, table, "IsProperty"),
         loc: toSpan(loc, table.file),
       });
       continue;
@@ -353,30 +393,58 @@ function compileElementAttrs(
 
     // Overriding commands: .style / .class / .attr
     if (s.command === "style") {
-      out.push({
+      tail.push({
         type: "stylePropertyBinding",
         to: s.target,
-        from: toBindingSource(a.value ?? "", loc, table, "IsProperty"),
+        from: toBindingSource(raw, loc, table, "IsProperty"),
         loc: toSpan(loc, table.file),
       });
       continue;
     }
     if (s.command === "class") {
-      out.push({
+      tail.push({
         type: "attributeBinding",
         attr: "class",
         to: "class",
-        from: toBindingSource(a.value ?? "", loc, table, "IsProperty"),
+        from: toBindingSource(raw, loc, table, "IsProperty"),
         loc: toSpan(loc, table.file),
       });
       continue;
     }
     if (s.command === "attr") {
-      out.push({
+      tail.push({
         type: "attributeBinding",
         attr: s.target,
         to: s.target,
-        from: toBindingSource(a.value ?? "", loc, table, "IsProperty"),
+        from: toBindingSource(raw, loc, table, "IsProperty"),
+        loc: toSpan(loc, table.file),
+      });
+      continue;
+    }
+
+    // Custom element bindables take precedence over custom attributes.
+    const bindable = elementDef?.bindables[camelCase(s.target)];
+    if (bindable) {
+      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, s.command);
+      continue;
+    }
+
+    // Custom attribute (non-template-controller)
+    const attrDef = resolveAttrDef(s.target, sem);
+    if (attrDef && !attrDef.isTemplateController) {
+      const targetBindableName =
+        attrDef.bindables[camelCase(s.target)]
+          ? camelCase(s.target)
+          : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
+      const props: ElementBindableIR[] = [];
+      if (targetBindableName) {
+        lowerBindable(props, targetBindableName, a.name, raw, loc, s.command);
+      }
+      hydrateAttributes.push({
+        type: "hydrateAttribute",
+        res: attrDef.name,
+        props,
+        alias: attrDef.name !== s.target ? s.target : null,
         loc: toSpan(loc, table.file),
       });
       continue;
@@ -384,10 +452,10 @@ function compileElementAttrs(
 
     // Binding commands (property) and :prop shorthand (→ toView).
     if (isBindingCommand(s.command) || isColonBind(a.name)) {
-      out.push({
+      tail.push({
         type: "propertyBinding",
-        to: camelCase(s.target), // Final attr→prop normalization occurs during Semantics linking.
-        from: toBindingSource(a.value ?? "", loc, table, "IsProperty"),
+        to: camelCase(s.target),
+        from: toBindingSource(raw, loc, table, "IsProperty"),
         mode: toMode(s.command, a.name),
         loc: toSpan(loc, table.file),
       });
@@ -395,9 +463,8 @@ function compileElementAttrs(
     }
 
     // Plain attributes: interpolation → AttributeBindingIR; else → Set* (left as DOM attribute).
-    const raw = a.value ?? "";
     if (raw.includes("${")) {
-      out.push({
+      tail.push({
         type: "attributeBinding",
         attr: a.name,
         to: camelCase(a.name),
@@ -409,21 +476,21 @@ function compileElementAttrs(
 
     switch (a.name) {
       case "class":
-        out.push({
+        tail.push({
           type: "setClassAttribute",
           value: raw,
           loc: toSpan(loc, table.file),
         });
         break;
       case "style":
-        out.push({
+        tail.push({
           type: "setStyleAttribute",
           value: raw,
           loc: toSpan(loc, table.file),
         });
         break;
       default:
-        out.push({
+        tail.push({
           type: "setAttribute",
           to: a.name,
           value: raw || null,
@@ -433,10 +500,20 @@ function compileElementAttrs(
     }
   }
 
-  return out;
-}
-
-/* =======================================================================================
+  const instructions: InstructionIR[] = [];
+  if (elementDef) {
+    instructions.push({
+      type: "hydrateElement",
+      res: elementDef.name,
+      props: hydrateElementProps,
+      containerless,
+      loc: toSpan(el.sourceCodeLocation, table.file),
+    } satisfies HydrateElementIR);
+  }
+  instructions.push(...hydrateAttributes);
+  instructions.push(...tail);
+  return instructions;
+}/* =======================================================================================
  * Template Controllers (repeat / with / promise / if / switch / portal)
  * ======================================================================================= */
 
@@ -444,7 +521,8 @@ function collectControllers(
   el: P5Element,
   attrParser: AttributeParser,
   table: ExprTable,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  sem: Semantics
 ): HydrateTemplateControllerIR[] {
   // 1) Gather controller-bearing attributes (preserve source order).
   const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]> }[] = [];
@@ -461,14 +539,15 @@ function collectControllers(
     rightmost!,
     attrParser,
     table,
-    nestedTemplates
+    nestedTemplates,
+    sem
   );
 
   // 3) Wrap remaining controllers RIGHT→LEFT.
   for (let i = candidates.length - 2; i >= 0; i--) {
     const { a, s } = candidates[i]!;
     const loc = attrLoc(el, a.name);
-    const prototypes = buildControllerPrototypes(el, a, s, attrParser, table, loc);
+    const prototypes = buildControllerPrototypes(el, a, s, attrParser, table, loc, sem);
 
     const nextLayer: HydrateTemplateControllerIR[] = [];
     for (const proto of prototypes) {
@@ -497,7 +576,8 @@ function buildBaseInstructionsForRightmost(
   rightmost: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]> },
   attrParser: AttributeParser,
   table: ExprTable,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  sem: Semantics
 ): HydrateTemplateControllerIR[] {
   const { a, s } = rightmost;
   const loc = attrLoc(el, a.name);
@@ -514,7 +594,7 @@ function buildBaseInstructionsForRightmost(
       props: parseRepeatTailProps(raw, loc, table),
       loc: toSpan(loc, table.file),
     };
-    const def = templateOfElementChildren(el, attrParser, table, nestedTemplates);
+    const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem);
     return [
       {
         type: "hydrateTemplateController",
@@ -546,7 +626,8 @@ function buildBaseInstructionsForRightmost(
       el,
       attrParser,
       table,
-      nestedTemplates
+      nestedTemplates,
+      sem
     );
     injectPromiseBranchesIntoDef(
       el,
@@ -555,6 +636,7 @@ function buildBaseInstructionsForRightmost(
       attrParser,
       table,
       nestedTemplates,
+      sem,
       valueProp
     );
     return [
@@ -576,7 +658,8 @@ function buildBaseInstructionsForRightmost(
       el,
       attrParser,
       table,
-      nestedTemplates
+      nestedTemplates,
+      sem
     );
     injectSwitchBranchesIntoDef(
       el,
@@ -585,6 +668,7 @@ function buildBaseInstructionsForRightmost(
       attrParser,
       table,
       nestedTemplates,
+      sem,
       valueProp
     );
     return [
@@ -602,7 +686,7 @@ function buildBaseInstructionsForRightmost(
   }
 
   // with / if / portal
-  const def = templateOfElementChildren(el, attrParser, table, nestedTemplates);
+  const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem);
   return [
     {
       type: "hydrateTemplateController",
@@ -629,7 +713,8 @@ function buildControllerPrototypes(
   s: ReturnType<AttributeParser["parse"]>,
   _attrParser: AttributeParser,
   table: ExprTable,
-  loc: P5Loc
+  loc: P5Loc,
+  _sem: Semantics
 ): ControllerPrototype[] {
   const raw = a.value ?? "";
 
@@ -685,6 +770,7 @@ function injectPromiseBranchesIntoDef(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
+  sem: Semantics,
   valueProp: PropertyBindingIR
 ): void {
   const kids =
@@ -755,8 +841,8 @@ function injectPromiseBranchesIntoDef(
 
     // 2) Build the branch view 'def' from either <template> content or the element itself.
     const branchDef = isTpl
-      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates)
-      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates);
+      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, sem)
+      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, sem);
 
     // Also prune marker artifacts inside the branch def itself (the cloned element/template).
     for (const row of branchDef.rows) {
@@ -790,6 +876,7 @@ function injectSwitchBranchesIntoDef(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
+  sem: Semantics,
   valueProp: PropertyBindingIR
 ): void {
   const kids =
@@ -830,12 +917,13 @@ function injectSwitchBranchesIntoDef(
     }
 
     if (caseExpr !== null) {
-      const branchDef = templateOfTemplateContent(
-        kid as P5Template,
-        attrParser,
-        table,
-        nestedTemplates
-      );
+    const branchDef = templateOfTemplateContent(
+      kid as P5Template,
+      attrParser,
+      table,
+      nestedTemplates,
+      sem
+    );
       const caseProp: PropertyBindingIR = {
         type: "propertyBinding",
         to: "case",
@@ -876,7 +964,8 @@ function injectSwitchBranchesIntoDef(
         kid as P5Template,
         attrParser,
         table,
-        nestedTemplates
+        nestedTemplates,
+        sem
       );
       def.rows.push({
         target,
@@ -905,28 +994,46 @@ function templateOfElementChildren(
   el: P5Element,
   attrParser: AttributeParser,
   table: ExprTable,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  sem: Semantics
 ): TemplateIR {
   // Lift the host element (with controller attrs stripped) into an inner view.
   const ids = new NodeIdGen();
   const idMap = new WeakMap<P5Node, NodeId>();
   const host = stripControllerAttrsFromElement(el, attrParser);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
-  return buildTemplateFrom(syntheticRoot, ids, idMap, attrParser, table, nestedTemplates);
+  return buildTemplateFrom(
+    syntheticRoot,
+    ids,
+    idMap,
+    attrParser,
+    table,
+    nestedTemplates,
+    sem
+  );
 }
 
 function templateOfElementChildrenWithMap(
   el: P5Element,
   attrParser: AttributeParser,
   table: ExprTable,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  sem: Semantics
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
   const ids = new NodeIdGen();
   const idMap = new WeakMap<P5Node, NodeId>();
   const host = stripControllerAttrsFromElement(el, attrParser);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
 
-  const def = buildTemplateFrom(syntheticRoot, ids, idMap, attrParser, table, nestedTemplates);
+  const def = buildTemplateFrom(
+    syntheticRoot,
+    ids,
+    idMap,
+    attrParser,
+    table,
+    nestedTemplates,
+    sem
+  );
   return { def, idMap };
 }
 
@@ -964,10 +1071,19 @@ function templateOfTemplateContent(
   t: P5Template,
   attrParser: AttributeParser,
   table: ExprTable,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  sem: Semantics
 ): TemplateIR {
   const ids = new NodeIdGen();
-  return buildTemplateFrom(t.content, ids, undefined, attrParser, table, nestedTemplates);
+  return buildTemplateFrom(
+    t.content,
+    ids,
+    undefined,
+    attrParser,
+    table,
+    nestedTemplates,
+    sem
+  );
 }
 
 function makeWrapperTemplate(
@@ -1003,7 +1119,8 @@ function buildTemplateFrom(
   idMap: WeakMap<P5Node, NodeId> | undefined,
   attrParser: AttributeParser,
   table: ExprTable,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  sem: Semantics
 ): TemplateIR {
   const dom: TemplateNode = {
     kind: "template",
@@ -1014,7 +1131,15 @@ function buildTemplateFrom(
     loc: null,
   };
   const rows: InstructionRow[] = [];
-  collectRows(rootLike as { childNodes?: P5Node[] }, ids, attrParser, table, nestedTemplates, rows);
+  collectRows(
+    rootLike as { childNodes?: P5Node[] },
+    ids,
+    attrParser,
+    table,
+    nestedTemplates,
+    rows,
+    sem
+  );
   const t: TemplateIR = { dom, rows };
   nestedTemplates.push(t);
   return t;
@@ -1132,6 +1257,24 @@ function isText(n: P5Node): n is P5Text {
 function isComment(n: P5Node): n is DefaultTreeAdapterMap["commentNode"] {
   return n.nodeName === "#comment";
 }
+function resolveElementDef(tag: string, sem: Semantics): ElementRes | null {
+  const normalized = tag.toLowerCase();
+  const direct = sem.resources.elements[normalized];
+  if (direct) return direct;
+  for (const def of Object.values(sem.resources.elements)) {
+    if (def.aliases?.includes(normalized)) return def;
+  }
+  return null;
+}
+function resolveAttrDef(name: string, sem: Semantics): AttrRes | null {
+  const normalized = name.toLowerCase();
+  const direct = sem.resources.attributes[normalized];
+  if (direct) return direct;
+  for (const def of Object.values(sem.resources.attributes)) {
+    if (def.aliases?.includes(normalized)) return def;
+  }
+  return null;
+}
 function findAttr(el: P5Element, name: string): Token.Attribute | undefined {
   return (el.attrs ?? []).find((a) => a.name === name);
 }
@@ -1215,3 +1358,4 @@ function hash64(s: string): string {
   const u = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
   return `${u(h1)}${u(h2)}`;
 }
+

@@ -1259,5 +1259,32 @@
         { "code": "AU1104" }
       ]
     }
+  },
+  {
+    "name": "R-112 au-compose subject.bind resolves to bindable (toView)",
+    "markup": "<au-compose subject.bind=\"vm\"></au-compose>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "subject", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-113 au-slot name.bind resolves to bindable (toView)",
+    "markup": "<au-slot name.bind=\"slotName\"></au-slot>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-114 focus custom attribute bindable resolves to twoWay",
+    "markup": "<div focus.bind=\"isFocused\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" }
+      ]
+    }
   }
 ]

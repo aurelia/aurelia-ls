@@ -88,25 +88,46 @@ export function reduceLinkedToIntent(linked) {
   const root = linked.templates?.[0];
   if (!root) return out;
 
+  const pushBindable = (ins, kindOverride, res) => {
+    switch (ins.kind) {
+      case "propertyBinding":
+        out.items.push({
+          kind: kindOverride ?? "prop",
+          res,
+          to: ins.to,
+          target: mapTarget(ins.target),
+          effectiveMode: ins.effectiveMode,
+        });
+        break;
+      case "attributeBinding":
+        out.items.push({
+          kind: kindOverride ?? "attr",
+          res,
+          attr: ins.attr,
+          to: ins.to,
+          target: mapTarget(ins.target),
+        });
+        break;
+      case "stylePropertyBinding":
+        out.items.push({
+          kind: kindOverride ?? "style",
+          res,
+          to: ins.to,
+          target: "style",
+        });
+        break;
+      default:
+        break;
+    }
+  };
+
   for (const row of root.rows ?? []) {
     for (const ins of row.instructions ?? []) {
       switch (ins.kind) {
         case "propertyBinding":
-          out.items.push({
-            kind: "prop",
-            to: ins.to,
-            target: mapTarget(ins.target),
-            effectiveMode: ins.effectiveMode,
-          });
-          break;
-
         case "attributeBinding":
-          out.items.push({
-            kind: "attr",
-            attr: ins.attr,
-            to: ins.to,
-            target: mapTarget(ins.target),
-          });
+        case "stylePropertyBinding":
+          pushBindable(ins);
           break;
 
         case "listenerBinding":
@@ -126,37 +147,25 @@ export function reduceLinkedToIntent(linked) {
           });
           break;
 
-        case "stylePropertyBinding":
-          out.items.push({
-            kind: "style",
-            to: ins.to,
-            target: "style",
-          });
-          break;
-
         case "hydrateTemplateController":
-          // Capture controller props at the outer frame (we don't descend into def here).
           for (const p of ins.props ?? []) {
-            if (p.kind === "propertyBinding") {
-              out.items.push({
-                kind: "ctrlProp",
-                res: ins.res,
-                to: p.to,
-                target: "controller",
-                effectiveMode: p.effectiveMode,
-              });
-            } else if (p.kind === "iteratorBinding") {
-              out.items.push({
-                kind: "iterator",
-                res: ins.res,
-                to: p.to, // should equal semantics.resources.controllers.repeat.iteratorProp
-              });
+            if (p.kind === "iteratorBinding") {
+              out.items.push({ kind: "iterator", res: ins.res, to: p.to });
+            } else {
+              pushBindable(p, "ctrlProp", ins.res);
             }
           }
           break;
 
+        case "hydrateElement":
+          for (const p of ins.props ?? []) pushBindable(p);
+          break;
+
+        case "hydrateAttribute":
+          for (const p of ins.props ?? []) pushBindable(p);
+          break;
+
         default:
-          // setAttribute/setClass/setStyle/setProperty etc. are not the focus of this phase’s tests
           break;
       }
     }
@@ -167,10 +176,10 @@ export function reduceLinkedToIntent(linked) {
   }
   return out;
 }
-
 function mapTarget(t) {
   switch (t?.kind) {
     case "element.bindable": return "bindable";
+    case "attribute.bindable": return "bindable";
     case "element.nativeProp": return "native";
     case "controller.prop": return "controller";
     case "attribute": return "attribute";
@@ -215,3 +224,4 @@ export function compareResolveIntent(actual, expected) {
 
   return { missingItems, extraItems, missingDiags, extraDiags };
 }
+
