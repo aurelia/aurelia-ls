@@ -37,6 +37,7 @@ export enum TokenType {
   Colon = "Colon",               // :
   Semicolon = "Semicolon",       // ;
   Dot = "Dot",                   // .
+  Ellipsis = "Ellipsis",         // ...
   Question = "Question",         // ?
   QuestionDot = "QuestionDot",   // ?.
   Backtick = "Backtick",         // `
@@ -227,8 +228,14 @@ export class Scanner {
         return this.makeToken(TokenType.Semicolon, start, this.index, undefined);
       }
       case CharCode.Dot: {
-        // Leading-dot numeric literals are handled earlier; so here we always
-        // produce a plain Dot.
+        const next = this.charCodeAt(this.index + 1);
+        const next2 = this.charCodeAt(this.index + 2);
+        // Leading-dot numeric literals are handled earlier; so here we either
+        // produce an ellipsis or a plain Dot.
+        if (next === CharCode.Dot && next2 === CharCode.Dot) {
+          this.index += 3;
+          return this.makeToken(TokenType.Ellipsis, start, this.index, undefined);
+        }
         this.index++;
         return this.makeToken(TokenType.Dot, start, this.index, undefined);
       }

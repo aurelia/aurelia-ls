@@ -9,7 +9,7 @@ test("Emit overlay: TS flavor (type alias + __au$access calls)", () => {
     templates: [{
       name: "T0",
       frames: [{
-        frame: 0,
+        frame: 1,
         typeName: "T",
         typeExpr: "{ x: number }",
         lambdas: ["o => o.x", "o => o['y']"],

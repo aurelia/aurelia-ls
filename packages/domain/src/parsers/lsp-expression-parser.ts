@@ -38,12 +38,14 @@ import type {
   PrimitiveLiteralExpression,
   ArrayLiteralExpression,
   ObjectLiteralExpression,
+  ArrayBindingPattern,
+  ObjectBindingPattern,
+  BindingPattern,
+  BindingPatternDefault,
+  BindingPatternHole,
   ParenExpression,
   ArrowFunction,
   CustomExpression,
-  ArrayBindingPattern,
-  ObjectBindingPattern,
-  BindingIdentifierOrPattern,
   BadExpression,
 } from "../compiler/model/ir.js";
 
@@ -272,9 +274,7 @@ export class CoreParser {
         $kind: "Unary",
         span,
         operation: op,
-        // NOTE: AST says expression: IsLeftHandSide, but the grammar allows
-        // nested unary.
-        expression: operand as IsLeftHandSide,
+        expression: operand,
         pos: 0,
       };
       return unary;
@@ -344,7 +344,7 @@ export class CoreParser {
 
   // MemberExpr ::= PrimaryExpr MemberTail*
   private parseMemberExpression(): IsLeftHandSide {
-    let expr = this.parsePrimaryExpr() as IsLeftHandSide;
+    let expr: IsLeftHandSide = this.parsePrimaryExpr();
 
     while (true) {
       const t = this.peekToken();
@@ -989,7 +989,7 @@ export class CoreParser {
    *
    * Very complex destructuring (deep nesting, rest, etc.) is currently rejected.
    */
-  private parseLhsBinding(): BindingIdentifierOrPattern {
+  private parseLhsBinding(): BindingPattern {
     const t = this.peekToken();
 
     switch (t.type) {
@@ -1045,58 +1045,72 @@ export class CoreParser {
    * Anything more complex (holes, >2 elements, trailing comma, etc.) is rejected.
    */
   private parseArrayBindingPattern(): ArrayBindingPattern {
-    const open = this.peekToken();
-    this.nextToken(); // '['
+    const open = this.nextToken(); // '['
     const start = open.start;
 
-    const elements: IsAssign[] = [];
+    const elements: BindingPattern[] = [];
+    let rest: BindingPattern | null = null;
 
-    const firstTok = this.peekToken();
-    if (firstTok.type === TokenType.CloseBracket) {
-      this.error(
-        "Array binding pattern must contain at least one identifier",
-        firstTok,
-      );
-    }
+    while (true) {
+      const t = this.peekToken();
 
-    // First element
-    const firstBinding = this.parseBindingIdentifier();
-    elements.push(firstBinding as unknown as IsAssign);
-
-    let t = this.peekToken();
-
-    // Optional second element
-    if (t.type === TokenType.Comma) {
-      this.nextToken(); // ','
-      const secondTok = this.peekToken();
-      if (secondTok.type === TokenType.CloseBracket) {
-        this.error(
-          "Array binding pattern cannot have a trailing comma",
-          secondTok,
-        );
+      if (t.type === TokenType.CloseBracket) {
+        this.nextToken();
+        break;
       }
 
-      const secondBinding = this.parseBindingIdentifier();
-      elements.push(secondBinding as unknown as IsAssign);
-      t = this.peekToken();
-    }
+      if (t.type === TokenType.Comma) {
+        this.nextToken();
+        elements.push(this.bindingPatternHoleFromToken(t));
+        continue;
+      }
 
-    // No more elements or syntax allowed in v1
-    if (t.type !== TokenType.CloseBracket) {
-      this.error(
-        "Array binding pattern in iterator header currently supports at most two identifiers '[item, index]'",
-        t,
-      );
+      if (t.type === TokenType.Ellipsis) {
+        if (rest) {
+          this.error("Only one rest element is allowed in an array pattern", t);
+        }
+        this.nextToken(); // '...'
+        rest = this.parseBindingPatternBase();
+        const afterRest = this.peekToken();
+        if (afterRest.type === TokenType.Comma) {
+          this.error("Rest element must be in the last position of an array pattern", afterRest);
+        }
+        if (afterRest.type !== TokenType.CloseBracket) {
+          this.error("Expected ']' after array pattern rest element", afterRest);
+        }
+        this.nextToken(); // ']'
+        break;
+      }
+
+      const element = this.parseBindingPatternWithOptionalDefault();
+      elements.push(element);
+
+      const sep = this.peekToken();
+      if (sep.type === TokenType.Comma) {
+        this.nextToken(); // ','
+        const maybeClose = this.peekToken();
+        if (maybeClose.type === TokenType.CloseBracket) {
+          this.nextToken(); // allow trailing comma
+          break;
+        }
+        continue;
+      }
+
+      if (sep.type === TokenType.CloseBracket) {
+        this.nextToken();
+        break;
+      }
+
+      this.error("Expected ',' or ']' in array binding pattern", sep);
     }
-    this.nextToken(); // ']'
 
     const span: TextSpan = { start, end: this.lastTokenEnd };
-    const pattern: ArrayBindingPattern = {
+    return {
       $kind: "ArrayBindingPattern",
       span,
       elements,
+      rest,
     };
-    return pattern;
   }
 
   /**
@@ -1107,22 +1121,36 @@ export class CoreParser {
    * No nested patterns, no defaults, no rest, no trailing comma.
    */
   private parseObjectBindingPattern(): ObjectBindingPattern {
-    const open = this.peekToken();
-    this.nextToken(); // '{'
+    const open = this.nextToken(); // '{'
     const start = open.start;
 
-    const keys: (string | number)[] = [];
-    const values: IsAssign[] = [];
-
-    let t = this.peekToken();
-    if (t.type === TokenType.CloseBrace) {
-      this.error(
-        "Object binding pattern must contain at least one property",
-        t,
-      );
-    }
+    const properties: { key: string | number; value: BindingPattern }[] = [];
+    let rest: BindingPattern | null = null;
 
     while (true) {
+      const t = this.peekToken();
+      if (t.type === TokenType.CloseBrace) {
+        this.nextToken();
+        break;
+      }
+
+      if (t.type === TokenType.Ellipsis) {
+        if (rest) {
+          this.error("Only one rest element is allowed in an object pattern", t);
+        }
+        this.nextToken(); // '...'
+        rest = this.parseBindingPatternBase();
+        const afterRest = this.peekToken();
+        if (afterRest.type === TokenType.Comma) {
+          this.error("Rest element must be in the last position of an object pattern", afterRest);
+        }
+        if (afterRest.type !== TokenType.CloseBrace) {
+          this.error("Expected '}' after object pattern rest element", afterRest);
+        }
+        this.nextToken(); // '}'
+        break;
+      }
+
       const keyTok = this.peekToken();
       if (
         keyTok.type !== TokenType.Identifier &&
@@ -1136,51 +1164,33 @@ export class CoreParser {
       }
       this.nextToken(); // consume key
 
-      let key: string | number;
-      if (keyTok.type === TokenType.NumericLiteral) {
-        key = keyTok.value as number;
-      } else {
-        key = String(keyTok.value);
-      }
+      const key: string | number = keyTok.type === TokenType.NumericLiteral
+        ? (keyTok.value as number)
+        : String(keyTok.value);
 
       const afterKey = this.peekToken();
-      let binding: BindingIdentifier;
+      let valuePattern: BindingPattern;
 
       if (afterKey.type === TokenType.Colon) {
-        // { key: alias }
         this.nextToken(); // ':'
-        const valueTok = this.peekToken();
-        if (valueTok.type !== TokenType.Identifier) {
-          this.error(
-            "Invalid object binding pattern value; expected identifier after ':'",
-            valueTok,
-          );
-        }
-        this.nextToken(); // identifier
-        binding = this.bindingIdentifierFromToken(valueTok);
+        valuePattern = this.parseBindingPatternWithOptionalDefault();
       } else {
-        // Shorthand { key } – only allowed for identifier keys
         if (keyTok.type !== TokenType.Identifier) {
-          this.error(
-            "Object binding pattern shorthand requires an identifier key",
-            keyTok,
-          );
+          this.error("Object binding pattern shorthand requires an identifier key", keyTok);
         }
-        binding = this.bindingIdentifierFromToken(keyTok);
+        const shorthand = this.bindingIdentifierFromToken(keyTok);
+        valuePattern = this.parseOptionalDefaultForShorthand(shorthand);
       }
 
-      keys.push(key);
-      values.push(binding as unknown as IsAssign);
+      properties.push({ key, value: valuePattern });
 
       const sep = this.peekToken();
       if (sep.type === TokenType.Comma) {
         this.nextToken(); // ','
-        const next = this.peekToken();
-        if (next.type === TokenType.CloseBrace) {
-          this.error(
-            "Object binding pattern cannot have a trailing comma",
-            next,
-          );
+        const maybeClose = this.peekToken();
+        if (maybeClose.type === TokenType.CloseBrace) {
+          this.nextToken(); // trailing comma
+          break;
         }
         continue;
       }
@@ -1194,19 +1204,74 @@ export class CoreParser {
     }
 
     const span: TextSpan = { start, end: this.lastTokenEnd };
-    const pattern: ObjectBindingPattern = {
+    return {
       $kind: "ObjectBindingPattern",
       span,
-      keys,
-      values,
+      properties,
+      rest,
     };
-    return pattern;
+  }
+
+  private parseBindingPatternWithOptionalDefault(): BindingPattern {
+    const pattern = this.parseBindingPatternBase();
+    const maybeDefault = this.peekToken();
+    if (maybeDefault.type !== TokenType.Equals) {
+      return pattern;
+    }
+
+    this.nextToken(); // '='
+    const init = this.parseAssignExpr();
+    return {
+      $kind: "BindingPatternDefault",
+      span: { start: pattern.span.start, end: this.getEndSpan(init) },
+      target: pattern,
+      default: init,
+    };
+  }
+
+  private parseBindingPatternBase(): BindingPattern {
+    const t = this.peekToken();
+    switch (t.type) {
+      case TokenType.Identifier:
+        return this.parseBindingIdentifier();
+      case TokenType.OpenBracket:
+        return this.parseArrayBindingPattern();
+      case TokenType.OpenBrace:
+        return this.parseObjectBindingPattern();
+      default:
+        this.error(
+          "Invalid binding pattern; expected identifier, array pattern, or object pattern",
+          t,
+        );
+    }
+  }
+
+  private parseOptionalDefaultForShorthand(binding: BindingIdentifier): BindingPattern {
+    const maybeDefault = this.peekToken();
+    if (maybeDefault.type !== TokenType.Equals) {
+      return binding;
+    }
+    this.nextToken(); // '='
+    const init = this.parseAssignExpr();
+    return {
+      $kind: "BindingPatternDefault",
+      span: { start: binding.span.start, end: this.getEndSpan(init) },
+      target: binding,
+      default: init,
+    };
+  }
+
+  private bindingPatternHoleFromToken(t: Token): BindingPatternHole {
+    return {
+      $kind: "BindingPatternHole",
+      span: this.spanFromToken(t),
+    };
   }
 
   /**
    * Parse the RHS of a repeat.for header with "chainable" semantics:
    *   - parse CoreExpression + tails (value converters / behaviors)
-   *   - stop at the first top‑level ';' (if any)
+   *   - stop at the first top-level ';' (if any)
    *   - record semiIdx = index of that ';', or -1 if no semicolon
    *
    * A bare trailing ';' with nothing after it is rejected.
