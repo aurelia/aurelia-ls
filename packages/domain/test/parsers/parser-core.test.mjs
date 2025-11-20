@@ -740,8 +740,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("malformed expression returns BadExpression (no throw)", () => {
-    const parser = new LspExpressionParser();
-    const ast = parser.parse("foo(", "IsProperty");
+    const ast = parseInBothModes("foo(");
     assert.equal(ast.$kind, "BadExpression");
   });
 
@@ -749,5 +748,45 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("hello ${foo(}", "Interpolation");
     assert.equal(ast.expressions[0].$kind, "BadExpression");
+  });
+
+  test("non-assignable left-hand side yields BadExpression", () => {
+    const ast = parseInBothModes("1 = foo");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("missing converter name after '|'", () => {
+    const ast = parseInBothModes("value |");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("missing behavior name after '&'", () => {
+    const ast = parseInBothModes("value &");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("unterminated conditional expression", () => {
+    const ast = parseInBothModes("cond ? a");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("unterminated template literal yields BadExpression", () => {
+    const ast = parseInBothModes("`abc");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("optional chain with invalid member yields BadExpression", () => {
+    const ast = parseInBothModes("foo?.123");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("bare '{' is rejected", () => {
+    const ast = parseInBothModes("{");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("missing arrow body yields BadExpression", () => {
+    const ast = parseInBothModes("x =>");
+    assert.equal(ast.$kind, "BadExpression");
   });
 });
