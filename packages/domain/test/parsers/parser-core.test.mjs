@@ -851,22 +851,27 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   test("malformed expression returns BadExpression (no throw)", () => {
     const ast = parseInBothModes("foo(");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ',' or ')' in argument list");
+    assert.deepEqual(ast.span, { start: 4, end: "foo(".length });
   });
 
   test("bad nested segment in interpolation returns BadExpression", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("hello ${foo(}", "Interpolation");
     assert.equal(ast.expressions[0].$kind, "BadExpression");
+    assert.equal(ast.expressions[0].message, "Expected ',' or ')' in argument list");
   });
 
   test("non-assignable left-hand side yields BadExpression", () => {
     const ast = parseInBothModes("1 = foo");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Left-hand side is not assignable");
   });
 
   test("missing converter name after '|'", () => {
     const ast = parseInBothModes("value |");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected identifier after '|'");
   });
 
   test("missing behavior name after '&'", () => {
@@ -887,6 +892,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   test("optional chain with invalid member yields BadExpression", () => {
     const ast = parseInBothModes("foo?.123");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected identifier after '?.'");
   });
 
   test("bare '{' is rejected", () => {
@@ -897,16 +903,22 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   test("missing arrow body yields BadExpression", () => {
     const ast = parseInBothModes("x =>");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Unexpected token EOF in primary expression");
   });
 
   test("invalid arrow head with non-identifier param yields BadExpression", () => {
     const ast = parseInBothModes("(1) => x");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(
+      ast.message,
+      "Arrow functions currently support only a single identifier parameter in the LSP parser",
+    );
   });
 
   test("rest parameter not last in arrow list yields BadExpression", () => {
     const ast = parseInBothModes("(...rest, a) => x");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Unexpected token Ellipsis in primary expression");
   });
 
   test("optional chain cannot be followed by tagged template", () => {
@@ -917,26 +929,31 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   test("optional keyed access missing closing bracket yields BadExpression", () => {
     const ast = parseInBothModes("foo?.[bar");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ']' in indexed access");
   });
 
   test("converter arg separator without arg yields BadExpression", () => {
     const ast = parseInBothModes("value | conv:");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Unexpected token EOF in primary expression");
   });
 
   test("behavior arg separator without arg yields BadExpression", () => {
     const ast = parseInBothModes("value & beh:");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Unexpected token EOF in primary expression");
   });
 
   test("converter name must be an identifier", () => {
     const ast = parseInBothModes("value | 123");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected identifier after '|'");
   });
 
   test("behavior name must be an identifier", () => {
     const ast = parseInBothModes("value & 123");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected identifier after '&'");
   });
 
   test("parse with unknown expression type yields BadExpression", () => {
@@ -949,6 +966,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("", "IsProperty");
     assert.equal(ast.$kind, "BadExpression");
+    assert.deepEqual(ast.span, { start: 0, end: 0 });
   });
 
   test("bare 'import' is rejected", () => {
@@ -959,16 +977,19 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   test("missing closing bracket in indexed access yields BadExpression", () => {
     const ast = parseInBothModes("foo[bar");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ']' in indexed access");
   });
 
   test("missing closing paren in call yields BadExpression", () => {
     const ast = parseInBothModes("foo(bar");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ',' or ')' in argument list");
   });
 
   test("object literal with invalid key yields BadExpression", () => {
     const ast = parseInBothModes("{ []: 1 }");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Invalid object literal key; expected identifier, string, or number");
   });
 
   test("array literal missing closing bracket yields BadExpression", () => {

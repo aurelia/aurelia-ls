@@ -163,6 +163,8 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const ast = parser.parse("[...rest a] of items", "IsIterator");
     assert.equal(ast.$kind, "BadExpression");
     assert.equal(ast.message, "Expected ']' after array pattern rest element");
+    assert.ok(ast.span.start >= 0);
+    assert.ok(ast.span.end >= ast.span.start);
   });
 
   test("object pattern rest must be followed by closing brace", () => {
@@ -170,6 +172,8 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const ast = parser.parse("{ ...rest a } of items", "IsIterator");
     assert.equal(ast.$kind, "BadExpression");
     assert.equal(ast.message, "Expected '}' after object pattern rest element");
+    assert.ok(ast.span.start >= 2);
+    assert.ok(ast.span.end >= ast.span.start);
   });
 
   test("object pattern shorthand requires identifier keys", () => {
@@ -177,6 +181,7 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const ast = parser.parse("{ 'notId' } of items", "IsIterator");
     assert.equal(ast.$kind, "BadExpression");
     assert.equal(ast.message, "Object binding pattern shorthand requires an identifier key");
+    assert.equal(ast.text, "'notId'");
   });
 
   test("missing 'of' is rejected", () => {
@@ -207,12 +212,14 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("[a, ...rest, b] of items", "IsIterator");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Rest element must be in the last position of an array pattern");
   });
 
   test("object pattern with rest not last is rejected", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("{ ...rest, a } of items", "IsIterator");
     assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Rest element must be in the last position of an object pattern");
   });
 
   test("invalid identifier 'import' in lhs is rejected", () => {
