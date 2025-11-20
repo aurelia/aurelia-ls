@@ -27,7 +27,7 @@ function textOf(source, token) {
 
 describe("expression-scanner", () => {
   test("identifiers vs keywords and literals", () => {
-    const src = "foo new typeof instanceof in of this $this $parent true false null undefined bar";
+    const src = "foo new typeof void instanceof in of this $this $parent true false null undefined bar";
     const tokens = scanAll(src);
     const types = tokens.map((t) => t.type);
 
@@ -35,6 +35,7 @@ describe("expression-scanner", () => {
       TokenType.Identifier,          // foo
       TokenType.KeywordNew,          // new
       TokenType.KeywordTypeof,       // typeof
+      TokenType.KeywordVoid,         // void
       TokenType.KeywordInstanceof,   // instanceof
       TokenType.KeywordIn,           // in
       TokenType.KeywordOf,           // of
@@ -53,12 +54,13 @@ describe("expression-scanner", () => {
     assert.equal(textOf(src, tokens[0]), "foo");
     assert.equal(textOf(src, tokens[1]), "new");
     assert.equal(textOf(src, tokens[2]), "typeof");
-    assert.equal(textOf(src, tokens[3]), "instanceof");
-    assert.equal(textOf(src, tokens[7]), "$this");
-    assert.equal(textOf(src, tokens[8]), "$parent");
-    assert.equal(textOf(src, tokens[9]), "true");
-    assert.equal(textOf(src, tokens[10]), "false");
-    assert.equal(textOf(src, tokens[13]), "bar");
+    assert.equal(textOf(src, tokens[3]), "void");
+    assert.equal(textOf(src, tokens[4]), "instanceof");
+    assert.equal(textOf(src, tokens[8]), "$this");
+    assert.equal(textOf(src, tokens[9]), "$parent");
+    assert.equal(textOf(src, tokens[10]), "true");
+    assert.equal(textOf(src, tokens[11]), "false");
+    assert.equal(textOf(src, tokens[14]), "bar");
   });
 
   test("numeric literals (ints, decimals, leading dot)", () => {
@@ -99,20 +101,22 @@ describe("expression-scanner", () => {
     const s4 = "\"c\\\"d\"";
     const s5 = "'\\n'";
     const s6 = "\"\\t\"";
+    const s7 = "'\\v'";
+    const s8 = "'\\0'";
+    const s9 = "'\\q'";
+    const s10 = "'\\r'";
+    const s11 = "'\\b'";
+    const s12 = "'\\\\'";
+    const s13 = "'\\f'";
 
-    const src = [s1, s2, s3, s4, s5, s6].join(" ");
+    const src = [s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13].join(" ");
     const tokens = scanAll(src);
     const types = tokens.map((t) => t.type);
 
-    assert.deepEqual(types, [
-      TokenType.StringLiteral,
-      TokenType.StringLiteral,
-      TokenType.StringLiteral,
-      TokenType.StringLiteral,
-      TokenType.StringLiteral,
-      TokenType.StringLiteral,
-      TokenType.EOF,
-    ]);
+    const stringCount = 13;
+    assert.equal(types.length, stringCount + 1);
+    for (let i = 0; i < stringCount; i++) assert.equal(types[i], TokenType.StringLiteral);
+    assert.equal(types[stringCount], TokenType.EOF);
 
     // Spans -> raw text (including quotes) for a couple of tokens
     assert.equal(textOf(src, tokens[0]), s1);
@@ -127,6 +131,13 @@ describe("expression-scanner", () => {
     assert.equal(tokens[3].value, 'c"d');
     assert.equal(tokens[4].value, "\n");
     assert.equal(tokens[5].value, "\t");
+    assert.equal(tokens[6].value, "\v");
+    assert.equal(tokens[7].value, "\0");
+    assert.equal(tokens[8].value, "q"); // default escape path
+    assert.equal(tokens[9].value, "\r");
+    assert.equal(tokens[10].value, "\b");
+    assert.equal(tokens[11].value, "\\");
+    assert.equal(tokens[12].value, "\f");
 
     // Unterminated string: should be marked and not crash
     const unterSrc = "'abc";
@@ -222,6 +233,52 @@ describe("expression-scanner", () => {
     assert.equal(tokens[0].value, "\u00C9foo");
     assert.equal(tokens[1].type, TokenType.Identifier); // whitespace skipped by scanner
     assert.equal(tokens[1].value, "\u00AA\u00AAbaz");
+  });
+
+  test("unknown token fallback", () => {
+    const src = "@";
+    const tokens = scanAll(src);
+    assert.equal(tokens[0].type, TokenType.Unknown);
+    assert.equal(tokens[0].value, "@");
+    assert.equal(tokens[1].type, TokenType.EOF);
+  });
+
+  test("unterminated block comment reaches EOF", () => {
+    const src = "/* unclosed";
+    const s = new Scanner(src);
+    const t = s.next();
+    assert.equal(t.type, TokenType.EOF);
+  });
+
+  test("line/block comments are skipped", () => {
+    const src = "// line\n/* block */foo";
+    const tokens = scanAll(src);
+    assert.equal(tokens[0].type, TokenType.Identifier);
+    assert.equal(tokens[0].value, "foo");
+  });
+
+  test("backslash at end of string marks unterminated", () => {
+    const s = new Scanner("'abc\\\\");
+    const tok = s.next();
+    assert.equal(tok.type, TokenType.StringLiteral);
+    assert.equal(tok.value, "abc\\");
+    assert.equal(tok.unterminated, true);
+  });
+
+  test("backslash as final char in empty string body", () => {
+    const s = new Scanner("'\\\\");
+    const tok = s.next();
+    assert.equal(tok.type, TokenType.StringLiteral);
+    assert.equal(tok.value, "\\");
+    assert.equal(tok.unterminated, true);
+  });
+
+  test("position getter and reset range guard", () => {
+    const s = new Scanner("abc");
+    assert.equal(s.position, 0);
+    s.next();
+    assert.ok(s.position > 0);
+    assert.throws(() => s.reset(-1), /out of range/);
   });
 
   test("backticks are tokenized consistently", () => {
