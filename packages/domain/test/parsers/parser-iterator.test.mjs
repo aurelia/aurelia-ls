@@ -143,4 +143,28 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const ast = parser.parse("of items", "IsIterator");
     assert.equal(ast.$kind, "BadExpression");
   });
+
+  test("missing rhs is rejected", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("item of", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("trailing semicolon without tail is rejected", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("item of items;", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("array pattern with rest not last is rejected", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("[a, ...rest, b] of items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("object pattern with rest not last is rejected", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("{ ...rest, a } of items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+  });
 });

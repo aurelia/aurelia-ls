@@ -30,6 +30,12 @@ describe("interpolation splitting", () => {
     assert.equal(split, null);
   });
 
+  test("unterminated ${ yields null", () => {
+    const src = "Hello ${name";
+    const split = splitInterpolationText(src);
+    assert.equal(split, null);
+  });
+
   test("simple hello ${name}", () => {
     const src = "Hello ${name}";
     const split = splitInterpolationText(src);
@@ -140,5 +146,22 @@ describe("LspExpressionParser / Interpolation AST", () => {
     assert.deepEqual(ast.parts, [src]);
     assert.equal(ast.expressions.length, 0);
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
+  });
+
+  test("unterminated ${ in text yields plain parts", () => {
+    const src = "Hello ${name";
+    const parser = new LspExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    assert.equal(ast.$kind, "Interpolation");
+    assert.deepEqual(ast.parts, [src]);
+    assert.equal(ast.expressions.length, 0);
+  });
+
+  test("invalid inner expression becomes BadExpression", () => {
+    const src = "Hello ${1 =}";
+    const parser = new LspExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+    assert.equal(ast.expressions[0].$kind, "BadExpression");
   });
 });
