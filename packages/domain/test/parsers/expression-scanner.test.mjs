@@ -215,6 +215,15 @@ describe("expression-scanner", () => {
     assert.equal(textOf(src, tokens[10]), "?");
   });
 
+  test("BMP identifier start/part (non-ASCII) is accepted", () => {
+    const src = "\u00C9foo \u00AA\u00AAbaz";
+    const tokens = scanAll(src);
+    assert.equal(tokens[0].type, TokenType.Identifier);
+    assert.equal(tokens[0].value, "\u00C9foo");
+    assert.equal(tokens[1].type, TokenType.Identifier); // whitespace skipped by scanner
+    assert.equal(tokens[1].value, "\u00AA\u00AAbaz");
+  });
+
   test("backticks are tokenized consistently", () => {
     const src = "`foo` `bar`";
     const tokens = scanAll(src);

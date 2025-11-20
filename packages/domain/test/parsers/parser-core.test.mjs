@@ -110,6 +110,14 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
   });
 
+  test("identifier with BMP characters", () => {
+    const src = "\u00C9foo";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "AccessScope");
+    assert.equal(ast.name, "\u00C9foo");
+  });
+
   //
   // Globals vs scopes / calls
   //
