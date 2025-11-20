@@ -70,6 +70,8 @@ export class CoreParser {
   private readonly scanner: Scanner;
   /** End offset of the last consumed token. */
   private lastTokenEnd = 0;
+  /** First parse failure encountered; threaded to the root as BadExpression. */
+  private failure: BadExpression | null = null;
 
   constructor(source: string) {
     this.source = source;
@@ -87,18 +89,21 @@ export class CoreParser {
   public parseBindingExpression(): IsBindingBehavior {
     const first = this.peekToken();
     if (first.type === TokenType.EOF) {
-      this.error("Empty expression", first);
+      return this.error("Empty expression", first);
     }
 
     const core = this.parseAssignExpr();
+    if (this.isBad(core)) {
+      return core;
+    }
     const withTails = this.parseTails(core);
 
     const eof = this.peekToken();
     if (eof.type !== TokenType.EOF) {
-      this.error("Unexpected token after end of expression", eof);
+      return this.error("Unexpected token after end of expression", eof);
     }
 
-    return withTails;
+    return this.failure ?? withTails;
   }
 
   /**
@@ -110,21 +115,27 @@ export class CoreParser {
    *
    * The returned ForOfStatement.span covers the entire header string (0..source.length).
    */
-  public parseIteratorHeader(): ForOfStatement {
+  public parseIteratorHeader(): ForOfStatement | BadExpression {
     const first = this.peekToken();
     if (first.type === TokenType.EOF) {
-      this.error("Empty iterator header", first);
+      return this.error("Empty iterator header", first);
     }
 
     const declaration = this.parseLhsBinding();
+    if (this.isBad(declaration)) {
+      return declaration;
+    }
 
     const ofTok = this.peekToken();
     if (ofTok.type !== TokenType.KeywordOf) {
-      this.error("Expected 'of' in iterator header", ofTok);
+      return this.error("Expected 'of' in iterator header", ofTok);
     }
     this.nextToken(); // 'of'
 
     const { expr: iterable, semiIdx } = this.parseChainableRhs();
+    if (this.isBad(iterable)) {
+      return iterable;
+    }
 
     const span: TextSpan = {
       start: 0,
@@ -139,7 +150,7 @@ export class CoreParser {
       semiIdx,
     };
 
-    return node;
+    return this.failure ?? node;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -158,6 +169,7 @@ export class CoreParser {
     }
 
     const left = this.parseConditionalExpr();
+    if (this.isBad(left)) return left;
 
     const next = this.peekToken();
 
@@ -174,7 +186,9 @@ export class CoreParser {
 
     this.nextToken(); // consume op
     const target = this.ensureAssignable(left, next);
+    if (this.isBad(target)) return target;
     const value = this.parseAssignExpr();
+    if (this.isBad(value)) return value;
     const span: TextSpan = {
       start: target.span.start,
       end: value.span.end,
@@ -194,6 +208,9 @@ export class CoreParser {
   // ConditionalExpr ::= BinaryExpr [ "?" AssignExpr ":" AssignExpr ]
   private parseConditionalExpr(): IsBinary | ConditionalExpression {
     const test = this.parseBinaryExpr(0);
+    if (this.isBad(test)) {
+      return test;
+    }
     const q = this.peekToken();
     if (q.type !== TokenType.Question) {
       return test;
@@ -203,10 +220,12 @@ export class CoreParser {
     const yes = this.parseAssignExpr();
     const colon = this.peekToken();
     if (colon.type !== TokenType.Colon) {
-      this.error("Expected ':' in conditional expression", colon);
+      return this.error("Expected ':' in conditional expression", colon);
     }
     this.nextToken(); // ':'
     const no = this.parseAssignExpr();
+    if (this.isBad(yes)) return yes;
+    if (this.isBad(no)) return no;
 
     const span: TextSpan = {
       start: test.span.start,
@@ -223,9 +242,10 @@ export class CoreParser {
     return cond;
   }
 
-  // BinaryExpr – standard precedence climbing implementation.
+  // BinaryExpr - standard precedence climbing implementation.
   private parseBinaryExpr(minPrecedence: number): IsBinary {
     let left = this.parseUnaryExpr() as IsBinary;
+    if (this.isBad(left)) return left;
 
     while (true) {
       const look = this.peekToken();
@@ -238,6 +258,7 @@ export class CoreParser {
       const nextMin =
         info.associativity === "left" ? info.precedence + 1 : info.precedence;
       const right = this.parseBinaryExpr(nextMin);
+      if (this.isBad(right)) return right;
 
       const span: TextSpan = {
         start: left.span.start,
@@ -268,6 +289,7 @@ export class CoreParser {
     if (op != null) {
       this.nextToken(); // consume operator
       const operand = this.parseUnaryExpr();
+      if (this.isBad(operand)) return operand;
       const span: TextSpan = {
         start: t.start,
         end: this.getEndSpan(operand),
@@ -284,6 +306,7 @@ export class CoreParser {
 
     // Postfix ++ / --
     const lhs = this.parseLeftHandSideExpr();
+    if (this.isBad(lhs)) return lhs;
     const next = this.peekToken();
     if (
       next.type === TokenType.PlusPlus ||
@@ -322,12 +345,15 @@ export class CoreParser {
   }
 
   // NewExpr ::= "new" MemberExpr [ Arguments ]
-  private parseNewExpression(): NewExpression {
+  private parseNewExpression(): NewExpression | BadExpression {
     const newTok = this.nextToken(); // 'new'
     const func = this.parseMemberExpression();
+    if (this.isBad(func)) return func;
     let args: IsAssign[] = [];
     if (this.peekToken().type === TokenType.OpenParen) {
       args = this.parseArguments();
+      const badArg = args.find(a => this.isBad(a));
+      if (badArg) return badArg;
     }
 
     const span: TextSpan = {
@@ -347,6 +373,7 @@ export class CoreParser {
   // MemberExpr ::= PrimaryExpr MemberTail*
   private parseMemberExpression(): IsLeftHandSide {
     let expr: IsLeftHandSide = this.parsePrimaryExpr();
+    if (this.isBad(expr)) return expr;
 
     while (true) {
       const t = this.peekToken();
@@ -356,7 +383,7 @@ export class CoreParser {
         this.nextToken(); // '.'
         const nameTok = this.peekToken();
         if (!this.isIdentifierNameToken(nameTok)) {
-          this.error("Expected identifier after '.'", nameTok);
+          return this.error("Expected identifier after '.'", nameTok);
         }
         this.nextToken();
         const name = this.tokenToIdentifierName(nameTok);
@@ -383,6 +410,8 @@ export class CoreParser {
         if (next.type === TokenType.OpenParen) {
           // func?.(args)
           const args = this.parseArguments();
+          const badArgs = args.find(a => this.isBad(a));
+          if (badArgs) return badArgs;
           const span: TextSpan = {
             start: this.getNodeStart(expr),
             end: this.lastTokenEnd,
@@ -427,13 +456,14 @@ export class CoreParser {
         if (next.type === TokenType.OpenBracket) {
           // obj?.[expr]
           const keyed = this.parseKeyedAccess(expr, true);
+          if (this.isBad(keyed)) return keyed;
           expr = keyed;
           continue;
         }
 
         // obj?.prop
         if (!this.isIdentifierNameToken(next)) {
-          this.error("Expected identifier after '?.'", next);
+          return this.error("Expected identifier after '?.'", next);
         }
         this.nextToken();
         const name = this.tokenToIdentifierName(next);
@@ -454,13 +484,17 @@ export class CoreParser {
 
       if (t.type === TokenType.OpenBracket) {
         // obj[expr]
-        expr = this.parseKeyedAccess(expr, false);
+        const keyed = this.parseKeyedAccess(expr, false);
+        if (this.isBad(keyed)) return keyed;
+        expr = keyed;
         continue;
       }
 
       if (t.type === TokenType.OpenParen) {
         // Function / method / scope call
         const args = this.parseArguments();
+        const badArgs = args.find(a => this.isBad(a));
+        if (badArgs) return badArgs;
         const span: TextSpan = {
           start: this.getNodeStart(expr),
           end: this.lastTokenEnd,
@@ -514,6 +548,7 @@ export class CoreParser {
 
       if (t.type === TokenType.Backtick) {
         const tpl = this.parseTemplateLiteral();
+        if (this.isBad(tpl)) return tpl;
         const span: TextSpan = {
           start: this.getNodeStart(expr),
           end: tpl.span.end,
@@ -539,12 +574,13 @@ export class CoreParser {
   private parseKeyedAccess(
     object: IsLeftHandSide,
     optional: boolean,
-  ): AccessKeyedExpression {
+  ): AccessKeyedExpression | BadExpression {
     this.nextToken(); // '['
     const key = this.parseAssignExpr();
+    if (this.isBad(key)) return key;
     const close = this.peekToken();
     if (close.type !== TokenType.CloseBracket) {
-      this.error("Expected ']' in indexed access", close);
+      return this.error("Expected ']' in indexed access", close);
     }
     this.nextToken(); // ']'
 
@@ -566,7 +602,7 @@ export class CoreParser {
   private parseArguments(): IsAssign[] {
     const open = this.peekToken();
     if (open.type !== TokenType.OpenParen) {
-      this.error("Expected '(' for argument list", open);
+      return [this.error("Expected '(' for argument list", open)];
     }
     this.nextToken(); // '('
 
@@ -598,7 +634,7 @@ export class CoreParser {
         break;
       }
 
-      this.error("Expected ',' or ')' in argument list", t);
+      return [this.error("Expected ',' or ')' in argument list", t)];
     }
 
     return args;
@@ -653,9 +689,10 @@ export class CoreParser {
         // Parenthesized expression - keep an explicit AST node for tooling.
         const open = this.nextToken(); // '('
         const expr = this.parseAssignExpr();
+        if (this.isBad(expr)) return expr;
         const close = this.peekToken();
         if (close.type !== TokenType.CloseParen) {
-          this.error("Expected ')' to close parenthesized expression", close);
+          return this.error("Expected ')' to close parenthesized expression", close);
         }
         this.nextToken(); // ')'
         const node: ParenExpression = {
@@ -671,20 +708,20 @@ export class CoreParser {
       }
     }
 
-    this.error(`Unexpected token ${t.type} in primary expression`, t);
+    return this.error(`Unexpected token ${t.type} in primary expression`, t);
   }
 
-  // Identifier primary – classify as global vs scope.
+  // Identifier primary - classify as global vs scope.
   private parseIdentifierPrimary(): IsPrimary {
     const t = this.peekToken();
     if (t.type !== TokenType.Identifier) {
-      this.error("Expected identifier", t);
+      return this.error("Expected identifier", t);
     }
     this.nextToken();
 
     const name = t.value as string;
     if (name === "import") {
-      this.error("Bare 'import' is not allowed in binding expressions", t);
+      return this.error("Bare 'import' is not allowed in binding expressions", t);
     }
 
     if (CoreParser.globalNames.has(name)) {
@@ -725,7 +762,7 @@ export class CoreParser {
         this.nextToken(); // '.'
         const nameTok = this.peekToken();
         if (!this.isIdentifierNameToken(nameTok)) {
-          this.error("Expected identifier after '$this.'", nameTok);
+          return this.error("Expected identifier after '$this.'", nameTok);
         }
         this.nextToken();
         const name = this.tokenToIdentifierName(nameTok);
@@ -768,7 +805,7 @@ export class CoreParser {
       // Not another $parent: treat this as member access and fall back to
       // AccessScope(name, ancestor).
       if (!this.isIdentifierNameToken(maybeParent)) {
-        this.error("Expected identifier after '$parent.'", maybeParent);
+        return this.error("Expected identifier after '$parent.'", maybeParent);
       }
       this.nextToken();
       const name = this.tokenToIdentifierName(maybeParent);
@@ -792,7 +829,7 @@ export class CoreParser {
   }
 
   // ArrayLiteral ::= "[" [ ( elision | AssignExpr ) ( "," ( elision | AssignExpr ) )* ] "]"
-  private parseArrayLiteral(): ArrayLiteralExpression {
+  private parseArrayLiteral(): ArrayLiteralExpression | BadExpression {
     const open = this.peekToken();
     this.nextToken(); // '['
     const start = open.start;
@@ -849,7 +886,7 @@ export class CoreParser {
         break;
       }
 
-      this.error("Expected ',' or ']' in array literal", sep);
+      return this.error("Expected ',' or ']' in array literal", sep);
     }
 
     const span: TextSpan = { start, end: this.lastTokenEnd };
@@ -861,7 +898,7 @@ export class CoreParser {
   }
 
   // ObjectLiteral ::= "{" [ ( Identifier | StringLiteral | NumericLiteral ) ":" AssignExpr ( "," ... )* ] "}"
-  private parseObjectLiteral(): ObjectLiteralExpression {
+  private parseObjectLiteral(): ObjectLiteralExpression | BadExpression {
     const open = this.peekToken();
     this.nextToken(); // '{'
     const start = open.start;
@@ -888,7 +925,7 @@ export class CoreParser {
         keyTok.type !== TokenType.StringLiteral &&
         keyTok.type !== TokenType.NumericLiteral
       ) {
-        this.error(
+        return this.error(
           "Invalid object literal key; expected identifier, string, or number",
           keyTok,
         );
@@ -904,7 +941,7 @@ export class CoreParser {
 
       const colon = this.peekToken();
       if (colon.type !== TokenType.Colon) {
-        this.error("Expected ':' after object literal key", colon);
+        return this.error("Expected ':' after object literal key", colon);
       }
       this.nextToken(); // ':'
 
@@ -928,7 +965,7 @@ export class CoreParser {
         break;
       }
 
-      this.error("Expected ',' or '}' in object literal", sep);
+      return this.error("Expected ',' or '}' in object literal", sep);
     }
 
     const span: TextSpan = { start, end: this.lastTokenEnd };
@@ -946,13 +983,14 @@ export class CoreParser {
 
   private parseTails(core: IsAssign): IsBindingBehavior {
     let expr: IsValueConverter = core;
+    if (this.isBad(expr)) return expr;
 
     // Value converters: expr | conv [: arg]*
     while (this.peekToken().type === TokenType.Bar) {
       this.nextToken(); // '|'
       const nameTok = this.peekToken();
       if (nameTok.type !== TokenType.Identifier) {
-        this.error("Expected identifier after '|'", nameTok);
+        return this.error("Expected identifier after '|'", nameTok);
       }
       this.nextToken();
       const name = nameTok.value as string;
@@ -984,7 +1022,7 @@ export class CoreParser {
       this.nextToken(); // '&'
       const nameTok = this.peekToken();
       if (nameTok.type !== TokenType.Identifier) {
-        this.error("Expected identifier after '&'", nameTok);
+        return this.error("Expected identifier after '&'", nameTok);
       }
       this.nextToken();
       const name = nameTok.value as string;
@@ -1039,7 +1077,7 @@ export class CoreParser {
         return this.parseObjectBindingPattern();
 
       default:
-        this.error(
+        return this.error(
           "Invalid repeat.for left-hand side; expected identifier, array pattern, or object pattern",
           t,
         );
@@ -1047,10 +1085,10 @@ export class CoreParser {
   }
 
   /** Parse a simple binding identifier (no destructuring) used on the LHS of repeat.for or in patterns. */
-  private parseBindingIdentifier(): BindingIdentifier {
+  private parseBindingIdentifier(): BindingIdentifier | BadExpression {
     const t = this.peekToken();
     if (t.type !== TokenType.Identifier) {
-      this.error("Expected identifier", t);
+      return this.error("Expected identifier", t);
     }
     this.nextToken();
     return this.bindingIdentifierFromToken(t);
@@ -1060,10 +1098,10 @@ export class CoreParser {
    * Create a BindingIdentifier from an already-consumed identifier token,
    * enforcing the same 'import' restriction as identifier primaries.
    */
-  private bindingIdentifierFromToken(t: Token): BindingIdentifier {
+  private bindingIdentifierFromToken(t: Token): BindingIdentifier | BadExpression {
     const name = t.value as string;
     if (name === "import") {
-      this.error("Bare 'import' is not allowed in binding expressions", t);
+      return this.error("Bare 'import' is not allowed in binding expressions", t);
     }
     const id: BindingIdentifier = {
       $kind: "BindingIdentifier",
@@ -1080,7 +1118,7 @@ export class CoreParser {
    *
    * Anything more complex (holes, >2 elements, trailing comma, etc.) is rejected.
    */
-  private parseArrayBindingPattern(): ArrayBindingPattern {
+  private parseArrayBindingPattern(): ArrayBindingPattern | BadExpression {
     const open = this.nextToken(); // '['
     const start = open.start;
 
@@ -1103,22 +1141,24 @@ export class CoreParser {
 
       if (t.type === TokenType.Ellipsis) {
         if (rest) {
-          this.error("Only one rest element is allowed in an array pattern", t);
+          return this.error("Only one rest element is allowed in an array pattern", t);
         }
         this.nextToken(); // '...'
         rest = this.parseBindingPatternBase();
+        if (this.isBad(rest)) return rest;
         const afterRest = this.peekToken();
         if (afterRest.type === TokenType.Comma) {
-          this.error("Rest element must be in the last position of an array pattern", afterRest);
+          return this.error("Rest element must be in the last position of an array pattern", afterRest);
         }
         if (afterRest.type !== TokenType.CloseBracket) {
-          this.error("Expected ']' after array pattern rest element", afterRest);
+          return this.error("Expected ']' after array pattern rest element", afterRest);
         }
         this.nextToken(); // ']'
         break;
       }
 
       const element = this.parseBindingPatternWithOptionalDefault();
+      if (this.isBad(element)) return element;
       elements.push(element);
 
       const sep = this.peekToken();
@@ -1137,7 +1177,7 @@ export class CoreParser {
         break;
       }
 
-      this.error("Expected ',' or ']' in array binding pattern", sep);
+      return this.error("Expected ',' or ']' in array binding pattern", sep);
     }
 
     const span: TextSpan = { start, end: this.lastTokenEnd };
@@ -1156,7 +1196,7 @@ export class CoreParser {
    *
    * No nested patterns, no defaults, no rest, no trailing comma.
    */
-  private parseObjectBindingPattern(): ObjectBindingPattern {
+  private parseObjectBindingPattern(): ObjectBindingPattern | BadExpression {
     const open = this.nextToken(); // '{'
     const start = open.start;
 
@@ -1172,16 +1212,17 @@ export class CoreParser {
 
       if (t.type === TokenType.Ellipsis) {
         if (rest) {
-          this.error("Only one rest element is allowed in an object pattern", t);
+          return this.error("Only one rest element is allowed in an object pattern", t);
         }
         this.nextToken(); // '...'
         rest = this.parseBindingPatternBase();
+        if (this.isBad(rest)) return rest;
         const afterRest = this.peekToken();
         if (afterRest.type === TokenType.Comma) {
-          this.error("Rest element must be in the last position of an object pattern", afterRest);
+          return this.error("Rest element must be in the last position of an object pattern", afterRest);
         }
         if (afterRest.type !== TokenType.CloseBrace) {
-          this.error("Expected '}' after object pattern rest element", afterRest);
+          return this.error("Expected '}' after object pattern rest element", afterRest);
         }
         this.nextToken(); // '}'
         break;
@@ -1193,7 +1234,7 @@ export class CoreParser {
         keyTok.type !== TokenType.StringLiteral &&
         keyTok.type !== TokenType.NumericLiteral
       ) {
-        this.error(
+        return this.error(
           "Invalid object binding pattern key; expected identifier, string, or number",
           keyTok,
         );
@@ -1210,12 +1251,15 @@ export class CoreParser {
       if (afterKey.type === TokenType.Colon) {
         this.nextToken(); // ':'
         valuePattern = this.parseBindingPatternWithOptionalDefault();
+        if (this.isBad(valuePattern)) return valuePattern;
       } else {
         if (keyTok.type !== TokenType.Identifier) {
-          this.error("Object binding pattern shorthand requires an identifier key", keyTok);
+          return this.error("Object binding pattern shorthand requires an identifier key", keyTok);
         }
         const shorthand = this.bindingIdentifierFromToken(keyTok);
+        if (this.isBad(shorthand)) return shorthand;
         valuePattern = this.parseOptionalDefaultForShorthand(shorthand);
+        if (this.isBad(valuePattern)) return valuePattern;
       }
 
       properties.push({ key, value: valuePattern });
@@ -1236,7 +1280,7 @@ export class CoreParser {
         break;
       }
 
-      this.error("Expected ',' or '}' in object binding pattern", sep);
+      return this.error("Expected ',' or '}' in object binding pattern", sep);
     }
 
     const span: TextSpan = { start, end: this.lastTokenEnd };
@@ -1253,10 +1297,10 @@ export class CoreParser {
    * Produces a TemplateExpression with cooked strings (raw text slices) and
    * expressions parsed as AssignExpr with proper span offsets.
    */
-  private parseTemplateLiteral(): TemplateExpression {
+  private parseTemplateLiteral(): TemplateExpression | BadExpression {
     const open = this.peekToken();
     if (open.type !== TokenType.Backtick) {
-      this.error("Expected '`' to start template literal", open);
+      return this.error("Expected '`' to start template literal", open);
     }
     this.nextToken(); // consume '`'
 
@@ -1286,13 +1330,14 @@ export class CoreParser {
           j++;
         }
         if (depth !== 0) {
-          this.error("Unterminated ${ in template literal", open);
+          return this.error("Unterminated ${ in template literal", open);
         }
         const exprSrc = src.slice(i + 2, j - 1);
         const inner = new CoreParser(exprSrc);
         const expr = inner.parseAssignExpr();
-        offsetNodeSpans(expr as unknown as Record<string, unknown>, i + 2);
-        expressions.push(expr);
+        const node = (inner.failure ?? expr) as unknown as Record<string, unknown>;
+        offsetNodeSpans(node, i + 2);
+        expressions.push(node as unknown as IsAssign);
         chunkStart = j;
         i = j;
         continue;
@@ -1314,11 +1359,12 @@ export class CoreParser {
       i++;
     }
 
-    this.error("Unterminated template literal", open);
+    return this.error("Unterminated template literal", open);
   }
 
   private parseBindingPatternWithOptionalDefault(): BindingPattern {
     const pattern = this.parseBindingPatternBase();
+    if (this.isBad(pattern)) return pattern;
     const maybeDefault = this.peekToken();
     if (maybeDefault.type !== TokenType.Equals) {
       return pattern;
@@ -1344,14 +1390,15 @@ export class CoreParser {
       case TokenType.OpenBrace:
         return this.parseObjectBindingPattern();
       default:
-        this.error(
+        return this.error(
           "Invalid binding pattern; expected identifier, array pattern, or object pattern",
           t,
         );
     }
   }
 
-  private parseOptionalDefaultForShorthand(binding: BindingIdentifier): BindingPattern {
+  private parseOptionalDefaultForShorthand(binding: BindingIdentifier | BadExpression): BindingPattern {
+    if (this.isBad(binding)) return binding;
     const maybeDefault = this.peekToken();
     if (maybeDefault.type !== TokenType.Equals) {
       return binding;
@@ -1383,7 +1430,13 @@ export class CoreParser {
    */
   private parseChainableRhs(): { expr: IsBindingBehavior; semiIdx: number } {
     const core = this.parseAssignExpr();
+    if (this.isBad(core)) {
+      return { expr: core, semiIdx: -1 };
+    }
     const expr = this.parseTails(core);
+    if (this.isBad(expr)) {
+      return { expr, semiIdx: -1 };
+    }
 
     let semiIdx = -1;
     const t = this.peekToken();
@@ -1394,10 +1447,13 @@ export class CoreParser {
 
       const afterSemi = this.peekToken();
       if (afterSemi.type === TokenType.EOF) {
-        this.error(
+        return {
+          expr: this.error(
           "Expected tail after ';' in iterator header",
           afterSemi,
-        );
+        ),
+          semiIdx,
+        };
       }
       // Tokens after the semicolon (e.g. `key: id; trackBy: foo`) are not
       // parsed by the expression parser; they are handled by the lowerer.
@@ -1411,7 +1467,8 @@ export class CoreParser {
   // Arrow functions (single identifier parameter for v1)
   // ------------------------------------------------------------------------------------------
 
-  private parseArrowFromLeft(left: IsBinary | ConditionalExpression): ArrowFunction {
+  private parseArrowFromLeft(left: IsBinary | ConditionalExpression): ArrowFunction | BadExpression {
+    if (this.isBad(left)) return left;
     const paramSpan = left.span;
 
     let name: string | null = null;
@@ -1424,7 +1481,7 @@ export class CoreParser {
 
     if (name == null) {
       const arrowTok = this.peekToken();
-      this.error(
+      return this.error(
         "Arrow functions currently support only a single identifier parameter in the LSP parser",
         arrowTok,
       );
@@ -1433,7 +1490,7 @@ export class CoreParser {
     // Consume =>
     const arrowTok = this.peekToken();
     if (arrowTok.type !== TokenType.EqualsGreaterThan) {
-      this.error("Expected '=>'", arrowTok);
+      return this.error("Expected '=>'", arrowTok);
     }
     this.nextToken();
 
@@ -1535,7 +1592,7 @@ export class CoreParser {
    * Parse an arrow function whose head starts with a '(' we already know is an
    * arrow parameter list, e.g. `(a, b) => body`.
    */
-  private parseParenthesizedArrowFunction(openParen: Token): ArrowFunction {
+  private parseParenthesizedArrowFunction(openParen: Token): ArrowFunction | BadExpression {
     // Consume '('
     this.nextToken();
 
@@ -1556,13 +1613,13 @@ export class CoreParser {
           this.nextToken(); // '...'
           idTok = this.peekToken();
           if (idTok.type !== TokenType.Identifier) {
-            this.error("Invalid rest parameter; expected identifier after '...'", idTok);
+            return this.error("Invalid rest parameter; expected identifier after '...'", idTok);
           }
           this.nextToken(); // identifier
         } else {
           idTok = this.peekToken();
           if (idTok.type !== TokenType.Identifier) {
-            this.error(
+            return this.error(
               "Invalid arrow function parameter; expected identifier",
               idTok,
             );
@@ -1580,7 +1637,7 @@ export class CoreParser {
         t = this.peekToken();
         if (t.type === TokenType.Comma) {
           if (rest) {
-            this.error("Rest parameter must be last in arrow parameter list", t);
+            return this.error("Rest parameter must be last in arrow parameter list", t);
           }
           this.nextToken(); // ','
           t = this.peekToken();
@@ -1592,13 +1649,13 @@ export class CoreParser {
           break;
         }
 
-        this.error("Expected ',' or ')' in arrow parameter list", t);
+        return this.error("Expected ',' or ')' in arrow parameter list", t);
       }
     }
 
     const arrowTok = this.peekToken();
     if (arrowTok.type !== TokenType.EqualsGreaterThan) {
-      this.error("Expected '=>'", arrowTok);
+      return this.error("Expected '=>'", arrowTok);
     }
     this.nextToken(); // '=>'
 
@@ -1644,11 +1701,33 @@ export class CoreParser {
     return node.span.start;
   }
 
-  private error(message: string, token?: Token): never {
-    const pos = token ? token.start : this.scanner.position;
-    throw new Error(
-      `[LspExpressionParser] ${message} at ${pos}`,
-    );
+  private error(message: string, token?: Token): BadExpression {
+    const t = token ?? this.peekToken();
+    const span: TextSpan = {
+      start: t.start,
+      end: Math.max(t.end, t.start),
+    };
+    const bad: BadExpression = {
+      $kind: "BadExpression",
+      span,
+      text: this.source.slice(span.start, span.end),
+      message,
+    };
+    if (!this.failure) {
+      this.failure = bad;
+    }
+    // Consume the offending token when possible to avoid infinite loops.
+    if (token === undefined || token === this.peekToken()) {
+      this.nextToken();
+    }
+    // Force subsequent peeks to hit EOF so loops terminate.
+    this.scanner.reset(this.source.length);
+    this.lastTokenEnd = this.source.length;
+    return bad;
+  }
+
+  private isBad(expr: unknown): expr is BadExpression {
+    return !!expr && (expr as { $kind?: string }).$kind === "BadExpression";
   }
 
   // Assignment operators
@@ -1772,7 +1851,8 @@ export class CoreParser {
   private ensureAssignable(
     expr: IsBinary | ConditionalExpression | IsLeftHandSide,
     opToken: Token,
-  ): AccessScopeExpression | AccessKeyedExpression | AccessMemberExpression | AssignExpression {
+  ): AccessScopeExpression | AccessKeyedExpression | AccessMemberExpression | AssignExpression | BadExpression {
+    if (this.isBad(expr)) return expr;
     switch ((expr as { $kind?: string } | null | undefined)?.$kind) {
       case "AccessScope":
       case "AccessKeyed":
@@ -1784,7 +1864,7 @@ export class CoreParser {
           | AccessMemberExpression
           | AssignExpression;
       default:
-        this.error("Left-hand side is not assignable", opToken);
+        return this.error("Left-hand side is not assignable", opToken);
     }
   }
 
@@ -1834,7 +1914,7 @@ export class CoreParser {
 
 export class LspExpressionParser implements IExpressionParser {
   // Overload signatures from IExpressionParser
-  parse(expression: string, expressionType: "IsIterator"): ForOfStatement;
+  parse(expression: string, expressionType: "IsIterator"): ForOfStatement | BadExpression;
   parse(expression: string, expressionType: "Interpolation"): Interpolation;
   parse(
     expression: string,
@@ -1887,10 +1967,12 @@ export class LspExpressionParser implements IExpressionParser {
       }
 
       default:
-        // Exhaustive guard – should be unreachable due to ExpressionType union.
-        throw new Error(
-          `[LspExpressionParser] Unknown expression type '${expressionType}'`,
-        );
+        return {
+          $kind: "BadExpression",
+          span: { start: 0, end: expression.length },
+          text: expression,
+          message: `Unknown expression type '${expressionType}'`,
+        };
     }
   }
 

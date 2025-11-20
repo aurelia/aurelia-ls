@@ -378,7 +378,9 @@ export type IsPrimary =
   | ParenExpression
   | PrimitiveLiteralExpression
   | TemplateExpression
-  | NewExpression;
+  | NewExpression
+  | CustomExpression
+  | BadExpression;
 
 export type IsLeftHandSide =
   | IsPrimary
@@ -388,11 +390,12 @@ export type IsLeftHandSide =
   | CallScopeExpression
   | AccessMemberExpression
   | AccessKeyedExpression
-  | TaggedTemplateExpression;
+  | TaggedTemplateExpression
+  | BadExpression;
 
-export type IsUnary = IsLeftHandSide | UnaryExpression;
-export type IsBinary = IsUnary | BinaryExpression;
-export type IsConditional = IsBinary | ConditionalExpression;
+export type IsUnary = IsLeftHandSide | UnaryExpression | BadExpression;
+export type IsBinary = IsUnary | BinaryExpression | BadExpression;
+export type IsConditional = IsBinary | ConditionalExpression | BadExpression;
 export type IsAssign = IsConditional | AssignExpression | ArrowFunction | DestructuringAssignmentExpression | BadExpression;
 export type IsValueConverter = IsAssign | ValueConverterExpression;
 export type IsBindingBehavior = IsValueConverter | BindingBehaviorExpression;
@@ -402,14 +405,16 @@ export type BindingPattern =
   | BindingPatternDefault
   | BindingPatternHole
   | ArrayBindingPattern
-  | ObjectBindingPattern;
+  | ObjectBindingPattern
+  | BadExpression;
 export type BindingIdentifierOrPattern = BindingPattern;
 export type IsExpression = IsBindingBehavior | Interpolation;
 export type AnyBindingExpression =
   | Interpolation
   | ForOfStatement
   | CustomExpression
-  | IsBindingBehavior;
+  | IsBindingBehavior
+  | BadExpression;
 
 /* ---- AST nodes ---- */
 

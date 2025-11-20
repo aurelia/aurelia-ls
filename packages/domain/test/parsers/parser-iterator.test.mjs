@@ -134,16 +134,13 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
 
   test("missing 'of' is rejected", () => {
     const parser = new LspExpressionParser();
-    assert.throws(
-      () => parser.parse("item items", "IsIterator"),
-      /of/i,
-    );
+    const ast = parser.parse("item items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
   });
 
   test("'of' in place of lhs is rejected", () => {
     const parser = new LspExpressionParser();
-    assert.throws(
-      () => parser.parse("of items", "IsIterator"),
-    );
+    const ast = parser.parse("of items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
   });
 });

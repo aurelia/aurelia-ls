@@ -189,6 +189,15 @@ function walkRows(
                 })
                 break;
               }
+              const badPattern = findBadInPattern(forOfAst.declaration);
+              if (badPattern) {
+                diags.push({
+                  code: "AU1201",
+                  message: badPattern.message ?? "Invalid or unsupported repeat header (could not parse iterator).",
+                  span: badPattern.span,
+                });
+                break;
+              }
               const names = bindingNamesFromDeclaration(forOfAst.declaration);
               addUniqueSymbols(
                 nextFrame,
@@ -383,8 +392,9 @@ function idOf(e: ExprRef): ExprId { return e.id; }
  * ============================================================================= */
 
 function bindingNamesFromDeclaration(
-  decl: BindingIdentifierOrPattern | DestructuringAssignmentExpression,
+  decl: BindingIdentifierOrPattern | DestructuringAssignmentExpression | BadExpression,
 ): string[] {
+  if (decl.$kind === "BadExpression") return [];
   if (decl.$kind === "DestructuringAssignment") {
     return bindingNamesFromPattern(decl.pattern);
   }
@@ -393,6 +403,8 @@ function bindingNamesFromDeclaration(
 
 function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] {
   switch (pattern.$kind) {
+    case "BadExpression":
+      return [];
     case "BindingIdentifier":
       return pattern.name ? [pattern.name] : [];
     case "BindingPatternDefault":
@@ -408,6 +420,42 @@ function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] 
       const names = pattern.properties.flatMap(p => bindingNamesFromPattern(p.value));
       if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
       return names;
+    }
+    default:
+      return assertUnreachable(pattern as never);
+  }
+}
+
+function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | null {
+  switch (pattern.$kind) {
+    case "BadExpression":
+      return pattern;
+    case "BindingIdentifier":
+    case "BindingPatternHole":
+      return null;
+    case "BindingPatternDefault":
+      return findBadInPattern(pattern.target);
+    case "ArrayBindingPattern": {
+      for (const el of pattern.elements) {
+        const bad = findBadInPattern(el);
+        if (bad) return bad;
+      }
+      if (pattern.rest) {
+        const bad = findBadInPattern(pattern.rest);
+        if (bad) return bad;
+      }
+      return null;
+    }
+    case "ObjectBindingPattern": {
+      for (const prop of pattern.properties) {
+        const bad = findBadInPattern(prop.value);
+        if (bad) return bad;
+      }
+      if (pattern.rest) {
+        const bad = findBadInPattern(pattern.rest);
+        if (bad) return bad;
+      }
+      return null;
     }
     default:
       return assertUnreachable(pattern as never);
