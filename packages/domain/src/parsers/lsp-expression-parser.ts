@@ -38,6 +38,7 @@ import type {
   PrimitiveLiteralExpression,
   ArrayLiteralExpression,
   ObjectLiteralExpression,
+  ParenExpression,
   ArrowFunction,
   CustomExpression,
   ArrayBindingPattern,
@@ -613,17 +614,20 @@ export class CoreParser {
       }
 
       case TokenType.OpenParen: {
-        // Parenthesized expression – group but do not create a dedicated AST node.
-        this.nextToken(); // '('
+        // Parenthesized expression - keep an explicit AST node for tooling.
+        const open = this.nextToken(); // '('
         const expr = this.parseAssignExpr();
         const close = this.peekToken();
         if (close.type !== TokenType.CloseParen) {
           this.error("Expected ')' to close parenthesized expression", close);
         }
         this.nextToken(); // ')'
-        // NOTE: this can be a non-primary (e.g. Binary), but IR types don't
-        // have an explicit Paren node.
-        return expr as IsPrimary;
+        const node: ParenExpression = {
+          $kind: "Paren",
+          span: { start: open.start, end: close.end },
+          expression: expr,
+        };
+        return node;
       }
 
       case TokenType.Backtick: {

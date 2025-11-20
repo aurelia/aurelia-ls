@@ -375,6 +375,7 @@ export type IsPrimary =
   | AccessGlobalExpression
   | ArrayLiteralExpression
   | ObjectLiteralExpression
+  | ParenExpression
   | PrimitiveLiteralExpression
   | TemplateExpression
   | NewExpression;
@@ -485,6 +486,12 @@ export interface AccessKeyedExpression {
   object: IsLeftHandSide;
   key: IsAssign;
   optional: boolean;
+}
+
+export interface ParenExpression {
+  $kind: 'Paren';
+  span: TextSpan;
+  expression: IsAssign;
 }
 
 export interface NewExpression {
