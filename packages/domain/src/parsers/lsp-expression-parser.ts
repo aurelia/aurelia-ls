@@ -1377,19 +1377,32 @@ export class CoreParser {
 
     t = probe.peek();
 
-    // Empty parameter list: () => expr
-    if (t.type === TokenType.CloseParen) {
-      probe.next(); // ')'
-    } else {
-      // One or more identifiers separated by commas.
+    let seenParam = false;
+    let seenRest = false;
+    // Empty parameter list: () => expr is allowed
+    if (t.type !== TokenType.CloseParen) {
       while (true) {
-        if (t.type !== TokenType.Identifier) {
+        if (t.type === TokenType.Ellipsis) {
+          // Rest parameter must be the last one.
+          if (seenRest) return false;
+          probe.next(); // '...'
+          const id = probe.peek();
+          if (id.type !== TokenType.Identifier) {
+            return false;
+          }
+          probe.next(); // identifier
+          seenRest = true;
+          t = probe.peek();
+        } else if (t.type === TokenType.Identifier) {
+          probe.next(); // identifier
+          seenParam = true;
+          t = probe.peek();
+        } else {
           return false;
         }
-        probe.next(); // identifier
 
-        t = probe.peek();
         if (t.type === TokenType.Comma) {
+          if (seenRest) return false; // nothing after rest
           probe.next(); // ','
           t = probe.peek();
           continue;
@@ -1403,6 +1416,10 @@ export class CoreParser {
         // Anything else (operators, literals, etc.) → not an arrow head.
         return false;
       }
+    }
+    // () case: consume ')'
+    else {
+      probe.next();
     }
 
     const afterParen = probe.peek();
@@ -1418,6 +1435,7 @@ export class CoreParser {
     this.nextToken();
 
     const params: BindingIdentifier[] = [];
+    let rest = false;
     const start = openParen.start;
 
     let t = this.peekToken();
@@ -1427,14 +1445,25 @@ export class CoreParser {
       this.nextToken(); // ')'
     } else {
       while (true) {
-        const idTok = this.peekToken();
-        if (idTok.type !== TokenType.Identifier) {
-          this.error(
-            "Invalid arrow function parameter; expected identifier",
-            idTok,
-          );
+        let idTok: Token;
+        if (t.type === TokenType.Ellipsis) {
+          rest = true;
+          this.nextToken(); // '...'
+          idTok = this.peekToken();
+          if (idTok.type !== TokenType.Identifier) {
+            this.error("Invalid rest parameter; expected identifier after '...'", idTok);
+          }
+          this.nextToken(); // identifier
+        } else {
+          idTok = this.peekToken();
+          if (idTok.type !== TokenType.Identifier) {
+            this.error(
+              "Invalid arrow function parameter; expected identifier",
+              idTok,
+            );
+          }
+          this.nextToken(); // identifier
         }
-        this.nextToken(); // identifier
 
         const param: BindingIdentifier = {
           $kind: "BindingIdentifier",
@@ -1445,6 +1474,9 @@ export class CoreParser {
 
         t = this.peekToken();
         if (t.type === TokenType.Comma) {
+          if (rest) {
+            this.error("Rest parameter must be last in arrow parameter list", t);
+          }
           this.nextToken(); // ','
           t = this.peekToken();
           continue;
@@ -1476,7 +1508,7 @@ export class CoreParser {
       span,
       args: params,
       body,
-      rest: false,
+      rest,
     };
     return fn;
   }

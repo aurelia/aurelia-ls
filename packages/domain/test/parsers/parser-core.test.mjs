@@ -477,6 +477,30 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
   });
 
+  test("arrow: (a, ...rest) => a", () => {
+    const src = "(a, ...rest) => a";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "ArrowFunction");
+    assert.equal(ast.args.length, 2);
+    assert.equal(ast.args[0].$kind, "BindingIdentifier");
+    assert.equal(ast.args[0].name, "a");
+    assert.equal(ast.args[1].$kind, "BindingIdentifier");
+    assert.equal(ast.args[1].name, "rest");
+    assert.equal(ast.rest, true);
+  });
+
+  test("arrow: (...rest) => rest", () => {
+    const src = "(...rest) => rest";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "ArrowFunction");
+    assert.equal(ast.args.length, 1);
+    assert.equal(ast.args[0].$kind, "BindingIdentifier");
+    assert.equal(ast.args[0].name, "rest");
+    assert.equal(ast.rest, true);
+  });
+
   test("arrow: () => x (zero parameters)", () => {
     const src = "() => x";
     const ast = parseInBothModes(src);
