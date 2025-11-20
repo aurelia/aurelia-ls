@@ -76,14 +76,12 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const decl = ast.declaration;
     assert.equal(decl.$kind, "ObjectBindingPattern");
 
-    assert.deepEqual(decl.keys, ["key", "value"]);
-    assert.equal(decl.values.length, 2);
-
-    const [keyBinding, valueBinding] = decl.values;
-    assert.equal(keyBinding.$kind, "BindingIdentifier");
-    assert.equal(keyBinding.name, "key");
-    assert.equal(valueBinding.$kind, "BindingIdentifier");
-    assert.equal(valueBinding.name, "value");
+    assert.equal(decl.properties.length, 2);
+    assert.deepEqual(decl.properties.map(p => p.key), ["key", "value"]);
+    assert.equal(decl.properties[0].value.$kind, "BindingIdentifier");
+    assert.equal(decl.properties[0].value.name, "key");
+    assert.equal(decl.properties[1].value.$kind, "BindingIdentifier");
+    assert.equal(decl.properties[1].value.name, "value");
   });
 
   test("{ key: alias } of entries", () => {
@@ -93,12 +91,45 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const decl = ast.declaration;
     assert.equal(decl.$kind, "ObjectBindingPattern");
 
-    assert.deepEqual(decl.keys, ["key"]);
-    assert.equal(decl.values.length, 1);
+    assert.equal(decl.properties.length, 1);
+    assert.equal(decl.properties[0].key, "key");
+    assert.equal(decl.properties[0].value.$kind, "BindingIdentifier");
+    assert.equal(decl.properties[0].value.name, "alias");
+  });
 
-    const binding = decl.values[0];
-    assert.equal(binding.$kind, "BindingIdentifier");
-    assert.equal(binding.name, "alias");
+  test("[first, , second, ...rest] of items", () => {
+    const code = "[first, , second, ...rest] of items";
+    const ast = parseIterator(code);
+
+    const decl = ast.declaration;
+    assert.equal(decl.$kind, "ArrayBindingPattern");
+    assert.equal(decl.elements.length, 3);
+
+    assert.equal(decl.elements[0].$kind, "BindingIdentifier");
+    assert.equal(decl.elements[1].$kind, "BindingPatternHole");
+    assert.equal(decl.elements[2].$kind, "BindingIdentifier");
+    assert.equal(decl.rest?.$kind, "BindingIdentifier");
+    assert.equal(decl.rest?.name, "rest");
+  });
+
+  test("{ a: foo = bar, ...rest } of entries", () => {
+    const code = "{ a: foo = bar, ...rest } of entries";
+    const ast = parseIterator(code);
+
+    const decl = ast.declaration;
+    assert.equal(decl.$kind, "ObjectBindingPattern");
+    assert.equal(decl.properties.length, 1);
+
+    const prop = decl.properties[0];
+    assert.equal(prop.key, "a");
+    assert.equal(prop.value.$kind, "BindingPatternDefault");
+    assert.equal(prop.value.target.$kind, "BindingIdentifier");
+    assert.equal(prop.value.target.name, "foo");
+    assert.equal(prop.value.default.$kind, "AccessScope");
+    assert.equal(prop.value.default.name, "bar");
+
+    assert.equal(decl.rest?.$kind, "BindingIdentifier");
+    assert.equal(decl.rest?.name, "rest");
   });
 
   test("missing 'of' is rejected", () => {

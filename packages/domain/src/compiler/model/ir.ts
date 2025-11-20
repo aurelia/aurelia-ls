@@ -393,11 +393,17 @@ export type IsLeftHandSide =
 export type IsUnary = IsLeftHandSide | UnaryExpression;
 export type IsBinary = IsUnary | BinaryExpression;
 export type IsConditional = IsBinary | ConditionalExpression;
-export type IsAssign = IsConditional | AssignExpression | ArrowFunction | BadExpression;
+export type IsAssign = IsConditional | AssignExpression | ArrowFunction | DestructuringAssignmentExpression | BadExpression;
 export type IsValueConverter = IsAssign | ValueConverterExpression;
 export type IsBindingBehavior = IsValueConverter | BindingBehaviorExpression;
 export type IsAssignable = AccessScopeExpression | AccessKeyedExpression | AccessMemberExpression | AssignExpression;
-export type BindingIdentifierOrPattern = BindingIdentifier | ArrayBindingPattern | ObjectBindingPattern;
+export type BindingPattern =
+  | BindingIdentifier
+  | BindingPatternDefault
+  | BindingPatternHole
+  | ArrayBindingPattern
+  | ObjectBindingPattern;
+export type BindingIdentifierOrPattern = BindingPattern;
 export type IsExpression = IsBindingBehavior | Interpolation;
 export type AnyBindingExpression =
   | Interpolation
@@ -547,7 +553,7 @@ export interface UnaryExpression {
   $kind: 'Unary';
   span: TextSpan;
   operation: UnaryOperator;
-  expression: IsLeftHandSide;
+  expression: IsUnary;
   pos: 0 | 1; // 0: prefix, 1: suffix
 }
 
@@ -585,19 +591,6 @@ export interface TaggedTemplateExpression {
   expressions: IsAssign[];
 }
 
-export interface ArrayBindingPattern {
-  $kind: 'ArrayBindingPattern';
-  span: TextSpan;
-  elements: IsAssign[];
-}
-
-export interface ObjectBindingPattern {
-  $kind: 'ObjectBindingPattern';
-  span: TextSpan;
-  keys: (string | number)[];
-  values: IsAssign[];
-}
-
 export interface BindingIdentifier {
   $kind: 'BindingIdentifier';
   span: TextSpan;
@@ -608,7 +601,7 @@ export interface BindingIdentifier {
 export interface ForOfStatement {
   $kind: 'ForOfStatement';
   span: TextSpan;
-  declaration: BindingIdentifierOrPattern | DestructuringAssignmentExpression;
+  declaration: BindingIdentifierOrPattern;
   iterable: IsBindingBehavior;
   semiIdx: number;
 }
@@ -621,34 +614,42 @@ export interface Interpolation {
   expressions: IsBindingBehavior[];
 }
 
+export interface BindingPatternDefault {
+  $kind: 'BindingPatternDefault';
+  span: TextSpan;
+  target: BindingPattern;
+  default: IsAssign;
+}
+
+export interface BindingPatternHole {
+  $kind: 'BindingPatternHole';
+  span: TextSpan;
+}
+
+export interface ArrayBindingPattern {
+  $kind: 'ArrayBindingPattern';
+  span: TextSpan;
+  elements: BindingPattern[];
+  rest?: BindingPattern | null;
+}
+
+export interface ObjectBindingPatternProperty {
+  key: string | number;
+  value: BindingPattern;
+}
+
+export interface ObjectBindingPattern {
+  $kind: 'ObjectBindingPattern';
+  span: TextSpan;
+  properties: ObjectBindingPatternProperty[];
+  rest?: BindingPattern | null;
+}
+
 export interface DestructuringAssignmentExpression {
-  $kind: 'ArrayDestructuring' | 'ObjectDestructuring';
+  $kind: 'DestructuringAssignment';
   span: TextSpan;
-  list: DestructuringAssignmentNode[];
-  source?: AccessMemberExpression | AccessKeyedExpression;
-  initializer?: IsBindingBehavior;
-}
-
-export type DestructuringAssignmentNode =
-  | DestructuringAssignmentExpression
-  | DestructuringAssignmentSingleExpression
-  | DestructuringAssignmentRestExpression;
-
-export interface DestructuringAssignmentSingleExpression {
-  $kind: 'DestructuringAssignmentLeaf';
-  leafKind: 'single';
-  span: TextSpan;
-  target: AccessMemberExpression;
-  source: AccessMemberExpression | AccessKeyedExpression;
-  initializer?: IsBindingBehavior;
-}
-
-export interface DestructuringAssignmentRestExpression {
-  $kind: 'DestructuringAssignmentLeaf';
-  leafKind: 'rest';
-  span: TextSpan;
-  target: AccessMemberExpression;
-  indexOrProperties: string[] | number;
+  pattern: BindingPattern;
+  source: IsAssign;
 }
 
 export interface ArrowFunction {

@@ -24,8 +24,6 @@ import type {
   IsBindingBehavior,
   ForOfStatement,
   BindingIdentifierOrPattern,
-  BindingIdentifier,
-  DestructuringAssignmentExpression,
   IsAssign,
   IsLeftHandSide,
   BindingBehaviorExpression,
@@ -51,9 +49,10 @@ import type {
   TemplateExpression,
   TaggedTemplateExpression,
   ArrowFunction,
-  DestructuringAssignmentRestExpression,
   ExprTableEntry,
 } from "../../model/ir.js";
+
+function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
 /* ===================================================================================== */
 /* Public API                                                                             */
@@ -267,76 +266,58 @@ function buildFrameAnalysis(
 }
 
 /**
- * Compute name → type for repeat locals based on the header declaration.
+ * Compute name -> type for repeat locals based on the header declaration.
  *
  * Supported shapes:
- *   - BindingIdentifier('item')           → item: elemT
- *   - ArrayDestructuring([...])           → leaves in order: TupleElement<elemT, 0>, TupleElement<elemT, 1>, ...
- *   - ObjectDestructuring({...})          → leaf maps to elemT['prop'] (or numeric index)
+ *   - BindingIdentifier('item')           -> item: elemT
+ *   - ArrayBindingPattern([...])          -> leaves in order: TupleElement<elemT, 0>, TupleElement<elemT, 1>, ...
+ *   - ObjectBindingPattern({...})         -> leaf maps to elemT['prop']
  */
+
 function projectRepeatLocals(forOf: ForOfStatement | undefined, elemT: string): Map<string, string> {
   const out = new Map<string, string>();
   if (!forOf) return out;
-  const decl = forOf.declaration as BindingIdentifierOrPattern | DestructuringAssignmentExpression;
-  switch (decl.$kind) {
+  projectPatternTypes(forOf.declaration, elemT, out);
+  return out;
+}
+
+function projectPatternTypes(pattern: BindingIdentifierOrPattern, baseType: string, out: Map<string, string>): void {
+  switch (pattern.$kind) {
     case "BindingIdentifier": {
-      const name = (decl as BindingIdentifier).name;
-      if (name) out.set(name, wrap(elemT));
-      return out;
+      const name = pattern.name;
+      if (name) out.set(name, wrap(baseType));
+      return;
     }
-    case "ArrayDestructuring":
-    case "ObjectDestructuring": {
-      projectFromDestructuring(decl as DestructuringAssignmentExpression, elemT, out);
-      return out;
-    }
-    default:
-      return out;
-  }
-}
-
-function projectFromDestructuring(node: DestructuringAssignmentExpression, elemT: string, out: Map<string, string>): void {
-  if (node.$kind === "ArrayDestructuring") {
-    // Assign consecutive indices to leaf targets.
-    let i = 0;
-    for (const entry of node.list) {
-      if (entry.$kind === "DestructuringAssignmentLeaf") {
-        const name = entry.target.name;         // AccessMemberExpression.name
-        if (name) out.set(name, tupleIndexType(elemT, i));
-        i++;
-      } else {
-        // For nested patterns, just advance the index for now
+    case "BindingPatternDefault":
+      projectPatternTypes(pattern.target, baseType, out);
+      return;
+    case "BindingPatternHole":
+      return;
+    case "ArrayBindingPattern": {
+      let i = 0;
+      for (const el of pattern.elements) {
+        projectPatternTypes(el, tupleIndexType(baseType, i), out);
         i++;
       }
-    }
-    return;
-  }
-  if (node.$kind === "ObjectDestructuring") {
-    // Use first property or numeric index when available.
-    for (const entry of node.list) {
-      if (entry.$kind !== "DestructuringAssignmentLeaf") continue;
-      const name = entry.target.name;
-      if (!name) continue;
-      const props = (entry as DestructuringAssignmentRestExpression).indexOrProperties;
-      if (typeof props === "number") {
-        out.set(name, indexType(elemT, [String(props)]));
-      } else if (Array.isArray(props) && props.length > 0) {
-        out.set(name, indexType(elemT, [String(props[0]!)]));
-      } else {
-        out.set(name, wrap(elemT));
+      if (pattern.rest) {
+        const restType = `Array<${tupleIndexType(baseType, i)}>`;
+        projectPatternTypes(pattern.rest, restType, out);
       }
+      return;
     }
-  }
-}
-
-/** Extract a local identifier name from a binding pattern value. */
-function nameFromPatternValue(v: IsAssign): string | null {
-  switch (v.$kind) {
-    case "AccessScope":
-      return v.name || null;
-    case "Assign":
-      return v.target.$kind === "AccessScope" ? v.target.name : null;
+    case "ObjectBindingPattern": {
+      for (const prop of pattern.properties) {
+        projectPatternTypes(prop.value, indexType(baseType, [String(prop.key)]), out);
+      }
+      if (pattern.rest) {
+        const keys = pattern.properties.map(p => `'${escapeKey(String(p.key))}'`).join(" | ") || "never";
+        const restType = `Omit<${wrap(baseType)}, ${keys}>`;
+        projectPatternTypes(pattern.rest, restType, out);
+      }
+      return;
+    }
     default:
-      return null;
+      return assertUnreachable(pattern as never);
   }
 }
 
@@ -569,7 +550,7 @@ function binary(n: BinaryExpression): string | null {
 }
 
 function unary(n: UnaryExpression): string | null {
-  const e = printLeft(n.expression);
+  const e = printIsBindingBehavior(n.expression as unknown as IsBindingBehavior);
   if (!e) return null;
   return n.pos === 0 ? `${n.operation}${e}` : `${e}${n.operation}`;
 }

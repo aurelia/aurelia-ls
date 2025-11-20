@@ -14,11 +14,7 @@ import type {
   ForOfStatement,
   BindingIdentifierOrPattern,
   DestructuringAssignmentExpression,
-  DestructuringAssignmentSingleExpression,
-  DestructuringAssignmentRestExpression,
-  IsAssign,
   BadExpression,
-  BindingIdentifier,
 } from "../../model/ir.js";
 
 import type {
@@ -389,57 +385,31 @@ function idOf(e: ExprRef): ExprId { return e.id; }
 function bindingNamesFromDeclaration(
   decl: BindingIdentifierOrPattern | DestructuringAssignmentExpression,
 ): string[] {
-  switch (decl.$kind) {
-    case "BindingIdentifier":
-      return [decl.name];
-
-    case "ArrayBindingPattern":
-      // Elements are parsed under etNone → IsAssign (AccessScope | Assign | ...)
-      return decl.elements.flatMap(bindingNamesFromPatternValue);
-
-    case "ObjectBindingPattern":
-      // Keys are irrelevant here; values carry the local names or defaulted locals
-      return decl.values.flatMap(bindingNamesFromPatternValue);
-
-    case "ArrayDestructuring":
-    case "ObjectDestructuring":
-      return namesFromDestructuringAssignment(decl);
-
-    default:
-      return assertUnreachable(decl as never);
+  if (decl.$kind === "DestructuringAssignment") {
+    return bindingNamesFromPattern(decl.pattern);
   }
+  return bindingNamesFromPattern(decl);
 }
 
-/** Extract a local from a single pattern slot (array/object value). */
-function bindingNamesFromPatternValue(v: IsAssign | BindingIdentifier): string[] {
-  switch (v.$kind) {
+function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] {
+  switch (pattern.$kind) {
     case "BindingIdentifier":
-    case "AccessScope": {
-      const name = v.name;
-      return name ? [name] : [];
-    }
-    case "Assign": {
-      const a = v;
-      return a.target.$kind === "AccessScope" ? [a.target.name] : [];
-    }
-    // Other IsAssign cases (literals, calls, etc.) do not introduce names
-    default:
+      return pattern.name ? [pattern.name] : [];
+    case "BindingPatternDefault":
+      return bindingNamesFromPattern(pattern.target);
+    case "BindingPatternHole":
       return [];
-  }
-}
-
-/** Flatten nested destructuring assignment lists into target names. */
-function namesFromDestructuringAssignment(
-  node: DestructuringAssignmentExpression | DestructuringAssignmentSingleExpression | DestructuringAssignmentRestExpression,
-): string[] {
-  switch (node.$kind) {
-    case "ArrayDestructuring":
-    case "ObjectDestructuring":
-      return node.list.flatMap(namesFromDestructuringAssignment);
-    case "DestructuringAssignmentLeaf":
-      // Both Single/Rest leaves share this $kind; target is AccessMemberExpression(name)
-      return [node.target.name];
+    case "ArrayBindingPattern": {
+      const names = pattern.elements.flatMap(bindingNamesFromPattern);
+      if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
+      return names;
+    }
+    case "ObjectBindingPattern": {
+      const names = pattern.properties.flatMap(p => bindingNamesFromPattern(p.value));
+      if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
+      return names;
+    }
     default:
-      return assertUnreachable(node as never);
+      return assertUnreachable(pattern as never);
   }
 }

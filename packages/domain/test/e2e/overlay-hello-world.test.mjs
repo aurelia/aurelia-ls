@@ -29,7 +29,8 @@ test("E2E: generates overlay and TS reports property-not-found", () => {
 
   // Sanity: one expression, one call
   assert.equal(result.calls.length, 1, "should collect exactly one expression");
-  assert.match(result.text, /__au\$access<__AU_TTC_T0_F0>\(o => o\.sdf\)/);
+  assert.match(result.text, /type __AU_TTC_[A-Za-z0-9_]*T0_F0 =/);
+  assert.match(result.text, /__au\$access<[^>]+>\(o => o\.sdf\)/);
 
   // Program in memory: prelude + overlay only
   const files = {
