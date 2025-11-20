@@ -17,6 +17,7 @@ import type {
   DestructuringAssignmentSingleExpression,
   DestructuringAssignmentRestExpression,
   IsAssign,
+  BadExpression,
 } from "../../model/ir.js";
 
 import type {
@@ -40,9 +41,13 @@ export function bindScopes(linked: LinkedSemanticsModule): ScopeModule {
   const diags: ScopeDiagnostic[] = [];
   const templates: ScopeTemplate[] = [];
 
-  // Index ForOf entries once (exprTable is opaque upstream by design)
-  type ForOfExprEntry = { id: ExprId; astKind: "ForOfStatement"; ast: ForOfStatement };
-  const forOfIndex = indexForOf(linked.exprTable as readonly ForOfExprEntry[] | undefined);
+  // Index ForOf entries once
+  const forOfIndex = new Map<ExprId, ForOfStatement | BadExpression>();
+  for (const e of linked.exprTable ?? []) {
+    if (e.expressionType === 'IsIterator') {
+      forOfIndex.set(e.id, e.ast);
+    }
+  }
 
   // Map raw TemplateIR roots → LinkedTemplate (identity preserved by resolve-host)
   const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
@@ -66,7 +71,7 @@ function buildTemplateScopes(
   t: LinkedTemplate,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
-  forOfIndex: ReadonlyMap<ExprId, ForOfStatement>,
+  forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
 ): ScopeTemplate {
   const frames: ScopeFrame[] = [];
   const exprToFrame: Record<string /* ExprId */, FrameId> = Object.create(null);
@@ -96,7 +101,7 @@ function walkRows(
   exprToFrame: Record<string, FrameId>,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
-  forOfIndex: ReadonlyMap<ExprId, ForOfStatement>,
+  forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
   allowLets: boolean,
 ): void {
   for (const r of rows) {
@@ -179,6 +184,14 @@ function walkRows(
 
               // locals/contextuals
               const forOfAst = forOfIndex.get(forOfAstId)!;
+              if (forOfAst.$kind === 'BadExpression') {
+                diags.push({
+                  code: "AU1201",
+                  message: forOfAst.message ?? "Invalid or unsupported repeat header (could not parse iterator).",
+                  span: forOfAst.span
+                })
+                break;
+              }
               const names = bindingNamesFromDeclaration(forOfAst.declaration);
               addUniqueSymbols(
                 nextFrame,
@@ -427,16 +440,4 @@ function namesFromDestructuringAssignment(
     default:
       return assertUnreachable(node as never);
   }
-}
-
-/* =============================================================================
- * Expr table indexing (ForOf entries only)
- * ============================================================================= */
-
-function indexForOf(table: readonly { id: ExprId; astKind: "ForOfStatement"; ast: ForOfStatement }[] | undefined):
-  ReadonlyMap<ExprId, ForOfStatement> {
-  const m = new Map<ExprId, ForOfStatement>();
-  if (!table) return m;
-  for (const e of table) m.set(e.id, e.ast);
-  return m;
 }

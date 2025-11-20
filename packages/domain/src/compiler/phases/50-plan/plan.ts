@@ -51,17 +51,8 @@ import type {
   TaggedTemplateExpression,
   ArrowFunction,
   DestructuringAssignmentRestExpression,
+  ExprTableEntry,
 } from "../../model/ir.js";
-
-function assertUnreachable(_: never): never { throw new Error("unreachable"); }
-
-/* ===================================================================================== */
-/* Expr-table slice used by Plan                                                          */
-/* ===================================================================================== */
-
-type ExprTableEntry =
-  | { id: ExprId; expressionType: "IsBindingBehavior"; ast: IsBindingBehavior }
-  | { id: ExprId; expressionType: "ForOfStatement";    ast: ForOfStatement };
 
 /* ===================================================================================== */
 /* Public API                                                                             */
@@ -194,19 +185,21 @@ function buildFrameAnalysis(
     // ---- Origin typing (repeat / with / promise) ----
     if (f.origin?.kind === "repeat") {
       const forOfAst = exprIndex.get(f.origin.forOfAstId);
-      if (forOfAst && forOfAst.expressionType === "ForOfStatement") {
+      if (forOfAst?.expressionType === "IsIterator") {
+        // TODO: handle this properly with a diag
+        if (forOfAst.ast.$kind === "BadExpression") throw new Error(forOfAst.ast.message);
         // Header evaluates in the *outer* frame
         const iterType = evalTypeInFrame(f.parent ?? f.id, forOfAst.ast.iterable);
         h.repeatIterable = iterType;
       }
     } else if (f.origin?.kind === "with") {
       const e = exprIndex.get(f.origin.valueExprId);
-      if (e && e.expressionType === "IsBindingBehavior") {
+      if (e?.expressionType === "IsProperty") {
         h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
       }
     } else if (f.origin?.kind === "promise") {
       const e = exprIndex.get(f.origin.valueExprId);
-      if (e && e.expressionType === "IsBindingBehavior") {
+      if (e?.expressionType === "IsProperty") {
         h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
         h.promiseBranch = f.origin.branch!;
       }
@@ -256,7 +249,7 @@ function buildFrameAnalysis(
     if (f.letValueExprs) {
       for (const [name, id] of Object.entries(f.letValueExprs)) {
         const entry = exprIndex.get(id);
-        if (entry && entry.expressionType === "IsBindingBehavior") {
+        if (entry?.expressionType === "IsProperty") {
           // Use the in-construction env so let values can reference locals in the same frame
           const t = evalTypeInFrame(f.id, entry.ast, env as Env);
           env.set(name, t);
@@ -437,11 +430,11 @@ function collectOneLambdaPerExpression(
     if (!entry) continue;
 
     switch (entry.expressionType) {
-      case "ForOfStatement":
+      case "IsIterator":
         // headers are mapped for scope only; no overlay lambda
         break;
 
-      case "IsBindingBehavior": {
+      case "IsProperty": {
         const expr = renderExpressionFromAst(entry.ast);
         if (expr) out.push(`o => ${expr}`);
         break;

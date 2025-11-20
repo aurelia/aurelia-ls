@@ -112,7 +112,7 @@ describe("Bind (30)", () => {
  *   * id 0/root → "root"
  *   * overlays (any kind) → "overlay:<kind>@<N>" where N increments
  *     globally per overlay appearance order (not per kind)
- * - "forOfHeader" uses exprTable.astKind === "ForOfStatement"
+ * - "forOfHeader" uses exprTable.expressionType === "IsIterator"
  */
 
 export function reduceScopeToBindIntent({ ir, linked, scope }) {
@@ -144,7 +144,7 @@ export function reduceScopeToBindIntent({ ir, linked, scope }) {
   // ---- Expressions: map ExprId → (frame,label) + classify header vs normal --
   const forOfIds = new Set(
     (ir.exprTable ?? [])
-      .filter(e => e.astKind === "ForOfStatement")
+      .filter(e => e.expressionType === "IsIterator")
       .map(e => e.id)
   );
 
