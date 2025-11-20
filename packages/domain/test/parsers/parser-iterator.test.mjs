@@ -132,6 +132,53 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     assert.equal(decl.rest?.name, "rest");
   });
 
+  test("[] of items is accepted and produces an empty array pattern", () => {
+    const ast = parseIterator("[] of items");
+    assert.equal(ast.$kind, "ForOfStatement");
+    assert.equal(ast.declaration.$kind, "ArrayBindingPattern");
+    assert.equal(ast.declaration.elements.length, 0);
+    assert.equal(ast.declaration.rest, null);
+  });
+
+  test("[a,] of items allows a trailing comma", () => {
+    const ast = parseIterator("[a,] of items");
+    assert.equal(ast.$kind, "ForOfStatement");
+    assert.equal(ast.declaration.$kind, "ArrayBindingPattern");
+    assert.equal(ast.declaration.elements.length, 1);
+    assert.equal(ast.declaration.elements[0].$kind, "BindingIdentifier");
+    assert.equal(ast.declaration.elements[0].name, "a");
+  });
+
+  test("{} of items is accepted and produces an empty object pattern", () => {
+    const ast = parseIterator("{} of items");
+    assert.equal(ast.$kind, "ForOfStatement");
+    const decl = ast.declaration;
+    assert.equal(decl.$kind, "ObjectBindingPattern");
+    assert.equal(decl.properties.length, 0);
+    assert.equal(decl.rest, null);
+  });
+
+  test("array pattern rest must be followed by closing bracket", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("[...rest a] of items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ']' after array pattern rest element");
+  });
+
+  test("object pattern rest must be followed by closing brace", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("{ ...rest a } of items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected '}' after object pattern rest element");
+  });
+
+  test("object pattern shorthand requires identifier keys", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("{ 'notId' } of items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Object binding pattern shorthand requires an identifier key");
+  });
+
   test("missing 'of' is rejected", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("item items", "IsIterator");
@@ -166,5 +213,25 @@ describe("lsp-expression-parser / IsIterator (ForOfStatement)", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("{ ...rest, a } of items", "IsIterator");
     assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("invalid identifier 'import' in lhs is rejected", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("import of items", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("empty iterator header is rejected", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("", "IsIterator");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Empty iterator header");
+  });
+
+  test("iterator header allows content after semicolon (semiIdx recorded)", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("item of items; key: id", "IsIterator");
+    assert.equal(ast.$kind, "ForOfStatement");
+    assert.equal(ast.semiIdx >= 0, true);
   });
 });

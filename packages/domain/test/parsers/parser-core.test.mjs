@@ -241,6 +241,33 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
   });
 
+  test("unary: +x", () => {
+    const src = "+x";
+    const ast = parseInBothModes(src);
+
+    assert.equal(ast.$kind, "Unary");
+    assert.equal(ast.operation, "+");
+    assert.equal(ast.pos, 0);
+    assert.equal(ast.expression.$kind, "AccessScope");
+    assert.equal(ast.expression.name, "x");
+  });
+
+  test("unary: typeof foo", () => {
+    const ast = parseInBothModes("typeof foo");
+    assert.equal(ast.$kind, "Unary");
+    assert.equal(ast.operation, "typeof");
+    assert.equal(ast.expression.$kind, "AccessScope");
+    assert.equal(ast.expression.name, "foo");
+  });
+
+  test("unary: void foo", () => {
+    const ast = parseInBothModes("void foo");
+    assert.equal(ast.$kind, "Unary");
+    assert.equal(ast.operation, "void");
+    assert.equal(ast.expression.$kind, "AccessScope");
+    assert.equal(ast.expression.name, "foo");
+  });
+
   test("unary prefix: ++i", () => {
     const src = "++i";
     const ast = parseInBothModes(src);
@@ -370,6 +397,62 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
   });
 
+  test("binary: other comparisons and equality operators", () => {
+    const eq = parseInBothModes("a === b");
+    assert.equal(eq.$kind, "Binary");
+    assert.equal(eq.operation, "===");
+
+    const neq = parseInBothModes("a !== b");
+    assert.equal(neq.$kind, "Binary");
+    assert.equal(neq.operation, "!==");
+
+    const looseEq = parseInBothModes("a == b");
+    assert.equal(looseEq.$kind, "Binary");
+    assert.equal(looseEq.operation, "==");
+
+    const looseNeq = parseInBothModes("a != b");
+    assert.equal(looseNeq.$kind, "Binary");
+    assert.equal(looseNeq.operation, "!=");
+
+    const lt = parseInBothModes("a < b");
+    assert.equal(lt.$kind, "Binary");
+    assert.equal(lt.operation, "<");
+
+    const lte = parseInBothModes("a <= b");
+    assert.equal(lte.$kind, "Binary");
+    assert.equal(lte.operation, "<=");
+
+    const gt = parseInBothModes("a > b");
+    assert.equal(gt.$kind, "Binary");
+    assert.equal(gt.operation, ">");
+  });
+
+  test("binary: arithmetic and misc operators", () => {
+    const mod = parseInBothModes("a % b");
+    assert.equal(mod.$kind, "Binary");
+    assert.equal(mod.operation, "%");
+
+    const div = parseInBothModes("a / b");
+    assert.equal(div.$kind, "Binary");
+    assert.equal(div.operation, "/");
+
+    const sub = parseInBothModes("a - b");
+    assert.equal(sub.$kind, "Binary");
+    assert.equal(sub.operation, "-");
+
+    const pow = parseInBothModes("a ** b");
+    assert.equal(pow.$kind, "Binary");
+    assert.equal(pow.operation, "**");
+
+    const inst = parseInBothModes("a instanceof b");
+    assert.equal(inst.$kind, "Binary");
+    assert.equal(inst.operation, "instanceof");
+
+    const inOp = parseInBothModes("a in b");
+    assert.equal(inOp.$kind, "Binary");
+    assert.equal(inOp.operation, "in");
+  });
+
   test("binary precedence with parentheses: (1 + 2) * 3", () => {
     const src = "(1 + 2) * 3";
     const ast = parseInBothModes(src);
@@ -446,6 +529,24 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(ast.value.name, "b");
 
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
+  });
+
+  test("compound assignment: a -= b", () => {
+    const ast = parseInBothModes("a -= b");
+    assert.equal(ast.$kind, "Assign");
+    assert.equal(ast.op, "-=");
+  });
+
+  test("compound assignment: a *= b", () => {
+    const ast = parseInBothModes("a *= b");
+    assert.equal(ast.$kind, "Assign");
+    assert.equal(ast.op, "*=");
+  });
+
+  test("compound assignment: a /= b", () => {
+    const ast = parseInBothModes("a /= b");
+    assert.equal(ast.$kind, "Assign");
+    assert.equal(ast.op, "/=");
   });
 
   test("compound assignment: a += b", () => {
@@ -796,5 +897,321 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   test("missing arrow body yields BadExpression", () => {
     const ast = parseInBothModes("x =>");
     assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("invalid arrow head with non-identifier param yields BadExpression", () => {
+    const ast = parseInBothModes("(1) => x");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("rest parameter not last in arrow list yields BadExpression", () => {
+    const ast = parseInBothModes("(...rest, a) => x");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("optional chain cannot be followed by tagged template", () => {
+    const ast = parseInBothModes("foo?.`bar`");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("optional keyed access missing closing bracket yields BadExpression", () => {
+    const ast = parseInBothModes("foo?.[bar");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("converter arg separator without arg yields BadExpression", () => {
+    const ast = parseInBothModes("value | conv:");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("behavior arg separator without arg yields BadExpression", () => {
+    const ast = parseInBothModes("value & beh:");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("converter name must be an identifier", () => {
+    const ast = parseInBothModes("value | 123");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("behavior name must be an identifier", () => {
+    const ast = parseInBothModes("value & 123");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("parse with unknown expression type yields BadExpression", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("foo", "None");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("empty expression yields BadExpression", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("", "IsProperty");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("bare 'import' is rejected", () => {
+    const ast = parseInBothModes("import");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("missing closing bracket in indexed access yields BadExpression", () => {
+    const ast = parseInBothModes("foo[bar");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("missing closing paren in call yields BadExpression", () => {
+    const ast = parseInBothModes("foo(bar");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("object literal with invalid key yields BadExpression", () => {
+    const ast = parseInBothModes("{ []: 1 }");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("array literal missing closing bracket yields BadExpression", () => {
+    const ast = parseInBothModes("[1, 2");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("paren expression followed by => yields BadExpression (not an arrow head)", () => {
+    const ast = parseInBothModes("(a + b) => c");
+    assert.equal(ast.$kind, "BadExpression");
+  });
+
+  test("complex optional chain with tails parses", () => {
+    const src = "user?.profile?.getName()?.toUpperCase() | upper:'en' & throttle:100";
+    const ast = parseInBothModes(src);
+    assert.equal(ast.$kind, "BindingBehavior");
+    assert.equal(ast.name, "throttle");
+    assert.equal(ast.args.length, 1);
+
+    const vc = ast.expression;
+    assert.equal(vc.$kind, "ValueConverter");
+    assert.equal(vc.name, "upper");
+    assert.equal(vc.args.length, 1);
+
+    const call = vc.expression;
+    assert.equal(call.$kind, "CallMember");
+    assert.equal(call.name, "toUpperCase");
+    assert.equal(call.optionalCall, false);
+    assert.equal(call.optionalMember, true);
+
+    const innerCall = call.object;
+    assert.equal(innerCall.$kind, "CallMember");
+    assert.equal(innerCall.optionalCall, false);
+    assert.equal(innerCall.optionalMember, true);
+
+    const member = innerCall.object;
+    assert.equal(member.$kind, "AccessMember");
+    assert.equal(member.name, "profile");
+    assert.equal(member.optional, true);
+  });
+
+  test("optional call on member with optional member flag persists", () => {
+    const src = "user?.getName?.()";
+    const ast = parseInBothModes(src);
+    assert.equal(ast.$kind, "CallMember");
+    assert.equal(ast.optionalMember, true);
+    assert.equal(ast.optionalCall, true);
+    assert.equal(ast.name, "getName");
+    assert.equal(ast.object.$kind, "AccessScope");
+    assert.equal(ast.object.name, "user");
+  });
+
+  test("tuple-like nested optional chaining renders correctly", () => {
+    const src = "a?.[b?.c]?.(d?.e)";
+    const ast = parseInBothModes(src);
+    assert.equal(ast.$kind, "CallFunction");
+    assert.equal(ast.optional, true);
+    const keyed = ast.func;
+    assert.equal(keyed.$kind, "AccessKeyed");
+    assert.equal(keyed.optional, true);
+    assert.equal(keyed.key.$kind, "AccessMember");
+    assert.equal(keyed.key.optional, true);
+    const member = keyed.key;
+    assert.equal(member.$kind, "AccessMember");
+    assert.equal(member.name, "c");
+    assert.equal(member.object.$kind, "AccessScope");
+    assert.equal(member.object.name, "b");
+  });
+
+  test("value converter with multiple args parses", () => {
+    const src = "value | conv:1:two:true";
+    const ast = parseInBothModes(src);
+    assert.equal(ast.$kind, "ValueConverter");
+    assert.equal(ast.args.length, 3);
+    assert.equal(ast.args[0].$kind, "PrimitiveLiteral");
+    assert.equal(ast.args[1].$kind, "AccessScope");
+    assert.equal(ast.args[1].name, "two");
+    assert.equal(ast.args[2].$kind, "PrimitiveLiteral");
+    assert.equal(ast.expression.$kind, "AccessScope");
+    assert.equal(ast.expression.name, "value");
+  });
+
+  test("trailing tokens after a valid expression return BadExpression", () => {
+    const ast = parseInBothModes("foo bar");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Unexpected token after end of expression");
+  });
+
+  test("new expression without args parses", () => {
+    const ast = parseInBothModes("new Foo");
+    assert.equal(ast.$kind, "New");
+    assert.equal(ast.args.length, 0);
+    assert.equal(ast.func.$kind, "AccessScope");
+    assert.equal(ast.func.name, "Foo");
+  });
+
+  test("new expression with member and args parses", () => {
+    const ast = parseInBothModes("new foo.bar(1, baz)");
+    assert.equal(ast.$kind, "New");
+    assert.equal(ast.args.length, 0);
+    assert.equal(ast.func.$kind, "CallMember");
+    assert.equal(ast.func.object.$kind, "AccessScope");
+    assert.equal(ast.func.object.name, "foo");
+    assert.equal(ast.func.name, "bar");
+    assert.equal(ast.func.optionalMember, false);
+    assert.equal(ast.func.optionalCall, false);
+    assert.equal(ast.func.args.length, 2);
+    assert.equal(ast.func.args[0].$kind, "PrimitiveLiteral");
+    assert.equal(ast.func.args[0].value, 1);
+    assert.equal(ast.func.args[1].$kind, "AccessScope");
+    assert.equal(ast.func.args[1].name, "baz");
+  });
+
+  test("member access without identifier yields BadExpression", () => {
+    const ast = parseInBothModes("foo.");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected identifier after '.'");
+  });
+
+  test("non-optional keyed access sets optional to false", () => {
+    const ast = parseInBothModes("items[index]");
+    assert.equal(ast.$kind, "AccessKeyed");
+    assert.equal(ast.optional, false);
+    assert.equal(ast.object.$kind, "AccessScope");
+    assert.equal(ast.object.name, "items");
+    assert.equal(ast.key.$kind, "AccessScope");
+    assert.equal(ast.key.name, "index");
+  });
+
+  test("parenthesized callee produces CallFunction with inner expression intact", () => {
+    const ast = parseInBothModes("(foo + bar)(baz)");
+    assert.equal(ast.$kind, "CallFunction");
+    assert.equal(ast.optional, false);
+    assert.equal(ast.func.$kind, "Paren");
+    assert.equal(ast.func.expression.$kind, "Binary");
+    assert.equal(ast.func.expression.operation, "+");
+    assert.equal(ast.func.expression.left.$kind, "AccessScope");
+    assert.equal(ast.func.expression.left.name, "foo");
+    assert.equal(ast.func.expression.right.$kind, "AccessScope");
+    assert.equal(ast.func.expression.right.name, "bar");
+    assert.equal(ast.args.length, 1);
+    assert.equal(ast.args[0].$kind, "AccessScope");
+    assert.equal(ast.args[0].name, "baz");
+  });
+
+  test("trailing comma in call arguments is allowed", () => {
+    const ast = parseInBothModes("fn(a,)");
+    assert.equal(ast.$kind, "CallScope");
+    assert.equal(ast.args.length, 1);
+    assert.equal(ast.args[0].$kind, "AccessScope");
+    assert.equal(ast.args[0].name, "a");
+  });
+
+  test("missing closing paren in grouped expression yields BadExpression", () => {
+    const ast = parseInBothModes("(foo");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ')' to close parenthesized expression");
+  });
+
+  test("$this. without identifier yields BadExpression", () => {
+    const ast = parseInBothModes("$this.");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected identifier after '$this.'");
+  });
+
+  test("$parent. without identifier yields BadExpression", () => {
+    const ast = parseInBothModes("$parent.");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected identifier after '$parent.'");
+  });
+
+  test("array literal variants preserve holes and trailing commas", () => {
+    const empty = parseInBothModes("[]");
+    assert.equal(empty.$kind, "ArrayLiteral");
+    assert.equal(empty.elements.length, 0);
+
+    const single = parseInBothModes("[1]");
+    assert.equal(single.$kind, "ArrayLiteral");
+    assert.equal(single.elements.length, 1);
+    assert.equal(single.elements[0].$kind, "PrimitiveLiteral");
+    assert.equal(single.elements[0].value, 1);
+
+    const holes = parseInBothModes("[, ,]");
+    assert.equal(holes.$kind, "ArrayLiteral");
+    assert.equal(holes.elements.length, 2);
+    assert.equal(holes.elements[0].$kind, "PrimitiveLiteral");
+    assert.equal(holes.elements[0].value, undefined);
+    assert.equal(holes.elements[1].$kind, "PrimitiveLiteral");
+    assert.equal(holes.elements[1].value, undefined);
+
+    const trailing = parseInBothModes("[1,]");
+    assert.equal(trailing.$kind, "ArrayLiteral");
+    assert.equal(trailing.elements.length, 1);
+    assert.equal(trailing.elements[0].$kind, "PrimitiveLiteral");
+    assert.equal(trailing.elements[0].value, 1);
+  });
+
+  test("object literal with mixed keys and trailing comma parses", () => {
+    const ast = parseInBothModes("{foo: bar, 1: two, 'three': 3,}");
+    assert.equal(ast.$kind, "ObjectLiteral");
+    assert.deepEqual(ast.keys, ["foo", 1, "three"]);
+    assert.equal(ast.values.length, 3);
+    assert.equal(ast.values[0].$kind, "AccessScope");
+    assert.equal(ast.values[0].name, "bar");
+    assert.equal(ast.values[1].$kind, "AccessScope");
+    assert.equal(ast.values[1].name, "two");
+    assert.equal(ast.values[2].$kind, "PrimitiveLiteral");
+    assert.equal(ast.values[2].value, 3);
+  });
+
+  test("object literal without trailing comma parses", () => {
+    const ast = parseInBothModes("{foo: bar}");
+    assert.equal(ast.$kind, "ObjectLiteral");
+    assert.deepEqual(ast.keys, ["foo"]);
+    assert.equal(ast.values.length, 1);
+    assert.equal(ast.values[0].$kind, "AccessScope");
+    assert.equal(ast.values[0].name, "bar");
+  });
+
+  test("empty object literal parses", () => {
+    const ast = parseInBothModes("{}");
+    assert.equal(ast.$kind, "ObjectLiteral");
+    assert.equal(ast.keys.length, 0);
+    assert.equal(ast.values.length, 0);
+  });
+
+  test("missing colon after object literal key yields BadExpression", () => {
+    const ast = parseInBothModes("{foo 1}");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ':' after object literal key");
+  });
+
+  test("object literal requires comma between properties", () => {
+    const ast = parseInBothModes("{foo: 1 bar: 2}");
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.message, "Expected ',' or '}' in object literal");
+  });
+
+  test("IsCustom parsing returns a Custom expression", () => {
+    const parser = new LspExpressionParser();
+    const ast = parser.parse("raw content", "IsCustom");
+    assert.equal(ast.$kind, "Custom");
+    assert.equal(ast.value, "raw content");
+    assert.deepEqual(ast.span, { start: 0, end: "raw content".length });
   });
 });
