@@ -14,7 +14,15 @@ import * as ts from "typescript";
 import {
   compileTemplate, compileTemplateToSSR, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
 } from "@aurelia-ls/domain";
-import type { VmReflection, TemplateCompilation, TemplateMappingArtifact, TemplateMappingEntry, TemplateExpressionInfo } from "@aurelia-ls/domain";
+import type {
+  VmReflection,
+  TemplateCompilation,
+  TemplateMappingArtifact,
+  TemplateMappingEntry,
+  TemplateMappingSegment,
+  TemplateExpressionInfo,
+  CompilerDiagnostic,
+} from "@aurelia-ls/domain";
 
 /* ============================================================================
  * Logging (verbose)
@@ -211,6 +219,14 @@ function tsSeverityToLsp(cat: ts.DiagnosticCategory): DiagnosticSeverity {
   }
 }
 
+function compilerSeverityToLsp(sev: CompilerDiagnostic["severity"]): DiagnosticSeverity {
+  switch (sev) {
+    case "warning": return DiagnosticSeverity.Warning;
+    case "info": return DiagnosticSeverity.Information;
+    default: return DiagnosticSeverity.Error;
+  }
+}
+
 /** Force create the SourceFile inside Program, then return it. */
 function forceOverlaySourceFile(overlayPathCanon: string): ts.SourceFile | undefined {
   try {
@@ -322,23 +338,14 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
     return;
   }
 
-  const diags = ts.getPreEmitDiagnostics(program, sf);
-  log(`overlay diagnostics: ${diags.length}`);
+  const tsDiags = ts.getPreEmitDiagnostics(program, sf);
+  log(`overlay diagnostics: ${tsDiags.length}`);
 
-  const htmlDiags = [];
-  for (const d of diags) {
-    if (d.start == null || d.length == null) continue;
-    const start = d.start;
-    const call = overlay.calls.find((c) => start >= c.overlayStart && start <= c.overlayEnd);
-    if (!call) continue;
+  const compilerDiags = mapCompilerDiagnosticsToLsp(compilation, doc);
+  const badExprDiags = collectBadExpressionDiagnostics(compilation, doc);
+  const htmlDiags = [...compilerDiags, ...badExprDiags, ...mapTsDiagnosticsToLsp(compilation, tsDiags, doc)];
 
-    const range = spanToRange(doc, call.htmlSpan.start, call.htmlSpan.end);
-    const message = flattenTsMessage(d.messageText);
-    const severity = tsSeverityToLsp(d.category);
-    htmlDiags.push({ range, message, severity, source: "aurelia-ttc" });
-  }
-
-  log(`remapped diagnostics: ${htmlDiags.length}`);
+  log(`remapped diagnostics: ${htmlDiags.length} (compiler=${compilerDiags.length}, bad=${badExprDiags.length}, ts=${htmlDiags.length - compilerDiags.length - badExprDiags.length})`);
   connection.sendDiagnostics({ uri: doc.uri, diagnostics: htmlDiags });
 
   connection.sendNotification("aurelia/overlayReady", {
@@ -473,8 +480,38 @@ function getTextDocumentForUri(uri: string): TextDocument | null {
   return TextDocument.create(uri, "html", 0, content);
 }
 
-function findMappingEntryForHtmlOffset(mapping: TemplateMappingArtifact, htmlOffset: number): TemplateMappingEntry | null {
-  return mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end) ?? null;
+type MappingHit = { entry: TemplateMappingEntry; segment?: TemplateMappingSegment | null };
+
+function findMappingHitForHtmlOffset(mapping: TemplateMappingArtifact, htmlOffset: number): MappingHit | null {
+  let bestSegment: MappingHit | null = null;
+  for (const entry of mapping.entries) {
+    for (const seg of entry.segments ?? []) {
+      if (htmlOffset >= seg.htmlSpan.start && htmlOffset <= seg.htmlSpan.end) {
+        if (!bestSegment || spanSize(seg.htmlSpan) < spanSize(bestSegment.segment!.htmlSpan)) {
+          bestSegment = { entry, segment: seg };
+        }
+      }
+    }
+  }
+  if (bestSegment) return bestSegment;
+  const fallback = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
+  return fallback ? { entry: fallback, segment: null } : null;
+}
+
+function findMappingHitForOverlayOffset(mapping: TemplateMappingArtifact, overlayOffset: number): MappingHit | null {
+  for (const entry of mapping.entries) {
+    for (const seg of entry.segments ?? []) {
+      if (overlayOffset >= seg.overlaySpan[0] && overlayOffset <= seg.overlaySpan[1]) {
+        return { entry, segment: seg };
+      }
+    }
+  }
+  const fallback = mapping.entries.find((entry) => overlayOffset >= entry.overlayRange[0] && overlayOffset <= entry.overlayRange[1]);
+  return fallback ? { entry: fallback, segment: null } : null;
+}
+
+function spanSize(span: { start: number; end: number }): number {
+  return span.end - span.start;
 }
 
 function tsSpanToRange(fileName: string, start: number, length: number): { start: Position; end: Position } | null {
@@ -487,11 +524,14 @@ function tsSpanToRange(fileName: string, start: number, length: number): { start
 
 function mapHtmlPositionToOverlay(compilation: TemplateCompilation, doc: TextDocument, pos: Position): { overlayPath: string; offset: number } | null {
   const htmlOffset = doc.offsetAt(pos);
-  const hit = findMappingEntryForHtmlOffset(compilation.mapping, htmlOffset);
+  const hit = findMappingHitForHtmlOffset(compilation.mapping, htmlOffset);
   if (!hit) return null;
-  // TODO: refine overlay offset to exact expression span once mapping artifact is first-class
-  const overlayOffset = hit.overlayRange[0];
-  return { overlayPath: compilation.overlay.overlayPath, offset: overlayOffset };
+  if (hit.segment) {
+    const seg = hit.segment;
+    const delta = Math.min(seg.overlaySpan[1] - seg.overlaySpan[0], Math.max(0, htmlOffset - seg.htmlSpan.start));
+    return { overlayPath: compilation.overlay.overlayPath, offset: seg.overlaySpan[0] + delta };
+  }
+  return { overlayPath: compilation.overlay.overlayPath, offset: hit.entry.overlayRange[0] };
 }
 
 function mapOverlayLocationToHtml(doc: TextDocument, compilation: TemplateCompilation, file: string, start: number, length: number): Location | null {
@@ -503,10 +543,88 @@ function mapOverlayLocationToHtml(doc: TextDocument, compilation: TemplateCompil
     if (!range) return null;
     return { uri, range };
   }
-  const entry = compilation.mapping.entries.find((m) => start >= m.overlayRange[0] && start <= m.overlayRange[1]);
-  if (!entry) return null;
-  const range = spanToRange(doc, entry.htmlSpan.start, entry.htmlSpan.end);
+  const hit = findMappingHitForOverlayOffset(compilation.mapping, start);
+  if (!hit) return null;
+  if (hit.segment) {
+    const range = spanToRange(doc, hit.segment.htmlSpan.start, hit.segment.htmlSpan.end);
+    return { uri: doc.uri, range };
+  }
+  const range = spanToRange(doc, hit.entry.htmlSpan.start, hit.entry.htmlSpan.end);
   return { uri: doc.uri, range };
+}
+
+function mapCompilerDiagnosticsToLsp(compilation: TemplateCompilation, doc: TextDocument) {
+  const all = [
+    ...(compilation.linked?.diags ?? []),
+    ...(compilation.scope?.diags ?? []),
+    ...(compilation.typecheck?.diags ?? []),
+  ];
+  return all
+    .filter((d) => d.span?.start != null && d.span?.end != null)
+    .map((d) => {
+      const shrunk = shrinkSpanWithMapping(d.span!, compilation.mapping);
+      return {
+        range: spanToRange(doc, shrunk.start, shrunk.end),
+        message: d.message,
+        severity: compilerSeverityToLsp(d.severity),
+        code: d.code,
+        source: d.source,
+      };
+    });
+}
+
+function mapTsDiagnosticsToLsp(compilation: TemplateCompilation, tsDiags: readonly ts.Diagnostic[], doc: TextDocument) {
+  const htmlDiags = [];
+  for (const d of tsDiags) {
+    if (d.start == null || d.length == null) continue;
+    const hit = findMappingHitForOverlayOffset(compilation.mapping, d.start);
+    if (!hit) continue;
+    const htmlSpan = hit.segment ? hit.segment.htmlSpan : hit.entry.htmlSpan;
+    const range = spanToRange(doc, htmlSpan.start, htmlSpan.end);
+    const message = flattenTsMessage(d.messageText);
+    const severity = tsSeverityToLsp(d.category);
+    htmlDiags.push({ range, message, severity, source: "aurelia-ttc" });
+  }
+  return htmlDiags;
+}
+
+function collectBadExpressionDiagnostics(compilation: TemplateCompilation, doc: TextDocument) {
+  const diags = [];
+  const mapping = compilation.mapping;
+  const entriesByExpr = new Map<string, TemplateMappingEntry>();
+  for (const entry of mapping.entries) entriesByExpr.set(entry.exprId as string, entry);
+
+  for (const entry of compilation.ir?.exprTable ?? []) {
+    const ast: any = (entry as any).ast;
+    if (!ast || ast.$kind !== "BadExpression") continue;
+    const m = entriesByExpr.get(entry.id as string);
+    const span = m?.htmlSpan;
+    if (!span) continue;
+    const message = ast.message ? String(ast.message) : "Malformed expression";
+    diags.push({
+      range: spanToRange(doc, span.start, span.end),
+      message,
+      severity: DiagnosticSeverity.Error,
+      code: "AU1000",
+      source: "lower",
+    });
+  }
+  return diags;
+}
+
+function shrinkSpanWithMapping(span: { start: number; end: number }, mapping: TemplateMappingArtifact): { start: number; end: number } {
+  const hit = mapping.entries.find((m) => intersects(span, m.htmlSpan));
+  if (!hit) return span;
+  let best: { start: number; end: number } = hit.htmlSpan;
+  for (const seg of hit.segments ?? []) {
+    if (!intersects(span, seg.htmlSpan)) continue;
+    if (spanSize(seg.htmlSpan) < spanSize(best)) best = seg.htmlSpan;
+  }
+  return spanSize(best) < spanSize(span) ? best : span;
+}
+
+function intersects(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
+  return a.start <= b.end && b.start <= a.end;
 }
 
 connection.onRequest("aurelia/getSsr", async (params: GetOverlayParams): Promise<GetSsrResult> => {

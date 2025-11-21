@@ -16,12 +16,14 @@ export type { TemplateCompilation } from "./compiler/facade.js";
 export type {
   TemplateMappingArtifact,
   TemplateMappingEntry,
+  TemplateMappingSegment,
   TemplateQueryFacade,
   TemplateExpressionInfo,
   TemplateBindableInfo,
   TemplateNodeInfo,
   TemplateControllerInfo,
 } from "./contracts.js";
+export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
 
 export { compileTemplateToSSR } from "./compiler/facade.js";
 export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
