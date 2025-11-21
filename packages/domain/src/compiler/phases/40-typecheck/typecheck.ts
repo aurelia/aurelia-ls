@@ -151,7 +151,7 @@ function visitInstruction(ins: LinkedInstruction, expected: Map<ExprId, string>)
       for (const p of ins.props ?? []) {
         if (p.kind === "iteratorBinding") {
           expected.set(p.forOf.astId, "Iterable<unknown>");
-          for (const aux of p.aux) recordExpected(aux.from, targetType(aux.spec?.type), expected);
+          for (const aux of p.aux) recordExpected(aux.from, targetType(aux.spec?.type ?? undefined), expected);
         } else {
           recordExpected(p.from, targetType(p.target), expected);
         }

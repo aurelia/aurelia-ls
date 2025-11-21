@@ -266,6 +266,12 @@ export interface TwoWayDefaults {
   conditional?: readonly { prop: string; requiresAttr: string }[];
 }
 
+/**
+ * Single place to describe controller keys.
+ * Useful for cross-module helpers and lookups.
+ */
+export type ControllerName = keyof Controllers;
+
 /* =======================
  * Default registry
  * ======================= */
@@ -588,3 +594,116 @@ export const DEFAULT: Semantics = {
     ],
   },
 };
+
+/* -------------------------------------------------------------------------
+ * Semantics lookup helpers
+ * - Builds case-insensitive/alias-aware indices for resources.
+ * - Keeps resolution logic reusable for the linker and future project-aware
+ *   discovery/enrichment layers.
+ * ------------------------------------------------------------------------- */
+
+export interface EventResolution {
+  type: TypeRef;
+  source: "byElement" | "global" | "unknown";
+}
+
+export interface SemanticsLookup {
+  /** Underlying semantics (for callers that need raw data). */
+  readonly sem: Semantics;
+
+  /** Resolve a custom element by name or alias (case-insensitive). */
+  element(name: string): ElementRes | null;
+
+  /** Resolve a custom attribute by name or alias (case-insensitive). */
+  attribute(name: string): AttrRes | null;
+
+  /** Resolve a template controller by canonical name. */
+  controller<TName extends ControllerName>(name: TName): Controllers[TName] | null;
+
+  /** Resolve a native DOM element entry (tag is normalized to lowercase). */
+  domElement(tag: string): DomElement | null;
+
+  /** Resolve an event type with per-element override and global fallback. */
+  event(eventName: string, tag?: string | null): EventResolution;
+
+  /** Whether the attribute should preserve authored casing (data-/aria-). */
+  hasPreservedPrefix(attr: string): boolean;
+}
+
+export function createSemanticsLookup(sem: Semantics): SemanticsLookup {
+  const elementIndex = buildResourceIndex(sem.resources.elements);
+  const attributeIndex = buildResourceIndex(sem.resources.attributes);
+  const domIndex = buildDomIndex(sem.dom.elements);
+
+  return {
+    sem,
+    element: (name) => lookupResource(elementIndex, name),
+    attribute: (name) => lookupResource(attributeIndex, name),
+    controller: (name) => sem.resources.controllers[name] ?? null,
+    domElement: (tag) => lookupDom(domIndex, tag),
+    event: (eventName, tag) => resolveEvent(sem, eventName, tag),
+    hasPreservedPrefix: (attr) => hasPreservedPrefix(sem, attr),
+  };
+}
+
+type ResourceWithAliases<T> = T & { aliases?: readonly string[] };
+type ResourceIndex<T> = Map<string, ResourceWithAliases<T>>;
+
+function buildResourceIndex<T extends { name: string }>(
+  entries: Record<string, ResourceWithAliases<T>>,
+): ResourceIndex<T> {
+  const index: ResourceIndex<T> = new Map();
+  for (const res of Object.values(entries)) {
+    const canonical = res.name.toLowerCase();
+    index.set(canonical, res);
+    if (res.aliases) {
+      for (const alias of res.aliases) index.set(alias.toLowerCase(), res);
+    }
+  }
+  return index;
+}
+
+function lookupResource<T>(index: ResourceIndex<T>, name: string): T | null {
+  const entry = index.get(name.toLowerCase());
+  return entry ?? null;
+}
+
+type DomIndex = Map<string, DomElement>;
+
+function buildDomIndex(entries: Record<string, DomElement>): DomIndex {
+  const index: DomIndex = new Map();
+  for (const res of Object.values(entries)) index.set(res.tag.toLowerCase(), res);
+  return index;
+}
+
+function lookupDom(index: DomIndex, tag: string): DomElement | null {
+  const entry = index.get(tag.toLowerCase());
+  return entry ?? null;
+}
+
+function resolveEvent(sem: Semantics, eventName: string, tag?: string | null): EventResolution {
+  const name = eventName.toLowerCase();
+  if (tag) {
+    const byElement = lookupCaseInsensitive(sem.events.byElement?.[tag] ?? {}, name);
+    if (byElement) return { type: byElement, source: "byElement" };
+  }
+  const global = lookupCaseInsensitive(sem.events.byName, name);
+  if (global) return { type: global, source: "global" };
+  return { type: { kind: "unknown" }, source: "unknown" };
+}
+
+function hasPreservedPrefix(sem: Semantics, attr: string): boolean {
+  const prefixes = sem.naming.preserveAttrPrefixes ?? ["data-", "aria-"];
+  const lower = attr.toLowerCase();
+  return prefixes.some((p) => lower.startsWith(p));
+}
+
+function lookupCaseInsensitive<T>(record: Record<string, T>, name: string): T | null {
+  const direct = record[name];
+  if (direct) return direct;
+  const lowered = name.toLowerCase();
+  for (const [key, value] of Object.entries(record)) {
+    if (key.toLowerCase() === lowered) return value;
+  }
+  return null;
+}

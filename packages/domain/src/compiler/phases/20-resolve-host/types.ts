@@ -235,11 +235,20 @@ export interface LinkedIteratorBinding extends BaseLinked {
   aux: LinkedAuxProp[];
 }
 
-/** `repeat` tail option item. Unknown options keep `spec` undefined and trigger AU1106. */
 export interface LinkedAuxProp {
   name: string;                // option name, e.g., 'key'
   from: BindingSourceIR;
-  spec?: IteratorTailPropSpec; // linked spec when recognized
+  /** Matched semantics spec (null when unknown). */
+  spec: IteratorAuxSpec | null;
+}
+
+/** Normalized iterator tail spec with optional mode override. */
+export interface IteratorAuxSpec {
+  name: string;
+  /** Optional mode override for .bind vs literal usage. */
+  mode: BindingMode | null;
+  /** Optional type hint for downstream analysis. */
+  type?: TypeRef | null;
 }
 
 /**

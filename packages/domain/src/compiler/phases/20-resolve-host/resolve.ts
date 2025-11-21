@@ -1,5 +1,5 @@
 /* =============================================================================
- * PHASE 20 — RESOLVE HOST SEMANTICS
+ * PHASE 20 - RESOLVE HOST SEMANTICS
  * IR → LinkedSemantics (pure; no IR mutation)
  * - Resolves host node semantics (custom/native/none)
  * - Normalizes attr→prop (global/per-tag/DOM overrides)
@@ -10,30 +10,85 @@
  * ============================================================================= */
 
 import type {
-  IrModule, TemplateIR, DOMNode,
+  IrModule,
+  TemplateIR,
+  DOMNode,
   SourceSpan,
-  PropertyBindingIR, AttributeBindingIR, StylePropertyBindingIR, ListenerBindingIR, RefBindingIR,
-  SetAttributeIR, SetClassAttributeIR, SetStyleAttributeIR, TextBindingIR, IteratorBindingIR, HydrateTemplateControllerIR, HydrateLetElementIR,
-  BindingMode, NodeId,
+  PropertyBindingIR,
+  AttributeBindingIR,
+  StylePropertyBindingIR,
+  ListenerBindingIR,
+  RefBindingIR,
+  SetAttributeIR,
+  SetClassAttributeIR,
+  SetStyleAttributeIR,
+  TextBindingIR,
+  IteratorBindingIR,
+  HydrateTemplateControllerIR,
+  HydrateLetElementIR,
+  BindingMode,
+  NodeId,
   InstructionIR,
   SetPropertyIR,
-  HydrateElementIR, HydrateAttributeIR, ElementBindableIR,
+  HydrateElementIR,
+  HydrateAttributeIR,
+  ElementBindableIR,
+  MultiAttrIR,
 } from "../../model/ir.js";
 
-import type { Semantics, TypeRef, Bindable } from "../../language/registry.js";
+import { createSemanticsLookup, type SemanticsLookup } from "../../language/registry.js";
+import type { Semantics } from "../../language/registry.js";
 
 import type {
-  LinkedSemanticsModule, LinkedTemplate, LinkedRow, NodeSem, LinkedInstruction,
-  LinkedPropertyBinding, LinkedAttributeBinding, LinkedStylePropertyBinding, LinkedListenerBinding, LinkedRefBinding,
-  LinkedTextBinding, LinkedSetAttribute, LinkedSetClassAttribute, LinkedSetStyleAttribute, LinkedIteratorBinding,
-  LinkedHydrateTemplateController, LinkedHydrateElement, LinkedHydrateAttribute, LinkedElementBindable, TargetSem, ControllerSem,
+  LinkedSemanticsModule,
+  LinkedTemplate,
+  LinkedRow,
+  NodeSem,
+  LinkedInstruction,
+  LinkedPropertyBinding,
+  LinkedAttributeBinding,
+  LinkedStylePropertyBinding,
+  LinkedListenerBinding,
+  LinkedRefBinding,
+  LinkedTextBinding,
+  LinkedSetAttribute,
+  LinkedSetClassAttribute,
+  LinkedSetStyleAttribute,
+  LinkedIteratorBinding,
+  LinkedHydrateTemplateController,
+  LinkedHydrateElement,
+  LinkedHydrateAttribute,
+  LinkedElementBindable,
   SemDiagnostic,
   LinkedHydrateLetElement,
   LinkedSetProperty,
-  ElementResRef, DomElementRef, AttrResRef,
+  TargetSem,
+  AttrResRef,
 } from "./types.js";
+import { normalizeAttrToProp, normalizePropLikeName } from "./name-normalizer.js";
+import {
+  pushDiag,
+  resolveAttrBindable,
+  resolveAttrResRef,
+  resolveAttrTarget,
+  resolveBindableMode,
+  resolveControllerBindable,
+  resolveControllerSem,
+  resolveEffectiveMode,
+  resolveElementResRef,
+  resolvePropertyTarget,
+  resolveIteratorAuxSpec,
+} from "./resolution-helpers.js";
+import { resolveNodeSem } from "./node-semantics.js";
 
-function assertUnreachable(x: never): never { throw new Error("unreachable"); }
+function assertUnreachable(x: never): never {
+  throw new Error("unreachable");
+}
+
+interface ResolverContext {
+  readonly lookup: SemanticsLookup;
+  readonly diags: SemDiagnostic[];
+}
 
 /* ============================================================================
  * Public API
@@ -41,11 +96,12 @@ function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
 export function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule {
   const diags: SemDiagnostic[] = [];
-  const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, sem, diags));
+  const ctx: ResolverContext = { lookup: createSemanticsLookup(sem), diags };
+  const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
   return {
     version: "aurelia-linked@1",
     templates,
-    exprTable: ir.exprTable!, // passthrough for Analysis/tooling
+    exprTable: ir.exprTable ?? [], // passthrough for Analysis/tooling
     diags,
   };
 }
@@ -54,13 +110,13 @@ export function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule
  * Template / Row linking
  * ============================================================================ */
 
-function linkTemplate(t: TemplateIR, sem: Semantics, diags: SemDiagnostic[]): LinkedTemplate {
+function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
   const idToNode = new Map<NodeId, DOMNode>();
   indexDom(t.dom, idToNode);
   const rows: LinkedRow[] = t.rows.map((row) => {
     const dom = idToNode.get(row.target);
-    const nodeSem = resolveNodeSem(dom, sem);
-    const linkedInstrs = row.instructions.map((i) => linkInstruction(i, nodeSem, sem, diags));
+    const nodeSem = resolveNodeSem(dom, ctx.lookup);
+    const linkedInstrs = row.instructions.map((i) => linkInstruction(i, nodeSem, ctx));
     return { target: row.target, node: nodeSem, instructions: linkedInstrs };
   });
   return { dom: t.dom, rows, name: t.name! };
@@ -81,55 +137,40 @@ function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
   }
 }
 
-function resolveNodeSem(n: DOMNode | undefined, sem: Semantics): NodeSem {
-  if (!n) return { kind: "comment" }; // rows may target synthetic nodes (e.g., wrapper templates)
-  switch (n.kind) {
-    case "element": {
-      const asElement = n.attrs?.find((a) => a.name === "as-element")?.value;
-      const tag = (asElement ?? n.tag).toLowerCase();
-      // Custom component wins when both exist
-      const custom = sem.resources.elements[tag] ?? null;
-      const native = sem.dom.elements[tag] ?? null;
-      return {
-        kind: "element",
-        tag,
-        custom: custom ? ({ def: custom } as ElementResRef) : null,
-        native: native ? ({ def: native } as DomElementRef) : null,
-      };
-    }
-    case "template": return { kind: "template" };
-    case "text":     return { kind: "text" };
-    case "comment":  return { kind: "comment" };
-    default:         return assertUnreachable(n as never);
-  }
-}
-
 /* ============================================================================
  * Instruction linking
  * ============================================================================ */
 
-function linkInstruction(
-  ins: InstructionIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedInstruction {
+function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext): LinkedInstruction {
   switch (ins.type) {
-    case "propertyBinding":       return linkPropertyBinding(ins, host, sem, diags);
-    case "attributeBinding":      return linkAttributeBinding(ins, host, sem, diags);
-    case "stylePropertyBinding":  return linkStylePropertyBinding(ins);
-    case "listenerBinding":       return linkListenerBinding(ins, host, sem, diags);
-    case "refBinding":            return linkRefBinding(ins);
-    case "textBinding":           return linkTextBinding(ins);
-    case "setAttribute":          return linkSetAttribute(ins);
-    case "setProperty":           return linkSetProperty(ins, host, sem, diags);
-    case "setClassAttribute":     return linkSetClassAttribute(ins);
-    case "setStyleAttribute":     return linkSetStyleAttribute(ins);
-    case "hydrateElement":        return linkHydrateElement(ins, host, sem, diags);
-    case "hydrateAttribute":      return linkHydrateAttribute(ins, host, sem, diags);
-    case "iteratorBinding":       return linkIteratorBinding(ins, host, sem, diags);
+    case "propertyBinding":
+      return linkPropertyBinding(ins, host, ctx);
+    case "attributeBinding":
+      return linkAttributeBinding(ins, host, ctx);
+    case "stylePropertyBinding":
+      return linkStylePropertyBinding(ins);
+    case "listenerBinding":
+      return linkListenerBinding(ins, host, ctx);
+    case "refBinding":
+      return linkRefBinding(ins);
+    case "textBinding":
+      return linkTextBinding(ins);
+    case "setAttribute":
+      return linkSetAttribute(ins);
+    case "setProperty":
+      return linkSetProperty(ins, host, ctx);
+    case "setClassAttribute":
+      return linkSetClassAttribute(ins);
+    case "setStyleAttribute":
+      return linkSetStyleAttribute(ins);
+    case "hydrateElement":
+      return linkHydrateElement(ins, host, ctx);
+    case "hydrateAttribute":
+      return linkHydrateAttribute(ins, host, ctx);
+    case "iteratorBinding":
+      return linkIteratorBinding(ins, ctx);
     case "hydrateTemplateController":
-      return linkHydrateTemplateController(ins, host, sem, diags);
+      return linkHydrateTemplateController(ins, host, ctx);
     case "hydrateLetElement":
       return linkHydrateLetElement(ins);
     default:
@@ -139,21 +180,12 @@ function linkInstruction(
 
 /* ---- PropertyBinding ---- */
 
-function linkPropertyBinding(
-  ins: PropertyBindingIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedPropertyBinding {
+function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: ResolverContext): LinkedPropertyBinding {
   // Normalize against naming/perTag/DOM overrides before resolving targets.
-  const to = normalizePropLikeName(host, ins.to, sem);
-  const { target, effectiveMode } = resolvePropertyTarget(host, to, ins.mode, sem);
+  const to = normalizePropLikeName(host, ins.to, ctx.lookup);
+  const { target, effectiveMode } = resolvePropertyTarget(host, to, ins.mode, ctx.lookup);
   if (target.kind === "unknown") {
-    diags.push({
-      code: "AU1104",
-      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
-      span: ins.loc ?? null,
-    });
+    pushDiag(ctx.diags, "AU1104", `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
   }
   return {
     kind: "propertyBinding",
@@ -168,14 +200,9 @@ function linkPropertyBinding(
 
 /* ---- AttributeBinding (interpolation on attr) ---- */
 
-function linkAttributeBinding(
-  ins: AttributeBindingIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedAttributeBinding {
+function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: ResolverContext): LinkedAttributeBinding {
   // Preserve data-* / aria-* authored forms: never camelCase or map to props.
-  if (hasPreservedPrefix(ins.attr, sem)) {
+  if (ctx.lookup.hasPreservedPrefix(ins.attr)) {
     return {
       kind: "attributeBinding",
       attr: ins.attr,
@@ -186,15 +213,11 @@ function linkAttributeBinding(
     };
   }
 
-  const to = normalizeAttrToProp(host, ins.attr, sem);
-  const target = resolveAttrTarget(host, to, sem);
+  const to = normalizeAttrToProp(host, ins.attr, ctx.lookup);
+  const target = resolveAttrTarget(host, to);
 
   if (target.kind === "unknown") {
-    diags.push({
-      code: "AU1104",
-      message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
-      span: ins.loc ?? null,
-    });
+    pushDiag(ctx.diags, "AU1104", `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
   }
 
   return {
@@ -215,20 +238,12 @@ function linkStylePropertyBinding(ins: StylePropertyBindingIR): LinkedStylePrope
 
 /* ---- ListenerBinding ---- */
 
-function linkListenerBinding(
-  ins: ListenerBindingIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedListenerBinding {
+function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: ResolverContext): LinkedListenerBinding {
   const tag = host.kind === "element" ? host.tag : null;
-  const eventType = resolveEventType(sem, ins.to, tag);
+  const eventRes = ctx.lookup.event(ins.to, tag ?? undefined);
+  const eventType = eventRes.type;
   if (eventType.kind === "unknown") {
-    diags.push({
-      code: "AU1103",
-      message: `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`,
-      span: ins.loc ?? null,
-    });
+    pushDiag(ctx.diags, "AU1103", `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`, ins.loc);
   }
   return {
     kind: "listenerBinding",
@@ -265,32 +280,18 @@ function linkSetStyleAttribute(ins: SetStyleAttributeIR): LinkedSetStyleAttribut
   return { kind: "setStyleAttribute", value: ins.value, loc: ins.loc ?? null };
 }
 
-function linkSetProperty(
-  ins: SetPropertyIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedSetProperty {
-  const to = normalizePropLikeName(host, ins.to, sem);
-  const { target } = resolvePropertyTarget(host, to, "default", sem);
+function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext): LinkedSetProperty {
+  const to = normalizePropLikeName(host, ins.to, ctx.lookup);
+  const { target } = resolvePropertyTarget(host, to, "default", ctx.lookup);
   if (target.kind === "unknown") {
-    diags.push({
-      code: "AU1104",
-      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
-      span: ins.loc ?? null,
-    });
+    pushDiag(ctx.diags, "AU1104", `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
   }
   return { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
 }
 
-function linkHydrateElement(
-  ins: HydrateElementIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedHydrateElement {
-  const res = resolveElementResRef(ins.res, sem);
-  const props = ins.props.map((p) => linkElementBindable(p, host, sem, diags));
+function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateElement {
+  const res = resolveElementResRef(ins.res, ctx.lookup);
+  const props = ins.props.map((p) => linkElementBindable(p, host, ctx));
   return {
     kind: "hydrateElement",
     res,
@@ -301,14 +302,9 @@ function linkHydrateElement(
   };
 }
 
-function linkHydrateAttribute(
-  ins: HydrateAttributeIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedHydrateAttribute {
-  const res = resolveAttrResRef(ins.res, sem);
-  const props = ins.props.map((p) => linkAttributeBindable(p, res, sem, diags));
+function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateAttribute {
+  const res = resolveAttrResRef(ins.res, ctx.lookup);
+  const props = ins.props.map((p) => linkAttributeBindable(p, res, ctx));
   return {
     kind: "hydrateAttribute",
     res,
@@ -318,21 +314,16 @@ function linkHydrateAttribute(
   };
 }
 
-function linkElementBindable(
-  ins: ElementBindableIR,
-  host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
-): LinkedElementBindable {
+function linkElementBindable(ins: ElementBindableIR, host: NodeSem, ctx: ResolverContext): LinkedElementBindable {
   switch (ins.type) {
     case "propertyBinding":
-      return linkPropertyBinding(ins, host, sem, diags);
+      return linkPropertyBinding(ins, host, ctx);
     case "attributeBinding":
-      return linkAttributeBinding(ins, host, sem, diags);
+      return linkAttributeBinding(ins, host, ctx);
     case "stylePropertyBinding":
       return linkStylePropertyBinding(ins);
     case "setProperty":
-      return linkSetProperty(ins, host, sem, diags);
+      return linkSetProperty(ins, host, ctx);
     default:
       return assertUnreachable(ins as never);
   }
@@ -341,8 +332,7 @@ function linkElementBindable(
 function linkAttributeBindable(
   ins: ElementBindableIR,
   attr: AttrResRef | null,
-  sem: Semantics,
-  diags: SemDiagnostic[],
+  ctx: ResolverContext,
 ): LinkedElementBindable {
   switch (ins.type) {
     case "propertyBinding": {
@@ -398,17 +388,22 @@ function linkAttributeBindable(
 
 /* ---- IteratorBinding (repeat) ---- */
 
-function linkIteratorBinding(
-  ins: IteratorBindingIR,
-  _host: NodeSem,
-  sem: Semantics,
-  _diags: SemDiagnostic[],
-): LinkedIteratorBinding {
-  // Current builder does not emit tail options as aux (MVP); keep empty for now.
+function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): LinkedIteratorBinding {
+  const normalizedTo = ctx.lookup.sem.resources.controllers.repeat.iteratorProp;
   const aux: LinkedIteratorBinding["aux"] = [];
 
-  // Normalize the iterator prop name to Semantics (usually 'items')
-  const normalizedTo = sem.resources.controllers.repeat.iteratorProp;
+  if (ins.props?.length) {
+    for (const p of ins.props) {
+      const authoredMode: BindingMode = p.command === "bind" ? "toView" : "default";
+      const spec = resolveIteratorAuxSpec(ctx.lookup, p.to, authoredMode);
+      if (!spec) {
+        pushDiag(ctx.diags, "AU1106", `Unknown repeat option '${p.to}'.`, p.loc);
+      }
+      if (!p.from && p.value == null) continue;
+      const from = p.from ?? ({ id: ins.forOf.astId, code: p.value! } as any);
+      aux.push({ name: p.to, from, spec });
+    }
+  }
 
   return {
     kind: "iteratorBinding",
@@ -424,25 +419,24 @@ function linkIteratorBinding(
 function linkHydrateTemplateController(
   ins: HydrateTemplateControllerIR,
   host: NodeSem,
-  sem: Semantics,
-  diags: SemDiagnostic[],
+  ctx: ResolverContext,
 ): LinkedHydrateTemplateController {
-  const ctrlSem = resolveControllerSem(sem, ins.res, ins.loc, diags);
+  const ctrlSem = resolveControllerSem(ctx.lookup, ins.res, ctx.diags, ins.loc);
 
   // Map controller props
   const props = ins.props.map((p) => {
     if (p.type === "iteratorBinding") {
-      const iter = linkIteratorBinding(p, host, sem, diags);
-      iter.to = sem.resources.controllers.repeat.iteratorProp; // ensure parity with spec
+      const iter = linkIteratorBinding(p, ctx);
+      iter.to = ctx.lookup.sem.resources.controllers.repeat.iteratorProp; // ensure parity with spec
       return iter;
     } else if (p.type === "propertyBinding") {
-      const to = normalizePropLikeName(host, p.to, sem);
+      const to = normalizePropLikeName(host, p.to, ctx.lookup);
       const target: TargetSem = {
         kind: "controller.prop",
         controller: ctrlSem,
         bindable: resolveControllerBindable(ctrlSem, to),
       };
-      const effectiveMode = resolveEffectiveMode(p.mode, target, host, sem, to);
+      const effectiveMode = resolveEffectiveMode(p.mode, target, host, ctx.lookup, to);
       const linked: LinkedPropertyBinding = {
         kind: "propertyBinding",
         to,
@@ -504,262 +498,3 @@ function linkHydrateLetElement(ins: HydrateLetElementIR): LinkedHydrateLetElemen
 /* ============================================================================
  * Target / Controller resolution
  * ============================================================================ */
-
-function resolvePropertyTarget(
-  host: NodeSem,
-  to: string,
-  mode: BindingMode,
-  sem: Semantics,
-): { target: TargetSem; effectiveMode: BindingMode } {
-  // 1) Custom element bindable (component prop)
-  if (host.kind === "element" && host.custom) {
-    const bindable = host.custom.def.bindables[to];
-    if (bindable) {
-      const target: TargetSem = { kind: "element.bindable", element: host.custom, bindable };
-      const effectiveMode = resolveEffectiveMode(mode, target, host, sem, to);
-      return { target, effectiveMode };
-    }
-  }
-  // 2) Native DOM prop
-  if (host.kind === "element" && host.native) {
-    const domProp = host.native.def.props[to];
-    if (domProp) {
-      const target: TargetSem = { kind: "element.nativeProp", element: host.native, prop: domProp };
-      const effectiveMode = resolveEffectiveMode(mode, target, host, sem, to);
-      return { target, effectiveMode };
-    }
-  }
-  // 3) Unknown target
-  const target: TargetSem = { kind: "unknown", reason: host.kind === "element" ? "no-prop" : "no-element" };
-  const effectiveMode = resolveEffectiveMode(mode, target, host, sem, to);
-  return { target, effectiveMode };
-}
-
-function resolveAttrTarget(host: NodeSem, to: string, sem: Semantics): TargetSem {
-  if (host.kind === "element" && host.custom) {
-    const b = host.custom.def.bindables[to];
-    if (b) return { kind: "element.bindable", element: host.custom, bindable: b };
-  }
-  if (host.kind === "element" && host.native) {
-    const p = host.native.def.props[to];
-    if (p) return { kind: "element.nativeProp", element: host.native, prop: p };
-  }
-  return { kind: "unknown", reason: host.kind === "element" ? "no-prop" : "no-element" };
-}
-
-function resolveControllerSem(
-  sem: Semantics,
-  res: string,
-  span: SourceSpan | null | undefined,
-  diags: SemDiagnostic[],
-): ControllerSem {
-  switch (res) {
-    case "repeat":  return { res, spec: sem.resources.controllers.repeat };
-    case "with":    return { res, spec: sem.resources.controllers.with };
-    case "promise": return { res, spec: sem.resources.controllers.promise };
-    case "if":      return { res, spec: sem.resources.controllers.if };
-    case "switch":  return { res, spec: sem.resources.controllers.switch };
-    case "portal":  return { res, spec: sem.resources.controllers.portal };
-    default:
-      diags.push({ code: "AU1101", message: `Unknown controller '${res}'.`, span: span ?? null });
-      // Fallback to 'with' shape to keep traversal alive
-      return { res: "with", spec: { kind: "controller", res: "with", scope: "overlay", props: { value: { name: "value" } } } };
-  }
-}
-
-function resolveControllerBindable(ctrl: ControllerSem, prop: string): Bindable {
-  switch (ctrl.res) {
-    case "repeat": {
-      // repeat header tail options are not bindables; iterator handled separately.
-      return { name: prop };
-    }
-    case "with":
-    case "promise":
-    case "if":
-    case "switch":
-    case "portal": {
-      const b = ctrl.spec.props[prop];
-      return b ?? { name: prop };
-    }
-    default:
-      return assertUnreachable(ctrl as never);
-  }
-}
-
-/* ============================================================================
- * Normalization & helpers
- * ============================================================================ */
-
-/**
- * Attr → prop normalization for interpolation on attributes.
- * Priority: naming.perTag > dom.element.attrToProp > naming.global > camelCase.
- * Preserved prefixes (data-/aria-) are handled before this is called.
- */
-function normalizeAttrToProp(host: NodeSem, rawAttr: string, sem: Semantics): string {
-  const attr = rawAttr.toLowerCase();
-  if (host.kind !== "element") return camelCase(attr);
-
-  const tag = host.tag;
-
-  // 1) naming.perTag (highest precedence)
-  const perTag = sem.naming.perTag?.[tag]?.[attr];
-  if (perTag) return perTag;
-
-  // 2) dom.elements[tag].attrToProp overrides
-  const elt = sem.dom.elements[tag];
-  const domOverride = elt?.attrToProp?.[attr];
-  if (domOverride) return domOverride;
-
-  // 3) naming.global
-  const global = sem.naming.attrToPropGlobal[attr];
-  if (global) return global;
-
-  // 4) host-aware case-insensitive canonicalization
-  //    (handles 'classname' → 'className', 'valueasnumber' → 'valueAsNumber', etc.)
-  const hostKey = lookupHostPropCaseInsensitive(host, attr);
-  if (hostKey) return hostKey;
-
-  // 5) fallback camelCase (kebab → camel)
-  return camelCase(attr);
-}
-
-function lookupHostPropCaseInsensitive(host: NodeSem, raw: string): string | null {
-  if (host.kind !== "element") return null;
-  const needle = raw.toLowerCase();
-
-  // 1) Prefer custom element bindables (component props)
-  if (host.custom) {
-    for (const k of Object.keys(host.custom.def.bindables)) {
-      if (k.toLowerCase() === needle) return k;
-    }
-  }
-  // 2) Then native DOM props for this tag
-  if (host.native) {
-    for (const k of Object.keys(host.native.def.props)) {
-      if (k.toLowerCase() === needle) return k;
-    }
-  }
-  return null;
-}
-
-/**
- * Property-like normalization for `.bind/.to-view` authored names that resemble attrs.
- * Handles cases like `minlength.bind` on `<input>` → `minLength`.
- * If it already looks like a prop (has uppercase, no hyphen), return as-is.
- */
-function normalizePropLikeName(host: NodeSem, raw: string, sem: Semantics): string {
-  const looksLikeProp = /[A-Z]/.test(raw) && !raw.includes("-");
-  if (looksLikeProp) return raw;
-  return normalizeAttrToProp(host, raw, sem);
-}
-
-/** data-* / aria-* must not be camelCased or mapped to props */
-function hasPreservedPrefix(attr: string, sem: Semantics): boolean {
-  const prefixes = sem.naming.preserveAttrPrefixes ?? ["data-", "aria-"];
-  const lower = attr.toLowerCase();
-  return prefixes.some((p) => lower.startsWith(p));
-}
-
-function resolveEventType(sem: Semantics, eventName: string, tag: string | null): TypeRef {
-  if (tag) {
-    const perEl = sem.events.byElement?.[tag]?.[eventName];
-    if (perEl) return perEl;
-  }
-  return sem.events.byName[eventName] ?? { kind: "unknown" };
-}
-
-/**
- * Effective binding mode resolution:
- * - Authored mode wins when not 'default'
- * - Else controller/element bindable mode
- * - Else native DOM prop mode
- * - Else static two-way defaults (byTag/globalProps)
- * - Else 'toView'
- *
- * Conditional two-way cases (e.g., contenteditable) are deferred to Typecheck.
- */
-function resolveEffectiveMode(
-  mode: BindingMode,
-  target: TargetSem,
-  host: NodeSem,
-  sem: Semantics,
-  propName?: string,
-): BindingMode {
-  if (mode !== "default") return mode;
-
-  switch (target.kind) {
-    case "element.bindable":
-      return target.bindable.mode ?? "toView";
-
-    case "element.nativeProp": {
-      const explicit = target.prop.mode;
-      if (explicit) return explicit;
-
-      const name = propName ?? "";
-      if (host.kind === "element") {
-        const byTag = sem.twoWayDefaults.byTag[host.tag] ?? [];
-        if (byTag.includes(name)) return "twoWay";
-      }
-      if (sem.twoWayDefaults.globalProps.includes(name)) return "twoWay";
-
-      return "toView";
-    }
-
-    case "controller.prop":
-      return target.bindable.mode ?? "toView";
-
-    case "attribute.bindable":
-      return target.bindable.mode ?? "toView";
-
-    case "attribute":
-      return "toView";
-
-    case "unknown":
-      return "toView";
-
-    default:
-      return assertUnreachable(target as never);
-  }
-}
-
-function camelCase(n: string): string {
-  return n.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase());
-}
-
-function resolveElementResRef(res: HydrateElementIR["res"], sem: Semantics): ElementResRef | null {
-  if (!res) return null;
-  const name = typeof res === "string" ? res.toLowerCase() : res;
-  const direct =
-    typeof name === "string"
-      ? sem.resources.elements[name]
-      : null;
-  if (direct) return { def: direct };
-  for (const candidate of Object.values(sem.resources.elements)) {
-    if (candidate.aliases?.includes(typeof name === "string" ? name : "")) return { def: candidate };
-  }
-  return null;
-}
-
-function resolveAttrResRef(res: HydrateAttributeIR["res"], sem: Semantics): AttrResRef | null {
-  if (!res) return null;
-  const name = typeof res === "string" ? res.toLowerCase() : res;
-  const direct =
-    typeof name === "string"
-      ? sem.resources.attributes[name]
-      : null;
-  if (direct) return { def: direct };
-  for (const candidate of Object.values(sem.resources.attributes)) {
-    if (candidate.aliases?.includes(typeof name === "string" ? name : "")) return { def: candidate };
-  }
-  return null;
-}
-
-function resolveAttrBindable(attr: AttrResRef, to: string): Bindable | null {
-  const camel = camelCase(to);
-  return attr.def.bindables[camel] ?? null;
-}
-
-function resolveBindableMode(mode: BindingMode, bindable: Bindable | null | undefined): BindingMode {
-  if (mode !== "default") return mode;
-  return bindable?.mode ?? "toView";
-}
