@@ -28,6 +28,7 @@ export interface TemplateMappingEntry {
   htmlSpan: SourceSpan;
   overlayRange: Range;
   frameId?: FrameId | undefined;
+  segments?: readonly TemplateMappingSegment[] | undefined;
 }
 
 export interface TemplateMappingArtifact {
@@ -35,23 +36,33 @@ export interface TemplateMappingArtifact {
   entries: readonly TemplateMappingEntry[];
 }
 
+export interface TemplateMappingSegment {
+  kind: "member";
+  path: string;
+  htmlSpan: SourceSpan;
+  overlaySpan: Range;
+}
+
 export interface TemplateNodeInfo {
   id: NodeId;
   kind: "element" | "attribute" | "text" | "comment";
   hostKind: "custom" | "native" | "none";
   span: SourceSpan;
+  templateIndex: number;
 }
 
 export interface TemplateBindableInfo {
   name: string;
   mode?: BindingMode;
   source: "component" | "custom-attribute" | "native" | "controller";
+  type?: string;
 }
 
 export interface TemplateExpressionInfo {
   exprId: ExprId;
   span: SourceSpan;
   frameId?: FrameId | undefined;
+  memberPath?: string;
 }
 
 export interface TemplateControllerInfo {

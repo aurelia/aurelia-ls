@@ -14,9 +14,9 @@ const html = `<template>
 const exprParser = getExpressionParser();
 const attrParser = DEFAULT_SYNTAX;
 
-function build() {
+function build(customHtml = html) {
   return compileTemplate({
-    html,
+    html: customHtml,
     templateFilePath: "C:/mem/facade-query.html",
     isJs: false,
     vm: vmStub,
@@ -59,7 +59,7 @@ describe("Facade", () => {
     assert.equal(query.controllerAt(nodeOffset), null);
   });
 
-  test.skip("nested controllers: nodeAt/controllerAt/exprAt cover inner templates with frameIds", () => {
+  test("nested controllers: nodeAt/controllerAt/exprAt cover inner templates with frameIds", () => {
     const html = `
       <div repeat.for="item of items">
         <template if.bind="item.ok">
@@ -68,16 +68,31 @@ describe("Facade", () => {
       </div>
     `;
     const { query, mapping } = build(html);
-    // TODO: assert nodeAt hits inner span, controllerAt finds if+repeat, exprAt carries frameId for repeat inner bindings.
-    void query;
-    void mapping;
+    const spanOffset = html.indexOf("<span") + 2;
+    const node = query.nodeAt(spanOffset);
+    assert.ok(node, "should find inner span node");
+    assert.equal(node?.hostKind, "native");
+
+    const ifOffset = html.indexOf("if.bind");
+    const controller = query.controllerAt(ifOffset);
+    assert.ok(controller);
+    assert.equal(controller?.kind, "if");
+
+    const exprOffset = html.indexOf("item.name");
+    const exprHit = query.exprAt(exprOffset);
+    assert.ok(exprHit?.frameId !== undefined, "expr should carry frameId from nested frame");
+    assert.ok(mapping.entries.some((m) => m.exprId === exprHit?.exprId));
   });
 
-  test.skip("mapping spans include member-level offsets for rename/refs", () => {
+  test("mapping spans include member-level offsets for rename/refs", () => {
     const html = `<div>\${user.address.street}</div>`;
     const { mapping } = build(html);
-    // TODO: assert mapping entries include inner member offsets (street) for rename/refs.
-    void mapping;
+    const entry = mapping.entries.find((e) => e.htmlSpan.start > 0 && (e.segments?.length ?? 0) > 0);
+    assert.ok(entry, "expected mapping entry with segments");
+    const member = entry?.segments?.find((s) => s.path.endsWith("street"));
+    assert.ok(member, "expected member segment for street");
+    assert.ok(member?.overlaySpan[1] > member?.overlaySpan[0]);
+    assert.ok(member?.htmlSpan.end > member?.htmlSpan.start);
   });
 
   test.skip("bindablesFor merges custom element/attribute/native schemas", () => {
@@ -87,11 +102,19 @@ describe("Facade", () => {
     void query;
   });
 
-  test.skip("expectedTypeOf surfaces target/expr hints (Phase 40)", () => {
-    const html = `<input value.bind="user.name" maxlength.bind="user.name.length" />`;
+  test("expectedTypeOf surfaces target/expr hints (Phase 40)", () => {
+    const html = `<input value.bind="user.name" checked.bind="flag" />`;
     const { query } = build(html);
-    // TODO: assert expectedTypeOf(bindable/value expr) returns string/number hints.
-    void query;
+    const valueOffset = html.indexOf("user.name");
+    const valueExpr = query.exprAt(valueOffset);
+    assert.ok(valueExpr);
+    const expectedValueType = valueExpr ? query.expectedTypeOf(valueExpr) : null;
+    assert.equal(expectedValueType, "string");
+
+    const node = query.nodeAt(html.indexOf("<input") + 1);
+    const bindables = node ? query.bindablesFor(node) : null;
+    const checkedType = bindables?.find((b) => b.name === "checked")?.type;
+    assert.equal(checkedType, "boolean");
   });
 
   test.skip("controllerAt reflects branches (switch/promise) with spans", () => {

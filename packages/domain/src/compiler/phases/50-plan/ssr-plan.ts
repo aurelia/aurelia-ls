@@ -1,6 +1,6 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../model/symbols.js";
-import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef } from "../../model/ir.js";
+import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef, TemplateNode } from "../../model/ir.js";
 import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./ssr-types.js";
 
 /** Build SSR plan from Linked+Scoped (tap point: after Phase 30 bind). */
@@ -13,7 +13,7 @@ export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrP
   const exprToFrame = st?.exprToFrame ?? Object.create(null);
 
   // Map raw TemplateIR roots → LinkedTemplate for nested controller defs
-  const domToLinked = new WeakMap<any, LinkedTemplate>();
+  const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
   for (const t of linked.templates) domToLinked.set(t.dom, t);
 
   const hidCounter = { value: 1 };
@@ -24,7 +24,7 @@ export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrP
 function buildTemplatePlan(
   t: LinkedTemplate,
   exprToFrame: Record<string, number>,
-  domToLinked: WeakMap<any, LinkedTemplate>,
+  domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   hidCounter: { value: number },
 ): SsrTemplatePlan {
   const hidByNode: Record<string, number> = Object.create(null);
@@ -35,7 +35,7 @@ function buildTemplatePlan(
   const textBindings: SsrTemplatePlan["textBindings"] = [];
 
   for (const row of t.rows) {
-    const nodeId = row.target as NodeId;
+    const nodeId = row.target;
 
     let hasDyn = false;
     const staticAttrs: Record<string, string | null> = Object.create(null);
@@ -117,7 +117,7 @@ function buildTemplatePlan(
         }
         case "hydrateTemplateController": {
           const hid = ensureHid(nodeId, hidByNode, () => hidCounter.value++);
-          const ctrl = ins as LinkedHydrateTemplateController;
+          const ctrl = ins;
           const nestedLinked = domToLinked.get(ctrl.def.dom);
           const nestedPlan = nestedLinked ? buildTemplatePlan(nestedLinked, exprToFrame, domToLinked, hidCounter) : emptyPlan();
 
@@ -158,7 +158,7 @@ function buildTemplatePlan(
             letsByHid,
             staticAttrsByHid,
             textBindings,
-            prefix: `${hid}:${nodeId as string}`,
+            prefix: `${hid}:${nodeId}`,
           });
           hasDyn = true;
           break;
@@ -209,9 +209,9 @@ function mergeChildPlanIntoParent(
   const keyMap = new Map<string, string>();
 
   for (const [nodeKey, hid] of Object.entries(child.hidByNode)) {
-    const namespaced = parent.prefix ? `${parent.prefix}|${nodeKey as string}` : (nodeKey as string);
-    parent.hidByNode[namespaced as NodeId] = hid;
-    keyMap.set(nodeKey as string, namespaced);
+    const namespaced = parent.prefix ? `${parent.prefix}|${nodeKey}` : nodeKey;
+    parent.hidByNode[namespaced] = hid;
+    keyMap.set(nodeKey, namespaced);
   }
   Object.assign(parent.bindingsByHid, child.bindingsByHid);
   Object.assign(parent.controllersByHid, child.controllersByHid);
@@ -226,12 +226,12 @@ function mergeChildPlanIntoParent(
 }
 
 function frameOf(map: Record<string, number>, id: ExprId): number {
-  const f = map[id as unknown as string];
+  const f = map[id as string];
   return typeof f === "number" ? f : 0;
 }
 
 function nodeKeyFromId(id: NodeId): string {
-  return id as unknown as string;
+  return id as string;
 }
 
 function nodeIdFromKey(key: string): NodeId {
@@ -249,7 +249,7 @@ function isInterp(src: BindingSourceIR): src is InterpIR {
 }
 
 function ensureHid(node: NodeId, map: Record<string, number>, next: () => number): number {
-  const key = node as unknown as string;
+  const key = node as string;
   let hid = map[key];
   if (hid == null) {
     hid = next();

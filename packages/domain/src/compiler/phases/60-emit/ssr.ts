@@ -1,5 +1,5 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow } from "../20-resolve-host/types.js";
-import type { TemplateNode, DOMNode, Attr, NodeId } from "../../model/ir.js";
+import type { TemplateNode, DOMNode, Attr, NodeId, ExprId } from "../../model/ir.js";
 import type { SsrPlanModule, SsrTemplatePlan, SsrManifest, SsrBinding, SsrController } from "../50-plan/ssr-types.js";
 
 /** Emit SSR HTML + JSON manifest. */
@@ -26,7 +26,7 @@ export function emitSsr(
 
 function indexRows(t: LinkedTemplate): Map<string, LinkedRow> {
   const idToRow: Map<string, LinkedRow> = new Map();
-  for (const row of t.rows) idToRow.set(row.target as unknown as string, row);
+  for (const row of t.rows) idToRow.set(row.target, row);
   return idToRow;
 }
 
@@ -129,12 +129,21 @@ function renderNode(
 
 /** Build JSON manifest text. */
 function makeManifest(tPlan: SsrTemplatePlan, tLinked: LinkedTemplate): string[] {
-  const nodes: any[] = [];
-  const tagByNode = new Map<string, string>();
+  const nodes: Array<{
+    hid: number;
+    nodeId: NodeId;
+    tag?: string;
+    text?: boolean;
+    staticAttrs?: Record<string, string | null>;
+    bindings?: SsrBinding[];
+    controllers?: Omit<SsrController, "def" | "defLinked">[];
+    lets?: { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> };
+  }> = [];
+  const tagByNode = new Map<NodeId, string | undefined>();
   indexDomTags(tLinked.dom, tagByNode);
   for (const ctrls of Object.values(tPlan.controllersByHid)) {
     for (const c of ctrls ?? []) {
-      const linked = (c as any).defLinked as LinkedTemplate | undefined;
+      const linked = c.defLinked;
       if (linked) indexDomTags(linked.dom, tagByNode);
     }
   }
@@ -143,17 +152,29 @@ function makeManifest(tPlan: SsrTemplatePlan, tLinked: LinkedTemplate): string[]
   for (const [nodeKey, hid] of Object.entries(tPlan.hidByNode)) {
     if (seen.has(hid)) continue;
     seen.add(hid);
-    const nodeId = nodeKey as any;
-    nodes.push({
-      hid,
-      nodeId,
-      tag: tagByNode.get(nodeKey) ?? undefined,
-      text: nodeKey.includes("#text"),
-      staticAttrs: tPlan.staticAttrsByHid[hid],
-      bindings: tPlan.bindingsByHid[hid],
-      controllers: (tPlan.controllersByHid[hid] ?? []).map(stripDef),
-      lets: tPlan.letsByHid[hid],
-    });
+    const nodeId = nodeKey as NodeId;
+    const nodeRecord: {
+      hid: number;
+      nodeId: NodeId;
+      tag?: string;
+      text?: boolean;
+      staticAttrs?: Record<string, string | null>;
+      bindings?: SsrBinding[];
+      controllers?: Omit<SsrController, "def" | "defLinked">[];
+      lets?: { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> };
+    } = { hid, nodeId };
+    const tag = tagByNode.get(nodeId);
+    if (tag) nodeRecord.tag = tag;
+    nodeRecord.text = nodeKey.includes("#text");
+    const staticAttrs = tPlan.staticAttrsByHid[hid];
+    if (staticAttrs) nodeRecord.staticAttrs = staticAttrs;
+    const bindings = tPlan.bindingsByHid[hid];
+    if (bindings) nodeRecord.bindings = bindings;
+    const controllers = tPlan.controllersByHid[hid];
+    nodeRecord.controllers = (controllers ?? []).map(stripDef);
+    const lets = tPlan.letsByHid[hid];
+    if (lets) nodeRecord.lets = lets;
+    nodes.push(nodeRecord);
   }
   const manifest = {
     version: "aurelia-ssr-manifest@0",
@@ -162,13 +183,14 @@ function makeManifest(tPlan: SsrTemplatePlan, tLinked: LinkedTemplate): string[]
   return [JSON.stringify(manifest, null, 2)];
 
   function stripDef(c: SsrController) {
-    const { def, defLinked, ...rest } = c as any;
+    const { def, defLinked, ...rest } = c;
     return rest;
   }
 }
 
-function indexDomTags(n: DOMNode, out: Map<string, string>) {
-  out.set(n.id as any, (n as any).tag ?? undefined);
+function indexDomTags(n: DOMNode, out: Map<NodeId, string | undefined>) {
+  const tag = n.kind === "element" ? n.tag : undefined;
+  out.set(n.id, tag);
   if (n.kind === "element" || n.kind === "template") for (const c of n.children) indexDomTags(c, out);
 }
 
