@@ -140,15 +140,16 @@ function buildTemplatePlan(
             }
           }
 
-          rowControllers.push({
+          const controllerEntry: SsrController = {
             res: ctrl.res,
             def: nestedPlan,
-            defLinked: nestedLinked,
             forOfExprId: forOfExprId!,
             valueExprId: valueExprId!,
             branch,
             frame: forOfExprId ? frameOf(exprToFrame, forOfExprId) : valueExprId ? frameOf(exprToFrame, valueExprId) : 0,
-          });
+          };
+          if (nestedLinked) controllerEntry.defLinked = nestedLinked;
+          rowControllers.push(controllerEntry);
 
           mergeChildPlanIntoParent(nestedPlan, {
             hidByNode,
@@ -208,9 +209,9 @@ function mergeChildPlanIntoParent(
   const keyMap = new Map<string, string>();
 
   for (const [nodeKey, hid] of Object.entries(child.hidByNode)) {
-    const namespaced = parent.prefix ? `${parent.prefix}|${nodeKey}` : nodeKey;
-    parent.hidByNode[namespaced] = hid;
-    keyMap.set(nodeKey, namespaced);
+    const namespaced = parent.prefix ? `${parent.prefix}|${nodeKey as string}` : (nodeKey as string);
+    parent.hidByNode[namespaced as NodeId] = hid;
+    keyMap.set(nodeKey as string, namespaced);
   }
   Object.assign(parent.bindingsByHid, child.bindingsByHid);
   Object.assign(parent.controllersByHid, child.controllersByHid);
@@ -238,7 +239,9 @@ function nodeIdFromKey(key: string): NodeId {
 }
 
 function exprIdFrom(from: BindingSourceIR): ExprId | undefined {
-  return isInterp(from) ? from.exprs[0]?.id : (from as ExprRef).id;
+  if (isInterp(from)) return from.exprs[0]?.id;
+  const ref = from as ExprRef | undefined;
+  return ref?.id;
 }
 
 function isInterp(src: BindingSourceIR): src is InterpIR {

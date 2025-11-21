@@ -1,5 +1,5 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow } from "../20-resolve-host/types.js";
-import type { TemplateNode, DOMNode, Attr } from "../../model/ir.js";
+import type { TemplateNode, DOMNode, Attr, NodeId } from "../../model/ir.js";
 import type { SsrPlanModule, SsrTemplatePlan, SsrManifest, SsrBinding, SsrController } from "../50-plan/ssr-types.js";
 
 /** Emit SSR HTML + JSON manifest. */
@@ -49,7 +49,7 @@ function renderNode(
   out: string[],
   eol: string,
 ): void {
-  const nodeKey = n.id as unknown as string;
+  const nodeKey = n.id as NodeId;
   const hid = plan.hidByNode[nodeKey] ?? plan.textBindings.find(tb => tb.target === nodeKey)?.hid;
 
   const row = idToRow.get(nodeKey);

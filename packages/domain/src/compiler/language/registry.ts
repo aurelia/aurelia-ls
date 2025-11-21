@@ -353,7 +353,7 @@ export const DEFAULT: Semantics = {
         kind: "controller",
         res: "with",
         scope: "overlay",
-        props: { value: { name: "value", type: { kind: "any" }, mode: "default", doc: "Overlay object" } },
+        props: { value: { name: "value", type: { kind: "unknown" }, mode: "default", doc: "Overlay object" } },
       },
 
       promise: {
