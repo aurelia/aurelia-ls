@@ -1,0 +1,206 @@
+[
+  {
+    "name": "R-E-01 @click on <button> resolves to MouseEvent",
+    "markup": "<button @click=\"go()\"></button>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "click", "type": "MouseEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-02 click.capture sets capture flag",
+    "markup": "<button click.capture=\"go()\"></button>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "click", "type": "MouseEvent", "capture": true }
+      ]
+    }
+  },
+  {
+    "name": "R-E-03 @click:once carries modifier",
+    "markup": "<button @click:once=\"go()\"></button>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "click", "type": "MouseEvent", "modifier": "once" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-04 unknown event produces AU1103",
+    "markup": "<div @xyz=\"fn()\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "xyz", "type": "unknown" }
+      ],
+      "diags": [
+        { "code": "AU1103" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-05 per-element event override: button@click Ã¢â€ â€™ PointerEvent",
+    "semOverrides": {
+      "events": {
+        "byElement": {
+          "button": {
+            "click": { "kind": "ts", "name": "PointerEvent" }
+          }
+        }
+      }
+    },
+    "markup": "<button @click=\"go()\"></button>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "click", "type": "PointerEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-06 @input on <input> resolves to InputEvent",
+    "markup": "<input @input=\"onInput()\">",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "input", "type": "InputEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-07 @keydown on <div> resolves to KeyboardEvent",
+    "markup": "<div @keydown=\"k()\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "keydown", "type": "KeyboardEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-08 @keyup on <div> resolves to KeyboardEvent",
+    "markup": "<div @keyup=\"k()\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "keyup", "type": "KeyboardEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-09 @submit on <form> resolves to SubmitEvent",
+    "markup": "<form @submit=\"s()\"></form>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "submit", "type": "SubmitEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-10 @change on <input> resolves to Event",
+    "markup": "<input @change=\"c()\">",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "change", "type": "Event" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-11 @focus on <input> resolves to FocusEvent",
+    "markup": "<input @focus=\"f()\">",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "focus", "type": "FocusEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-12 @blur on <input> resolves to FocusEvent",
+    "markup": "<input @blur=\"b()\">",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "blur", "type": "FocusEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-13 unknown event when global event map is emptied",
+    "semOverrides": {
+      "events": {
+        "byName": {}
+      }
+    },
+    "markup": "<div @click=\"go()\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "click", "type": "unknown" }
+      ],
+      "diags": [
+        { "code": "AU1103" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-14 unknown event name produces AU1103",
+    "markup": "<div @transitionend=\"onEnd()\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "transitionend", "type": "unknown" }
+      ],
+      "diags": [
+        { "code": "AU1103" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-15 clear both global and per-element event maps Ã¢â€ â€™ AU1103 for input event",
+    "semOverrides": {
+      "events": {
+        "byName": {},
+        "byElement": {}
+      }
+    },
+    "markup": "<input @input=\"h()\">",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "input", "type": "unknown" }
+      ],
+      "diags": [
+        { "code": "AU1103" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-16 click.capture unknown when events removed",
+    "semOverrides": {
+      "events": {
+        "byName": {}
+      }
+    },
+    "markup": "<div click.capture=\"go()\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "click", "type": "unknown", "capture": true }
+      ],
+      "diags": [
+        { "code": "AU1103" }
+      ]
+    }
+  },
+  {
+    "name": "R-E-17 @click unknown on <button> when both global and per-element maps are empty",
+    "semOverrides": {
+      "events": {
+        "byName": {},
+        "byElement": {
+          "button": {}
+        }
+      }
+    },
+    "markup": "<button @click=\"go()\"></button>",
+    "expect": {
+      "items": [
+        { "kind": "event", "to": "click", "type": "unknown" }
+      ],
+      "diags": [
+        { "code": "AU1103" }
+      ]
+    }
+  }
+]
