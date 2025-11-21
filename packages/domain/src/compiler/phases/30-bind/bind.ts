@@ -23,7 +23,7 @@ import type {
 } from "../20-resolve-host/types.js";
 
 import type {
-  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic,
+  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic, ScopeDiagCode,
 } from "../../model/symbols.js";
 
 import type { RepeatController } from "../../language/registry.js";
@@ -185,20 +185,12 @@ function walkRows(
               // locals/contextuals
               const forOfAst = forOfIndex.get(forOfAstId)!;
               if (forOfAst.$kind === 'BadExpression') {
-                diags.push({
-                  code: "AU1201",
-                  message: forOfAst.message ?? "Invalid or unsupported repeat header (could not parse iterator).",
-                  span: forOfAst.span
-                })
+                addDiag(diags, "AU1201", forOfAst.message ?? "Invalid or unsupported repeat header (could not parse iterator).", forOfAst.span);
                 break;
               }
               const badPattern = findBadInPattern(forOfAst.declaration);
               if (badPattern) {
-                diags.push({
-                  code: "AU1201",
-                  message: badPattern.message ?? "Invalid or unsupported repeat header (could not parse iterator).",
-                  span: badPattern.span,
-                });
+                addDiag(diags, "AU1201", badPattern.message ?? "Invalid or unsupported repeat header (could not parse iterator).", badPattern.span);
                 break;
               }
               const names = bindingNamesFromDeclaration(forOfAst.declaration);
@@ -311,7 +303,7 @@ function addUniqueSymbols(targetFrame: FrameId, frames: ScopeFrame[], symbols: S
   const existing = new Set(f.symbols.map(s => s.name));
   for (const s of symbols) {
     if (existing.has(s.name)) {
-      diags.push({ code: "AU1202", message: `Duplicate local '${s.name}' in the same scope.`, span: s.span ?? null });
+      addDiag(diags, "AU1202", `Duplicate local '${s.name}' in the same scope.`, s.span ?? null);
       continue;
     }
     f.symbols.push(s);
@@ -482,5 +474,9 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
     default:
       return assertUnreachable(pattern as never);
   }
+}
+
+function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null): void {
+  diags.push({ code, message, span: span ?? null, source: "bind", severity: "error" });
 }
 
