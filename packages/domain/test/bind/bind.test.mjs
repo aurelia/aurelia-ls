@@ -243,13 +243,19 @@ function indexExprCodeFromIr(ir) {
               if (p.kind === "propertyBinding" || p.type === "propertyBinding") visitSource(p.from);
             }
             break;
+          case "hydrateAttribute":
+            for (const p of ins.props ?? []) {
+              if (p.kind === "propertyBinding" || p.type === "propertyBinding") visitSource(p.from);
+              if (p.kind === "attributeBinding" || p.type === "attributeBinding") visitSource(p.from);
+            }
+            break;
 
           case "hydrateLetElement":
             for (const lb of ins.instructions ?? []) visitSource(lb.from);
             break;
 
           default:
-            // setAttribute/setClass/setStyle/setProperty/hydrateElement/hydrateAttribute — no expressions
+            // setAttribute/setClass/setStyle/setProperty - no expressions
             break;
         }
       }
