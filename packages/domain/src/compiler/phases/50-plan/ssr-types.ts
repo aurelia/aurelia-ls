@@ -48,11 +48,13 @@ export interface SsrController {
   branch?: { kind: "then" | "catch" | "case" | "default"; exprId?: ExprId | null } | null;
   /** Nested view compiled as its own plan. */
   def: SsrTemplatePlan;
+  /** Linked template for render-time DOM traversal (not emitted in manifest). */
+  defLinked?: unknown;
   /** Frame where the controlling expr evaluates. */
   frame: number;
 }
 
-/** Compact manifest we emit alongside HTML for “server emits”. */
+/** Compact manifest we emit alongside HTML for "server emits". */
 export interface SsrManifest {
   version: "aurelia-ssr-manifest@0";
   templates: Array<{
@@ -63,7 +65,7 @@ export interface SsrManifest {
       tag?: string; // when element
       text?: boolean;
       bindings?: SsrBinding[];
-      controllers?: Omit<SsrController, "def">[]; // def is expanded in HTML, not needed here
+      controllers?: Omit<SsrController, "def" | "defLinked">[]; // def is expanded in HTML, not needed here
       lets?: { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> };
       staticAttrs?: Record<string, string | null>;
     }>;

@@ -6,12 +6,21 @@
       "nodes": [
         {
           "hid": 1,
+          "nodeId": "0/0",
+          "text": true,
+          "staticAttrs": {
+            "class": "greeting"
+          },
+          "controllers": []
+        },
+        {
+          "hid": 2,
           "nodeId": "0/0#text@0",
           "text": true,
           "controllers": []
         },
         {
-          "hid": 2,
+          "hid": 3,
           "nodeId": "0/1",
           "tag": "input",
           "text": false,
@@ -38,7 +47,7 @@
           "controllers": []
         },
         {
-          "hid": 3,
+          "hid": 4,
           "nodeId": "0/2",
           "text": true,
           "controllers": [
@@ -49,6 +58,12 @@
               "frame": 0
             }
           ]
+        },
+        {
+          "hid": 5,
+          "nodeId": "0/0/0#text@0",
+          "text": true,
+          "controllers": []
         }
       ]
     }
