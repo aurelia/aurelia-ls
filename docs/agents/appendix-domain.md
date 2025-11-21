@@ -140,7 +140,7 @@ Entry:
 Input/Output:
 
 ```ts
-function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule;
+function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOptions): LinkedSemanticsModule;
 ```
 
 Responsibilities:

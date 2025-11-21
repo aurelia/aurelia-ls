@@ -2,6 +2,7 @@ import { PipelineEngine, type PipelineOptions, type StageOutputs, type CacheOpti
 import { createDefaultStageDefinitions } from "./pipeline/stages.js";
 import type { AttributeParser } from "./language/syntax.js";
 import type { Semantics } from "./language/registry.js";
+import type { ResourceGraph, ResourceScopeId } from "./language/resource-graph.js";
 import type { VmReflection } from "./phases/50-plan/overlay/types.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
 
@@ -9,6 +10,8 @@ export interface CoreCompileOptions {
   html: string;
   templateFilePath: string;
   semantics?: Semantics;
+  resourceGraph?: ResourceGraph;
+  resourceScope?: ResourceScopeId | null;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   vm: VmReflection;
@@ -40,6 +43,8 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     vm: opts.vm,
   };
   if (opts.semantics) pipelineOpts.semantics = opts.semantics;
+  if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
+  if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
   if (opts.cache) pipelineOpts.cache = opts.cache;
   if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;

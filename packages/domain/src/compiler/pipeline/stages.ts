@@ -8,6 +8,7 @@ import { emitOverlayFile } from "../phases/60-emit/overlay/emit.js";
 import { planSsr } from "../phases/50-plan/ssr/plan.js";
 import { emitSsr } from "../phases/60-emit/ssr/emit.js";
 import { DEFAULT as SEM_DEFAULT } from "../language/registry.js";
+import { materializeResourcesForScope } from "../language/resource-graph.js";
 import { DEFAULT_SYNTAX } from "../language/syntax.js";
 import { getExpressionParser } from "../../parsers/expression-parser.js";
 import { PipelineEngine } from "./engine.js";
@@ -29,9 +30,28 @@ function assertOption<T>(value: T | undefined, name: string): T {
 export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   const definitions: StageDefinition<StageKey>[] = [];
 
+  const scopedSemantics = (options: PipelineOptions) => {
+    const base = options.semantics ?? SEM_DEFAULT;
+    const graph = options.resourceGraph ?? base.resourceGraph ?? null;
+    const scopeId = options.resourceScope ?? base.defaultScope ?? null;
+    const scoped = materializeResourcesForScope(base, graph, scopeId);
+    return {
+      sem: { ...base, resources: scoped.resources, resourceGraph: graph ?? null, defaultScope: scopeId ?? null },
+      resources: scoped.resources,
+      scopeId: scoped.scope,
+    };
+  };
+
+  const scopeFingerprint = (options: PipelineOptions) => {
+    const graph = options.resourceGraph ?? options.semantics?.resourceGraph ?? null;
+    if (!graph) return null;
+    const scope = options.resourceScope ?? options.semantics?.defaultScope ?? graph.root ?? null;
+    return { graph: stableHash(graph), scope };
+  };
+
   definitions.push({
     key: "10-lower",
-    version: "1",
+    version: "2",
     deps: [],
     fingerprint(ctx) {
       const options = ctx.options;
@@ -40,6 +60,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         html: stableHash(options.html),
         file: options.templateFilePath,
         sem: options.fingerprints?.semantics ?? stableHash(sem),
+        resourceGraph: scopeFingerprint(options),
         attrParser: options.fingerprints?.attrParser ?? (options.attrParser ? "custom" : "default"),
         exprParser: options.fingerprints?.exprParser ?? (options.exprParser ? "custom" : "default"),
       };
@@ -48,28 +69,36 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       const options = ctx.options;
       const exprParser = options.exprParser ?? getExpressionParser();
       const attrParser = options.attrParser ?? DEFAULT_SYNTAX;
+      const { sem } = scopedSemantics(options);
       return lowerDocument(options.html, {
         file: options.templateFilePath,
         name: path.basename(options.templateFilePath),
         attrParser,
         exprParser,
-        sem: options.semantics ?? SEM_DEFAULT,
+        sem,
       });
     },
   });
 
   definitions.push({
     key: "20-link",
-    version: "1",
+    version: "2",
     deps: ["10-lower"],
     fingerprint(ctx) {
       const sem = ctx.options.semantics ?? SEM_DEFAULT;
-      return { sem: ctx.options.fingerprints?.semantics ?? stableHash(sem) };
+      return {
+        sem: ctx.options.fingerprints?.semantics ?? stableHash(sem),
+        resourceGraph: scopeFingerprint(ctx.options),
+      };
     },
     run(ctx) {
-      const sem = ctx.options.semantics ?? SEM_DEFAULT;
+      const scoped = scopedSemantics(ctx.options);
       const ir = ctx.require("10-lower");
-      return resolveHost(ir, sem);
+      return resolveHost(ir, scoped.sem, {
+        resources: scoped.resources,
+        graph: ctx.options.resourceGraph ?? null,
+        scope: scoped.scopeId,
+      });
     },
   });
 

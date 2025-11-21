@@ -1,10 +1,18 @@
 import type { BindingMode } from "../model/ir.js";
+import type { ResourceCollections, ResourceGraph, ResourceScopeId, ScopedResources } from "./resource-graph.js";
+import { materializeResourcesForScope } from "./resource-graph.js";
 
 /** Schema version for Semantics. Keep stable across linker/analysis. */
 export type SemVersion = "aurelia-semantics@1";
 
 export interface Semantics {
   version: SemVersion;
+  /**
+   * Optional scoped resource graph to allow per-scope resolution of resources.
+   * If provided, callers may supply a scope id; otherwise the graph's root is used.
+   */
+  resourceGraph?: ResourceGraph | null;
+  defaultScope?: ResourceScopeId | null;
 
   /**
    * Project/resource registry:
@@ -610,6 +618,8 @@ export interface EventResolution {
 export interface SemanticsLookup {
   /** Underlying semantics (for callers that need raw data). */
   readonly sem: Semantics;
+  /** Scope id (if derived from a ResourceGraph). */
+  readonly scope: ResourceScopeId | null;
 
   /** Resolve a custom element by name or alias (case-insensitive). */
   element(name: string): ElementRes | null;
@@ -630,16 +640,27 @@ export interface SemanticsLookup {
   hasPreservedPrefix(attr: string): boolean;
 }
 
-export function createSemanticsLookup(sem: Semantics): SemanticsLookup {
-  const elementIndex = buildResourceIndex(sem.resources.elements);
-  const attributeIndex = buildResourceIndex(sem.resources.attributes);
+export interface SemanticsLookupOptions {
+  resources?: ResourceCollections;
+  graph?: ResourceGraph | null;
+  scope?: ResourceScopeId | null;
+}
+
+export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOptions): SemanticsLookup {
+  const scoped: ScopedResources = opts?.resources
+    ? { scope: opts.scope ?? null, resources: opts.resources }
+    : materializeResourcesForScope(sem, opts?.graph, opts?.scope ?? null);
+
+  const elementIndex = buildResourceIndex(scoped.resources.elements);
+  const attributeIndex = buildResourceIndex(scoped.resources.attributes);
   const domIndex = buildDomIndex(sem.dom.elements);
 
   return {
     sem,
+    scope: scoped.scope,
     element: (name) => lookupResource(elementIndex, name),
     attribute: (name) => lookupResource(attributeIndex, name),
-    controller: (name) => sem.resources.controllers[name] ?? null,
+    controller: (name) => scoped.resources.controllers[name] ?? null,
     domElement: (tag) => lookupDom(domIndex, tag),
     event: (eventName, tag) => resolveEvent(sem, eventName, tag),
     hasPreservedPrefix: (attr) => hasPreservedPrefix(sem, attr),
