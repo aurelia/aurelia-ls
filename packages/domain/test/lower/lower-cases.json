@@ -159,9 +159,7 @@
   {
     "name": "L-19 <let/> no bindings",
     "markup": "<template><let></let></template>",
-    "expect": {
-      "lets": []
-    }
+    "expect": { "lets": [] }
   },
   {
     "name": "L-20 <let/> with .bind and interpolation",
@@ -298,10 +296,7 @@
   {
     "name": "L-32 skip local custom element template",
     "markup": "<template as-custom-element=\"user-card\" if.bind=\"c\"></template>",
-    "expect": {
-      "controllers": [],
-      "expressions": []
-    }
+    "expect": { "controllers": [], "expressions": [] }
   },
   {
     "name": "L-33 let with multiple ${} expressions",
@@ -643,9 +638,7 @@
           "x-widget": {
             "kind": "element",
             "name": "x-widget",
-            "aliases": [
-              "x-alias"
-            ],
+            "aliases": [ "x-alias" ],
             "boundary": true,
             "containerless": true,
             "bindables": {
@@ -661,13 +654,7 @@
         { "kind": "propCommand", "code": "bar", "command": "bind" }
       ],
       "elements": [
-        {
-          "res": "x-widget",
-          "containerless": true,
-          "props": [
-            "foo"
-          ]
-        }
+        { "res": "x-widget", "containerless": true, "props": [ "foo" ] }
       ]
     }
   },
@@ -679,9 +666,7 @@
           "fancy-attr": {
             "kind": "attribute",
             "name": "fancy-attr",
-            "aliases": [
-              "fancy"
-            ],
+            "aliases": [ "fancy" ],
             "isTemplateController": false,
             "bindables": {
               "value": { "name": "value", "mode": "toView" }
@@ -696,13 +681,7 @@
         { "kind": "propCommand", "code": "x", "command": "bind" }
       ],
       "attributes": [
-        {
-          "res": "fancy-attr",
-          "alias": "fancy",
-          "props": [
-            "value"
-          ]
-        }
+        { "res": "fancy-attr", "alias": "fancy", "props": [ "value" ] }
       ]
     }
   },
@@ -726,13 +705,7 @@
     "expect": {
       "expressions": [],
       "elements": [
-        {
-          "res": "x-panel",
-          "containerless": false,
-          "props": [
-            "title"
-          ]
-        }
+        { "res": "x-panel", "containerless": false, "props": [ "title" ] }
       ]
     }
   },
@@ -758,13 +731,7 @@
         { "kind": "attrInterpolation", "on": "title", "code": "name" }
       ],
       "elements": [
-        {
-          "res": "x-panel",
-          "containerless": false,
-          "props": [
-            "title"
-          ]
-        }
+        { "res": "x-panel", "containerless": false, "props": [ "title" ] }
       ]
     }
   },
@@ -801,13 +768,7 @@
         { "kind": "propCommand", "code": "vm", "command": "bind" }
       ],
       "elements": [
-        {
-          "res": "x-thing",
-          "containerless": false,
-          "props": [
-            "fancy"
-          ]
-        }
+        { "res": "x-thing", "containerless": false, "props": [ "fancy" ] }
       ],
       "attributes": []
     }
@@ -833,13 +794,7 @@
     "expect": {
       "expressions": [],
       "attributes": [
-        {
-          "res": "note",
-          "alias": null,
-          "props": [
-            "value"
-          ]
-        }
+        { "res": "note", "alias": null, "props": [ "value" ] }
       ]
     }
   }
