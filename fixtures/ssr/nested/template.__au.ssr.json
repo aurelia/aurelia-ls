@@ -1,0 +1,129 @@
+{
+  "version": "aurelia-ssr-manifest@0",
+  "templates": [
+    {
+      "name": "template.html",
+      "nodes": [
+        {
+          "hid": 13,
+          "nodeId": "0/0/0",
+          "text": false,
+          "controllers": [
+            {
+              "res": "promise",
+              "valueExprId": "expr_246e3f80a9d05400",
+              "branch": {
+                "kind": "then",
+                "exprId": null
+              },
+              "frame": 2
+            }
+          ]
+        },
+        {
+          "hid": 2,
+          "nodeId": "0/0/0/0/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 3,
+          "nodeId": "0/0/0/1/0",
+          "tag": "li",
+          "text": false,
+          "controllers": [
+            {
+              "res": "repeat",
+              "forOfExprId": "expr_166ab9005206d2a0",
+              "branch": null,
+              "frame": 0
+            }
+          ]
+        },
+        {
+          "hid": 7,
+          "nodeId": "0/0/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 16,
+          "nodeId": "0/0/1",
+          "text": false,
+          "controllers": [
+            {
+              "res": "promise",
+              "valueExprId": "expr_246e3f80a9d05400",
+              "branch": {
+                "kind": "catch",
+                "exprId": null
+              },
+              "frame": 2
+            }
+          ]
+        },
+        {
+          "hid": 8,
+          "nodeId": "0/0/2",
+          "text": false,
+          "controllers": [
+            {
+              "res": "promise",
+              "valueExprId": "expr_246e3f80a9d05400",
+              "branch": null,
+              "frame": 2
+            }
+          ]
+        },
+        {
+          "hid": 9,
+          "nodeId": "0/0/0/0",
+          "tag": "div",
+          "text": false,
+          "staticAttrs": {
+            "class": "details"
+          },
+          "controllers": []
+        },
+        {
+          "hid": 10,
+          "nodeId": "0/0/0/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 11,
+          "nodeId": "0/0/1/0",
+          "tag": "div",
+          "text": false,
+          "staticAttrs": {
+            "class": "error"
+          },
+          "controllers": []
+        },
+        {
+          "hid": 12,
+          "nodeId": "0/0/1/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 17,
+          "nodeId": "0/0",
+          "tag": "div",
+          "text": false,
+          "staticAttrs": {
+            "class": "error"
+          },
+          "controllers": []
+        },
+        {
+          "hid": 18,
+          "nodeId": "0/0#text@0",
+          "text": true,
+          "controllers": []
+        }
+      ]
+    }
+  ]
+}
