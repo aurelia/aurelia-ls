@@ -12,7 +12,7 @@ export type {
 } from "./compiler/language/resource-graph.js";
 
 export type { VmReflection } from "./compiler/phases/50-plan/overlay/types.js";
-export type { TemplateCompilation } from "./compiler/facade.js";
+export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./compiler/facade.js";
 export type {
   TemplateMappingArtifact,
   TemplateMappingEntry,
@@ -27,3 +27,6 @@ export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
 
 export { compileTemplateToSSR } from "./compiler/facade.js";
 export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
+export { mapOverlayOffsetToHtml, mapHtmlOffsetToOverlay } from "./compiler/facade.js";
+export type { MappingHit } from "./compiler/mapping.js";
+export type { StageKey, StageArtifactMeta } from "./compiler/pipeline/engine.js";
