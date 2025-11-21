@@ -1,4 +1,5 @@
 import type { ExprId, SourceSpan, NodeId, InterpIR } from "../../model/ir.js";
+import type { LinkedTemplate } from "../20-resolve-host/types.js";
 
 /** Module-level SSR planning artifact. */
 export interface SsrPlanModule {
@@ -10,7 +11,7 @@ export interface SsrPlanModule {
 export interface SsrTemplatePlan {
   name?: string | undefined;
   /** NodeId → HID (hydration id). Assigned only to nodes with dynamic work. */
-  hidByNode: Record<string /* NodeId */, number>;
+  hidByNode: Record<NodeId, number>;
   /** Text nodes with interpolations, (one HID per text node occurrence). */
   textBindings: Array<{
     hid: number;
@@ -49,7 +50,7 @@ export interface SsrController {
   /** Nested view compiled as its own plan. */
   def: SsrTemplatePlan;
   /** Linked template for render-time DOM traversal (not emitted in manifest). */
-  defLinked?: unknown;
+  defLinked?: LinkedTemplate;
   /** Frame where the controlling expr evaluates. */
   frame: number;
 }
