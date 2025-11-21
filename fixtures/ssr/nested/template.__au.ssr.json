@@ -27,7 +27,7 @@
           "controllers": [
             {
               "res": "repeat",
-              "forOfExprId": "expr_166ab9005206d2a0",
+              "forOfExprId": "expr_1f8cfd303aee5680",
               "branch": null,
               "frame": 0
             }
@@ -46,7 +46,7 @@
           "controllers": [
             {
               "res": "if",
-              "valueExprId": "expr_6f11c680544d8487",
+              "valueExprId": "expr_08486dc00a11a840",
               "branch": null,
               "frame": 1
             }
@@ -60,7 +60,7 @@
             {
               "kind": "listener",
               "name": "click",
-              "exprId": "expr_31c3dc00de973d68",
+              "exprId": "expr_c1800400227d7740",
               "frame": 1,
               "capture": false,
               "modifier": null
@@ -81,7 +81,7 @@
           "controllers": [
             {
               "res": "promise",
-              "valueExprId": "expr_246e3f80a9d05400",
+              "valueExprId": "expr_73fc5500ab71c8d0",
               "branch": null,
               "frame": 1
             }
@@ -124,7 +124,7 @@
           "controllers": [
             {
               "res": "promise",
-              "valueExprId": "expr_246e3f80a9d05400",
+              "valueExprId": "expr_73fc5500ab71c8d0",
               "branch": {
                 "kind": "then",
                 "exprId": null
@@ -155,7 +155,7 @@
           "controllers": [
             {
               "res": "promise",
-              "valueExprId": "expr_246e3f80a9d05400",
+              "valueExprId": "expr_73fc5500ab71c8d0",
               "branch": {
                 "kind": "catch",
                 "exprId": null
