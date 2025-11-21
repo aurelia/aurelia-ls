@@ -16,6 +16,7 @@
     "commands": [
       { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
       { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
+      { "command": "aurelia.showTemplateInfo", "title": "Aurelia: Show Template Info" },
       { "command": "aurelia.showSsrPreview", "title": "Aurelia: Show SSR Preview" },
       { "command": "aurelia.dumpState",   "title": "Aurelia: Dump Server State" }
     ]

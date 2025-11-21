@@ -125,25 +125,71 @@ export async function activate(context: vscode.ExtensionContext) {
       const editor = vscode.window.activeTextEditor;
       if (!editor) { vscode.window.showInformationMessage("No active editor"); return; }
       const uri = editor.document.uri.toString();
-      out.appendLine(`[client] aurelia.showOverlayMapping → request for ${uri}`);
+      out.appendLine(`[client] aurelia.showOverlayMapping -> request for ${uri}`);
       try {
-        const result = await client!.sendRequest<{ overlayPath: string; text: string; calls?: any[] } | null>(
-          "aurelia/getOverlay",
+        const mapping = await client!.sendRequest<{ overlayPath: string; mapping: { entries: any[] } } | null>(
+          "aurelia/getMapping",
           { uri }
         );
-        if (!result?.calls?.length) {
-          vscode.window.showInformationMessage("No overlay mapping available for this document");
+        const overlayFallback = mapping?.mapping?.entries?.length ? null : await client!.sendRequest<{
+          overlayPath: string; text: string; calls?: any[];
+        } | null>("aurelia/getOverlay", { uri });
+
+        if (mapping?.mapping?.entries?.length) {
+          const rows = mapping.mapping.entries.map((entry: any, i: number) =>
+            `${i + 1}. expr=${entry.exprId} overlay=[${entry.overlayRange?.[0]},${entry.overlayRange?.[1]}) html=[${entry.htmlSpan?.start},${entry.htmlSpan?.end})`
+          );
+          const body = [`Overlay: ${mapping.overlayPath}`, "", ...rows].join("\n");
+          const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Mapping Artifact\n\n${body}` });
+          await vscode.window.showTextDocument(doc, { preview: true });
           return;
         }
-        const lines = result.calls.map((c: any, i: number) =>
-          `${i + 1}. expr=${c.exprId} overlay=[${c.overlayStart},${c.overlayEnd}) html=[${c.htmlStart},${c.htmlEnd})`
-        );
-        const body = [`Overlay: ${result.overlayPath}`, "", ...lines].join("\n");
-        const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Overlay Mapping\n\n${body}` });
-        await vscode.window.showTextDocument(doc, { preview: true });
+
+        if (overlayFallback?.calls?.length) {
+          const lines = overlayFallback.calls.map((c: any, i: number) =>
+            `${i + 1}. expr=${c.exprId} overlay=[${c.overlayStart},${c.overlayEnd}) html=[${c.htmlStart},${c.htmlEnd})`
+          );
+          const body = [`Overlay: ${overlayFallback.overlayPath}`, "", ...lines].join("\n");
+          const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Overlay Mapping\n\n${body}` });
+          await vscode.window.showTextDocument(doc, { preview: true });
+          return;
+        }
+
+        vscode.window.showInformationMessage("No overlay mapping available for this document");
       } catch (e: any) {
         out.appendLine(`[client] aurelia.showOverlayMapping error: ${e?.message || e}`);
         vscode.window.showErrorMessage(`Show Overlay Mapping failed: ${e?.message || e}`);
+      }
+    })
+  );
+
+  // Command: Show Template Info (Query API scaffold)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("aurelia.showTemplateInfo", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) { vscode.window.showInformationMessage("No active editor"); return; }
+      const uri = editor.document.uri.toString();
+      const position = editor.selection.active;
+      out.appendLine(`[client] aurelia.showTemplateInfo -> request for ${uri} @ ${position.line}:${position.character}`);
+      try {
+        const result = await client!.sendRequest<any>("aurelia/queryAtPosition", { uri, position });
+        if (!result) {
+          vscode.window.showInformationMessage("No query info available for this document");
+          return;
+        }
+        const lines = [
+          `expr: ${result.expr?.exprId ?? "<none>"}`,
+          `node: ${result.node?.kind ?? "<none>"}`,
+          `controller: ${result.controller?.kind ?? "<none>"}`,
+          `bindables: ${result.bindables?.length ?? 0}`,
+          `mapping entries: ${result.mappingSize ?? "?"}`,
+        ];
+        const body = `# Template Info\n\n${lines.join("\n")}`;
+        const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: body });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      } catch (e: any) {
+        out.appendLine(`[client] aurelia.showTemplateInfo error: ${e?.message || e}`);
+        vscode.window.showErrorMessage(`Show Template Info failed: ${e?.message || e}`);
       }
     })
   );

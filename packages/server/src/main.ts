@@ -1,6 +1,9 @@
 import {
   createConnection, ProposedFeatures, TextDocuments, TextDocumentSyncKind,
   DiagnosticSeverity, type InitializeParams, type InitializeResult,
+  type CompletionItem, type Hover, type Definition, type Location, type WorkspaceEdit,
+  type ReferenceParams, type RenameParams, type TextDocumentPositionParams, type CodeAction,
+  type CodeActionParams, type Position,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
@@ -9,9 +12,9 @@ import * as path from "node:path";
 import * as ts from "typescript";
 
 import {
-  compileTemplateToOverlay, compileTemplateToSSR, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
+  compileTemplate, compileTemplateToSSR, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
 } from "@aurelia-ls/domain";
-import type { VmReflection } from "@aurelia-ls/domain";
+import type { VmReflection, TemplateCompilation, TemplateMappingArtifact, TemplateExpressionInfo } from "@aurelia-ls/domain";
 
 /* ============================================================================
  * Logging (verbose)
@@ -38,7 +41,7 @@ const canonical = (f: string) => {
 type Snapshot = { text: string; version: number };
 const overlayFiles   = new Map<string, Snapshot>();
 const scriptFileKeys = new Set<string>();
-const htmlToOverlay  = new Map<string, { path: string; text: string; calls: Array<{ exprId: string; overlayStart: number; overlayEnd: number; htmlStart: number; htmlEnd: number }> }>();
+const htmlPrograms   = new Map<string, TemplateCompilation>();
 const htmlToSsr      = new Map<string, { htmlPath: string; htmlText: string; manifestPath: string; manifestText: string }>();
 
 let projectVersion = 1;
@@ -268,23 +271,22 @@ async function compileSsrForDocument(doc: TextDocument) {
 /* ============================================================================
  * Core: compile + overlay + diagnostics
  * ========================================================================== */
+
 async function compileAndUpdateOverlay(doc: TextDocument) {
   const fsPath = uriToFsPath(doc.uri);
   const lang = (doc as any).languageId ?? "<unknown>";
+  const key = canonical(fsPath);
   log(`compileAndUpdateOverlay: uri=${doc.uri} fsPath=${fsPath} lang=${lang}`);
   if (path.extname(fsPath).toLowerCase() !== ".html") {
     log(`skip (not .html): ${fsPath}`);
     return;
   }
 
-  const base = path.basename(fsPath, ".html");
   const vm: VmReflection = buildVmReflection(fsPath);
 
-  // Domain pipeline (HTML → IR → Linked → Scope → Plan → Emit)
-  // e.g. :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3} :contentReference[oaicite:4]{index=4} :contentReference[oaicite:5]{index=5} :contentReference[oaicite:6]{index=6}
-  let result: ReturnType<typeof compileTemplateToOverlay> | null = null;
+  let compilation: TemplateCompilation | null = null;
   try {
-    result = compileTemplateToOverlay({
+    compilation = compileTemplate({
       html: doc.getText(),
       templateFilePath: fsPath,
       isJs: false,
@@ -293,31 +295,22 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
       exprParser,
     });
   } catch (e: any) {
-    err(`compileTemplateToOverlay threw: ${e?.stack || e}`);
+    err(`compileTemplate threw: ${e?.stack || e}`);
     connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
     return;
   }
-  if (!result) { warn(`no overlay result for ${fsPath}`); return; }
+  if (!compilation) { warn(`no overlay result for ${fsPath}`); return; }
 
-  upsertOverlay(result.overlayPath, result.text);
-  htmlToSsr.delete(canonical(fsPath)); // invalidate SSR cache on new overlay build
-  htmlToOverlay.set(canonical(fsPath), {
-    path: result.overlayPath,
-    text: result.text,
-    calls: result.calls.map((c) => ({
-      exprId: c.exprId as string,
-      overlayStart: c.overlayStart,
-      overlayEnd: c.overlayEnd,
-      htmlStart: c.htmlSpan?.start ?? 0,
-      htmlEnd: c.htmlSpan?.end ?? 0,
-    })),
-  });
+  const overlay = compilation.overlay;
+  upsertOverlay(overlay.overlayPath, overlay.text);
+  htmlToSsr.delete(key); // invalidate SSR cache on new overlay build
+  htmlPrograms.set(key, compilation);
 
-  const accessCount = (result.text.match(/__au\$access/g) || []).length;
-  log(`overlay@${result.overlayPath} len=${result.text.length} calls=${accessCount} preview:\n${preview(result.text)}`);
-  log(`calls mapping entries: ${result.calls.length}`);
+  const accessCount = (overlay.text.match(/__au\$access/g) || []).length;
+  log(`overlay@${overlay.overlayPath} len=${overlay.text.length} calls=${accessCount} preview:\n${preview(overlay.text)}`);
+  log(`calls mapping entries: ${overlay.calls.length}`);
 
-  const overlayCanon = canonical(result.overlayPath);
+  const overlayCanon = canonical(overlay.overlayPath);
   const sf = forceOverlaySourceFile(overlayCanon);
   const program = tsService.getProgram();
   const roots = (program?.getRootFileNames() ?? []).map(canonical);
@@ -336,7 +329,7 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
   for (const d of diags) {
     if (d.start == null || d.length == null) continue;
     const start = d.start;
-    const call = result.calls.find((c) => start >= c.overlayStart && start <= c.overlayEnd);
+    const call = overlay.calls.find((c) => start >= c.overlayStart && start <= c.overlayEnd);
     if (!call) continue;
 
     const range = spanToRange(doc, call.htmlSpan.start, call.htmlSpan.end);
@@ -350,20 +343,46 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
 
   connection.sendNotification("aurelia/overlayReady", {
     uri: doc.uri,
-    overlayPath: result.overlayPath,
-    calls: result.calls.length,
-    overlayLen: result.text.length,
+    overlayPath: overlay.overlayPath,
+    calls: overlay.calls.length,
+    overlayLen: overlay.text.length,
     diags: htmlDiags.length,
   });
 }
+
+async function ensureCompilationForDocument(doc: TextDocument): Promise<TemplateCompilation | null> {
+  const fsPath = uriToFsPath(doc.uri);
+  const key = canonical(fsPath);
+  const cached = htmlPrograms.get(key);
+  if (cached) return cached;
+  await compileAndUpdateOverlay(doc);
+  return htmlPrograms.get(key) ?? null;
+}
+
+async function ensureCompilationForUri(uri: string): Promise<TemplateCompilation | null> {
+  const doc = documents.get(uri) ?? getTextDocumentForUri(uri);
+  if (!doc) return null;
+  return ensureCompilationForDocument(doc);
+}
+
 
 /* ============================================================================
  * Custom requests (overlay/SSR preview + dump state)
  * ========================================================================== */
 type GetOverlayParams = { uri?: string } | string | null;
 type OverlayCall = { exprId: string; overlayStart: number; overlayEnd: number; htmlStart: number; htmlEnd: number };
-type GetOverlayResult = { overlayPath: string; text: string; calls?: OverlayCall[] } | null;
+type GetOverlayResult = { overlayPath: string; text: string; calls?: OverlayCall[]; mapping?: TemplateMappingArtifact } | null;
+type GetMappingResult = { overlayPath: string; mapping: TemplateMappingArtifact } | null;
+type QueryAtPositionParams = { uri: string; position: Position };
+type QueryAtPositionResult = {
+  expr?: TemplateExpressionInfo | null;
+  node?: ReturnType<TemplateCompilation["query"]["nodeAt"]>;
+  bindables?: ReturnType<TemplateCompilation["query"]["bindablesFor"]>;
+  controller?: ReturnType<TemplateCompilation["query"]["controllerAt"]>;
+  mappingSize?: number;
+} | null;
 type GetSsrResult = { htmlPath: string; htmlText: string; manifestPath: string; manifestText: string } | null;
+
 
 connection.onRequest("aurelia/getOverlay", async (params: GetOverlayParams): Promise<GetOverlayResult> => {
   let uri: string | undefined;
@@ -373,28 +392,77 @@ connection.onRequest("aurelia/getOverlay", async (params: GetOverlayParams): Pro
   log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
 
   if (uri) {
-    const fsPath = uriToFsPath(uri);
-    const key = canonical(fsPath);
-    let rec = htmlToOverlay.get(key);
-
-    if (!rec) {
-      log(`overlay missing for ${fsPath} — compiling on demand`);
-      const doc = documents.get(uri);
-      if (doc) await compileAndUpdateOverlay(doc);
-      rec = htmlToOverlay.get(key);
+    const compilation = await ensureCompilationForUri(uri);
+    if (compilation) {
+      const overlay = compilation.overlay;
+      log(`overlay found for ${uri} -> ${overlay.overlayPath} (len=${overlay.text.length})`);
+      return {
+        overlayPath: overlay.overlayPath,
+        text: overlay.text,
+        mapping: compilation.mapping,
+        calls: overlay.calls.map((c) => ({
+          exprId: c.exprId as string,
+          overlayStart: c.overlayStart,
+          overlayEnd: c.overlayEnd,
+          htmlStart: c.htmlSpan?.start ?? 0,
+          htmlEnd: c.htmlSpan?.end ?? 0,
+        })),
+      };
     }
-
-    if (rec) {
-      log(`overlay found for ${fsPath} → ${rec.path} (len=${rec.text.length})`);
-      return { overlayPath: rec.path, text: rec.text, calls: rec.calls };
-    }
-    warn(`overlay still not found for ${fsPath}`);
+    warn(`overlay still not found for ${uri}`);
     return null;
   }
 
-  const last = Array.from(htmlToOverlay.values()).pop();
-  return last ? { overlayPath: last.path, text: last.text, calls: last.calls } : null;
+  const last = Array.from(htmlPrograms.values()).pop();
+  return last ? {
+    overlayPath: last.overlay.overlayPath,
+    text: last.overlay.text,
+    mapping: last.mapping,
+    calls: last.overlay.calls.map((c) => ({
+      exprId: c.exprId as string,
+      overlayStart: c.overlayStart,
+      overlayEnd: c.overlayEnd,
+      htmlStart: c.htmlSpan?.start ?? 0,
+      htmlEnd: c.htmlSpan?.end ?? 0,
+    })),
+  } : null;
 });
+
+connection.onRequest("aurelia/getMapping", async (params: GetOverlayParams): Promise<GetMappingResult> => {
+  let uri: string | undefined;
+  if (typeof params === "string") uri = params;
+  else if (params && typeof params === "object") uri = (params as any).uri;
+
+  if (uri) {
+    const compilation = await ensureCompilationForUri(uri);
+    if (!compilation) return null;
+    return { overlayPath: compilation.overlay.overlayPath, mapping: compilation.mapping };
+  }
+
+  const last = Array.from(htmlPrograms.values()).pop();
+  return last ? { overlayPath: last.overlay.overlayPath, mapping: last.mapping } : null;
+});
+
+connection.onRequest("aurelia/queryAtPosition", async (params: QueryAtPositionParams): Promise<QueryAtPositionResult> => {
+  const uri = params?.uri;
+  if (!uri || !params.position) return null;
+
+  const doc = getTextDocumentForUri(uri);
+  if (!doc) return null;
+
+  const compilation = await ensureCompilationForDocument(doc);
+  if (!compilation) return null;
+
+  const offset = doc.offsetAt(params.position);
+  const query = compilation.query;
+  const expr = query.exprAt(offset);
+  const node = query.nodeAt(offset);
+  const controller = query.controllerAt(offset);
+  const bindables = node ? query.bindablesFor(node) : null;
+
+  return { expr, node, controller, bindables, mappingSize: compilation.mapping.entries.length };
+});
+
 
 function getTextDocumentForUri(uri: string): TextDocument | null {
   const live = documents.get(uri);
@@ -431,9 +499,77 @@ connection.onRequest("aurelia/dumpState", () => {
     prelude: PRELUDE_PATH,
     overlayRoots: Array.from(scriptFileKeys),
     overlays: Array.from(overlayFiles.keys()),
-    htmlToOverlay: Array.from(htmlToOverlay.entries()),
+    htmlPrograms: Array.from(htmlPrograms.entries()).map(([k, v]) => ({
+      key: k,
+      overlay: v.overlay.overlayPath,
+      calls: v.overlay.calls.length,
+      mappingEntries: v.mapping.entries.length,
+    })),
     programRoots: roots,
   };
+});
+
+/* ============================================================================
+ * LSP feature scaffolding (completions/hover/defs/refs/rename/code actions)
+ * ========================================================================== */
+connection.onCompletion(async (params): Promise<CompletionItem[]> => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return [];
+  const compilation = await ensureCompilationForDocument(doc);
+  if (!compilation) return [];
+  // TODO: use TemplateQueryFacade + TS LS for Aurelia-aware completions.
+  return [];
+});
+
+connection.onHover(async (params: TextDocumentPositionParams): Promise<Hover | null> => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const compilation = await ensureCompilationForDocument(doc);
+  if (!compilation) return null;
+  // TODO: use mapping artifact + TS LS for hover text.
+  void compilation;
+  return null;
+});
+
+connection.onDefinition(async (params: TextDocumentPositionParams): Promise<Definition | null> => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const compilation = await ensureCompilationForDocument(doc);
+  if (!compilation) return null;
+  // TODO: bridge Query API -> TS LS for go-to-def.
+  void compilation;
+  return [];
+});
+
+connection.onReferences(async (params: ReferenceParams): Promise<Location[] | null> => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const compilation = await ensureCompilationForDocument(doc);
+  if (!compilation) return null;
+  // TODO: map TS references back to HTML using first-class mapping.
+  void compilation;
+  return [];
+});
+
+connection.onRenameRequest(async (params: RenameParams): Promise<WorkspaceEdit | null> => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const compilation = await ensureCompilationForDocument(doc);
+  if (!compilation) return null;
+  // TODO: implement HTML<->TS rename using mapping artifact.
+  void compilation;
+  return null;
+});
+
+connection.onCodeAction(async (params: CodeActionParams): Promise<CodeAction[] | null> => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const compilation = await ensureCompilationForDocument(doc);
+  if (!compilation) return null;
+  // TODO: surface create-bindable / event-name-fix actions using Query API context.
+  void params;
+  void compilation;
+  return [];
 });
 
 /* ============================================================================
@@ -446,6 +582,12 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
+      completionProvider: { triggerCharacters: ["<", " ", ".", ":", "@", "$", "{"] },
+      hoverProvider: true,
+      definitionProvider: true,
+      referencesProvider: true,
+      renameProvider: true,
+      codeActionProvider: true,
     },
   };
 });
