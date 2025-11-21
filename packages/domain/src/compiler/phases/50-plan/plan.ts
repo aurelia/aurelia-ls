@@ -126,10 +126,10 @@ type Env = ReadonlyMap<string, string>;        // name -> TS type expr
 type MutableEnv = Map<string, string>;
 
 type FrameTypingHints = {
-  /** For 'with': overlay value type; for 'promise': raw promise type (before Awaited). */
+  /** For 'with': overlay value type. */
   overlayBase?: string;
-  /** then/catch to refine $this and alias typing */
-  promiseBranch?: "then" | "catch";
+  /** For 'promise': raw promise type (before Awaited). */
+  promiseBase?: string;
   /** For 'repeat': iterable type; element type computed via CollectionElement<>. */
   repeatIterable?: string;
 };
@@ -201,8 +201,7 @@ function buildFrameAnalysis(
     } else if (f.origin?.kind === "promise") {
       const e = exprIndex.get(f.origin.valueExprId);
       if (e?.expressionType === "IsProperty") {
-        h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
-        h.promiseBranch = f.origin.branch!;
+        h.promiseBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
       }
     }
     hints.set(f.id, h);
@@ -235,12 +234,11 @@ function buildFrameAnalysis(
 
     // promise alias (then/catch)
     if (f.origin?.kind === "promise") {
-      const base = h.overlayBase;
-      const branch = h.promiseBranch;
+      const base = h.promiseBase;
       for (const s of f.symbols) {
         if (s.kind === "promiseAlias") {
-          if (branch === "then" && base) env.set(s.name, `Awaited<${base}>`);
-          else if (branch === "catch") env.set(s.name, "any");
+          if (s.branch === "then" && base) env.set(s.name, `Awaited<${base}>`);
+          else if (s.branch === "catch") env.set(s.name, "any");
           else env.set(s.name, "unknown");
         }
       }
@@ -341,8 +339,8 @@ function buildFrameTypeExpr(
   const localKeysUnion = localEntries.length > 0 ? localEntries.map(([k]) => `'${escapeKey(k)}'`).join(" | ") : "never";
   const localsType = localEntries.length > 0 ? `{ ${localEntries.map(([n, t]) => `${safeProp(n)}: ${t}`).join("; ")} }` : "{}";
 
-  // Overlay object (with / promise then) if present
-  const overlayObj = hints?.overlayBase ? (hints.promiseBranch === "then" ? `Awaited<${hints.overlayBase}>` : hints.overlayBase) : null;
+  // Overlay object (with) if present
+  const overlayObj = frame.overlay?.kind === "with" && hints?.overlayBase ? hints.overlayBase : null;
 
   // Root after overlay shadow:  Omit<VM, keyof Overlay>
   const rootAfterOverlay = overlayObj != null ? `Omit<${wrap(rootVm)}, keyof ${wrap(overlayObj)}>` : wrap(rootVm);

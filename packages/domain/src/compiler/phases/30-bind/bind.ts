@@ -1,6 +1,6 @@
 /* =============================================================================
  * PHASE 30 — BIND (Scope Graph)
- * LinkedSemantics → ScopeModule (pure, deterministic)
+ * LinkedSemantics -> ScopeModule (pure, deterministic)
  * - Map each expression occurrence to the frame where it is evaluated
  * - Introduce frames for overlay controllers (repeat/with/promise)
  * - Materialize locals: <let>, repeat declaration, repeat contextuals, promise alias
@@ -148,15 +148,18 @@ function walkRows(
 
         // ---- Template controllers ----
         case "hydrateTemplateController": {
+          const isPromiseBranch = ins.res === "promise" && !!ins.branch;
+          const propFrame = isPromiseBranch ? frames[currentFrame]?.parent ?? currentFrame : currentFrame;
+
           // 1) Map controller prop expressions at the *outer* frame.
           for (const p of ins.props) {
             switch (p.kind) {
               case "propertyBinding":
-                mapBindingSource(p.from, currentFrame, exprToFrame);
+                mapBindingSource(p.from, propFrame, exprToFrame);
                 break;
               case "iteratorBinding":
-                exprToFrame[p.forOf.astId] = currentFrame; // header evaluated in outer frame
-                for (const a of p.aux) mapBindingSource(a.from, currentFrame, exprToFrame);
+                exprToFrame[p.forOf.astId] = propFrame; // header evaluated in outer frame
+                for (const a of p.aux) mapBindingSource(a.from, propFrame, exprToFrame);
                 break;
               default:
                 assertUnreachable(p);
@@ -164,11 +167,11 @@ function walkRows(
           }
           // Switch branches evaluate in outer frame too
           if (ins.branch && ins.branch.kind === "case") {
-            exprToFrame[idOf(ins.branch.expr)] = currentFrame;
+            exprToFrame[idOf(ins.branch.expr)] = propFrame;
           }
 
           // 2) Enter the controller's frame according to semantics.scope
-          const nextFrame = enterControllerFrame(ins, currentFrame, frames);
+          const nextFrame = isPromiseBranch ? currentFrame : enterControllerFrame(ins, currentFrame, frames);
 
           // 3) Populate locals / overlays + record origin metadata
           switch (ins.res) {
@@ -215,23 +218,21 @@ function walkRows(
               setOverlayBase(nextFrame, frames, { kind: "with", from: valueProp.from, span: valueProp.loc ?? null });
               const ids = exprIdsOf(valueProp.from);
               if (ids.length > 0) {
-                frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "with", valueExprId: ids[0] } } as ScopeFrame;;
+                frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "with", valueExprId: ids[0] } } as ScopeFrame;
               }
               break;
             }
             case "promise": {
-              const valueProp = getValueProp(ins);
-              setOverlayBase(nextFrame, frames, { kind: "promise", from: valueProp.from, span: valueProp.loc ?? null });
-              const ids = exprIdsOf(valueProp.from);
-              const branch = ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch") ? ins.branch.kind : undefined;
-              if (ids.length > 0) {
-                frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "promise", valueExprId: ids[0], branch } } as ScopeFrame;;
-              }
-              // Promise alias (then/catch): surface as local if present.
-              if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
-                if (ins.branch.local && ins.branch.local.length > 0) {
-                  addUniqueSymbols(nextFrame, frames, [{ kind: "promiseAlias", name: ins.branch.local, span: ins.loc ?? null }], diags);
+              if (!isPromiseBranch) {
+                const valueProp = getValueProp(ins);
+                const ids = exprIdsOf(valueProp.from);
+                if (ids.length > 0) {
+                  frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "promise", valueExprId: ids[0] } } as ScopeFrame;
                 }
+              }
+              if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
+                const aliasName = ins.branch.local && ins.branch.local.length > 0 ? ins.branch.local : ins.branch.kind;
+                addUniqueSymbols(nextFrame, frames, [{ kind: "promiseAlias", name: aliasName, branch: ins.branch.kind, span: ins.loc ?? null }], diags);
               }
               break;
             }
