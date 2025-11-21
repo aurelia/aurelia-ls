@@ -1,6 +1,6 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../model/symbols.js";
-import type { ExprId, InterpIR, NodeId } from "../../model/ir.js";
+import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef } from "../../model/ir.js";
 import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./ssr-types.js";
 
 /** Build SSR plan from Linked+Scoped (tap point: after Phase 30 bind). */
@@ -66,15 +66,19 @@ function buildTemplatePlan(
           break;
         }
         case "propertyBinding": {
-          const exprId = (ins.from as any).id as ExprId;
-          rowBindings.push({ kind: "prop", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId), mode: ins.mode });
-          hasDyn = true;
+          const exprId = exprIdFrom(ins.from);
+          if (exprId) {
+            rowBindings.push({ kind: "prop", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId), mode: ins.mode });
+            hasDyn = true;
+          }
           break;
         }
         case "stylePropertyBinding": {
-          const exprId = (ins.from as any).id as ExprId;
-          rowBindings.push({ kind: "styleProp", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId) });
-          hasDyn = true;
+          const exprId = exprIdFrom(ins.from);
+          if (exprId) {
+            rowBindings.push({ kind: "styleProp", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId) });
+            hasDyn = true;
+          }
           break;
         }
         case "listenerBinding": {
@@ -104,8 +108,7 @@ function buildTemplatePlan(
           const hid = ensureHid(nodeId, hidByNode, () => hidCounter.value++);
           const locals: Array<{ name: string; exprId: ExprId }> = [];
           for (const lb of ins.instructions) {
-            const from = lb.from as any;
-            const exprId: ExprId = from?.id ?? (from?.exprs?.[0]?.id) ?? undefined;
+            const exprId = exprIdFrom(lb.from);
             if (exprId) locals.push({ name: lb.to, exprId });
           }
           letsByHid[hid] = { toBindingContext: ins.toBindingContext, locals };
@@ -124,7 +127,7 @@ function buildTemplatePlan(
             if (p.kind === "iteratorBinding") {
               forOfExprId = p.forOf.astId;
             } else if (p.kind === "propertyBinding" && p.to === "value") {
-              valueExprId = (p.from as any).id as ExprId;
+              valueExprId = exprIdFrom(p.from);
             }
           }
 
@@ -154,6 +157,7 @@ function buildTemplatePlan(
             letsByHid,
             staticAttrsByHid,
             textBindings,
+            prefix: `${hid}:${nodeId as string}`,
           });
           hasDyn = true;
           break;
@@ -198,19 +202,47 @@ function mergeChildPlanIntoParent(
     letsByHid: Record<number, { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> }>;
     staticAttrsByHid: Record<number, Record<string, string | null>>;
     textBindings: SsrTemplatePlan["textBindings"];
+    prefix: string;
   },
 ): void {
-  Object.assign(parent.hidByNode, child.hidByNode);
+  const keyMap = new Map<string, string>();
+
+  for (const [nodeKey, hid] of Object.entries(child.hidByNode)) {
+    const namespaced = parent.prefix ? `${parent.prefix}|${nodeKey}` : nodeKey;
+    parent.hidByNode[namespaced] = hid;
+    keyMap.set(nodeKey, namespaced);
+  }
   Object.assign(parent.bindingsByHid, child.bindingsByHid);
   Object.assign(parent.controllersByHid, child.controllersByHid);
   Object.assign(parent.letsByHid, child.letsByHid);
   Object.assign(parent.staticAttrsByHid, child.staticAttrsByHid);
-  parent.textBindings.push(...child.textBindings);
+  parent.textBindings.push(
+    ...child.textBindings.map(tb => ({
+      ...tb,
+      target: nodeIdFromKey(keyMap.get(nodeKeyFromId(tb.target)) ?? nodeKeyFromId(tb.target)),
+    }))
+  );
 }
 
 function frameOf(map: Record<string, number>, id: ExprId): number {
   const f = map[id as unknown as string];
   return typeof f === "number" ? f : 0;
+}
+
+function nodeKeyFromId(id: NodeId): string {
+  return id as unknown as string;
+}
+
+function nodeIdFromKey(key: string): NodeId {
+  return key as NodeId;
+}
+
+function exprIdFrom(from: BindingSourceIR): ExprId | undefined {
+  return isInterp(from) ? from.exprs[0]?.id : (from as ExprRef).id;
+}
+
+function isInterp(src: BindingSourceIR): src is InterpIR {
+  return (src as InterpIR).kind === "interp";
 }
 
 function ensureHid(node: NodeId, map: Record<string, number>, next: () => number): number {

@@ -5,20 +5,13 @@
       "name": "template.html",
       "nodes": [
         {
-          "hid": 13,
+          "hid": 1,
           "nodeId": "0/0/0",
           "text": false,
-          "controllers": [
-            {
-              "res": "promise",
-              "valueExprId": "expr_246e3f80a9d05400",
-              "branch": {
-                "kind": "then",
-                "exprId": null
-              },
-              "frame": 2
-            }
-          ]
+          "staticAttrs": {
+            "class": "app"
+          },
+          "controllers": []
         },
         {
           "hid": 2,
@@ -41,14 +34,123 @@
           ]
         },
         {
+          "hid": 4,
+          "nodeId": "3:0/0/0/1/0|0/0/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 5,
+          "nodeId": "3:0/0/0/1/0|0/0/1",
+          "text": false,
+          "controllers": [
+            {
+              "res": "if",
+              "valueExprId": "expr_6f11c680544d8487",
+              "branch": null,
+              "frame": 1
+            }
+          ]
+        },
+        {
+          "hid": 6,
+          "nodeId": "3:0/0/0/1/0|5:0/0/1|0/0/0",
+          "text": false,
+          "bindings": [
+            {
+              "kind": "listener",
+              "name": "click",
+              "exprId": "expr_31c3dc00de973d68",
+              "frame": 1,
+              "capture": false,
+              "modifier": null
+            }
+          ],
+          "controllers": []
+        },
+        {
           "hid": 7,
-          "nodeId": "0/0/0#text@0",
+          "nodeId": "3:0/0/0/1/0|5:0/0/1|0/0/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 8,
+          "nodeId": "3:0/0/0/1/0|0/0/2",
+          "text": false,
+          "controllers": [
+            {
+              "res": "promise",
+              "valueExprId": "expr_246e3f80a9d05400",
+              "branch": null,
+              "frame": 1
+            }
+          ]
+        },
+        {
+          "hid": 9,
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|0/0/0/0",
+          "text": false,
+          "staticAttrs": {
+            "class": "details"
+          },
+          "controllers": []
+        },
+        {
+          "hid": 10,
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|0/0/0/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 11,
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|0/0/1/0",
+          "text": false,
+          "staticAttrs": {
+            "class": "error"
+          },
+          "controllers": []
+        },
+        {
+          "hid": 12,
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|0/0/1/0#text@0",
+          "text": true,
+          "controllers": []
+        },
+        {
+          "hid": 13,
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|0/0/0",
+          "text": false,
+          "controllers": [
+            {
+              "res": "promise",
+              "valueExprId": "expr_246e3f80a9d05400",
+              "branch": {
+                "kind": "then",
+                "exprId": null
+              },
+              "frame": 1
+            }
+          ]
+        },
+        {
+          "hid": 14,
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|13:0/0/0|0/0",
+          "text": false,
+          "staticAttrs": {
+            "class": "details"
+          },
+          "controllers": []
+        },
+        {
+          "hid": 15,
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|13:0/0/0|0/0#text@0",
           "text": true,
           "controllers": []
         },
         {
           "hid": 16,
-          "nodeId": "0/0/1",
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|0/0/1",
           "text": false,
           "controllers": [
             {
@@ -58,59 +160,13 @@
                 "kind": "catch",
                 "exprId": null
               },
-              "frame": 2
+              "frame": 1
             }
           ]
-        },
-        {
-          "hid": 8,
-          "nodeId": "0/0/2",
-          "text": false,
-          "controllers": [
-            {
-              "res": "promise",
-              "valueExprId": "expr_246e3f80a9d05400",
-              "branch": null,
-              "frame": 2
-            }
-          ]
-        },
-        {
-          "hid": 9,
-          "nodeId": "0/0/0/0",
-          "tag": "div",
-          "text": false,
-          "staticAttrs": {
-            "class": "details"
-          },
-          "controllers": []
-        },
-        {
-          "hid": 10,
-          "nodeId": "0/0/0/0#text@0",
-          "text": true,
-          "controllers": []
-        },
-        {
-          "hid": 11,
-          "nodeId": "0/0/1/0",
-          "tag": "div",
-          "text": false,
-          "staticAttrs": {
-            "class": "error"
-          },
-          "controllers": []
-        },
-        {
-          "hid": 12,
-          "nodeId": "0/0/1/0#text@0",
-          "text": true,
-          "controllers": []
         },
         {
           "hid": 17,
-          "nodeId": "0/0",
-          "tag": "div",
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|16:0/0/1|0/0",
           "text": false,
           "staticAttrs": {
             "class": "error"
@@ -119,7 +175,7 @@
         },
         {
           "hid": 18,
-          "nodeId": "0/0#text@0",
+          "nodeId": "3:0/0/0/1/0|8:0/0/2|16:0/0/1|0/0#text@0",
           "text": true,
           "controllers": []
         }
