@@ -96,6 +96,7 @@ Products wire stage DAGs instead of baking orchestration into the facade:
 * `NodeId` uniqueness is **per `TemplateIR`**.
 * `ExprId` is stable per `(file|span|expressionType|code)` (see `ExprTable` in `lower.ts`).
 * Later stages **never mutate** earlier stage objects; they build linked/derived views.
+* Stage defs carry **version + fingerprint** and are cacheable: engine derives a cache key from stage version + dep artifact hashes + fingerprint (options/parsers/VM/semantics). Default persistent cache lives in `.aurelia-cache/` and can be disabled via `cache.enabled=false` or redirected via `cache.dir`. Supply `fingerprints` in `PipelineOptions` when using custom parsers/semantics/VM reflection to avoid cache collisions.
 
 ### 2.2 Phase 10 - Lower (HTML -> IR)
 

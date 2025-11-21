@@ -1,6 +1,6 @@
 import path from "node:path";
 import { createDefaultEngine } from "./pipeline.js";
-import type { StageOutputs, PipelineOptions } from "./pipeline/engine.js";
+import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./pipeline/engine.js";
 import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
 import type { VmReflection } from "./phases/50-plan/types.js";
@@ -16,6 +16,8 @@ export interface CompileOptions {
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   overlayBaseName?: string;
+  cache?: CacheOptions;
+  fingerprints?: FingerprintHints;
 }
 
 export type CompileOverlayResult = OverlayProductResult;
@@ -42,6 +44,8 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
   };
+  if (opts.cache) base.cache = opts.cache;
+  if (opts.fingerprints) base.fingerprints = opts.fingerprints;
   if (opts.attrParser) base.attrParser = opts.attrParser;
   if (opts.exprParser) base.exprParser = opts.exprParser;
   return base;
