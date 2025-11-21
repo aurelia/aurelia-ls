@@ -145,14 +145,15 @@ Key points:
   * All expressions are recorded in `exprTable` with a stable `ExprId`.
   * Parser failures must **not** crash; they produce `BadExpression` instead.
 
-* Responsibilities:
+* Responsibilities (pure, but Semantics-aware for structure):
 
-  * Syntax only: HTML structure, binding commands, template controllers, interpolation.
-  * Does **not** use `Semantics` or DOM schema.
+  * Shape the instruction stream: binding commands, template controllers (repeat/with/promise/if/switch/portal), custom elements/attributes (incl. containerless), primary bindable/multi-binding choices.
+  * Leave host target resolution (DOM props, events, AU11xx diags) to Phase 20.
   * Emits:
 
     * `HydrateTemplateControllerIR` for repeat/with/promise/if/switch/portal.
     * `HydrateLetElementIR` for `<let>`.
+    * `HydrateElementIR` / `HydrateAttributeIR` when a resource is known.
     * Bindings (`PropertyBindingIR`, `TextBindingIR`, etc).
 
 If you extend Aurelia syntax (e.g., new attribute shape), this is usually the first phase to touch.
@@ -257,9 +258,9 @@ function plan(
 
 Responsibilities:
 
-* Build a type‑level model per frame:
+* Build a type-level model per frame:
 
-  * Use `VmReflection` (`opts.vm`) to obtain a root VM type expression.
+  * Use `VmReflection` (`opts.vm`) to obtain a root VM type expression (prefers `getQualifiedRootVmTypeExpr()` when provided, otherwise `getRootVmTypeExpr()`; `getSyntheticPrefix()` seeds alias names).
   * Respect overlay base (`with`, `promise`) and `repeat` iterable type.
   * Incorporate locals (`<let>`, repeat locals, contextuals, promise alias).
 * Compute **frame overlay type**:
@@ -268,7 +269,7 @@ Responsibilities:
   * Overlay base, minus locals.
   * Locals object.
   * `$parent`, `$vm`, `$this` segments.
-* Generate **one lambda per expression occurrence** in that frame:
+  * Generate **one lambda per expression occurrence** in that frame:
 
   * Lambdas look like `o => o.user.name`.
   * Expressions are reconstructed from AST (`ExprTableEntry.ast`).
@@ -317,7 +318,7 @@ Responsibilities:
     );
     ```
 
-* Root frame can skip a named type alias to improve diagnostics.
+* Emits a named type alias for every frame; root lambdas inline the root type expression for readability.
 
 Invariants:
 
@@ -325,6 +326,22 @@ Invariants:
 
   * `__au$access<T>(fn: (o: T) => unknown): void`
   * `CollectionElement<T>`, `TupleElement<T, I>` helpers.
+
+### 3.8 SSR planning & emit
+
+Entry:
+`packages/domain/src/compiler/phases/50-plan/ssr-plan.ts`
+`packages/domain/src/compiler/phases/60-emit/ssr.ts`
+
+Responsibilities:
+
+* Build SSR plan (`aurelia-ssr-plan@0`) after bind: collect HIDs per node, map bindings/controllers/lets/text bindings to HIDs, capture branch info for controllers.
+* Emit SSR HTML skeleton + JSON manifest (`aurelia-ssr-manifest@0`), inserting HID markers and interpolation markers for text bindings.
+
+Notes:
+
+* Uses the same linked + scoped inputs as overlay planning; pure and deterministic.
+* Manifest/HTML are versioned; keep schema stable unless intentionally bumped.
 
 ---
 
