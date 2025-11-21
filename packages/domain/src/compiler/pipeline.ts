@@ -1,13 +1,7 @@
-import path from "node:path";
-import { lowerDocument } from "./phases/10-lower/lower.js";
-import { resolveHost } from "./phases/20-resolve-host/resolve.js";
-import { bindScopes } from "./phases/30-bind/bind.js";
-import { typecheck } from "./phases/40-typecheck/typecheck.js";
-import { DEFAULT as SEM_DEFAULT } from "./language/registry.js";
-import { DEFAULT_SYNTAX, type AttributeParser } from "./language/syntax.js";
-import { getExpressionParser } from "../parsers/expression-parser.js";
+import { PipelineEngine, type PipelineOptions, type StageOutputs } from "./pipeline/engine.js";
+import { createDefaultStageDefinitions } from "./pipeline/stages.js";
+import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
-import type { BuildIrOptions } from "./phases/10-lower/lower.js";
 
 export interface CoreCompileOptions {
   html: string;
@@ -17,27 +11,34 @@ export interface CoreCompileOptions {
 }
 
 export interface CorePipelineResult {
-  ir: ReturnType<typeof lowerDocument>;
-  linked: ReturnType<typeof resolveHost>;
-  scope: ReturnType<typeof bindScopes>;
-  typecheck: ReturnType<typeof typecheck>;
+  ir: StageOutputs["10-lower"];
+  linked: StageOutputs["20-link"];
+  scope: StageOutputs["30-scope"];
+  typecheck: StageOutputs["40-typecheck"];
 }
 
-/** Run the pure pipeline up to typecheck (10 → 40). */
+/**
+  * Create a pipeline engine with the default stage graph.
+  * Callers can supply a custom engine for experimentation or testing.
+  */
+export function createDefaultEngine(): PipelineEngine {
+  return new PipelineEngine(createDefaultStageDefinitions());
+}
+
+/** Run the pure pipeline up to typecheck (10 -> 40). */
 export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
-  const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
-  const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
-
-  const ir = lowerDocument(opts.html, {
-    file: opts.templateFilePath,
-    name: path.basename(opts.templateFilePath),
-    attrParser,
-    exprParser,
-  } as BuildIrOptions);
-
-  const linked = resolveHost(ir, SEM_DEFAULT);
-  const scope = bindScopes(linked);
-  const typecheckOut = typecheck(linked);
-
-  return { ir, linked, scope, typecheck: typecheckOut };
+  const engine = createDefaultEngine();
+  const pipelineOpts: PipelineOptions = {
+    html: opts.html,
+    templateFilePath: opts.templateFilePath,
+  };
+  if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
+  if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
+  const session = engine.createSession(pipelineOpts);
+  return {
+    ir: session.run("10-lower"),
+    linked: session.run("20-link"),
+    scope: session.run("30-scope"),
+    typecheck: session.run("40-typecheck"),
+  };
 }
