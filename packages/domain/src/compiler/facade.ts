@@ -3,6 +3,7 @@ import { createDefaultEngine } from "./pipeline.js";
 import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./pipeline/engine.js";
 import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
+import type { Semantics } from "./language/registry.js";
 import type { VmReflection } from "./phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
 import { buildOverlayProduct, type OverlayProductResult } from "./products/overlay.js";
@@ -13,6 +14,7 @@ export interface CompileOptions {
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
+  semantics?: Semantics;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   overlayBaseName?: string;
@@ -44,6 +46,7 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
   };
+  if (opts.semantics) base.semantics = opts.semantics;
   if (opts.cache) base.cache = opts.cache;
   if (opts.fingerprints) base.fingerprints = opts.fingerprints;
   if (opts.attrParser) base.attrParser = opts.attrParser;
@@ -105,6 +108,7 @@ export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
     vm: opts.vm,
     ssr: { eol: "\n" },
   };
+  if (opts.semantics) pipelineOpts.semantics = opts.semantics;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
   if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
   const session = engine.createSession(pipelineOpts);

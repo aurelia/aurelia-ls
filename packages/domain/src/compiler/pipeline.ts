@@ -1,14 +1,17 @@
 import { PipelineEngine, type PipelineOptions, type StageOutputs, type CacheOptions, type FingerprintHints } from "./pipeline/engine.js";
 import { createDefaultStageDefinitions } from "./pipeline/stages.js";
 import type { AttributeParser } from "./language/syntax.js";
+import type { Semantics } from "./language/registry.js";
+import type { VmReflection } from "./phases/50-plan/overlay/types.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
 
 export interface CoreCompileOptions {
   html: string;
   templateFilePath: string;
+  semantics?: Semantics;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
-  vm: import("./phases/50-plan/overlay/types.js").VmReflection;
+  vm: VmReflection;
   cache?: CacheOptions;
   fingerprints?: FingerprintHints;
 }
@@ -36,6 +39,7 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
   };
+  if (opts.semantics) pipelineOpts.semantics = opts.semantics;
   if (opts.cache) pipelineOpts.cache = opts.cache;
   if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
