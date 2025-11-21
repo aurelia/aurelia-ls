@@ -11,12 +11,12 @@
 
 import type {
   AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment,
-} from "./overlay-types.js";
+} from "./types.js";
 
-import type { LinkedSemanticsModule } from "../20-resolve-host/types.js";
+import type { LinkedSemanticsModule } from "../../20-resolve-host/types.js";
 import type {
   ScopeModule, ScopeTemplate, ScopeFrame, FrameId,
-} from "../../model/symbols.js";
+} from "../../../model/symbols.js";
 
 import type {
   ExprId,
@@ -52,14 +52,14 @@ import type {
   ArrowFunction,
   ExprTableEntry,
   BadExpression,
-} from "../../model/ir.js";
+} from "../../../model/ir.js";
 import {
   buildFrameAnalysis,
   typeFromExprAst,
   wrap,
   type FrameTypingHints,
   type Env,
-} from "../shared/type-analysis.js";
+} from "../../shared/type-analysis.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 

@@ -4,15 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createFailureRecorder, diffByKey, fmtList } from "../_helpers/test-utils.mjs";
-import { deepMergeSemantics } from "../_helpers/semantics-merge.mjs";
+import { createFailureRecorder, diffByKey, fmtList } from "../../_helpers/test-utils.mjs";
+import { deepMergeSemantics } from "../../_helpers/semantics-merge.mjs";
 
-import { getExpressionParser, DEFAULT_SYNTAX } from "../../out/index.js";
-import { lowerDocument } from "../../out/compiler/phases/10-lower/lower.js";
-import { resolveHost } from "../../out/compiler/phases/20-resolve-host/resolve.js";
-import { bindScopes } from "../../out/compiler/phases/30-bind/bind.js";
-import { plan as planOverlay } from "../../out/compiler/phases/50-plan/overlay-plan.js";
-import { DEFAULT as SEM_DEFAULT } from "../../out/compiler/language/registry.js";
+import { getExpressionParser, DEFAULT_SYNTAX } from "../../../out/index.js";
+import { lowerDocument } from "../../../out/compiler/phases/10-lower/lower.js";
+import { resolveHost } from "../../../out/compiler/phases/20-resolve-host/resolve.js";
+import { bindScopes } from "../../../out/compiler/phases/30-bind/bind.js";
+import { plan as planOverlay } from "../../../out/compiler/phases/50-plan/overlay/plan.js";
+import { DEFAULT as SEM_DEFAULT } from "../../../out/compiler/language/registry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vectorFiles = fs.readdirSync(__dirname)

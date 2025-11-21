@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { PipelineSession } from "../pipeline/engine.js";
-import type { SsrPlanModule } from "../phases/50-plan/ssr-types.js";
+import type { SsrPlanModule } from "../phases/50-plan/ssr/types.js";
 
 export interface SsrProductOptions {
   templateFilePath: string;

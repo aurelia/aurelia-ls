@@ -3,7 +3,7 @@ import { createDefaultEngine } from "./pipeline.js";
 import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./pipeline/engine.js";
 import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
-import type { VmReflection } from "./phases/50-plan/overlay-types.js";
+import type { VmReflection } from "./phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
 import { buildOverlayProduct, type OverlayProductResult } from "./products/overlay.js";
 import { buildSsrProduct, type SsrProductResult } from "./products/ssr.js";

@@ -1,5 +1,5 @@
-import type { ExprId, SourceSpan, NodeId, InterpIR } from "../../model/ir.js";
-import type { LinkedTemplate } from "../20-resolve-host/types.js";
+import type { ExprId, SourceSpan, NodeId, InterpIR } from "../../../model/ir.js";
+import type { LinkedTemplate } from "../../20-resolve-host/types.js";
 
 /** Module-level SSR planning artifact. */
 export interface SsrPlanModule {
