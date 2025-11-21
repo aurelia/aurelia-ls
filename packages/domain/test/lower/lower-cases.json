@@ -634,5 +634,60 @@
         { "kind": "text", "code": "y" }
       ]
     }
+  },
+  {
+    "name": "L-59 custom element alias containerless + bindable",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-widget": {
+            "kind": "element",
+            "name": "x-widget",
+            "aliases": ["x-alias"],
+            "boundary": true,
+            "containerless": true,
+            "bindables": {
+              "foo": { "name": "foo", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div as-element=\"x-alias\" foo.bind=\"bar\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "code": "bar", "command": "bind" }
+      ],
+      "elements": [
+        { "res": "x-widget", "containerless": true, "props": ["foo"] }
+      ]
+    }
+  },
+  {
+    "name": "L-60 custom attribute alias hydrates attribute with bindable",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "fancy-attr": {
+            "kind": "attribute",
+            "name": "fancy-attr",
+            "aliases": ["fancy"],
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div fancy.bind=\"x\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "code": "x", "command": "bind" }
+      ],
+      "attributes": [
+        { "res": "fancy-attr", "alias": "fancy", "props": ["value"] }
+      ]
+    }
   }
 ]
