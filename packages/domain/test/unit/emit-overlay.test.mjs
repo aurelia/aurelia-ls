@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const emitterUrl = new URL("../../out/compiler/phases/60-emit/overlay.js", import.meta.url);
+const emitterUrl = new URL("../../out/compiler/phases/60-emit/overlay/emit.js", import.meta.url);
 const { emitOverlayFile } = await import(emitterUrl.href);
 
 test("Emit overlay: TS flavor (type alias + __au$access calls)", () => {

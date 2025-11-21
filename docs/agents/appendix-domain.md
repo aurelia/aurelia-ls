@@ -41,7 +41,7 @@ Use these as authoritative descriptions of current runtime semantics; code and t
 - **Design:** keep shared shapes/types in the existing model/type files; avoid scattering local type declarations when a central export fits.
 - **Generated vs src:** only edit `packages/**/src` and tests; `packages/**/out` is generated.
 - **Tests/build:** `npm run test:spec` runs `tsc -b` then all specs; use it to refresh out/overlay artifacts instead of manual builds.
-- **Where things live:** mapping/query in `compiler/facade.ts`; overlay plan in `phases/50-plan`; overlay emit in `phases/60-emit`; typecheck scaffold in `phases/40-typecheck`; SSR plan/emit in `phases/50-plan/ssr-*` and `phases/60-emit/ssr.ts`.
+- **Where things live:** mapping/query in `compiler/facade.ts`; overlay plan in `phases/50-plan/overlay`; overlay emit in `phases/60-emit/overlay`; typecheck scaffold in `phases/40-typecheck`; SSR plan/emit in `phases/50-plan/ssr` and `phases/60-emit/ssr`.
 
 ---
 
@@ -269,7 +269,7 @@ Invariants:
 ### 2.7 Phase 60 - Emit (overlay TS/JS)
 
 Entry:
-`packages/domain/src/compiler/phases/60-emit/overlay.ts`
+`packages/domain/src/compiler/phases/60-emit/overlay/emit.ts`
 
 Key APIs:
 
@@ -318,7 +318,7 @@ Invariants:
 
 Entry:
 `packages/domain/src/compiler/phases/50-plan/ssr/plan.ts`
-`packages/domain/src/compiler/phases/60-emit/ssr.ts`
+`packages/domain/src/compiler/phases/60-emit/ssr/emit.ts`
 
 Responsibilities:
 

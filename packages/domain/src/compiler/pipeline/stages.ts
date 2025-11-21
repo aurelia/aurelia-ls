@@ -4,16 +4,16 @@ import { resolveHost } from "../phases/20-resolve-host/resolve.js";
 import { bindScopes } from "../phases/30-bind/bind.js";
 import { typecheck } from "../phases/40-typecheck/typecheck.js";
 import { plan as planOverlay } from "../phases/50-plan/overlay/plan.js";
-import { emitOverlayFile } from "../phases/60-emit/overlay.js";
+import { emitOverlayFile } from "../phases/60-emit/overlay/emit.js";
 import { planSsr } from "../phases/50-plan/ssr/plan.js";
-import { emitSsr } from "../phases/60-emit/ssr.js";
+import { emitSsr } from "../phases/60-emit/ssr/emit.js";
 import { DEFAULT as SEM_DEFAULT } from "../language/registry.js";
 import { DEFAULT_SYNTAX } from "../language/syntax.js";
 import { getExpressionParser } from "../../parsers/expression-parser.js";
 import { PipelineEngine } from "./engine.js";
 import type { StageDefinition, StageKey, StageOutputs, PipelineOptions } from "./engine.js";
 import type { AnalyzeOptions } from "../phases/50-plan/overlay/types.js";
-import type { EmitOptions as OverlayEmitOptions } from "../phases/60-emit/overlay.js";
+import type { EmitOptions as OverlayEmitOptions } from "../phases/60-emit/overlay/emit.js";
 import { stableHash } from "./hash.js";
 
 function assertOption<T>(value: T | undefined, name: string): T {

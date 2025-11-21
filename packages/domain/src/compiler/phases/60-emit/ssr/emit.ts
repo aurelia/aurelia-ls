@@ -1,6 +1,6 @@
-import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow } from "../20-resolve-host/types.js";
-import type { TemplateNode, DOMNode, Attr, NodeId, ExprId } from "../../model/ir.js";
-import type { SsrPlanModule, SsrTemplatePlan, SsrManifest, SsrBinding, SsrController } from "../50-plan/ssr/types.js";
+import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow } from "../../20-resolve-host/types.js";
+import type { TemplateNode, DOMNode, Attr, NodeId, ExprId } from "../../../model/ir.js";
+import type { SsrPlanModule, SsrTemplatePlan, SsrManifest, SsrBinding, SsrController } from "../../50-plan/ssr/types.js";
 
 /** Emit SSR HTML + JSON manifest. */
 export function emitSsr(
