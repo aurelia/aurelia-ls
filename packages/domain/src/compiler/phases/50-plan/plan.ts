@@ -10,7 +10,7 @@
  * ============================================================================= */
 
 import type {
-  AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan,
+  AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment,
 } from "./types.js";
 
 import type { LinkedSemanticsModule } from "../20-resolve-host/types.js";
@@ -22,6 +22,7 @@ import type {
   ExprId,
   // Expression AST (discriminated by $kind)
   IsBindingBehavior,
+  IsUnary,
   ForOfStatement,
   BindingIdentifierOrPattern,
   IsAssign,
@@ -89,13 +90,9 @@ function analyzeTemplate(
 ): TemplateOverlayPlan {
   const frames: FrameOverlayPlan[] = [];
   // Prefer a collision-safe, qualified VM expr if the adapter provides it.
-  const vmAny = opts.vm as unknown as {
-    getRootVmTypeExpr: () => string;
-    getQualifiedRootVmTypeExpr?: () => string;
-    getSyntheticPrefix?: () => string;
-  };
-  const rootVm = vmAny.getQualifiedRootVmTypeExpr?.() ?? vmAny.getRootVmTypeExpr();
-  const prefix = (opts.syntheticPrefix ?? vmAny.getSyntheticPrefix?.()) || "__AU_TTC_";
+  const vm = opts.vm;
+  const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
+  const prefix = (opts.syntheticPrefix ?? vm.getSyntheticPrefix?.()) || "__AU_TTC_";
 
   // Stable per-frame alias names up front (root-first order already)
   const typeAliasByFrame = new Map<FrameId, string>();
@@ -419,7 +416,12 @@ function collectOneLambdaPerExpression(
 
       case "IsProperty": {
         const expr = renderExpressionFromAst(entry.ast);
-        if (expr) out.push({ exprId: id, lambda: `o => ${expr}` });
+        if (expr) {
+          const lambda = `o => ${expr.code}`;
+          const exprStart = lambda.indexOf("=>") + 2;
+          const segments = shiftSegments(expr.segments, exprStart);
+          out.push({ exprId: id, lambda, exprSpan: [exprStart, exprStart + expr.code.length], segments });
+        }
         break;
       }
 
@@ -435,49 +437,53 @@ function collectOneLambdaPerExpression(
 /* Expression rendering                                                                   */
 /* ===================================================================================== */
 
-/**
- * Render the authored expression once, rooted at `o`:
- * - Behaviors/converters are treated as transparent (for TTC purposes).
- * - `$parent` is represented via AccessThis/AccessScope.ancestor.
- * - Optional chaining flags are preserved where present in the AST.
- * If we cannot confidently render a node, return `null` (skip emission).
- */
-function renderExpressionFromAst(ast: IsBindingBehavior): string | null {
+type PrintableAst = IsBindingBehavior | IsAssign | IsLeftHandSide | IsUnary;
+type PrintedExpression = { code: string; segments: OverlayLambdaSegment[]; path?: string };
+
+function renderExpressionFromAst(ast: IsBindingBehavior): PrintedExpression | null {
   return printIsBindingBehavior(ast);
 }
 
-function printIsBindingBehavior(n: IsBindingBehavior): string | null {
+function shiftSegments(segs: OverlayLambdaSegment[], by: number): OverlayLambdaSegment[] {
+  if (segs.length === 0) return segs;
+  return segs.map((s) => ({ ...s, span: [s.span[0] + by, s.span[1] + by] }));
+}
+
+function mergeSegments(base: OverlayLambdaSegment[], extra: OverlayLambdaSegment[], offset: number): OverlayLambdaSegment[] {
+  if (extra.length === 0) return base;
+  return base.concat(shiftSegments(extra, offset));
+}
+
+function printIsBindingBehavior(n: PrintableAst): PrintedExpression | null {
   switch (n.$kind) {
-    case "BindingBehavior":
-      return printIsBindingBehavior(n.expression);
-    case "ValueConverter":
-      return printIsBindingBehavior(n.expression);
+    case "BindingBehavior": return printIsBindingBehavior(n.expression);
+    case "ValueConverter":  return printIsBindingBehavior(n.expression);
 
-    case "Assign":           return printAssign(n);
-    case "Conditional":      return printConditional(n);
+    case "Assign":          return printAssign(n);
+    case "Conditional":     return printConditional(n);
 
-    case "AccessThis":       return baseThis(n);
-    case "AccessBoundary":   return boundaryVm();
-    case "AccessScope":      return scopeWithName(n);
-    case "AccessMember":     return member(n);
-    case "AccessKeyed":      return keyed(n);
+    case "AccessThis":      return baseThis(n);
+    case "AccessBoundary":  return boundaryVm();
+    case "AccessScope":     return scopeWithName(n);
+    case "AccessMember":    return member(n);
+    case "AccessKeyed":     return keyed(n);
 
-    case "CallScope":        return callScope(n);
-    case "CallMember":       return callMember(n);
-    case "CallFunction":     return callFunction(n);
-    case "CallGlobal":       return callGlobal(n);
+    case "CallScope":       return callScope(n);
+    case "CallMember":      return callMember(n);
+    case "CallFunction":    return callFunction(n);
+    case "CallGlobal":      return callGlobal(n);
 
-    case "New":              return newExpr(n);
-    case "Binary":           return binary(n);
-    case "Unary":            return unary(n);
+    case "New":             return newExpr(n);
+    case "Binary":          return binary(n);
+    case "Unary":           return unary(n);
 
-    case "PrimitiveLiteral": return primitive(n);
-    case "ArrayLiteral":     return arrayLit(n);
-    case "ObjectLiteral":    return objectLit(n);
-    case "Paren":            return paren(n);
+    case "PrimitiveLiteral":return primitive(n);
+    case "ArrayLiteral":    return arrayLit(n);
+    case "ObjectLiteral":   return objectLit(n);
+    case "Paren":           return paren(n);
 
-    case "Template":         return template(n);
-    case "TaggedTemplate":   return taggedTemplate(n);
+    case "Template":        return template(n);
+    case "TaggedTemplate":  return taggedTemplate(n);
 
     default:
       return null;
@@ -485,159 +491,226 @@ function printIsBindingBehavior(n: IsBindingBehavior): string | null {
 }
 
 /* ---- Primitives / simple nodes ---- */
-function boundaryVm(): string {
-  return "o.$vm";
+function boundaryVm(): PrintedExpression {
+  return printed("o.$vm", []);
 }
-function baseThis(n: AccessThisExpression): string {
-  return ancestorChain(n.ancestor);
+function baseThis(n: AccessThisExpression): PrintedExpression {
+  return printed(ancestorChain(n.ancestor), [], n.ancestor === 0 ? "$this" : `$parent^${n.ancestor}`);
 }
-function scopeWithName(n: AccessScopeExpression): string {
+function scopeWithName(n: AccessScopeExpression): PrintedExpression {
   const base = ancestorChain(n.ancestor);
-  return n.name ? `${base}.${n.name}` : base;
+  const pathBase = n.ancestor === 0 ? "" : `$parent^${n.ancestor}.`;
+  if (!n.name) return printed(base, [], pathBase ? pathBase.slice(0, -1) : undefined);
+  const code = `${base}.${n.name}`;
+  const start = base.length + 1;
+  const seg: OverlayLambdaSegment = { kind: "member", path: `${pathBase}${n.name}`, span: [start, start + n.name.length] };
+  return printed(code, [seg], `${pathBase}${n.name}`);
 }
 
-function member(n: AccessMemberExpression): string | null {
+function member(n: AccessMemberExpression): PrintedExpression | null {
   const base = printLeft(n.object);
   if (!base) return null;
-  return `${base}${n.optional ? "?." : "."}${n.name}`;
+  const dot = n.optional ? "?." : ".";
+  const head = `${base.code}${dot}`;
+  const code = `${head}${n.name}`;
+  const segs = base.path
+    ? [{ kind: "member", path: `${base.path}.${n.name}`, span: [head.length, head.length + n.name.length] } as OverlayLambdaSegment]
+    : [];
+  const segments = mergeSegments(base.segments, segs, 0);
+  const path = base.path ? `${base.path}.${n.name}` : undefined;
+  return printed(code, segments, path);
 }
 
-function keyed(n: AccessKeyedExpression): string | null {
+function keyed(n: AccessKeyedExpression): PrintedExpression | null {
   const base = printLeft(n.object);
   const key = printIsAssign(n.key);
   if (!base || !key) return null;
-  return `${base}${n.optional ? "?." : ""}[${key}]`;
+  const opt = n.optional ? "?." : "";
+  const head = `${base.code}${opt}[`;
+  const code = `${head}${key.code}]`;
+  const path = base.path && key.path ? `${base.path}.${key.path}` : base.path && key.code ? `${base.path}[${key.code}]` : undefined;
+  const segs: OverlayLambdaSegment[] = key.path
+    ? [{ kind: "member", path: path ?? key.path, span: [head.length, head.length + key.code.length] }]
+    : [];
+  const inner = mergeSegments(key.segments, segs, head.length);
+  const segments = mergeSegments(base.segments, inner, 0);
+  return printed(code, segments, path);
 }
 
-function callScope(n: CallScopeExpression): string | null {
-  const callee = scopeWithName({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: null! /* TODO: integrate spans */ });
+function callScope(n: CallScopeExpression): PrintedExpression | null {
+  const callee = scopeWithName({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: null! /* spans handled separately */ });
   const args = joinArgs(n.args);
-  return `${callee}${n.optional ? "?." : ""}(${args})`;
+  const head = `${callee.code}${n.optional ? "?." : ""}(`;
+  const code = `${head}${args.code})`;
+  const segments = mergeSegments(callee.segments, args.segments, head.length);
+  return printed(code, segments);
 }
 
-function callMember(n: CallMemberExpression): string | null {
+function callMember(n: CallMemberExpression): PrintedExpression | null {
   const obj = printLeft(n.object);
   if (!obj) return null;
-  const head = `${obj}${n.optionalMember ? "?." : "."}${n.name}`;
+  const head = `${obj.code}${n.optionalMember ? "?." : "."}${n.name}`;
   const args = joinArgs(n.args);
-  return `${head}${n.optionalCall ? "?." : ""}(${args})`;
+  const callHead = `${head}${n.optionalCall ? "?." : ""}(`;
+  const code = `${callHead}${args.code})`;
+  const segments = mergeSegments(obj.segments, args.segments, callHead.length);
+  return printed(code, segments);
 }
 
-function callFunction(n: CallFunctionExpression): string | null {
-  const f = printLeft(n.func);
-  if (!f) return null;
+function callFunction(n: CallFunctionExpression): PrintedExpression | null {
+  const fn = printLeft(n.func);
+  if (!fn) return null;
   const args = joinArgs(n.args);
-  return `${f}${n.optional ? "?." : ""}(${args})`;
+  const head = `${fn.code}${n.optional ? "?." : ""}(`;
+  const code = `${head}${args.code})`;
+  const segments = mergeSegments(fn.segments, args.segments, head.length);
+  return printed(code, segments);
 }
 
-function callGlobal(_n: CallGlobalExpression): string | null {
-  // Globals are not part of component scope; for TTC we skip emitting them.
-  // (If we later allow specific globals, thread a whitelist here.)
+function callGlobal(_n: CallGlobalExpression): PrintedExpression | null {
   return null;
 }
 
-function newExpr(n: NewExpression): string | null {
+function newExpr(n: NewExpression): PrintedExpression | null {
   const f = printLeft(n.func);
   if (!f) return null;
   const args = joinArgs(n.args);
-  return `new ${f}(${args})`;
+  const head = `new ${f.code}(`;
+  const code = `${head}${args.code})`;
+  const segments = mergeSegments(f.segments, args.segments, head.length);
+  return printed(code, segments);
 }
 
-function binary(n: BinaryExpression): string | null {
+function binary(n: BinaryExpression): PrintedExpression | null {
   const l = printIsBindingBehavior(n.left);
   const r = printIsBindingBehavior(n.right);
   if (!l || !r) return null;
-  return `(${l}) ${n.operation} (${r})`;
+  const leftHead = `(${l.code}) ${n.operation} (`;
+  const code = `${leftHead}${r.code})`;
+  const segments = mergeSegments(l.segments, r.segments, leftHead.length);
+  return printed(code, segments);
 }
 
-function unary(n: UnaryExpression): string | null {
-  const e = printIsBindingBehavior(n.expression as unknown as IsBindingBehavior);
+function unary(n: UnaryExpression): PrintedExpression | null {
+  const e = printIsBindingBehavior(n.expression);
   if (!e) return null;
-  return n.pos === 0 ? `${n.operation}${e}` : `${e}${n.operation}`;
+  const code = n.pos === 0 ? `${n.operation}${e.code}` : `${e.code}${n.operation}`;
+  return printed(code, e.segments, e.path);
 }
 
-function primitive(n: PrimitiveLiteralExpression): string {
-  if (n.value === undefined) return "undefined";
-  return JSON.stringify(n.value as unknown);
+function primitive(n: PrimitiveLiteralExpression): PrintedExpression {
+  const code = n.value === undefined ? "undefined" : JSON.stringify(n.value);
+  return printed(code, []);
 }
 
-function arrayLit(n: ArrayLiteralExpression): string | null {
-  const el = n.elements.map(printIsAssign);
-  if (el.some(e => !e)) return null;
-  return `[${el.join(", ")}]`;
-}
-
-function objectLit(n: ObjectLiteralExpression): string | null {
-  const ks = n.keys;
-  const vs = n.values.map(printIsAssign);
-  if (vs.some(v => !v)) return null;
+function arrayLit(n: ArrayLiteralExpression): PrintedExpression | null {
   const parts: string[] = [];
-  for (let i = 0; i < ks.length; i++) {
-    const k = ks[i];
-    const key = typeof k === "number" ? String(k) : JSON.stringify(k);
-    const v = vs[i]!;
-    parts.push(`${key}: ${v}`);
+  let segments: OverlayLambdaSegment[] = [];
+  for (let i = 0; i < n.elements.length; i++) {
+    const el = printIsAssign(n.elements[i]!);
+    if (!el) return null;
+    const prefix = i === 0 ? "" : ", ";
+    const offset = parts.join("").length + prefix.length;
+    parts.push(`${prefix}${el.code}`);
+    segments = mergeSegments(segments, el.segments, offset);
   }
-  return `{ ${parts.join(", ")} }`;
+  const code = `[${parts.join("")}]`;
+  return printed(code, segments);
 }
 
-function paren(n: ParenExpression): string | null {
+function objectLit(n: ObjectLiteralExpression): PrintedExpression | null {
+  const parts: string[] = [];
+  let segments: OverlayLambdaSegment[] = [];
+  for (let i = 0; i < n.keys.length; i++) {
+    const keyAst = n.keys[i];
+    const val = printIsAssign(n.values[i]!);
+    if (!val) return null;
+    const key = typeof keyAst === "number" ? String(keyAst) : JSON.stringify(keyAst);
+    const prefix = i === 0 ? "" : ", ";
+    const offset = parts.join("").length + prefix.length + key.length + 2;
+    parts.push(`${prefix}${key}: ${val.code}`);
+    segments = mergeSegments(segments, val.segments, offset);
+  }
+  const code = `{ ${parts.join("")} }`;
+  return printed(code, segments);
+}
+
+function paren(n: ParenExpression): PrintedExpression | null {
   const inner = printIsAssign(n.expression);
   if (!inner) return null;
-  return `(${inner})`;
+  return printed(`(${inner.code})`, shiftSegments(inner.segments, 1), inner.path);
 }
 
-function template(n: TemplateExpression): string | null {
-  const chunks: string[] = [];
-  chunks.push(escapeBackticks(n.cooked[0] ?? ""));
+function template(n: TemplateExpression): PrintedExpression | null {
+  const pieces: string[] = [];
+  let segments: OverlayLambdaSegment[] = [];
+  pieces.push(escapeBackticks(n.cooked[0] ?? ""));
   for (let i = 0; i < n.expressions.length; i++) {
     const e = printIsAssign(n.expressions[i]!);
     if (!e) return null;
-    const text = escapeBackticks(n.cooked[i + 1] ?? "");
-    chunks.push(`\${${e}}${text}`);
+    const before = pieces.join("");
+    pieces.push(`\${${e.code}}${escapeBackticks(n.cooked[i + 1] ?? "")}`);
+    segments = mergeSegments(segments, e.segments, before.length + 2);
   }
-  return `\`${chunks.join("")}\``;
+  return printed(`\`${pieces.join("")}\``, segments);
 }
 
-function taggedTemplate(n: TaggedTemplateExpression): string | null {
+function taggedTemplate(n: TaggedTemplateExpression): PrintedExpression | null {
   const f = printLeft(n.func);
   if (!f) return null;
-  const t = template({ $kind: "Template", cooked: n.cooked, expressions: n.expressions, span: null! /* TODO: integrate spans */ });
+  const t = template({ $kind: "Template", cooked: n.cooked, expressions: n.expressions, span: null! /* spans handled elsewhere */ });
   if (!t) return null;
-  return `${f}${t}`;
+  const code = `${f.code}${t.code}`;
+  const segments = mergeSegments(f.segments, t.segments, f.code.length);
+  return printed(code, segments);
 }
 
 /* ---- Composite / helpers ---- */
 
-function printAssign(n: AssignExpression): string | null {
+function printAssign(n: AssignExpression): PrintedExpression | null {
   const t = printIsBindingBehavior(n.target);
   const v = printIsBindingBehavior(n.value);
   if (!t || !v) return null;
-  return `${t} ${n.op} ${v}`;
+  const code = `${t.code} ${n.op} ${v.code}`;
+  const segments = mergeSegments(t.segments, v.segments, t.code.length + 1 + n.op.length + 1);
+  return printed(code, segments);
 }
 
-function printConditional(n: ConditionalExpression): string | null {
+function printConditional(n: ConditionalExpression): PrintedExpression | null {
   const c = printIsBindingBehavior(n.condition);
   const y = printIsBindingBehavior(n.yes);
   const no = printIsBindingBehavior(n.no);
   if (!c || !y || !no) return null;
-  return `(${c}) ? (${y}) : (${no})`;
+  const head = `(${c.code}) ? (${y.code}) : (`;
+  const code = `${head}${no.code})`;
+  const segments = mergeSegments(mergeSegments(c.segments, y.segments, head.length - y.code.length - 3), no.segments, head.length);
+  return printed(code, segments);
 }
 
-function joinArgs(args: IsAssign[]): string {
-  const a = args.map(printIsAssign);
-  if (a.some(x => !x)) return ""; // keep syntactically valid; emitter no-ops anyway
-  return (a as string[]).join(", ");
+function joinArgs(args: IsAssign[]): PrintedExpression {
+  const parts: string[] = [];
+  let segments: OverlayLambdaSegment[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = printIsAssign(args[i]!);
+    if (!a) continue;
+    const prefix = i === 0 ? "" : ", ";
+    const offset = parts.join("").length + prefix.length;
+    parts.push(`${prefix}${a.code}`);
+    segments = mergeSegments(segments, a.segments, offset);
+  }
+  return printed(parts.join(""), segments);
 }
 
-function printIsAssign(n: IsAssign): string | null {
-  // IsAssign ⊂ IsBindingBehavior, so we can reuse the main printer
+function printIsAssign(n: IsAssign): PrintedExpression | null {
   return printIsBindingBehavior(n as IsBindingBehavior);
 }
 
-function printLeft(n: IsLeftHandSide): string | null {
-  // IsLeftHandSide ⊂ IsBindingBehavior
+function printLeft(n: IsLeftHandSide): PrintedExpression | null {
   return printIsBindingBehavior(n as IsBindingBehavior);
+}
+
+function printed(code: string, segments: OverlayLambdaSegment[], path?: string): PrintedExpression {
+  return path ? { code, segments, path } : { code, segments };
 }
 
 function ancestorChain(ancestor: number): string {
@@ -645,11 +718,8 @@ function ancestorChain(ancestor: number): string {
 }
 
 function escapeBackticks(s: string): string {
-  // Escape ` and ${ inside template literal raw text
   return s.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 }
-
-/* ===================================================================================== */
 /* Env-aware Expression → type expressions                                               */
 /* ===================================================================================== */
 
@@ -674,10 +744,10 @@ type TypeCtx = {
 function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   return tIsBindingBehavior(ast);
 
-  function tIsBindingBehavior(n: IsBindingBehavior): string {
-    switch (n.$kind) {
-      case "BindingBehavior": return tIsBindingBehavior(n.expression);
-      case "ValueConverter":  return tIsBindingBehavior(n.expression);
+function tIsBindingBehavior(n: PrintableAst): string {
+  switch (n.$kind) {
+    case "BindingBehavior": return tIsBindingBehavior(n.expression);
+    case "ValueConverter":  return tIsBindingBehavior(n.expression);
 
       case "Assign":          return "unknown";
       case "Conditional":     return "unknown";
@@ -727,17 +797,18 @@ function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   }
 
   function tAccessMember(n: AccessMemberExpression): string {
-    const base = tIsBindingBehavior(n.object as unknown as IsBindingBehavior);
+    const base = tIsBindingBehavior(n.object);
     if (!base || base === "unknown") return "unknown";
     return indexType(base, [n.name]);
   }
 
   function tAccessKeyed(n: AccessKeyedExpression): string {
-    const base = tIsBindingBehavior(n.object as unknown as IsBindingBehavior);
+    const base = tIsBindingBehavior(n.object);
     if (!base || base === "unknown") return "unknown";
     if (n.key.$kind === "PrimitiveLiteral") {
-      const k = String((n.key as PrimitiveLiteralExpression).value as unknown);
-      return indexType(base, [k]);
+      const keyVal = (n.key as PrimitiveLiteralExpression).value;
+      const key = keyVal === undefined ? "undefined" : String(keyVal);
+      return indexType(base, [key]);
     }
     return "unknown";
   }
@@ -749,14 +820,14 @@ function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   }
 
   function tCallMember(n: CallMemberExpression): string {
-    const base = tIsBindingBehavior(n.object as unknown as IsBindingBehavior);
+    const base = tIsBindingBehavior(n.object);
     if (!base || base === "unknown") return "unknown";
     const calleeT = indexType(base, [n.name]);
     return returnTypeOf(calleeT);
   }
 
   function tCallFunction(n: CallFunctionExpression): string {
-    const fnT = tIsBindingBehavior(n.func as unknown as IsBindingBehavior);
+    const fnT = tIsBindingBehavior(n.func);
     return returnTypeOf(fnT);
   }
 }
@@ -800,4 +871,8 @@ function indexExprTable(table: readonly ExprTableEntry[] | undefined): ReadonlyM
   if (!table) return m;
   for (const e of table) m.set(e.id, e);
   return m;
+}
+
+function hasQualifiedVm(vm: AnalyzeOptions["vm"]): vm is AnalyzeOptions["vm"] & { getQualifiedRootVmTypeExpr: () => string } {
+  return typeof (vm as { getQualifiedRootVmTypeExpr?: unknown }).getQualifiedRootVmTypeExpr === "function";
 }

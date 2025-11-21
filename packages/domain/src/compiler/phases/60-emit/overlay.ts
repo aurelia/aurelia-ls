@@ -1,4 +1,4 @@
-import type { OverlayPlanModule } from "../50-plan/types.js";
+import type { OverlayLambdaSegment, OverlayPlanModule } from "../50-plan/types.js";
 import type { ExprId } from "../../model/ir.js";
 
 /**
@@ -10,6 +10,13 @@ export interface OverlayEmitMappingEntry {
   exprId: ExprId;
   start: number;
   end: number;
+  segments?: readonly OverlayEmitSegment[] | undefined;
+}
+
+export interface OverlayEmitSegment {
+  kind: "member";
+  path: string;
+  span: readonly [number, number];
 }
 
 export interface OverlayEmitResult {
@@ -33,7 +40,7 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
           const lambdaStart = line.indexOf("(") + 1; // point at lambda start
           const start = offset + lambdaStart;
           const end = start + l.lambda.length;
-          mapping.push({ exprId: l.exprId, start, end });
+          mapping.push({ exprId: l.exprId, start, end, segments: mapSegments(l.segments, start) });
           out.push(line);
           offset += line.length + 1;
         }
@@ -51,7 +58,8 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
           const lambdaStart = line.indexOf("(") + 1;
           const start = offset + lambdaStart;
           const end = start + lambdaWithDoc.length;
-          mapping.push({ exprId: l.exprId, start, end });
+          const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan[0]);
+          mapping.push({ exprId: l.exprId, start, end, segments: mapSegments(l.segments, start, shift) });
           out.push(line);
           offset += line.length + 1;
         }
@@ -61,6 +69,21 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
 
   const text = `${out.join("\n")}\n`;
   return { text, mapping };
+}
+
+function mapSegments(segments: readonly OverlayLambdaSegment[] | undefined, lambdaStart: number, spanShift = 0): OverlayEmitSegment[] | undefined {
+  if (!segments || segments.length === 0) return undefined;
+  return segments.map((s) => ({
+    kind: "member",
+    path: s.path,
+    span: [lambdaStart + s.span[0] + spanShift, lambdaStart + s.span[1] + spanShift],
+  }));
+}
+
+function computeSegmentShift(original: string, withDoc: string, exprStart: number): number {
+  const originalExprStart = exprStart;
+  const newExprStart = withDoc.indexOf("=>") + 2;
+  return newExprStart - originalExprStart;
 }
 
 /* -----------------------------------------------------------------------------
