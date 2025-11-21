@@ -66,10 +66,14 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
 
   definitions.push({
     key: "40-typecheck",
-    deps: ["20-link"],
+    deps: ["10-lower", "20-link", "30-scope"],
     run(ctx) {
       const linked = ctx.require("20-link");
-      return typecheck(linked);
+      const scope = ctx.require("30-scope");
+      const ir = ctx.require("10-lower");
+      const vm = assertOption(ctx.options.vm, "vm");
+      const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
+      return typecheck({ linked, scope, ir, rootVmType: rootVm });
     },
   });
 
@@ -139,4 +143,8 @@ export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-
     "30-scope": session.run("30-scope"),
     "40-typecheck": session.run("40-typecheck"),
   };
+}
+
+function hasQualifiedVm(vm: AnalyzeOptions["vm"]): vm is AnalyzeOptions["vm"] & { getQualifiedRootVmTypeExpr: () => string } {
+  return typeof (vm as { getQualifiedRootVmTypeExpr?: unknown }).getQualifiedRootVmTypeExpr === "function";
 }

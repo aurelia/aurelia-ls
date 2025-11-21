@@ -6,7 +6,7 @@
 
 - **`packages/domain`**
   Core compiler / analysis pipeline. Pure TS library:
-  - HTML -> IR -> LinkedSemantics -> ScopeGraph -> (Typecheck TBD) -> Plan -> Emit.
+- HTML -> IR -> LinkedSemantics -> ScopeGraph -> Typecheck -> Plan -> Emit.
   - Exposes:
     - `compileTemplateToOverlay` (overlay/ttc pipeline)
     - `compileTemplateToSSR` (SSR skeleton + manifest)
@@ -51,11 +51,12 @@ This section is the main thing Codex should understand before touching compiler 
 
 ### 2.1 Data flow overview
 
-Core types (unchanged):
+Core types:
 
 - `IrModule` - HTML -> IR (`model/ir.ts`)
 - `LinkedSemanticsModule` - IR + Semantics -> linked host info (`20-resolve-host/types.ts`)
 - `ScopeModule` - Linked -> scope graph (`model/symbols.ts`)
+- `TypecheckModule` - Linked + Scope + VM -> inferred/expected types + AU13xx diags (`40-typecheck/typecheck.ts`)
 - `OverlayPlanModule` - Linked + Scope -> overlay plan (`50-plan/types.ts`)
 - `SsrPlanModule` - Linked + Scope -> SSR plan (`50-plan/ssr-types.ts`)
 
@@ -199,17 +200,31 @@ Invariants:
 * Bind never changes linked structures; it only walks them.
 * Nested templates from controllers are part of the **same** `ScopeTemplate`; there is one scope template per module root.
 
-### 2.5 Phase 40 - Typecheck (planned)
+### 2.5 Phase 40 - Typecheck
 
-Directory:
-`packages/domain/src/compiler/phases/40-typecheck/`
+Directory: `packages/domain/src/compiler/phases/40-typecheck/`
 
-Currently only a placeholder (`.gitkeep`). Type-level analysis for editor features will live here eventually, separate from TTC planning.
+Input/Output:
 
-Until then:
+```ts
+typecheck({
+  linked: LinkedSemanticsModule,
+  scope: ScopeModule,
+  ir: IrModule,
+  rootVmType: string,
+}): TypecheckModule;
+```
 
-* Some type reasoning lives inside **Plan** (see below).
-* Tests under `packages/domain/test/typecheck` simulate end-to-end behavior via overlays.
+Responsibilities:
+
+* Builds frame-aware environments (shared with Plan) to **infer** expression types per frame.
+* Collects **expected** types from binding targets (DOM/custom resources/controllers).
+* Emits **AU13xx** diagnostics for obvious mismatches (best-effort string compare; unknown/any suppressed).
+* Surfaces `inferredByExpr` + `expectedByExpr` maps for editor features (e.g., `expectedTypeOf`).
+
+Notes:
+* Pure and independent of overlay planning/emit.
+* Uses authored spans from IR to attach diagnostics; relies on VM reflection for the root type.
 
 ### 2.6 Phase 50 - Plan (overlay planning)
 

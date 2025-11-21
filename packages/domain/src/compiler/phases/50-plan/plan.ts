@@ -53,6 +53,13 @@ import type {
   ExprTableEntry,
   BadExpression,
 } from "../../model/ir.js";
+import {
+  buildFrameAnalysis,
+  typeFromExprAst,
+  wrap,
+  type FrameTypingHints,
+  type Env,
+} from "../shared/type-analysis.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -116,210 +123,6 @@ function analyzeTemplate(
 }
 
 /* ===================================================================================== */
-/* Frame analysis: Env + origin typing                                                    */
-/* ===================================================================================== */
-
-type Env = ReadonlyMap<string, string>;        // name -> TS type expr
-type MutableEnv = Map<string, string>;
-
-type FrameTypingHints = {
-  /** For 'with': overlay value type. */
-  overlayBase?: string;
-  /** For 'promise': raw promise type (before Awaited). */
-  promiseBase?: string;
-  /** For 'repeat': iterable type; element type computed via CollectionElement<>. */
-  repeatIterable?: string;
-};
-
-type FrameAnalysis = {
-  envs: Map<FrameId, Env>;
-  hints: Map<FrameId, FrameTypingHints>;
-};
-
-function buildFrameAnalysis(
-  st: ScopeTemplate,
-  exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
-  rootVm: string,
-): FrameAnalysis {
-  const envs = new Map<FrameId, Env>();
-  const hints = new Map<FrameId, FrameTypingHints>();
-
-  // Helpers to navigate frame ancestry quickly
-  const frameById = new Map<FrameId, ScopeFrame>();
-  for (const f of st.frames) frameById.set(f.id, f);
-
-  const resolveEnvAt = (start: FrameId | null, up: number): Env | undefined => {
-    let id = start;
-    let steps = up;
-    while (steps > 0 && id != null) {
-      id = frameById.get(id!)?.parent ?? null;
-      steps--;
-    }
-    return id != null ? envs.get(id) : undefined;
-  };
-
-  // Evaluate a type in the context of a frame. Allow the *current* env to be seen for depth 0.
-  const evalTypeInFrame = (
-    frameId: FrameId,
-    ast: IsBindingBehavior | ForOfStatement | undefined,
-    currentEnv?: Env,
-  ): string => {
-    if (!ast) return "unknown";
-    const node = ast as IsBindingBehavior;
-    return typeFromExprAst(node, {
-      rootVm,
-      resolveEnv: (depth: number) => {
-        if (depth === 0 && currentEnv) return currentEnv;
-        return resolveEnvAt(frameId, depth);
-      },
-    });
-  };
-
-  for (const f of st.frames) {
-    const parentEnv: Env = f.parent != null ? (envs.get(f.parent) ?? new Map()) : new Map();
-    const env: MutableEnv = new Map(parentEnv); // start with inherited names
-    const h: FrameTypingHints = {};
-
-    // ---- Origin typing (repeat / with / promise) ----
-    if (f.origin?.kind === "repeat") {
-      const forOfAst = exprIndex.get(f.origin.forOfAstId);
-      if (forOfAst?.expressionType === "IsIterator") {
-        if (forOfAst.ast.$kind !== "BadExpression") {
-          // Header evaluates in the *outer* frame
-          const iterType = evalTypeInFrame(f.parent ?? f.id, forOfAst.ast.iterable);
-          h.repeatIterable = iterType;
-        }
-      }
-    } else if (f.origin?.kind === "with") {
-      const e = exprIndex.get(f.origin.valueExprId);
-      if (e?.expressionType === "IsProperty") {
-        h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
-      }
-    } else if (f.origin?.kind === "promise") {
-      const e = exprIndex.get(f.origin.valueExprId);
-      if (e?.expressionType === "IsProperty") {
-        h.promiseBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
-      }
-    }
-    hints.set(f.id, h);
-
-    // ---- Populate env with this-frame names (shadowing parent) ----
-
-    // repeat locals / contextuals
-    if (h.repeatIterable) {
-      const iterT = h.repeatIterable;                  // e.g., Map<K,V> | T[] | Iterable<T>
-      const elemT = `CollectionElement<${iterT}>`;     // element/tuple/object view
-      // Project locals from the header declaration shape
-      const proj = f.origin?.kind === "repeat"
-        ? projectRepeatLocals(exprIndex.get(f.origin.forOfAstId)?.ast as ForOfStatement | undefined, elemT)
-        : new Map<string, string>();
-      for (const s of f.symbols) {
-        if (s.kind === "repeatLocal") {
-          const t = proj.get(s.name);
-          env.set(s.name, t ?? "unknown");
-        }
-      }
-    } else {
-      // Even if we don't know iterable type, surface unknown for locals
-      for (const s of f.symbols) {
-        if (s.kind === "repeatLocal") env.set(s.name, "unknown");
-      }
-    }
-    for (const s of f.symbols) {
-      if (s.kind === "repeatContextual") env.set(s.name, contextualType(s.name));
-    }
-
-    // promise alias (then/catch)
-    if (f.origin?.kind === "promise") {
-      const base = h.promiseBase;
-      for (const s of f.symbols) {
-        if (s.kind === "promiseAlias") {
-          if (s.branch === "then" && base) env.set(s.name, `Awaited<${base}>`);
-          else if (s.branch === "catch") env.set(s.name, "any");
-          else env.set(s.name, "unknown");
-        }
-      }
-    }
-
-    // <let> locals (value exprs evaluate in *current* frame)
-    if (f.letValueExprs) {
-      for (const [name, id] of Object.entries(f.letValueExprs)) {
-        const entry = exprIndex.get(id);
-        if (entry?.expressionType === "IsProperty") {
-          // Use the in-construction env so let values can reference locals in the same frame
-          const t = evalTypeInFrame(f.id, entry.ast, env as Env);
-          env.set(name, t);
-        } else {
-          env.set(name, "unknown");
-        }
-      }
-    }
-
-    envs.set(f.id, env);
-  }
-
-  return { envs, hints };
-}
-
-/**
- * Compute name -> type for repeat locals based on the header declaration.
- *
- * Supported shapes:
- *   - BindingIdentifier('item')           -> item: elemT
- *   - ArrayBindingPattern([...])          -> leaves in order: TupleElement<elemT, 0>, TupleElement<elemT, 1>, ...
- *   - ObjectBindingPattern({...})         -> leaf maps to elemT['prop']
- */
-
-function projectRepeatLocals(forOf: ForOfStatement | undefined, elemT: string): Map<string, string> {
-  const out = new Map<string, string>();
-  if (!forOf) return out;
-  projectPatternTypes(forOf.declaration, elemT, out);
-  return out;
-}
-
-function projectPatternTypes(pattern: BindingIdentifierOrPattern, baseType: string, out: Map<string, string>): void {
-  switch (pattern.$kind) {
-    case "BadExpression":
-      return;
-    case "BindingIdentifier": {
-      const name = pattern.name;
-      if (name) out.set(name, wrap(baseType));
-      return;
-    }
-    case "BindingPatternDefault":
-      projectPatternTypes(pattern.target, baseType, out);
-      return;
-    case "BindingPatternHole":
-      return;
-    case "ArrayBindingPattern": {
-      let i = 0;
-      for (const el of pattern.elements) {
-        projectPatternTypes(el, tupleIndexType(baseType, i), out);
-        i++;
-      }
-      if (pattern.rest) {
-        const restType = `Array<${tupleIndexType(baseType, i)}>`;
-        projectPatternTypes(pattern.rest, restType, out);
-      }
-      return;
-    }
-    case "ObjectBindingPattern": {
-      for (const prop of pattern.properties) {
-        projectPatternTypes(prop.value, indexType(baseType, [String(prop.key)]), out);
-      }
-      if (pattern.rest) {
-        const keys = pattern.properties.map(p => `'${escapeKey(String(p.key))}'`).join(" | ") || "never";
-        const restType = `Omit<${wrap(baseType)}, ${keys}>`;
-        projectPatternTypes(pattern.rest, restType, out);
-      }
-      return;
-    }
-    default:
-      return assertUnreachable(pattern as never);
-  }
-}
-
-/* ===================================================================================== */
 /* Frame type assembly                                                                    */
 /* ===================================================================================== */
 
@@ -365,27 +168,12 @@ function buildFrameTypeExpr(
   ].join(" & ");
 }
 
-function wrap(s: string): string {
-  const trimmed = s.trim();
-  if (trimmed.startsWith("{") || trimmed.startsWith("(")) return trimmed;
-  return `(${trimmed})`;
-}
-
-function contextualType(name: string): string {
-  switch (name) {
-    case "$index":   return "number";
-    case "$length":  return "number";
-    case "$first":   return "boolean";
-    case "$last":    return "boolean";
-    case "$even":    return "boolean";
-    case "$odd":     return "boolean";
-    case "$middle":  return "boolean";
-    default:         return "unknown";
-  }
-}
-
 function safeProp(n: string): string {
   return /^[$A-Z_][0-9A-Z_$]*$/i.test(n) ? n : JSON.stringify(n);
+}
+
+function escapeKey(s: string): string {
+  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 /* ===================================================================================== */
@@ -719,147 +507,6 @@ function ancestorChain(ancestor: number): string {
 
 function escapeBackticks(s: string): string {
   return s.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
-}
-/* Env-aware Expression → type expressions                                               */
-/* ===================================================================================== */
-
-type TypeCtx = {
-  rootVm: string;
-  /**
-   * Resolve the *Env* at a given $parent depth from the frame where the expression is evaluated.
-   * depth 0 = current frame, 1 = parent, ...
-   */
-  resolveEnv(depth: number): Env | undefined;
-};
-
-/**
- * Produce a TS type expression for an expression in the given frame context:
- * - Locals first (via Env), then fall back to root VM bracket-indexing
- * - AccessThis(0) → root VM (the overlay gets intersected into the frame type)
- * - AccessScope with ancestor>0 resolves against ancestor Env
- * - AccessMember/Keyed index into the base type
- * - Calls → ReturnType<NonNullable<calleeType>>
- * - Unknown/complex shapes → 'unknown'
- */
-function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
-  return tIsBindingBehavior(ast);
-
-function tIsBindingBehavior(n: PrintableAst): string {
-  switch (n.$kind) {
-    case "BindingBehavior": return tIsBindingBehavior(n.expression);
-    case "ValueConverter":  return tIsBindingBehavior(n.expression);
-
-      case "Assign":          return "unknown";
-      case "Conditional":     return "unknown";
-
-      case "AccessThis":      return tAccessThis(n);
-      case "AccessBoundary":  return `(${ctx.rootVm})`;
-      case "AccessScope":     return tAccessScope(n);
-      case "AccessMember":    return tAccessMember(n);
-      case "AccessKeyed":     return tAccessKeyed(n);
-
-      case "CallScope":       return tCallScope(n);
-      case "CallMember":      return tCallMember(n);
-      case "CallFunction":    return tCallFunction(n);
-      case "CallGlobal":      return "unknown";
-
-      case "New":             return "unknown";
-      case "Binary":          return "unknown";
-      case "Unary":           return "unknown";
-
-      case "PrimitiveLiteral":return literalType(n);
-      case "ArrayLiteral":    return "unknown[]";
-      case "ObjectLiteral":   return "Record<string, unknown>";
-      case "Paren":           return tIsBindingBehavior(n.expression);
-
-      case "Template":        return "string";
-      case "TaggedTemplate":  return "unknown";
-
-      default:
-        return "unknown";
-    }
-  }
-
-  function tAccessThis(n: AccessThisExpression): string {
-    if (n.ancestor === 0) return `(${ctx.rootVm})`;
-    // Accessing $parent.$this is not modeled as a value path here; rely on frame $parent typing
-    return "unknown";
-  }
-
-  function tAccessScope(n: AccessScopeExpression): string {
-    const env = ctx.resolveEnv(n.ancestor);
-    if (n.name && env) {
-      const t = env.get(n.name);
-      if (t) return `(${t})`;
-    }
-    // Fallback to root VM only when ancestor === 0
-    return n.ancestor === 0 && n.name ? indexType(ctx.rootVm, [n.name]) : "unknown";
-  }
-
-  function tAccessMember(n: AccessMemberExpression): string {
-    const base = tIsBindingBehavior(n.object);
-    if (!base || base === "unknown") return "unknown";
-    return indexType(base, [n.name]);
-  }
-
-  function tAccessKeyed(n: AccessKeyedExpression): string {
-    const base = tIsBindingBehavior(n.object);
-    if (!base || base === "unknown") return "unknown";
-    if (n.key.$kind === "PrimitiveLiteral") {
-      const keyVal = (n.key as PrimitiveLiteralExpression).value;
-      const key = keyVal === undefined ? "undefined" : String(keyVal);
-      return indexType(base, [key]);
-    }
-    return "unknown";
-  }
-
-  function tCallScope(n: CallScopeExpression): string {
-    // ReturnType of the callee found via scope lookup
-    const calleeT = tAccessScope({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: null! /* TODO: integrate spans */ });
-    return returnTypeOf(calleeT);
-  }
-
-  function tCallMember(n: CallMemberExpression): string {
-    const base = tIsBindingBehavior(n.object);
-    if (!base || base === "unknown") return "unknown";
-    const calleeT = indexType(base, [n.name]);
-    return returnTypeOf(calleeT);
-  }
-
-  function tCallFunction(n: CallFunctionExpression): string {
-    const fnT = tIsBindingBehavior(n.func);
-    return returnTypeOf(fnT);
-  }
-}
-
-function literalType(n: PrimitiveLiteralExpression): string {
-  const v = n.value;
-  switch (typeof v) {
-    case "string":  return "string";
-    case "number":  return "number";
-    case "boolean": return "boolean";
-    default:        return v === null ? "null" : "unknown";
-  }
-}
-
-/** `ReturnType<NonNullable<T>>` */
-function returnTypeOf(fnType: string): string {
-  return `ReturnType<NonNullable<${wrap(fnType)}>>`;
-}
-
-/** Index like: `NonNullable<Base>[0]['b']` (numeric indices stay numeric). */
-function indexType(base: string, parts: string[]): string {
-  const idx = parts.map(p => `['${escapeKey(p)}']`).join("");
-  return `NonNullable<${wrap(base)}>${idx}`;
-}
-
-/** Tuple index like: `TupleElement<NonNullable<Base>, I>` */
-function tupleIndexType(base: string, i: number): string {
-  return `TupleElement<NonNullable<${wrap(base)}>, ${i}>`;
-}
-
-function escapeKey(s: string): string {
-  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 /* ===================================================================================== */

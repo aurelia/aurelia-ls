@@ -8,6 +8,7 @@ export interface CoreCompileOptions {
   templateFilePath: string;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
+  vm: import("./phases/50-plan/types.js").VmReflection;
 }
 
 export interface CorePipelineResult {
@@ -31,6 +32,7 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
   const pipelineOpts: PipelineOptions = {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
+    vm: opts.vm,
   };
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
   if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
