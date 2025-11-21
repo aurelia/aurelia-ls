@@ -35,6 +35,14 @@
 
 Use these as authoritative descriptions of current runtime semantics; code and tests should align, and extensions should be additive.
 
+### Quick operating rules (practical)
+- **Purity:** phases 10/20/30/40/50/60 remain pure (no I/O, no input mutation).
+- **Types:** avoid `any`/`unknown` casts; add guards/helpers instead. Prefer refactoring to strong types over adding local casts/aliases.
+- **Design:** keep shared shapes/types in the existing model/type files; avoid scattering local type declarations when a central export fits.
+- **Generated vs src:** only edit `packages/**/src` and tests; `packages/**/out` is generated.
+- **Tests/build:** `npm run test:spec` runs `tsc -b` then all specs; use it to refresh out/overlay artifacts instead of manual builds.
+- **Where things live:** mapping/query in `compiler/facade.ts`; overlay plan in `phases/50-plan`; overlay emit in `phases/60-emit`; typecheck scaffold in `phases/40-typecheck`; SSR plan/emit in `phases/50-plan/ssr-*` and `phases/60-emit/ssr.ts`.
+
 ---
 
 ## 2. Compiler pipeline contracts
