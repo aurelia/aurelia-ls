@@ -8,9 +8,21 @@ import { plan } from "./phases/50-plan/plan.js";
 import { emitOverlayFile } from "./phases/60-emit/overlay.js";
 
 // Types
-import type { SourceSpan, ExprId, BindingSourceIR, InterpIR, ExprRef } from "./model/ir.js";
+import type { SourceSpan, ExprId, BindingSourceIR, InterpIR, ExprRef, DOMNode, TemplateIR, NodeId } from "./model/ir.js";
 import type { VmReflection, OverlayPlanModule } from "./phases/50-plan/types.js";
-import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateQueryFacade } from "../contracts.js";
+import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateQueryFacade, TemplateNodeInfo, TemplateBindableInfo, TemplateControllerInfo } from "../contracts.js";
+import type {
+  LinkedSemanticsModule,
+  LinkedRow,
+  NodeSem,
+  LinkedHydrateTemplateController,
+  LinkedElementBindable,
+  LinkedPropertyBinding,
+  LinkedAttributeBinding,
+  LinkedStylePropertyBinding,
+  TargetSem,
+} from "./phases/20-resolve-host/types.js";
+import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay.js";
 
 // Parsers
 import { getExpressionParser } from "../parsers/expression-parser.js";
@@ -94,7 +106,7 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
     overlayEnd: m.end,
     htmlSpan: exprSpans.get(m.exprId) ?? { start: 0, end: 0, file: opts.templateFilePath },
   }));
-  const query = buildPendingQueryFacade(mapping);
+  const query = buildQueryFacade(ir.templates[0], linked, scope, mapping);
 
   return {
     ir,
@@ -113,7 +125,7 @@ export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayRe
 }
 
 function buildMappingArtifact(
-  overlayMapping: Array<{ exprId: ExprId; start: number; end: number }>,
+  overlayMapping: OverlayEmitMappingEntry[],
   exprSpans: Map<ExprId, SourceSpan>,
   fallbackFile: string,
 ): TemplateMappingArtifact {
@@ -125,7 +137,177 @@ function buildMappingArtifact(
   return { kind: "mapping", entries };
 }
 
-/** TODO: wire this to a real Query API once scope graphs + mapping artifacts are first-class. */
+function buildQueryFacade(ir: TemplateIR | undefined, linked: LinkedSemanticsModule, scope: any, mapping: TemplateMappingArtifact): TemplateQueryFacade {
+  if (!ir) return buildPendingQueryFacade(mapping);
+  const nodes = indexDom(ir);
+  const rowsByTarget = indexRows(linked);
+
+  return {
+    nodeAt(htmlOffset) {
+      return pickNodeAt(nodes, rowsByTarget, htmlOffset);
+    },
+    bindablesFor(node) {
+      const row = rowsByTarget.get(node.id);
+      if (!row) return null;
+      const bindables = collectBindables(row);
+      return bindables.length > 0 ? bindables : null;
+    },
+    exprAt(htmlOffset) {
+      const hit = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
+      if (!hit) return null;
+      // TODO: surface frameId from scope.exprToFrame when available
+      return { exprId: hit.exprId, span: hit.htmlSpan };
+    },
+    expectedTypeOf(_exprOrBindable) {
+      // TODO: feed Phase 40 typing hints when implemented
+      return null;
+    },
+    controllerAt(htmlOffset) {
+      const node = pickNodeAt(nodes, rowsByTarget, htmlOffset);
+      if (!node) return null;
+      const row = rowsByTarget.get(node.id);
+      if (!row) return null;
+      const ctrl = findControllerAt(row, htmlOffset);
+      return ctrl;
+    },
+  };
+}
+
+type NodeIndex = { id: NodeId; node: DOMNode; span?: SourceSpan | null; kind: "element" | "template" | "text" | "comment"; hostKind: "custom" | "native" | "none" };
+
+function indexDom(ir: TemplateIR): NodeIndex[] {
+  const out: NodeIndex[] = [];
+  const stack: DOMNode[] = [ir.dom];
+  while (stack.length) {
+    const n = stack.pop()!;
+    out.push({ id: n.id, node: n, span: n.loc ?? null, kind: n.kind, hostKind: "none" });
+    switch (n.kind) {
+      case "element":
+      case "template":
+        for (let i = n.children.length - 1; i >= 0; i--) stack.push(n.children[i]!);
+        break;
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
+function indexRows(linked: LinkedSemanticsModule): Map<NodeId, LinkedRow> {
+  const map = new Map<NodeId, LinkedRow>();
+  const t = linked.templates?.[0];
+  if (!t) return map;
+  for (const row of t.rows ?? []) map.set(row.target, row);
+  return map;
+}
+
+function pickNodeAt(nodes: NodeIndex[], rows: Map<NodeId, LinkedRow>, offset: number): TemplateNodeInfo | null {
+  let best: NodeIndex | null = null;
+  for (const n of nodes) {
+    if (n.span == null) continue;
+    if (offset < n.span.start || offset > n.span.end) continue;
+    if (!best || (best.span && (n.span!.end - n.span!.start) <= (best.span.end! - best.span.start!))) {
+      best = n;
+    }
+  }
+  if (!best || !best.span) return null;
+  const row = rows.get(best.id);
+  const hostKind = row ? resolveHostKind(row.node) : "none";
+  const mappedKind = mapNodeKind(best.kind);
+  if (!mappedKind) return null;
+  return { id: best.id, kind: mappedKind, hostKind, span: best.span };
+}
+
+function mapNodeKind(k: NodeIndex["kind"]): TemplateNodeInfo["kind"] | null {
+  switch (k) {
+    case "element": return "element";
+    case "text": return "text";
+    case "comment": return "comment";
+    case "template": return "element";
+    default: return null;
+  }
+}
+
+function resolveHostKind(node: NodeSem): "custom" | "native" | "none" {
+  if (node.kind === "element") {
+    if (node.custom) return "custom";
+    if (node.native) return "native";
+  }
+  return "none";
+}
+
+function collectBindables(row: LinkedRow): TemplateBindableInfo[] {
+  const out: TemplateBindableInfo[] = [];
+  for (const instr of row.instructions ?? []) {
+    switch (instr.kind) {
+      case "propertyBinding":
+        out.push({
+          name: instr.to,
+          mode: instr.effectiveMode,
+          source: targetSource(instr.target),
+        });
+        break;
+      case "attributeBinding":
+      case "stylePropertyBinding":
+        out.push({ name: instr.to, source: "native" });
+        break;
+      case "hydrateElement":
+      case "hydrateAttribute":
+        for (const p of instr.props ?? []) {
+          addBindableFromLinked(p);
+        }
+        break;
+      case "hydrateTemplateController":
+        for (const p of instr.props ?? []) {
+          if (p.kind === "iteratorBinding") continue;
+          addBindableFromLinked(p);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return out;
+
+  function addBindableFromLinked(b: LinkedElementBindable | LinkedPropertyBinding | LinkedAttributeBinding | LinkedStylePropertyBinding) {
+    switch (b.kind) {
+      case "propertyBinding":
+        out.push({ name: b.to, mode: b.effectiveMode, source: targetSource(b.target) });
+        break;
+      case "attributeBinding":
+        out.push({ name: b.to, source: targetSource(b.target) });
+        break;
+      case "stylePropertyBinding":
+        out.push({ name: b.to, source: "native" });
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+function targetSource(target: TargetSem | undefined): TemplateBindableInfo["source"] {
+  if (!target) return "native";
+  switch (target.kind) {
+    case "element.bindable": return "component";
+    case "attribute.bindable": return "custom-attribute";
+    case "controller.prop": return "controller";
+    case "element.nativeProp": return "native";
+    default: return "native";
+  }
+}
+
+function findControllerAt(row: LinkedRow, htmlOffset: number): TemplateControllerInfo | null {
+  for (const instr of row.instructions ?? []) {
+    if (instr.kind !== "hydrateTemplateController") continue;
+    if (instr.loc && (htmlOffset < instr.loc.start || htmlOffset > instr.loc.end)) continue;
+    const span = instr.loc ?? { start: 0, end: 0 };
+    return { kind: instr.res, span };
+  }
+  return null;
+}
+
+// Fallback query facade when IR is missing (should not happen in normal flow).
 function buildPendingQueryFacade(mapping: TemplateMappingArtifact): TemplateQueryFacade {
   return {
     nodeAt(_htmlOffset) { return null; },
