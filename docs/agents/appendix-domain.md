@@ -1,6 +1,6 @@
-# AGENTS Appendix — Architecture & Pipelines
+# AGENTS Appendix - Architecture & Pipelines
 
-## 2. High-level architecture
+## 1. High-level architecture
 
 ### Packages
 
@@ -29,57 +29,57 @@
 
 ### Reference docs (read-only runtime specs)
 
-- `docs/expression-language.md` — binding expression grammar/runtime behavior.
-- `docs/template-lowering-and-binding.md` — lowering + bind contracts for templates.
-- `docs/errors.md` — diagnostic codes/messages.
+- `docs/expression-language.md` - binding expression grammar/runtime behavior.
+- `docs/template-lowering-and-binding.md` - lowering + bind contracts for templates.
+- `docs/errors.md` - diagnostic codes/messages.
 
 Use these as authoritative descriptions of current runtime semantics; code and tests should align, and extensions should be additive.
 
 ---
 
-## 3. Compiler pipeline contracts
+## 2. Compiler pipeline contracts
 
 This section is the main thing Codex should understand before touching compiler code.
 
-### 3.1 Data flow overview
+### 2.1 Data flow overview
 
 Core types:
 
-- `IrModule` — HTML -> IR (`model/ir.ts`)
-- `LinkedSemanticsModule` — IR + Semantics -> linked host info (`20-resolve-host/types.ts`)
-- `ScopeModule` — Linked -> scope graph (`model/symbols.ts`)
-- `OverlayPlanModule` — Linked + Scope -> overlay plan (`50-plan/types.ts`)
+- `IrModule` - HTML -> IR (`model/ir.ts`)
+- `LinkedSemanticsModule` - IR + Semantics -> linked host info (`20-resolve-host/types.ts`)
+- `ScopeModule` - Linked -> scope graph (`model/symbols.ts`)
+- `OverlayPlanModule` - Linked + Scope -> overlay plan (`50-plan/types.ts`)
 
 Pipeline:
 
 ```ts
-// 10 — Lower
+// 10 - Lower
 function lowerDocument(html: string, opts: BuildIrOptions): IrModule;
 
-// 20 — Resolve host semantics
+// 20 - Resolve host semantics
 function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule;
 
-// 30 — Bind (scope graph)
+// 30 - Bind (scope graph)
 function bindScopes(linked: LinkedSemanticsModule): ScopeModule;
 
-// 40 — Typecheck (planned)
+// 40 - Typecheck (planned)
 // (currently a placeholder; type-ish logic lives in Plan)
 
-// 50 — Plan (overlay)
+// 50 - Plan (overlay)
 function plan(
   linked: LinkedSemanticsModule,
   scope: ScopeModule,
   opts: AnalyzeOptions
 ): OverlayPlanModule;
 
-// 60 — Emit overlay
+// 60 - Emit overlay
 function emitOverlayFile(
   plan: OverlayPlanModule,
   opts: { isJs: boolean } & EmitOptions
 ): EmitResult;
 ````
 
-And the façade:
+And the facade:
 
 ```ts
 // packages/domain/src/compiler/facade.ts
@@ -94,7 +94,7 @@ export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult;
 * `ExprId` is stable per `(file|span|expressionType|code)` (see `ExprTable` in `lower.ts`).
 * Later phases **never mutate** earlier phase objects; they build linked/derived views.
 
-### 3.2 Phase 10 — Lower (HTML -> IR)
+### 2.2 Phase 10 - Lower (HTML -> IR)
 
 Entry:
 `packages/domain/src/compiler/phases/10-lower/lower.ts`
@@ -126,7 +126,7 @@ Key points:
 
 If you extend Aurelia syntax (e.g., new attribute shape), this is usually the first phase to touch.
 
-### 3.3 Phase 20 — Resolve host semantics (IR -> LinkedSemantics)
+### 2.3 Phase 20 - Resolve host semantics (IR -> LinkedSemantics)
 
 Entry:
 `packages/domain/src/compiler/phases/20-resolve-host/resolve.ts`
@@ -145,7 +145,7 @@ Responsibilities:
 * Normalize binding targets:
 
   * Attribute -> property mapping (per tag / global / camelCase fallback).
-  * Two‑way defaults (`Semantics.twoWayDefaults`) into `effectiveMode`.
+  * Two-way defaults (`Semantics.twoWayDefaults`) into `effectiveMode`.
 * Attach semantic targets:
 
   * Custom element bindables.
@@ -159,9 +159,9 @@ Invariants:
 
 * No mutation of `IrModule`.
 * `LinkedInstruction` mirrors `InstructionIR` but has additional `target: TargetSem`, `controller: ControllerSem`, etc.
-* Attributes with `data-*` / `aria-*` stay attribute‑only (never mapped to props).
+* Attributes with `data-*` / `aria-*` stay attribute-only (never mapped to props).
 
-### 3.4 Phase 30 — Bind (scope graph)
+### 2.4 Phase 30 - Bind (scope graph)
 
 Entry:
 `packages/domain/src/compiler/phases/30-bind/bind.ts`
@@ -178,7 +178,7 @@ Responsibilities:
 
   * `root` frame (component root).
   * `overlay` frames for repeat/with/promise.
-  * Reuse‑scope controllers (if/switch/portal) reuse the parent frame.
+  * Reuse-scope controllers (if/switch/portal) reuse the parent frame.
 * Attach **overlay bases**:
 
   * `with`: overlay base is `value`.
@@ -197,19 +197,19 @@ Invariants:
 * Bind never changes linked structures; it only walks them.
 * Nested templates from controllers are part of the **same** `ScopeTemplate`; there is one scope template per module root.
 
-### 3.5 Phase 40 — Typecheck (planned)
+### 2.5 Phase 40 - Typecheck (planned)
 
 Directory:
 `packages/domain/src/compiler/phases/40-typecheck/`
 
-Currently only a placeholder (`.gitkeep`). Type‑level analysis for editor features will live here eventually, separate from TTC planning.
+Currently only a placeholder (`.gitkeep`). Type-level analysis for editor features will live here eventually, separate from TTC planning.
 
 Until then:
 
 * Some type reasoning lives inside **Plan** (see below).
-* Tests under `packages/domain/test/typecheck` simulate end‑to‑end behavior via overlays.
+* Tests under `packages/domain/test/typecheck` simulate end-to-end behavior via overlays.
 
-### 3.6 Phase 50 — Plan (overlay planning)
+### 2.6 Phase 50 - Plan (overlay planning)
 
 Entry:
 `packages/domain/src/compiler/phases/50-plan/plan.ts`
@@ -244,10 +244,10 @@ Responsibilities:
 
 Invariants:
 
-* Plan is pure: it doesn’t depend on TS APIs or file system.
+* Plan is pure: it doesn't depend on TS APIs or file system.
 * It must be safe to evaluate on any valid `LinkedSemanticsModule` + `ScopeModule` (even with `BadExpression` entries).
 
-### 3.7 Phase 60 — Emit (overlay TS/JS)
+### 2.7 Phase 60 - Emit (overlay TS/JS)
 
 Entry:
 `packages/domain/src/compiler/phases/60-emit/overlay.ts`
@@ -295,7 +295,7 @@ Invariants:
   * `__au$access<T>(fn: (o: T) => unknown): void`
   * `CollectionElement<T>`, `TupleElement<T, I>` helpers.
 
-### 3.8 SSR planning & emit
+### 2.8 SSR planning & emit
 
 Entry:
 `packages/domain/src/compiler/phases/50-plan/ssr-plan.ts`
@@ -313,14 +313,14 @@ Notes:
 
 ---
 
-## 4. LSP / TS overlay integration (high-level)
+## 3. LSP / TS overlay integration (high-level)
 
 ### Server (`packages/server/src/main.ts`)
 
 * Builds a `ts.LanguageService` over:
 
   * Workspace files.
-  * In‑memory overlays.
+  * In-memory overlays.
   * A prelude file (`PRELUDE_TS` in `.aurelia/__prelude.d.ts`).
 
 * For each `.html` document:
@@ -338,12 +338,12 @@ Notes:
 * Starts the server as a Node IPC process.
 * Provides commands:
 
-  * `aurelia.showOverlay` — fetch overlay text from server and show in a TS editor.
-  * `aurelia.dumpState` — debug info from the server side.
+  * `aurelia.showOverlay` - fetch overlay text from server and show in a TS editor.
+  * `aurelia.dumpState` - debug info from the server side.
 
 ---
 
-## 5. Expression parsing contracts
+## 4. Expression parsing contracts
 
 File: `packages/domain/src/parsers/expression-api.ts`
 
@@ -368,14 +368,14 @@ Important:
 
 ---
 
-## 6. How an AI agent should work in this repo
+## 5. How an AI agent should work in this repo
 
 When modifying or adding code:
 
-1. **Stay pipeline‑shaped**
+1. **Stay pipeline-shaped**
 
    * New features should plug into the existing phases where possible.
-   * Avoid adding ad‑hoc cross‑phase shortcuts; prefer:
+   * Avoid adding ad-hoc cross-phase shortcuts; prefer:
 
      * `IrModule` -> `LinkedSemanticsModule` -> `ScopeModule` -> `OverlayPlanModule`.
 
@@ -392,7 +392,7 @@ When modifying or adding code:
      * then also update:
 
        * Corresponding tests under `packages/domain/test/**`.
-       * Any top‑level façades (`compiler/facade.ts`, `src/index.ts`).
+       * Any top-level facades (`compiler/facade.ts`, `src/index.ts`).
    * Version tags (`"aurelia-ir@1"`, etc.) must **not** change without a conscious schema bump.
 
 4. **Testing expectations**
@@ -418,7 +418,7 @@ When modifying or adding code:
 
      * Local helpers inside a single phase file (`lower.ts`, `resolve.ts`, `bind.ts`, `plan.ts`, `overlay.ts`) where types keep you honest.
      * New test vectors / fixtures.
-     * New helper functions that don’t alter public exports.
+     * New helper functions that don't alter public exports.
 
    * **Require extra care / human review**:
 
@@ -428,7 +428,7 @@ When modifying or adding code:
 
 ---
 
-## 7. If you’re adding a new feature
+## 6. If you're adding a new feature
 
 When implementing a new capability (e.g. new template controller, new binding command):
 
@@ -453,7 +453,7 @@ When implementing a new capability (e.g. new template controller, new binding co
 
 4. Add or extend tests:
 
-   * Prefer JSON vector tests over ad‑hoc assertions where possible.
+   * Prefer JSON vector tests over ad-hoc assertions where possible.
    * If behavior affects overlays, add/update a `typecheck` test.
 
 ---

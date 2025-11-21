@@ -1,4 +1,4 @@
-# AGENTS.md — AI guide to `aurelia-ls`
+# AGENTS.md -- AI guide to `aurelia-ls`
 
 Audience: AI assistants / codegen tools working on this repo.
 Goal: make changes safely, in line with the architectural intent.
@@ -28,7 +28,7 @@ These are **hard constraints**:
 
 - **Strongly-typed contracts**
   - Prefer explicit interfaces and discriminated unions.
-  - Avoid `any` unless it’s genuinely “unknown” and cannot be expressed better.
+  - Avoid `any` unless it's genuinely "unknown" and cannot be expressed better.
 
 - **Minimal defensive programming**
   - Code may assume callers respect contracts.
