@@ -105,4 +105,20 @@ describe("Facade.query", () => {
     const checkedType = bindables?.find((b) => b.name === "checked")?.type;
     assert.equal(checkedType, "boolean");
   });
+
+  test("controllerAt returns null when no controller exists at offset", () => {
+    const html = `<template><div title.bind="msg"></div></template>`;
+    const { query } = build(html);
+    const offset = html.indexOf("title.bind");
+    assert.equal(query.controllerAt(offset), null);
+  });
+
+  test("exprAt includes offsets at expression end boundary", () => {
+    const html = `<div>\${user.name}</div>`;
+    const { query } = build(html);
+    const exprEnd = html.indexOf("user.name") + "user.name".length;
+    const expr = query.exprAt(exprEnd);
+    assert.ok(expr, "exprAt should include end boundary of expression");
+    assert.ok(expr?.span.end >= exprEnd);
+  });
 });

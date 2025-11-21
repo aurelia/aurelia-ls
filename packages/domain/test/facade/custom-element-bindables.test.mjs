@@ -62,3 +62,19 @@ test("facade query exposes custom element bindables from Semantics", () => {
   const missingDiag = linkedUnknown.diags.find((d) => d.code === "AU1104");
   assert.ok(missingDiag, "expected AU1104 diagnostic for unknown bindable");
 });
+
+test("custom element semantics toggle diagnostics on/off", () => {
+  const html = `<template><name-tag first-name.bind="userName"></name-tag></template>`;
+
+  const defaultSemantics = compileMarkup(html, "C:/mem/name-tag-default.html", {
+    semantics: DEFAULT,
+    vm: vmStub(),
+  });
+  assert.ok(defaultSemantics.linked.diags.some((d) => d.code === "AU1104"), "default semantics should flag unknown bindable");
+
+  const customSemantics = compileMarkup(html, "C:/mem/name-tag-custom.html", {
+    semantics: semanticsWithNameTag,
+    vm: vmStub(),
+  });
+  assert.ok(!customSemantics.linked.diags.some((d) => d.code === "AU1104"), "custom semantics should suppress AU1104 for known bindable");
+});
