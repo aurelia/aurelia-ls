@@ -9,12 +9,8 @@ import type { TypecheckModule } from "../phases/40-typecheck/typecheck.js";
 import type { Semantics } from "../language/registry.js";
 import type { AttributeParser } from "../language/syntax.js";
 import type { IExpressionParser } from "../../parsers/expression-api.js";
-
-/**
- * Minimal in-memory stage executor.
- * - Caches results per session; start a new session when inputs change.
- * - No automatic change detection: callers decide when inputs changed.
- */
+import { stableHash } from "./hash.js";
+import { FileStageCache, type StageCache, type StageCacheEntry, createDefaultCacheDir } from "./cache.js";
 
 /**
  * Stage keys (loosely aligned to the original phases, with product-specific planning/emit steps).
@@ -54,6 +50,13 @@ export interface PipelineOptions {
   exprParser?: IExpressionParser;
   semantics?: Semantics;
   vm?: VmReflection;
+  /** Pipeline-wide cache knobs. */
+  cache?: CacheOptions;
+  /**
+   * Opaque hints for fingerprinting non-serializable inputs (parsers, registry adapters, vm reflection).
+   * If unset, fall back to coarse tokens like 'default' | 'custom'.
+   */
+  fingerprints?: FingerprintHints;
   overlay?: {
     isJs: boolean;
     filename?: string;
@@ -68,19 +71,51 @@ export interface PipelineOptions {
   // TODO(productize): optional typecheck-only product settings (diagnostics gating, severity levels).
 }
 
+export interface CacheOptions {
+  /** Disable all persistence (in-memory per session still applies). */
+  enabled?: boolean;
+  /** Persist artifacts to disk (default: true). */
+  persist?: boolean;
+  /** Override cache directory. Defaults to `<cwd>/.aurelia-cache`. */
+  dir?: string;
+}
+
+export interface FingerprintHints {
+  attrParser?: string;
+  exprParser?: string;
+  semantics?: string;
+  vm?: string;
+  overlay?: string;
+  ssr?: string;
+  analyze?: string;
+  [extra: string]: string | undefined;
+}
+
 export interface StageDefinition<TKey extends StageKey> {
   key: TKey;
+  version: string;
   deps: readonly StageKey[];
+  /**
+   * Pure fingerprint of authored inputs to the stage (deps are already resolved).
+   * The final cache key is derived from this fingerprint + dep artifact hashes.
+   */
+  fingerprint: (ctx: StageContext) => unknown;
   run: (ctx: StageContext) => StageOutputs[TKey];
 }
 
 export class StageContext {
   #options: PipelineOptions;
   #fetch: <K extends StageKey>(key: K) => StageOutputs[K];
+  #meta: <K extends StageKey>(key: K) => StageArtifactMeta | undefined;
 
-  constructor(options: PipelineOptions, fetch: <K extends StageKey>(key: K) => StageOutputs[K]) {
+  constructor(
+    options: PipelineOptions,
+    fetch: <K extends StageKey>(key: K) => StageOutputs[K],
+    meta: <K extends StageKey>(key: K) => StageArtifactMeta | undefined,
+  ) {
     this.#options = options;
     this.#fetch = fetch;
+    this.#meta = meta;
   }
 
   get options(): PipelineOptions {
@@ -90,21 +125,51 @@ export class StageContext {
   require<K extends StageKey>(key: K): StageOutputs[K] {
     return this.#fetch(key);
   }
+
+  meta<K extends StageKey>(key: K): StageArtifactMeta | undefined {
+    return this.#meta(key);
+  }
+}
+
+export interface StageArtifactMeta {
+  key: StageKey;
+  version: string;
+  cacheKey: string;
+  artifactHash: string;
+  fromCache: boolean;
 }
 
 /** Represents one execution window with memoized stage results. */
 export class PipelineSession {
   #stages: Map<StageKey, StageDefinition<StageKey>>;
-  #cache: Map<StageKey, unknown>;
+  #results: Map<StageKey, unknown>;
+  #meta: Map<StageKey, StageArtifactMeta>;
+  #cacheEnabled: boolean;
+  #persistCache: StageCache | null;
   #options: PipelineOptions;
 
-  constructor(stages: Map<StageKey, StageDefinition<StageKey>>, options: PipelineOptions, seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>) {
+  constructor(
+    stages: Map<StageKey, StageDefinition<StageKey>>,
+    options: PipelineOptions,
+    seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+  ) {
     this.#stages = stages;
     this.#options = options;
-    this.#cache = new Map<StageKey, unknown>();
+    this.#results = new Map<StageKey, unknown>();
+    this.#meta = new Map<StageKey, StageArtifactMeta>();
+    this.#cacheEnabled = options.cache?.enabled ?? true;
+    const persist = options.cache?.persist ?? false;
+    this.#persistCache = this.#cacheEnabled && persist ? new FileStageCache(options.cache?.dir ?? createDefaultCacheDir()) : null;
+
     if (seed) {
       for (const key of Object.keys(seed) as StageKey[]) {
-        this.#cache.set(key, seed[key]);
+        const def = this.#stages.get(key);
+        if (!def) continue;
+        const output = seed[key] as StageOutputs[StageKey];
+        const artifactHash = stableHash(output);
+        const cacheKey = stableHash({ seed: key, artifactHash, version: def.version });
+        this.#results.set(key, output);
+        this.#meta.set(key, { key, version: def.version, cacheKey, artifactHash, fromCache: false });
       }
     }
   }
@@ -114,18 +179,58 @@ export class PipelineSession {
   }
 
   peek<K extends StageKey>(key: K): StageOutputs[K] | undefined {
-    return this.#cache.get(key) as StageOutputs[K] | undefined;
+    return this.#results.get(key) as StageOutputs[K] | undefined;
   }
 
   run<K extends StageKey>(key: K): StageOutputs[K] {
-    const cached = this.peek(key);
-    if (cached) return cached;
+    const memo = this.peek(key);
+    if (memo) return memo;
     const def = this.#stages.get(key);
     if (!def) throw new Error(`Unknown stage '${key}'`);
-    const ctx = new StageContext(this.#options, <S extends StageKey>(k: S) => this.run(k));
+
+    // Ensure deps are resolved before computing fingerprint.
     for (const dep of def.deps) this.run(dep);
+    const ctx = new StageContext(
+      this.#options,
+      <S extends StageKey>(k: S) => this.run(k),
+      <S extends StageKey>(k: S) => this.#meta.get(k),
+    );
+
+    const depMeta = def.deps.map((d) => {
+      const m = this.#meta.get(d);
+      if (!m) throw new Error(`Missing metadata for dependency '${d}' required by '${key}'`);
+      return { key: m.key, version: m.version, artifactHash: m.artifactHash };
+    });
+    const fingerprint = def.fingerprint(ctx);
+    const cacheKey = stableHash({ key, version: def.version, deps: depMeta, input: fingerprint });
+
+    if (this.#cacheEnabled && this.#persistCache) {
+      const cached = this.#persistCache.load<StageOutputs[K]>(cacheKey);
+      if (cached && cached.meta.version === def.version) {
+        const meta: StageArtifactMeta = {
+          key,
+          version: def.version,
+          cacheKey,
+          artifactHash: cached.meta.artifactHash,
+          fromCache: true,
+        };
+        this.#meta.set(key, meta);
+        this.#results.set(key, cached.artifact);
+        return cached.artifact as StageOutputs[K];
+      }
+    }
+
     const out = def.run(ctx) as StageOutputs[K];
-    this.#cache.set(key, out);
+    const artifactHash = stableHash(out);
+    const meta: StageArtifactMeta = { key, version: def.version, cacheKey, artifactHash, fromCache: false };
+    this.#meta.set(key, meta);
+    this.#results.set(key, out);
+
+    if (this.#cacheEnabled && this.#persistCache) {
+      const entry: StageCacheEntry = { meta: { ...meta, fromCache: false }, artifact: out };
+      this.#persistCache.store(cacheKey, entry);
+    }
+
     return out;
   }
 }

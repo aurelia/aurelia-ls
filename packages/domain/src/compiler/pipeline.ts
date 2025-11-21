@@ -1,4 +1,4 @@
-import { PipelineEngine, type PipelineOptions, type StageOutputs } from "./pipeline/engine.js";
+import { PipelineEngine, type PipelineOptions, type StageOutputs, type CacheOptions, type FingerprintHints } from "./pipeline/engine.js";
 import { createDefaultStageDefinitions } from "./pipeline/stages.js";
 import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
@@ -9,6 +9,8 @@ export interface CoreCompileOptions {
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   vm: import("./phases/50-plan/types.js").VmReflection;
+  cache?: CacheOptions;
+  fingerprints?: FingerprintHints;
 }
 
 export interface CorePipelineResult {
@@ -34,6 +36,8 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
   };
+  if (opts.cache) pipelineOpts.cache = opts.cache;
+  if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
   if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
   const session = engine.createSession(pipelineOpts);
