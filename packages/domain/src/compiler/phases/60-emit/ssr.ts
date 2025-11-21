@@ -14,7 +14,7 @@ export function emitSsr(
   if (!tPlan || !tLinked) return { html: "", manifest: JSON.stringify(emptyManifest(), null, 2) };
 
   const idToRow = indexRows(tLinked);
-  const html = renderTemplate(tLinked.dom, tPlan, idToRow, eol, tPlan).join("");
+  const html = renderTemplate(tLinked.dom, tPlan, idToRow, eol).join("");
   const manifest = makeManifest(tPlan, tLinked).join("");
 
   return { html, manifest };
@@ -36,10 +36,9 @@ function renderTemplate(
   plan: SsrTemplatePlan,
   idToRow: Map<string, LinkedRow>,
   eol: string,
-  planRoot: SsrTemplatePlan,
 ): string[] {
   const out: string[] = [];
-  for (const child of dom.children) renderNode(child, plan, idToRow, out, eol, planRoot);
+  for (const child of dom.children) renderNode(child, plan, idToRow, out, eol);
   return out;
 }
 
@@ -49,7 +48,6 @@ function renderNode(
   idToRow: Map<string, LinkedRow>,
   out: string[],
   eol: string,
-  planRoot: SsrTemplatePlan,
 ): void {
   const nodeKey = n.id as unknown as string;
   const hid = plan.hidByNode[nodeKey] ?? plan.textBindings.find(tb => tb.target === nodeKey)?.hid;
@@ -64,7 +62,7 @@ function renderNode(
           out.push(`<!--au:ctrl ${hid} ${c.res} start-->${eol}`);
           if (c.defLinked) {
             const nestedRowMap = indexRows(c.defLinked as LinkedTemplate);
-            out.push(...renderTemplate((c.defLinked as LinkedTemplate).dom, c.def as SsrTemplatePlan, nestedRowMap, eol, planRoot));
+            out.push(...renderTemplate((c.defLinked as LinkedTemplate).dom, c.def as SsrTemplatePlan, nestedRowMap, eol));
           } else {
             out.push(`<!--au:ctrl ${hid} ${c.res} def:rendered-by-runtime-->${eol}`);
           }
@@ -83,15 +81,15 @@ function renderNode(
       }
 
       out.push(`<${n.tag}${attrs.length ? " " + attrs.join(" ") : ""}>`);
-      for (const c of n.children) renderNode(c, planRoot, idToRow, out, eol, planRoot);
+      for (const c of n.children) renderNode(c, plan, idToRow, out, eol);
       out.push(`</${n.tag}>`);
       return;
     }
 
     case "text": {
-      const tb = planRoot.textBindings.find(x => x.target === nodeKey);
+      const tb = plan.textBindings.find(x => x.target === nodeKey);
       if (tb) {
-        const tbHid = planRoot.hidByNode[nodeKey] ?? tb.hid;
+        const tbHid = plan.hidByNode[nodeKey] ?? tb.hid;
         for (let i = 0; i < tb.parts.length; i++) {
           out.push(escapeHtml(tb.parts[i] ?? ""));
           if (i < tb.exprIds.length) {
@@ -106,7 +104,20 @@ function renderNode(
     }
 
     case "template": {
-      for (const c of n.children) renderNode(c, planRoot, idToRow, out, eol, planRoot);
+      if (ctrls && ctrls.length) {
+        for (const c of ctrls) {
+          out.push(`<!--au:ctrl ${hid} ${c.res} start-->${eol}`);
+          if (c.defLinked) {
+            const nestedRowMap = indexRows(c.defLinked as LinkedTemplate);
+            out.push(...renderTemplate((c.defLinked as LinkedTemplate).dom, c.def as SsrTemplatePlan, nestedRowMap, eol));
+          } else {
+            out.push(`<!--au:ctrl ${hid} ${c.res} def:rendered-by-runtime-->${eol}`);
+          }
+          out.push(`<!--au:ctrl ${hid} end-->${eol}`);
+        }
+        return;
+      }
+      for (const c of n.children) renderNode(c, plan, idToRow, out, eol);
       return;
     }
 
@@ -137,7 +148,7 @@ function makeManifest(tPlan: SsrTemplatePlan, tLinked: LinkedTemplate): string[]
       hid,
       nodeId,
       tag: tagByNode.get(nodeKey) ?? undefined,
-      text: tagByNode.get(nodeKey) === undefined,
+      text: nodeKey.includes("#text"),
       staticAttrs: tPlan.staticAttrsByHid[hid],
       bindings: tPlan.bindingsByHid[hid],
       controllers: (tPlan.controllersByHid[hid] ?? []).map(stripDef),

@@ -7,7 +7,7 @@
         {
           "hid": 1,
           "nodeId": "0/0",
-          "text": true,
+          "text": false,
           "staticAttrs": {
             "class": "greeting"
           },
@@ -49,7 +49,7 @@
         {
           "hid": 4,
           "nodeId": "0/2",
-          "text": true,
+          "text": false,
           "controllers": [
             {
               "res": "with",
