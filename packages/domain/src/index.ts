@@ -4,7 +4,7 @@ export { PRELUDE_TS } from "./prelude.js";
 export { getExpressionParser } from "./parsers/expression-parser.js";
 export { DEFAULT_SYNTAX } from "./compiler/language/syntax.js";
 
-export type { VmReflection } from "./compiler/phases/50-plan/types.js";
+export type { VmReflection } from "./compiler/phases/50-plan/overlay-types.js";
 export type { TemplateCompilation } from "./compiler/facade.js";
 export type {
   TemplateMappingArtifact,

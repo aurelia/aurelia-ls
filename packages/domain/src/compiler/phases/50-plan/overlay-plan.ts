@@ -1,5 +1,5 @@
 /* =============================================================================
- * PHASE 50 — PLAN (Overlay planning for TTC)
+ * PHASE 50 - PLAN (Overlay planning for TTC)
  * Linked+Scoped → OverlayPlanModule (pure)
  * - Build per-frame overlay type expressions
  * - Collect **one** validation lambda per authored expression in that frame
@@ -11,7 +11,7 @@
 
 import type {
   AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment,
-} from "./types.js";
+} from "./overlay-types.js";
 
 import type { LinkedSemanticsModule } from "../20-resolve-host/types.js";
 import type {

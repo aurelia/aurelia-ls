@@ -231,7 +231,7 @@ Notes:
 ### 2.6 Phase 50 - Plan (overlay planning)
 
 Entry:
-`packages/domain/src/compiler/phases/50-plan/plan.ts`
+`packages/domain/src/compiler/phases/50-plan/overlay-plan.ts`
 
 Input/Output:
 
