@@ -430,6 +430,7 @@ When modifying or adding code:
      * E2E fixtures: `pnpm test:e2e`
    * Tests are in `packages/domain/test/**` and mostly data-driven JSON vectors.
    * Coverage flavors exist for most suites (e.g., `*:cov` scripts in `package.json`); use them when changing parser/phases heavily.
+   * For current test layout/prefix conventions for phases 10/20/30, see `docs/agents/appendix-testing.md`.
 
 5. **Safe areas vs. dangerous areas**
 

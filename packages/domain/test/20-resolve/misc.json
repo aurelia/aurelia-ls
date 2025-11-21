@@ -1,0 +1,38 @@
+[
+  {
+    "name": "R-M-01 ref=el Ã¢â€ â€™ element ref",
+    "markup": "<div ref=el></div>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "element" }
+      ]
+    }
+  },
+  {
+    "name": "R-M-02 view-model.ref Ã¢â€ â€™ component ref",
+    "markup": "<my-el view-model.ref=\"vm\"></my-el>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "component" }
+      ]
+    }
+  },
+  {
+    "name": "R-M-03 ref=el Ã¢â€ â€™ element ref",
+    "markup": "<span ref=el></span>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "element" }
+      ]
+    }
+  },
+  {
+    "name": "R-M-04 view-model.ref Ã¢â€ â€™ component ref",
+    "markup": "<my-card view-model.ref=\"vm\"></my-card>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "component" }
+      ]
+    }
+  }
+]
