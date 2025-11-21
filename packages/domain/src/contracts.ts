@@ -1,4 +1,4 @@
-import type { ExprId, SourceSpan } from "./compiler/model/ir.js";
+import type { ExprId, SourceSpan, NodeId, BindingMode } from "./compiler/model/ir.js";
 
 type Brand<T extends string> = { readonly __brand: T };
 
@@ -34,7 +34,7 @@ export interface TemplateMappingArtifact {
 }
 
 export interface TemplateNodeInfo {
-  id: string;
+  id: NodeId;
   kind: "element" | "attribute" | "text" | "comment";
   hostKind: "custom" | "native" | "none";
   span: SourceSpan;
@@ -42,7 +42,7 @@ export interface TemplateNodeInfo {
 
 export interface TemplateBindableInfo {
   name: string;
-  mode?: "oneWay" | "twoWay" | "oneTime" | "fromView";
+  mode?: BindingMode;
   source: "component" | "custom-attribute" | "native" | "controller";
 }
 
