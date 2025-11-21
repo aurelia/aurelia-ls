@@ -14,7 +14,7 @@ import * as ts from "typescript";
 import {
   compileTemplate, compileTemplateToSSR, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
 } from "@aurelia-ls/domain";
-import type { VmReflection, TemplateCompilation, TemplateMappingArtifact, TemplateExpressionInfo } from "@aurelia-ls/domain";
+import type { VmReflection, TemplateCompilation, TemplateMappingArtifact, TemplateMappingEntry, TemplateExpressionInfo } from "@aurelia-ls/domain";
 
 /* ============================================================================
  * Logging (verbose)
@@ -473,6 +473,42 @@ function getTextDocumentForUri(uri: string): TextDocument | null {
   return TextDocument.create(uri, "html", 0, content);
 }
 
+function findMappingEntryForHtmlOffset(mapping: TemplateMappingArtifact, htmlOffset: number): TemplateMappingEntry | null {
+  return mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end) ?? null;
+}
+
+function tsSpanToRange(fileName: string, start: number, length: number): { start: Position; end: Position } | null {
+  const sf = tsService.getProgram()?.getSourceFile(fileName);
+  if (!sf) return null;
+  const a = ts.getLineAndCharacterOfPosition(sf, start);
+  const b = ts.getLineAndCharacterOfPosition(sf, start + length);
+  return { start: { line: a.line, character: a.character }, end: { line: b.line, character: b.character } };
+}
+
+function mapHtmlPositionToOverlay(compilation: TemplateCompilation, doc: TextDocument, pos: Position): { overlayPath: string; offset: number } | null {
+  const htmlOffset = doc.offsetAt(pos);
+  const hit = findMappingEntryForHtmlOffset(compilation.mapping, htmlOffset);
+  if (!hit) return null;
+  // TODO: refine overlay offset to exact expression span once mapping artifact is first-class
+  const overlayOffset = hit.overlayRange[0];
+  return { overlayPath: compilation.overlay.overlayPath, offset: overlayOffset };
+}
+
+function mapOverlayLocationToHtml(doc: TextDocument, compilation: TemplateCompilation, file: string, start: number, length: number): Location | null {
+  const overlayCanon = canonical(compilation.overlay.overlayPath);
+  if (canonical(file) !== overlayCanon) {
+    // Non-overlay locations can be returned verbatim (e.g., VM definitions).
+    const uri = URI.file(file).toString();
+    const range = tsSpanToRange(file, start, length);
+    if (!range) return null;
+    return { uri, range };
+  }
+  const entry = compilation.mapping.entries.find((m) => start >= m.overlayRange[0] && start <= m.overlayRange[1]);
+  if (!entry) return null;
+  const range = spanToRange(doc, entry.htmlSpan.start, entry.htmlSpan.end);
+  return { uri: doc.uri, range };
+}
+
 connection.onRequest("aurelia/getSsr", async (params: GetOverlayParams): Promise<GetSsrResult> => {
   let uri: string | undefined;
   if (typeof params === "string") uri = params;
@@ -517,8 +553,18 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   if (!doc) return [];
   const compilation = await ensureCompilationForDocument(doc);
   if (!compilation) return [];
-  // TODO: use TemplateQueryFacade + TS LS for Aurelia-aware completions.
-  return [];
+  const mapped = mapHtmlPositionToOverlay(compilation, doc, params.position);
+  if (!mapped) return [];
+
+  const overlayCanon = canonical(mapped.overlayPath);
+  const completions = tsService.getCompletionsAtPosition(overlayCanon, mapped.offset, {});
+  if (!completions?.entries) return [];
+
+  return completions.entries.map((entry) => ({
+    label: entry.name,
+    detail: entry.kind,
+    // TODO: map completion ranges back to HTML spans once mapping artifact is richer.
+  }));
 });
 
 connection.onHover(async (params: TextDocumentPositionParams): Promise<Hover | null> => {
@@ -526,9 +572,15 @@ connection.onHover(async (params: TextDocumentPositionParams): Promise<Hover | n
   if (!doc) return null;
   const compilation = await ensureCompilationForDocument(doc);
   if (!compilation) return null;
-  // TODO: use mapping artifact + TS LS for hover text.
-  void compilation;
-  return null;
+  const mapped = mapHtmlPositionToOverlay(compilation, doc, params.position);
+  if (!mapped) return null;
+
+  const overlayCanon = canonical(mapped.overlayPath);
+  const info = tsService.getQuickInfoAtPosition(overlayCanon, mapped.offset);
+  if (!info) return null;
+
+  const text = ts.displayPartsToString(info.displayParts ?? []);
+  return { contents: [{ language: "typescript", value: text }] };
 });
 
 connection.onDefinition(async (params: TextDocumentPositionParams): Promise<Definition | null> => {
@@ -536,9 +588,17 @@ connection.onDefinition(async (params: TextDocumentPositionParams): Promise<Defi
   if (!doc) return null;
   const compilation = await ensureCompilationForDocument(doc);
   if (!compilation) return null;
-  // TODO: bridge Query API -> TS LS for go-to-def.
-  void compilation;
-  return [];
+  const mapped = mapHtmlPositionToOverlay(compilation, doc, params.position);
+  if (!mapped) return [];
+
+  const overlayCanon = canonical(mapped.overlayPath);
+  const defs = tsService.getDefinitionAtPosition(overlayCanon, mapped.offset) ?? [];
+  const out: Location[] = [];
+  for (const d of defs) {
+    const loc = mapOverlayLocationToHtml(doc, compilation, d.fileName, d.textSpan.start, d.textSpan.length);
+    if (loc) out.push(loc);
+  }
+  return out;
 });
 
 connection.onReferences(async (params: ReferenceParams): Promise<Location[] | null> => {
@@ -546,8 +606,8 @@ connection.onReferences(async (params: ReferenceParams): Promise<Location[] | nu
   if (!doc) return null;
   const compilation = await ensureCompilationForDocument(doc);
   if (!compilation) return null;
-  // TODO: map TS references back to HTML using first-class mapping.
-  void compilation;
+  // TODO: map TS references back to HTML using first-class mapping (requires richer overlay spans).
+  void params;
   return [];
 });
 
@@ -557,7 +617,7 @@ connection.onRenameRequest(async (params: RenameParams): Promise<WorkspaceEdit |
   const compilation = await ensureCompilationForDocument(doc);
   if (!compilation) return null;
   // TODO: implement HTML<->TS rename using mapping artifact.
-  void compilation;
+  void params;
   return null;
 });
 
