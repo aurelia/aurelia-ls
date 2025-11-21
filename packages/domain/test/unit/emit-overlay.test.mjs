@@ -12,13 +12,17 @@ test("Emit overlay: TS flavor (type alias + __au$access calls)", () => {
         frame: 1,
         typeName: "T",
         typeExpr: "{ x: number }",
-        lambdas: ["o => o.x", "o => o['y']"],
+        lambdas: [
+          { exprId: "e1", lambda: "o => o.x" },
+          { exprId: "e2", lambda: "o => o['y']" },
+        ],
       }],
     }],
   };
-  const { text } = emitOverlayFile(plan, { isJs: false, filename: "__test.overlay" });
+  const { text, mapping } = emitOverlayFile(plan, { isJs: false, filename: "__test.overlay" });
 
   assert.match(text, /type T = \{ x: number \}/, "should emit type alias");
   assert.match(text, /__au\$access<T>\(o => o\.x\);/, "should emit first lambda");
   assert.match(text, /__au\$access<T>\(o => o\['y'\]\);/, "should emit bracket-access lambda");
+  assert.equal(mapping.length, 2, "should return mapping for lambdas");
 });
