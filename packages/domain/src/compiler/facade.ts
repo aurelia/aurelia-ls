@@ -9,6 +9,7 @@ import { emitOverlayFile } from "./phases/60-emit/overlay.js";
 
 // Types
 import type { SourceSpan, ExprId, BindingSourceIR, InterpIR, ExprRef, DOMNode, TemplateIR, NodeId } from "./model/ir.js";
+import type { FrameId } from "./model/symbols.js";
 import type { VmReflection, OverlayPlanModule } from "./phases/50-plan/types.js";
 import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateQueryFacade, TemplateNodeInfo, TemplateBindableInfo, TemplateControllerInfo } from "../contracts.js";
 import type {
@@ -99,7 +100,8 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
 
   // 6) Mapping
   const exprSpans = collectExprSpansFromIr(ir);
-  const mapping = buildMappingArtifact(overlayMapping, exprSpans, opts.templateFilePath);
+  const exprToFrame = scope.templates?.[0]?.exprToFrame as ExprToFrameMap | undefined;
+  const mapping = buildMappingArtifact(overlayMapping, exprSpans, opts.templateFilePath, exprToFrame ?? null);
   const calls = overlayMapping.map((m) => ({
     exprId: m.exprId,
     overlayStart: m.start,
@@ -124,15 +126,19 @@ export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayRe
   return compilation.overlay;
 }
 
+type ExprToFrameMap = Record<ExprId, FrameId>;
+
 function buildMappingArtifact(
   overlayMapping: OverlayEmitMappingEntry[],
   exprSpans: Map<ExprId, SourceSpan>,
   fallbackFile: string,
+  exprToFrame?: ExprToFrameMap | null,
 ): TemplateMappingArtifact {
   const entries: TemplateMappingEntry[] = overlayMapping.map((m) => ({
     exprId: m.exprId,
     htmlSpan: exprSpans.get(m.exprId) ?? { start: 0, end: 0, file: fallbackFile },
     overlayRange: [m.start, m.end],
+    frameId: exprToFrame?.[m.exprId] ?? undefined,
   }));
   return { kind: "mapping", entries };
 }
@@ -155,8 +161,7 @@ function buildQueryFacade(ir: TemplateIR | undefined, linked: LinkedSemanticsMod
     exprAt(htmlOffset) {
       const hit = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
       if (!hit) return null;
-      // TODO: surface frameId from scope.exprToFrame when available
-      return { exprId: hit.exprId, span: hit.htmlSpan };
+      return { exprId: hit.exprId, span: hit.htmlSpan, frameId: hit.frameId };
     },
     expectedTypeOf(_exprOrBindable) {
       // TODO: feed Phase 40 typing hints when implemented
@@ -315,7 +320,7 @@ function buildPendingQueryFacade(mapping: TemplateMappingArtifact): TemplateQuer
     exprAt(htmlOffset) {
       const hit = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
       if (!hit) return null;
-      return { exprId: hit.exprId, span: hit.htmlSpan };
+      return { exprId: hit.exprId, span: hit.htmlSpan, frameId: hit.frameId };
     },
     expectedTypeOf(_exprOrBindable) { return null; },
     controllerAt(_htmlOffset) { return null; },

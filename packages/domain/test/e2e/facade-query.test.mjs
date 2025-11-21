@@ -58,5 +58,75 @@ describe("Facade", () => {
     // plain div should not have a controller
     assert.equal(query.controllerAt(nodeOffset), null);
   });
+
+  test.skip("nested controllers: nodeAt/controllerAt/exprAt cover inner templates with frameIds", () => {
+    const html = `
+      <div repeat.for="item of items">
+        <template if.bind="item.ok">
+          <span title.bind="item.name">\${item.name}</span>
+        </template>
+      </div>
+    `;
+    const { query, mapping } = build(html);
+    // TODO: assert nodeAt hits inner span, controllerAt finds if+repeat, exprAt carries frameId for repeat inner bindings.
+    void query;
+    void mapping;
+  });
+
+  test.skip("mapping spans include member-level offsets for rename/refs", () => {
+    const html = `<div>\${user.address.street}</div>`;
+    const { mapping } = build(html);
+    // TODO: assert mapping entries include inner member offsets (street) for rename/refs.
+    void mapping;
+  });
+
+  test.skip("bindablesFor merges custom element/attribute/native schemas", () => {
+    const html = `<my-thing foo.bind="vmFoo" bar.attr="x" baz="y"></my-thing>`;
+    const { query } = build(html);
+    // TODO: assert bindablesFor lists CE bindables, native props, and custom attribute bindables when present.
+    void query;
+  });
+
+  test.skip("expectedTypeOf surfaces target/expr hints (Phase 40)", () => {
+    const html = `<input value.bind="user.name" maxlength.bind="user.name.length" />`;
+    const { query } = build(html);
+    // TODO: assert expectedTypeOf(bindable/value expr) returns string/number hints.
+    void query;
+  });
+
+  test.skip("controllerAt reflects branches (switch/promise) with spans", () => {
+    const html = `
+      <template switch.bind="mode">
+        <template case="a">\${foo}</template>
+        <template default>\${bar}</template>
+      </template>
+    `;
+    const { query } = build(html);
+    // TODO: assert controllerAt hits switch/case/default spans inside nested templates.
+    void query;
+  });
+
+  test.skip("slot/projection awareness for nodeAt/bindables", () => {
+    const html = `
+      <custom-layout>
+        <div slot="header">\${title}</div>
+        <div>\${body}</div>
+      </custom-layout>
+    `;
+    const { query } = build(html);
+    // TODO: assert nodeAt maps projected nodes and bindables consider slot context.
+    void query;
+  });
+
+  test.skip("containerless/surrogate mapping survives DOM reshaping", () => {
+    const html = `
+      <div as-element="au-marker" containerless>
+        <span>\${msg}</span>
+      </div>
+    `;
+    const { mapping } = build(html);
+    // TODO: assert mapping spans still point to authored spans despite markers/surrogates.
+    void mapping;
+  });
 });
 

@@ -1,4 +1,5 @@
 import type { ExprId, SourceSpan, NodeId, BindingMode } from "./compiler/model/ir.js";
+import type { FrameId } from "./compiler/model/symbols.js";
 
 type Brand<T extends string> = { readonly __brand: T };
 
@@ -26,6 +27,7 @@ export interface TemplateMappingEntry {
   exprId: ExprId;
   htmlSpan: SourceSpan;
   overlayRange: Range;
+  frameId?: FrameId | undefined;
 }
 
 export interface TemplateMappingArtifact {
@@ -49,7 +51,7 @@ export interface TemplateBindableInfo {
 export interface TemplateExpressionInfo {
   exprId: ExprId;
   span: SourceSpan;
-  frameId?: number;
+  frameId?: FrameId | undefined;
 }
 
 export interface TemplateControllerInfo {
