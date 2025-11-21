@@ -19,6 +19,10 @@ Goal: make changes safely, in line with the architectural intent.
   - Parsers: touch `packages/domain/src/parsers`; run `pnpm test:parsers`.
   - SSR: touch `packages/domain/src/compiler/phases/50-plan/ssr-plan.ts` or `60-emit/ssr.ts`; run `pnpm test:ssr`.
 - **Do not edit generated output:** `packages/**/out` is build output; change `src` + tests only.
+- **Type hygiene:** eliminate `any`/`unknown` casts. Prefer proper guards/helpers over `as any`; refactor to strong types instead of adding local casts/aliases.
+- **Design patterns:** keep types/shared shapes in the existing model/type files; avoid sprinkling local type declarations when a central export makes sense.
+- **Building/tests:** `npm run test:spec` auto-builds (tsc -b) then runs all specs. If build output is stale, rerun tests instead of hand-invoking the build.
+- **Navigation:** mapping/query live in `packages/domain/src/compiler/facade.ts`; overlay planning in `phases/50-plan`; emit in `phases/60-emit`; typecheck scaffolding in `phases/40-typecheck`. SSR plan/emit under `phases/50-plan/ssr-*.ts` and `60-emit/ssr.ts`.
 
 ---
 
