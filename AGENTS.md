@@ -5,6 +5,23 @@ Goal: make changes safely, in line with the architectural intent.
 
 ---
 
+## TL;DR
+
+- **Phases (pure, no I/O, no input mutation):** 10-lower → 20-resolve-host → 30-bind → 50-plan → 60-emit. Each returns new objects; never mutate prior-phase data.
+- **Style:** Strong types, discriminated unions, TS 5.x; avoid `any`; minimal runtime guards—trust contracts.
+- **Packages:** `packages/domain` (compiler, pure), `packages/server` (LSP host + TS LS), `packages/client` (VS Code extension), `packages/shared` (small utilities).
+- **Entrypoints:** Overlay/SSR facade in `packages/domain/src/compiler/facade.ts`; public exports in `packages/domain/src/index.ts`; docs under `docs/`.
+- **Common tasks → tests to run:**
+  - Syntax/lowering: touch 10-lower; run `pnpm test:lower`.
+  - Host semantics: touch 20-resolve-host; run `pnpm test:resolve`.
+  - Scoping: touch 30-bind; run `pnpm test:bind`.
+  - Overlay typing/emit: touch 50-plan/60-emit; run `pnpm test:typecheck`.
+  - Parsers: touch `packages/domain/src/parsers`; run `pnpm test:parsers`.
+  - SSR: touch `packages/domain/src/compiler/phases/50-plan/ssr-plan.ts` or `60-emit/ssr.ts`; run `pnpm test:ssr`.
+- **Do not edit generated output:** `packages/**/out` is build output; change `src` + tests only.
+
+---
+
 ## 1. House rules
 
 These are **hard constraints**:
