@@ -38,7 +38,8 @@ jobs:
         run: |
           set -o pipefail
           pnpm -w build
-          c8 --all --include "packages/domain/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -o coverage/typecheck node --test --test-reporter=spec | tee coverage/typecheck/coverage.log
+          mkdir -p coverage/typecheck
+          pnpm exec c8 --all --include "packages/domain/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -o coverage/typecheck node --test --test-reporter=spec | tee coverage/typecheck/coverage.log
 
       - name: Coverage summary (job)
         if: always()
