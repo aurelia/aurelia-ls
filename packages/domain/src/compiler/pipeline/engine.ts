@@ -65,6 +65,7 @@ export interface PipelineOptions {
     eol?: "\n" | "\r\n";
   };
   analyze?: AnalyzeOptions;
+  // TODO(productize): optional typecheck-only product settings (diagnostics gating, severity levels).
 }
 
 export interface StageDefinition<TKey extends StageKey> {

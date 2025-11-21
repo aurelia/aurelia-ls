@@ -72,6 +72,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       const scope = ctx.require("30-scope");
       const ir = ctx.require("10-lower");
       const vm = assertOption(ctx.options.vm, "vm");
+      // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
       return typecheck({ linked, scope, ir, rootVmType: rootVm });
     },
