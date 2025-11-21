@@ -1,0 +1,23 @@
+<template>
+  <div class="app">
+    <header>
+      <h1>${title}</h1>
+    </header>
+    <ul>
+      <li repeat.for="item of items">
+        <span>${item.name}</span>
+        <template if.bind="item.show">
+          <button click.trigger="select(item)">${item.cta}</button>
+        </template>
+        <template promise.bind="item.detailsPromise">
+          <template then>
+            <div class="details">${value.text}</div>
+          </template>
+          <template catch>
+            <div class="error">${error.message}</div>
+          </template>
+        </template>
+      </li>
+    </ul>
+  </div>
+</template>
