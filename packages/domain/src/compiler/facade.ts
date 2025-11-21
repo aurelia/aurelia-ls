@@ -83,23 +83,17 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
 
   // 5) Plan -> overlay text
   const overlayPath = path.join(path.dirname(opts.templateFilePath), `${overlayBase}${opts.isJs ? ".js" : ".ts"}`);
-  const { text } = emitOverlayFile(planOut, { isJs: !!opts.isJs, filename: overlayBase });
+  const { text, mapping: overlayMapping } = emitOverlayFile(planOut, { isJs: !!opts.isJs, filename: overlayBase });
 
   // 6) Mapping
   const exprSpans = collectExprSpansFromIr(ir);
-  const idsInPlanOrder = listExprIdsInPlanEmissionOrder(scope);
-  const callRanges = listOverlayCallRanges(text, opts.isJs);
-
-  const count = Math.min(idsInPlanOrder.length, callRanges.length);
-  const calls = new Array<{ exprId: ExprId; overlayStart: number; overlayEnd: number; htmlSpan: SourceSpan }>(count);
-  for (let i = 0; i < count; i++) {
-    const exprId = idsInPlanOrder[i]!;
-    const htmlSpan = exprSpans.get(exprId) ?? { start: 0, end: 0, file: opts.templateFilePath };
-    const { start: overlayStart, end: overlayEnd } = callRanges[i]!;
-    calls[i] = { exprId, overlayStart, overlayEnd, htmlSpan };
-  }
-
-  const mapping = buildMappingArtifact(calls);
+  const mapping = buildMappingArtifact(overlayMapping, exprSpans, opts.templateFilePath);
+  const calls = overlayMapping.map((m) => ({
+    exprId: m.exprId,
+    overlayStart: m.start,
+    overlayEnd: m.end,
+    htmlSpan: exprSpans.get(m.exprId) ?? { start: 0, end: 0, file: opts.templateFilePath },
+  }));
   const query = buildPendingQueryFacade(mapping);
 
   return {
@@ -118,11 +112,15 @@ export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayRe
   return compilation.overlay;
 }
 
-function buildMappingArtifact(calls: Array<{ exprId: ExprId; overlayStart: number; overlayEnd: number; htmlSpan: SourceSpan }>): TemplateMappingArtifact {
-  const entries: TemplateMappingEntry[] = calls.map((c) => ({
-    exprId: c.exprId,
-    htmlSpan: c.htmlSpan,
-    overlayRange: [c.overlayStart, c.overlayEnd],
+function buildMappingArtifact(
+  overlayMapping: Array<{ exprId: ExprId; start: number; end: number }>,
+  exprSpans: Map<ExprId, SourceSpan>,
+  fallbackFile: string,
+): TemplateMappingArtifact {
+  const entries: TemplateMappingEntry[] = overlayMapping.map((m) => ({
+    exprId: m.exprId,
+    htmlSpan: exprSpans.get(m.exprId) ?? { start: 0, end: 0, file: fallbackFile },
+    overlayRange: [m.start, m.end],
   }));
   return { kind: "mapping", entries };
 }
@@ -240,36 +238,4 @@ export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
   return { htmlPath, htmlText: html, manifestPath, manifestText: manifest, plan };
 }
 
-
-function listExprIdsInPlanEmissionOrder(scope: any): ExprId[] {
-  const st = scope.templates?.[0];
-  if (!st) return [];
-  const out: ExprId[] = [];
-  const seen = new Set<string>();
-  for (const frame of st.frames as any[]) {
-    for (const [idStr, fid] of Object.entries(st.exprToFrame as Record<string, number>)) {
-      if (fid !== frame.id) continue;
-      if (seen.has(idStr)) continue;
-      seen.add(idStr);
-      out.push(idStr as ExprId);
-    }
-  }
-  return out;
-}
-
-function listOverlayCallRanges(text: string, _isJs: boolean): Array<{ start: number; end: number }> {
-  const ranges: Array<{ start: number; end: number }> = [];
-  let idx = 0;
-  while (idx < text.length) {
-    const pos = text.indexOf("__au$access", idx);
-    if (pos < 0) break;
-    let open = text.indexOf("(", pos);
-    if (open < 0) break;
-    const close = text.indexOf(")", open);
-    if (close < 0) break;
-    ranges.push({ start: open + 1, end: close });
-    idx = close + 1;
-  }
-  return ranges;
-}
 

@@ -1,4 +1,5 @@
 import type { FrameId } from "../../model/symbols.js";
+import type { ExprId } from "../../model/ir.js";
 
 /** Injected by the caller; keeps the Plan phase decoupled from TS/compiler state. */
 export interface VmReflection {
@@ -38,5 +39,10 @@ export interface FrameOverlayPlan {
   /** Type expression, e.g. "(App | Admin) & { $index: number } & { u: unknown }". */
   typeExpr: string;
   /** Unique property-path lambdas to validate against this frame's overlay type. */
-  lambdas: string[]; // e.g., ["o => o.user.name", "o => o.save"]
+  lambdas: OverlayLambdaPlan[]; // e.g., [{ exprId, lambda: "o => o.user.name" }]
+}
+
+export interface OverlayLambdaPlan {
+  exprId: ExprId;
+  lambda: string;
 }

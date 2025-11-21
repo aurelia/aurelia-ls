@@ -10,7 +10,7 @@
  * ============================================================================= */
 
 import type {
-  AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan,
+  AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan,
 } from "./types.js";
 
 import type { LinkedSemanticsModule } from "../20-resolve-host/types.js";
@@ -399,8 +399,8 @@ function collectOneLambdaPerExpression(
   st: ScopeTemplate,
   frameId: FrameId,
   exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
-): string[] {
-  const out: string[] = [];
+): OverlayLambdaPlan[] {
+  const out: OverlayLambdaPlan[] = [];
   const seen = new Set<string /* ExprId string */>();
 
   for (const [idStr, fid] of Object.entries(st.exprToFrame)) {
@@ -419,7 +419,7 @@ function collectOneLambdaPerExpression(
 
       case "IsProperty": {
         const expr = renderExpressionFromAst(entry.ast);
-        if (expr) out.push(`o => ${expr}`);
+        if (expr) out.push({ exprId: id, lambda: `o => ${expr}` });
         break;
       }
 
