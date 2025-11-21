@@ -4,7 +4,7 @@ import { buildTemplateQuery } from "../query.js";
 import type { PipelineSession } from "../pipeline/engine.js";
 import type { OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../../contracts.js";
-import type { ExprId, SourceSpan } from "../model/ir.js";
+import type { ExprId, ExprTableEntry, SourceSpan } from "../model/ir.js";
 import type { FrameId } from "../model/symbols.js";
 
 export interface OverlayProductArtifacts {
@@ -12,6 +12,10 @@ export interface OverlayProductArtifacts {
   overlay: OverlayProductResult;
   mapping: TemplateMappingArtifact;
   query: TemplateQueryFacade;
+  /** Expression spans keyed by exprId (HTML source). */
+  exprSpans: Map<ExprId, SourceSpan>;
+  /** Raw expr table for consumers that need authored ASTs. */
+  exprTable: readonly ExprTableEntry[];
 }
 
 export interface OverlayProductOptions {
@@ -61,7 +65,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
 
   const query = buildTemplateQuery(ir, linked, mapping, typecheck);
 
-  return { plan: planOut, overlay, mapping, query };
+  return { plan: planOut, overlay, mapping, query, exprSpans, exprTable: ir.exprTable ?? [] };
 }
 
 type ExprToFrameMap = Record<ExprId, FrameId>;

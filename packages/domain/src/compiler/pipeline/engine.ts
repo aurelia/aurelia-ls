@@ -129,6 +129,10 @@ export class StageContext {
     return this.#fetch(key);
   }
 
+  /**
+   * Inspect cached metadata for a completed stage. Primarily used by facade
+   * callers (LSP/diagnostics) to surface cache hits and artifact hashes.
+   */
   meta<K extends StageKey>(key: K): StageArtifactMeta | undefined {
     return this.#meta(key);
   }
@@ -183,6 +187,11 @@ export class PipelineSession {
 
   peek<K extends StageKey>(key: K): StageOutputs[K] | undefined {
     return this.#results.get(key) as StageOutputs[K] | undefined;
+  }
+
+  /** Inspect metadata for a given stage if it has already been computed in this session. */
+  meta<K extends StageKey>(key: K): StageArtifactMeta | undefined {
+    return this.#meta.get(key);
   }
 
   run<K extends StageKey>(key: K): StageOutputs[K] {

@@ -9,6 +9,10 @@ import type { VmReflection } from "./phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
 import { buildOverlayProduct, type OverlayProductResult } from "./products/overlay.js";
 import { buildSsrProduct, type SsrProductResult } from "./products/ssr.js";
+import type { CompilerDiagnostic } from "./diagnostics.js";
+import type { StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/engine.js";
+import type { ExprId, ExprTableEntry, SourceSpan } from "./model/ir.js";
+import { htmlOffsetToOverlay, overlayOffsetToHtml, type MappingHit } from "./mapping.js";
 
 export interface CompileOptions {
   html: string;
@@ -27,6 +31,15 @@ export interface CompileOptions {
 
 export type CompileOverlayResult = OverlayProductResult;
 
+export interface TemplateDiagnostics {
+  /** Flat list of all diagnostics from the pipeline. */
+  all: CompilerDiagnostic[];
+  /** Per-stage view keyed by diagnostic source. */
+  bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>>;
+}
+
+export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
+
 export interface TemplateCompilation {
   ir: StageOutputs["10-lower"];
   linked: StageOutputs["20-link"];
@@ -36,6 +49,11 @@ export interface TemplateCompilation {
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
   query: TemplateQueryFacade;
+  /** Authored expression table + spans for tooling (hover/refs). */
+  exprTable: readonly ExprTableEntry[];
+  exprSpans: Map<ExprId, SourceSpan>;
+  diagnostics: TemplateDiagnostics;
+  meta: StageMetaSnapshot;
 }
 
 function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): PipelineOptions {
@@ -83,16 +101,28 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
   const linked = session.run("20-link");
   const scope = session.run("30-scope");
   const typecheck = session.run("40-typecheck");
+  const overlayPlan = overlayArtifacts.plan;
 
   return {
     ir,
     linked,
     scope,
     typecheck,
-    overlayPlan: overlayArtifacts.plan,
+    overlayPlan,
     overlay: overlayArtifacts.overlay,
     mapping: overlayArtifacts.mapping,
     query: overlayArtifacts.query,
+    exprTable: overlayArtifacts.exprTable,
+    exprSpans: overlayArtifacts.exprSpans,
+    diagnostics: buildDiagnostics(linked, scope, typecheck),
+    meta: collectStageMeta(session, [
+      "10-lower",
+      "20-link",
+      "30-scope",
+      "40-typecheck",
+      "50-plan-overlay",
+      "60-emit-overlay",
+    ]),
   };
 }
 
@@ -124,4 +154,44 @@ export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
     templateFilePath: opts.templateFilePath,
     baseName,
   });
+}
+
+/* --------------------------
+ * Helpers
+ * ------------------------ */
+
+function buildDiagnostics(
+  linked: StageOutputs["20-link"],
+  scope: StageOutputs["30-scope"],
+  typecheck: StageOutputs["40-typecheck"],
+): TemplateDiagnostics {
+  const flat = [
+    ...(linked?.diags ?? []),
+    ...(scope?.diags ?? []),
+    ...(typecheck?.diags ?? []),
+  ];
+
+  const bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>> = {};
+  for (const d of flat) {
+    if (!bySource[d.source]) bySource[d.source] = [];
+    bySource[d.source]!.push(d);
+  }
+  return { all: flat, bySource };
+}
+
+function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMetaSnapshot {
+  const meta: StageMetaSnapshot = {};
+  for (const k of keys) {
+    const m = session.meta(k);
+    if (m) meta[k] = m;
+  }
+  return meta;
+}
+
+export function mapOverlayOffsetToHtml(mapping: TemplateMappingArtifact, overlayOffset: number): MappingHit | null {
+  return overlayOffsetToHtml(mapping, overlayOffset);
+}
+
+export function mapHtmlOffsetToOverlay(mapping: TemplateMappingArtifact, htmlOffset: number): MappingHit | null {
+  return htmlOffsetToOverlay(mapping, htmlOffset);
 }

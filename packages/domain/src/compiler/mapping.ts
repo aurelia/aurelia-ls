@@ -23,6 +23,11 @@ export interface BuildMappingResult {
   exprSpans: Map<ExprId, SourceSpan>;
 }
 
+export interface MappingHit {
+  entry: TemplateMappingEntry;
+  segment?: TemplateMappingSegment | null;
+}
+
 export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingResult {
   const exprSpans = collectExprSpans(inputs.ir);
   const memberHtmlSegments = collectExprMemberSegments(inputs.exprTable ?? [], exprSpans);
@@ -42,6 +47,36 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
   return { mapping: { kind: "mapping", entries }, exprSpans };
 }
 
+/** Map an overlay offset back to the best-matching HTML span. */
+export function overlayOffsetToHtml(mapping: TemplateMappingArtifact, overlayOffset: number): MappingHit | null {
+  for (const entry of mapping.entries) {
+    for (const seg of entry.segments ?? []) {
+      if (overlayOffset >= seg.overlaySpan[0] && overlayOffset <= seg.overlaySpan[1]) {
+        return { entry, segment: seg };
+      }
+    }
+  }
+  const fallback = mapping.entries.find((entry) => overlayOffset >= entry.overlayRange[0] && overlayOffset <= entry.overlayRange[1]);
+  return fallback ? { entry: fallback, segment: null } : null;
+}
+
+/** Map an HTML offset to the best-matching overlay span. */
+export function htmlOffsetToOverlay(mapping: TemplateMappingArtifact, htmlOffset: number): MappingHit | null {
+  let bestSegment: MappingHit | null = null;
+  for (const entry of mapping.entries) {
+    for (const seg of entry.segments ?? []) {
+      if (htmlOffset >= seg.htmlSpan.start && htmlOffset <= seg.htmlSpan.end) {
+        if (!bestSegment || spanSize(seg.htmlSpan) < spanSize(bestSegment.segment!.htmlSpan)) {
+          bestSegment = { entry, segment: seg };
+        }
+      }
+    }
+  }
+  if (bestSegment) return bestSegment;
+  const fallback = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
+  return fallback ? { entry: fallback, segment: null } : null;
+}
+
 function buildSegmentPairs(
   overlaySegments: readonly { path: string; span: readonly [number, number] }[],
   htmlSegments: readonly HtmlMemberSegment[],
@@ -57,4 +92,8 @@ function buildSegmentPairs(
     out.push({ kind: "member", path: seg.path, htmlSpan: h.span, overlaySpan: [seg.span[0], seg.span[1]] });
   }
   return out;
+}
+
+function spanSize(span: { start: number; end: number }): number {
+  return span.end - span.start;
 }
