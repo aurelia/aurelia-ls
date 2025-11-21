@@ -61,6 +61,60 @@ test("buildTemplateMapping pairs overlay spans with HTML/member spans", () => {
   assert.deepEqual(entry.segments?.[0].overlaySpan, [12, 16]);
 });
 
+test("buildTemplateMapping keeps member segments through optional chaining", () => {
+  const exprId = "eOptional";
+  const ir = {
+    version: "aurelia-ir@1",
+    templates: [{
+      dom: { kind: "template", id: "0", ns: "html", attrs: [], children: [], loc: null },
+      rows: [{
+        target: "0/1",
+        instructions: [{
+          type: "propertyBinding",
+          to: "value",
+          mode: "toView",
+          from: { id: exprId, code: "user?.profile?.name", loc: { start: 10, end: 30, file: "comp.html" } },
+        }],
+      }],
+    }],
+    exprTable: [{
+      id: exprId,
+      expressionType: "IsProperty",
+      ast: {
+        $kind: "AccessMember",
+        object: {
+          $kind: "AccessMember",
+          object: { $kind: "AccessScope", name: "user", ancestor: 0, span: { start: 0, end: 4 } },
+          name: "profile",
+          optional: true,
+          span: { start: 0, end: 12 },
+        },
+        name: "name",
+        optional: true,
+        span: { start: 0, end: 17 },
+      },
+    }],
+  };
+
+  const overlayMapping = [{
+    exprId,
+    start: 0,
+    end: 10,
+    segments: [{ kind: "member", path: "user.profile.name", span: [2, 8] }],
+  }];
+
+  const { mapping } = buildTemplateMapping({
+    overlayMapping,
+    ir,
+    exprTable: ir.exprTable,
+    fallbackFile: "comp.html",
+  });
+
+  const seg = mapping.entries[0]?.segments?.[0];
+  assert.equal(seg?.path, "user.profile.name");
+  assert.ok(seg?.htmlSpan.start !== undefined);
+});
+
 test("buildTemplateQuery exposes node/expr/controller/bindable lookups", () => {
   const exprId = "e1";
   const dom = {

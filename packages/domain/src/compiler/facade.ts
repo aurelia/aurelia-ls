@@ -1,9 +1,6 @@
 import path from "node:path";
 
 // Phases
-import { lowerDocument } from "./phases/10-lower/lower.js";
-import { resolveHost } from "./phases/20-resolve-host/resolve.js";
-import { bindScopes } from "./phases/30-bind/bind.js";
 import { plan } from "./phases/50-plan/plan.js";
 import { emitOverlayFile } from "./phases/60-emit/overlay.js";
 
@@ -18,11 +15,9 @@ import { buildTemplateQuery } from "./query.js";
 // Parsers
 import { getExpressionParser } from "../parsers/expression-parser.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
-import type { BuildIrOptions } from "./phases/10-lower/lower.js";
 
-import { DEFAULT as SEM_DEFAULT } from "./language/registry.js";
 import { DEFAULT_SYNTAX, type AttributeParser } from "./language/syntax.js";
-import { typecheck } from "./phases/40-typecheck/typecheck.js";
+import { runCorePipeline } from "./pipeline.js";
 
 // SSR
 import { planSsr } from "./phases/50-plan/ssr-plan.js";
@@ -52,10 +47,10 @@ export interface CompileOverlayResult {
 }
 
 export interface TemplateCompilation {
-  ir: ReturnType<typeof lowerDocument>;
-  linked: ReturnType<typeof resolveHost>;
-  scope: ReturnType<typeof bindScopes>;
-  typecheck: ReturnType<typeof typecheck>;
+  ir: ReturnType<typeof runCorePipeline>["ir"];
+  linked: ReturnType<typeof runCorePipeline>["linked"];
+  scope: ReturnType<typeof runCorePipeline>["scope"];
+  typecheck: ReturnType<typeof runCorePipeline>["typecheck"];
   overlayPlan: OverlayPlanModule;
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
@@ -67,22 +62,12 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
   const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
   const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
 
-  // 1) HTML -> IR
-  const ir = lowerDocument(opts.html, {
-    file: opts.templateFilePath,
-    name: path.basename(opts.templateFilePath),
+  const { ir, linked, scope, typecheck: typecheckOut } = runCorePipeline({
+    html: opts.html,
+    templateFilePath: opts.templateFilePath,
     attrParser,
     exprParser,
-  } as BuildIrOptions); // lowerer reads both contracts.
-
-  // 2) IR -> Linked
-  const linked = resolveHost(ir, SEM_DEFAULT);
-
-  // 3) Linked -> ScopeGraph
-  const scope = bindScopes(linked);
-
-  // 4) Type hints (phase 40)
-  const typecheckOut = typecheck(linked);
+  });
 
   // 4) ScopeGraph -> Overlay plan
   const overlayBase = opts.overlayBaseName ?? `${path.basename(opts.templateFilePath, path.extname(opts.templateFilePath))}.__au.ttc.overlay`;
@@ -137,26 +122,19 @@ export interface CompileSsrResult {
   plan: SsrPlanModule; // handy for debugging/tests
 }
 
-/** Build SSR “server emits” (HTML skeleton + JSON manifest) from a template. */
+/** Build SSR "server emits" (HTML skeleton + JSON manifest) from a template. */
 export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
   const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
   const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
 
-  // 1) HTML → IR
-  const ir = lowerDocument(opts.html, {
-    file: opts.templateFilePath,
-    name: path.basename(opts.templateFilePath),
+  const { ir, linked, scope } = runCorePipeline({
+    html: opts.html,
+    templateFilePath: opts.templateFilePath,
     attrParser,
     exprParser,
-  } as BuildIrOptions);
+  });
 
-  // 2) IR → Linked
-  const linked = resolveHost(ir, SEM_DEFAULT);
-
-  // 3) Linked → ScopeGraph
-  const scope = bindScopes(linked);
-
-  // 4) Linked+Scoped → SSR plan
+  // 4) Linked+Scoped -> SSR plan
   const plan = planSsr(linked, scope);
 
   // 5) Emit SSR artifacts
@@ -170,5 +148,3 @@ export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
 
   return { htmlPath, htmlText: html, manifestPath, manifestText: manifest, plan };
 }
-
-
