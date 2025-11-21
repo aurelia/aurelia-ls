@@ -35,6 +35,7 @@ export type SsrBinding =
   | { kind: "prop"; to: string; exprId: ExprId; frame: number; mode: "default" | "oneTime" | "toView" | "fromView" | "twoWay" }
   | { kind: "styleProp"; to: string; exprId: ExprId; frame: number }
   | { kind: "attrInterp"; attr: string; to: string; parts: string[]; exprIds: ExprId[]; frames: number[] }
+  | { kind: "attr"; attr: string; to: string; exprId: ExprId; frame: number }
   | { kind: "listener"; name: string; exprId: ExprId; frame: number; capture?: boolean; modifier?: string | null }
   | { kind: "ref"; to: string; exprId: ExprId; frame: number };
 
