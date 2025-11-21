@@ -10,6 +10,7 @@ import { emitOverlayFile } from "./phases/60-emit/overlay.js";
 // Types
 import type { SourceSpan, ExprId, BindingSourceIR, InterpIR, ExprRef } from "./model/ir.js";
 import type { VmReflection, OverlayPlanModule } from "./phases/50-plan/types.js";
+import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateQueryFacade } from "../contracts.js";
 
 // Parsers
 import { getExpressionParser } from "../parsers/expression-parser.js";
@@ -42,13 +43,26 @@ export interface CompileOverlayResult {
   overlayPath: string;
   text: string;
   calls: Array<{ exprId: ExprId; overlayStart: number; overlayEnd: number; htmlSpan: SourceSpan }>;
+  /** First-class mapping scaffold (currently mirrors ad-hoc call mapping). */
+  mapping?: TemplateMappingArtifact;
 }
 
-export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayResult {
+export interface TemplateCompilation {
+  ir: ReturnType<typeof lowerDocument>;
+  linked: ReturnType<typeof resolveHost>;
+  scope: ReturnType<typeof bindScopes>;
+  overlayPlan: OverlayPlanModule;
+  overlay: CompileOverlayResult;
+  mapping: TemplateMappingArtifact;
+  query: TemplateQueryFacade;
+}
+
+/** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
+export function compileTemplate(opts: CompileOptions): TemplateCompilation {
   const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
   const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
 
-  // 1) HTML → IR
+  // 1) HTML -> IR
   const ir = lowerDocument(opts.html, {
     file: opts.templateFilePath,
     name: path.basename(opts.templateFilePath),
@@ -56,18 +70,18 @@ export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayRe
     exprParser,
   } as BuildIrOptions); // lowerer reads both contracts.
 
-  // 2) IR → Linked
+  // 2) IR -> Linked
   const linked = resolveHost(ir, SEM_DEFAULT);
 
-  // 3) Linked → ScopeGraph
+  // 3) Linked -> ScopeGraph
   const scope = bindScopes(linked);
 
-  // 4) ScopeGraph → Overlay plan
+  // 4) ScopeGraph -> Overlay plan
   const overlayBase = opts.overlayBaseName ?? `${path.basename(opts.templateFilePath, path.extname(opts.templateFilePath))}.__au.ttc.overlay`;
   const syntheticPrefix = opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_";
   const planOut: OverlayPlanModule = plan(linked, scope, { isJs: opts.isJs, vm: opts.vm, syntheticPrefix });
 
-  // 5) Plan → overlay text
+  // 5) Plan -> overlay text
   const overlayPath = path.join(path.dirname(opts.templateFilePath), `${overlayBase}${opts.isJs ? ".js" : ".ts"}`);
   const { text } = emitOverlayFile(planOut, { isJs: !!opts.isJs, filename: overlayBase });
 
@@ -85,7 +99,47 @@ export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayRe
     calls[i] = { exprId, overlayStart, overlayEnd, htmlSpan };
   }
 
-  return { overlayPath, text, calls };
+  const mapping = buildMappingArtifact(calls);
+  const query = buildPendingQueryFacade(mapping);
+
+  return {
+    ir,
+    linked,
+    scope,
+    overlayPlan: planOut,
+    overlay: { overlayPath, text, calls, mapping },
+    mapping,
+    query,
+  };
+}
+
+export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayResult {
+  const compilation = compileTemplate(opts);
+  return compilation.overlay;
+}
+
+function buildMappingArtifact(calls: Array<{ exprId: ExprId; overlayStart: number; overlayEnd: number; htmlSpan: SourceSpan }>): TemplateMappingArtifact {
+  const entries: TemplateMappingEntry[] = calls.map((c) => ({
+    exprId: c.exprId,
+    htmlSpan: c.htmlSpan,
+    overlayRange: [c.overlayStart, c.overlayEnd],
+  }));
+  return { kind: "mapping", entries };
+}
+
+/** TODO: wire this to a real Query API once scope graphs + mapping artifacts are first-class. */
+function buildPendingQueryFacade(mapping: TemplateMappingArtifact): TemplateQueryFacade {
+  return {
+    nodeAt(_htmlOffset) { return null; },
+    bindablesFor(_node) { return null; },
+    exprAt(htmlOffset) {
+      const hit = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
+      if (!hit) return null;
+      return { exprId: hit.exprId, span: hit.htmlSpan };
+    },
+    expectedTypeOf(_exprOrBindable) { return null; },
+    controllerAt(_htmlOffset) { return null; },
+  };
 }
 
 /* =======================================================================================
