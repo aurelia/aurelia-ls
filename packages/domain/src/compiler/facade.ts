@@ -1,32 +1,12 @@
 import path from "node:path";
-
-// Phases
-import { plan } from "./phases/50-plan/plan.js";
-import { emitOverlayFile } from "./phases/60-emit/overlay.js";
-
-// Types
-import type { SourceSpan, ExprId } from "./model/ir.js";
-import type { FrameId } from "./model/symbols.js";
-import type { VmReflection, OverlayPlanModule } from "./phases/50-plan/types.js";
-import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
-import { buildTemplateMapping } from "./mapping.js";
-import { buildTemplateQuery } from "./query.js";
-
-// Parsers
-import { getExpressionParser } from "../parsers/expression-parser.js";
+import { createDefaultEngine } from "./pipeline.js";
+import type { StageOutputs, PipelineOptions } from "./pipeline/engine.js";
+import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
-
-import { DEFAULT_SYNTAX, type AttributeParser } from "./language/syntax.js";
-import { runCorePipeline } from "./pipeline.js";
-
-// SSR
-import { planSsr } from "./phases/50-plan/ssr-plan.js";
-import { emitSsr } from "./phases/60-emit/ssr.js";
-import type { SsrPlanModule } from "./phases/50-plan/ssr-types.js";
-
-/* =======================================================================================
- * Public façade
- * ======================================================================================= */
+import type { VmReflection } from "./phases/50-plan/types.js";
+import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
+import { buildOverlayProduct, type OverlayProductResult } from "./products/overlay.js";
+import { buildSsrProduct, type SsrProductResult } from "./products/ssr.js";
 
 export interface CompileOptions {
   html: string;
@@ -38,72 +18,69 @@ export interface CompileOptions {
   overlayBaseName?: string;
 }
 
-export interface CompileOverlayResult {
-  overlayPath: string;
-  text: string;
-  calls: Array<{ exprId: ExprId; overlayStart: number; overlayEnd: number; htmlSpan: SourceSpan }>;
-  /** First-class mapping scaffold (currently mirrors ad-hoc call mapping). */
-  mapping?: TemplateMappingArtifact;
-}
+export type CompileOverlayResult = OverlayProductResult;
 
 export interface TemplateCompilation {
-  ir: ReturnType<typeof runCorePipeline>["ir"];
-  linked: ReturnType<typeof runCorePipeline>["linked"];
-  scope: ReturnType<typeof runCorePipeline>["scope"];
-  typecheck: ReturnType<typeof runCorePipeline>["typecheck"];
-  overlayPlan: OverlayPlanModule;
+  ir: StageOutputs["10-lower"];
+  linked: StageOutputs["20-link"];
+  scope: StageOutputs["30-scope"];
+  typecheck: StageOutputs["40-typecheck"];
+  overlayPlan: StageOutputs["50-plan-overlay"];
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
   query: TemplateQueryFacade;
 }
 
-/** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
-export function compileTemplate(opts: CompileOptions): TemplateCompilation {
-  const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
-  const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
-
-  const { ir, linked, scope, typecheck: typecheckOut } = runCorePipeline({
+function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): PipelineOptions {
+  const base: PipelineOptions = {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
-    attrParser,
-    exprParser,
-  });
+    vm: opts.vm,
+    overlay: {
+      isJs: opts.isJs,
+      filename: overlayBaseName,
+      syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
+    },
+  };
+  if (opts.attrParser) base.attrParser = opts.attrParser;
+  if (opts.exprParser) base.exprParser = opts.exprParser;
+  return base;
+}
 
-  // 4) ScopeGraph -> Overlay plan
-  const overlayBase = opts.overlayBaseName ?? `${path.basename(opts.templateFilePath, path.extname(opts.templateFilePath))}.__au.ttc.overlay`;
-  const syntheticPrefix = opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_";
-  const planOut: OverlayPlanModule = plan(linked, scope, { isJs: opts.isJs, vm: opts.vm, syntheticPrefix });
+function computeOverlayBaseName(templatePath: string, override?: string): string {
+  if (override) return override;
+  const base = path.basename(templatePath, path.extname(templatePath));
+  return `${base}.__au.ttc.overlay`;
+}
 
-  // 5) Plan -> overlay text
-  const overlayPath = path.join(path.dirname(opts.templateFilePath), `${overlayBase}${opts.isJs ? ".js" : ".ts"}`);
-  const { text, mapping: overlayMapping } = emitOverlayFile(planOut, { isJs: !!opts.isJs, filename: overlayBase });
+function computeSsrBaseName(templatePath: string, override?: string): string {
+  if (override) return override.replace(/\.ssr$/, "");
+  const base = path.basename(templatePath, path.extname(templatePath));
+  return `${base}.__au.ssr`;
+}
 
-  // 6) Mapping
-  const exprToFrame = scope.templates?.[0]?.exprToFrame as ExprToFrameMap | undefined;
-  const { mapping, exprSpans } = buildTemplateMapping({
-    overlayMapping,
-    ir,
-    exprTable: ir.exprTable ?? [],
-    fallbackFile: opts.templateFilePath,
-    exprToFrame: exprToFrame ?? null,
-  });
-  const calls = overlayMapping.map((m) => ({
-    exprId: m.exprId,
-    overlayStart: m.start,
-    overlayEnd: m.end,
-    htmlSpan: exprSpans.get(m.exprId) ?? { start: 0, end: 0, file: opts.templateFilePath },
-  }));
-  const query = buildTemplateQuery(ir, linked, mapping, typecheckOut);
+/** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
+export function compileTemplate(opts: CompileOptions): TemplateCompilation {
+  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
+  const engine = createDefaultEngine();
+  const session = engine.createSession(buildPipelineOptions(opts, overlayBase));
+
+  const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
+
+  const ir = session.run("10-lower");
+  const linked = session.run("20-link");
+  const scope = session.run("30-scope");
+  const typecheck = session.run("40-typecheck");
 
   return {
     ir,
     linked,
     scope,
-    typecheck: typecheckOut,
-    overlayPlan: planOut,
-    overlay: { overlayPath, text, calls, mapping },
-    mapping,
-    query,
+    typecheck,
+    overlayPlan: overlayArtifacts.plan,
+    overlay: overlayArtifacts.overlay,
+    mapping: overlayArtifacts.mapping,
+    query: overlayArtifacts.query,
   };
 }
 
@@ -112,39 +89,24 @@ export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayRe
   return compilation.overlay;
 }
 
-type ExprToFrameMap = Record<ExprId, FrameId>;
-
-export interface CompileSsrResult {
-  htmlPath: string;
-  htmlText: string;
-  manifestPath: string;
-  manifestText: string;
-  plan: SsrPlanModule; // handy for debugging/tests
-}
+export interface CompileSsrResult extends SsrProductResult {}
 
 /** Build SSR "server emits" (HTML skeleton + JSON manifest) from a template. */
 export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
-  const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
-  const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
-
-  const { ir, linked, scope } = runCorePipeline({
+  const baseName = computeSsrBaseName(opts.templateFilePath, opts.overlayBaseName);
+  const engine = createDefaultEngine();
+  const pipelineOpts: PipelineOptions = {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
-    attrParser,
-    exprParser,
+    vm: opts.vm,
+    ssr: { eol: "\n" },
+  };
+  if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
+  if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
+  const session = engine.createSession(pipelineOpts);
+
+  return buildSsrProduct(session, {
+    templateFilePath: opts.templateFilePath,
+    baseName,
   });
-
-  // 4) Linked+Scoped -> SSR plan
-  const plan = planSsr(linked, scope);
-
-  // 5) Emit SSR artifacts
-  const { html, manifest } = emitSsr(plan, linked, { eol: "\n" });
-
-  // 6) Paths
-  const base = opts.overlayBaseName ?? `${path.basename(opts.templateFilePath, path.extname(opts.templateFilePath))}.__au.ssr`;
-  const dir = path.dirname(opts.templateFilePath);
-  const htmlPath = path.join(dir, `${base}.html`);
-  const manifestPath = path.join(dir, `${base}.json`);
-
-  return { htmlPath, htmlText: html, manifestPath, manifestText: manifest, plan };
 }

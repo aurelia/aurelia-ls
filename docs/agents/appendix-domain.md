@@ -51,56 +51,50 @@ This section is the main thing Codex should understand before touching compiler 
 
 ### 2.1 Data flow overview
 
-Core types:
+Core types (unchanged):
 
 - `IrModule` - HTML -> IR (`model/ir.ts`)
 - `LinkedSemanticsModule` - IR + Semantics -> linked host info (`20-resolve-host/types.ts`)
 - `ScopeModule` - Linked -> scope graph (`model/symbols.ts`)
 - `OverlayPlanModule` - Linked + Scope -> overlay plan (`50-plan/types.ts`)
+- `SsrPlanModule` - Linked + Scope -> SSR plan (`50-plan/ssr-types.ts`)
 
-Pipeline:
-
-```ts
-// 10 - Lower
-function lowerDocument(html: string, opts: BuildIrOptions): IrModule;
-
-// 20 - Resolve host semantics
-function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule;
-
-// 30 - Bind (scope graph)
-function bindScopes(linked: LinkedSemanticsModule): ScopeModule;
-
-// 40 - Typecheck (planned)
-// (currently a placeholder; type-ish logic lives in Plan)
-
-// 50 - Plan (overlay)
-function plan(
-  linked: LinkedSemanticsModule,
-  scope: ScopeModule,
-  opts: AnalyzeOptions
-): OverlayPlanModule;
-
-// 60 - Emit overlay
-function emitOverlayFile(
-  plan: OverlayPlanModule,
-  opts: { isJs: boolean } & EmitOptions
-): EmitResult;
-````
-
-And the facade:
+Pipeline engine (new):
 
 ```ts
-// packages/domain/src/compiler/facade.ts
-export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayResult;
-export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult;
+// Stage keys (compiler/pipeline/engine.ts)
+type StageKey =
+  | "10-lower"        // lowerDocument
+  | "20-link"         // resolveHost
+  | "30-scope"        // bindScopes
+  | "40-typecheck"    // typecheck stub
+  | "50-plan-overlay" // plan (overlay)
+  | "60-emit-overlay" // emitOverlayFile
+  | "50-plan-ssr"     // planSsr
+  | "60-emit-ssr";    // emitSsr
+
+const engine = new PipelineEngine(createDefaultStageDefinitions());
+const session = engine.createSession({
+  html,
+  templateFilePath,
+  vm,
+  overlay: { isJs, filename: "<base>.__au.ttc.overlay" },
+  ssr: { eol: "\n" },
+});
 ```
 
-**Invariants across phases:**
+Products wire stage DAGs instead of baking orchestration into the facade:
+
+- `products/overlay.ts`: consumes stages up to `60-emit-overlay`, then builds mapping/query.
+- `products/ssr.ts`: consumes `50-plan-ssr` + `60-emit-ssr`, then attaches file paths.
+- `facade.ts` is now a light wrapper that spins a session and delegates to those products.
+
+**Invariants across stages:**
 
 * Version tags (`version: 'aurelia-ir@1'` / `'aurelia-linked@1'` / `'aurelia-scope@1'`) are stable schema IDs.
 * `NodeId` uniqueness is **per `TemplateIR`**.
 * `ExprId` is stable per `(file|span|expressionType|code)` (see `ExprTable` in `lower.ts`).
-* Later phases **never mutate** earlier phase objects; they build linked/derived views.
+* Later stages **never mutate** earlier stage objects; they build linked/derived views.
 
 ### 2.2 Phase 10 - Lower (HTML -> IR)
 
