@@ -1,5 +1,5 @@
-import type { FrameId } from "../../model/symbols.js";
-import type { ExprId } from "../../model/ir.js";
+import type { FrameId } from "../../../model/symbols.js";
+import type { ExprId } from "../../../model/ir.js";
 
 /** Injected by the caller; keeps the Plan phase decoupled from TS/compiler state. */
 export interface VmReflection {

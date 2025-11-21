@@ -58,7 +58,7 @@ Core types:
 - `ScopeModule` - Linked -> scope graph (`model/symbols.ts`)
 - `TypecheckModule` - Linked + Scope + VM -> inferred/expected types + AU13xx diags (`40-typecheck/typecheck.ts`)
 - `OverlayPlanModule` - Linked + Scope -> overlay plan (`50-plan/types.ts`)
-- `SsrPlanModule` - Linked + Scope -> SSR plan (`50-plan/ssr-types.ts`)
+- `SsrPlanModule` - Linked + Scope -> SSR plan (`50-plan/ssr/types.ts`)
 
 Pipeline engine (new):
 
@@ -231,7 +231,7 @@ Notes:
 ### 2.6 Phase 50 - Plan (overlay planning)
 
 Entry:
-`packages/domain/src/compiler/phases/50-plan/overlay-plan.ts`
+`packages/domain/src/compiler/phases/50-plan/overlay/plan.ts`
 
 Input/Output:
 
@@ -317,7 +317,7 @@ Invariants:
 ### 2.8 SSR planning & emit
 
 Entry:
-`packages/domain/src/compiler/phases/50-plan/ssr-plan.ts`
+`packages/domain/src/compiler/phases/50-plan/ssr/plan.ts`
 `packages/domain/src/compiler/phases/60-emit/ssr.ts`
 
 Responsibilities:

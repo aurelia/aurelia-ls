@@ -1,7 +1,7 @@
-import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../20-resolve-host/types.js";
-import type { ScopeModule, ScopeTemplate } from "../../model/symbols.js";
-import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef, TemplateNode } from "../../model/ir.js";
-import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./ssr-types.js";
+import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../../20-resolve-host/types.js";
+import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
+import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef, TemplateNode } from "../../../model/ir.js";
+import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./types.js";
 
 /** Build SSR plan from Linked+Scoped (tap point: after Phase 30 bind). */
 export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrPlanModule {

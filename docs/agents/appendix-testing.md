@@ -25,11 +25,8 @@ This appendix documents the current test layout and expectations for compiler ph
   - Default `rootVmType` is `RootVm` unless overridden per vector. Wrapped in `describe("Typecheck (40)")`.
 
 - **50-plan**: `packages/domain/test/50-plan/`
-  - Vectors split by concern (e.g., `basics.json`) with prefixes like `PL-B-..`.
-  - Runner `overlay-plan.test.mjs` loads all JSONs, runs 10/20/30 setup + plan, then compares:
-    - frames: [{ label, typeName, typeExpr }]
-    - lambdas: [{ frame, lambda, expr }]
-  - Uses a stub `VmReflection` (default root `RootVm`, synthetic prefix `__AU_TTC_`). Wrapped in `describe("Plan (50)")`.
+  - Overlay: `overlay/` vectors (e.g., `basics.json`) with prefixes like `PL-B-..`; runner `overlay/overlay-plan.test.mjs` loads all JSONs, runs 10/20/30 setup + plan, then compares frames/lambdas. Uses stub `VmReflection` (default root `RootVm`, synthetic prefix `__AU_TTC_`). Wrapped in `describe("Plan (50)")`.
+  - SSR: (add alongside when needed) keep under `ssr/` to mirror stage `50-plan-ssr`.
 
 ## Conventions
 

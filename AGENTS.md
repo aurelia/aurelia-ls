@@ -19,7 +19,7 @@ Goal: make changes safely, in line with the architectural intent.
   - Scoping: touch 30-bind; run `pnpm test:bind`.
   - Overlay typing/emit: touch 50-plan/60-emit; run `pnpm test:typecheck`.
   - Parsers: touch `packages/domain/src/parsers`; run `pnpm test:parsers`.
-  - SSR: touch `packages/domain/src/compiler/phases/50-plan/ssr-plan.ts` or `60-emit/ssr.ts`; run `pnpm test:ssr`.
+  - SSR: touch `packages/domain/src/compiler/phases/50-plan/ssr/plan.ts` or `60-emit/ssr.ts`; run `pnpm test:ssr`.
 - **Do not edit generated output:** `packages/**/out` is build output; change `src` + tests only.
 - **Type hygiene:** eliminate `any`/`unknown` casts. Prefer proper guards/helpers over `as any`; refactor to strong types instead of adding local casts/aliases.
 - **Design patterns:** keep types/shared shapes in the existing model/type files; avoid sprinkling local type declarations when a central export makes sense.

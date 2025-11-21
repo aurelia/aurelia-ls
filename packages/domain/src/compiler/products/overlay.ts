@@ -2,7 +2,7 @@ import path from "node:path";
 import { buildTemplateMapping } from "../mapping.js";
 import { buildTemplateQuery } from "../query.js";
 import type { PipelineSession } from "../pipeline/engine.js";
-import type { OverlayPlanModule } from "../phases/50-plan/overlay-types.js";
+import type { OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../../contracts.js";
 import type { ExprId, SourceSpan } from "../model/ir.js";
 import type { FrameId } from "../model/symbols.js";
