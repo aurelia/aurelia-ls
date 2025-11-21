@@ -45,11 +45,9 @@ export type FrameOrigin =
 /**
  * Overlay base kinds:
  * - 'with'     : with.value
- * - 'promise'  : promise.value (Awaited), constrained by branch
  */
 export type OverlayBase =
-  | { kind: "with"; from: BindingSourceIR; span?: SourceSpan | null }
-  | { kind: "promise"; from: BindingSourceIR; span?: SourceSpan | null };
+  | { kind: "with"; from: BindingSourceIR; span?: SourceSpan | null };
 
 /**
  * Symbols visible in a frame.
@@ -61,17 +59,11 @@ export type OverlayBase =
  * NOTE(binding-context): `<let to-binding-context>` does not change lexical visibility;
  * it only affects the *write lane* at runtime. We track names uniformly here.
  */
-export type SymbolKind =
-  | "let"
-  | "repeatLocal"
-  | "repeatContextual"
-  | "promiseAlias";
-
-export interface ScopeSymbol {
-  kind: SymbolKind;
-  name: string;
-  span?: SourceSpan | null;
-}
+export type ScopeSymbol =
+  | { kind: "let"; name: string; span?: SourceSpan | null }
+  | { kind: "repeatLocal"; name: string; span?: SourceSpan | null }
+  | { kind: "repeatContextual"; name: string; span?: SourceSpan | null }
+  | { kind: "promiseAlias"; name: string; branch: "then" | "catch"; span?: SourceSpan | null };
 
 export interface ScopeFrame {
   id: FrameId;
@@ -82,8 +74,7 @@ export interface ScopeFrame {
    * Optional overlay base. When present, unresolved identifiers should be interpreted
    * as properties of this base (before falling back to parent frames).
    *
-   * - 'with'     → controller value
-   * - 'promise'  → resolved value (branch)
+   * - 'with': controller value
    *
    * (repeat has explicit locals/contextuals instead of an overlay base.)
    */
