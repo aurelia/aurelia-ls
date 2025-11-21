@@ -11,6 +11,7 @@ import { getExpressionParser, DEFAULT_SYNTAX } from "../../out/index.js";
 import { lowerDocument } from "../../out/compiler/phases/10-lower/lower.js";
 import { DEFAULT } from "../../out/compiler/language/registry.js";
 import { resolveHost } from "../../out/compiler/phases/20-resolve-host/resolve.js";
+import { materializeResourcesForScope } from "../../out/compiler/language/resource-graph.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +79,156 @@ describe("Resolve (20)", () => {
       );
     });
   }
+
+  test("resource graph: local scope overlays root but not parent scopes", () => {
+    const baseSem = deepMergeSemantics(DEFAULT, {
+      resources: {
+        elements: {},
+        attributes: {},
+        valueConverters: {},
+        bindingBehaviors: {},
+      },
+    });
+
+    const graph = {
+      version: "aurelia-resource-graph@1",
+      root: "root",
+      scopes: {
+        root: {
+          id: "root",
+          parent: null,
+          resources: {
+            elements: {
+              "root-el": { kind: "element", name: "root-el", bindables: { foo: { name: "foo" } } },
+            },
+          },
+        },
+        feature: {
+          id: "feature",
+          parent: "root",
+          resources: {
+            elements: {
+              "feature-el": { kind: "element", name: "feature-el", bindables: { bar: { name: "bar" } } },
+            },
+          },
+        },
+        child: {
+          id: "child",
+          parent: "feature",
+          resources: {
+            elements: {
+              "child-el": { kind: "element", name: "child-el", bindables: { baz: { name: "baz" } } },
+            },
+          },
+        },
+      },
+    };
+
+    const scoped = materializeResourcesForScope(baseSem, graph, "child");
+    const sem = {
+      ...baseSem,
+      resources: scoped.resources,
+      resourceGraph: graph,
+      defaultScope: "child",
+    };
+
+    const ir = lowerDocument(
+      `<root-el foo.bind="a"></root-el><feature-el bar.bind="b"></feature-el><child-el baz.bind="c"></child-el>`,
+      {
+        attrParser: DEFAULT_SYNTAX,
+        exprParser: getExpressionParser(),
+        file: "mem.html",
+        name: "mem",
+        sem,
+      },
+    );
+
+    const linked = resolveHost(ir, sem, { graph, scope: "child" });
+    const intent = reduceLinkedIntent(linked);
+
+    const propTargets = intent.items
+      .filter((i) => i.kind === "prop")
+      .map((p) => ({ to: p.to, target: p.target }))
+      .sort((a, b) => a.to.localeCompare(b.to));
+
+    assert.deepEqual(propTargets, [
+      { to: "bar", target: "unknown" }, // parent scope resource should NOT be visible
+      { to: "baz", target: "bindable" }, // local scope
+      { to: "foo", target: "bindable" }, // root scope
+    ]);
+
+    assert.ok(
+      intent.diags.includes("AU1104"),
+      "Unknown host/prop from parent scope should surface AU1104",
+    );
+  });
+
+  test("resource graph: local overrides root when names conflict", () => {
+    const baseSem = deepMergeSemantics(DEFAULT, {
+      resources: {
+        elements: {},
+        attributes: {},
+        valueConverters: {},
+        bindingBehaviors: {},
+      },
+    });
+
+    const graph = {
+      version: "aurelia-resource-graph@1",
+      root: "root",
+      scopes: {
+        root: {
+          id: "root",
+          parent: null,
+          resources: {
+            elements: {
+              "conflict-el": { kind: "element", name: "conflict-el", bindables: { fromRoot: { name: "fromRoot" } } },
+            },
+          },
+        },
+        feature: {
+          id: "feature",
+          parent: "root",
+          resources: {
+            elements: {
+              "conflict-el": { kind: "element", name: "conflict-el", bindables: { fromLocal: { name: "fromLocal" } } },
+            },
+          },
+        },
+      },
+    };
+
+    const scoped = materializeResourcesForScope(baseSem, graph, "feature");
+    const sem = {
+      ...baseSem,
+      resources: scoped.resources,
+      resourceGraph: graph,
+      defaultScope: "feature",
+    };
+
+    const ir = lowerDocument(`<conflict-el from-local.bind="x"></conflict-el><conflict-el from-root.bind="y"></conflict-el>`, {
+      attrParser: DEFAULT_SYNTAX,
+      exprParser: getExpressionParser(),
+      file: "mem.html",
+      name: "mem",
+      sem,
+    });
+
+    const linked = resolveHost(ir, sem, { graph, scope: "feature" });
+    const intent = reduceLinkedIntent(linked);
+
+    const propTargets = intent.items
+      .filter((i) => i.kind === "prop")
+      .map((p) => ({ to: p.to, target: p.target }))
+      .sort((a, b) => a.to.localeCompare(b.to));
+
+    // local bindable wins; root bindable absent -> AU1104
+    assert.deepEqual(propTargets, [
+      { to: "fromLocal", target: "bindable" },
+      { to: "fromRoot", target: "unknown" },
+    ]);
+    assert.ok(intent.diags.includes("AU1104"), "Root bindable should be hidden by local override");
+  });
 });
 
 function reduceLinkedIntent(linked) {

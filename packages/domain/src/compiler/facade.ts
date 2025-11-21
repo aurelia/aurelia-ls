@@ -4,6 +4,7 @@ import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } fr
 import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
 import type { Semantics } from "./language/registry.js";
+import type { ResourceGraph, ResourceScopeId } from "./language/resource-graph.js";
 import type { VmReflection } from "./phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
 import { buildOverlayProduct, type OverlayProductResult } from "./products/overlay.js";
@@ -15,6 +16,8 @@ export interface CompileOptions {
   isJs: boolean;
   vm: VmReflection;
   semantics?: Semantics;
+  resourceGraph?: ResourceGraph;
+  resourceScope?: ResourceScopeId | null;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   overlayBaseName?: string;
@@ -47,6 +50,8 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
     },
   };
   if (opts.semantics) base.semantics = opts.semantics;
+  if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
+  if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
   if (opts.cache) base.cache = opts.cache;
   if (opts.fingerprints) base.fingerprints = opts.fingerprints;
   if (opts.attrParser) base.attrParser = opts.attrParser;
@@ -109,6 +114,8 @@ export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
     ssr: { eol: "\n" },
   };
   if (opts.semantics) pipelineOpts.semantics = opts.semantics;
+  if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
+  if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
   if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
   const session = engine.createSession(pipelineOpts);

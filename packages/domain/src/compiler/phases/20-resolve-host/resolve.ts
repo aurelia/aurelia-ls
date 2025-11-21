@@ -36,8 +36,9 @@ import type {
   MultiAttrIR,
 } from "../../model/ir.js";
 
-import { createSemanticsLookup, type SemanticsLookup } from "../../language/registry.js";
+import { createSemanticsLookup, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
 import type { Semantics } from "../../language/registry.js";
+import type { ResourceCollections, ResourceGraph, ResourceScopeId } from "../../language/resource-graph.js";
 
 import type {
   LinkedSemanticsModule,
@@ -94,9 +95,19 @@ interface ResolverContext {
  * Public API
  * ============================================================================ */
 
-export function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule {
+export interface ResolveHostOptions {
+  resources?: ResourceCollections;
+  graph?: ResourceGraph | null;
+  scope?: ResourceScopeId | null;
+}
+
+export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOptions): LinkedSemanticsModule {
   const diags: SemDiagnostic[] = [];
-  const ctx: ResolverContext = { lookup: createSemanticsLookup(sem), diags };
+  const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
+  const ctx: ResolverContext = {
+    lookup: createSemanticsLookup(sem, lookupOpts),
+    diags,
+  };
   const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
   return {
     version: "aurelia-linked@1",
@@ -109,6 +120,14 @@ export function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule
 /* ============================================================================
  * Template / Row linking
  * ============================================================================ */
+
+function buildLookupOpts(opts: ResolveHostOptions): SemanticsLookupOptions {
+  const out: SemanticsLookupOptions = {};
+  if (opts.resources) out.resources = opts.resources;
+  if (opts.graph !== undefined) out.graph = opts.graph;
+  if (opts.scope !== undefined) out.scope = opts.scope ?? null;
+  return out;
+}
 
 function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
   const idToNode = new Map<NodeId, DOMNode>();

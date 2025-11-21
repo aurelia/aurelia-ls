@@ -7,6 +7,7 @@ import type { LinkedSemanticsModule } from "../phases/20-resolve-host/types.js";
 import type { ScopeModule } from "../model/symbols.js";
 import type { TypecheckModule } from "../phases/40-typecheck/typecheck.js";
 import type { Semantics } from "../language/registry.js";
+import type { ResourceGraph, ResourceScopeId } from "../language/resource-graph.js";
 import type { AttributeParser } from "../language/syntax.js";
 import type { IExpressionParser } from "../../parsers/expression-api.js";
 import { stableHash } from "./hash.js";
@@ -49,6 +50,8 @@ export interface PipelineOptions {
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   semantics?: Semantics;
+  resourceGraph?: ResourceGraph;
+  resourceScope?: ResourceScopeId | null;
   vm?: VmReflection;
   /** Pipeline-wide cache knobs. */
   cache?: CacheOptions;
