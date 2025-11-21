@@ -26,7 +26,7 @@ const vectors = vectorFiles.flatMap((file) => {
 const { recordFailure, attachWriter } = createFailureRecorder(__dirname, "failures.json");
 attachWriter();
 
-describe("Plan (50)", () => {
+describe("Plan Overlay (50)", () => {
   for (const v of vectors) {
     test(`${v.name}  [${v.file}]`, () => {
       const sem = v.semOverrides ? deepMergeSemantics(SEM_DEFAULT, v.semOverrides) : SEM_DEFAULT;

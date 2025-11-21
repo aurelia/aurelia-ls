@@ -1,5 +1,5 @@
-import type { OverlayLambdaSegment, OverlayPlanModule } from "../50-plan/overlay/types.js";
-import type { ExprId } from "../../model/ir.js";
+import type { OverlayLambdaSegment, OverlayPlanModule } from "../../50-plan/overlay/types.js";
+import type { ExprId } from "../../../model/ir.js";
 
 /**
  * Emit a compact overlay:

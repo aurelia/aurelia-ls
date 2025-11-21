@@ -1,5 +1,5 @@
 import type { AnalyzeOptions, OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
-import type { EmitResult as OverlayEmitResult } from "../phases/60-emit/overlay.js";
+import type { EmitResult as OverlayEmitResult } from "../phases/60-emit/overlay/emit.js";
 import type { SsrPlanModule } from "../phases/50-plan/ssr/types.js";
 import type { VmReflection } from "../phases/50-plan/overlay/types.js";
 import type { IrModule } from "../model/ir.js";

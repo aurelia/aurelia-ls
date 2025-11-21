@@ -39,6 +39,7 @@ This appendix documents the current test layout and expectations for compiler ph
   - 30-bind: `npm run test:30-bind` / `test:30-bind:cov`
   - 40-typecheck: `npm run test:40-typecheck` / `test:40-typecheck:cov`
   - 50-plan: `npm run test:50-plan` / `test:50-plan:cov`
+  - 60-emit: `npm run test:60-emit`
 - Coverage commands target the corresponding phase outputs; `types.js` files and tests are excluded where needed.
 
 ## When adding vectors

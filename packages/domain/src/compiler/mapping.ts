@@ -7,7 +7,7 @@ import type {
   SourceSpan,
 } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
-import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay.js";
+import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import { collectExprMemberSegments, collectExprSpans, type HtmlMemberSegment } from "./expr-utils.js";
 
 export interface BuildMappingInputs {
