@@ -13,7 +13,7 @@
     "clean": "node scripts/clean.mjs",
     "test": "pnpm -w build && node --test",
     "test:spec": "pnpm -w build && node --test --test-reporter=spec",
-    "test:e2e": "pnpm -w build && node --test --test-reporter=spec packages/domain/test/e2e/*.test.mjs",
+    "test:facade": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/facade/*.test.mjs",
     "test:domain": "pnpm -w build && node --test --test-reporter=spec packages/domain/test/**/*.test.mjs",
     "test:domain:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/**/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/typecheck node --test --test-reporter=spec packages/domain/test/**/*.test.mjs",
     "test:10-lower": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec \"packages/domain/test/10-lower/**/*.test.mjs\"",
