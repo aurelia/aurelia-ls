@@ -9,7 +9,7 @@ import * as path from "node:path";
 import * as ts from "typescript";
 
 import {
-  compileTemplateToOverlay, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
+  compileTemplateToOverlay, compileTemplateToSSR, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
 } from "@aurelia-ls/domain";
 import type { VmReflection } from "@aurelia-ls/domain";
 
@@ -38,7 +38,8 @@ const canonical = (f: string) => {
 type Snapshot = { text: string; version: number };
 const overlayFiles   = new Map<string, Snapshot>();
 const scriptFileKeys = new Set<string>();
-const htmlToOverlay  = new Map<string, { path: string; text: string }>();
+const htmlToOverlay  = new Map<string, { path: string; text: string; calls: Array<{ exprId: string; overlayStart: number; overlayEnd: number; htmlStart: number; htmlEnd: number }> }>();
+const htmlToSsr      = new Map<string, { htmlPath: string; htmlText: string; manifestPath: string; manifestText: string }>();
 
 let projectVersion = 1;
 let PRELUDE_PATH = "";
@@ -220,6 +221,51 @@ function forceOverlaySourceFile(overlayPathCanon: string): ts.SourceFile | undef
 }
 
 /* ============================================================================
+ * SSR compilation (on-demand)
+ * ========================================================================== */
+function buildVmReflection(fsPath: string): VmReflection {
+  const base = path.basename(fsPath, ".html");
+  const vmTypeNameGuess = pascalFromKebab(base);
+  const vmSpecifier = detectVmSpecifier(fsPath, base);
+  info(`vmType: ${vmTypeNameGuess}, vmSpecifier: ${vmSpecifier}`);
+  return {
+    getRootVmTypeExpr() { return `import("${vmSpecifier}").${vmTypeNameGuess}`; },
+    getSyntheticPrefix() { return "__AU_TTC_"; },
+  };
+}
+
+async function compileSsrForDocument(doc: TextDocument) {
+  const fsPath = uriToFsPath(doc.uri);
+  if (path.extname(fsPath).toLowerCase() !== ".html") return null;
+
+  const cached = htmlToSsr.get(canonical(fsPath));
+  if (cached) return cached;
+
+  const vm = buildVmReflection(fsPath);
+  try {
+    const ssr = compileTemplateToSSR({
+      html: doc.getText(),
+      templateFilePath: fsPath,
+      isJs: false,
+      vm,
+      attrParser,
+      exprParser,
+    });
+    const rec = {
+      htmlPath: ssr.htmlPath,
+      htmlText: ssr.htmlText,
+      manifestPath: ssr.manifestPath,
+      manifestText: ssr.manifestText,
+    };
+    htmlToSsr.set(canonical(fsPath), rec);
+    return rec;
+  } catch (e: any) {
+    err(`compileTemplateToSSR threw: ${e?.stack || e}`);
+    return null;
+  }
+}
+
+/* ============================================================================
  * Core: compile + overlay + diagnostics
  * ========================================================================== */
 async function compileAndUpdateOverlay(doc: TextDocument) {
@@ -232,14 +278,7 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
   }
 
   const base = path.basename(fsPath, ".html");
-  const vmTypeNameGuess = pascalFromKebab(base);
-  const vmSpecifier = detectVmSpecifier(fsPath, base);
-  info(`vmType: ${vmTypeNameGuess}, vmSpecifier: ${vmSpecifier}`);
-
-  const vm: VmReflection = {
-    getRootVmTypeExpr() { return `import("${vmSpecifier}").${vmTypeNameGuess}`; },
-    getSyntheticPrefix() { return "__AU_TTC_"; },
-  };
+  const vm: VmReflection = buildVmReflection(fsPath);
 
   // Domain pipeline (HTML → IR → Linked → Scope → Plan → Emit)
   // e.g. :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3} :contentReference[oaicite:4]{index=4} :contentReference[oaicite:5]{index=5} :contentReference[oaicite:6]{index=6}
@@ -261,7 +300,18 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
   if (!result) { warn(`no overlay result for ${fsPath}`); return; }
 
   upsertOverlay(result.overlayPath, result.text);
-  htmlToOverlay.set(canonical(fsPath), { path: result.overlayPath, text: result.text });
+  htmlToSsr.delete(canonical(fsPath)); // invalidate SSR cache on new overlay build
+  htmlToOverlay.set(canonical(fsPath), {
+    path: result.overlayPath,
+    text: result.text,
+    calls: result.calls.map((c) => ({
+      exprId: c.exprId as string,
+      overlayStart: c.overlayStart,
+      overlayEnd: c.overlayEnd,
+      htmlStart: c.htmlSpan?.start ?? 0,
+      htmlEnd: c.htmlSpan?.end ?? 0,
+    })),
+  });
 
   const accessCount = (result.text.match(/__au\$access/g) || []).length;
   log(`overlay@${result.overlayPath} len=${result.text.length} calls=${accessCount} preview:\n${preview(result.text)}`);
@@ -308,10 +358,12 @@ async function compileAndUpdateOverlay(doc: TextDocument) {
 }
 
 /* ============================================================================
- * Custom requests (overlay preview + dump state)
+ * Custom requests (overlay/SSR preview + dump state)
  * ========================================================================== */
 type GetOverlayParams = { uri?: string } | string | null;
-type GetOverlayResult = { overlayPath: string; text: string } | null;
+type OverlayCall = { exprId: string; overlayStart: number; overlayEnd: number; htmlStart: number; htmlEnd: number };
+type GetOverlayResult = { overlayPath: string; text: string; calls?: OverlayCall[] } | null;
+type GetSsrResult = { htmlPath: string; htmlText: string; manifestPath: string; manifestText: string } | null;
 
 connection.onRequest("aurelia/getOverlay", async (params: GetOverlayParams): Promise<GetOverlayResult> => {
   let uri: string | undefined;
@@ -334,14 +386,40 @@ connection.onRequest("aurelia/getOverlay", async (params: GetOverlayParams): Pro
 
     if (rec) {
       log(`overlay found for ${fsPath} → ${rec.path} (len=${rec.text.length})`);
-      return { overlayPath: rec.path, text: rec.text };
+      return { overlayPath: rec.path, text: rec.text, calls: rec.calls };
     }
     warn(`overlay still not found for ${fsPath}`);
     return null;
   }
 
   const last = Array.from(htmlToOverlay.values()).pop();
-  return last ? { overlayPath: last.path, text: last.text } : null;
+  return last ? { overlayPath: last.path, text: last.text, calls: last.calls } : null;
+});
+
+function getTextDocumentForUri(uri: string): TextDocument | null {
+  const live = documents.get(uri);
+  if (live) return live;
+  const fsPath = uriToFsPath(uri);
+  if (!fs.existsSync(fsPath)) return null;
+  const content = fs.readFileSync(fsPath, "utf8");
+  return TextDocument.create(uri, "html", 0, content);
+}
+
+connection.onRequest("aurelia/getSsr", async (params: GetOverlayParams): Promise<GetSsrResult> => {
+  let uri: string | undefined;
+  if (typeof params === "string") uri = params;
+  else if (params && typeof params === "object") uri = (params as any).uri;
+
+  log(`RPC aurelia/getSsr params=${JSON.stringify(params)}`);
+  const doc = uri ? getTextDocumentForUri(uri) : null;
+  if (!doc) {
+    warn(`getSsr: no document for uri=${uri ?? "<undefined>"}`);
+    return null;
+  }
+
+  const rec = await compileSsrForDocument(doc);
+  if (!rec) return null;
+  return rec;
 });
 
 connection.onRequest("aurelia/dumpState", () => {
