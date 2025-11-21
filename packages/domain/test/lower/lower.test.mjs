@@ -6,9 +6,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createFailureRecorder, fmtList } from "../_helpers/test-utils.mjs";
+import { deepMergeSemantics } from "../_helpers/semantics-merge.mjs";
 
 import { getExpressionParser, DEFAULT_SYNTAX } from "../../out/index.js";
 import { lowerDocument } from "../../out/compiler/phases/10-lower/lower.js";
+import { DEFAULT as SEM_DEFAULT } from "../../out/compiler/language/registry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vectorsPath = path.join(__dirname, "lower-cases.json");
@@ -20,11 +22,13 @@ attachWriter();
 describe("Lower (10)", () => {
   for (const v of vectors) {
     test(v.name, () => {
+      const sem = v.semOverrides ? deepMergeSemantics(SEM_DEFAULT, v.semOverrides) : SEM_DEFAULT;
       const ir = lowerDocument(v.markup, {
         attrParser: DEFAULT_SYNTAX,
         exprParser: getExpressionParser(),
         file: "mem.html",
-        name: "mem"
+        name: "mem",
+        sem
       });
       const intent = reduceIrToLowerIntent(ir);
       const expected = v.expect ?? {};
@@ -32,8 +36,18 @@ describe("Lower (10)", () => {
       const diff = compareIntent(intent, expected);
       const { missing, extra } = diff;
 
-      const anyMissing = missing.expressions.length || missing.controllers.length || missing.lets.length;
-      const anyExtra = extra.expressions.length || extra.controllers.length || extra.lets.length;
+  const anyMissing =
+    missing.expressions.length ||
+    missing.controllers.length ||
+    missing.lets.length ||
+    missing.elements.length ||
+    missing.attributes.length;
+  const anyExtra =
+    extra.expressions.length ||
+    extra.controllers.length ||
+    extra.lets.length ||
+    extra.elements.length ||
+    extra.attributes.length;
 
       if (anyMissing || anyExtra) {
         recordFailure({
@@ -52,6 +66,8 @@ describe("Lower (10)", () => {
         fmtList("missing.expressions", missing.expressions) +
         fmtList("missing.controllers", missing.controllers) +
         fmtList("missing.lets",       missing.lets) +
+        fmtList("missing.elements",   missing.elements) +
+        fmtList("missing.attributes", missing.attributes) +
         "\nSee failures.json for full snapshot."
       );
 
@@ -61,6 +77,8 @@ describe("Lower (10)", () => {
         fmtList("extra.expressions", extra.expressions) +
         fmtList("extra.controllers", extra.controllers) +
         fmtList("extra.lets",       extra.lets) +
+        fmtList("extra.elements",   extra.elements) +
+        fmtList("extra.attributes", extra.attributes) +
         "\nSee failures.json for full snapshot."
       );
     });
@@ -192,8 +210,48 @@ function reduceTemplate(t, moduleExprTable, out) {
           break;
         }
 
+        case "hydrateElement": {
+          out.elements.push({
+            res: ins.res,
+            containerless: !!ins.containerless,
+            props: (ins.props ?? []).map((p) => p.to ?? p.attr ?? ""),
+          });
+          for (const p of ins.props ?? []) {
+            if (p.type === "propertyBinding") {
+              out.expressions.push({
+                kind: "propCommand",
+                code: p.from?.code,
+                command: modeToCommand(p.mode),
+              });
+            } else if (p.type === "attributeBinding") {
+              pushFromBindingSource(out.expressions, "attrInterpolation", p.attr, p.from);
+            }
+          }
+          break;
+        }
+
+        case "hydrateAttribute": {
+          out.attributes.push({
+            res: ins.res,
+            alias: ins.alias,
+            props: (ins.props ?? []).map((p) => p.to ?? p.attr ?? ""),
+          });
+          for (const p of ins.props ?? []) {
+            if (p.type === "propertyBinding") {
+              out.expressions.push({
+                kind: "propCommand",
+                code: p.from?.code,
+                command: modeToCommand(p.mode),
+              });
+            } else if (p.type === "attributeBinding") {
+              pushFromBindingSource(out.expressions, "attrInterpolation", p.attr, p.from);
+            }
+          }
+          break;
+        }
+
         default:
-          // ignore SetAttribute/SetClassAttribute/SetStyleAttribute/HydrateElementIR/HydrateAttributeIR
+          // ignore SetAttribute/SetClassAttribute/SetStyleAttribute
           break;
       }
     }
@@ -202,7 +260,7 @@ function reduceTemplate(t, moduleExprTable, out) {
 
 /** Public reducer */
 export function reduceIrToLowerIntent(irModule) {
-  const out = { expressions: [], controllers: [], lets: [] };
+  const out = { expressions: [], controllers: [], lets: [], elements: [], attributes: [] };
   // IMPORTANT: only reduce the root template and recurse via `ins.def`.
   // `irModule.templates` also contains nested templates; iterating all would double count.
   const root = irModule.templates?.[0];
@@ -212,34 +270,52 @@ export function reduceIrToLowerIntent(irModule) {
 
 /** Deep comparison treating arrays as sets by value. */
 export function compareIntent(actual, expected) {
-  const key = (e) =>
+  const keyExpr = (e) =>
     `${e.kind ?? ""}|${e.on ?? ""}|${e.command ?? ""}|${e.code ?? ""}|${e.name ?? ""}|${e.toBindingContext ? 1 : 0}|${e.hasValue ? 1 : 0}`;
+  const keyElem = (e) =>
+    `${e.res ?? ""}|${e.containerless ? 1 : 0}|${(e.props ?? []).join(",")}`;
+  const keyAttr = (e) =>
+    `${e.res ?? ""}|${e.alias ?? ""}|${(e.props ?? []).join(",")}`;
 
   function toSet(list) {
-    return new Set((list ?? []).map(key));
+    return new Set((list ?? []).map(keyExpr));
+  }
+  function toElemSet(list) {
+    return new Set((list ?? []).map(keyElem));
+  }
+  function toAttrSet(list) {
+    return new Set((list ?? []).map(keyAttr));
   }
 
   const a = {
     expressions: toSet(actual.expressions),
     controllers: toSet(actual.controllers),
     lets: toSet(actual.lets),
+    elements: toElemSet(actual.elements),
+    attributes: toAttrSet(actual.attributes),
   };
   const e = {
     expressions: toSet(expected.expressions),
     controllers: toSet(expected.controllers),
     lets: toSet(expected.lets),
+    elements: toElemSet(expected.elements),
+    attributes: toAttrSet(expected.attributes),
   };
 
   const missing = {
     expressions: [...e.expressions].filter(k => !a.expressions.has(k)),
     controllers: [...e.controllers].filter(k => !a.controllers.has(k)),
     lets: [...e.lets].filter(k => !a.lets.has(k)),
+    elements: [...e.elements].filter(k => !a.elements.has(k)),
+    attributes: [...e.attributes].filter(k => !a.attributes.has(k)),
   };
 
   const extra = {
     expressions: [...a.expressions].filter(k => !e.expressions.has(k)),
     controllers: [...a.controllers].filter(k => !e.controllers.has(k)),
     lets: [...a.lets].filter(k => !e.lets.has(k)),
+    elements: [...a.elements].filter(k => !e.elements.has(k)),
+    attributes: [...a.attributes].filter(k => !e.attributes.has(k)),
   };
 
   return { missing, extra };
