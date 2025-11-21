@@ -7,8 +7,8 @@ export type DiagnosticSource =
   | "resolve-host"
   | "bind"
   | "typecheck"
-  | "plan"
-  | "emit"
+  | "overlay-plan"
+  | "overlay-emit"
   | "ssr-plan"
   | "ssr-emit";
 

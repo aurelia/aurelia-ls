@@ -8,7 +8,7 @@ export interface CoreCompileOptions {
   templateFilePath: string;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
-  vm: import("./phases/50-plan/types.js").VmReflection;
+  vm: import("./phases/50-plan/overlay-types.js").VmReflection;
   cache?: CacheOptions;
   fingerprints?: FingerprintHints;
 }
