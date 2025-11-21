@@ -34,36 +34,45 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build and test
-        run: pnpm test:spec
-
-      - name: Run coverage (domain suite)
+      - name: Test with coverage
         run: |
           set -o pipefail
-          pnpm test:domain:cov | tee coverage/typecheck/coverage.log
+          pnpm -w build
+          c8 --all --include "packages/domain/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -o coverage/typecheck node --test --test-reporter=spec | tee coverage/typecheck/coverage.log
 
       - name: Coverage summary (job)
+        if: always()
         run: |
           {
             echo "## Coverage (domain suite)";
             echo "";
-            grep -A20 "All files" coverage/typecheck/coverage.log || cat coverage/typecheck/coverage.log;
+            if [ -f coverage/typecheck/coverage.log ]; then
+              grep -A20 "All files" coverage/typecheck/coverage.log || cat coverage/typecheck/coverage.log;
+            else
+              echo "**Coverage log not found.**";
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-typecheck
           path: coverage/typecheck
+          if-no-files-found: ignore
 
       - name: Comment coverage on PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const path = 'coverage/typecheck/coverage-final.json';
+            if (!fs.existsSync(path)) {
+              core.info('coverage-final.json not found; skipping comment.');
+              return;
+            }
             const coverage = JSON.parse(fs.readFileSync(path, 'utf8'));
 
             const keys = ['lines', 'statements', 'functions', 'branches'];
