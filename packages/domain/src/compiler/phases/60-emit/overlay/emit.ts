@@ -37,7 +37,7 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
         const typeRef = f.frame === 0 ? f.typeExpr : f.typeName;
         for (const l of f.lambdas) {
           const line = `__au$access<${typeRef}>(${l.lambda});`;
-          const lambdaStart = line.indexOf("(") + 1; // point at lambda start
+          const lambdaStart = line.lastIndexOf("(") + 1; // point at lambda start
           const start = offset + lambdaStart;
           const end = start + l.lambda.length;
           mapping.push({ exprId: l.exprId, start, end, segments: mapSegments(l.segments, start) });
@@ -55,7 +55,7 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
         for (const l of f.lambdas) {
           const lambdaWithDoc = withJSDocParam(l.lambda);
           const line = `__au$access(${lambdaWithDoc});`;
-          const lambdaStart = line.indexOf("(") + 1;
+          const lambdaStart = line.lastIndexOf("(") + 1;
           const start = offset + lambdaStart;
           const end = start + lambdaWithDoc.length;
           const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan[0]);

@@ -1,13 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const mappingUrl = new URL("../../out/compiler/mapping.js", import.meta.url);
-const queryUrl = new URL("../../out/compiler/query.js", import.meta.url);
+import { buildTemplateMapping } from "../../out/compiler/mapping.js";
+import { buildTemplateQuery } from "../../out/compiler/query.js";
 
-const { buildTemplateMapping } = await import(mappingUrl.href);
-const { buildTemplateQuery } = await import(queryUrl.href);
-
-test("buildTemplateMapping pairs overlay spans with HTML/member spans", () => {
+test("mapping pairs overlay spans with HTML/member spans", () => {
   const exprId = "e1";
   const ir = {
     version: "aurelia-ir@1",
@@ -61,7 +58,7 @@ test("buildTemplateMapping pairs overlay spans with HTML/member spans", () => {
   assert.deepEqual(entry.segments?.[0].overlaySpan, [12, 16]);
 });
 
-test("buildTemplateMapping keeps member segments through optional chaining", () => {
+test("mapping keeps member segments through optional chaining", () => {
   const exprId = "eOptional";
   const ir = {
     version: "aurelia-ir@1",
@@ -115,7 +112,7 @@ test("buildTemplateMapping keeps member segments through optional chaining", () 
   assert.ok(seg?.htmlSpan.start !== undefined);
 });
 
-test("buildTemplateQuery exposes node/expr/controller/bindable lookups", () => {
+test("query facade exposes node/expr/controller/bindable lookups", () => {
   const exprId = "e1";
   const dom = {
     kind: "template",
