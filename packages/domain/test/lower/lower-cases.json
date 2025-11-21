@@ -689,5 +689,142 @@
         { "res": "fancy-attr", "alias": "fancy", "props": ["value"] }
       ]
     }
+  },
+  {
+    "name": "L-61 custom element literal bindable emits setProperty",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-panel": {
+            "kind": "element",
+            "name": "x-panel",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<x-panel title=\"Hello\"></x-panel>",
+    "expect": {
+      "expressions": [],
+      "elements": [
+        {
+          "res": "x-panel",
+          "containerless": false,
+          "props": [
+            "title"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "L-62 custom element interpolation on bindable emits attributeBinding",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-panel": {
+            "kind": "element",
+            "name": "x-panel",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<x-panel title=\"Hi ${name}\"></x-panel>",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "title", "code": "name" }
+      ],
+      "elements": [
+        {
+          "res": "x-panel",
+          "containerless": false,
+          "props": [
+            "title"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "L-63 custom element bindable wins over same-named custom attribute",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-thing": {
+            "kind": "element",
+            "name": "x-thing",
+            "boundary": true,
+            "bindables": {
+              "fancy": { "name": "fancy", "mode": "toView" }
+            }
+          }
+        },
+        "attributes": {
+          "fancy": {
+            "kind": "attribute",
+            "name": "fancy",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<x-thing fancy.bind=\"vm\"></x-thing>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "code": "vm", "command": "bind" }
+      ],
+      "elements": [
+        {
+          "res": "x-thing",
+          "containerless": false,
+          "props": [
+            "fancy"
+          ]
+        }
+      ],
+      "attributes": []
+    }
+  },
+  {
+    "name": "L-64 custom attribute literal binds primary property",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "note": {
+            "kind": "attribute",
+            "name": "note",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div note=\"hello\"></div>",
+    "expect": {
+      "expressions": [],
+      "attributes": [
+        {
+          "res": "note",
+          "alias": null,
+          "props": [
+            "value"
+          ]
+        }
+      ]
+    }
   }
 ]

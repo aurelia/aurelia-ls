@@ -1,0 +1,59 @@
+[
+  {
+    "name": "B-H1 hydrateElement bindable expression stays in root frame",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-panel": {
+            "kind": "element",
+            "name": "x-panel",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<x-panel title.bind=\"vm\"></x-panel>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "vm" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-H2 hydrateAttribute interpolation expression stays in root frame",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "fancy-attr": {
+            "kind": "attribute",
+            "name": "fancy-attr",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div fancy-attr=\"hi ${name}\"></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "name" }
+      ],
+      "diags": []
+    }
+  }
+]

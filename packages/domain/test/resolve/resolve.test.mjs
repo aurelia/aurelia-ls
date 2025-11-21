@@ -22,14 +22,15 @@ attachWriter();
 describe("Resolve Host (20)", () => {
   for (const v of vectors) {
     test(v.name, () => {
+      const sem = v.semOverrides ? deepMergeSemantics(DEFAULT, v.semOverrides) : DEFAULT;
       const ir = lowerDocument(v.markup, {
         attrParser: DEFAULT_SYNTAX,
         exprParser: getExpressionParser(),
         file: "mem.html",
-        name: "mem"
+        name: "mem",
+        sem
       });
 
-      const sem = v.semOverrides ? deepMergeSemantics(DEFAULT, v.semOverrides) : DEFAULT;
       const linked = resolveHost(ir, sem);
 
       const intent = reduceLinkedToIntent(linked);

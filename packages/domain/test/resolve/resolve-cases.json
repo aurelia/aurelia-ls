@@ -1286,5 +1286,76 @@
         { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" }
       ]
     }
+  },
+  {
+    "name": "R-115 custom element bindable resolves to element bindable",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-panel": {
+            "kind": "element",
+            "name": "x-panel",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<x-panel title.bind=\"vm\"></x-panel>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "title", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-116 custom attribute bindable carries bindable mode for propertyBinding",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "fancy-attr": {
+            "kind": "attribute",
+            "name": "fancy-attr",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "twoWay" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div fancy-attr.bind=\"value\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-117 custom attribute interpolation resolves to bindable target",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "note": {
+            "kind": "attribute",
+            "name": "note",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div note=\"hi ${name}\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "note", "to": "value", "target": "bindable" }
+      ]
+    }
   }
 ]
