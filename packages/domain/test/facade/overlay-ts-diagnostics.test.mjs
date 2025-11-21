@@ -43,3 +43,10 @@ test("overlay produces TS diagnostics mapped from __au$access", () => {
   );
   assert.ok(hasPropNotFound, "should report 'Property sdf does not exist...'");
 });
+
+test("overlay includes __prelude definitions to type global helpers", () => {
+  const html = `<div>\${$this}</div>`;
+  const { overlay } = compileMarkup(html, "C:/mem/prelude-check.html", { vm: vmStub() });
+  assert.match(overlay.text, /__au\$access/);
+  assert.match(overlay.text, /type __AU_TTC_/);
+});

@@ -13,6 +13,13 @@ function collectCodes(diags) {
   return diags.map((d) => d.code);
 }
 
+test("clean template produces no diagnostics", () => {
+  const ok = compileMarkup(`<template><div repeat.for="item of items"></div><input value.bind="foo" /></template>`, "C:/mem/clean.html", {
+    vm: vmStub(),
+  });
+  assert.equal(ok.linked.diags.length, 0);
+});
+
 test("AU1101: unknown controller emits, known controller does not", () => {
   // Craft an IR with a template controller, then force its res to an unknown name.
   const lowered = lowerDocument(`<template><div repeat.for="i of items"></div></template>`, {
@@ -71,4 +78,10 @@ test("AU1106: repeat tail option mismatch emits, known options do not", () => {
     vm: vmStub(),
   });
   assert.ok(!collectCodes(good.linked.diags).includes("AU1106"), "valid repeat header should not emit AU1106");
+});
+
+test("unknown au-slot bindable emits AU1104", () => {
+  const html = `<template><au-slot nope.bind="x"></au-slot></template>`;
+  const res = compileMarkup(html, "C:/mem/unknown-slot-bindable.html", { vm: vmStub() });
+  assert.ok(collectCodes(res.linked.diags).includes("AU1104"));
 });
