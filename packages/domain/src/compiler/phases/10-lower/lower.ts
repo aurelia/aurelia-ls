@@ -1,3 +1,4 @@
+import path from "node:path";
 import { parseFragment } from "parse5";
 import type { DefaultTreeAdapterMap, Token } from "parse5";
 
@@ -46,7 +47,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
   const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
   const sem = opts.sem ?? DEFAULT_SEMANTICS;
   const ids = new NodeIdGen();
-  const table = new ExprTable(opts.exprParser, opts.file ?? "");
+  const table = new ExprTable(opts.exprParser, normalizeFileForHash(opts.file ?? opts.name ?? ""));
   const nestedTemplates: TemplateIR[] = [];
 
   const domRoot: TemplateNode = {
@@ -1357,5 +1358,11 @@ function hash64(s: string): string {
   }
   const u = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
   return `${u(h1)}${u(h2)}`;
+}
+
+function normalizeFileForHash(filePath: string): string {
+  if (!filePath) return "";
+  const relative = path.isAbsolute(filePath) ? path.relative(process.cwd(), filePath) : filePath;
+  return relative.split(path.sep).join("/");
 }
 
