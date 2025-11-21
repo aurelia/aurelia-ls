@@ -52,16 +52,29 @@ function buildTemplatePlan(
           break;
         }
         case "attributeBinding": {
-          const from = ins.from as InterpIR;
-          const frames = from.exprs.map(e => frameOf(exprToFrame, e.id));
-          rowBindings.push({
-            kind: "attrInterp",
-            attr: ins.attr,
-            to: ins.to,
-            parts: from.parts,
-            exprIds: from.exprs.map(e => e.id),
-            frames,
-          });
+          const src = ins.from as BindingSourceIR | InterpIR;
+          if (isInterp(src)) {
+            const frames = src.exprs.map(e => frameOf(exprToFrame, e.id));
+            rowBindings.push({
+              kind: "attrInterp",
+              attr: ins.attr,
+              to: ins.to,
+              parts: src.parts,
+              exprIds: src.exprs.map(e => e.id),
+              frames,
+            });
+          } else {
+            const exprId = exprIdFrom(src);
+            if (exprId) {
+              rowBindings.push({
+                kind: "attr",
+                attr: ins.attr,
+                to: ins.to,
+                exprId,
+                frame: frameOf(exprToFrame, exprId),
+              });
+            }
+          }
           hasDyn = true;
           break;
         }
