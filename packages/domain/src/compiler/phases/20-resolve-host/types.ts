@@ -31,9 +31,10 @@ import type {
   TypeRef,
   IteratorTailPropSpec,
 } from "../../language/registry.js";
+import type { CompilerDiagnostic } from "../../diagnostics.js";
 
 /* ===========================
- * Diagnostics (Resolve‑Host)
+ * Diagnostics (Resolve-Host)
  * =========================== */
 
 /** AU11xx = Semantics/host-linker diagnostics. */
@@ -45,11 +46,7 @@ export type SemDiagCode =
   | "AU1105" // Repeat missing iterator binding (reserved)
   | "AU1106"; // Repeat tail option not recognized/wrong syntax
 
-export interface SemDiagnostic {
-  code: SemDiagCode;
-  message: string;
-  span?: SourceSpan | null;
-}
+export type SemDiagnostic = CompilerDiagnostic<SemDiagCode>;
 
 /* ===========================
  * Linked module / template / row

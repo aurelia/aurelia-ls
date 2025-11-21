@@ -17,15 +17,13 @@ import type {
 import type { TypeRef } from "../../language/registry.js";
 import { collectExprSpans } from "../../expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
+import type { CompilerDiagnostic } from "../../diagnostics.js";
 
-export interface TypecheckDiagnostic {
-  code: "AU1301";
-  message: string;
+export type TypecheckDiagnostic = CompilerDiagnostic<"AU1301"> & {
   exprId?: ExprId;
-  span?: SourceSpan | null;
   expected?: string;
   actual?: string;
-}
+};
 
 export interface TypecheckModule {
   version: "aurelia-typecheck@1";
@@ -114,6 +112,8 @@ function collectDiagnostics(
       span: spans.get(id) ?? null,
       expected: expectedType,
       actual,
+      severity: "error",
+      source: "typecheck",
     });
   }
   return diags;

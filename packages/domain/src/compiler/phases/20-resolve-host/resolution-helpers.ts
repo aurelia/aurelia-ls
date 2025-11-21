@@ -13,9 +13,17 @@ import type {
   TargetSem,
 } from "./types.js";
 import { camelCase } from "./name-normalizer.js";
+import type { CompilerDiagnostic } from "../../diagnostics.js";
 
 export function pushDiag(diags: SemDiagnostic[], code: SemDiagCode, message: string, span?: SourceSpan | null): void {
-  diags.push({ code, message, span: span ?? null });
+  const diag: CompilerDiagnostic = {
+    code,
+    message,
+    span: span ?? null,
+    source: "resolve-host",
+    severity: "error",
+  };
+  diags.push(diag as SemDiagnostic);
 }
 
 export function resolvePropertyTarget(

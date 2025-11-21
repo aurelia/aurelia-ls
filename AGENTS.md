@@ -12,6 +12,7 @@ Goal: make changes safely, in line with the architectural intent.
 - **Packages:** `packages/domain` (compiler, pure), `packages/server` (LSP host + TS LS), `packages/client` (VS Code extension), `packages/shared` (small utilities).
 - **Entrypoints:** Overlay/SSR facade in `packages/domain/src/compiler/facade.ts`; public exports in `packages/domain/src/index.ts`; docs under `docs/`.
 - **Pipeline engine:** stage DAG lives in `packages/domain/src/compiler/pipeline/` (versioned stages + fingerprints). Supports optional persisted cache (`.aurelia-cache/` by default); products ask for artifacts via the engine.
+- **Diagnostics:** Stages emit a unified envelope (`code/message/severity/source/span/related`); AU11xx/12xx/13xx keep their codes, now tagged with source stage.
 - **Common tasks -> tests to run:**
   - Syntax/lowering: touch 10-lower; run `pnpm test:lower`.
   - Host semantics: touch 20-resolve-host; run `pnpm test:resolve`.

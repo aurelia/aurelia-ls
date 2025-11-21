@@ -9,6 +9,7 @@
  * ======================================================================================= */
 
 import type { SourceSpan, ExprId, BindingSourceIR } from "./ir.js";
+import type { CompilerDiagnostic } from "../diagnostics.js";
 
 /* ===========================
  * Diagnostics (scoping only)
@@ -19,11 +20,7 @@ export type ScopeDiagCode =
   | "AU1201" // Invalid/unsupported repeat destructuring pattern (MVP: shallow only)
   | "AU1202"; // Duplicate local name in the same frame
 
-export interface ScopeDiagnostic {
-  code: ScopeDiagCode;
-  message: string;
-  span?: SourceSpan | null;
-}
+export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode>;
 
 /* ===========================
  * Frames & templates
