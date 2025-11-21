@@ -1,0 +1,14 @@
+[
+  {
+    "name": "PL-B-01 simple property binding produces root lambda",
+    "markup": "<div textcontent.bind=\"user.name\"></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "typeName": "__AU_TTC_T0_F0", "typeExpr": "(RootVm) & {} & {} & { $parent: unknown } & { $vm: (RootVm) } & {}" }
+      ],
+      "lambdas": [
+        { "frame": "root", "lambda": "o => o.user.name", "expr": "user.name" }
+      ]
+    }
+  }
+]

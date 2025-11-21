@@ -16,15 +16,32 @@ This appendix documents the current test layout and expectations for compiler ph
   - Vectors already split (e.g., `bind-basic.json`, `bind-diags.json`, `bind-repeat.json`, etc.) with prefixes (`B-..`, `DG-..`, `RPT-..`, etc.).
   - Runner `bind.test.mjs` loads all JSONs and asserts scope mappings/diags. Wrapped in `describe("Bind (30)")`.
 
+- **40-typecheck**: `packages/domain/test/40-typecheck/`
+  - Vectors split by concern (`basics.json`, `diags.json`, etc.) with prefixes like `TC-B-..`.
+  - Runner `typecheck.test.mjs` loads all JSONs, runs 10/20/30 setup, then compares:
+    - `expected`: [{ code, type }]
+    - `inferred`: [{ code, type }]
+    - diags: AU13xx entries keyed by expr code + expected/actual when present.
+  - Default `rootVmType` is `RootVm` unless overridden per vector. Wrapped in `describe("Typecheck (40)")`.
+
+- **50-plan**: `packages/domain/test/50-plan/`
+  - Vectors split by concern (e.g., `basics.json`) with prefixes like `PL-B-..`.
+  - Runner `plan.test.mjs` loads all JSONs, runs 10/20/30 setup + plan, then compares:
+    - frames: [{ label, typeName, typeExpr }]
+    - lambdas: [{ frame, lambda, expr }]
+  - Uses a stub `VmReflection` (default root `RootVm`, synthetic prefix `__AU_TTC_`). Wrapped in `describe("Plan (50)")`.
+
 ## Conventions
 
 - One runner per phase; it loads **all** `.json` vector files in its folder (excluding `failures.json` when present).
 - Prefix numbering restarts per file; prefixes follow phase tags to keep IDs unique and searchable.
 - Use `npm run fmt:vectors` after editing/adding JSON vectors to normalize formatting.
 - Scripts:
-  - Lower: `npm run test:lower` / `test:lower:cov`
-  - Resolve: `npm run test:resolve` / `test:resolve:cov`
-  - Bind: `npm run test:bind` / `test:bind:cov`
+  - 10-lower: `npm run test:10-lower` / `test:10-lower:cov`
+  - 20-resolve: `npm run test:20-resolve` / `test:20-resolve:cov`
+  - 30-bind: `npm run test:30-bind` / `test:30-bind:cov`
+  - 40-typecheck: `npm run test:40-typecheck` / `test:40-typecheck:cov`
+  - 50-plan: `npm run test:50-plan` / `test:50-plan:cov`
 - Coverage commands target the corresponding phase outputs; `types.js` files and tests are excluded where needed.
 
 ## When adding vectors
