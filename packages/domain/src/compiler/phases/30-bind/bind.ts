@@ -29,10 +29,11 @@ import type {
 
 import type { RepeatController } from "../../language/registry.js";
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
-import { provenanceFromSpan } from "../../model/origin.js";
+import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";
 import { buildDiagnostic } from "../../diagnostics.js";
 import { exprIdsOf } from "../../expr-utils.js";
 import { normalizeSpanMaybe } from "../../model/span.js";
+import type { Origin, Provenance } from "../../model/origin.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -438,12 +439,16 @@ function reportBadExpression(ref: ExprRef, ctx: BadExprContext): void {
   if (ctx.reported.has(ref.id)) return;
   const entry = ctx.exprIndex.get(ref.id);
   if (!entry || entry.expressionType === "IsIterator") return; // repeat headers have bespoke diagnostics
-  const ast = entry.ast as { $kind?: string; message?: string } | undefined;
-  if (ast?.$kind === "BadExpression") {
-    ctx.reported.add(ref.id);
-    const message = (ast as BadExpression).message ?? "Invalid or unsupported expression.";
-    addDiag(ctx.diags, "AU1203", message, ref.loc ?? null);
-  }
+  const ast = entry.ast as { $kind?: string; message?: string; origin?: Origin | Provenance | null } | undefined;
+  if (ast?.$kind !== "BadExpression") return;
+
+  ctx.reported.add(ref.id);
+  const bad = ast as BadExpression;
+  const span = badExpressionSpan(bad, ref);
+  const message = bad.message ?? "Invalid or unsupported expression.";
+  const parseOrigin = unwrapOrigin(bad.origin ?? null);
+  const bindOrigin = preferOrigin(parseOrigin, provenanceFromSpan("bind", span ?? ref.loc ?? null, "invalid expression surfaced during bind").origin ?? null);
+  addDiag(ctx.diags, "AU1203", message, span ?? ref.loc ?? null, bindOrigin);
 }
 
 /* =============================================================================
@@ -521,6 +526,16 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
   }
 }
 
-function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null): void {
-  diags.push(buildDiagnostic({ code, message, span, source: "bind" }) as ScopeDiagnostic);
+function badExpressionSpan(ast: BadExpression, ref: ExprRef): SourceSpan | null {
+  const span = provenanceSpan(ast.origin ?? null) ?? ast.span ?? ref.loc ?? null;
+  return normalizeSpanMaybe(span);
+}
+
+function unwrapOrigin(source: Origin | Provenance | null): Origin | null {
+  if (!source) return null;
+  return (source as Origin).kind ? (source as Origin) : (source as Provenance).origin ?? null;
+}
+
+function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null, origin?: Origin | null | undefined): void {
+  diags.push(buildDiagnostic({ code, message, span, origin: origin ?? null, source: "bind" }) as ScopeDiagnostic);
 }

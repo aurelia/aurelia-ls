@@ -2164,8 +2164,9 @@ export class LspExpressionParser implements IExpressionParser {
   // Implementation
   /**
    * Parse an expression, optionally rebasing spans to an absolute `baseSpan`
-   * (or `baseOffset`/`file`). Without context, spans stay relative to the
-   * provided expression string.
+   * (or `baseOffset`/`file`). Interpolation/template literal children inherit
+   * the same base so inner expressions carry absolute offsets too. Without
+   * context, spans stay relative to the provided expression string.
    */
   parse(
     expression: string,
@@ -2232,6 +2233,11 @@ export class LspExpressionParser implements IExpressionParser {
 
 }
 
+/**
+ * Rebase an AST produced by this parser onto an absolute `baseSpan`. Useful
+ * when reusing cached ASTs or when parse context was not known at parse time.
+ * Also attaches parse provenance to BadExpression nodes when no origin exists.
+ */
 export function rebaseExpressionSpans<T extends AnyBindingExpression>(
   ast: T,
   baseSpan: SourceSpan,

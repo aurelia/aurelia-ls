@@ -371,13 +371,25 @@ Core interface:
 
 ```ts
 export interface IExpressionParser {
-  parse(expr: string, type: "IsIterator"): ForOfStatement | BadExpression;
-  parse(expr: string, type: "Interpolation"): Interpolation;
-  parse(expr: string, type: "IsFunction" | "IsProperty"): IsBindingBehavior;
-  parse(expr: string, type: "IsCustom"): CustomExpression;
-  parse(expr: string, type: ExpressionType): AnyBindingExpression;
+  parse(expr: string, type: "IsIterator", context?: ExpressionParseContext): ForOfStatement | BadExpression;
+  parse(expr: string, type: "Interpolation", context?: ExpressionParseContext): Interpolation;
+  parse(expr: string, type: "IsFunction" | "IsProperty", context?: ExpressionParseContext): IsBindingBehavior;
+  parse(expr: string, type: "IsCustom", context?: ExpressionParseContext): CustomExpression;
+  parse(expr: string, type: ExpressionType, context?: ExpressionParseContext): AnyBindingExpression;
 }
 ```
+
+`ExpressionParseContext` lets callers attach absolute offsets/files to parser output:
+
+```ts
+type ExpressionParseContext = {
+  baseSpan?: SourceSpan;   // preferred: authored span with file
+  baseOffset?: number;     // fallback offset when baseSpan is unknown
+  file?: SourceFileId;     // optional file id when only offset is known
+};
+```
+
+Spans emitted by the parser are `SourceSpan` (with `file`) when a context is provided; otherwise they remain relative `TextSpan`s. `rebaseExpressionSpans(ast, baseSpan)` can retrofit absolute spans/provenance on cached ASTs. Interpolation/template literal expressions inherit the same base offsets so nested nodes carry accurate absolute spans.
 
 Important:
 
