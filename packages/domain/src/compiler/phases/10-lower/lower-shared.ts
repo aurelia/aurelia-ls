@@ -10,12 +10,13 @@ import type {
   SourceSpan,
   BadExpression,
 } from "../../model/ir.js";
-import type { ExpressionType, IExpressionParser } from "../../../parsers/expression-api.js";
+import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../../parsers/expression-api.js";
 import { extractInterpolationSegments } from "../../../parsers/lsp-expression-parser.js";
 import { DomIdAllocator, deterministicStringId } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";
 import { spanFromBounds } from "../../model/span.js";
+import { provenanceFromSpan } from "../../model/origin.js";
 export { DomIdAllocator } from "../../model/identity.js";
 
 export type P5Node = DefaultTreeAdapterMap["childNode"];
@@ -53,6 +54,8 @@ export class ExprTable {
     const start = loc?.startOffset ?? 0;
     const end = loc?.endOffset ?? 0;
     const key = `${this.source.hashKey}|${start}|${end}|${expressionType}|${code}`;
+    const baseSpan = spanFromOffsets(loc, this.source);
+    const context: ExpressionParseContext | undefined = baseSpan ? { baseSpan } : undefined;
 
     let id = this.seen.get(key);
     if (!id) {
@@ -61,13 +64,15 @@ export class ExprTable {
       let ast: AnyBindingExpression;
 
       try {
-        ast = this.parser.parse(code, expressionType);
+        ast = this.parser.parse(code, expressionType, context);
       } catch (e: unknown) {
+        const span: SourceSpan = baseSpan ?? spanFromBounds(0, code.length);
         const bad: BadExpression = {
           $kind: "BadExpression",
-          span: spanFromBounds(0, code.length),
+          span,
           text: code,
           message: e instanceof Error ? e.message : String(e),
+          origin: baseSpan ? provenanceFromSpan("parse", span) : null,
         };
         ast = bad;
       }
