@@ -39,7 +39,7 @@
     }
   },
   {
-    "name": "R-E-05 per-element event override: button@click Ã¢â€ â€™ PointerEvent",
+    "name": "R-E-05 per-element event override: button@click -> PointerEvent",
     "semOverrides": {
       "events": {
         "byElement": {
@@ -149,7 +149,7 @@
     }
   },
   {
-    "name": "R-E-15 clear both global and per-element event maps Ã¢â€ â€™ AU1103 for input event",
+    "name": "R-E-15 clear both global and per-element event maps -> AU1103 for input event",
     "semOverrides": {
       "events": {
         "byName": {},

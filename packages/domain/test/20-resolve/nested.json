@@ -1,0 +1,17 @@
+[
+  {
+    "name": "R-N-01 nested promise branches resolved",
+    "markup": "<div promise.bind=\"p\"><template then><span textcontent.bind=\"value\"></span></template><template catch><button @click=\"retry()\"></button></template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" },
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" },
+        { "kind": "event", "to": "click", "type": "MouseEvent" },
+        { "kind": "event", "to": "click", "type": "MouseEvent" }
+      ]
+    }
+  }
+]

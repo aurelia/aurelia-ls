@@ -1,6 +1,6 @@
 [
   {
-    "name": "R-P-01 textcontent.bind Ã¢â€ â€™ textContent (toView) on <div>",
+    "name": "R-P-01 textcontent.bind -> textContent (toView) on <div>",
     "markup": "<div textcontent.bind=\"x\"></div>",
     "expect": {
       "items": [
@@ -18,7 +18,7 @@
     }
   },
   {
-    "name": "R-P-03 colon shorthand :class Ã¢â€ â€™ className (toView)",
+    "name": "R-P-03 colon shorthand :class -> className (toView)",
     "markup": "<div :class=\"c\"></div>",
     "expect": {
       "items": [
@@ -63,7 +63,7 @@
     }
   },
   {
-    "name": "R-P-08 div scrollTop.bind Ã¢â€ â€™ twoWay via global default",
+    "name": "R-P-08 div scrollTop.bind -> twoWay via global default",
     "markup": "<div scrolltop.bind=\"n\"></div>",
     "expect": {
       "items": [
@@ -84,7 +84,7 @@
     }
   },
   {
-    "name": "R-P-10 input readonly.bind Ã¢â€ â€™ readOnly (toView, unknown target)",
+    "name": "R-P-10 input readonly.bind -> readOnly (toView, unknown target)",
     "markup": "<input readonly.bind=\"r\">",
     "expect": {
       "items": [
@@ -105,7 +105,7 @@
     }
   },
   {
-    "name": "R-P-12 input minlength.bind Ã¢â€ â€™ minLength (toView, unknown target)",
+    "name": "R-P-12 input minlength.bind -> minLength (toView, unknown target)",
     "markup": "<input minlength.bind=\"x\">",
     "expect": {
       "items": [
@@ -117,7 +117,7 @@
     }
   },
   {
-    "name": "R-P-13 tabindex.bind Ã¢â€ â€™ tabIndex (unknown on <div>)",
+    "name": "R-P-13 tabindex.bind -> tabIndex (unknown on <div>)",
     "markup": "<div tabindex.bind=\"i\"></div>",
     "expect": {
       "items": [
@@ -129,7 +129,7 @@
     }
   },
   {
-    "name": "R-P-14 outerhtml.bind Ã¢â€ â€™ outerHTML (unknown on <div>)",
+    "name": "R-P-14 outerhtml.bind -> outerHTML (unknown on <div>)",
     "markup": "<div outerhtml.bind=\"s\"></div>",
     "expect": {
       "items": [
@@ -141,7 +141,7 @@
     }
   },
   {
-    "name": "R-P-15 innerhtml.bind Ã¢â€ â€™ innerHTML (native on <div>)",
+    "name": "R-P-15 innerhtml.bind -> innerHTML (native on <div>)",
     "markup": "<div innerhtml.bind=\"s\"></div>",
     "expect": {
       "items": [
@@ -177,7 +177,7 @@
     }
   },
   {
-    "name": "R-P-19 input formtarget.bind Ã¢â€ â€™ formTarget (unknown target)",
+    "name": "R-P-19 input formtarget.bind -> formTarget (unknown target)",
     "markup": "<input formtarget.bind=\"t\">",
     "expect": {
       "items": [
@@ -189,7 +189,7 @@
     }
   },
   {
-    "name": "R-P-20 textarea maxlength.bind Ã¢â€ â€™ maxLength (unknown target)",
+    "name": "R-P-20 textarea maxlength.bind -> maxLength (unknown target)",
     "markup": "<textarea maxlength.bind=\"n\"></textarea>",
     "expect": {
       "items": [
@@ -282,7 +282,7 @@
     }
   },
   {
-    "name": "R-P-30 label for.bind Ã¢â€ â€™ htmlFor (native)",
+    "name": "R-P-30 label for.bind -> htmlFor (native)",
     "markup": "<label for.bind=\"id\"></label>",
     "expect": {
       "items": [
@@ -291,7 +291,7 @@
     }
   },
   {
-    "name": "R-P-31 img usemap.bind Ã¢â€ â€™ useMap (native)",
+    "name": "R-P-31 img usemap.bind -> useMap (native)",
     "markup": "<img usemap.bind=\"m\">",
     "expect": {
       "items": [
@@ -300,7 +300,7 @@
     }
   },
   {
-    "name": "R-P-32 td rowSpan.bind Ã¢â€ â€™ native",
+    "name": "R-P-32 td rowSpan.bind -> native",
     "markup": "<table><tr><td rowspan.bind=\"r\"></td></tr></table>",
     "expect": {
       "items": [
@@ -309,7 +309,7 @@
     }
   },
   {
-    "name": "R-P-33 th colSpan.bind Ã¢â€ â€™ native",
+    "name": "R-P-33 th colSpan.bind -> native",
     "markup": "<table><tr><th colspan.bind=\"c\"></th></tr></table>",
     "expect": {
       "items": [
@@ -327,7 +327,7 @@
     }
   },
   {
-    "name": "R-P-35 input readonly.bind Ã¢â€ â€™ readOnly (toView, unknown target)",
+    "name": "R-P-35 input readonly.bind -> readOnly (toView, unknown target)",
     "markup": "<input readonly.bind=\"r\">",
     "expect": {
       "items": [
@@ -339,7 +339,7 @@
     }
   },
   {
-    "name": "R-P-36 input type.bind Ã¢â€ â€™ type (toView, unknown target)",
+    "name": "R-P-36 input type.bind -> type (toView, unknown target)",
     "markup": "<input type.bind=\"t\">",
     "expect": {
       "items": [
@@ -357,7 +357,7 @@
     }
   },
   {
-    "name": "R-P-38 input inputmode.bind Ã¢â€ â€™ inputMode (unknown target)",
+    "name": "R-P-38 input inputmode.bind -> inputMode (unknown target)",
     "markup": "<input inputmode.bind=\"m\">",
     "expect": {
       "items": [
@@ -433,7 +433,7 @@
     }
   },
   {
-    "name": "R-P-43 property binding on <template> has no element Ã¢â€ â€™ AU1104",
+    "name": "R-P-43 property binding on <template> has no element -> AU1104",
     "markup": "<template title.bind=\"t\"></template>",
     "expect": {
       "items": [
@@ -445,7 +445,7 @@
     }
   },
   {
-    "name": "R-P-44 au-slot unknown bindable Ã¢â€ â€™ AU1104",
+    "name": "R-P-44 au-slot unknown bindable -> AU1104",
     "markup": "<au-slot foo.bind=\"x\"></au-slot>",
     "expect": {
       "items": [
@@ -457,7 +457,7 @@
     }
   },
   {
-    "name": "R-P-45 au-compose unknown bindable Ã¢â€ â€™ AU1104",
+    "name": "R-P-45 au-compose unknown bindable -> AU1104",
     "markup": "<au-compose bogus.bind=\"x\"></au-compose>",
     "expect": {
       "items": [
@@ -469,7 +469,7 @@
     }
   },
   {
-    "name": "R-P-46 unknown custom element tag Ã¢â€ â€™ property target unknown",
+    "name": "R-P-46 unknown custom element tag -> property target unknown",
     "markup": "<x-unknown bar.bind=\"y\"></x-unknown>",
     "expect": {
       "items": [

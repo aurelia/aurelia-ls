@@ -1,6 +1,6 @@
 [
   {
-    "name": "DG-01 duplicate let names in with overlay → AU1202",
+    "name": "DG-01 duplicate let names in with overlay -> AU1202",
     "markup": "<div with.bind=\"ctx\"><let a.bind=\"x\"></let><let a.bind=\"y\"></let></div>",
     "expect": {
       "frames": [
@@ -17,6 +17,40 @@
       ],
       "diags": [
         { "code": "AU1202" }
+      ]
+    }
+  },
+  {
+    "name": "DG-02 repeat header missing 'of' -> AU1201",
+    "markup": "<ul repeat.for=\"item items\"></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1201" }
+      ]
+    }
+  },
+  {
+    "name": "DG-03 repeat header bad destructuring -> AU1201",
+    "markup": "<ul repeat.for=\"{x,,y} of items\"></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1201" }
       ]
     }
   }

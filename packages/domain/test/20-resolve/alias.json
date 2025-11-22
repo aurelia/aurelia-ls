@@ -1,0 +1,51 @@
+[
+  {
+    "name": "R-AL-01 custom element alias resolves bindable",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-widget": {
+            "kind": "element",
+            "name": "x-widget",
+            "aliases": ["x-alias"],
+            "boundary": true,
+            "bindables": {
+              "foo": { "name": "foo", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div as-element=\"x-alias\" foo.bind=\"bar\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "foo", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-AL-02 custom attribute alias resolves primary bindable mode",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "fancy-attr": {
+            "kind": "attribute",
+            "name": "fancy-attr",
+            "aliases": ["fancy"],
+            "isTemplateController": false,
+            "primary": "value",
+            "bindables": {
+              "value": { "name": "value", "mode": "twoWay" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div fancy.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" }
+      ]
+    }
+  }
+]
