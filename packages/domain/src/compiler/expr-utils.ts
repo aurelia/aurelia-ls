@@ -8,9 +8,9 @@ import type {
   SourceSpan,
 } from "./model/ir.js";
 import type { SourceFile } from "./model/source.js";
-import { absoluteSpan, resolveSourceSpan, resolveSourceSpanMaybe } from "./model/source.js";
-import type { ExprIdMap, SourceFileId } from "./model/identity.js";
-import { normalizeSpan } from "./model/span.js";
+import { absoluteSpan, fallbackSpan, resolveSourceSpan, resolveSourceSpanMaybe } from "./model/source.js";
+import type { ExprIdMap, ReadonlyExprIdMap, SourceFileId } from "./model/identity.js";
+import { normalizeSpan, normalizeSpanMaybe } from "./model/span.js";
 
 /**
  * Collect authored spans for every expression occurrence in an IR module.
@@ -18,12 +18,17 @@ import { normalizeSpan } from "./model/span.js";
  */
 export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
   const out: ExprIdMap<SourceSpan> = new Map();
+  const recordExprSpan = (id: ExprId, span: SourceSpan | null | undefined) => {
+    if (out.has(id)) return;
+    const normalized = normalizeSpanMaybe(span);
+    if (normalized) out.set(id, normalized);
+  };
   const visitSource = (src: BindingSourceIR) => {
     if (isInterpolation(src)) {
-      for (const ref of src.exprs) if (!out.has(ref.id) && ref.loc) out.set(ref.id, normalizeSpan(ref.loc));
+      for (const ref of src.exprs) recordExprSpan(ref.id, ref.loc);
     } else {
       const ref = src as ExprRef;
-      if (!out.has(ref.id) && ref.loc) out.set(ref.id, normalizeSpan(ref.loc));
+      recordExprSpan(ref.id, ref.loc);
     }
   };
 
@@ -37,22 +42,22 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
           case "textBinding":
             visitSource(ins.from);
             break;
-      case "listenerBinding":
-      case "refBinding":
-        if (ins.from?.loc) out.set(ins.from.id, normalizeSpan(ins.from.loc));
-        break;
-      case "hydrateTemplateController":
-        for (const p of ins.props ?? []) {
-          if (p.type === "iteratorBinding") {
-            continue;
-          } else if (p.type === "propertyBinding") {
-            visitSource(p.from);
-          }
-        }
-        if (ins.branch?.kind === "case" && ins.branch.expr.loc) {
-          out.set(ins.branch.expr.id, normalizeSpan(ins.branch.expr.loc));
-        }
-        break;
+          case "listenerBinding":
+          case "refBinding":
+            recordExprSpan(ins.from.id, ins.from?.loc);
+            break;
+          case "hydrateTemplateController":
+            for (const p of ins.props ?? []) {
+              if (p.type === "iteratorBinding") {
+                continue;
+              } else if (p.type === "propertyBinding") {
+                visitSource(p.from);
+              }
+            }
+            if (ins.branch?.kind === "case") {
+              recordExprSpan(ins.branch.expr.id, ins.branch.expr.loc);
+            }
+            break;
           case "hydrateLetElement":
             for (const lb of ins.instructions ?? []) visitSource(lb.from);
             break;
@@ -73,16 +78,26 @@ export function ensureExprSpan(
 }
 
 export function resolveExprSpanIndex(
-  spans: ReadonlyMap<ExprId, SourceSpan>,
+  spans: ReadonlyExprIdMap<SourceSpan>,
   fallback?: SourceFile | SourceFileId | string,
 ): ExprIdMap<SourceSpan> {
   const out: ExprIdMap<SourceSpan> = new Map();
   const inferredFallback = fallback ?? firstFileFromSpans(spans);
   for (const [id, span] of spans.entries()) {
     const resolved = inferredFallback
-      ? resolveSourceSpanMaybe(span ?? null, inferredFallback) ?? normalizeSpan(span ?? { start: 0, end: 0 })
-      : normalizeSpan(span ?? { start: 0, end: 0 });
-    out.set(id, resolved);
+      ? resolveSourceSpanMaybe(span ?? null, inferredFallback)
+      : resolveSourceSpanMaybe(span ?? null, null);
+    if (resolved) {
+      out.set(id, resolved);
+      continue;
+    }
+    if (inferredFallback) {
+      const start = span?.start ?? 0;
+      const end = span?.end ?? start;
+      out.set(id, fallbackSpan(inferredFallback, start, end));
+      continue;
+    }
+    out.set(id, normalizeSpan(span ?? { start: 0, end: 0 }));
   }
   return out;
 }
@@ -130,9 +145,9 @@ export function primaryExprId(src: BindingSourceIR | ExprRef | InterpIR): ExprId
  */
 export function collectExprMemberSegments(
   table: readonly ExprTableEntry[],
-  exprSpans: ReadonlyMap<ExprId, SourceSpan>,
-): Map<ExprId, HtmlMemberSegment[]> {
-  const out: Map<ExprId, HtmlMemberSegment[]> = new Map();
+  exprSpans: ReadonlyExprIdMap<SourceSpan>,
+): ExprIdMap<HtmlMemberSegment[]> {
+  const out: ExprIdMap<HtmlMemberSegment[]> = new Map();
   for (const entry of table) {
     const base = exprSpans.get(entry.id);
     if (!base) continue;
@@ -234,7 +249,7 @@ export function isInterpolation(x: BindingSourceIR): x is InterpIR {
   return (x as InterpIR).kind === "interp";
 }
 
-function firstFileFromSpans(spans: ReadonlyMap<ExprId, SourceSpan>): SourceFileId | undefined {
+function firstFileFromSpans(spans: ReadonlyExprIdMap<SourceSpan>): SourceFileId | undefined {
   for (const span of spans.values()) {
     if (span?.file) return span.file;
   }

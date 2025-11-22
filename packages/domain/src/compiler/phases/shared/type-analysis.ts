@@ -26,6 +26,7 @@ import type {
   ExprTableEntry,
 } from "../../model/ir.js";
 import type { FrameId, ScopeTemplate, ScopeFrame } from "../../model/symbols.js";
+import type { ReadonlyExprIdMap } from "../../model/identity.js";
 
 export type Env = ReadonlyMap<string, string>;
 type MutableEnv = Map<string, string>;
@@ -62,7 +63,7 @@ export function contextualType(name: string): string {
 
 export function buildFrameAnalysis(
   st: ScopeTemplate,
-  exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
   rootVm: string,
 ): FrameAnalysis {
   const envs = new Map<FrameId, Env>();

@@ -1,7 +1,17 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
 import type { ExprId, InterpIR, NodeId, BindingSourceIR, TemplateNode } from "../../../model/ir.js";
-import { brandNumber, idFromKey, idKey, toExprIdMap, HydrationIdAllocator, type FrameId, type HydrationId } from "../../../model/identity.js";
+import {
+  brandNumber,
+  exprIdMapGet,
+  idFromKey,
+  idKey,
+  toExprIdMap,
+  HydrationIdAllocator,
+  type FrameId,
+  type HydrationId,
+  type ReadonlyExprIdMap,
+} from "../../../model/identity.js";
 import { isInterpolation, primaryExprId } from "../../../expr-utils.js";
 import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./types.js";
 
@@ -25,7 +35,7 @@ export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrP
 
 function buildTemplatePlan(
   t: LinkedTemplate,
-  exprToFrame: ReadonlyMap<ExprId, FrameId>,
+  exprToFrame: ReadonlyExprIdMap<FrameId>,
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   hidAllocator: HydrationIdAllocator,
 ): SsrTemplatePlan {
@@ -240,8 +250,8 @@ function mergeChildPlanIntoParent(
   );
 }
 
-function frameOf(map: ReadonlyMap<ExprId, FrameId>, id: ExprId): FrameId {
-  return map.get(id) ?? brandNumber<"FrameId">(0);
+function frameOf(map: ReadonlyExprIdMap<FrameId>, id: ExprId): FrameId {
+  return exprIdMapGet(map, id) ?? brandNumber<"FrameId">(0);
 }
 
 function nodeKeyFromId(id: NodeId): string {

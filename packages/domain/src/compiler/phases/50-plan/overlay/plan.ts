@@ -54,6 +54,7 @@ import type {
   ExprTableEntry,
   BadExpression,
 } from "../../../model/ir.js";
+import type { ExprIdMap, ReadonlyExprIdMap } from "../../../model/identity.js";
 import {
   buildFrameAnalysis,
   typeFromExprAst,
@@ -92,7 +93,7 @@ export function plan(linked: LinkedSemanticsModule, scope: ScopeModule, opts: An
 
 function analyzeTemplate(
   st: ScopeTemplate,
-  exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
   templateIndex: number,
   opts: AnalyzeOptions,
 ): TemplateOverlayPlan {
@@ -184,7 +185,7 @@ function escapeKey(s: string): string {
 function collectOneLambdaPerExpression(
   st: ScopeTemplate,
   frameId: FrameId,
-  exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
 ): OverlayLambdaPlan[] {
   const out: OverlayLambdaPlan[] = [];
   const seen = new Set<ExprId>();
@@ -521,8 +522,8 @@ function escapeBackticks(s: string): string {
 /* Expr-table indexing                                                                    */
 /* ===================================================================================== */
 
-function indexExprTable(table: readonly ExprTableEntry[] | undefined): ReadonlyMap<ExprId, ExprTableEntry> {
-  const m = new Map<ExprId, ExprTableEntry>();
+function indexExprTable(table: readonly ExprTableEntry[] | undefined): ReadonlyExprIdMap<ExprTableEntry> {
+  const m: ExprIdMap<ExprTableEntry> = new Map();
   if (!table) return m;
   for (const e of table) m.set(e.id, e);
   return m;

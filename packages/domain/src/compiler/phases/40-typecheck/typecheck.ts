@@ -19,6 +19,7 @@ import { buildExprSpanIndex, exprIdsOf } from "../../expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
 import type { CompilerDiagnostic } from "../../diagnostics.js";
 import { buildDiagnostic } from "../../diagnostics.js";
+import { exprIdMapGet, toExprIdMap, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 
 export type TypecheckDiagnostic = CompilerDiagnostic<"AU1301"> & {
   exprId?: ExprId;
@@ -28,8 +29,8 @@ export type TypecheckDiagnostic = CompilerDiagnostic<"AU1301"> & {
 
 export interface TypecheckModule {
   version: "aurelia-typecheck@1";
-  inferredByExpr: Map<ExprId, string>;
-  expectedByExpr: Map<ExprId, string>;
+  inferredByExpr: ExprIdMap<string>;
+  expectedByExpr: ExprIdMap<string>;
   diags: TypecheckDiagnostic[];
 }
 
@@ -50,8 +51,8 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
   return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags };
 }
 
-function collectExpectedTypes(linked: LinkedSemanticsModule): Map<ExprId, string> {
-  const expectedByExpr = new Map<ExprId, string>();
+function collectExpectedTypes(linked: LinkedSemanticsModule): ExprIdMap<string> {
+  const expectedByExpr: ExprIdMap<string> = new Map();
   for (const t of linked.templates ?? []) {
     for (const row of t.rows ?? []) {
       for (const ins of row.instructions ?? []) {
@@ -62,8 +63,8 @@ function collectExpectedTypes(linked: LinkedSemanticsModule): Map<ExprId, string
   return expectedByExpr;
 }
 
-function collectInferredTypes(opts: TypecheckOptions): Map<ExprId, string> {
-  const inferred = new Map<ExprId, string>();
+function collectInferredTypes(opts: TypecheckOptions): ExprIdMap<string> {
+  const inferred: ExprIdMap<string> = new Map();
   const exprIndex = indexExprTable(opts.linked.exprTable as readonly ExprTableEntry[] | undefined);
   const scopeTemplate = opts.scope.templates[0];
   if (!scopeTemplate) return inferred;
@@ -82,7 +83,8 @@ function collectInferredTypes(opts: TypecheckOptions): Map<ExprId, string> {
     return id != null ? analysis.envs.get(id) : undefined;
   };
 
-  for (const [exprId, frameId] of scopeTemplate.exprToFrame.entries()) {
+  const exprToFrame = toExprIdMap(scopeTemplate.exprToFrame);
+  for (const [exprId, frameId] of exprToFrame.entries()) {
     const entry = exprIndex.get(exprId);
     if (!entry) continue;
     if (entry.expressionType !== "IsProperty" && entry.expressionType !== "IsFunction") continue;
@@ -97,16 +99,16 @@ function collectInferredTypes(opts: TypecheckOptions): Map<ExprId, string> {
 }
 
 function collectDiagnostics(
-  expected: Map<ExprId, string>,
-  inferred: Map<ExprId, string>,
-  spans: ReadonlyMap<ExprId, SourceSpan>,
+  expected: ReadonlyExprIdMap<string>,
+  inferred: ReadonlyExprIdMap<string>,
+  spans: ReadonlyExprIdMap<SourceSpan>,
 ): TypecheckDiagnostic[] {
   const diags: TypecheckDiagnostic[] = [];
   for (const [id, expectedType] of expected.entries()) {
-    const actual = inferred.get(id);
+    const actual = exprIdMapGet(inferred, id);
     if (!actual) continue;
     if (!shouldReportMismatch(expectedType, actual)) continue;
-    const span = spans.get(id) ?? null;
+    const span = exprIdMapGet(spans as ReadonlyExprIdMap<SourceSpan>, id) ?? null;
     diags.push({
       exprId: id,
       expected: expectedType,
@@ -133,7 +135,7 @@ function normalizeType(t: string): string {
   return t.replace(/[\s()]/g, "");
 }
 
-function visitInstruction(ins: LinkedInstruction, expected: Map<ExprId, string>): void {
+function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<string>): void {
   switch (ins.kind) {
     case "propertyBinding":
     case "attributeBinding":
@@ -169,7 +171,7 @@ function visitInstruction(ins: LinkedInstruction, expected: Map<ExprId, string>)
   }
 }
 
-function recordLinkedBindable(b: LinkedElementBindable, expected: Map<ExprId, string>): void {
+function recordLinkedBindable(b: LinkedElementBindable, expected: ExprIdMap<string>): void {
   switch (b.kind) {
     case "propertyBinding":
     case "attributeBinding":
@@ -181,7 +183,7 @@ function recordLinkedBindable(b: LinkedElementBindable, expected: Map<ExprId, st
   }
 }
 
-function recordExpected(src: BindingSourceIR | ExprRef | InterpIR, type: string | null | undefined, expected: Map<ExprId, string>): void {
+function recordExpected(src: BindingSourceIR | ExprRef | InterpIR, type: string | null | undefined, expected: ExprIdMap<string>): void {
   if (!type) return;
   const ids = exprIdsOf(src);
   for (const id of ids) expected.set(id, type);
@@ -222,8 +224,8 @@ function typeRefToString(t: TypeRef | undefined): string {
   }
 }
 
-function indexExprTable(table: readonly ExprTableEntry[] | undefined): ReadonlyMap<ExprId, ExprTableEntry> {
-  const m = new Map<ExprId, ExprTableEntry>();
+function indexExprTable(table: readonly ExprTableEntry[] | undefined): ReadonlyExprIdMap<ExprTableEntry> {
+  const m: ExprIdMap<ExprTableEntry> = new Map();
   if (!table) return m;
   for (const e of table) m.set(e.id, e);
   return m;

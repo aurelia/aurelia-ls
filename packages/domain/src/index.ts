@@ -48,6 +48,7 @@ export {
   spanLength,
   intersectSpans,
   normalizeSpan,
+  normalizeSpanMaybe,
   narrowestContainingSpan,
   pickNarrowestContaining,
   offsetSpan,

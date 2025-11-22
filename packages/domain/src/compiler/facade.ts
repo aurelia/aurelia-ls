@@ -13,6 +13,7 @@ import type { CompilerDiagnostic } from "./diagnostics.js";
 import type { StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/engine.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "./model/ir.js";
 import { htmlOffsetToOverlay, overlayOffsetToHtml, type MappingHit } from "./mapping.js";
+import type { ExprIdMap } from "./model/identity.js";
 
 export interface CompileOptions {
   html: string;
@@ -51,7 +52,7 @@ export interface TemplateCompilation {
   query: TemplateQueryFacade;
   /** Authored expression table + spans for tooling (hover/refs). */
   exprTable: readonly ExprTableEntry[];
-  exprSpans: Map<ExprId, SourceSpan>;
+  exprSpans: ExprIdMap<SourceSpan>;
   diagnostics: TemplateDiagnostics;
   meta: StageMetaSnapshot;
 }
