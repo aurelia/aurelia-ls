@@ -28,6 +28,8 @@ function serialize(value: unknown): string {
       return '"<fn>"';
     case "object":
       if (value === null) return "null";
+      if (value instanceof Map) return serializeMap(value as Map<unknown, unknown>);
+      if (value instanceof Set) return serializeSet(value as Set<unknown>);
       if (Array.isArray(value)) return serializeArray(value);
       return serializeObject(value as Record<string, unknown>);
     default:
@@ -41,6 +43,23 @@ function serializeArray(arr: unknown[]): string {
     parts.push(serialize(arr[i]));
   }
   return `[${parts.join(",")}]`;
+}
+
+function serializeMap(map: Map<unknown, unknown>): string {
+  const entries = Array.from(map.entries()).sort(([a], [b]) => {
+    const aKey = serialize(a);
+    const bKey = serialize(b);
+    return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+  });
+  const parts = entries.map(([k, v]) => `[${serialize(k)},${serialize(v)}]`);
+  return `{"__map__":[${parts.join(",")}]}`;
+}
+
+function serializeSet(set: Set<unknown>): string {
+  const sorted = Array.from(set.values())
+    .map((v) => serialize(v))
+    .sort();
+  return `{"__set__":[${sorted.join(",")}]}`;
 }
 
 function serializeObject(obj: Record<string, unknown>): string {

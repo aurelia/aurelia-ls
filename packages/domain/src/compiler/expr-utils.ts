@@ -7,7 +7,9 @@ import type {
   IrModule,
   SourceSpan,
 } from "./model/ir.js";
-import { absoluteSpan } from "./model/source.js";
+import type { SourceFile } from "./model/source.js";
+import { absoluteSpan, resolveSourceSpan } from "./model/source.js";
+import type { SourceFileId } from "./model/identity.js";
 
 /**
  * Collect authored spans for every expression occurrence in an IR module.
@@ -58,6 +60,24 @@ export function collectExprSpans(ir: IrModule): Map<ExprId, SourceSpan> {
         }
       }
     }
+  }
+  return out;
+}
+
+export function ensureExprSpan(
+  span: SourceSpan | null | undefined,
+  fallback: SourceFile | SourceFileId | string,
+): SourceSpan {
+  return resolveSourceSpan(span ?? null, fallback);
+}
+
+export function resolveExprSpanIndex(
+  spans: ReadonlyMap<ExprId, SourceSpan>,
+  fallback: SourceFile | SourceFileId | string,
+): Map<ExprId, SourceSpan> {
+  const out = new Map<ExprId, SourceSpan>();
+  for (const [id, span] of spans.entries()) {
+    out.set(id, resolveSourceSpan(span ?? null, fallback));
   }
   return out;
 }

@@ -1,6 +1,7 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
 import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef, TemplateNode } from "../../../model/ir.js";
+import { brandNumber, toExprIdMap, type FrameId } from "../../../model/identity.js";
 import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./types.js";
 
 /** Build SSR plan from Linked+Scoped (tap point: after Phase 30 bind). */
@@ -10,7 +11,7 @@ export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrP
 
   // Single ScopeTemplate models the whole module incl. nested defs (see bind.ts).
   const st: ScopeTemplate | undefined = scope.templates[0];
-  const exprToFrame = st?.exprToFrame ?? Object.create(null);
+  const exprToFrame = toExprIdMap<FrameId>(st?.exprToFrame);
 
   // Map raw TemplateIR roots → LinkedTemplate for nested controller defs
   const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
@@ -23,7 +24,7 @@ export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrP
 
 function buildTemplatePlan(
   t: LinkedTemplate,
-  exprToFrame: Record<string, number>,
+  exprToFrame: ReadonlyMap<ExprId, FrameId>,
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   hidCounter: { value: number },
 ): SsrTemplatePlan {
@@ -159,7 +160,7 @@ function buildTemplatePlan(
             forOfExprId: forOfExprId!,
             valueExprId: valueExprId!,
             branch,
-            frame: forOfExprId ? frameOf(exprToFrame, forOfExprId) : valueExprId ? frameOf(exprToFrame, valueExprId) : 0,
+            frame: forOfExprId ? frameOf(exprToFrame, forOfExprId) : valueExprId ? frameOf(exprToFrame, valueExprId) : brandNumber<"FrameId">(0),
           };
           if (nestedLinked) controllerEntry.defLinked = nestedLinked;
           rowControllers.push(controllerEntry);
@@ -238,9 +239,8 @@ function mergeChildPlanIntoParent(
   );
 }
 
-function frameOf(map: Record<string, number>, id: ExprId): number {
-  const f = map[id as string];
-  return typeof f === "number" ? f : 0;
+function frameOf(map: ReadonlyMap<ExprId, FrameId>, id: ExprId): FrameId {
+  return map.get(id) ?? brandNumber<"FrameId">(0);
 }
 
 function nodeKeyFromId(id: NodeId): string {

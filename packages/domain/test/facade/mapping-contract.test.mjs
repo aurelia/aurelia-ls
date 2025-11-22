@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { buildTemplateMapping } from "../../out/compiler/mapping.js";
 import { buildTemplateQuery } from "../../out/compiler/query.js";
+import { resolveSourceFile } from "../../out/compiler/model/source.js";
 
 test("mapping pairs overlay spans with HTML/member spans", () => {
   const exprId = "e1";
@@ -44,7 +45,7 @@ test("mapping pairs overlay spans with HTML/member spans", () => {
     overlayMapping,
     ir,
     exprTable: ir.exprTable,
-    fallbackFile: "comp.html",
+    fallbackFile: resolveSourceFile("comp.html"),
     exprToFrame: { [exprId]: 1 },
   });
 
@@ -104,7 +105,7 @@ test("mapping keeps member segments through optional chaining", () => {
     overlayMapping,
     ir,
     exprTable: ir.exprTable,
-    fallbackFile: "comp.html",
+    fallbackFile: resolveSourceFile("comp.html"),
   });
 
   const seg = mapping.entries[0]?.segments?.[0];
@@ -182,7 +183,7 @@ test("query facade exposes node/expr/controller/bindable lookups", () => {
     overlayMapping: [{ exprId, start: 0, end: 5, segments: [] }],
     ir,
     exprTable: [],
-    fallbackFile: "comp.html",
+    fallbackFile: resolveSourceFile("comp.html"),
     exprToFrame: { [exprId]: 2 },
   });
 

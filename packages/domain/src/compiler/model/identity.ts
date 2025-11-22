@@ -19,6 +19,25 @@ export type TemplateId = StringId<"TemplateId">;
 export type SourceFileId = StringId<"SourceFileId">;
 export type NormalizedPath = StringId<"NormalizedPath">;
 export type UriString = StringId<"UriString">;
+export type ExprIdMap<TValue> = IdMap<"ExprId", TValue>;
+export type ReadonlyExprIdMap<TValue> = ReadonlyIdMap<"ExprId", TValue>;
+export type ExprIdMapLike<TValue> = IdMapLike<"ExprId", TValue>;
+
+export function exprIdMapGet<TValue>(map: ExprIdMapLike<TValue>, id: ExprId): TValue | undefined {
+  return idMapGet<"ExprId", TValue>(map, id);
+}
+
+export function toExprIdMap<TValue>(map: ExprIdMapLike<TValue>): ExprIdMap<TValue> {
+  return toIdMap<"ExprId", TValue>(map);
+}
+export type IdRecord<TBrand extends string, TValue> = Readonly<Record<StringId<TBrand>, TValue>>;
+export type IdMapLike<TBrand extends string, TValue> =
+  | ReadonlyMap<StringId<TBrand>, TValue>
+  | IdRecord<TBrand, TValue>
+  | null
+  | undefined;
+export type IdMap<TBrand extends string, TValue> = Map<StringId<TBrand>, TValue>;
+export type ReadonlyIdMap<TBrand extends string, TValue> = ReadonlyMap<StringId<TBrand>, TValue>;
 
 // TODO: Builder currently hardcodes 'html'. Add ns detection for SVG/MathML when needed.
 export type Namespace = "html" | "svg" | "mathml";
@@ -33,6 +52,34 @@ export function brandNumber<TBrand extends string>(value: number): NumericId<TBr
 
 export function unbrand<T>(value: Branded<T, string>): T {
   return value as T;
+}
+
+export function idMapGet<TBrand extends string, TValue>(
+  map: IdMapLike<TBrand, TValue>,
+  id: StringId<TBrand>,
+): TValue | undefined {
+  if (!map) return undefined;
+  if (map instanceof Map) return map.get(id);
+  return (map as IdRecord<TBrand, TValue>)[id];
+}
+
+export function toIdMap<TBrand extends string, TValue>(map: IdMapLike<TBrand, TValue>): IdMap<TBrand, TValue> {
+  if (!map) return new Map();
+  if (map instanceof Map) return new Map(map);
+  const entries = Object.entries(map as Record<string, TValue>).map(
+    ([k, v]) => [k as StringId<TBrand>, v] as const,
+  );
+  return new Map(entries);
+}
+
+export function idMapEntries<TBrand extends string, TValue>(
+  map: IdMapLike<TBrand, TValue>,
+): Iterable<[StringId<TBrand>, TValue]> {
+  if (!map) return [];
+  if (map instanceof Map) return map.entries();
+  return Object.entries(map as Record<string, TValue>).map(
+    ([k, v]) => [k as StringId<TBrand>, v] as [StringId<TBrand>, TValue],
+  );
 }
 
 /**

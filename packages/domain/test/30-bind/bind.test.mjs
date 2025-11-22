@@ -149,11 +149,11 @@ export function reduceScopeToBindIntent({ ir, linked, scope }) {
   );
 
   const codeIndex = indexExprCodeFromIr(ir);
-  for (const [idStr, frameId] of Object.entries(st.exprToFrame ?? {})) {
-    if (forOfIds.has(idStr)) {
+  for (const [exprId, frameId] of st.exprToFrame.entries()) {
+    if (forOfIds.has(exprId)) {
       out.exprs.push({ kind: "forOfHeader", frame: labels[frameId] });
     } else {
-      const code = codeIndex.get(idStr) ?? "(unknown)";
+      const code = codeIndex.get(exprId) ?? "(unknown)";
       out.exprs.push({ kind: "expr", frame: labels[frameId], code });
     }
   }

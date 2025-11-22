@@ -80,8 +80,7 @@ function collectInferredTypes(opts: TypecheckOptions): Map<ExprId, string> {
     return id != null ? analysis.envs.get(id) : undefined;
   };
 
-  for (const [exprIdStr, frameId] of Object.entries(scopeTemplate.exprToFrame)) {
-    const exprId = exprIdStr as ExprId;
+  for (const [exprId, frameId] of scopeTemplate.exprToFrame.entries()) {
     const entry = exprIndex.get(exprId);
     if (!entry) continue;
     if (entry.expressionType !== "IsProperty" && entry.expressionType !== "IsFunction") continue;
