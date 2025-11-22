@@ -43,8 +43,8 @@ export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
 export interface TemplateCompilation {
   ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-link"];
-  scope: StageOutputs["30-scope"];
+  linked: StageOutputs["20-resolve-host"];
+  scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
   overlayPlan: StageOutputs["50-plan-overlay"];
   overlay: CompileOverlayResult;
@@ -99,8 +99,8 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
   const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
 
   const ir = session.run("10-lower");
-  const linked = session.run("20-link");
-  const scope = session.run("30-scope");
+  const linked = session.run("20-resolve-host");
+  const scope = session.run("30-bind");
   const typecheck = session.run("40-typecheck");
   const overlayPlan = overlayArtifacts.plan;
 
@@ -118,8 +118,8 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
     diagnostics: buildDiagnostics(linked, scope, typecheck),
     meta: collectStageMeta(session, [
       "10-lower",
-      "20-link",
-      "30-scope",
+      "20-resolve-host",
+      "30-bind",
       "40-typecheck",
       "50-plan-overlay",
       "60-emit-overlay",
@@ -162,8 +162,8 @@ export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
  * ------------------------ */
 
 function buildDiagnostics(
-  linked: StageOutputs["20-link"],
-  scope: StageOutputs["30-scope"],
+  linked: StageOutputs["20-resolve-host"],
+  scope: StageOutputs["30-bind"],
   typecheck: StageOutputs["40-typecheck"],
 ): TemplateDiagnostics {
   const flat = [

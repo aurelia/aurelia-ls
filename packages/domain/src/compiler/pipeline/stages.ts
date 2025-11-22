@@ -83,7 +83,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   });
 
   definitions.push({
-    key: "20-link",
+    key: "20-resolve-host",
     version: "2",
     deps: ["10-lower"],
     fingerprint(ctx) {
@@ -105,14 +105,14 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   });
 
   definitions.push({
-    key: "30-scope",
+    key: "30-bind",
     version: "1",
-    deps: ["20-link"],
+    deps: ["20-resolve-host"],
     fingerprint() {
       return "scope@1";
     },
     run(ctx) {
-      const linked = ctx.require("20-link");
+      const linked = ctx.require("20-resolve-host");
       return bindScopes(linked);
     },
   });
@@ -120,7 +120,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "40-typecheck",
     version: "1",
-    deps: ["10-lower", "20-link", "30-scope"],
+    deps: ["10-lower", "20-resolve-host", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
@@ -128,8 +128,8 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       return { vm: vmToken, root: rootVm };
     },
     run(ctx) {
-      const linked = ctx.require("20-link");
-      const scope = ctx.require("30-scope");
+      const linked = ctx.require("20-resolve-host");
+      const scope = ctx.require("30-bind");
       const ir = ctx.require("10-lower");
       const vm = assertOption(ctx.options.vm, "vm");
       // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
@@ -141,7 +141,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "50-plan-overlay",
     version: "1",
-    deps: ["20-link", "30-scope"],
+    deps: ["20-resolve-host", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const overlayOpts = ctx.options.overlay ?? { isJs: false };
@@ -155,8 +155,8 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const linked = ctx.require("20-link");
-      const scope = ctx.require("30-scope");
+      const linked = ctx.require("20-resolve-host");
+      const scope = ctx.require("30-bind");
       const vm = assertOption(ctx.options.vm, "vm");
       const overlayOpts: AnalyzeOptions = {
         isJs: ctx.options.overlay?.isJs ?? false,
@@ -194,13 +194,13 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "50-plan-ssr",
     version: "1",
-    deps: ["20-link", "30-scope"],
+    deps: ["20-resolve-host", "30-bind"],
     fingerprint() {
       return "ssr-plan@1";
     },
     run(ctx) {
-      const linked = ctx.require("20-link");
-      const scope = ctx.require("30-scope");
+      const linked = ctx.require("20-resolve-host");
+      const scope = ctx.require("30-bind");
       return planSsr(linked, scope);
     },
   });
@@ -208,13 +208,13 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "60-emit-ssr",
     version: "1",
-    deps: ["50-plan-ssr", "20-link"],
+    deps: ["50-plan-ssr", "20-resolve-host"],
     fingerprint(ctx) {
       return ctx.options.fingerprints?.ssr ?? { eol: ctx.options.ssr?.eol ?? "\n" };
     },
     run(ctx) {
       const plan = ctx.require("50-plan-ssr");
-      const linked = ctx.require("20-link");
+      const linked = ctx.require("20-resolve-host");
       const { html, manifest } = emitSsr(plan, linked, { eol: ctx.options.ssr?.eol ?? "\n" });
       return { html, manifest };
     },
@@ -226,13 +226,13 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
 /**
  * Shape used by tests/clients that only need the pure pipeline (up to typecheck).
  */
-export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-link" | "30-scope" | "40-typecheck"> {
+export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck"> {
   const engine = new PipelineEngine(createDefaultStageDefinitions());
   const session = engine.createSession(options);
   return {
     "10-lower": session.run("10-lower"),
-    "20-link": session.run("20-link"),
-    "30-scope": session.run("30-scope"),
+    "20-resolve-host": session.run("20-resolve-host"),
+    "30-bind": session.run("30-bind"),
     "40-typecheck": session.run("40-typecheck"),
   };
 }
