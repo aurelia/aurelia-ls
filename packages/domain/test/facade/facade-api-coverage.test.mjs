@@ -68,7 +68,7 @@ describe("Facade API coverage", () => {
 
     const boundaryHit = mapOverlayOffsetToHtml(mapping, 20);
     assert.ok(boundaryHit?.segment);
-    assert.equal(boundaryHit.segment?.path, "user.address.street", "segment end boundary should remain inclusive");
+    assert.equal(boundaryHit.segment?.path, "user", "end boundary should fall back to the containing segment");
 
     const htmlNarrow = mapHtmlOffsetToOverlay(mapping, 12);
     assert.ok(htmlNarrow?.segment);
