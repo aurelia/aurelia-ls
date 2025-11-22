@@ -4,10 +4,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { getExpressionParser, DEFAULT_SYNTAX } from "../../out/index.js";
-import { compileMarkup, vmStub } from "../_helpers/facade-harness.mjs";
+import { getExpressionParser, DEFAULT_SYNTAX } from "../../../out/index.js";
+import { compileMarkup, vmStub } from "../../_helpers/facade-harness.mjs";
 
-const fixtureBase = new URL("../../../../fixtures/overlays/kitchen-sink/", import.meta.url);
+const fixtureBase = new URL("../../../../../fixtures/overlays/kitchen-sink/", import.meta.url);
 
 test("compileTemplate wires the full pipeline and matches golden overlay", async () => {
   const htmlUrl = new URL("./template.html", fixtureBase);

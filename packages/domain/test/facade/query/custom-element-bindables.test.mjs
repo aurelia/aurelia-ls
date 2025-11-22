@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT } from "../../out/compiler/language/registry.js";
-import { deepMergeSemantics } from "../_helpers/semantics-merge.mjs";
-import { compileMarkup, vmStub } from "../_helpers/facade-harness.mjs";
+import { DEFAULT } from "../../../out/compiler/language/registry.js";
+import { deepMergeSemantics } from "../../_helpers/semantics-merge.mjs";
+import { compileMarkup, vmStub } from "../../_helpers/facade-harness.mjs";
 
 // Custom Semantics to simulate a real project element registry.
 const semanticsWithNameTag = deepMergeSemantics(DEFAULT, {
@@ -77,4 +77,10 @@ test("custom element semantics toggle diagnostics on/off", () => {
     vm: vmStub(),
   });
   assert.ok(!customSemantics.linked.diags.some((d) => d.code === "AU1104"), "custom semantics should suppress AU1104 for known bindable");
+});
+
+test("custom semantics merge retains defaults elsewhere", () => {
+  const html = `<template><input value.bind="user.name" /></template>`;
+  const res = compileMarkup(html, "C:/mem/merge-defaults.html", { semantics: semanticsWithNameTag, vm: vmStub() });
+  assert.equal(res.linked.diags.length, 0);
 });

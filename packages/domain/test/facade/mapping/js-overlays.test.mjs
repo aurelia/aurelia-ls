@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_SYNTAX, getExpressionParser } from "../../out/index.js";
-import { compileMarkup, vmStub } from "../_helpers/facade-harness.mjs";
+import { DEFAULT_SYNTAX, getExpressionParser } from "../../../out/index.js";
+import { compileMarkup, vmStub } from "../../_helpers/facade-harness.mjs";
 
 test("JS overlays still surface mapping with member segments", () => {
   const html = `<template><div>\${user?.profile?.name}</div></template>`;

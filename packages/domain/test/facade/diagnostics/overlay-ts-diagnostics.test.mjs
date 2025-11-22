@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getExpressionParser, DEFAULT_SYNTAX, PRELUDE_TS } from "../../out/index.js";
-import { compileMarkup, vmStub } from "../_helpers/facade-harness.mjs";
-import { createProgramFromMemory } from "../_helpers/ts-harness.mjs";
+import { getExpressionParser, DEFAULT_SYNTAX, PRELUDE_TS } from "../../../out/index.js";
+import { compileMarkup, vmStub } from "../../_helpers/facade-harness.mjs";
+import { createProgramFromMemory } from "../../_helpers/ts-harness.mjs";
 
 test("overlay produces TS diagnostics mapped from __au$access", () => {
   const html = `<div>\${sdf}</div>`;

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildTemplateMapping } from "../../out/compiler/mapping.js";
-import { buildTemplateQuery } from "../../out/compiler/query.js";
-import { resolveSourceFile } from "../../out/compiler/model/source.js";
+import { buildTemplateMapping } from "../../../out/compiler/mapping.js";
+import { buildTemplateQuery } from "../../../out/compiler/query.js";
+import { resolveSourceFile } from "../../../out/compiler/model/source.js";
 
 test("mapping pairs overlay spans with HTML/member spans", () => {
   const exprId = "e1";
