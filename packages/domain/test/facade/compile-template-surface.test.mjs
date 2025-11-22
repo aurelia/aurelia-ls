@@ -32,8 +32,8 @@ test("compileTemplate wires the full pipeline and matches golden overlay", async
   const firstSegmented = result.mapping.entries.find((e) => e.segments?.length);
   assert.ok(firstSegmented, "expected at least one mapping entry with segments");
   const seg = firstSegmented.segments?.[0];
-  assert.ok(seg?.overlaySpan[1] > seg?.overlaySpan[0], "segment overlay span must be non-empty");
-  const snippet = result.overlay.text.slice(seg.overlaySpan[0], seg.overlaySpan[1]);
+  assert.ok(seg?.overlaySpan.end > seg?.overlaySpan.start, "segment overlay span must be non-empty");
+  const snippet = result.overlay.text.slice(seg.overlaySpan.start, seg.overlaySpan.end);
   assert.ok(snippet.length > 0, "segment slice should produce text");
 });
 

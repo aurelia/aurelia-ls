@@ -14,7 +14,7 @@ import type {
 } from "./types.js";
 import { camelCase } from "./name-normalizer.js";
 import type { CompilerDiagnostic } from "../../diagnostics.js";
-import { authoredOrigin } from "../../model/origin.js";
+import { originFromSpan } from "../../model/origin.js";
 
 export function pushDiag(diags: SemDiagnostic[], code: SemDiagCode, message: string, span?: SourceSpan | null): void {
   const diag: CompilerDiagnostic = {
@@ -23,7 +23,7 @@ export function pushDiag(diags: SemDiagnostic[], code: SemDiagCode, message: str
     span: span ?? null,
     source: "resolve-host",
     severity: "error",
-    origin: authoredOrigin(span ?? null),
+    origin: originFromSpan("resolve-host", span ?? null),
   };
   diags.push(diag as SemDiagnostic);
 }

@@ -27,7 +27,7 @@ describe("Facade.query", () => {
     const overlayExprIds = new Set(overlay.calls.map((c) => c.exprId));
     for (const entry of mapping.entries) {
       assert.ok(overlayExprIds.has(entry.exprId), `exprId ${entry.exprId} missing in overlay calls`);
-      assert.ok(entry.overlayRange[0] < entry.overlayRange[1], "overlay range must be non-empty");
+      assert.ok(entry.overlaySpan.start < entry.overlaySpan.end, "overlay range must be non-empty");
       assert.ok(entry.htmlSpan.start < entry.htmlSpan.end, "html span must be non-empty");
     }
   });
@@ -87,7 +87,7 @@ describe("Facade.query", () => {
     assert.ok(entry, "expected mapping entry with segments");
     const member = entry?.segments?.find((s) => s.path.endsWith("street"));
     assert.ok(member, "expected member segment for street");
-    assert.ok(member?.overlaySpan[1] > member?.overlaySpan[0]);
+    assert.ok(member?.overlaySpan.end > member?.overlaySpan.start);
     assert.ok(member?.htmlSpan.end > member?.htmlSpan.start);
   });
 

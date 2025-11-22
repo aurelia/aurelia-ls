@@ -1,6 +1,6 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow } from "../../20-resolve-host/types.js";
 import type { TemplateNode, DOMNode, Attr, NodeId, ExprId } from "../../../model/ir.js";
-import { idFromKey } from "../../../model/identity.js";
+import { idFromKey, type HydrationId } from "../../../model/identity.js";
 import type { SsrPlanModule, SsrTemplatePlan, SsrManifest, SsrBinding, SsrController } from "../../50-plan/ssr/types.js";
 
 /** Emit SSR HTML + JSON manifest. */
@@ -131,7 +131,7 @@ function renderNode(
 /** Build JSON manifest text. */
 function makeManifest(tPlan: SsrTemplatePlan, tLinked: LinkedTemplate): string[] {
   const nodes: Array<{
-    hid: number;
+    hid: HydrationId;
     nodeId: NodeId;
     tag?: string;
     text?: boolean;
@@ -149,13 +149,13 @@ function makeManifest(tPlan: SsrTemplatePlan, tLinked: LinkedTemplate): string[]
     }
   }
 
-  const seen = new Set<number>();
+  const seen = new Set<HydrationId>();
   for (const [nodeKey, hid] of Object.entries(tPlan.hidByNode)) {
     if (seen.has(hid)) continue;
     seen.add(hid);
     const nodeId = idFromKey<"NodeId">(nodeKey);
     const nodeRecord: {
-      hid: number;
+      hid: HydrationId;
       nodeId: NodeId;
       tag?: string;
       text?: boolean;

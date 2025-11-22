@@ -25,6 +25,6 @@ test("JS overlays still surface mapping with member segments", () => {
   assert.ok(entry, "expected mapping entry with member segments for optional chain");
 
   const member = entry?.segments?.find((s) => s.path.endsWith("profile.name"));
-  assert.ok(member?.overlaySpan[1] > member?.overlaySpan[0], "member overlay span should be non-empty");
+  assert.ok(member?.overlaySpan.end > member?.overlaySpan.start, "member overlay span should be non-empty");
   assert.ok(member?.htmlSpan.end > member?.htmlSpan.start, "member html span should be non-empty");
 });

@@ -72,6 +72,18 @@ export function appendTrace(origin: Origin, trace: OriginTrace): Origin {
   return { ...origin, trace: [...existing, trace] };
 }
 
+/** Build a stage-tagged origin from a span, optionally annotating with a description. */
+export function originFromSpan(by: string, span?: SourceSpan | null, description?: string): Origin {
+  const base = authoredOrigin(span ?? null, description);
+  return appendTrace(base, { by, span: span ?? null });
+}
+
+/** Convenience wrapper that builds provenance (origin + fallback span) for a stage. */
+export function provenanceFromSpan(by: string, span?: SourceSpan | null, description?: string): Provenance {
+  const origin = originFromSpan(by, span ?? null, description);
+  return { origin, fallbackSpan: span ?? null };
+}
+
 function isOrigin(value: Provenance | Origin): value is Origin {
   return (value as Origin).kind !== undefined;
 }

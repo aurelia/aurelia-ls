@@ -121,10 +121,10 @@ function mapHtmlPositionToOverlay(compilation: TemplateCompilation, doc: TextDoc
   if (!hit) return null;
   if (hit.segment) {
     const seg = hit.segment;
-    const delta = Math.min(seg.overlaySpan[1] - seg.overlaySpan[0], Math.max(0, htmlOffset - seg.htmlSpan.start));
-    return { overlayPath: compilation.overlay.overlayPath, offset: seg.overlaySpan[0] + delta };
+    const delta = Math.min(seg.overlaySpan.end - seg.overlaySpan.start, Math.max(0, htmlOffset - seg.htmlSpan.start));
+    return { overlayPath: compilation.overlay.overlayPath, offset: seg.overlaySpan.start + delta };
   }
-  return { overlayPath: compilation.overlay.overlayPath, offset: hit.entry.overlayRange[0] };
+  return { overlayPath: compilation.overlay.overlayPath, offset: hit.entry.overlaySpan.start };
 }
 
 function mapOverlayLocationToHtml(

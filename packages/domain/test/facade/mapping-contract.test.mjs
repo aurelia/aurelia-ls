@@ -36,9 +36,8 @@ test("mapping pairs overlay spans with HTML/member spans", () => {
 
   const overlayMapping = [{
     exprId,
-    start: 10,
-    end: 20,
-    segments: [{ kind: "member", path: "user.name", span: [12, 16] }],
+    span: { start: 10, end: 20 },
+    segments: [{ kind: "member", path: "user.name", span: { start: 12, end: 16 } }],
   }];
 
   const { mapping, exprSpans } = buildTemplateMapping({
@@ -52,11 +51,11 @@ test("mapping pairs overlay spans with HTML/member spans", () => {
   const entry = mapping.entries[0];
 
   assert.equal(exprSpans.get(exprId)?.start, 100);
-  assert.deepEqual(entry.overlayRange, [10, 20]);
+  assert.deepEqual(entry.overlaySpan, { start: 10, end: 20 });
   assert.equal(entry.frameId, 1);
   assert.deepEqual(entry.htmlSpan, { start: 100, end: 110, file: "comp.html" });
   assert.deepEqual(entry.segments?.[0].htmlSpan, { start: 100, end: 109, file: "comp.html" });
-  assert.deepEqual(entry.segments?.[0].overlaySpan, [12, 16]);
+  assert.deepEqual(entry.segments?.[0].overlaySpan, { start: 12, end: 16 });
 });
 
 test("mapping keeps member segments through optional chaining", () => {
@@ -96,9 +95,8 @@ test("mapping keeps member segments through optional chaining", () => {
 
   const overlayMapping = [{
     exprId,
-    start: 0,
-    end: 10,
-    segments: [{ kind: "member", path: "user.profile.name", span: [2, 8] }],
+    span: { start: 0, end: 10 },
+    segments: [{ kind: "member", path: "user.profile.name", span: { start: 2, end: 8 } }],
   }];
 
   const { mapping } = buildTemplateMapping({
@@ -180,7 +178,7 @@ test("query facade exposes node/expr/controller/bindable lookups", () => {
   };
 
   const { mapping } = buildTemplateMapping({
-    overlayMapping: [{ exprId, start: 0, end: 5, segments: [] }],
+    overlayMapping: [{ exprId, span: { start: 0, end: 5 }, segments: [] }],
     ir,
     exprTable: [],
     fallbackFile: resolveSourceFile("comp.html"),

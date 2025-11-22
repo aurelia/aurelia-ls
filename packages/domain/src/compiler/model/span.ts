@@ -31,6 +31,16 @@ export function spanLength(span: SpanLike | null | undefined): number {
   return span ? Math.max(0, span.end - span.start) : 0;
 }
 
+/** Build a normalized TextSpan from numeric bounds. */
+export function spanFromBounds(start: number, end: number): TextSpan {
+  return normalizeSpan({ start, end });
+}
+
+/** Convert a `[start,end)` tuple into a normalized TextSpan. */
+export function spanFromRange(range: readonly [number, number]): TextSpan {
+  return spanFromBounds(range[0], range[1]);
+}
+
 export function isEmptySpan(span: SpanLike | null | undefined): boolean {
   return spanLength(span) === 0;
 }

@@ -15,6 +15,7 @@ export type NumericId<TBrand extends string> = Branded<number, TBrand>;
 export type NodeId = StringId<"NodeId">; // e.g. '0/2/1', '0/3#text@0', '0/1@attr:value'
 export type ExprId = StringId<"ExprId">; // deterministic (e.g., hash of file+loc+expressionType+code)
 export type FrameId = NumericId<"FrameId">;
+export type HydrationId = NumericId<"HydrationId">;
 export type TemplateId = StringId<"TemplateId">;
 export type SourceFileId = StringId<"SourceFileId">;
 export type NormalizedPath = StringId<"NormalizedPath">;
@@ -263,16 +264,21 @@ export class NodeAddressBuilder {
 }
 
 /** Sequential allocator for FrameId to centralize numbering logic. */
-export class FrameIdAllocator {
-  private next = 0;
+export class SequentialIdAllocator<TBrand extends string> {
+  private next: number;
 
   public constructor(start = 0) {
     this.next = start;
   }
 
-  public allocate(): FrameId {
-    const id = brandNumber<"FrameId">(this.next);
+  public allocate(): NumericId<TBrand> {
+    const id = brandNumber<TBrand>(this.next);
     this.next += 1;
     return id;
   }
 }
+
+export class FrameIdAllocator extends SequentialIdAllocator<"FrameId"> {}
+
+/** Sequential allocator for hydration ids (SSR markers). */
+export class HydrationIdAllocator extends SequentialIdAllocator<"HydrationId"> {}

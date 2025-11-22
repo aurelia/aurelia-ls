@@ -1,5 +1,5 @@
 import type { ExprId, SourceSpan, NodeId, InterpIR } from "../../../model/ir.js";
-import type { FrameId } from "../../../model/identity.js";
+import type { FrameId, HydrationId } from "../../../model/identity.js";
 import type { LinkedTemplate } from "../../20-resolve-host/types.js";
 
 /** Module-level SSR planning artifact. */
@@ -12,23 +12,23 @@ export interface SsrPlanModule {
 export interface SsrTemplatePlan {
   name?: string | undefined;
   /** NodeId → HID (hydration id). Assigned only to nodes with dynamic work. */
-  hidByNode: Record<NodeId, number>;
+  hidByNode: Record<NodeId, HydrationId>;
   /** Text nodes with interpolations, (one HID per text node occurrence). */
   textBindings: Array<{
-    hid: number;
+    hid: HydrationId;
     target: NodeId;
     parts: string[];
     exprIds: ExprId[];
     span?: SourceSpan | null;
   }>;
   /** Element/template nodes: static attributes we will actually render. */
-  staticAttrsByHid: Record<number, Record<string, string | null>>;
+  staticAttrsByHid: Record<HydrationId, Record<string, string | null>>;
   /** Dynamic bindings/listeners/refs grouped by HID. */
-  bindingsByHid: Record<number, SsrBinding[]>;
+  bindingsByHid: Record<HydrationId, SsrBinding[]>;
   /** Template controllers (repeat/with/promise/if/switch/portal). */
-  controllersByHid: Record<number, SsrController[]>;
+  controllersByHid: Record<HydrationId, SsrController[]>;
   /** <let> locals on that HID (hosted on the <let> node). */
-  letsByHid: Record<number, { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> }>;
+  letsByHid: Record<HydrationId, { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> }>;
 }
 
 /** Dynamic op variants we care about for SSR/hydration. */
@@ -63,7 +63,7 @@ export interface SsrManifest {
   templates: Array<{
     name?: string;
     nodes: Array<{
-      hid: number;
+      hid: HydrationId;
       nodeId: NodeId;
       tag?: string; // when element
       text?: boolean;

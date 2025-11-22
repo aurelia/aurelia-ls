@@ -53,8 +53,8 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
 
   const calls = overlayEmit.mapping.map((m) => ({
     exprId: m.exprId,
-    overlayStart: m.start,
-    overlayEnd: m.end,
+    overlayStart: m.span.start,
+    overlayEnd: m.span.end,
     htmlSpan: ensureExprSpan(exprSpans.get(m.exprId), sourceFile),
   }));
 

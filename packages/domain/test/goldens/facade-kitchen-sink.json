@@ -1163,10 +1163,10 @@
           "end": 44,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          252,
-          264
-        ],
+        "overlaySpan": {
+          "start": 252,
+          "end": 264
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1177,10 +1177,10 @@
               "end": 44,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              258,
-              263
-            ]
+            "overlaySpan": {
+              "start": 258,
+              "end": 263
+            }
           }
         ]
       },
@@ -1191,10 +1191,10 @@
           "end": 75,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          388,
-          399
-        ],
+        "overlaySpan": {
+          "start": 388,
+          "end": 399
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1205,10 +1205,10 @@
               "end": 58,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              394,
-              398
-            ]
+            "overlaySpan": {
+              "start": 394,
+              "end": 398
+            }
           }
         ]
       },
@@ -1219,10 +1219,10 @@
           "end": 94,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          523,
-          536
-        ],
+        "overlaySpan": {
+          "start": 523,
+          "end": 536
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1233,10 +1233,10 @@
               "end": 82,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              529,
-              535
-            ]
+            "overlaySpan": {
+              "start": 529,
+              "end": 535
+            }
           }
         ]
       },
@@ -1247,10 +1247,10 @@
           "end": 128,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          660,
-          672
-        ],
+        "overlaySpan": {
+          "start": 660,
+          "end": 672
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1261,10 +1261,10 @@
               "end": 112,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              666,
-              671
-            ]
+            "overlaySpan": {
+              "start": 666,
+              "end": 671
+            }
           }
         ]
       },
@@ -1275,10 +1275,10 @@
           "end": 148,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          796,
-          807
-        ],
+        "overlaySpan": {
+          "start": 796,
+          "end": 807
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1289,10 +1289,10 @@
               "end": 133,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              802,
-              806
-            ]
+            "overlaySpan": {
+              "start": 802,
+              "end": 806
+            }
           }
         ]
       },
@@ -1303,10 +1303,10 @@
           "end": 171,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          931,
-          945
-        ],
+        "overlaySpan": {
+          "start": 931,
+          "end": 945
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1317,10 +1317,10 @@
               "end": 156,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              937,
-              944
-            ]
+            "overlaySpan": {
+              "start": 937,
+              "end": 944
+            }
           }
         ]
       },
@@ -1331,10 +1331,10 @@
           "end": 195,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          1069,
-          1086
-        ],
+        "overlaySpan": {
+          "start": 1069,
+          "end": 1086
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1345,10 +1345,10 @@
               "end": 182,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              1075,
-              1085
-            ]
+            "overlaySpan": {
+              "start": 1075,
+              "end": 1085
+            }
           }
         ]
       },
@@ -1359,10 +1359,10 @@
           "end": 246,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          1210,
-          1225
-        ],
+        "overlaySpan": {
+          "start": 1210,
+          "end": 1225
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1373,10 +1373,10 @@
               "end": 246,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              1216,
-              1224
-            ]
+            "overlaySpan": {
+              "start": 1216,
+              "end": 1224
+            }
           }
         ]
       },
@@ -1387,10 +1387,10 @@
           "end": 265,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          1349,
-          1359
-        ],
+        "overlaySpan": {
+          "start": 1349,
+          "end": 1359
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1401,10 +1401,10 @@
               "end": 259,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              1355,
-              1358
-            ]
+            "overlaySpan": {
+              "start": 1355,
+              "end": 1358
+            }
           }
         ]
       },
@@ -1415,10 +1415,10 @@
           "end": 294,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          1483,
-          1497
-        ],
+        "overlaySpan": {
+          "start": 1483,
+          "end": 1497
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1429,10 +1429,10 @@
               "end": 273,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              1489,
-              1496
-            ]
+            "overlaySpan": {
+              "start": 1489,
+              "end": 1496
+            }
           }
         ]
       },
@@ -1443,10 +1443,10 @@
           "end": 0,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          1621,
-          1632
-        ],
+        "overlaySpan": {
+          "start": 1621,
+          "end": 1632
+        },
         "frameId": 0
       },
       {
@@ -1456,10 +1456,10 @@
           "end": 0,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          1756,
-          1765
-        ],
+        "overlaySpan": {
+          "start": 1756,
+          "end": 1765
+        },
         "frameId": 0
       },
       {
@@ -1469,10 +1469,10 @@
           "end": 0,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          1889,
-          1903
-        ],
+        "overlaySpan": {
+          "start": 1889,
+          "end": 1903
+        },
         "frameId": 0
       },
       {
@@ -1482,10 +1482,10 @@
           "end": 413,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2027,
-          2037
-        ],
+        "overlaySpan": {
+          "start": 2027,
+          "end": 2037
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1496,10 +1496,10 @@
               "end": 407,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              2033,
-              2036
-            ]
+            "overlaySpan": {
+              "start": 2033,
+              "end": 2036
+            }
           }
         ]
       },
@@ -1510,10 +1510,10 @@
           "end": 0,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2161,
-          2177
-        ],
+        "overlaySpan": {
+          "start": 2161,
+          "end": 2177
+        },
         "frameId": 0
       },
       {
@@ -1523,10 +1523,10 @@
           "end": 0,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2301,
-          2317
-        ],
+        "overlaySpan": {
+          "start": 2301,
+          "end": 2317
+        },
         "frameId": 0
       },
       {
@@ -1536,10 +1536,10 @@
           "end": 527,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2441,
-          2453
-        ],
+        "overlaySpan": {
+          "start": 2441,
+          "end": 2453
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1550,10 +1550,10 @@
               "end": 527,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              2447,
-              2452
-            ]
+            "overlaySpan": {
+              "start": 2447,
+              "end": 2452
+            }
           }
         ]
       },
@@ -1564,10 +1564,10 @@
           "end": 625,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2577,
-          2586
-        ],
+        "overlaySpan": {
+          "start": 2577,
+          "end": 2586
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1578,10 +1578,10 @@
               "end": 606,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              2583,
-              2585
-            ]
+            "overlaySpan": {
+              "start": 2583,
+              "end": 2585
+            }
           }
         ]
       },
@@ -1592,10 +1592,10 @@
           "end": 633,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2710,
-          2722
-        ],
+        "overlaySpan": {
+          "start": 2710,
+          "end": 2722
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1606,10 +1606,10 @@
               "end": 633,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              2716,
-              2721
-            ]
+            "overlaySpan": {
+              "start": 2716,
+              "end": 2721
+            }
           }
         ]
       },
@@ -1620,10 +1620,10 @@
           "end": 0,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2846,
-          2860
-        ],
+        "overlaySpan": {
+          "start": 2846,
+          "end": 2860
+        },
         "frameId": 0
       },
       {
@@ -1633,10 +1633,10 @@
           "end": 1330,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          2984,
-          2997
-        ],
+        "overlaySpan": {
+          "start": 2984,
+          "end": 2997
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1647,10 +1647,10 @@
               "end": 1330,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              2990,
-              2996
-            ]
+            "overlaySpan": {
+              "start": 2990,
+              "end": 2996
+            }
           }
         ]
       },
@@ -1661,10 +1661,10 @@
           "end": 1378,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          3121,
-          3134
-        ],
+        "overlaySpan": {
+          "start": 3121,
+          "end": 3134
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1675,10 +1675,10 @@
               "end": 1363,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              3127,
-              3133
-            ]
+            "overlaySpan": {
+              "start": 3127,
+              "end": 3133
+            }
           }
         ]
       },
@@ -1689,10 +1689,10 @@
           "end": 1617,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          3258,
-          3271
-        ],
+        "overlaySpan": {
+          "start": 3258,
+          "end": 3271
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1703,10 +1703,10 @@
               "end": 1603,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              3264,
-              3270
-            ]
+            "overlaySpan": {
+              "start": 3264,
+              "end": 3270
+            }
           }
         ]
       },
@@ -1717,10 +1717,10 @@
           "end": 1633,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          3395,
-          3411
-        ],
+        "overlaySpan": {
+          "start": 3395,
+          "end": 3411
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1731,10 +1731,10 @@
               "end": 1627,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              3401,
-              3410
-            ]
+            "overlaySpan": {
+              "start": 3401,
+              "end": 3410
+            }
           }
         ]
       },
@@ -1745,10 +1745,10 @@
           "end": 1662,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          3535,
-          3547
-        ],
+        "overlaySpan": {
+          "start": 3535,
+          "end": 3547
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1759,10 +1759,10 @@
               "end": 1662,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              3541,
-              3546
-            ]
+            "overlaySpan": {
+              "start": 3541,
+              "end": 3546
+            }
           }
         ]
       },
@@ -1773,10 +1773,10 @@
           "end": 1718,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          3671,
-          3681
-        ],
+        "overlaySpan": {
+          "start": 3671,
+          "end": 3681
+        },
         "frameId": 0,
         "segments": [
           {
@@ -1787,10 +1787,10 @@
               "end": 1707,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              3677,
-              3680
-            ]
+            "overlaySpan": {
+              "start": 3677,
+              "end": 3680
+            }
           }
         ]
       },
@@ -1801,10 +1801,10 @@
           "end": 722,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          4198,
-          4213
-        ],
+        "overlaySpan": {
+          "start": 4198,
+          "end": 4213
+        },
         "frameId": 1,
         "segments": [
           {
@@ -1815,10 +1815,10 @@
               "end": 716,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4204,
-              4212
-            ]
+            "overlaySpan": {
+              "start": 4204,
+              "end": 4212
+            }
           }
         ]
       },
@@ -1829,10 +1829,10 @@
           "end": 757,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          4244,
-          4258
-        ],
+        "overlaySpan": {
+          "start": 4244,
+          "end": 4258
+        },
         "frameId": 1,
         "segments": [
           {
@@ -1843,10 +1843,10 @@
               "end": 744,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4250,
-              4254
-            ]
+            "overlaySpan": {
+              "start": 4250,
+              "end": 4254
+            }
           },
           {
             "kind": "member",
@@ -1856,10 +1856,10 @@
               "end": 747,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4255,
-              4257
-            ]
+            "overlaySpan": {
+              "start": 4255,
+              "end": 4257
+            }
           }
         ]
       },
@@ -1870,10 +1870,10 @@
           "end": 771,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          4289,
-          4303
-        ],
+        "overlaySpan": {
+          "start": 4289,
+          "end": 4303
+        },
         "frameId": 1,
         "segments": [
           {
@@ -1884,10 +1884,10 @@
               "end": 765,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4295,
-              4302
-            ]
+            "overlaySpan": {
+              "start": 4295,
+              "end": 4302
+            }
           }
         ]
       },
@@ -1898,10 +1898,10 @@
           "end": 825,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          4334,
-          4355
-        ],
+        "overlaySpan": {
+          "start": 4334,
+          "end": 4355
+        },
         "frameId": 1,
         "segments": [
           {
@@ -1912,10 +1912,10 @@
               "end": 815,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4340,
-              4344
-            ]
+            "overlaySpan": {
+              "start": 4340,
+              "end": 4344
+            }
           },
           {
             "kind": "member",
@@ -1925,10 +1925,10 @@
               "end": 825,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4345,
-              4354
-            ]
+            "overlaySpan": {
+              "start": 4345,
+              "end": 4354
+            }
           }
         ]
       },
@@ -1939,10 +1939,10 @@
           "end": 875,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          4386,
-          4404
-        ],
+        "overlaySpan": {
+          "start": 4386,
+          "end": 4404
+        },
         "frameId": 1,
         "segments": [
           {
@@ -1953,10 +1953,10 @@
               "end": 856,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4392,
-              4396
-            ]
+            "overlaySpan": {
+              "start": 4392,
+              "end": 4396
+            }
           },
           {
             "kind": "member",
@@ -1966,10 +1966,10 @@
               "end": 863,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              4397,
-              4403
-            ]
+            "overlaySpan": {
+              "start": 4397,
+              "end": 4403
+            }
           }
         ]
       },
@@ -1980,10 +1980,10 @@
           "end": 917,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          5682,
-          5700
-        ],
+        "overlaySpan": {
+          "start": 5682,
+          "end": 5700
+        },
         "frameId": 2,
         "segments": [
           {
@@ -1994,10 +1994,10 @@
               "end": 905,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              5688,
-              5699
-            ]
+            "overlaySpan": {
+              "start": 5688,
+              "end": 5699
+            }
           }
         ]
       },
@@ -2008,10 +2008,10 @@
           "end": 985,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          5731,
-          5743
-        ],
+        "overlaySpan": {
+          "start": 5731,
+          "end": 5743
+        },
         "frameId": 2,
         "segments": [
           {
@@ -2022,10 +2022,10 @@
               "end": 971,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              5737,
-              5742
-            ]
+            "overlaySpan": {
+              "start": 5737,
+              "end": 5742
+            }
           }
         ]
       },
@@ -2036,10 +2036,10 @@
           "end": 1071,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          5774,
-          5787
-        ],
+        "overlaySpan": {
+          "start": 5774,
+          "end": 5787
+        },
         "frameId": 2,
         "segments": [
           {
@@ -2050,10 +2050,10 @@
               "end": 1071,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              5780,
-              5786
-            ]
+            "overlaySpan": {
+              "start": 5780,
+              "end": 5786
+            }
           }
         ]
       },
@@ -2064,10 +2064,10 @@
           "end": 1171,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          5818,
-          5833
-        ],
+        "overlaySpan": {
+          "start": 5818,
+          "end": 5833
+        },
         "frameId": 2,
         "segments": [
           {
@@ -2078,10 +2078,10 @@
               "end": 1171,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              5824,
-              5832
-            ]
+            "overlaySpan": {
+              "start": 5824,
+              "end": 5832
+            }
           }
         ]
       },
@@ -2092,10 +2092,10 @@
           "end": 1107,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          5864,
-          5876
-        ],
+        "overlaySpan": {
+          "start": 5864,
+          "end": 5876
+        },
         "frameId": 2,
         "segments": [
           {
@@ -2106,10 +2106,10 @@
               "end": 1006,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              5870,
-              5875
-            ]
+            "overlaySpan": {
+              "start": 5870,
+              "end": 5875
+            }
           }
         ]
       },
@@ -2120,10 +2120,10 @@
           "end": 1445,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          6208,
-          6224
-        ],
+        "overlaySpan": {
+          "start": 6208,
+          "end": 6224
+        },
         "frameId": 3,
         "segments": [
           {
@@ -2134,10 +2134,10 @@
               "end": 1439,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              6214,
-              6217
-            ]
+            "overlaySpan": {
+              "start": 6214,
+              "end": 6217
+            }
           },
           {
             "kind": "member",
@@ -2147,10 +2147,10 @@
               "end": 1445,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              6218,
-              6223
-            ]
+            "overlaySpan": {
+              "start": 6218,
+              "end": 6223
+            }
           }
         ]
       },
@@ -2161,10 +2161,10 @@
           "end": 1540,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "overlayRange": [
-          6255,
-          6273
-        ],
+        "overlaySpan": {
+          "start": 6255,
+          "end": 6273
+        },
         "frameId": 3,
         "segments": [
           {
@@ -2175,10 +2175,10 @@
               "end": 1532,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              6261,
-              6264
-            ]
+            "overlaySpan": {
+              "start": 6261,
+              "end": 6264
+            }
           },
           {
             "kind": "member",
@@ -2188,10 +2188,10 @@
               "end": 1540,
               "file": "fixtures/overlays/kitchen-sink/template.html"
             },
-            "overlaySpan": [
-              6265,
-              6272
-            ]
+            "overlaySpan": {
+              "start": 6265,
+              "end": 6272
+            }
           }
         ]
       }
@@ -13904,7 +13904,17 @@
             "start": 54,
             "end": 75,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 54,
+                "end": 75,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -13923,7 +13933,17 @@
             "start": 76,
             "end": 94,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 76,
+                "end": 94,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -13942,7 +13962,17 @@
             "start": 149,
             "end": 171,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 149,
+                "end": 171,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -13961,7 +13991,17 @@
             "start": 172,
             "end": 195,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 172,
+                "end": 195,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -13980,7 +14020,17 @@
             "start": 232,
             "end": 255,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 232,
+                "end": 255,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -13999,7 +14049,17 @@
             "start": 266,
             "end": 294,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 266,
+                "end": 294,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -14018,7 +14078,17 @@
             "start": 513,
             "end": 556,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 513,
+                "end": 556,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -14037,7 +14107,17 @@
             "start": 604,
             "end": 625,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 604,
+                "end": 625,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       },
       {
@@ -14056,7 +14136,17 @@
             "start": 804,
             "end": 834,
             "file": "fixtures/overlays/kitchen-sink/template.html"
-          }
+          },
+          "trace": [
+            {
+              "by": "resolve-host",
+              "span": {
+                "start": 804,
+                "end": 834,
+                "file": "fixtures/overlays/kitchen-sink/template.html"
+              }
+            }
+          ]
         }
       }
     ]
