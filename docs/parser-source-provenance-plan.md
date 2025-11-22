@@ -25,6 +25,8 @@ This document captures the target architecture for source-aware parsing and the 
 
 ### Checklist
 
+Status: ✅ Complete; parser now emits SourceSpan directly with context (no post-parse rebasing needed) and goldens/tests updated.
+
 #### 1) IR model update (`packages/domain/src/compiler/model/ir.ts`)
 - [x] Change AST node `span` types from `TextSpan` to `SourceSpan` (or add `sourceSpan?: SourceSpan` if doing a transitional shape).
 - [x] Update `BadExpression` to require `SourceSpan`; add optional `origin?: Origin` if desired.
