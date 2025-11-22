@@ -235,10 +235,22 @@ function reduceLinkedIntent(linked) {
   const items = [];
   const diags = (linked.diags ?? []).map((d) => d.code);
 
-  const root = linked.templates?.[0];
-  if (!root) return { items, diags };
+  const visited = new Set();
+  const visit = (template) => {
+    if (!template || visited.has(template)) return;
+    visited.add(template);
+    visitTemplate(template, items, visit);
+  };
 
-  for (const row of root.rows ?? []) {
+  for (const template of linked.templates ?? []) {
+    visit(template);
+  }
+
+  return { items, diags };
+}
+
+function visitTemplate(template, items, visit) {
+  for (const row of template.rows ?? []) {
     for (const ins of row.instructions ?? []) {
       switch (ins.kind) {
         case "propertyBinding":
@@ -310,6 +322,7 @@ function reduceLinkedIntent(linked) {
               }
             }
           }
+          if (ins.def) visit(ins.def);
           break;
         case "hydrateLetElement":
           break;
@@ -318,32 +331,55 @@ function reduceLinkedIntent(linked) {
       }
     }
   }
-
-  return { items, diags };
 }
 
 function compareIntent(actual, expected) {
-  const toSet = (list, keyFn) => new Set((list ?? []).map(keyFn));
+  const toCountMap = (list, keyFn) => {
+    const map = new Map();
+    for (const item of list ?? []) {
+      const k = keyFn(item);
+      map.set(k, (map.get(k) ?? 0) + 1);
+    }
+    return map;
+  };
   const a = {
-    items: toSet(actual.items, (e) => JSON.stringify(e)),
-    diags: toSet(actual.diags, (e) => e),
+    items: toCountMap(actual.items, (e) => JSON.stringify(e)),
+    diags: toCountMap(actual.diags, (e) => e),
   };
   const e = {
-    items: toSet(expected.items ?? [], (e) => JSON.stringify(e)),
-    diags: toSet((expected.diags ?? []).map((d) => d.code ?? d), (e) => e),
+    items: toCountMap(expected.items ?? [], (e) => JSON.stringify(e)),
+    diags: toCountMap((expected.diags ?? []).map((d) => d.code ?? d), (e) => e),
   };
 
-  const missing = {
-    items: [...e.items].filter((k) => !a.items.has(k)),
-    diags: [...e.diags].filter((k) => !a.diags.has(k)),
+  const diffCounts = (actualMap, expectedMap) => {
+    const missing = [];
+    const extra = [];
+    const keys = new Set([...actualMap.keys(), ...expectedMap.keys()]);
+    for (const k of keys) {
+      const aCount = actualMap.get(k) ?? 0;
+      const eCount = expectedMap.get(k) ?? 0;
+      if (eCount > aCount) {
+        for (let i = 0; i < eCount - aCount; i++) missing.push(k);
+      } else if (aCount > eCount) {
+        for (let i = 0; i < aCount - eCount; i++) extra.push(k);
+      }
+    }
+    return { missing, extra };
   };
 
-  const extra = {
-    items: [...a.items].filter((k) => !e.items.has(k)),
-    diags: [...a.diags].filter((k) => !e.diags.has(k)),
-  };
+  const items = diffCounts(a.items, e.items);
+  const diags = diffCounts(a.diags, e.diags);
 
-  return { missing, extra };
+  return {
+    missing: {
+      items: items.missing,
+      diags: diags.missing,
+    },
+    extra: {
+      items: items.extra,
+      diags: diags.extra,
+    },
+  };
 }
 
 function mapTarget(target) {

@@ -244,24 +244,5 @@
         { "kind": "propCommand", "command": "bind", "code": "foo(" }
       ]
     }
-  },
-  {
-    "name": "LB-28 extra comment node",
-    "markup": "<!-- hi -->",
-    "expect": {}
-  },
-  {
-    "name": "LB-29 plain class and style literals",
-    "markup": "<div class=\"foo bar\" style=\"color:red\" title=\"hi\"></div>",
-    "expect": {}
-  },
-  {
-    "name": "LB-30 invalid expression captured as BadExpression",
-    "markup": "<div title.bind=\"foo(\"></div>",
-    "expect": {
-      "expressions": [
-        { "kind": "propCommand", "command": "bind", "code": "foo(" }
-      ]
-    }
   }
 ]

@@ -1,6 +1,6 @@
 [
   {
-    "name": "R-A-01 class interpolation Ã¢â€ â€™ className on <div>",
+    "name": "R-A-01 class interpolation -> className on <div>",
     "markup": "<div class=\"a ${b} c\"></div>",
     "expect": {
       "items": [
@@ -27,7 +27,7 @@
     }
   },
   {
-    "name": "R-A-04 label for=\"${...}\" Ã¢â€ â€™ htmlFor (native)",
+    "name": "R-A-04 label for=\"${...}\" -> htmlFor (native)",
     "markup": "<label for=\"x ${y}\"></label>",
     "expect": {
       "items": [
@@ -36,7 +36,7 @@
     }
   },
   {
-    "name": "R-A-05 img usemap=\"${...}\" Ã¢â€ â€™ useMap (native)",
+    "name": "R-A-05 img usemap=\"${...}\" -> useMap (native)",
     "markup": "<img usemap=\"a ${b}\">",
     "expect": {
       "items": [
@@ -45,7 +45,7 @@
     }
   },
   {
-    "name": "R-A-06 td rowspan=\"${...}\" Ã¢â€ â€™ rowSpan (native)",
+    "name": "R-A-06 td rowspan=\"${...}\" -> rowSpan (native)",
     "markup": "<table><tr><td rowspan=\"a ${b}\"></td></tr></table>",
     "expect": {
       "items": [
@@ -54,7 +54,7 @@
     }
   },
   {
-    "name": "R-A-07 input inputmode interpolation Ã¢â€ â€™ inputMode (unknown target)",
+    "name": "R-A-07 input inputmode interpolation -> inputMode (unknown target)",
     "markup": "<input inputmode=\"x ${y}\">",
     "expect": {
       "items": [
@@ -66,7 +66,7 @@
     }
   },
   {
-    "name": "R-A-08 div contenteditable interpolation Ã¢â€ â€™ contentEditable (unknown target)",
+    "name": "R-A-08 div contenteditable interpolation -> contentEditable (unknown target)",
     "markup": "<div contenteditable=\"a ${b}\"></div>",
     "expect": {
       "items": [
@@ -96,7 +96,7 @@
     }
   },
   {
-    "name": "R-A-11 div title interpolation Ã¢â€ â€™ title (unknown target)",
+    "name": "R-A-11 div title interpolation -> title (unknown target)",
     "markup": "<div title=\"a ${b}\"></div>",
     "expect": {
       "items": [
@@ -108,7 +108,7 @@
     }
   },
   {
-    "name": "R-A-12 input minlength interpolation Ã¢â€ â€™ minLength (unknown target)",
+    "name": "R-A-12 input minlength interpolation -> minLength (unknown target)",
     "markup": "<input minlength=\"x ${y}\">",
     "expect": {
       "items": [
@@ -129,7 +129,7 @@
     }
   },
   {
-    "name": "R-A-14 camelCase fallback for attr interpolation: foo-bar Ã¢â€ â€™ fooBar (unknown) on <div>",
+    "name": "R-A-14 camelCase fallback for attr interpolation: foo-bar -> fooBar (unknown) on <div>",
     "markup": "<div foo-bar=\"a ${b}\"></div>",
     "expect": {
       "items": [
@@ -196,7 +196,7 @@
     }
   },
   {
-    "name": "R-A-17 .class override Ã¢â€ â€™ className (native)",
+    "name": "R-A-17 .class override -> className (native)",
     "markup": "<div d.class=\"expr\"></div>",
     "expect": {
       "items": [
@@ -223,7 +223,7 @@
     }
   },
   {
-    "name": "R-A-20 title interpolation on <span> Ã¢â€ â€™ unknown target + AU1104",
+    "name": "R-A-20 title interpolation on <span> -> unknown target + AU1104",
     "markup": "<span title=\"a ${b}\"></span>",
     "expect": {
       "items": [
@@ -235,7 +235,7 @@
     }
   },
   {
-    "name": "R-A-21 img usemap interpolation Ã¢â€ â€™ useMap (native)",
+    "name": "R-A-21 img usemap interpolation -> useMap (native)",
     "markup": "<img usemap=\"a ${b}\">",
     "expect": {
       "items": [
@@ -244,7 +244,7 @@
     }
   },
   {
-    "name": "R-A-22 label for interpolation Ã¢â€ â€™ htmlFor (native)",
+    "name": "R-A-22 label for interpolation -> htmlFor (native)",
     "markup": "<label for=\"x ${y}\"></label>",
     "expect": {
       "items": [
@@ -253,7 +253,7 @@
     }
   },
   {
-    "name": "R-A-23 textarea maxlength interpolation Ã¢â€ â€™ maxLength (unknown target)",
+    "name": "R-A-23 textarea maxlength interpolation -> maxLength (unknown target)",
     "markup": "<textarea maxlength=\"a ${b}\"></textarea>",
     "expect": {
       "items": [
@@ -265,7 +265,7 @@
     }
   },
   {
-    "name": "R-A-24 th rowspan interpolation Ã¢â€ â€™ rowSpan (native)",
+    "name": "R-A-24 th rowspan interpolation -> rowSpan (native)",
     "markup": "<table><tr><th rowspan=\"a ${b}\"></th></tr></table>",
     "expect": {
       "items": [
@@ -297,7 +297,7 @@
     }
   },
   {
-    "name": "R-A-26 attribute interpolation on unknown attr Ã¢â€ â€™ AU1104",
+    "name": "R-A-26 attribute interpolation on unknown attr -> AU1104",
     "markup": "<div foo=\"a ${b}\"></div>",
     "expect": {
       "items": [
@@ -332,7 +332,7 @@
     }
   },
   {
-    "name": "R-A-28 attribute interpolation normalized by perTag to a missing prop Ã¢â€ â€™ AU1104",
+    "name": "R-A-28 attribute interpolation normalized by perTag to a missing prop -> AU1104",
     "semOverrides": {
       "naming": {
         "perTag": {
