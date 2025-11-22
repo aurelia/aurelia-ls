@@ -11,7 +11,7 @@ export function buildDomRoot(
 ): TemplateNode {
   return {
     kind: "template",
-    id: "0" as NodeId,
+    id: ids.current(),
     ns: "html",
     attrs: [],
     children: buildDomChildren(rootLike, ids, file, idMap),
@@ -31,7 +31,7 @@ export function buildDomChildren(
 
     for (const n of kids) {
       if (isElement(n)) {
-        const id = ids.nextElement() as NodeId;
+        const id = ids.nextElement();
         idMap?.set(n, id);
 
         if (n.nodeName === "template") {
@@ -61,7 +61,7 @@ export function buildDomChildren(
       }
 
       if (isText(n)) {
-        const id = ids.nextText() as NodeId;
+        const id = ids.nextText();
         idMap?.set(n, id);
         out.push({
           kind: "text",
@@ -74,7 +74,7 @@ export function buildDomChildren(
       }
 
       if (isComment(n)) {
-        const id = ids.nextComment() as NodeId;
+        const id = ids.nextComment();
         idMap?.set(n, id);
         out.push({
           kind: "comment",

@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import { normalizePathForId, toSourceFileId, type NormalizedPath, type SourceFileId } from "./identity.js";
-import { offsetSpan, toSourceSpan, type SourceSpan, type TextSpan } from "./span.js";
+import { normalizeSpan, offsetSpan, toSourceSpan, type SourceSpan, type TextSpan } from "./span.js";
 
 export interface SourceFile {
   readonly id: SourceFileId;
@@ -35,12 +35,12 @@ export function spanFromOffsets(
   const offsets = coerceOffsets(loc);
   if (!offsets) return null;
   const file = toFileId(source);
-  return toSourceSpan(offsets, file);
+  return normalizeSpan(toSourceSpan(offsets, file));
 }
 
 export function absoluteSpan(relative: TextSpan | null | undefined, base: SourceSpan | null | undefined): SourceSpan | null {
   if (!relative || !base) return null;
-  return offsetSpan(toSourceSpan(relative, base.file), base.start);
+  return normalizeSpan(offsetSpan(toSourceSpan(relative, base.file), base.start));
 }
 
 export function ensureSpanFile(
@@ -48,14 +48,31 @@ export function ensureSpanFile(
   source: SourceFile | SourceFileId | string | null | undefined,
 ): SourceSpan | null {
   if (!span) return null;
-  if (span.file) return span;
+  if (span.file) return normalizeSpan(span);
   const file = toFileId(source);
-  return file ? { ...span, file } : span;
+  return file ? normalizeSpan({ ...span, file }) : normalizeSpan(span);
 }
 
 export function fallbackSpan(source: SourceFile | SourceFileId | string, start = 0, end = start): SourceSpan {
   const file = toFileIdRequired(source);
   return { start, end, file };
+}
+
+export function resolveSourceSpanMaybe(
+  span: SourceSpan | null | undefined,
+  source: SourceFile | SourceFileId | string | null | undefined,
+): SourceSpan | null {
+  const withFile = ensureSpanFile(span, source);
+  return withFile ? normalizeSpan(withFile) : null;
+}
+
+export function resolveSourceSpan(
+  span: SourceSpan | null | undefined,
+  source: SourceFile | SourceFileId | string,
+  start = 0,
+  end = start,
+): SourceSpan {
+  return normalizeSpan(ensureSpanFile(span, source) ?? fallbackSpan(source, start, end));
 }
 
 function coerceOffsets(loc: OffsetLike | null | undefined): { start: number; end: number } | null {

@@ -27,6 +27,8 @@ import type {
 } from "../../model/symbols.js";
 
 import type { RepeatController } from "../../language/registry.js";
+import { FrameIdAllocator } from "../../model/identity.js";
+import { authoredProvenance } from "../../model/origin.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -71,10 +73,11 @@ function buildTemplateScopes(
   forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
 ): ScopeTemplate {
   const frames: ScopeFrame[] = [];
+  const frameIds = new FrameIdAllocator();
   const exprToFrame: Record<string /* ExprId */, FrameId> = Object.create(null);
 
   // Root frame (component root)
-  const rootId = nextFrameId(frames);
+  const rootId = frameIds.allocate();
   frames.push({
     id: rootId,
     parent: null,
@@ -86,7 +89,7 @@ function buildTemplateScopes(
   });
 
   // Walk rows at the root template
-  walkRows(t.rows, rootId, frames, exprToFrame, diags, domToLinked, forOfIndex, /*allowLets*/ true);
+  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, /*allowLets*/ true);
 
   return { name: t.name!, frames, root: rootId, exprToFrame };
 }
@@ -95,6 +98,7 @@ function walkRows(
   rows: LinkedRow[],
   currentFrame: FrameId,
   frames: ScopeFrame[],
+  frameIds: FrameIdAllocator,
   exprToFrame: Record<string, FrameId>,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
@@ -171,7 +175,7 @@ function walkRows(
           }
 
           // 2) Enter the controller's frame according to semantics.scope
-          const nextFrame = isPromiseBranch ? currentFrame : enterControllerFrame(ins, currentFrame, frames);
+          const nextFrame = isPromiseBranch ? currentFrame : enterControllerFrame(ins, currentFrame, frames, frameIds);
 
           // 3) Populate locals / overlays + record origin metadata
           switch (ins.res) {
@@ -180,7 +184,8 @@ function walkRows(
 
               // provenance for plan/typecheck
               const forOfAstId = iter.forOf.astId;
-              frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "repeat", forOfAstId } } as ScopeFrame;
+              const repeatSpan = iter.forOf.loc ?? ins.loc ?? null;
+              setFrameOrigin(nextFrame, frames, { kind: "repeat", forOfAstId, ...authoredProvenance(repeatSpan, "repeat controller") });
 
               // locals/contextuals
               const forOfAst = forOfIndex.get(forOfAstId)!;
@@ -209,8 +214,10 @@ function walkRows(
               const valueProp = getValueProp(ins);
               setOverlayBase(nextFrame, frames, { kind: "with", from: valueProp.from, span: valueProp.loc ?? null });
               const ids = exprIdsOf(valueProp.from);
-              if (ids.length > 0) {
-                frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "with", valueExprId: ids[0] } } as ScopeFrame;
+              const [valueExprId] = ids;
+              if (valueExprId) {
+                const originSpan = valueProp.loc ?? ins.loc ?? null;
+                setFrameOrigin(nextFrame, frames, { kind: "with", valueExprId, ...authoredProvenance(originSpan, "'with' controller") });
               }
               break;
             }
@@ -218,8 +225,10 @@ function walkRows(
               if (!isPromiseBranch) {
                 const valueProp = getValueProp(ins);
                 const ids = exprIdsOf(valueProp.from);
-                if (ids.length > 0) {
-                  frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "promise", valueExprId: ids[0] } } as ScopeFrame;
+                const [valueExprId] = ids;
+                if (valueExprId) {
+                  const originSpan = valueProp.loc ?? ins.loc ?? null;
+                  setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...authoredProvenance(originSpan, "promise controller") });
                 }
               }
               if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
@@ -245,7 +254,7 @@ function walkRows(
             // - overlay scope (repeat/with/promise): their <let> belong to that overlay frame
             // - reuse scope (if/switch/portal): their <let> must not leak to the whole frame
             const childAllowsLets = ins.controller.spec.scope === "overlay";
-            walkRows(linkedNested.rows, nextFrame, frames, exprToFrame, diags, domToLinked, forOfIndex, childAllowsLets);
+            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, childAllowsLets);
           }
           break;
         }
@@ -265,22 +274,15 @@ function walkRows(
   }
 }
 
-/* =============================================================================
- * Frame management
- * ============================================================================= */
-
-function nextFrameId(frames: ScopeFrame[]): FrameId {
-  return frames.length as FrameId;
-}
-
 function enterControllerFrame(
   ctrl: LinkedHydrateTemplateController,
   current: FrameId,
   frames: ScopeFrame[],
+  frameIds: FrameIdAllocator,
 ): FrameId {
   switch (ctrl.controller.spec.scope) {
     case "overlay": {
-      const id = nextFrameId(frames);
+      const id = frameIds.allocate();
       frames.push({ id, parent: current, kind: "overlay", overlay: null, symbols: [], origin: null, letValueExprs: null });
       return id;
     }
@@ -294,7 +296,12 @@ function enterControllerFrame(
 
 function setOverlayBase(targetFrame: FrameId, frames: ScopeFrame[], overlay: ScopeFrame["overlay"]): void {
   const f = frames[targetFrame];
-  frames[targetFrame] = { ...f, overlay } as ScopeFrame;;
+  frames[targetFrame] = { ...f, overlay } as ScopeFrame;
+}
+
+function setFrameOrigin(targetFrame: FrameId, frames: ScopeFrame[], origin: ScopeFrame["origin"]): void {
+  const f = frames[targetFrame];
+  frames[targetFrame] = { ...f, origin } as ScopeFrame;
 }
 
 function addUniqueSymbols(targetFrame: FrameId, frames: ScopeFrame[], symbols: ScopeSymbol[], diags: ScopeDiagnostic[]): void {

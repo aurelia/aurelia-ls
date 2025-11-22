@@ -48,6 +48,21 @@ export function provenanceSpan(provenance?: Provenance | Origin | null): SourceS
   return provenance.origin?.span ?? provenance.fallbackSpan ?? null;
 }
 
+export function authoredProvenance(span?: SourceSpan | null, description?: string): Provenance {
+  const origin = authoredOrigin(span ?? null, description);
+  return { origin, fallbackSpan: span ?? null };
+}
+
+export function syntheticProvenance(description: string, span?: SourceSpan | null, derivedFrom?: Origin | null): Provenance {
+  const origin = syntheticOrigin(description, span ?? null, derivedFrom ?? null);
+  return { origin, fallbackSpan: span ?? null };
+}
+
+export function inferredProvenance(description: string, span?: SourceSpan | null, derivedFrom?: Origin | null): Provenance {
+  const origin = inferredOrigin(description, span ?? null, derivedFrom ?? null);
+  return { origin, fallbackSpan: span ?? null };
+}
+
 export function preferOrigin(primary?: Origin | null, fallback?: Origin | null): Origin | null {
   return primary ?? fallback ?? null;
 }

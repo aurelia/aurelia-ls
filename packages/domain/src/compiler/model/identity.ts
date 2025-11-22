@@ -204,3 +204,18 @@ export class NodeAddressBuilder {
     return { template: this.template, node: this.ids.withSuffix(suffix) };
   }
 }
+
+/** Sequential allocator for FrameId to centralize numbering logic. */
+export class FrameIdAllocator {
+  private next = 0;
+
+  public constructor(start = 0) {
+    this.next = start;
+  }
+
+  public allocate(): FrameId {
+    const id = brandNumber<"FrameId">(this.next);
+    this.next += 1;
+    return id;
+  }
+}
