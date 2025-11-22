@@ -41,7 +41,7 @@ export class FileStageCache implements StageCache {
     if (!fs.existsSync(file)) return null;
     try {
       const text = fs.readFileSync(file, "utf8");
-      const parsed = JSON.parse(text) as StageCacheEntry<TValue>;
+      const parsed = JSON.parse(text, cacheReviver) as StageCacheEntry<TValue>;
       return parsed;
     } catch {
       return null;
@@ -51,7 +51,7 @@ export class FileStageCache implements StageCache {
   store<TValue = unknown>(key: string, entry: StageCacheEntry<TValue>): void {
     const file = this.#pathFor(key);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    const payload = JSON.stringify(entry);
+    const payload = JSON.stringify(entry, cacheReplacer);
     fs.writeFileSync(file, payload, "utf8");
   }
 
@@ -63,4 +63,27 @@ export class FileStageCache implements StageCache {
 
 export function createDefaultCacheDir(): string {
   return path.join(process.cwd(), ".aurelia-cache");
+}
+
+function cacheReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Map) {
+    return { __cacheType: "Map", entries: Array.from(value.entries()) };
+  }
+  if (value instanceof Set) {
+    return { __cacheType: "Set", values: Array.from(value.values()) };
+  }
+  return value;
+}
+
+function cacheReviver(_key: string, value: unknown): unknown {
+  if (value && typeof value === "object") {
+    const record = value as { __cacheType?: string; entries?: [unknown, unknown][]; values?: unknown[] };
+    if (record.__cacheType === "Map" && Array.isArray(record.entries)) {
+      return new Map(record.entries);
+    }
+    if (record.__cacheType === "Set" && Array.isArray(record.values)) {
+      return new Set(record.values);
+    }
+  }
+  return value;
 }

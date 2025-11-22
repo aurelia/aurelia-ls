@@ -186,14 +186,12 @@ function collectOneLambdaPerExpression(
   exprIndex: ReadonlyMap<ExprId, ExprTableEntry>,
 ): OverlayLambdaPlan[] {
   const out: OverlayLambdaPlan[] = [];
-  const seen = new Set<string /* ExprId string */>();
+  const seen = new Set<ExprId>();
 
-  for (const [idStr, fid] of Object.entries(st.exprToFrame)) {
+  for (const [id, fid] of st.exprToFrame.entries()) {
     if (fid !== frameId) continue;
-    if (seen.has(idStr)) continue;
-    seen.add(idStr);
-
-    const id = idStr as ExprId;
+    if (seen.has(id)) continue;
+    seen.add(id);
     const entry = exprIndex.get(id);
     if (!entry) continue;
 

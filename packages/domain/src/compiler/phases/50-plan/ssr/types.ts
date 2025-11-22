@@ -1,4 +1,5 @@
 import type { ExprId, SourceSpan, NodeId, InterpIR } from "../../../model/ir.js";
+import type { FrameId } from "../../../model/identity.js";
 import type { LinkedTemplate } from "../../20-resolve-host/types.js";
 
 /** Module-level SSR planning artifact. */
@@ -32,12 +33,12 @@ export interface SsrTemplatePlan {
 
 /** Dynamic op variants we care about for SSR/hydration. */
 export type SsrBinding =
-  | { kind: "prop"; to: string; exprId: ExprId; frame: number; mode: "default" | "oneTime" | "toView" | "fromView" | "twoWay" }
-  | { kind: "styleProp"; to: string; exprId: ExprId; frame: number }
-  | { kind: "attrInterp"; attr: string; to: string; parts: string[]; exprIds: ExprId[]; frames: number[] }
-  | { kind: "attr"; attr: string; to: string; exprId: ExprId; frame: number }
-  | { kind: "listener"; name: string; exprId: ExprId; frame: number; capture?: boolean; modifier?: string | null }
-  | { kind: "ref"; to: string; exprId: ExprId; frame: number };
+  | { kind: "prop"; to: string; exprId: ExprId; frame: FrameId; mode: "default" | "oneTime" | "toView" | "fromView" | "twoWay" }
+  | { kind: "styleProp"; to: string; exprId: ExprId; frame: FrameId }
+  | { kind: "attrInterp"; attr: string; to: string; parts: string[]; exprIds: ExprId[]; frames: FrameId[] }
+  | { kind: "attr"; attr: string; to: string; exprId: ExprId; frame: FrameId }
+  | { kind: "listener"; name: string; exprId: ExprId; frame: FrameId; capture?: boolean; modifier?: string | null }
+  | { kind: "ref"; to: string; exprId: ExprId; frame: FrameId };
 
 /** Controller shape for SSR. We carry nested `def` as another template plan. */
 export interface SsrController {
@@ -53,7 +54,7 @@ export interface SsrController {
   /** Linked template for render-time DOM traversal (not emitted in manifest). */
   defLinked?: LinkedTemplate;
   /** Frame where the controlling expr evaluates. */
-  frame: number;
+  frame: FrameId;
 }
 
 /** Compact manifest we emit alongside HTML for "server emits". */

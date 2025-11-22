@@ -8,17 +8,17 @@ import type {
 } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
-import { collectExprMemberSegments, collectExprSpans, type HtmlMemberSegment } from "./expr-utils.js";
+import { collectExprMemberSegments, collectExprSpans, ensureExprSpan, resolveExprSpanIndex, type HtmlMemberSegment } from "./expr-utils.js";
 import { spanLength } from "./model/span.js";
 import type { SourceFile } from "./model/source.js";
-import { resolveSourceSpan } from "./model/source.js";
+import { exprIdMapGet, type ExprIdMapLike } from "./model/identity.js";
 
 export interface BuildMappingInputs {
   overlayMapping: readonly OverlayEmitMappingEntry[];
   ir: IrModule;
   exprTable?: readonly ExprTableEntry[];
   fallbackFile: SourceFile;
-  exprToFrame?: Record<ExprId, FrameId> | null;
+  exprToFrame?: ExprIdMapLike<FrameId> | null;
 }
 
 export interface BuildMappingResult {
@@ -32,17 +32,17 @@ export interface MappingHit {
 }
 
 export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingResult {
-  const exprSpans = collectExprSpans(inputs.ir);
+  const exprSpans = resolveExprSpanIndex(collectExprSpans(inputs.ir), inputs.fallbackFile);
   const memberHtmlSegments = collectExprMemberSegments(inputs.exprTable ?? [], exprSpans);
   const entries: TemplateMappingEntry[] = inputs.overlayMapping.map((m) => {
-    const htmlSpan = resolveSourceSpan(exprSpans.get(m.exprId), inputs.fallbackFile);
+    const htmlSpan = ensureExprSpan(exprSpans.get(m.exprId), inputs.fallbackFile);
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const segments = buildSegmentPairs(m.segments ?? [], htmlSegments);
     return {
       exprId: m.exprId,
       htmlSpan,
       overlayRange: [m.start, m.end],
-      frameId: inputs.exprToFrame?.[m.exprId] ?? undefined,
+      frameId: exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined,
       segments: segments.length > 0 ? segments : undefined,
     };
   });

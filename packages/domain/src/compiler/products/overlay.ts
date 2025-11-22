@@ -5,8 +5,8 @@ import type { PipelineSession } from "../pipeline/engine.js";
 import type { OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../../contracts.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "../model/ir.js";
-import type { FrameId } from "../model/symbols.js";
-import { resolveSourceFile, resolveSourceSpan } from "../model/source.js";
+import { resolveSourceFile } from "../model/source.js";
+import { ensureExprSpan } from "../expr-utils.js";
 
 export interface OverlayProductArtifacts {
   plan: OverlayPlanModule;
@@ -41,7 +41,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
   const overlayEmit = session.run("60-emit-overlay");
 
   const overlayPath = path.join(path.dirname(opts.templateFilePath), overlayEmit.filename);
-  const exprToFrame = scope.templates?.[0]?.exprToFrame as ExprToFrameMap | undefined;
+  const exprToFrame = scope.templates?.[0]?.exprToFrame;
 
   const { mapping, exprSpans } = buildTemplateMapping({
     overlayMapping: overlayEmit.mapping,
@@ -55,7 +55,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     exprId: m.exprId,
     overlayStart: m.start,
     overlayEnd: m.end,
-    htmlSpan: resolveSourceSpan(exprSpans.get(m.exprId), sourceFile),
+    htmlSpan: ensureExprSpan(exprSpans.get(m.exprId), sourceFile),
   }));
 
   const overlay: OverlayProductResult = {
@@ -69,5 +69,3 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
 
   return { plan: planOut, overlay, mapping, query, exprSpans, exprTable: ir.exprTable ?? [] };
 }
-
-type ExprToFrameMap = Record<ExprId, FrameId>;

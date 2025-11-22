@@ -27,7 +27,7 @@ import type {
 } from "../../model/symbols.js";
 
 import type { RepeatController } from "../../language/registry.js";
-import { FrameIdAllocator } from "../../model/identity.js";
+import { FrameIdAllocator, type ExprIdMap } from "../../model/identity.js";
 import { authoredProvenance } from "../../model/origin.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
@@ -74,7 +74,7 @@ function buildTemplateScopes(
 ): ScopeTemplate {
   const frames: ScopeFrame[] = [];
   const frameIds = new FrameIdAllocator();
-  const exprToFrame: Record<string /* ExprId */, FrameId> = Object.create(null);
+  const exprToFrame: ExprIdMap<FrameId> = new Map();
 
   // Root frame (component root)
   const rootId = frameIds.allocate();
@@ -99,7 +99,7 @@ function walkRows(
   currentFrame: FrameId,
   frames: ScopeFrame[],
   frameIds: FrameIdAllocator,
-  exprToFrame: Record<string, FrameId>,
+  exprToFrame: ExprIdMap<FrameId>,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
@@ -119,10 +119,10 @@ function walkRows(
           mapBindingSource(ins.from, currentFrame, exprToFrame);
           break;
         case "listenerBinding":
-          exprToFrame[idOf(ins.from)] = currentFrame;
+          exprToFrame.set(idOf(ins.from), currentFrame);
           break;
         case "refBinding":
-          exprToFrame[idOf(ins.from)] = currentFrame;
+          exprToFrame.set(idOf(ins.from), currentFrame);
           break;
         case "textBinding":
           mapBindingSource(ins.from, currentFrame, exprToFrame);
@@ -145,7 +145,7 @@ function walkRows(
         // ---- Standalone iteratorBinding should not appear (repeat packs it as a prop) ----
         case "iteratorBinding":
           // Header evaluated in the outer frame: record the ForOfStatement id.
-          exprToFrame[ins.forOf.astId] = currentFrame;
+          exprToFrame.set(ins.forOf.astId, currentFrame);
           // Tail options (aux) also evaluate in the outer frame.
           for (const a of ins.aux) mapBindingSource(a.from, currentFrame, exprToFrame);
           break;
@@ -162,7 +162,7 @@ function walkRows(
                 mapBindingSource(p.from, propFrame, exprToFrame);
                 break;
               case "iteratorBinding":
-                exprToFrame[p.forOf.astId] = propFrame; // header evaluated in outer frame
+                exprToFrame.set(p.forOf.astId, propFrame); // header evaluated in outer frame
                 for (const a of p.aux) mapBindingSource(a.from, propFrame, exprToFrame);
                 break;
               default:
@@ -171,7 +171,7 @@ function walkRows(
           }
           // Switch branches evaluate in outer frame too
           if (ins.branch && ins.branch.kind === "case") {
-            exprToFrame[idOf(ins.branch.expr)] = propFrame;
+            exprToFrame.set(idOf(ins.branch.expr), propFrame);
           }
 
           // 2) Enter the controller's frame according to semantics.scope
@@ -326,7 +326,7 @@ function materializeLetSymbols(
   ins: LinkedHydrateLetElement,
   currentFrame: FrameId,
   frames: ScopeFrame[],
-  exprToFrame: Record<string, FrameId>,
+  exprToFrame: ExprIdMap<FrameId>,
   diags: ScopeDiagnostic[],
   publishEnv: boolean,
 ): void {
@@ -380,7 +380,7 @@ function getValueProp(ctrl: LinkedHydrateTemplateController): _LinkedValueProp {
  * Expression → Frame mapping
  * ============================================================================= */
 
-function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: Record<string, FrameId>): void {
+function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: ExprIdMap<FrameId>): void {
   switch (b.kind) {
     case "propertyBinding":
     case "attributeBinding":
@@ -393,8 +393,8 @@ function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: Record
       assertUnreachable(b as never);
   }
 }
-function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: Record<string, FrameId>): void {
-  for (const id of exprIdsOf(src)) out[id] = frame;
+function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: ExprIdMap<FrameId>): void {
+  for (const id of exprIdsOf(src)) out.set(id, frame);
 }
 
 /** Extract all ExprIds from a BindingSourceIR (ExprRef | InterpIR). */

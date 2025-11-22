@@ -196,7 +196,7 @@ Responsibilities:
   * Promise branch alias (`then="r"`, `catch="e"`).
 * Build `exprToFrame` mapping:
 
-  * For every `ExprId`, record **which frame** it is evaluated in.
+  * For every `ExprId`, record **which frame** it is evaluated in (stored as a branded `Map<ExprId, FrameId>`).
 
 Invariants:
 

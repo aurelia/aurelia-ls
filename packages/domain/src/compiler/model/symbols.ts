@@ -9,7 +9,7 @@
  * ======================================================================================= */
 
 import type { SourceSpan, BindingSourceIR } from "./ir.js";
-import type { FrameId, ExprId } from "./identity.js";
+import type { FrameId, ExprId, ExprIdMap, ReadonlyExprIdMap } from "./identity.js";
 import type { Provenance } from "./origin.js";
 import type { CompilerDiagnostic } from "../diagnostics.js";
 
@@ -105,7 +105,7 @@ export interface ScopeTemplate {
    * Map each expression occurrence to the frame where it is evaluated.
    * Keyed by ExprId (string brand).
    */
-  exprToFrame: Record<string /* ExprId */, FrameId>;
+  exprToFrame: ReadonlyExprIdMap<FrameId>;
 }
 
 export interface ScopeModule {
