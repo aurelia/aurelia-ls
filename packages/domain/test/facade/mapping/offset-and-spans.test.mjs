@@ -126,6 +126,28 @@ test("mapping helpers translate overlay/html offsets with and without member seg
   assert.equal(mapHtmlOffsetToOverlay(mapping, 1), null, "HTML offsets outside any expression should return null");
 });
 
+test("member segments preserve authored HTML offsets from parser spans", () => {
+  const html = "<template><div>${user.address.street}</div></template>";
+  const templateFilePath = "C:/mem/facade-member-spans.html";
+  const compilation = compile(html, templateFilePath);
+
+  const entry = compilation.mapping.entries.find((e) => e.segments?.some((s) => s.path.endsWith("address.street")));
+  assert.ok(entry, "expected mapping entry for member path");
+  const seg = entry.segments?.find((s) => s.path.endsWith("address.street"));
+  assert.ok(seg, "expected member segment for address.street");
+
+  const expectedStart = html.indexOf("user.address.street");
+  const expectedEnd = expectedStart + "user.address.street".length;
+
+  assert.equal(seg.htmlSpan.start, expectedStart, "member html span should align to authored offset");
+  assert.equal(seg.htmlSpan.end, expectedEnd, "member html span should cover the authored path only");
+  assert.equal(seg.htmlSpan.file, entry.htmlSpan.file, "member spans should carry the same file id as the expression");
+  assert.ok(
+    seg.htmlSpan.start >= entry.htmlSpan.start && seg.htmlSpan.end <= entry.htmlSpan.end,
+    "member span should stay within the owning expression span",
+  );
+});
+
 test("exprTable aligns with mapping entries and exprSpans", () => {
   const html = `<template title.bind="user.name">\${user.count}</template>`;
   const compilation = compile(html, "C:/mem/facade-exprtable.html");

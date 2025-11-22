@@ -249,7 +249,11 @@ export function collectExprMemberSegments(
   }
 
   function toHtmlSpan(span: { start: number; end: number } | undefined, base: SourceSpan): SourceSpan {
-    return absoluteSpan(span ?? null, base) ?? base;
+    const normalizedBase = normalizeSpan(base);
+    if (!span) return normalizedBase;
+    const normalizedSpan = normalizeSpan(span as SourceSpan);
+    if ((normalizedSpan as SourceSpan).file) return normalizedSpan as SourceSpan;
+    return absoluteSpan(normalizedSpan, normalizedBase) ?? normalizedBase;
   }
 }
 
