@@ -8,18 +8,18 @@ import type {
   SourceSpan,
 } from "./model/ir.js";
 import type { SourceFile } from "./model/source.js";
-import { absoluteSpan, resolveSourceSpan } from "./model/source.js";
-import type { SourceFileId } from "./model/identity.js";
+import { absoluteSpan, resolveSourceSpan, resolveSourceSpanMaybe } from "./model/source.js";
+import type { ExprIdMap, SourceFileId } from "./model/identity.js";
 import { normalizeSpan } from "./model/span.js";
 
 /**
  * Collect authored spans for every expression occurrence in an IR module.
  * Useful for diagnostics and overlay/mapping back to HTML.
  */
-export function collectExprSpans(ir: IrModule): Map<ExprId, SourceSpan> {
-  const out = new Map<ExprId, SourceSpan>();
+export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
+  const out: ExprIdMap<SourceSpan> = new Map();
   const visitSource = (src: BindingSourceIR) => {
-    if (isInterp(src)) {
+    if (isInterpolation(src)) {
       for (const ref of src.exprs) if (!out.has(ref.id) && ref.loc) out.set(ref.id, normalizeSpan(ref.loc));
     } else {
       const ref = src as ExprRef;
@@ -37,22 +37,22 @@ export function collectExprSpans(ir: IrModule): Map<ExprId, SourceSpan> {
           case "textBinding":
             visitSource(ins.from);
             break;
-          case "listenerBinding":
-          case "refBinding":
-            if (ins.from?.loc) out.set(ins.from.id, ins.from.loc);
-            break;
-          case "hydrateTemplateController":
-            for (const p of ins.props ?? []) {
-              if (p.type === "iteratorBinding") {
-                continue;
-              } else if (p.type === "propertyBinding") {
-                visitSource(p.from);
-              }
-            }
-            if (ins.branch?.kind === "case" && ins.branch.expr.loc) {
-              out.set(ins.branch.expr.id, ins.branch.expr.loc);
-            }
-            break;
+      case "listenerBinding":
+      case "refBinding":
+        if (ins.from?.loc) out.set(ins.from.id, normalizeSpan(ins.from.loc));
+        break;
+      case "hydrateTemplateController":
+        for (const p of ins.props ?? []) {
+          if (p.type === "iteratorBinding") {
+            continue;
+          } else if (p.type === "propertyBinding") {
+            visitSource(p.from);
+          }
+        }
+        if (ins.branch?.kind === "case" && ins.branch.expr.loc) {
+          out.set(ins.branch.expr.id, normalizeSpan(ins.branch.expr.loc));
+        }
+        break;
           case "hydrateLetElement":
             for (const lb of ins.instructions ?? []) visitSource(lb.from);
             break;
@@ -74,25 +74,65 @@ export function ensureExprSpan(
 
 export function resolveExprSpanIndex(
   spans: ReadonlyMap<ExprId, SourceSpan>,
-  fallback: SourceFile | SourceFileId | string,
-): Map<ExprId, SourceSpan> {
-  const out = new Map<ExprId, SourceSpan>();
+  fallback?: SourceFile | SourceFileId | string,
+): ExprIdMap<SourceSpan> {
+  const out: ExprIdMap<SourceSpan> = new Map();
+  const inferredFallback = fallback ?? firstFileFromSpans(spans);
   for (const [id, span] of spans.entries()) {
-    out.set(id, resolveSourceSpan(span ?? null, fallback));
+    const resolved = inferredFallback
+      ? resolveSourceSpanMaybe(span ?? null, inferredFallback) ?? normalizeSpan(span ?? { start: 0, end: 0 })
+      : normalizeSpan(span ?? { start: 0, end: 0 });
+    out.set(id, resolved);
   }
   return out;
 }
 
 export type HtmlMemberSegment = { path: string; span: SourceSpan };
 
+export interface ExprSpanIndex {
+  readonly spans: ExprIdMap<SourceSpan>;
+  readonly fallback?: SourceFile | SourceFileId | string;
+  get(id: ExprId): SourceSpan | null;
+  ensure(id: ExprId, fallback?: SourceFile | SourceFileId | string): SourceSpan;
+}
+
+/** Build a normalized, file-aware span index for all expressions in an IR module. */
+export function buildExprSpanIndex(ir: IrModule, fallback?: SourceFile | SourceFileId | string): ExprSpanIndex {
+  const collected = collectExprSpans(ir);
+  const resolved = resolveExprSpanIndex(collected, fallback);
+  const defaultFallback = fallback ?? firstFileFromSpans(resolved);
+
+  const get = (id: ExprId): SourceSpan | null => resolved.get(id) ?? null;
+  const ensure = (id: ExprId, fb?: SourceFile | SourceFileId | string): SourceSpan => {
+    const span = get(id);
+    const source = fb ?? defaultFallback ?? span?.file;
+    if (source) return resolveSourceSpan(span, source);
+    return normalizeSpan(span ?? { start: 0, end: 0 });
+  };
+
+  const base: Pick<ExprSpanIndex, "spans" | "get" | "ensure"> = { spans: resolved, get, ensure };
+  return defaultFallback ? { ...base, fallback: defaultFallback } : base;
+}
+
+/** Extract all ExprIds from a BindingSourceIR (ExprRef | InterpIR). */
+export function exprIdsOf(src: BindingSourceIR | ExprRef | InterpIR): readonly ExprId[] {
+  return isInterpolation(src) ? src.exprs.map((e) => e.id) : [(src as ExprRef).id];
+}
+
+/** First ExprId from a binding source (handy for singleton bindings). */
+export function primaryExprId(src: BindingSourceIR | ExprRef | InterpIR): ExprId | undefined {
+  const ids = exprIdsOf(src);
+  return ids[0];
+}
+
 /**
  * Collect member access spans within expressions for richer mapping/diagnostics.
  */
 export function collectExprMemberSegments(
   table: readonly ExprTableEntry[],
-  exprSpans: Map<ExprId, SourceSpan>,
+  exprSpans: ReadonlyMap<ExprId, SourceSpan>,
 ): Map<ExprId, HtmlMemberSegment[]> {
-  const out = new Map<ExprId, HtmlMemberSegment[]>();
+  const out: Map<ExprId, HtmlMemberSegment[]> = new Map();
   for (const entry of table) {
     const base = exprSpans.get(entry.id);
     if (!base) continue;
@@ -190,6 +230,13 @@ export function collectExprMemberSegments(
   }
 }
 
-function isInterp(x: BindingSourceIR): x is InterpIR {
+export function isInterpolation(x: BindingSourceIR): x is InterpIR {
   return (x as InterpIR).kind === "interp";
+}
+
+function firstFileFromSpans(spans: ReadonlyMap<ExprId, SourceSpan>): SourceFileId | undefined {
+  for (const span of spans.values()) {
+    if (span?.file) return span.file;
+  }
+  return undefined;
 }
