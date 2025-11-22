@@ -46,6 +46,16 @@ export function brandString<TBrand extends string>(value: string): StringId<TBra
   return value as StringId<TBrand>;
 }
 
+/** Convert a branded string id to its unbranded string key (for Records/Map keys). */
+export function idKey<TBrand extends string>(value: StringId<TBrand>): string {
+  return unbrand(value);
+}
+
+/** Brand a previously persisted key back into the expected id brand. */
+export function idFromKey<TBrand extends string>(key: string): StringId<TBrand> {
+  return brandString<TBrand>(key);
+}
+
 export function brandNumber<TBrand extends string>(value: number): NumericId<TBrand> {
   return value as NumericId<TBrand>;
 }

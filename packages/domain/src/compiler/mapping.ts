@@ -9,7 +9,7 @@ import type {
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import { collectExprMemberSegments, collectExprSpans, ensureExprSpan, resolveExprSpanIndex, type HtmlMemberSegment } from "./expr-utils.js";
-import { spanLength } from "./model/span.js";
+import { spanContainsOffset, spanLength, type SpanLike } from "./model/span.js";
 import type { SourceFile } from "./model/source.js";
 import { exprIdMapGet, type ExprIdMapLike } from "./model/identity.js";
 
@@ -52,31 +52,17 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
 
 /** Map an overlay offset back to the best-matching HTML span. */
 export function overlayOffsetToHtml(mapping: TemplateMappingArtifact, overlayOffset: number): MappingHit | null {
-  for (const entry of mapping.entries) {
-    for (const seg of entry.segments ?? []) {
-      if (overlayOffset >= seg.overlaySpan[0] && overlayOffset <= seg.overlaySpan[1]) {
-        return { entry, segment: seg };
-      }
-    }
-  }
-  const fallback = mapping.entries.find((entry) => overlayOffset >= entry.overlayRange[0] && overlayOffset <= entry.overlayRange[1]);
+  const best = pickBestSegment(mapping.entries, overlayOffset, (seg) => rangeToSpan(seg.overlaySpan));
+  if (best) return best;
+  const fallback = mapping.entries.find((entry) => spanContainsOffset(rangeToSpan(entry.overlayRange), overlayOffset));
   return fallback ? { entry: fallback, segment: null } : null;
 }
 
 /** Map an HTML offset to the best-matching overlay span. */
 export function htmlOffsetToOverlay(mapping: TemplateMappingArtifact, htmlOffset: number): MappingHit | null {
-  let bestSegment: MappingHit | null = null;
-  for (const entry of mapping.entries) {
-    for (const seg of entry.segments ?? []) {
-      if (htmlOffset >= seg.htmlSpan.start && htmlOffset <= seg.htmlSpan.end) {
-        if (!bestSegment || spanLength(seg.htmlSpan) < spanLength(bestSegment.segment!.htmlSpan)) {
-          bestSegment = { entry, segment: seg };
-        }
-      }
-    }
-  }
-  if (bestSegment) return bestSegment;
-  const fallback = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
+  const best = pickBestSegment(mapping.entries, htmlOffset, (seg) => seg.htmlSpan);
+  if (best) return best;
+  const fallback = mapping.entries.find((entry) => spanContainsOffset(entry.htmlSpan, htmlOffset));
   return fallback ? { entry: fallback, segment: null } : null;
 }
 
@@ -95,4 +81,27 @@ function buildSegmentPairs(
     out.push({ kind: "member", path: seg.path, htmlSpan: h.span, overlaySpan: [seg.span[0], seg.span[1]] });
   }
   return out;
+}
+
+function pickBestSegment(
+  entries: readonly TemplateMappingEntry[],
+  offset: number,
+  spanOf: (seg: TemplateMappingSegment) => SpanLike,
+): MappingHit | null {
+  // Mapping-specific helper: stays here to honor overlay/html pairing semantics (and return MappingHit) without exporting domain glue into span/query helpers.
+  let best: { entry: TemplateMappingEntry; segment: TemplateMappingSegment; span: SpanLike } | null = null;
+  for (const entry of entries) {
+    for (const seg of entry.segments ?? []) {
+      const span = spanOf(seg);
+      if (!spanContainsOffset(span, offset)) continue;
+      if (!best || spanLength(span) < spanLength(best.span)) {
+        best = { entry, segment: seg, span };
+      }
+    }
+  }
+  return best ? { entry: best.entry, segment: best.segment } : null;
+}
+
+function rangeToSpan(range: readonly [number, number]): SpanLike {
+  return { start: range[0], end: range[1] };
 }

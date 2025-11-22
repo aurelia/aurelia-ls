@@ -13897,7 +13897,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 54,
+            "end": 75,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13908,7 +13916,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 76,
+            "end": 94,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13919,7 +13935,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 149,
+            "end": 171,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13930,7 +13954,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 172,
+            "end": 195,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13941,7 +13973,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 232,
+            "end": 255,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13952,7 +13992,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 266,
+            "end": 294,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13963,7 +14011,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 513,
+            "end": 556,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13974,7 +14030,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 604,
+            "end": 625,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       },
       {
         "code": "AU1104",
@@ -13985,7 +14049,15 @@
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
         "source": "resolve-host",
-        "severity": "error"
+        "severity": "error",
+        "origin": {
+          "kind": "authored",
+          "span": {
+            "start": 804,
+            "end": 834,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
+          }
+        }
       }
     ]
   },

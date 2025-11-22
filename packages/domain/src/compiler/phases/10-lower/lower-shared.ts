@@ -55,7 +55,7 @@ export class ExprTable {
 
     let id = this.seen.get(key);
     if (!id) {
-      id = deterministicStringId<"ExprId">("expr", key) as ExprId;
+      id = deterministicStringId<"ExprId">("expr", key);
 
       let ast: AnyBindingExpression;
 

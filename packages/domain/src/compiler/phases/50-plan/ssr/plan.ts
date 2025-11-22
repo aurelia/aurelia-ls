@@ -1,7 +1,7 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
 import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef, TemplateNode } from "../../../model/ir.js";
-import { brandNumber, toExprIdMap, type FrameId } from "../../../model/identity.js";
+import { brandNumber, idFromKey, idKey, toExprIdMap, type FrameId } from "../../../model/identity.js";
 import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./types.js";
 
 /** Build SSR plan from Linked+Scoped (tap point: after Phase 30 bind). */
@@ -96,13 +96,13 @@ function buildTemplatePlan(
           break;
         }
         case "listenerBinding": {
-          const exprId = ins.from.id as ExprId;
+          const exprId = ins.from.id;
           rowBindings.push({ kind: "listener", name: ins.to, exprId, frame: frameOf(exprToFrame, exprId), capture: ins.capture ?? false, modifier: ins.modifier ?? null });
           hasDyn = true;
           break;
         }
         case "refBinding": {
-          const exprId = ins.from.id as ExprId;
+          const exprId = ins.from.id;
           rowBindings.push({ kind: "ref", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId) });
           hasDyn = true;
           break;
@@ -148,7 +148,7 @@ function buildTemplatePlan(
           let branch: SsrController["branch"] = null;
           if (ctrl.branch) {
             if (ctrl.branch.kind === "case") {
-              branch = { kind: "case", exprId: ctrl.branch.expr.id as ExprId };
+              branch = { kind: "case", exprId: ctrl.branch.expr.id };
             } else if (ctrl.branch.kind === "then" || ctrl.branch.kind === "catch" || ctrl.branch.kind === "default") {
               branch = { kind: ctrl.branch.kind, exprId: null };
             }
@@ -244,11 +244,11 @@ function frameOf(map: ReadonlyMap<ExprId, FrameId>, id: ExprId): FrameId {
 }
 
 function nodeKeyFromId(id: NodeId): string {
-  return id as string;
+  return idKey(id);
 }
 
 function nodeIdFromKey(key: string): NodeId {
-  return key as NodeId;
+  return idFromKey<"NodeId">(key);
 }
 
 function exprIdFrom(from: BindingSourceIR): ExprId | undefined {
@@ -262,7 +262,7 @@ function isInterp(src: BindingSourceIR): src is InterpIR {
 }
 
 function ensureHid(node: NodeId, map: Record<string, number>, next: () => number): number {
-  const key = node as string;
+  const key = idKey(node);
   let hid = map[key];
   if (hid == null) {
     hid = next();

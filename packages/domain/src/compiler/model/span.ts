@@ -81,6 +81,26 @@ export function spanEquals(a: SpanLike | null | undefined, b: SpanLike | null | 
   return a.start === b.start && a.end === b.end && ("file" in a ? (a as SourceSpan).file : undefined) === ("file" in b ? (b as SourceSpan).file : undefined);
 }
 
+/** True when an offset falls within [start, end) of the given span (null-safe). */
+export function spanContainsOffset(span: SpanLike | null | undefined, offset: number): boolean {
+  if (!span) return false;
+  return offset >= span.start && offset <= span.end;
+}
+
+/** Find the narrowest span that contains the offset (null-safe). */
+export function narrowestContainingSpan<TSpan extends SpanLike>(
+  spans: Iterable<TSpan | null | undefined>,
+  offset: number,
+): TSpan | null {
+  // Kept in span primitives so core offset logic stays dependency-free; callers layer their own domain semantics on top.
+  let best: TSpan | null = null;
+  for (const span of spans) {
+    if (!span || !spanContainsOffset(span, offset)) continue;
+    if (!best || spanLength(span) < spanLength(best)) best = span;
+  }
+  return best;
+}
+
 export function toSourceSpan(span: TextSpan, file?: SourceFileId): SourceSpan {
   return file === undefined ? { ...span } : { ...span, file };
 }

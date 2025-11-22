@@ -28,7 +28,7 @@ import type {
 
 import type { RepeatController } from "../../language/registry.js";
 import { FrameIdAllocator, type ExprIdMap } from "../../model/identity.js";
-import { authoredProvenance } from "../../model/origin.js";
+import { authoredOrigin, authoredProvenance } from "../../model/origin.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -484,6 +484,5 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
 }
 
 function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null): void {
-  diags.push({ code, message, span: span ?? null, source: "bind", severity: "error" });
+  diags.push({ code, message, span: span ?? null, origin: authoredOrigin(span ?? null), source: "bind", severity: "error" });
 }
-
