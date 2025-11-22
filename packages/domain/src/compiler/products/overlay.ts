@@ -6,7 +6,7 @@ import type { OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../../contracts.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "../model/ir.js";
 import type { FrameId } from "../model/symbols.js";
-import { ensureSpanFile, fallbackSpan, resolveSourceFile } from "../model/source.js";
+import { resolveSourceFile, resolveSourceSpan } from "../model/source.js";
 
 export interface OverlayProductArtifacts {
   plan: OverlayPlanModule;
@@ -55,7 +55,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     exprId: m.exprId,
     overlayStart: m.start,
     overlayEnd: m.end,
-    htmlSpan: ensureSpanFile(exprSpans.get(m.exprId), sourceFile) ?? fallbackSpan(sourceFile),
+    htmlSpan: resolveSourceSpan(exprSpans.get(m.exprId), sourceFile),
   }));
 
   const overlay: OverlayProductResult = {

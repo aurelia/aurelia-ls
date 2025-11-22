@@ -129,10 +129,10 @@ export function makeWrapperTemplate(
   nestedTemplates: TemplateIR[]
 ): TemplateIR {
   const ids = new DomIdAllocator();
-  const commentId = ids.withinChildren(() => ids.nextComment()) as NodeId;
+  const commentId = ids.withinChildren(() => ids.nextComment());
   const dom: TemplateNode = {
     kind: "template",
-    id: "0" as NodeId,
+    id: ids.current(),
     ns: "html",
     attrs: [],
     children: [{ kind: "comment", id: commentId, ns: "html", text: "", loc: null }],
@@ -161,7 +161,7 @@ export function buildTemplateFrom(
 ): TemplateIR {
   const dom: TemplateNode = {
     kind: "template",
-    id: "0" as NodeId,
+    id: ids.current(),
     ns: "html",
     attrs: [],
     children: buildDomChildren(rootLike as { childNodes?: P5Node[] }, ids, table.source, idMap),

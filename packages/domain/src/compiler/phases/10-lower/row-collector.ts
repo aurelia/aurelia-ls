@@ -1,6 +1,6 @@
 import type { AttributeParser } from "../../language/syntax.js";
 import type { Semantics } from "../../language/registry.js";
-import type { InstructionRow, NodeId, TemplateIR } from "../../model/ir.js";
+import type { InstructionRow, TemplateIR } from "../../model/ir.js";
 import { collectControllers } from "./controller-lowering.js";
 import { lowerElementAttributes } from "./element-lowering.js";
 import type { ExprTable, DomIdAllocator, P5Node, P5Template } from "./lower-shared.js";
@@ -22,7 +22,7 @@ export function collectRows(
     for (const n of kids) {
       if (isElement(n)) {
         const tag = n.nodeName.toLowerCase();
-        const target = ids.nextElement() as NodeId;
+        const target = ids.nextElement();
 
         if (tag === "template" && findAttr(n, "as-custom-element")) {
           ids.exitElement();
@@ -63,7 +63,7 @@ export function collectRows(
       }
 
       if (isText(n)) {
-        const target = ids.nextText() as NodeId;
+        const target = ids.nextText();
         const textInstructions = lowerTextNode(n, table);
         if (textInstructions.length) {
           rows.push({
