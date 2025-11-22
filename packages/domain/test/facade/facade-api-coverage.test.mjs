@@ -45,6 +45,25 @@ function compileSsr(html, templateFilePath, overrides = {}) {
   return compileTemplateToSSR(buildCompileOpts(html, templateFilePath, overrides));
 }
 
+function snapshotMapping(entries) {
+  return entries.map((entry) => ({
+    exprId: entry.exprId,
+    htmlSpan: entry.htmlSpan,
+    overlaySpan: entry.overlaySpan,
+    frameId: entry.frameId,
+    segments: (entry.segments ?? []).map((s) => ({
+      kind: s.kind,
+      path: s.path,
+      htmlSpan: s.htmlSpan,
+      overlaySpan: s.overlaySpan,
+    })),
+  }));
+}
+
+function snapshotExprSpans(map) {
+  return Array.from(map.entries()).map(([exprId, span]) => [exprId, span]);
+}
+
 describe("Facade API coverage", () => {
   test("overlay/HTML mapping helpers pick narrowest segments and fallback cleanly", () => {
     const file = "mem.html";
@@ -180,6 +199,21 @@ describe("Facade API coverage", () => {
     assert.equal(exprSpans.get(literalHtmlHit.entry.exprId)?.file, literalHtmlHit.entry.htmlSpan.file);
 
     assert.equal(mapHtmlOffsetToOverlay(mapping, 1), null, "HTML offsets outside any expression should return null");
+  });
+
+  test("exprTable aligns with mapping entries and exprSpans", () => {
+    const html = `<template title.bind="user.name">\${user.count}</template>`;
+    const compilation = compile(html, "C:/mem/facade-exprtable.html");
+
+    const exprTableIds = new Set(compilation.exprTable.map((e) => e.id));
+    assert.ok(exprTableIds.size >= 2, "exprTable should include entries for attribute and interpolation expressions");
+
+    for (const entry of compilation.mapping.entries) {
+      assert.ok(exprTableIds.has(entry.exprId), `exprTable should contain mapping exprId ${entry.exprId}`);
+      const span = compilation.exprSpans.get(entry.exprId);
+      assert.ok(span, `exprSpans should contain ${entry.exprId}`);
+      assert.equal(span?.file, entry.htmlSpan.file, "expr span file should match mapping html span file");
+    }
   });
 
   test("diagnostics carry origin traces for resolve-host and bind stages", () => {
@@ -325,6 +359,18 @@ describe("Facade API coverage", () => {
     );
   });
 
+  test("compileTemplateToSSR derives default base names from template path", () => {
+    const templatePath = path.join(process.cwd(), "tmp", "facade-ssr-default.html");
+    const res = compileSsr(`<template>\${msg}</template>`, templatePath);
+
+    assert.ok(res.htmlPath.endsWith("facade-ssr-default.__au.ssr.html"));
+    assert.ok(res.manifestPath.endsWith("facade-ssr-default.__au.ssr.json"));
+
+    const manifest = JSON.parse(res.manifestText);
+    assert.ok(manifest.templates?.[0], "manifest should list templates for default base name");
+    assert.equal(manifest.templates[0].name, "facade-ssr-default.html");
+  });
+
   test("expr and mapping spans carry normalized file ids", () => {
     const html = `<template>\${msg}</template>`;
     const templatePath = path.join(process.cwd(), "tmp", "facade-normalized.html");
@@ -361,5 +407,25 @@ describe("Facade API coverage", () => {
 
     assert.deepEqual(provenanceSpan(originA), spanA, "provenanceSpan should return origin span");
     assert.deepEqual(provenanceSpan({ origin: null, fallbackSpan: spanB }), spanB, "fallbackSpan should be used when origin is null");
+  });
+
+  test("repeated compiles are deterministic and return fresh snapshots", () => {
+    const html = `<template title.bind="user.name">\${user.count}</template>`;
+    const templatePath = "C:/mem/facade-deterministic.html";
+
+    const first = compile(html, templatePath);
+    const second = compile(html, templatePath);
+
+    assert.notStrictEqual(first.overlay, second.overlay, "overlay objects should not be reused across compiles");
+    assert.notStrictEqual(first.mapping.entries, second.mapping.entries, "mapping arrays should be recreated");
+    assert.notStrictEqual(first.exprSpans, second.exprSpans, "expr span maps should be recreated");
+    assert.deepEqual(first.overlay.text, second.overlay.text, "overlay text should stay deterministic");
+    assert.deepEqual(snapshotMapping(first.mapping.entries), snapshotMapping(second.mapping.entries), "mapping entries should stay deterministic");
+    assert.deepEqual(snapshotExprSpans(first.exprSpans), snapshotExprSpans(second.exprSpans), "exprSpans should stay deterministic");
+    assert.deepEqual(
+      first.overlay.calls.map((c) => ({ exprId: c.exprId, overlayStart: c.overlayStart, overlayEnd: c.overlayEnd })),
+      second.overlay.calls.map((c) => ({ exprId: c.exprId, overlayStart: c.overlayStart, overlayEnd: c.overlayEnd })),
+      "overlay calls should stay deterministic",
+    );
   });
 });
