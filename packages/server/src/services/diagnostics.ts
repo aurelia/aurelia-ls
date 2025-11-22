@@ -1,30 +1,39 @@
-import { DiagnosticSeverity, type Diagnostic, type Position } from "vscode-languageserver/node.js";
+import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node.js";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import {
   mapOverlayOffsetToHtml,
+  provenanceSpan,
+  spanLength,
+  intersectSpans,
+  normalizeSpan,
   type TemplateCompilation,
   type TemplateMappingArtifact,
+  type TemplateMappingEntry,
   type CompilerDiagnostic,
+  type SourceSpan,
 } from "@aurelia-ls/domain";
 
-function spanToRange(doc: TextDocument, start: number, end: number) {
-  return { start: doc.positionAt(start), end: doc.positionAt(end) };
+function spanToRange(doc: TextDocument, span: SourceSpan) {
+  const normalized = normalizeSpan(span);
+  return { start: doc.positionAt(normalized.start), end: doc.positionAt(normalized.end) };
 }
 
 export function mapCompilerDiagnosticsToLsp(compilation: TemplateCompilation, doc: TextDocument): Diagnostic[] {
   const diags = compilation.diagnostics.all ?? [];
-  return diags
-    .filter((d) => d.span?.start != null && d.span?.end != null)
-    .map((d) => {
-      const shrunk = shrinkSpanWithMapping(d.span!, compilation.mapping);
-      return {
-        range: spanToRange(doc, shrunk.start, shrunk.end),
-        message: d.message,
-        severity: compilerSeverityToLsp(d),
-        code: d.code,
-        source: d.source,
-      };
+  const mapped: Diagnostic[] = [];
+  for (const diag of diags) {
+    const span = resolveDiagnosticSpan(diag);
+    if (!span) continue;
+    const shrunk = shrinkSpanWithMapping(span, compilation.mapping);
+    mapped.push({
+      range: spanToRange(doc, shrunk),
+      message: diag.message,
+      severity: compilerSeverityToLsp(diag),
+      code: diag.code,
+      source: diag.source,
     });
+  }
+  return mapped;
 }
 
 export function mapTsDiagnosticsToLsp(
@@ -39,7 +48,7 @@ export function mapTsDiagnosticsToLsp(
     if (!hit) continue;
     const htmlSpan = hit.segment ? hit.segment.htmlSpan : hit.entry.htmlSpan;
     htmlDiags.push({
-      range: spanToRange(doc, htmlSpan.start, htmlSpan.end),
+      range: spanToRange(doc, htmlSpan),
       message: flattenTsMessage(d.messageText),
       severity: tsSeverityToLsp(d.category),
       source: "aurelia-ttc",
@@ -50,18 +59,19 @@ export function mapTsDiagnosticsToLsp(
 
 export function collectBadExpressionDiagnostics(compilation: TemplateCompilation, doc: TextDocument): Diagnostic[] {
   const diags: Diagnostic[] = [];
-  const entriesByExpr = new Map<string, TemplateMappingArtifact["entries"][number]>();
-  for (const entry of compilation.mapping.entries) entriesByExpr.set(entry.exprId as string, entry);
+  const entriesByExpr = new Map<TemplateMappingEntry["exprId"], TemplateMappingEntry>();
+  for (const entry of compilation.mapping.entries) entriesByExpr.set(entry.exprId, entry);
 
   for (const entry of compilation.exprTable ?? []) {
     const ast: any = (entry as any).ast;
     if (!ast || ast.$kind !== "BadExpression") continue;
-    const mapping = entriesByExpr.get(entry.id as string);
+    const mapping = entriesByExpr.get(entry.id);
     const span = mapping?.htmlSpan ?? compilation.exprSpans.get(entry.id) ?? null;
     if (!span) continue;
+    const normalized = normalizeSpan(span);
     const message = ast.message ? String(ast.message) : "Malformed expression";
     diags.push({
-      range: spanToRange(doc, span.start, span.end),
+      range: spanToRange(doc, normalized),
       message,
       severity: DiagnosticSeverity.Error,
       code: "AU1000",
@@ -97,21 +107,32 @@ function flattenTsMessage(msg: string | import("typescript").DiagnosticMessageCh
   return parts.join(" ");
 }
 
-function shrinkSpanWithMapping(span: { start: number; end: number }, mapping: TemplateMappingArtifact): { start: number; end: number } {
-  const hit = mapping.entries.find((m) => intersects(span, m.htmlSpan));
-  if (!hit) return span;
-  let best: { start: number; end: number } = hit.htmlSpan;
-  for (const seg of hit.segments ?? []) {
-    if (!intersects(span, seg.htmlSpan)) continue;
-    if (spanSize(seg.htmlSpan) < spanSize(best)) best = seg.htmlSpan;
+function resolveDiagnosticSpan(diag: CompilerDiagnostic): SourceSpan | null {
+  const span = provenanceSpan(diag.origin ?? null) ?? diag.span ?? null;
+  if (!span) return null;
+  return normalizeSpan(span);
+}
+
+function shrinkSpanWithMapping(span: SourceSpan, mapping: TemplateMappingArtifact): SourceSpan {
+  const normalized = normalizeSpan(span);
+  let best: SourceSpan | null = null;
+  let entry: TemplateMappingEntry | null = null;
+
+  for (const candidate of mapping.entries) {
+    const overlap = intersectSpans(normalized, candidate.htmlSpan);
+    if (!overlap) continue;
+    best = overlap;
+    entry = candidate;
+    break;
   }
-  return spanSize(best) < spanSize(span) ? best : span;
-}
 
-function intersects(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
-  return a.start <= b.end && b.start <= a.end;
-}
+  if (!entry || !best) return normalized;
 
-function spanSize(span: { start: number; end: number }): number {
-  return span.end - span.start;
+  for (const seg of entry.segments ?? []) {
+    const overlap = intersectSpans(normalized, seg.htmlSpan);
+    if (!overlap) continue;
+    if (spanLength(overlap) < spanLength(best)) best = overlap;
+  }
+
+  return spanLength(best) < spanLength(normalized) ? best : normalized;
 }

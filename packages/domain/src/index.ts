@@ -30,3 +30,18 @@ export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
 export { mapOverlayOffsetToHtml, mapHtmlOffsetToOverlay } from "./compiler/facade.js";
 export type { MappingHit } from "./compiler/mapping.js";
 export type { StageKey, StageArtifactMeta } from "./compiler/pipeline/engine.js";
+export {
+  spanContainsOffset,
+  spanLength,
+  intersectSpans,
+  normalizeSpan,
+  narrowestContainingSpan,
+  pickNarrowestContaining,
+  offsetSpan,
+  toSourceSpan,
+  toSourceLoc,
+  type SpanLike,
+  type SourceSpan,
+  type TextSpan,
+} from "./compiler/model/span.js";
+export { provenanceSpan, preferOrigin } from "./compiler/model/origin.js";

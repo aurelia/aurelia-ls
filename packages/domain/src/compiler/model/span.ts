@@ -111,6 +111,26 @@ export function narrowestContainingSpan<TSpan extends SpanLike>(
   return best;
 }
 
+/**
+ * Find the item whose span most tightly contains the offset.
+ * Useful when callers care about the owning object rather than the span itself.
+ */
+export function pickNarrowestContaining<T>(
+  items: Iterable<T>,
+  offset: number,
+  spanOf: (item: T) => SpanLike | null | undefined,
+): T | null {
+  let best: { item: T; span: SpanLike } | null = null;
+  for (const item of items) {
+    const span = spanOf(item);
+    if (!span || !spanContainsOffset(span, offset)) continue;
+    if (!best || spanLength(span) < spanLength(best.span)) {
+      best = { item, span };
+    }
+  }
+  return best?.item ?? null;
+}
+
 export function toSourceSpan(span: TextSpan, file?: SourceFileId): SourceSpan {
   return file === undefined ? { ...span } : { ...span, file };
 }
