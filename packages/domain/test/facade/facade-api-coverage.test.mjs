@@ -175,6 +175,7 @@ describe("Facade API coverage", () => {
     assert.ok(typeDiag, "expected AU1301 typecheck diagnostic");
     assert.ok(typeDiag?.exprId, "typecheck diagnostic should carry exprId");
     assert.ok(typeDiag?.span, "typecheck diagnostic should carry span");
+    assert.ok(typeDiag.origin?.trace?.some((t) => t.by === "typecheck"), "typecheck diagnostic should carry origin trace");
 
     const entry = compilation.mapping.entries.find((e) => e.exprId === typeDiag?.exprId);
     assert.ok(entry, "mapping entry should exist for diagnostic expr");
@@ -334,6 +335,7 @@ describe("Facade API coverage", () => {
       { name: "edge", span: { start: 10, end: 15 } },
     ];
     assert.ok(spanContainsOffset(items[0].span, 7));
+    assert.equal(spanContainsOffset(items[0].span, items[0].span.end), false, "end of span should be exclusive");
     assert.equal(spanLength(items[0].span), 20);
     const hit = pickNarrowestContaining(items, 7, (i) => i.span);
     assert.equal(hit?.name, "narrow", "narrowest span should be selected");

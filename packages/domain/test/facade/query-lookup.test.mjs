@@ -117,8 +117,9 @@ describe("Facade.query", () => {
     const html = `<div>\${user.name}</div>`;
     const { query } = build(html);
     const exprEnd = html.indexOf("user.name") + "user.name".length;
-    const expr = query.exprAt(exprEnd);
-    assert.ok(expr, "exprAt should include end boundary of expression");
-    assert.ok(expr?.span.end >= exprEnd);
+    const inside = query.exprAt(exprEnd - 1);
+    assert.ok(inside, "exprAt should include offsets strictly inside the span");
+    assert.ok(inside?.span.end >= exprEnd);
+    assert.equal(query.exprAt(exprEnd), null, "exprAt should treat span end as exclusive");
   });
 });

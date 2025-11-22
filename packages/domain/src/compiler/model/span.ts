@@ -94,7 +94,7 @@ export function spanEquals(a: SpanLike | null | undefined, b: SpanLike | null | 
 /** True when an offset falls within [start, end) of the given span (null-safe). */
 export function spanContainsOffset(span: SpanLike | null | undefined, offset: number): boolean {
   if (!span) return false;
-  return offset >= span.start && offset <= span.end;
+  return offset >= span.start && offset < span.end;
 }
 
 /** Find the narrowest span that contains the offset (null-safe). */
