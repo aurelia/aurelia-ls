@@ -15,6 +15,7 @@ import { extractInterpolationSegments } from "../../../parsers/interpolation.js"
 import { DomIdAllocator, deterministicStringId } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";
+import { spanFromBounds } from "../../model/span.js";
 export { DomIdAllocator } from "../../model/identity.js";
 
 export type P5Node = DefaultTreeAdapterMap["childNode"];
@@ -64,7 +65,7 @@ export class ExprTable {
       } catch (e: unknown) {
         const bad: BadExpression = {
           $kind: "BadExpression",
-          span: { start: 0, end: code.length },
+          span: spanFromBounds(0, code.length),
           text: code,
           message: e instanceof Error ? e.message : String(e),
         };

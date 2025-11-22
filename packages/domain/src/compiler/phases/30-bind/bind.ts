@@ -28,7 +28,8 @@ import type {
 
 import type { RepeatController } from "../../language/registry.js";
 import { FrameIdAllocator, type ExprIdMap } from "../../model/identity.js";
-import { originFromSpan, provenanceFromSpan } from "../../model/origin.js";
+import { provenanceFromSpan } from "../../model/origin.js";
+import { buildDiagnostic } from "../../diagnostics.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -484,5 +485,5 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
 }
 
 function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null): void {
-  diags.push({ code, message, span: span ?? null, origin: originFromSpan("bind", span ?? null), source: "bind", severity: "error" });
+  diags.push(buildDiagnostic({ code, message, span, source: "bind" }) as ScopeDiagnostic);
 }

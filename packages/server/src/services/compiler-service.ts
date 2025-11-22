@@ -1,13 +1,20 @@
 import path from "node:path";
 import { URI } from "vscode-uri";
-import { compileTemplate, compileTemplateToSSR, DEFAULT_SYNTAX, getExpressionParser, type VmReflection } from "@aurelia-ls/domain";
+import {
+  compileTemplate,
+  compileTemplateToSSR,
+  DEFAULT_SYNTAX,
+  getExpressionParser,
+  type VmReflection,
+  type NormalizedPath,
+} from "@aurelia-ls/domain";
 import type { TemplateCompilation } from "@aurelia-ls/domain";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { PathUtils } from "./paths.js";
 import type { Logger } from "./types.js";
 
 export interface CompilationRecord {
-  key: string;
+  key: NormalizedPath;
   compilation: TemplateCompilation;
 }
 
@@ -16,8 +23,8 @@ export class CompilerService {
   #logger: Logger;
   #attrParser = DEFAULT_SYNTAX;
   #exprParser = getExpressionParser();
-  #programs = new Map<string, TemplateCompilation>();
-  #ssr = new Map<string, ReturnType<typeof compileTemplateToSSR>>();
+  #programs = new Map<NormalizedPath, TemplateCompilation>();
+  #ssr = new Map<NormalizedPath, ReturnType<typeof compileTemplateToSSR>>();
 
   constructor(paths: PathUtils, logger: Logger) {
     this.#paths = paths;
