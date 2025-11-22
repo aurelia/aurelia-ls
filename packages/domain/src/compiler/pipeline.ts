@@ -21,8 +21,8 @@ export interface CoreCompileOptions {
 
 export interface CorePipelineResult {
   ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-link"];
-  scope: StageOutputs["30-scope"];
+  linked: StageOutputs["20-resolve-host"];
+  scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
 }
 
@@ -52,8 +52,8 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
   const session = engine.createSession(pipelineOpts);
   return {
     ir: session.run("10-lower"),
-    linked: session.run("20-link"),
-    scope: session.run("30-scope"),
+    linked: session.run("20-resolve-host"),
+    scope: session.run("30-bind"),
     typecheck: session.run("40-typecheck"),
   };
 }

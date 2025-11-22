@@ -68,3 +68,6 @@ export {
 } from "./compiler/model/identity.js";
 export { diagnosticSpan } from "./compiler/diagnostics.js";
 export { provenanceSpan, preferOrigin } from "./compiler/model/origin.js";
+
+// Program facade + services (experimental)
+export * from "./program/index.js";

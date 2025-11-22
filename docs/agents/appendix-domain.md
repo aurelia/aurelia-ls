@@ -67,8 +67,8 @@ Pipeline engine (new):
 // Stage keys (compiler/pipeline/engine.ts)
 type StageKey =
   | "10-lower"        // lowerDocument
-  | "20-link"         // resolveHost
-  | "30-scope"        // bindScopes
+  | "20-resolve-host" // resolveHost
+  | "30-bind"         // bindScopes
   | "40-typecheck"    // typecheck stub
   | "50-plan-overlay" // plan (overlay)
   | "60-emit-overlay" // emitOverlayFile

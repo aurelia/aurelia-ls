@@ -18,8 +18,8 @@ import { FileStageCache, type StageCache, type StageCacheEntry, createDefaultCac
  */
 export type StageKey =
   | "10-lower"
-  | "20-link"
-  | "30-scope"
+  | "20-resolve-host"
+  | "30-bind"
   | "40-typecheck"
   | "50-plan-overlay"
   | "60-emit-overlay"
@@ -31,8 +31,8 @@ export type StageKey =
  */
 export interface StageOutputs {
   "10-lower": IrModule;
-  "20-link": LinkedSemanticsModule;
-  "30-scope": ScopeModule;
+  "20-resolve-host": LinkedSemanticsModule;
+  "30-bind": ScopeModule;
   "40-typecheck": TypecheckModule;
   "50-plan-overlay": OverlayPlanModule;
   "60-emit-overlay": OverlayEmitResult;

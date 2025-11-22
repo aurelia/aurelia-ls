@@ -35,8 +35,8 @@ export interface OverlayProductResult {
 export function buildOverlayProduct(session: PipelineSession, opts: OverlayProductOptions): OverlayProductArtifacts {
   const sourceFile = resolveSourceFile(opts.templateFilePath);
   const ir = session.run("10-lower");
-  const linked = session.run("20-link");
-  const scope = session.run("30-scope");
+  const linked = session.run("20-resolve-host");
+  const scope = session.run("30-bind");
   const typecheck = session.run("40-typecheck");
 
   const planOut = session.run("50-plan-overlay");
