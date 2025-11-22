@@ -52,6 +52,7 @@ import type {
 } from "../compiler/model/ir.js";
 
 import { parseInterpolationAst } from "./interpolation.js";
+import { offsetSpan, spanFromBounds } from "../compiler/model/span.js";
 
 /**
  * Core expression parser for Aurelia's binding expression language, tailored
@@ -137,10 +138,7 @@ export class CoreParser {
       return iterable;
     }
 
-    const span: TextSpan = {
-      start: 0,
-      end: this.source.length,
-    };
+    const span: TextSpan = spanFromBounds(0, this.source.length);
 
     const node: ForOfStatement = {
       $kind: "ForOfStatement",
@@ -189,10 +187,7 @@ export class CoreParser {
     if (this.isBad(target)) return target;
     const value = this.parseAssignExpr();
     if (this.isBad(value)) return value;
-    const span: TextSpan = {
-      start: target.span.start,
-      end: value.span.end,
-    };
+    const span: TextSpan = spanFromBounds(target.span.start, value.span.end);
 
     const assign: AssignExpression = {
       $kind: "Assign",
@@ -227,10 +222,7 @@ export class CoreParser {
     if (this.isBad(yes)) return yes;
     if (this.isBad(no)) return no;
 
-    const span: TextSpan = {
-      start: test.span.start,
-      end: no.span.end,
-    };
+    const span: TextSpan = spanFromBounds(test.span.start, no.span.end);
 
     const cond: ConditionalExpression = {
       $kind: "Conditional",
@@ -260,10 +252,7 @@ export class CoreParser {
       const right = this.parseBinaryExpr(nextMin);
       if (this.isBad(right)) return right;
 
-      const span: TextSpan = {
-        start: left.span.start,
-        end: right.span.end,
-      };
+      const span: TextSpan = spanFromBounds(left.span.start, right.span.end);
 
       const binary: BinaryExpression = {
         $kind: "Binary",
@@ -290,10 +279,7 @@ export class CoreParser {
       this.nextToken(); // consume operator
       const operand = this.parseUnaryExpr();
       if (this.isBad(operand)) return operand;
-      const span: TextSpan = {
-        start: t.start,
-        end: this.getEndSpan(operand),
-      };
+      const span: TextSpan = spanFromBounds(t.start, this.getEndSpan(operand));
       const unary: UnaryExpression = {
         $kind: "Unary",
         span,
@@ -1690,7 +1676,7 @@ export class CoreParser {
   }
 
   private spanFromToken(t: Token): TextSpan {
-    return { start: t.start, end: t.end };
+    return spanFromBounds(t.start, t.end);
   }
 
   private getEndSpan(node: { span: TextSpan }): number {
@@ -1703,10 +1689,7 @@ export class CoreParser {
 
   private error(message: string, token?: Token): BadExpression {
     const t = token ?? this.peekToken();
-    const span: TextSpan = {
-      start: t.start,
-      end: Math.max(t.end, t.start),
-    };
+    const span: TextSpan = spanFromBounds(t.start, Math.max(t.end, t.start));
     const bad: BadExpression = {
       $kind: "BadExpression",
       span,
@@ -1957,7 +1940,7 @@ export class LspExpressionParser implements IExpressionParser {
       case "IsCustom": {
         // For v1, a custom expression simply wraps the raw text. Higher-level
         // plugins can later extend this to attach richer payloads.
-        const span: TextSpan = { start: 0, end: expression.length };
+        const span: TextSpan = spanFromBounds(0, expression.length);
         const node: CustomExpression = {
           $kind: "Custom",
           span,
@@ -1969,7 +1952,7 @@ export class LspExpressionParser implements IExpressionParser {
       default:
         return {
           $kind: "BadExpression",
-          span: { start: 0, end: expression.length },
+          span: spanFromBounds(0, expression.length),
           text: expression,
           message: `Unknown expression type '${expressionType}'`,
         };
@@ -1997,10 +1980,7 @@ function offsetNodeSpans(node: Record<string, unknown>, delta: number): void {
     typeof anyNode.span.start === "number" &&
     typeof anyNode.span.end === "number"
   ) {
-    anyNode.span = {
-      start: anyNode.span.start + delta,
-      end: anyNode.span.end + delta,
-    };
+    anyNode.span = offsetSpan(anyNode.span, delta);
   }
 
   for (const key of Object.keys(anyNode)) {

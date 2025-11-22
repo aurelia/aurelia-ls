@@ -28,6 +28,7 @@ import {
   PRELUDE_TS,
   mapHtmlOffsetToOverlay,
   mapOverlayOffsetToHtml,
+  idKey,
   type TemplateCompilation,
 } from "@aurelia-ls/domain";
 import { createPathUtils } from "./services/paths.js";
@@ -40,6 +41,7 @@ import {
   mapTsDiagnosticsToLsp,
 } from "./services/diagnostics.js";
 import type { Logger } from "./services/types.js";
+import { spanToRange } from "./services/spans.js";
 
 /* =============================================================================
  * Logging + LSP wiring
@@ -74,10 +76,6 @@ function ensurePrelude() {
 
 function uriToFsPath(uri: string): string {
   return URI.parse(uri).fsPath;
-}
-
-function spanToRange(doc: TextDocument, start: number, end: number) {
-  return { start: doc.positionAt(start), end: doc.positionAt(end) };
 }
 
 function buildVmReflection(fsPath: string) {
@@ -144,7 +142,7 @@ function mapOverlayLocationToHtml(
   const hit = mapOverlayOffsetToHtml(compilation.mapping, start);
   if (!hit) return null;
   const htmlSpan = hit.segment ? hit.segment.htmlSpan : hit.entry.htmlSpan;
-  const range = spanToRange(doc, htmlSpan.start, htmlSpan.end);
+  const range = spanToRange(doc, htmlSpan);
   return { uri: doc.uri, range };
 }
 
@@ -218,7 +216,7 @@ connection.onRequest("aurelia/getOverlay", async (params: { uri?: string } | str
       text: overlay.text,
       mapping: compilation.mapping,
       calls: overlay.calls.map((c) => ({
-        exprId: c.exprId as string,
+        exprId: idKey(c.exprId),
         overlayStart: c.overlayStart,
         overlayEnd: c.overlayEnd,
         htmlStart: c.htmlSpan?.start ?? 0,

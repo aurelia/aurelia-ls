@@ -4,6 +4,7 @@ import type {
   IsBindingBehavior,
   TextSpan,
 } from "../compiler/model/ir.js";
+import { spanFromBounds } from "../compiler/model/span.js";
 
 /**
  * Result of splitting an interpolation string into literal parts and
@@ -122,7 +123,7 @@ export function splitInterpolationText(text: string): InterpolationSplitResult |
 
         if (c === "}" && --depth === 0) {
           const exprEnd = i;
-          exprSpans.push({ start: exprStart, end: exprEnd });
+          exprSpans.push(spanFromBounds(exprStart, exprEnd));
           i++;        // consume the closing '}'
           start = i;  // next literal part starts after the interpolation
           break;
@@ -191,7 +192,7 @@ export function parseInterpolationAst(
     }
   }
 
-  const span: TextSpan = { start: 0, end: text.length };
+  const span: TextSpan = spanFromBounds(0, text.length);
 
   return {
     $kind: "Interpolation",

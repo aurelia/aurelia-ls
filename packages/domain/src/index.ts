@@ -50,5 +50,6 @@ export {
   type SourceSpan,
   type TextSpan,
 } from "./compiler/model/span.js";
+export { idKey, idFromKey } from "./compiler/model/identity.js";
 export { diagnosticSpan } from "./compiler/diagnostics.js";
 export { provenanceSpan, preferOrigin } from "./compiler/model/origin.js";
