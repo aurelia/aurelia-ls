@@ -16,6 +16,7 @@ import type { StageDefinition, StageKey, StageOutputs, PipelineOptions } from ".
 import type { AnalyzeOptions } from "../phases/50-plan/overlay/types.js";
 import type { EmitOptions as OverlayEmitOptions } from "../phases/60-emit/overlay/emit.js";
 import { stableHash } from "./hash.js";
+import { resolveSourceFile } from "../model/source.js";
 
 function assertOption<T>(value: T | undefined, name: string): T {
   if (value === undefined || value === null) {
@@ -56,9 +57,10 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     fingerprint(ctx) {
       const options = ctx.options;
       const sem = options.semantics ?? SEM_DEFAULT;
+      const source = resolveSourceFile(options.templateFilePath);
       return {
         html: stableHash(options.html),
-        file: options.templateFilePath,
+        file: source.hashKey,
         sem: options.fingerprints?.semantics ?? stableHash(sem),
         resourceGraph: scopeFingerprint(options),
         attrParser: options.fingerprints?.attrParser ?? (options.attrParser ? "custom" : "default"),

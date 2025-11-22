@@ -57,7 +57,7 @@ export function lowerElementAttributes(
         to,
         from: toBindingSource(raw, loc, table, "IsProperty"),
         mode: toMode(command, attrName),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       return;
     }
@@ -67,7 +67,7 @@ export function lowerElementAttributes(
         attr: attrName,
         to,
         from: toInterpIR(raw, loc, table),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       return;
     }
@@ -76,7 +76,7 @@ export function lowerElementAttributes(
       type: "setProperty",
       to,
       value: raw,
-      loc: toSpan(loc, table.file),
+      loc: toSpan(loc, table.source),
     } as SetPropertyIR);
   };
 
@@ -95,7 +95,7 @@ export function lowerElementAttributes(
         from: toExprRef(raw, loc, table, "IsFunction"),
         capture: s.command === "capture",
         modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -105,7 +105,7 @@ export function lowerElementAttributes(
         type: "refBinding",
         to: s.target,
         from: toExprRef(raw, loc, table, "IsProperty"),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -115,7 +115,7 @@ export function lowerElementAttributes(
         type: "stylePropertyBinding",
         to: s.target,
         from: toBindingSource(raw, loc, table, "IsProperty"),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -125,7 +125,7 @@ export function lowerElementAttributes(
         attr: "class",
         to: "class",
         from: toBindingSource(raw, loc, table, "IsProperty"),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -135,7 +135,7 @@ export function lowerElementAttributes(
         attr: s.target,
         to: s.target,
         from: toBindingSource(raw, loc, table, "IsProperty"),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -161,7 +161,7 @@ export function lowerElementAttributes(
         res: attrDef.name,
         props,
         alias: attrDef.name !== s.target ? s.target : null,
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -172,7 +172,7 @@ export function lowerElementAttributes(
         to: camelCase(s.target),
         from: toBindingSource(raw, loc, table, "IsProperty"),
         mode: toMode(s.command, a.name),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -183,7 +183,7 @@ export function lowerElementAttributes(
         attr: a.name,
         to: camelCase(a.name),
         from: toInterpIR(raw, loc, table),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -193,14 +193,14 @@ export function lowerElementAttributes(
         tail.push({
           type: "setClassAttribute",
           value: raw,
-          loc: toSpan(loc, table.file),
+          loc: toSpan(loc, table.source),
         });
         break;
       case "style":
         tail.push({
           type: "setStyleAttribute",
           value: raw,
-          loc: toSpan(loc, table.file),
+          loc: toSpan(loc, table.source),
         });
         break;
       default:
@@ -208,7 +208,7 @@ export function lowerElementAttributes(
           type: "setAttribute",
           to: a.name,
           value: raw || null,
-          loc: toSpan(loc, table.file),
+          loc: toSpan(loc, table.source),
         });
         break;
     }
@@ -221,7 +221,7 @@ export function lowerElementAttributes(
       res: elementDef.name,
       props: hydrateElementProps,
       containerless,
-      loc: toSpan(el.sourceCodeLocation, table.file),
+      loc: toSpan(el.sourceCodeLocation, table.source),
     } satisfies HydrateElementIR);
   }
   instructions.push(...hydrateAttributes);

@@ -7,7 +7,8 @@ import { DEFAULT as DEFAULT_SEMANTICS } from "../../language/registry.js";
 import type { IExpressionParser } from "../../../parsers/expression-api.js";
 import { buildDomRoot } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
-import { normalizeFileForHash, ExprTable, NodeIdGen } from "./lower-shared.js";
+import { ExprTable, DomIdAllocator } from "./lower-shared.js";
+import { resolveSourceFile } from "../../model/source.js";
 
 export interface BuildIrOptions {
   file?: string;
@@ -20,11 +21,12 @@ export interface BuildIrOptions {
 export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
   const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
   const sem = opts.sem ?? DEFAULT_SEMANTICS;
-  const ids = new NodeIdGen();
-  const table = new ExprTable(opts.exprParser, normalizeFileForHash(opts.file ?? opts.name ?? ""));
+  const source = resolveSourceFile(opts.file ?? opts.name ?? "");
+  const ids = new DomIdAllocator();
+  const table = new ExprTable(opts.exprParser, source);
   const nestedTemplates: TemplateIR[] = [];
 
-  const domRoot: TemplateNode = buildDomRoot(p5, ids, undefined, table.file);
+  const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source);
   const rows: InstructionRow[] = [];
   collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, sem);
 

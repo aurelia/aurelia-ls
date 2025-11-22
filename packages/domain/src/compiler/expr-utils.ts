@@ -7,6 +7,7 @@ import type {
   IrModule,
   SourceSpan,
 } from "./model/ir.js";
+import { absoluteSpan } from "./model/source.js";
 
 /**
  * Collect authored spans for every expression occurrence in an IR module.
@@ -164,9 +165,7 @@ export function collectExprMemberSegments(
   }
 
   function toHtmlSpan(span: { start: number; end: number } | undefined, base: SourceSpan): SourceSpan {
-    if (!span) return base;
-    const file = base.file;
-    return file ? { start: base.start + span.start, end: base.start + span.end, file } : { start: base.start + span.start, end: base.start + span.end };
+    return absoluteSpan(span ?? null, base) ?? base;
   }
 }
 

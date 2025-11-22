@@ -67,7 +67,7 @@ export function collectControllers(
           alias: proto.alias ?? null,
           branch: null,
           containerless: false,
-          loc: toSpan(loc, table.file),
+          loc: toSpan(loc, table.source),
         });
       }
     }
@@ -99,14 +99,14 @@ function buildBaseInstructionsForRightmost(
 
   if (kind === "repeat") {
     const forRef = table.add(raw, loc, "IsIterator");
-    const forOf = { astId: forRef.id, loc: toSpan(loc, table.file) };
+    const forOf = { astId: forRef.id, loc: toSpan(loc, table.source) };
     const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, loc, table);
     const iter: IteratorBindingIR = {
       type: "iteratorBinding",
       to: "items",
       forOf,
       props: tailProps,
-      loc: toSpan(loc, table.file),
+      loc: toSpan(loc, table.source),
     };
     const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
     return [
@@ -118,7 +118,7 @@ function buildBaseInstructionsForRightmost(
         alias: null,
         branch: null,
         containerless: false,
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       },
     ];
   }
@@ -130,7 +130,7 @@ function buildBaseInstructionsForRightmost(
     to: "value",
     from: toExprRef(exprText, loc, table, "IsProperty"),
     mode: "default",
-    loc: toSpan(loc, table.file),
+    loc: toSpan(loc, table.source),
   };
 
   if (controller === "promise") {
@@ -162,7 +162,7 @@ function buildBaseInstructionsForRightmost(
         alias: null,
         branch: null,
         containerless: false,
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       },
     ];
   }
@@ -196,7 +196,7 @@ function buildBaseInstructionsForRightmost(
         alias: null,
         branch: null,
         containerless: false,
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       },
     ];
   }
@@ -211,7 +211,7 @@ function buildBaseInstructionsForRightmost(
       alias: null,
       branch: null,
       containerless: false,
-      loc: toSpan(loc, table.file),
+      loc: toSpan(loc, table.source),
     },
   ];
 }
@@ -230,14 +230,14 @@ function buildControllerPrototypes(
 
   if (kind === "repeat") {
     const forRef = table.add(raw, loc, "IsIterator");
-    const forOf = { astId: forRef.id, loc: toSpan(loc, table.file) };
+    const forOf = { astId: forRef.id, loc: toSpan(loc, table.source) };
     const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, loc, table);
     const iter: IteratorBindingIR = {
       type: "iteratorBinding",
       to: "items",
       forOf,
       props: tailProps,
-      loc: toSpan(loc, table.file),
+      loc: toSpan(loc, table.source),
     };
     return [{ res: "repeat", props: [iter] }];
   }
@@ -249,7 +249,7 @@ function buildControllerPrototypes(
     to: "value",
     from: toExprRef(exprText, loc, table, "IsProperty"),
     mode: "default",
-    loc: toSpan(loc, table.file),
+    loc: toSpan(loc, table.source),
   };
 
   if (controller === "promise" || controller === "switch") {
@@ -271,7 +271,7 @@ function toRepeatTailIR(
     command: null,
     from: p.from,
     value: p.value,
-    loc: toSpan(loc, table.file),
+    loc: toSpan(loc, table.source),
   }));
 }
 
@@ -368,7 +368,7 @@ function injectPromiseBranchesIntoDef(
           loc: toSpan(
             branchAttrLoc ??
               (isTpl ? (kid as P5Template).sourceCodeLocation : (kid as P5Element).sourceCodeLocation),
-            table.file
+            table.source
           ),
         },
       ],
@@ -438,7 +438,7 @@ function injectSwitchBranchesIntoDef(
           "IsProperty"
         ),
         mode: "default",
-        loc: toSpan((kid as P5Template).sourceCodeLocation, table.file),
+        loc: toSpan((kid as P5Template).sourceCodeLocation, table.source),
       };
       def.rows.push({
         target,
@@ -459,7 +459,7 @@ function injectSwitchBranchesIntoDef(
               ),
             },
             containerless: false,
-            loc: toSpan((kid as P5Template).sourceCodeLocation, table.file),
+            loc: toSpan((kid as P5Template).sourceCodeLocation, table.source),
           },
         ],
       });
@@ -486,7 +486,7 @@ function injectSwitchBranchesIntoDef(
             alias: "default",
             branch: { kind: "default" },
             containerless: false,
-            loc: toSpan((kid as P5Template).sourceCodeLocation, table.file),
+            loc: toSpan((kid as P5Template).sourceCodeLocation, table.source),
           },
         ],
       });
