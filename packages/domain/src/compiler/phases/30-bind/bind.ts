@@ -31,6 +31,7 @@ import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../
 import { provenanceFromSpan } from "../../model/origin.js";
 import { buildDiagnostic } from "../../diagnostics.js";
 import { exprIdsOf } from "../../expr-utils.js";
+import { normalizeSpanMaybe } from "../../model/span.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -186,7 +187,7 @@ function walkRows(
 
               // provenance for plan/typecheck
               const forOfAstId = iter.forOf.astId;
-              const repeatSpan = iter.forOf.loc ?? ins.loc ?? null;
+              const repeatSpan = normalizeSpanMaybe(iter.forOf.loc ?? ins.loc ?? null);
               setFrameOrigin(nextFrame, frames, { kind: "repeat", forOfAstId, ...provenanceFromSpan("bind", repeatSpan, "repeat controller") });
 
               // locals/contextuals
@@ -218,7 +219,7 @@ function walkRows(
               const ids = exprIdsOf(valueProp.from);
               const [valueExprId] = ids;
               if (valueExprId) {
-                const originSpan = valueProp.loc ?? ins.loc ?? null;
+                const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
                 setFrameOrigin(nextFrame, frames, { kind: "with", valueExprId, ...provenanceFromSpan("bind", originSpan, "'with' controller") });
               }
               break;
@@ -229,7 +230,7 @@ function walkRows(
                 const ids = exprIdsOf(valueProp.from);
                 const [valueExprId] = ids;
                 if (valueExprId) {
-                  const originSpan = valueProp.loc ?? ins.loc ?? null;
+                  const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
                   setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...provenanceFromSpan("bind", originSpan, "promise controller") });
                 }
               }
@@ -358,7 +359,7 @@ function materializeLetSymbols(
 
 function spanOfLet(ins: LinkedHydrateLetElement, _name: string): SourceSpan | null | undefined {
   // TODO(linker-carry): Thread per-let SourceSpan through LinkedHydrateLetElement if needed.
-  return ins.loc ?? null;
+  return normalizeSpanMaybe(ins.loc ?? null);
 }
 
 function getIteratorProp(ctrl: LinkedHydrateTemplateController): LinkedIteratorBinding {

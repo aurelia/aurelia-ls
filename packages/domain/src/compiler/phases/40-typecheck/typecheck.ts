@@ -7,7 +7,7 @@ import type {
   IrModule,
   SourceSpan,
 } from "../../model/ir.js";
-import type { ScopeModule, ScopeFrame, FrameId } from "../../model/symbols.js";
+import type { ScopeModule, FrameId } from "../../model/symbols.js";
 import type {
   LinkedInstruction,
   LinkedSemanticsModule,
@@ -15,11 +15,12 @@ import type {
   LinkedElementBindable,
 } from "../20-resolve-host/types.js";
 import type { TypeRef } from "../../language/registry.js";
-import { buildExprSpanIndex, exprIdsOf } from "../../expr-utils.js";
+import { buildExprSpanIndex, exprIdsOf, indexExprTable } from "../../expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
 import type { CompilerDiagnostic } from "../../diagnostics.js";
 import { buildDiagnostic } from "../../diagnostics.js";
-import { exprIdMapGet, toExprIdMap, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
+import { exprIdMapGet, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
+import { buildScopeLookup } from "../shared/scope-lookup.js";
 
 export type TypecheckDiagnostic = CompilerDiagnostic<"AU1301"> & {
   exprId?: ExprId;
@@ -69,22 +70,15 @@ function collectInferredTypes(opts: TypecheckOptions): ExprIdMap<string> {
   const scopeTemplate = opts.scope.templates[0];
   if (!scopeTemplate) return inferred;
 
+  const scope = buildScopeLookup(scopeTemplate);
   const analysis = buildFrameAnalysis(scopeTemplate, exprIndex, opts.rootVmType);
-  const frameById = new Map<FrameId, ScopeFrame>();
-  for (const f of scopeTemplate.frames) frameById.set(f.id, f);
 
   const resolveEnv = (frameId: FrameId, depth: number) => {
-    let id: FrameId | null = frameId;
-    let steps = depth;
-    while (steps > 0 && id != null) {
-      id = frameById.get(id!)?.parent ?? null;
-      steps--;
-    }
-    return id != null ? analysis.envs.get(id) : undefined;
+    const ancestor = scope.ancestorOf(frameId, depth);
+    return ancestor != null ? analysis.envs.get(ancestor) : undefined;
   };
 
-  const exprToFrame = toExprIdMap(scopeTemplate.exprToFrame);
-  for (const [exprId, frameId] of exprToFrame.entries()) {
+  for (const [exprId, frameId] of scope.exprToFrame.entries()) {
     const entry = exprIndex.get(exprId);
     if (!entry) continue;
     if (entry.expressionType !== "IsProperty" && entry.expressionType !== "IsFunction") continue;
@@ -222,11 +216,4 @@ function typeRefToString(t: TypeRef | undefined): string {
     case "unknown": return "unknown";
     default: return "unknown";
   }
-}
-
-function indexExprTable(table: readonly ExprTableEntry[] | undefined): ReadonlyExprIdMap<ExprTableEntry> {
-  const m: ExprIdMap<ExprTableEntry> = new Map();
-  if (!table) return m;
-  for (const e of table) m.set(e.id, e);
-  return m;
 }

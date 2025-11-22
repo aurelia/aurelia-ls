@@ -70,6 +70,14 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
   return out;
 }
 
+/** Index an expression table by ExprId with normalized Map semantics. */
+export function indexExprTable(table: readonly ExprTableEntry[] | undefined): ExprIdMap<ExprTableEntry> {
+  const m: ExprIdMap<ExprTableEntry> = new Map();
+  if (!table) return m;
+  for (const e of table) m.set(e.id, e);
+  return m;
+}
+
 export function ensureExprSpan(
   span: SourceSpan | null | undefined,
   fallback: SourceFile | SourceFileId | string,

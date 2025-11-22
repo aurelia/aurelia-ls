@@ -25,8 +25,9 @@ import type {
   ExprId,
   ExprTableEntry,
 } from "../../model/ir.js";
-import type { FrameId, ScopeTemplate, ScopeFrame } from "../../model/symbols.js";
+import type { FrameId, ScopeTemplate } from "../../model/symbols.js";
 import type { ReadonlyExprIdMap } from "../../model/identity.js";
+import { buildScopeLookup } from "./scope-lookup.js";
 
 export type Env = ReadonlyMap<string, string>;
 type MutableEnv = Map<string, string>;
@@ -69,17 +70,11 @@ export function buildFrameAnalysis(
   const envs = new Map<FrameId, Env>();
   const hints = new Map<FrameId, FrameTypingHints>();
 
-  const frameById = new Map<FrameId, ScopeFrame>();
-  for (const f of st.frames) frameById.set(f.id, f);
+  const scope = buildScopeLookup(st);
 
   const resolveEnvAt = (start: FrameId | null, up: number): Env | undefined => {
-    let id = start;
-    let steps = up;
-    while (steps > 0 && id != null) {
-      id = frameById.get(id!)?.parent ?? null;
-      steps--;
-    }
-    return id != null ? envs.get(id) : undefined;
+    const ancestor = scope.ancestorOf(start, up);
+    return ancestor != null ? envs.get(ancestor) : undefined;
   };
 
   const evalTypeInFrame = (
@@ -98,7 +93,7 @@ export function buildFrameAnalysis(
     });
   };
 
-  for (const f of st.frames) {
+  for (const f of scope.frames) {
     const parentEnv: Env = f.parent != null ? (envs.get(f.parent) ?? new Map()) : new Map();
     const env: MutableEnv = new Map(parentEnv);
     const h: FrameTypingHints = {};

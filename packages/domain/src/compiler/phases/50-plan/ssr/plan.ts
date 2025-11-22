@@ -3,17 +3,16 @@ import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
 import type { ExprId, InterpIR, NodeId, BindingSourceIR, TemplateNode } from "../../../model/ir.js";
 import {
   brandNumber,
-  exprIdMapGet,
   idFromKey,
   idKey,
-  toExprIdMap,
   HydrationIdAllocator,
   type FrameId,
   type HydrationId,
-  type ReadonlyExprIdMap,
 } from "../../../model/identity.js";
 import { isInterpolation, primaryExprId } from "../../../expr-utils.js";
 import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./types.js";
+import { buildScopeLookup, type ScopeLookup } from "../../shared/scope-lookup.js";
+import { normalizeSpanMaybe } from "../../../model/span.js";
 
 /** Build SSR plan from Linked+Scoped (tap point: after Phase 30 bind). */
 export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrPlanModule {
@@ -22,20 +21,20 @@ export function planSsr(linked: LinkedSemanticsModule, scope: ScopeModule): SsrP
 
   // Single ScopeTemplate models the whole module incl. nested defs (see bind.ts).
   const st: ScopeTemplate | undefined = scope.templates[0];
-  const exprToFrame = toExprIdMap<FrameId>(st?.exprToFrame);
+  const scopeLookup = st ? buildScopeLookup(st) : null;
 
   // Map raw TemplateIR roots → LinkedTemplate for nested controller defs
   const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
   for (const t of linked.templates) domToLinked.set(t.dom, t);
 
   const hidAllocator = new HydrationIdAllocator(1);
-  const plan = buildTemplatePlan(rootLinked, exprToFrame, domToLinked, hidAllocator);
+  const plan = buildTemplatePlan(rootLinked, scopeLookup, domToLinked, hidAllocator);
   return { version: "aurelia-ssr-plan@0", templates: [plan] };
 }
 
 function buildTemplatePlan(
   t: LinkedTemplate,
-  exprToFrame: ReadonlyExprIdMap<FrameId>,
+  scope: ScopeLookup | null,
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   hidAllocator: HydrationIdAllocator,
 ): SsrTemplatePlan {
@@ -59,14 +58,15 @@ function buildTemplatePlan(
         case "textBinding": {
           const inter = ins.from as InterpIR;
           const hid = ensureHid(nodeId, hidByNode, hidAllocator);
-          textBindings.push({ hid, target: nodeId, parts: inter.parts, exprIds: inter.exprs.map(e => e.id), span: ins.loc ?? null });
+          const span = normalizeSpanMaybe(ins.loc ?? null);
+          textBindings.push({ hid, target: nodeId, parts: inter.parts, exprIds: inter.exprs.map(e => e.id), span });
           hasDyn = true;
           break;
         }
         case "attributeBinding": {
           const src = ins.from as BindingSourceIR | InterpIR;
           if (isInterpolation(src)) {
-            const frames = src.exprs.map(e => frameOf(exprToFrame, e.id));
+            const frames = src.exprs.map(e => frameOf(scope, e.id));
             rowBindings.push({
               kind: "attrInterp",
               attr: ins.attr,
@@ -83,7 +83,7 @@ function buildTemplatePlan(
                 attr: ins.attr,
                 to: ins.to,
                 exprId,
-                frame: frameOf(exprToFrame, exprId),
+                frame: frameOf(scope, exprId),
               });
             }
           }
@@ -93,7 +93,7 @@ function buildTemplatePlan(
         case "propertyBinding": {
           const exprId = primaryExprId(ins.from);
           if (exprId) {
-            rowBindings.push({ kind: "prop", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId), mode: ins.mode });
+            rowBindings.push({ kind: "prop", to: ins.to, exprId, frame: frameOf(scope, exprId), mode: ins.mode });
             hasDyn = true;
           }
           break;
@@ -101,20 +101,20 @@ function buildTemplatePlan(
         case "stylePropertyBinding": {
           const exprId = primaryExprId(ins.from);
           if (exprId) {
-            rowBindings.push({ kind: "styleProp", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId) });
+            rowBindings.push({ kind: "styleProp", to: ins.to, exprId, frame: frameOf(scope, exprId) });
             hasDyn = true;
           }
           break;
         }
         case "listenerBinding": {
           const exprId = ins.from.id;
-          rowBindings.push({ kind: "listener", name: ins.to, exprId, frame: frameOf(exprToFrame, exprId), capture: ins.capture ?? false, modifier: ins.modifier ?? null });
+          rowBindings.push({ kind: "listener", name: ins.to, exprId, frame: frameOf(scope, exprId), capture: ins.capture ?? false, modifier: ins.modifier ?? null });
           hasDyn = true;
           break;
         }
         case "refBinding": {
           const exprId = ins.from.id;
-          rowBindings.push({ kind: "ref", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId) });
+          rowBindings.push({ kind: "ref", to: ins.to, exprId, frame: frameOf(scope, exprId) });
           hasDyn = true;
           break;
         }
@@ -144,7 +144,7 @@ function buildTemplatePlan(
           const hid = ensureHid(nodeId, hidByNode, hidAllocator);
           const ctrl = ins;
           const nestedLinked = domToLinked.get(ctrl.def.dom);
-          const nestedPlan = nestedLinked ? buildTemplatePlan(nestedLinked, exprToFrame, domToLinked, hidAllocator) : emptyPlan();
+          const nestedPlan = nestedLinked ? buildTemplatePlan(nestedLinked, scope, domToLinked, hidAllocator) : emptyPlan();
 
           let forOfExprId: ExprId | undefined;
           let valueExprId: ExprId | undefined;
@@ -171,7 +171,7 @@ function buildTemplatePlan(
             forOfExprId: forOfExprId!,
             valueExprId: valueExprId!,
             branch,
-            frame: forOfExprId ? frameOf(exprToFrame, forOfExprId) : valueExprId ? frameOf(exprToFrame, valueExprId) : brandNumber<"FrameId">(0),
+            frame: frameOf(scope, forOfExprId ?? valueExprId),
           };
           if (nestedLinked) controllerEntry.defLinked = nestedLinked;
           rowControllers.push(controllerEntry);
@@ -250,8 +250,10 @@ function mergeChildPlanIntoParent(
   );
 }
 
-function frameOf(map: ReadonlyExprIdMap<FrameId>, id: ExprId): FrameId {
-  return exprIdMapGet(map, id) ?? brandNumber<"FrameId">(0);
+function frameOf(scope: ScopeLookup | null, id: ExprId | undefined): FrameId {
+  const fallback = scope?.root ?? brandNumber<"FrameId">(0);
+  if (!scope || !id) return fallback;
+  return scope.frameOfExpr(id) ?? fallback;
 }
 
 function nodeKeyFromId(id: NodeId): string {
