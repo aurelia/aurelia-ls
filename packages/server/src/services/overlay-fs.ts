@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import type { NormalizedPath } from "@aurelia-ls/domain";
 import { PathUtils } from "./paths.js";
 
 export interface Snapshot {
@@ -8,8 +9,8 @@ export interface Snapshot {
 
 export class OverlayFs {
   #paths: PathUtils;
-  #files = new Map<string, Snapshot>();
-  #scriptRoots = new Set<string>();
+  #files = new Map<NormalizedPath, Snapshot>();
+  #scriptRoots = new Set<NormalizedPath>();
 
   constructor(paths: PathUtils) {
     this.#paths = paths;

@@ -1,15 +1,16 @@
 import ts from "typescript";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/domain";
 
 export class PathUtils {
   constructor(private readonly caseSensitive: boolean) {}
 
-  normalize(file: string): string {
-    return file.replace(/\\/g, "/");
+  normalize(file: string): NormalizedPath {
+    return normalizePathForId(file);
   }
 
-  canonical(file: string): string {
+  canonical(file: string): NormalizedPath {
     const normalized = this.normalize(file);
-    return this.caseSensitive ? normalized : normalized.toLowerCase();
+    return this.caseSensitive ? normalized : normalizePathForId(normalized.toLowerCase());
   }
 
   isCaseSensitive(): boolean {

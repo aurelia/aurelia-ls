@@ -10,6 +10,7 @@ import type {
 import type { SourceFile } from "./model/source.js";
 import { absoluteSpan, resolveSourceSpan } from "./model/source.js";
 import type { SourceFileId } from "./model/identity.js";
+import { normalizeSpan } from "./model/span.js";
 
 /**
  * Collect authored spans for every expression occurrence in an IR module.
@@ -19,10 +20,10 @@ export function collectExprSpans(ir: IrModule): Map<ExprId, SourceSpan> {
   const out = new Map<ExprId, SourceSpan>();
   const visitSource = (src: BindingSourceIR) => {
     if (isInterp(src)) {
-      for (const ref of src.exprs) if (!out.has(ref.id) && ref.loc) out.set(ref.id, ref.loc);
+      for (const ref of src.exprs) if (!out.has(ref.id) && ref.loc) out.set(ref.id, normalizeSpan(ref.loc));
     } else {
       const ref = src as ExprRef;
-      if (!out.has(ref.id) && ref.loc) out.set(ref.id, ref.loc);
+      if (!out.has(ref.id) && ref.loc) out.set(ref.id, normalizeSpan(ref.loc));
     }
   };
 

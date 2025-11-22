@@ -683,7 +683,7 @@ export class CoreParser {
         this.nextToken(); // ')'
         const node: ParenExpression = {
           $kind: "Paren",
-          span: { start: open.start, end: close.end },
+          span: spanFromBounds(open.start, close.end),
           expression: expr,
         };
         return node;
@@ -752,7 +752,7 @@ export class CoreParser {
         }
         this.nextToken();
         const name = this.tokenToIdentifierName(nameTok);
-        const span: TextSpan = { start, end: nameTok.end };
+        const span = spanFromBounds(start, nameTok.end);
         const node: AccessScopeExpression = {
           $kind: "AccessScope",
           span,
@@ -764,7 +764,7 @@ export class CoreParser {
 
       const node: AccessThisExpression = {
         $kind: "AccessThis",
-        span: { start, end: first.end },
+        span: spanFromBounds(start, first.end),
         ancestor: 0,
       };
       return node;
@@ -808,7 +808,7 @@ export class CoreParser {
     // Only hops, no trailing property.
     const node: AccessThisExpression = {
       $kind: "AccessThis",
-      span: { start, end: this.lastTokenEnd || first.end },
+      span: spanFromBounds(start, this.lastTokenEnd || first.end),
       ancestor,
     };
     return node;
@@ -824,7 +824,7 @@ export class CoreParser {
     const first = this.peekToken();
     if (first.type === TokenType.CloseBracket) {
       this.nextToken();
-      const span: TextSpan = { start, end: this.lastTokenEnd };
+      const span = spanFromBounds(start, this.lastTokenEnd);
       return {
         $kind: "ArrayLiteral",
         span,
@@ -875,7 +875,7 @@ export class CoreParser {
       return this.error("Expected ',' or ']' in array literal", sep);
     }
 
-    const span: TextSpan = { start, end: this.lastTokenEnd };
+    const span = spanFromBounds(start, this.lastTokenEnd);
     return {
       $kind: "ArrayLiteral",
       span,
@@ -895,7 +895,7 @@ export class CoreParser {
     const first = this.peekToken();
     if (first.type === TokenType.CloseBrace) {
       this.nextToken();
-      const span: TextSpan = { start, end: this.lastTokenEnd };
+      const span = spanFromBounds(start, this.lastTokenEnd);
       return {
         $kind: "ObjectLiteral",
         span,
@@ -954,7 +954,7 @@ export class CoreParser {
       return this.error("Expected ',' or '}' in object literal", sep);
     }
 
-    const span: TextSpan = { start, end: this.lastTokenEnd };
+    const span = spanFromBounds(start, this.lastTokenEnd);
     return {
       $kind: "ObjectLiteral",
       span,
@@ -1166,7 +1166,7 @@ export class CoreParser {
       return this.error("Expected ',' or ']' in array binding pattern", sep);
     }
 
-    const span: TextSpan = { start, end: this.lastTokenEnd };
+    const span = spanFromBounds(start, this.lastTokenEnd);
     return {
       $kind: "ArrayBindingPattern",
       span,
@@ -1269,7 +1269,7 @@ export class CoreParser {
       return this.error("Expected ',' or '}' in object binding pattern", sep);
     }
 
-    const span: TextSpan = { start, end: this.lastTokenEnd };
+    const span = spanFromBounds(start, this.lastTokenEnd);
     return {
       $kind: "ObjectBindingPattern",
       span,
@@ -1334,7 +1334,7 @@ export class CoreParser {
         i++; // include closing
         this.scanner.reset(i);
         this.lastTokenEnd = i;
-        const span: TextSpan = { start: open.start, end: i };
+        const span = spanFromBounds(open.start, i);
         return { $kind: "Template", span, cooked, expressions };
       }
       // handle escape of backtick/dollar by skipping next char
@@ -1360,7 +1360,7 @@ export class CoreParser {
     const init = this.parseAssignExpr();
     return {
       $kind: "BindingPatternDefault",
-      span: { start: pattern.span.start, end: this.getEndSpan(init) },
+      span: spanFromBounds(pattern.span.start, this.getEndSpan(init)),
       target: pattern,
       default: init,
     };
@@ -1393,7 +1393,7 @@ export class CoreParser {
     const init = this.parseAssignExpr();
     return {
       $kind: "BindingPatternDefault",
-      span: { start: binding.span.start, end: this.getEndSpan(init) },
+      span: spanFromBounds(binding.span.start, this.getEndSpan(init)),
       target: binding,
       default: init,
     };
