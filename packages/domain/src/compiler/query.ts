@@ -23,7 +23,7 @@ import type { TypeRef } from "./language/registry.js";
 import type { DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import { idKey } from "./model/identity.js";
-import { spanContainsOffset, spanLength, type SpanLike } from "./model/span.js";
+import { pickNarrowestContaining, spanContainsOffset } from "./model/span.js";
 
 export function buildTemplateQuery(
   irModule: IrModule | undefined,
@@ -64,7 +64,7 @@ export function buildTemplateQuery(
       return null;
     },
     controllerAt(htmlOffset) {
-      const hit = pickNarrowest(controllers, htmlOffset, (c) => c.span);
+      const hit = pickNarrowestContaining(controllers, htmlOffset, (c) => c.span);
       return hit ? { kind: hit.kind, span: hit.span! } : null;
     },
   };
@@ -128,7 +128,7 @@ function indexControllers(linked: LinkedSemanticsModule): ControllerIndex[] {
 }
 
 function pickNodeAt(nodes: NodeIndex[], rows: Map<string, LinkedRow>, offset: number): TemplateNodeInfo | null {
-  const best = pickNarrowest(nodes, offset, (n) => n.span ?? null);
+  const best = pickNarrowestContaining(nodes, offset, (n) => n.span ?? null);
   if (!best || !best.span) return null;
   const mappedKind = mapNodeKind(best.kind);
   if (!mappedKind) return null;
@@ -159,14 +159,7 @@ function findSegmentAt(
   entries: readonly TemplateMappingEntry[],
   htmlOffset: number,
 ): { exprId: ExprId; span: SourceSpan; frameId?: FrameId; memberPath?: string } | null {
-  const pairs = (function* () {
-    for (const entry of entries) {
-      for (const segment of entry.segments ?? []) {
-        yield { entry, segment };
-      }
-    }
-  })();
-  const best = pickNarrowest(pairs, htmlOffset, (pair) => pair.segment.htmlSpan);
+  const best = pickNarrowestContaining(segmentPairs(entries), htmlOffset, (pair) => pair.segment.htmlSpan);
   if (!best) return null;
   const { entry, segment } = best;
   const result: { exprId: ExprId; span: SourceSpan; frameId?: FrameId; memberPath?: string } = {
@@ -176,6 +169,14 @@ function findSegmentAt(
   if (entry.frameId !== undefined) result.frameId = entry.frameId;
   if (segment.path !== undefined) result.memberPath = segment.path;
   return result;
+}
+
+function* segmentPairs(entries: readonly TemplateMappingEntry[]) {
+  for (const entry of entries) {
+    for (const segment of entry.segments ?? []) {
+      yield { entry, segment };
+    }
+  }
 }
 
 function collectBindables(row: LinkedRow, typeResolver: (target?: TargetSem | { kind: "style" }) => string | undefined): TemplateBindableInfo[] {
@@ -288,21 +289,4 @@ function buildPendingQueryFacade(mapping: TemplateMappingArtifact, typecheck: Ty
     },
     controllerAt(_htmlOffset) { return null; },
   };
-}
-
-function pickNarrowest<T>(
-  items: Iterable<T>,
-  offset: number,
-  spanOf: (item: T) => SpanLike | null | undefined,
-): T | null {
-  // Local generic for query: works over arbitrary items with a span projector, keeping span logic close to query without widening span.ts to domain-specific shapes.
-  let best: { item: T; span: SpanLike } | null = null;
-  for (const item of items) {
-    const span = spanOf(item);
-    if (!span || !spanContainsOffset(span, offset)) continue;
-    if (!best || spanLength(span) < spanLength(best.span)) {
-      best = { item, span };
-    }
-  }
-  return best?.item ?? null;
 }

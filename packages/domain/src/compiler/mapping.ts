@@ -10,7 +10,7 @@ import type {
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import { collectExprMemberSegments, collectExprSpans, ensureExprSpan, resolveExprSpanIndex, type HtmlMemberSegment } from "./expr-utils.js";
-import { spanContainsOffset, spanLength, type SpanLike } from "./model/span.js";
+import { pickNarrowestContaining, spanContainsOffset, type SpanLike } from "./model/span.js";
 import type { SourceFile } from "./model/source.js";
 import { exprIdMapGet, type ExprIdMapLike } from "./model/identity.js";
 
@@ -89,16 +89,16 @@ function pickBestSegment(
   offset: number,
   spanOf: (seg: TemplateMappingSegment) => SpanLike,
 ): MappingHit | null {
-  // Mapping-specific helper: stays here to honor overlay/html pairing semantics (and return MappingHit) without exporting domain glue into span/query helpers.
-  let best: { entry: TemplateMappingEntry; segment: TemplateMappingSegment; span: SpanLike } | null = null;
+  const best = pickNarrowestContaining(segmentPairs(entries), offset, (pair) => spanOf(pair.segment));
+  return best ? { entry: best.entry, segment: best.segment } : null;
+}
+
+function* segmentPairs(
+  entries: readonly TemplateMappingEntry[],
+): Iterable<{ entry: TemplateMappingEntry; segment: TemplateMappingSegment }> {
   for (const entry of entries) {
-    for (const seg of entry.segments ?? []) {
-      const span = spanOf(seg);
-      if (!spanContainsOffset(span, offset)) continue;
-      if (!best || spanLength(span) < spanLength(best.span)) {
-        best = { entry, segment: seg, span };
-      }
+    for (const segment of entry.segments ?? []) {
+      yield { entry, segment };
     }
   }
-  return best ? { entry: best.entry, segment: best.segment } : null;
 }
