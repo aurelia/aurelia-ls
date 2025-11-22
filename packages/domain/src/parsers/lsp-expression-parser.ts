@@ -51,7 +51,6 @@ import type {
   BadExpression,
 } from "../compiler/model/ir.js";
 
-import { parseInterpolationAst } from "./interpolation.js";
 import { offsetSpan, spanFromBounds } from "../compiler/model/span.js";
 
 /**
@@ -636,6 +635,9 @@ export class CoreParser {
       case TokenType.UndefinedLiteral:
       case TokenType.NumericLiteral:
       case TokenType.StringLiteral: {
+        if (t.unterminated) {
+          return this.error("Unterminated string literal", t);
+        }
         this.nextToken();
         const node: PrimitiveLiteralExpression = {
           $kind: "PrimitiveLiteral",
@@ -1306,26 +1308,23 @@ export class CoreParser {
       // `${` starts an expression
       if (ch === CharCode.Dollar && src.charCodeAt(i + 1) === CharCode.OpenBrace) {
         flushChunk(i);
-        // find matching }
-        let depth = 1;
-        let j = i + 2;
-        while (j < src.length && depth > 0) {
-          const code = src.charCodeAt(j);
-          if (code === CharCode.OpenBrace) depth++;
-          else if (code === CharCode.CloseBrace) depth--;
-          j++;
-        }
-        if (depth !== 0) {
+        const exprStart = i + 2;
+        const closing = this.scanTemplateExpression(exprStart);
+        if (closing < 0) {
           return this.error("Unterminated ${ in template literal", open);
         }
-        const exprSrc = src.slice(i + 2, j - 1);
+        const exprSrc = src.slice(exprStart, closing);
         const inner = new CoreParser(exprSrc);
         const expr = inner.parseAssignExpr();
+        const trailing = inner.peekToken();
+        if (trailing.type !== TokenType.EOF) {
+          inner.error("Unexpected token after end of template expression", trailing);
+        }
         const node = (inner.failure ?? expr) as unknown as Record<string, unknown>;
-        offsetNodeSpans(node, i + 2);
+        offsetNodeSpans(node, exprStart);
         expressions.push(node as unknown as IsAssign);
-        chunkStart = j;
-        i = j;
+        chunkStart = closing + 1;
+        i = chunkStart;
         continue;
       }
       // closing backtick
@@ -1346,6 +1345,114 @@ export class CoreParser {
     }
 
     return this.error("Unterminated template literal", open);
+  }
+
+  private scanTemplateExpression(start: number): number {
+    let depth = 1;
+    let i = start;
+    while (i < this.source.length) {
+      const ch = this.source.charCodeAt(i);
+      // Skip strings
+      if (ch === CharCode.SingleQuote || ch === CharCode.DoubleQuote) {
+        const after = this.skipStringLiteral(i, ch);
+        if (after < 0) return -1;
+        i = after;
+        continue;
+      }
+      // Skip nested template literals
+      if (ch === CharCode.Backtick) {
+        const after = this.scanTemplateLiteralBody(i);
+        if (after < 0) return -1;
+        i = after;
+        continue;
+      }
+      // Skip comments
+      if (ch === CharCode.Slash && this.source.charCodeAt(i + 1) === CharCode.Slash) {
+        i = this.skipLineComment(i + 2);
+        continue;
+      }
+      if (ch === CharCode.Slash && this.source.charCodeAt(i + 1) === CharCode.Asterisk) {
+        const after = this.skipBlockComment(i + 2);
+        if (after < 0) return -1;
+        i = after;
+        continue;
+      }
+
+      if (ch === CharCode.OpenBrace) {
+        depth++;
+        i++;
+        continue;
+      }
+      if (ch === CharCode.CloseBrace) {
+        depth--;
+        if (depth === 0) return i;
+        i++;
+        continue;
+      }
+      i++;
+    }
+    return -1;
+  }
+
+  private scanTemplateLiteralBody(startBacktick: number): number {
+    let i = startBacktick + 1;
+    while (i < this.source.length) {
+      const ch = this.source.charCodeAt(i);
+      if (ch === CharCode.Backslash) {
+        i += 2;
+        continue;
+      }
+      if (ch === CharCode.Backtick) {
+        return i + 1;
+      }
+      if (ch === CharCode.Dollar && this.source.charCodeAt(i + 1) === CharCode.OpenBrace) {
+        const closing = this.scanTemplateExpression(i + 2);
+        if (closing < 0) return -1;
+        i = closing + 1;
+        continue;
+      }
+      i++;
+    }
+    return -1;
+  }
+
+  private skipStringLiteral(start: number, quote: number): number {
+    let i = start + 1;
+    while (i < this.source.length) {
+      const ch = this.source.charCodeAt(i);
+      if (ch === CharCode.Backslash) {
+        i += 2;
+        continue;
+      }
+      if (ch === quote) {
+        return i + 1;
+      }
+      i++;
+    }
+    return -1;
+  }
+
+  private skipLineComment(start: number): number {
+    let i = start;
+    while (i < this.source.length) {
+      const ch = this.source.charCodeAt(i);
+      if (ch === CharCode.LineFeed || ch === CharCode.CarriageReturn) {
+        return i;
+      }
+      i++;
+    }
+    return i;
+  }
+
+  private skipBlockComment(start: number): number {
+    let i = start;
+    while (i < this.source.length - 1) {
+      if (this.source.charCodeAt(i) === CharCode.Asterisk && this.source.charCodeAt(i + 1) === CharCode.Slash) {
+        return i + 2;
+      }
+      i++;
+    }
+    return -1;
   }
 
   private parseBindingPatternWithOptionalDefault(): BindingPattern {
@@ -1894,6 +2001,150 @@ export class CoreParser {
 // --------------------------------------------------------------------------------------------
 // Public LSP-facing parser
 // --------------------------------------------------------------------------------------------
+
+// Interpolation helpers (formerly in interpolation.ts)
+
+export interface InterpolationSplitResult {
+  parts: string[];
+  exprSpans: TextSpan[];
+}
+
+export interface InterpolationSegments {
+  parts: string[];
+  expressions: { span: TextSpan; code: string }[];
+}
+
+export function splitInterpolationText(text: string): InterpolationSplitResult | null {
+  let i = 0;
+  let depth = 0;
+  let start = 0;
+  let str: '"' | "'" | "`" | null = null;
+
+  const parts: string[] = [];
+  const exprSpans: TextSpan[] = [];
+
+  while (i < text.length) {
+    const ch = text[i];
+
+    if (str) {
+      if (ch === "\\") {
+        i += 2;
+        continue;
+      }
+      if (ch === str) {
+        str = null;
+      }
+      i++;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'" || ch === "`") {
+      str = ch;
+      i++;
+      continue;
+    }
+
+    if (ch === "$" && text[i + 1] === "{") {
+      parts.push(text.slice(start, i));
+
+      i += 2;
+      depth = 1;
+
+      const exprStart = i;
+      let innerStr: '"' | "'" | "`" | null = null;
+
+      while (i < text.length) {
+        const c = text[i];
+
+        if (innerStr) {
+          if (c === "\\") {
+            i += 2;
+            continue;
+          }
+          if (c === innerStr) {
+            innerStr = null;
+            i++;
+            continue;
+          }
+          i++;
+          continue;
+        }
+
+        if (c === '"' || c === "'" || c === "`") {
+          innerStr = c;
+          i++;
+          continue;
+        }
+
+        if (c === "{") {
+          depth++;
+          i++;
+          continue;
+        }
+
+        if (c === "}" && --depth === 0) {
+          const exprEnd = i;
+          exprSpans.push(spanFromBounds(exprStart, exprEnd));
+          i++;        // consume the closing '}'
+          start = i;  // next literal part starts after the interpolation
+          break;
+        }
+
+        i++;
+      }
+
+      continue;
+    }
+
+    i++;
+  }
+
+  if (exprSpans.length === 0) {
+    return null;
+  }
+
+  parts.push(text.slice(start));
+
+  return { parts, exprSpans };
+}
+
+export function extractInterpolationSegments(text: string): InterpolationSegments | null {
+  const split = splitInterpolationText(text);
+  if (!split) return null;
+
+  const expressions = split.exprSpans.map((span) => ({
+    span,
+    code: text.slice(span.start, span.end),
+  }));
+
+  return { parts: split.parts, expressions };
+}
+
+export function parseInterpolationAst(
+  text: string,
+  parseExpr: (segment: string, baseOffset: number) => IsBindingBehavior | BadExpression,
+): Interpolation {
+  const split = extractInterpolationSegments(text);
+
+  const parts: string[] = split ? split.parts : [text];
+  const expressions: IsBindingBehavior[] = [];
+
+  if (split) {
+    for (const { code, span } of split.expressions) {
+      const expr = parseExpr(code, span.start);
+      expressions.push(expr as IsBindingBehavior);
+    }
+  }
+
+  const span: TextSpan = spanFromBounds(0, text.length);
+
+  return {
+    $kind: "Interpolation",
+    span,
+    parts,
+    expressions,
+  };
+}
 
 export class LspExpressionParser implements IExpressionParser {
   // Overload signatures from IExpressionParser

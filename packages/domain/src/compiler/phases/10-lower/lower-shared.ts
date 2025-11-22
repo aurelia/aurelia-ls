@@ -11,7 +11,7 @@ import type {
   BadExpression,
 } from "../../model/ir.js";
 import type { ExpressionType, IExpressionParser } from "../../../parsers/expression-api.js";
-import { extractInterpolationSegments } from "../../../parsers/interpolation.js";
+import { extractInterpolationSegments } from "../../../parsers/lsp-expression-parser.js";
 import { DomIdAllocator, deterministicStringId } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";

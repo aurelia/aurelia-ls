@@ -15,6 +15,7 @@ import type {
   BindingIdentifierOrPattern,
   DestructuringAssignmentExpression,
   BadExpression,
+  ExprTableEntry,
 } from "../../model/ir.js";
 
 import type {
@@ -44,12 +45,15 @@ export function bindScopes(linked: LinkedSemanticsModule): ScopeModule {
   const templates: ScopeTemplate[] = [];
 
   // Index ForOf entries once
+  const exprIndex: ExprIdMap<ExprTableEntry> = new Map();
   const forOfIndex: ExprIdMap<ForOfStatement | BadExpression> = new Map();
   for (const e of linked.exprTable ?? []) {
+    exprIndex.set(e.id, e as ExprTableEntry);
     if (e.expressionType === 'IsIterator') {
       forOfIndex.set(e.id, e.ast);
     }
   }
+  const reportedBadExprs = new Set<ExprId>();
 
   // Map raw TemplateIR roots → LinkedTemplate (identity preserved by resolve-host)
   const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
@@ -59,7 +63,7 @@ export function bindScopes(linked: LinkedSemanticsModule): ScopeModule {
   // are traversed via controller defs while staying inside the same frame tree.
   const roots: LinkedTemplate[] = linked.templates.length > 0 ? [linked.templates[0]!] : [];
   for (const t of roots) {
-    templates.push(buildTemplateScopes(t, diags, domToLinked, forOfIndex));
+    templates.push(buildTemplateScopes(t, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs));
   }
 
   return { version: "aurelia-scope@1", templates, diags };
@@ -74,6 +78,8 @@ function buildTemplateScopes(
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
+  reportedBadExprs: Set<ExprId>,
 ): ScopeTemplate {
   const frames: ScopeFrame[] = [];
   const frameIds = new FrameIdAllocator();
@@ -92,7 +98,7 @@ function buildTemplateScopes(
   });
 
   // Walk rows at the root template
-  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, /*allowLets*/ true);
+  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs, /*allowLets*/ true);
 
   return { name: t.name!, frames, root: rootId, exprToFrame };
 }
@@ -106,29 +112,34 @@ function walkRows(
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
+  reportedBadExprs: Set<ExprId>,
   allowLets: boolean,
 ): void {
+  const badCtx: BadExprContext = { exprIndex, reported: reportedBadExprs, diags };
   for (const r of rows) {
     for (const ins of r.instructions) {
       switch (ins.kind) {
         // ---- Bindings with expressions evaluated in the *current* frame ----
         case "propertyBinding":
-          mapBindingSource(ins.from, currentFrame, exprToFrame);
+          mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
           break;
         case "attributeBinding":
-          mapBindingSource(ins.from, currentFrame, exprToFrame);
+          mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
           break;
         case "stylePropertyBinding":
-          mapBindingSource(ins.from, currentFrame, exprToFrame);
+          mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
           break;
         case "listenerBinding":
+          reportBadExpression(ins.from, badCtx);
           exprToFrame.set(idOf(ins.from), currentFrame);
           break;
         case "refBinding":
+          reportBadExpression(ins.from, badCtx);
           exprToFrame.set(idOf(ins.from), currentFrame);
           break;
         case "textBinding":
-          mapBindingSource(ins.from, currentFrame, exprToFrame);
+          mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
           break;
 
         // ---- Setters (no expressions) ----
@@ -142,7 +153,7 @@ function walkRows(
         case "hydrateLetElement":
           // Only materialize <let> names into the env when the current traversal context allows it.
           // Reuse-scoped nested templates (if/switch/portal) should not leak their <let> names to the whole frame.
-          materializeLetSymbols(ins, currentFrame, frames, exprToFrame, diags, /*publishEnv*/ allowLets);
+          materializeLetSymbols(ins, currentFrame, frames, exprToFrame, diags, badCtx, /*publishEnv*/ allowLets);
           break;
 
         // ---- Standalone iteratorBinding should not appear (repeat packs it as a prop) ----
@@ -150,7 +161,7 @@ function walkRows(
           // Header evaluated in the outer frame: record the ForOfStatement id.
           exprToFrame.set(ins.forOf.astId, currentFrame);
           // Tail options (aux) also evaluate in the outer frame.
-          for (const a of ins.aux) mapBindingSource(a.from, currentFrame, exprToFrame);
+          for (const a of ins.aux) mapBindingSource(a.from, currentFrame, exprToFrame, badCtx);
           break;
 
         // ---- Template controllers ----
@@ -162,11 +173,11 @@ function walkRows(
           for (const p of ins.props) {
             switch (p.kind) {
               case "propertyBinding":
-                mapBindingSource(p.from, propFrame, exprToFrame);
+                mapBindingSource(p.from, propFrame, exprToFrame, badCtx);
                 break;
               case "iteratorBinding":
                 exprToFrame.set(p.forOf.astId, propFrame); // header evaluated in outer frame
-                for (const a of p.aux) mapBindingSource(a.from, propFrame, exprToFrame);
+                for (const a of p.aux) mapBindingSource(a.from, propFrame, exprToFrame, badCtx);
                 break;
               default:
                 assertUnreachable(p);
@@ -257,16 +268,16 @@ function walkRows(
             // - overlay scope (repeat/with/promise): their <let> belong to that overlay frame
             // - reuse scope (if/switch/portal): their <let> must not leak to the whole frame
             const childAllowsLets = ins.controller.spec.scope === "overlay";
-            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, childAllowsLets);
+            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs, childAllowsLets);
           }
           break;
         }
         case "hydrateElement": {
-          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame);
+          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
           break;
         }
         case "hydrateAttribute": {
-          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame);
+          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
           break;
         }
 
@@ -331,6 +342,7 @@ function materializeLetSymbols(
   frames: ScopeFrame[],
   exprToFrame: ExprIdMap<FrameId>,
   diags: ScopeDiagnostic[],
+  badCtx: BadExprContext,
   publishEnv: boolean,
 ): void {
   // Record each <let> value expr in the current frame and surface names as locals.
@@ -338,7 +350,7 @@ function materializeLetSymbols(
   let map = f.letValueExprs ?? (Object.create(null) as Record<string, ExprId>);
 
   for (const lb of ins.instructions) {
-    mapBindingSource(lb.from, currentFrame, exprToFrame);
+    mapBindingSource(lb.from, currentFrame, exprToFrame, badCtx);
     if (publishEnv) {
       const ids = exprIdsOf(lb.from);
       if (ids.length > 0) {
@@ -383,12 +395,12 @@ function getValueProp(ctrl: LinkedHydrateTemplateController): _LinkedValueProp {
  * Expression → Frame mapping
  * ============================================================================= */
 
-function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: ExprIdMap<FrameId>): void {
+function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: ExprIdMap<FrameId>, badCtx: BadExprContext): void {
   switch (b.kind) {
     case "propertyBinding":
     case "attributeBinding":
     case "stylePropertyBinding":
-      mapBindingSource(b.from, frame, out);
+      mapBindingSource(b.from, frame, out, badCtx);
       return;
     case "setProperty":
       return;
@@ -396,13 +408,43 @@ function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: ExprId
       assertUnreachable(b as never);
   }
 }
-function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: ExprIdMap<FrameId>): void {
+function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: ExprIdMap<FrameId>, badCtx: BadExprContext): void {
+  forEachExprRef(src, (ref) => reportBadExpression(ref, badCtx));
   for (const id of exprIdsOf(src)) out.set(id, frame);
 }
 
 /** Extract all ExprIds from a BindingSourceIR (ExprRef | InterpIR). */
 /** Single ExprId from ExprRef. */
 function idOf(e: ExprRef): ExprId { return e.id; }
+
+function forEachExprRef(src: BindingSourceIR, cb: (ref: ExprRef) => void): void {
+  if ((src as { kind?: string }).kind === "interp") {
+    const interp = src as Extract<BindingSourceIR, { kind: "interp" }>;
+    for (const ref of interp.exprs) {
+      cb(ref);
+    }
+    return;
+  }
+  cb(src as ExprRef);
+}
+
+type BadExprContext = {
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>;
+  reported: Set<ExprId>;
+  diags: ScopeDiagnostic[];
+};
+
+function reportBadExpression(ref: ExprRef, ctx: BadExprContext): void {
+  if (ctx.reported.has(ref.id)) return;
+  const entry = ctx.exprIndex.get(ref.id);
+  if (!entry || entry.expressionType === "IsIterator") return; // repeat headers have bespoke diagnostics
+  const ast = entry.ast as { $kind?: string; message?: string } | undefined;
+  if (ast?.$kind === "BadExpression") {
+    ctx.reported.add(ref.id);
+    const message = (ast as BadExpression).message ?? "Invalid or unsupported expression.";
+    addDiag(ctx.diags, "AU1203", message, ref.loc ?? null);
+  }
+}
 
 /* =============================================================================
  * repeat.for declaration → local names (AST-based, shallow by design)

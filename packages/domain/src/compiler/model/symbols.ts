@@ -22,7 +22,8 @@ export type { FrameId } from "./identity.js";
 /** AU12xx = ScopeGraph diagnostics (scoping-only; type errors belong to Typecheck). */
 export type ScopeDiagCode =
   | "AU1201" // Invalid/unsupported repeat destructuring pattern (MVP: shallow only)
-  | "AU1202"; // Duplicate local name in the same frame
+  | "AU1202" // Duplicate local name in the same frame
+  | "AU1203"; // Invalid or unsupported expression (parser error)
 
 export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode>;
 
