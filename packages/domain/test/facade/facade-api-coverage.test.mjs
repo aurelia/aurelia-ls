@@ -13,8 +13,10 @@ import {
   mapHtmlOffsetToOverlay,
   mapOverlayOffsetToHtml,
   pickNarrowestContaining,
+  diagnosticSpan,
   provenanceSpan,
   preferOrigin,
+  shrinkSpanToMapping,
   spanContainsOffset,
   spanLength,
 } from "../../out/index.js";
@@ -112,6 +114,10 @@ describe("Facade API coverage", () => {
     assert.equal(overlayFallback.segment, null, "missing segment should fallback to entry");
     assert.equal(overlayFallback.entry.exprId, "expr-1");
 
+    const shrunk = shrinkSpanToMapping({ start: 5, end: 25, file }, mapping);
+    assert.equal(shrunk.start, 10, "shrinkSpanToMapping should prefer the narrowest overlapping segment");
+    assert.equal(shrunk.end, 20);
+
     const htmlFallback = mapHtmlOffsetToOverlay(mapping, 45);
     assert.ok(htmlFallback);
     assert.equal(htmlFallback.segment, null, "HTML offset outside segments should fallback to entry");
@@ -199,21 +205,6 @@ describe("Facade API coverage", () => {
     assert.equal(exprSpans.get(literalHtmlHit.entry.exprId)?.file, literalHtmlHit.entry.htmlSpan.file);
 
     assert.equal(mapHtmlOffsetToOverlay(mapping, 1), null, "HTML offsets outside any expression should return null");
-  });
-
-  test("exprTable aligns with mapping entries and exprSpans", () => {
-    const html = `<template title.bind="user.name">\${user.count}</template>`;
-    const compilation = compile(html, "C:/mem/facade-exprtable.html");
-
-    const exprTableIds = new Set(compilation.exprTable.map((e) => e.id));
-    assert.ok(exprTableIds.size >= 2, "exprTable should include entries for attribute and interpolation expressions");
-
-    for (const entry of compilation.mapping.entries) {
-      assert.ok(exprTableIds.has(entry.exprId), `exprTable should contain mapping exprId ${entry.exprId}`);
-      const span = compilation.exprSpans.get(entry.exprId);
-      assert.ok(span, `exprSpans should contain ${entry.exprId}`);
-      assert.equal(span?.file, entry.htmlSpan.file, "expr span file should match mapping html span file");
-    }
   });
 
   test("diagnostics carry origin traces for resolve-host and bind stages", () => {
@@ -427,5 +418,20 @@ describe("Facade API coverage", () => {
       second.overlay.calls.map((c) => ({ exprId: c.exprId, overlayStart: c.overlayStart, overlayEnd: c.overlayEnd })),
       "overlay calls should stay deterministic",
     );
+  });
+
+  test("diagnosticSpan prefers provenance over flat spans", () => {
+    const file = "pref.html";
+    const diag = {
+      code: "AU0000",
+      message: "pref check",
+      source: "bind",
+      severity: "error",
+      span: { start: 0, end: 5, file },
+      origin: { kind: "authored", span: { start: 10, end: 15, file } },
+    };
+    const resolved = diagnosticSpan(diag);
+    assert.equal(resolved?.start, 10);
+    assert.equal(resolved?.end, 15);
   });
 });

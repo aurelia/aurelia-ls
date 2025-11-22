@@ -28,7 +28,13 @@ export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
 export { compileTemplateToSSR } from "./compiler/facade.js";
 export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
 export { mapOverlayOffsetToHtml, mapHtmlOffsetToOverlay } from "./compiler/facade.js";
-export type { MappingHit } from "./compiler/mapping.js";
+export {
+  mappingSegments,
+  pickMappingSegment,
+  shrinkSpanToMapping,
+  type MappingSegmentPair,
+  type MappingHit,
+} from "./compiler/mapping.js";
 export type { StageKey, StageArtifactMeta } from "./compiler/pipeline/engine.js";
 export {
   spanContainsOffset,
@@ -44,4 +50,5 @@ export {
   type SourceSpan,
   type TextSpan,
 } from "./compiler/model/span.js";
+export { diagnosticSpan } from "./compiler/diagnostics.js";
 export { provenanceSpan, preferOrigin } from "./compiler/model/origin.js";

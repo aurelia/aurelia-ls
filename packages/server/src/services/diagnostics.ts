@@ -1,14 +1,11 @@
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver/node.js";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import {
+  diagnosticSpan,
   mapOverlayOffsetToHtml,
-  provenanceSpan,
-  spanLength,
-  intersectSpans,
   normalizeSpan,
+  shrinkSpanToMapping,
   type TemplateCompilation,
-  type TemplateMappingArtifact,
-  type TemplateMappingEntry,
   type CompilerDiagnostic,
   type SourceSpan,
 } from "@aurelia-ls/domain";
@@ -22,9 +19,9 @@ export function mapCompilerDiagnosticsToLsp(compilation: TemplateCompilation, do
   const diags = compilation.diagnostics.all ?? [];
   const mapped: Diagnostic[] = [];
   for (const diag of diags) {
-    const span = resolveDiagnosticSpan(diag);
+    const span = diagnosticSpan(diag);
     if (!span) continue;
-    const shrunk = shrinkSpanWithMapping(span, compilation.mapping);
+    const shrunk = shrinkSpanToMapping(span, compilation.mapping);
     mapped.push({
       range: spanToRange(doc, shrunk),
       message: diag.message,
@@ -105,34 +102,4 @@ function flattenTsMessage(msg: string | import("typescript").DiagnosticMessageCh
   let next = msg.next?.[0];
   while (next) { parts.push(next.messageText); next = next.next?.[0]; }
   return parts.join(" ");
-}
-
-function resolveDiagnosticSpan(diag: CompilerDiagnostic): SourceSpan | null {
-  const span = provenanceSpan(diag.origin ?? null) ?? diag.span ?? null;
-  if (!span) return null;
-  return normalizeSpan(span);
-}
-
-function shrinkSpanWithMapping(span: SourceSpan, mapping: TemplateMappingArtifact): SourceSpan {
-  const normalized = normalizeSpan(span);
-  let best: SourceSpan | null = null;
-  let entry: TemplateMappingEntry | null = null;
-
-  for (const candidate of mapping.entries) {
-    const overlap = intersectSpans(normalized, candidate.htmlSpan);
-    if (!overlap) continue;
-    best = overlap;
-    entry = candidate;
-    break;
-  }
-
-  if (!entry || !best) return normalized;
-
-  for (const seg of entry.segments ?? []) {
-    const overlap = intersectSpans(normalized, seg.htmlSpan);
-    if (!overlap) continue;
-    if (spanLength(overlap) < spanLength(best)) best = overlap;
-  }
-
-  return spanLength(best) < spanLength(normalized) ? best : normalized;
 }
