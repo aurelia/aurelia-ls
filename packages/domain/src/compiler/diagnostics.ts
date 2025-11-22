@@ -1,4 +1,5 @@
 import type { SourceSpan } from "./model/ir.js";
+import type { Origin } from "./model/origin.js";
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
 
@@ -26,4 +27,5 @@ export interface CompilerDiagnostic<TCode extends string = string> {
   severity: DiagnosticSeverity;
   span?: SourceSpan | null;
   related?: DiagnosticRelated[];
+  origin?: Origin | null;
 }

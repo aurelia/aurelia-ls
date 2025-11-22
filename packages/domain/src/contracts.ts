@@ -1,7 +1,6 @@
 import type { ExprId, SourceSpan, NodeId, BindingMode } from "./compiler/model/ir.js";
 import type { FrameId } from "./compiler/model/symbols.js";
-
-type Brand<T extends string> = { readonly __brand: T };
+import type { Brand } from "./compiler/model/identity.js";
 
 export type AbsPath = string & Brand<"AbsPath">;
 export type OverlayPath = string & Brand<"OverlayPath">;

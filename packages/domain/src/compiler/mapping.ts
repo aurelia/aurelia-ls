@@ -9,6 +9,7 @@ import type {
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import { collectExprMemberSegments, collectExprSpans, type HtmlMemberSegment } from "./expr-utils.js";
+import { spanLength } from "./model/span.js";
 
 export interface BuildMappingInputs {
   overlayMapping: readonly OverlayEmitMappingEntry[];
@@ -66,7 +67,7 @@ export function htmlOffsetToOverlay(mapping: TemplateMappingArtifact, htmlOffset
   for (const entry of mapping.entries) {
     for (const seg of entry.segments ?? []) {
       if (htmlOffset >= seg.htmlSpan.start && htmlOffset <= seg.htmlSpan.end) {
-        if (!bestSegment || spanSize(seg.htmlSpan) < spanSize(bestSegment.segment!.htmlSpan)) {
+        if (!bestSegment || spanLength(seg.htmlSpan) < spanLength(bestSegment.segment!.htmlSpan)) {
           bestSegment = { entry, segment: seg };
         }
       }
@@ -92,8 +93,4 @@ function buildSegmentPairs(
     out.push({ kind: "member", path: seg.path, htmlSpan: h.span, overlaySpan: [seg.span[0], seg.span[1]] });
   }
   return out;
-}
-
-function spanSize(span: { start: number; end: number }): number {
-  return span.end - span.start;
 }

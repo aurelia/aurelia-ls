@@ -6,8 +6,9 @@ import type {
   Semantics,
   ValueConverterSig,
 } from "./registry.js";
+import type { Brand } from "../model/identity.js";
 
-export type ResourceScopeId = string & { __brand?: "ResourceScopeId" };
+export type ResourceScopeId = string & Brand<"ResourceScopeId">;
 
 export interface ResourceCollections {
   elements: Record<string, ElementRes>;

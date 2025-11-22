@@ -8,8 +8,12 @@
  * - Template/module containers
  * ======================================================================================= */
 
-import type { SourceSpan, ExprId, BindingSourceIR } from "./ir.js";
+import type { SourceSpan, BindingSourceIR } from "./ir.js";
+import type { FrameId, ExprId } from "./identity.js";
+import type { Provenance } from "./origin.js";
 import type { CompilerDiagnostic } from "../diagnostics.js";
+
+export type { FrameId } from "./identity.js";
 
 /* ===========================
  * Diagnostics (scoping only)
@@ -26,18 +30,15 @@ export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode>;
  * Frames & templates
  * =========================== */
 
-/** Frame ids are stable within a single ScopeTemplate only. */
-export type FrameId = number & { __brand?: "FrameId" };
-
 export type FrameKind =
   | "root"     // component root
   | "overlay"; // controllers that overlay current scope (repeat/with/promise in MVP)
 
 /** Provenance for frames, to help later phases reconstruct types precisely. */
 export type FrameOrigin =
-  | { kind: "repeat";  forOfAstId: ExprId }
-  | { kind: "with";    valueExprId: ExprId }
-  | { kind: "promise"; valueExprId: ExprId; branch?: "then" | "catch" };
+  | ({ kind: "repeat";  forOfAstId: ExprId } & Provenance)
+  | ({ kind: "with";    valueExprId: ExprId } & Provenance)
+  | ({ kind: "promise"; valueExprId: ExprId; branch?: "then" | "catch" } & Provenance);
 
 /**
  * Overlay base kinds:

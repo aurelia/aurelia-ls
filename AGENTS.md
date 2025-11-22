@@ -7,6 +7,10 @@ Goal: make changes safely, in line with the architectural intent.
 
 ## TL;DR
 
+- **Primitives (identity/span/provenance):**
+  - Use `model/identity.ts` brands for ids (`ExprId`, `NodeId`, `TemplateId`, `SourceFileId`, `NormalizedPath`, `UriString`). Do not rebrand ad-hoc strings; prefer `deterministicStringId`, `stableHash`, and `NodeIdGen/NodeAddressBuilder` instead of bespoke counters.
+  - Use `model/span.ts` for offsets (`TextSpan`, `SourceSpan`, `SourceLoc`, helpers like `spanLength/coverSpans/intersectSpans`). Keep offsets UTF-16 unless explicitly converted; thread `SourceFileId` through spans when possible.
+  - Prefer provenance in `model/origin.ts` for anything diagnostic/mapping-worthy; attach `Origin/Provenance` rather than bolting on local trace fields.
 - **Phases (pure, no I/O, no input mutation):** 10-lower -> 20-resolve-host -> 30-bind -> 50-plan -> 60-emit. Each returns new objects; never mutate prior-phase data.
 - **Style:** Strong types, discriminated unions, TS 5.x; avoid `any`; minimal runtime guards; trust contracts.
 - **Packages:** `packages/domain` (compiler, pure), `packages/server` (LSP host + TS LS), `packages/client` (VS Code extension), `packages/shared` (small utilities).
