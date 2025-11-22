@@ -118,6 +118,65 @@ export class NodeIdGen extends HierarchicalIdBuilder<"NodeId"> {
   }
 }
 
+/**
+ * DOM-aware id allocator that keeps element/text/comment sibling counts aligned with traversal.
+ * Ensures callers don't hand-roll suffix counters per level.
+ */
+export class DomIdAllocator {
+  private readonly ids = new NodeIdGen();
+  private readonly siblings: Array<{ element: number; text: number; comment: number }> = [];
+
+  public enterChildren(): void {
+    this.siblings.push({ element: 0, text: 0, comment: 0 });
+  }
+
+  public exitChildren(): void {
+    this.siblings.pop();
+  }
+
+  public nextElement(): NodeId {
+    const idx = this.currentSiblings().element++;
+    return this.ids.pushElement(idx);
+  }
+
+  public exitElement(): void {
+    this.ids.pop();
+  }
+
+  public nextText(): NodeId {
+    const idx = this.currentSiblings().text++;
+    return this.ids.withSuffix(`#text@${idx}`);
+  }
+
+  public nextComment(): NodeId {
+    const idx = this.currentSiblings().comment++;
+    return this.ids.withSuffix(`#comment@${idx}`);
+  }
+
+  public current(): NodeId {
+    return this.ids.current();
+  }
+
+  public withSuffix(suffix: string): NodeId {
+    return this.ids.withSuffix(suffix);
+  }
+
+  public withinChildren<T>(callback: () => T): T {
+    this.enterChildren();
+    try {
+      return callback();
+    } finally {
+      this.exitChildren();
+    }
+  }
+
+  private currentSiblings(): { element: number; text: number; comment: number } {
+    const current = this.siblings[this.siblings.length - 1];
+    if (!current) throw new Error("No active child list; call enterChildren() first.");
+    return current;
+  }
+}
+
 /** Pair a template id with a node id for cross-template stability. */
 export interface NodeAddress {
   template: TemplateId;

@@ -6,6 +6,7 @@ import type { OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../../contracts.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "../model/ir.js";
 import type { FrameId } from "../model/symbols.js";
+import { ensureSpanFile, fallbackSpan, resolveSourceFile } from "../model/source.js";
 
 export interface OverlayProductArtifacts {
   plan: OverlayPlanModule;
@@ -30,6 +31,7 @@ export interface OverlayProductResult {
 }
 
 export function buildOverlayProduct(session: PipelineSession, opts: OverlayProductOptions): OverlayProductArtifacts {
+  const sourceFile = resolveSourceFile(opts.templateFilePath);
   const ir = session.run("10-lower");
   const linked = session.run("20-link");
   const scope = session.run("30-scope");
@@ -45,7 +47,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     overlayMapping: overlayEmit.mapping,
     ir,
     exprTable: ir.exprTable ?? [],
-    fallbackFile: opts.templateFilePath,
+    fallbackFile: sourceFile,
     exprToFrame: exprToFrame ?? null,
   });
 
@@ -53,7 +55,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     exprId: m.exprId,
     overlayStart: m.start,
     overlayEnd: m.end,
-    htmlSpan: exprSpans.get(m.exprId) ?? { start: 0, end: 0, file: opts.templateFilePath },
+    htmlSpan: ensureSpanFile(exprSpans.get(m.exprId), sourceFile) ?? fallbackSpan(sourceFile),
   }));
 
   const overlay: OverlayProductResult = {

@@ -13,7 +13,7 @@ export function lowerLetElement(
     type: "hydrateLetElement",
     instructions,
     toBindingContext,
-    loc: toSpan(el.sourceCodeLocation, table.file),
+    loc: toSpan(el.sourceCodeLocation, table.source),
   };
 }
 
@@ -42,7 +42,7 @@ function compileLet(
         type: "letBinding",
         to: s.target,
         from: toBindingSource(a.value ?? "", loc, table, "IsProperty"),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
       continue;
     }
@@ -54,7 +54,7 @@ function compileLet(
         type: "letBinding",
         to: s.target,
         from: toInterpIR(raw, loc, table),
-        loc: toSpan(loc, table.file),
+        loc: toSpan(loc, table.source),
       });
     }
   }

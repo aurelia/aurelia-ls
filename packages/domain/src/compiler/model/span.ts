@@ -17,11 +17,11 @@ export interface TextSpan {
 }
 
 export interface SourceSpan extends TextSpan {
-  file?: SourceFileId | string;
+  file?: SourceFileId;
 }
 
 export interface SourceLoc {
-  file: SourceFileId | string;
+  file: SourceFileId;
   span: TextSpan;
 }
 
@@ -81,10 +81,10 @@ export function spanEquals(a: SpanLike | null | undefined, b: SpanLike | null | 
   return a.start === b.start && a.end === b.end && ("file" in a ? (a as SourceSpan).file : undefined) === ("file" in b ? (b as SourceSpan).file : undefined);
 }
 
-export function toSourceSpan(span: TextSpan, file?: string): SourceSpan {
+export function toSourceSpan(span: TextSpan, file?: SourceFileId): SourceSpan {
   return file === undefined ? { ...span } : { ...span, file };
 }
 
-export function toSourceLoc(span: TextSpan, file: SourceFileId | string): SourceLoc {
+export function toSourceLoc(span: TextSpan, file: SourceFileId): SourceLoc {
   return { file, span };
 }

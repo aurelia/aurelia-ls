@@ -10,12 +10,14 @@ import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import { collectExprMemberSegments, collectExprSpans, type HtmlMemberSegment } from "./expr-utils.js";
 import { spanLength } from "./model/span.js";
+import type { SourceFile } from "./model/source.js";
+import { ensureSpanFile, fallbackSpan } from "./model/source.js";
 
 export interface BuildMappingInputs {
   overlayMapping: readonly OverlayEmitMappingEntry[];
   ir: IrModule;
   exprTable?: readonly ExprTableEntry[];
-  fallbackFile: string;
+  fallbackFile: SourceFile;
   exprToFrame?: Record<ExprId, FrameId> | null;
 }
 
@@ -33,7 +35,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
   const exprSpans = collectExprSpans(inputs.ir);
   const memberHtmlSegments = collectExprMemberSegments(inputs.exprTable ?? [], exprSpans);
   const entries: TemplateMappingEntry[] = inputs.overlayMapping.map((m) => {
-    const htmlSpan = exprSpans.get(m.exprId) ?? { start: 0, end: 0, file: inputs.fallbackFile };
+    const htmlSpan = ensureSpanFile(exprSpans.get(m.exprId), inputs.fallbackFile) ?? fallbackSpan(inputs.fallbackFile);
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const segments = buildSegmentPairs(m.segments ?? [], htmlSegments);
     return {

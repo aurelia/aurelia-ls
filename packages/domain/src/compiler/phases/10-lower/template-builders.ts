@@ -10,11 +10,11 @@ import type {
 import { buildDomChildren } from "./dom-builder.js";
 import { isControllerAttr } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Node, P5Template } from "./lower-shared.js";
-import { NodeIdGen } from "./lower-shared.js";
+import { DomIdAllocator } from "./lower-shared.js";
 
 export type RowCollector = (
   rootLike: { childNodes?: P5Node[] },
-  ids: NodeIdGen,
+  ids: DomIdAllocator,
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
@@ -30,7 +30,7 @@ export function templateOfElementChildren(
   sem: Semantics,
   collectRows: RowCollector
 ): TemplateIR {
-  const ids = new NodeIdGen();
+  const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
   const host = stripControllerAttrsFromElement(el, attrParser, sem);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
@@ -54,7 +54,7 @@ export function templateOfElementChildrenWithMap(
   sem: Semantics,
   collectRows: RowCollector
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
-  const ids = new NodeIdGen();
+  const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
   const host = stripControllerAttrsFromElement(el, attrParser, sem);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
@@ -111,7 +111,7 @@ export function templateOfTemplateContent(
   sem: Semantics,
   collectRows: RowCollector
 ): TemplateIR {
-  const ids = new NodeIdGen();
+  const ids = new DomIdAllocator();
   return buildTemplateFrom(
     t.content,
     ids,
@@ -128,19 +128,19 @@ export function makeWrapperTemplate(
   inner: HydrateTemplateControllerIR,
   nestedTemplates: TemplateIR[]
 ): TemplateIR {
+  const ids = new DomIdAllocator();
+  const commentId = ids.withinChildren(() => ids.nextComment()) as NodeId;
   const dom: TemplateNode = {
     kind: "template",
     id: "0" as NodeId,
     ns: "html",
     attrs: [],
-    children: [
-      { kind: "comment", id: "0#comment@0" as NodeId, ns: "html", text: "", loc: null },
-    ],
+    children: [{ kind: "comment", id: commentId, ns: "html", text: "", loc: null }],
     loc: null,
   };
   const rows: InstructionRow[] = [
     {
-      target: "0#comment@0" as NodeId,
+      target: commentId,
       instructions: [inner],
     },
   ];
@@ -151,7 +151,7 @@ export function makeWrapperTemplate(
 
 export function buildTemplateFrom(
   rootLike: { childNodes?: P5Node[] } | P5Template["content"],
-  ids: NodeIdGen,
+  ids: DomIdAllocator,
   idMap: WeakMap<P5Node, NodeId> | undefined,
   attrParser: AttributeParser,
   table: ExprTable,
@@ -164,7 +164,7 @@ export function buildTemplateFrom(
     id: "0" as NodeId,
     ns: "html",
     attrs: [],
-    children: buildDomChildren(rootLike as { childNodes?: P5Node[] }, ids, idMap),
+    children: buildDomChildren(rootLike as { childNodes?: P5Node[] }, ids, table.source, idMap),
     loc: null,
   };
   const rows: InstructionRow[] = [];

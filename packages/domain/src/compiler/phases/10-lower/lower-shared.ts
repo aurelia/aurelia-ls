@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { DefaultTreeAdapterMap, Token } from "parse5";
 
 import type {
@@ -13,8 +12,10 @@ import type {
 } from "../../model/ir.js";
 import type { ExpressionType, IExpressionParser } from "../../../parsers/expression-api.js";
 import { extractInterpolationSegments } from "../../../parsers/interpolation.js";
-import { NodeIdGen, deterministicStringId } from "../../model/identity.js";
-export { NodeIdGen } from "../../model/identity.js";
+import { DomIdAllocator, deterministicStringId } from "../../model/identity.js";
+import type { SourceFile } from "../../model/source.js";
+import { spanFromOffsets } from "../../model/source.js";
+export { DomIdAllocator } from "../../model/identity.js";
 
 export type P5Node = DefaultTreeAdapterMap["childNode"];
 export type P5Element = DefaultTreeAdapterMap["element"];
@@ -44,13 +45,13 @@ export class ExprTable {
 
   public constructor(
     private readonly parser: IExpressionParser,
-    public readonly file: string,
+    public readonly source: SourceFile,
   ) {}
 
   public add(code: string, loc: P5Loc | null, expressionType: ExpressionType): ExprRef {
     const start = loc?.startOffset ?? 0;
     const end = loc?.endOffset ?? 0;
-    const key = `${this.file}|${start}|${end}|${expressionType}|${code}`;
+    const key = `${this.source.hashKey}|${start}|${end}|${expressionType}|${code}`;
 
     let id = this.seen.get(key);
     if (!id) {
@@ -74,7 +75,7 @@ export class ExprTable {
       this.seen.set(key, id);
     }
 
-    return { id, code, loc: toSpan(loc, this.file) };
+    return { id, code, loc: toSpan(loc, this.source) };
   }
 }
 
@@ -126,7 +127,7 @@ export function toInterpIR(
     }
   }
 
-  return { kind: "interp", parts, exprs, loc: toSpan(loc, table.file) };
+  return { kind: "interp", parts, exprs, loc: toSpan(loc, table.source) };
 }
 
 export function toExprRef(
@@ -155,15 +156,8 @@ export function parseRepeatTailProps(
   return [{ to, from, value: val }];
 }
 
-export function toSpan(loc: P5Loc | null, file?: string): SourceSpan | null {
-  if (!loc) return null;
-  return { start: loc.startOffset, end: loc.endOffset, file: file! };
-}
-
-export function normalizeFileForHash(filePath: string): string {
-  if (!filePath) return "";
-  const relative = path.isAbsolute(filePath) ? path.relative(process.cwd(), filePath) : filePath;
-  return relative.split(path.sep).join("/");
+export function toSpan(loc: P5Loc | null, source: SourceFile): SourceSpan | null {
+  return spanFromOffsets(loc, source);
 }
 
 export function findAttr(el: P5Element, name: string): Token.Attribute | undefined {
