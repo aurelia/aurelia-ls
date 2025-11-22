@@ -43,15 +43,15 @@ This document captures the target architecture for source-aware parsing and the 
 - [x] Construct `BadExpression` with `provenanceFromSpan("parse", sourceSpan)` when context is present; otherwise keep the current behavior.
 
 #### 4) Parser callers
-- [ ] `packages/domain/src/parsers/expression-parser.ts`: if keeping the singleton, adjust factory to accept/forward parse context or clarify default behavior (no file).
+- [x] `packages/domain/src/parsers/expression-parser.ts`: if keeping the singleton, adjust factory to accept/forward parse context or clarify default behavior (no file).
 - [x] `packages/domain/src/compiler/phases/10-lower/lower-shared.ts`: pass `SourceSpan` (from `spanFromOffsets`) into the parser so AST spans are source-aware at creation; remove any post-parse offset hacks.
-- [ ] `packages/domain/src/compiler/phases/30-bind/bind.ts`: ensure diagnostics consume `SourceSpan` directly; simplify any file-attachment code.
+- [x] `packages/domain/src/compiler/phases/30-bind/bind.ts`: ensure diagnostics consume `SourceSpan` directly; simplify any file-attachment code.
 - [ ] `packages/domain/src/compiler/phases/40-typecheck` / emit layers: verify they no longer expect `TextSpan` from expressions or attach files ad-hoc.
 - [ ] Other parser users (tests, fixtures) updated for the new signature.
 
 #### 5) Diagnostics
-- [ ] Verify `packages/domain/src/compiler/diagnostics.ts` continues to work with `SourceSpan` (it already does).
-- [ ] For `BadExpression`, ensure AU1203 (bind) uses the new `SourceSpan` and provenance.
+- [x] Verify `packages/domain/src/compiler/diagnostics.ts` continues to work with `SourceSpan` (it already does).
+- [x] For `BadExpression`, ensure AU1203 (bind) uses the new `SourceSpan` and provenance.
 
 #### 6) Tests and fixtures
 - [x] Update parser tests under `packages/domain/test/parsers/*.test.mjs` for any signature/shape changes and expected spans/files.
@@ -59,11 +59,11 @@ This document captures the target architecture for source-aware parsing and the 
 - [x] Consider adding a test that parses with a `baseSpan`/`file` and asserts `span.file` is set on nested nodes (including interpolation segments).
 
 #### 7) Helpers and documentation
-- [ ] Add inline docstrings to `parse` and `rebaseExpressionSpans` describing context usage.
-- [ ] Update `docs/agents/appendix-domain.md` (and `AGENTS.md` TL;DR if needed) to note that parser spans are now `SourceSpan` and can carry provenance.
+- [x] Add inline docstrings to `parse` and `rebaseExpressionSpans` describing context usage.
+- [x] Update `docs/agents/appendix-domain.md` (and `AGENTS.md` TL;DR if needed) to note that parser spans are now `SourceSpan` and can carry provenance.
 
 #### 8) Public surface
-- [ ] Re-export `ExpressionParseContext` / `rebaseExpressionSpans` (or document their import path) from the public API if external consumers need source-aware parsing.
+- [x] Re-export `ExpressionParseContext` / `rebaseExpressionSpans` (or document their import path) from the public API if external consumers need source-aware parsing.
 
 ---
 

@@ -2,6 +2,8 @@ export { compileTemplate, compileTemplateToOverlay } from "./compiler/facade.js"
 export { PRELUDE_TS } from "./prelude.js";
 
 export { getExpressionParser } from "./parsers/expression-parser.js";
+export { rebaseExpressionSpans } from "./parsers/lsp-expression-parser.js";
+export type { ExpressionParseContext, IExpressionParser } from "./parsers/expression-api.js";
 export { DEFAULT_SYNTAX } from "./compiler/language/syntax.js";
 export type { Semantics } from "./compiler/language/registry.js";
 export type {
