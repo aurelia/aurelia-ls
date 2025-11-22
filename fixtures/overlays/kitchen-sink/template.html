@@ -1,0 +1,47 @@
+<template>
+  <div containerless class="host ${klass}" data-flag.bind="flag" role.attr="banner">
+    <input value.two-way="value" checked.bind="flag" matcher.bind="matcher" class.bind="inputClass">
+    <button click.trigger="doIt()" class="btn ${btnClass}" ref="btn" aria-pressed.class="pressed">Action</button>
+
+    <au-compose subject.bind="comp" view-model.bind="vm" model.bind="payload" ...$bindables ref="cmp"></au-compose>
+
+    <section show.bind="isVisible" focus.from-view="isFocused" data-x="x" ...$attrs style="color: ${color}; font-weight: bold;" class="the-section">
+      <span class="title" style.background="bg">${title}</span>
+    </section>
+
+    <div repeat.for="item of items; key: item.id" ref="itemsRep">
+      <template if.bind="item.ok" ref="ifBlock">
+        <article containerless class="card ${item.cardClass}">
+          <span with.bind="item.detail">
+            <let name.bind="displayName" to-binding-context></let>
+            <template switch.bind="state">
+              <template case="ready">
+                <strong class="ready">${status}</strong>
+              </template>
+              <template default>
+                <em>${fallback}</em>
+              </template>
+            </template>
+          </span>
+        </article>
+      </template>
+    </div>
+
+    <au-slot name="header">${header}</au-slot>
+
+    <template promise.bind="result">
+      <template then="res">
+        <div class="done">${res.value}</div>
+      </template>
+      <template catch="err">
+        <div class="error">${err.message}</div>
+      </template>
+    </template>
+
+    <template portal.bind="target" ref="portalTpl">
+      <p>Teleported ${title}</p>
+    </template>
+
+    <let foo="bar" baz.bind="qux"></let>
+  </div>
+</template>

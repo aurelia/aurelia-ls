@@ -1,0 +1,30 @@
+[
+  {
+    "name": "TC-B-01 string literal satisfies native string target",
+    "markup": "<div textcontent.bind=\"'hi'\"></div>",
+    "expect": {
+      "expected": [
+        { "code": "'hi'", "type": "string" }
+      ],
+      "inferred": [
+        { "code": "'hi'", "type": "string" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "TC-B-02 number literal mismatches boolean bindable",
+    "markup": "<div focus.bind=\"123\"></div>",
+    "expect": {
+      "expected": [
+        { "code": "123", "type": "boolean" }
+      ],
+      "inferred": [
+        { "code": "123", "type": "number" }
+      ],
+      "diags": [
+        { "code": "AU1301", "expr": "123", "expected": "boolean", "actual": "number" }
+      ]
+    }
+  }
+]

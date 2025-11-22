@@ -1,0 +1,92 @@
+[
+  {
+    "name": "LS-01 containerless controller stack",
+    "spec": "docs/template-lowering-and-binding.md",
+    "markup": "<spec-panel containerless state.two-way=\"panel\" title.bind=\"heading\" analytics=\"session\">\n  <let to-binding-context foo.bind=\"'literal'\" bar.bind=\"barVal\" baz.bind=\"bazVal\"></let>\n  <section repeat.for=\"item of items; key: item.id\" class=\"section ${dyn}\" style=\"color:${color}; padding:4px\" ref=\"sectionRef\">\n    <span class=\"label ${item.cls}\" ref=\"rowRef\">${item.label}</span>\n    <button if.bind=\"item.show\" click.trigger=\"select(item)\" disabled.bind=\"item.disabled\" class.bind=\"item.btnClass\"></button>\n  </section>\n  <footer promise.bind=\"load()\">\n    <template then=\"result\">\n      <div with.bind=\"result.detail\">\n        ${result.message}\n      </div>\n    </template>\n    <template catch=\"err\">\n      Error ${err.code}\n    </template>\n  </footer>\n</spec-panel>",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "spec-panel": {
+            "kind": "element",
+            "name": "spec-panel",
+            "boundary": true,
+            "containerless": true,
+            "bindables": {
+              "state": { "name": "state", "mode": "twoWay" },
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        },
+        "attributes": {
+          "analytics": {
+            "kind": "attribute",
+            "name": "analytics",
+            "isTemplateController": false,
+            "primary": "value",
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "two-way", "code": "panel" },
+        { "kind": "propCommand", "command": "bind", "code": "heading" },
+        { "kind": "letValue", "on": "foo", "code": "'literal'", "command": "bind" },
+        { "kind": "letValue", "on": "bar", "code": "barVal", "command": "bind" },
+        { "kind": "letValue", "on": "baz", "code": "bazVal", "command": "bind" },
+        { "kind": "iterator" },
+        { "kind": "attrInterpolation", "on": "class", "code": "dyn" },
+        { "kind": "attrInterpolation", "on": "style", "code": "color" },
+        { "kind": "ref", "on": "element", "code": "sectionRef" },
+        { "kind": "attrInterpolation", "on": "class", "code": "item.cls" },
+        { "kind": "text", "code": "item.label" },
+        { "kind": "ref", "on": "element", "code": "rowRef" },
+        { "kind": "controllerValue", "code": "item.show", "command": "bind" },
+        { "kind": "event", "on": "click", "command": "trigger", "code": "select(item)" },
+        { "kind": "propCommand", "command": "bind", "code": "item.disabled" },
+        { "kind": "propCommand", "command": "bind", "code": "item.btnClass" },
+        { "kind": "controllerValue", "code": "load()", "command": "bind" },
+        { "kind": "controllerValue", "code": "result.detail", "command": "bind" },
+        { "kind": "text", "code": "result.message" },
+        { "kind": "text", "code": "err.code" }
+      ],
+      "controllers": [
+        { "name": "repeat" },
+        { "name": "if" },
+        { "name": "promise" },
+        { "name": "with" }
+      ],
+      "lets": [
+        { "name": "foo", "toBindingContext": true, "hasValue": true },
+        { "name": "bar", "toBindingContext": true, "hasValue": true },
+        { "name": "baz", "toBindingContext": true, "hasValue": true }
+      ],
+      "elements": [
+        { "res": "spec-panel", "containerless": true, "props": [ "state", "title" ] }
+      ],
+      "attributes": [
+        { "res": "analytics", "alias": null, "props": [ "value" ] }
+      ]
+    }
+  },
+  {
+    "name": "LS-02 mixed comments classes and switch cases",
+    "markup": "<!--hdr--><section class=\"a\" style=\"color:blue\" switch.bind=\"mode\">\n  <template case=\"\">Empty</template>\n  <template case=\"mode\">Named</template>\n  <template default-case>Fallback</template>\n</section>",
+    "expect": {
+      "controllers": [
+        { "name": "switch" },
+        { "name": "switch" },
+        { "name": "switch" },
+        { "name": "switch" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "mode" },
+        { "kind": "propCommand", "command": "bind", "code": "" },
+        { "kind": "propCommand", "command": "bind", "code": "mode" }
+      ]
+    }
+  }
+]

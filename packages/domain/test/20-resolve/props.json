@@ -1,0 +1,627 @@
+[
+  {
+    "name": "R-P-01 textcontent.bind -> textContent (toView) on <div>",
+    "markup": "<div textcontent.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-02 class.bind normalizes to className (toView)",
+    "markup": "<div class.bind=\"c\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-03 colon shorthand :class -> className (toView)",
+    "markup": "<div :class=\"c\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-04 input value.bind defaults to twoWay",
+    "markup": "<input value.bind=\"x\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-05 input checked.bind defaults to twoWay",
+    "markup": "<input checked.bind=\"x\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "checked", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-06 textarea value.bind defaults to twoWay",
+    "markup": "<textarea value.bind=\"x\"></textarea>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-07 select value.bind defaults to twoWay",
+    "markup": "<select value.bind=\"x\"></select>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-08 div scrollTop.bind -> twoWay via global default",
+    "markup": "<div scrolltop.bind=\"n\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "scrollTop", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-09 unknown property produces AU1104",
+    "markup": "<div foo.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-10 input readonly.bind -> readOnly (toView, unknown target)",
+    "markup": "<input readonly.bind=\"r\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-11 au-compose bindable: subject.bind resolves to bindable (toView)",
+    "markup": "<au-compose subject.bind=\"s\"></au-compose>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "subject", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-12 input minlength.bind -> minLength (toView, unknown target)",
+    "markup": "<input minlength.bind=\"x\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "minLength", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-13 tabindex.bind -> tabIndex (unknown on <div>)",
+    "markup": "<div tabindex.bind=\"i\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "tabIndex", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-14 outerhtml.bind -> outerHTML (unknown on <div>)",
+    "markup": "<div outerhtml.bind=\"s\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "outerHTML", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-15 innerhtml.bind -> innerHTML (native on <div>)",
+    "markup": "<div innerhtml.bind=\"s\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "innerHTML", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-16 :scroll-left forces toView (wins over global twoWay) on <div>",
+    "markup": "<div :scroll-left=\"n\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "scrollLeft", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-17 scrollleft.bind defaults to twoWay via globalProps",
+    "markup": "<div scrollleft.bind=\"n\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "scrollLeft", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-18 :textcontent toView on <div>",
+    "markup": "<div :textcontent=\"s\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-19 input formtarget.bind -> formTarget (unknown target)",
+    "markup": "<input formtarget.bind=\"t\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "formTarget", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-20 textarea maxlength.bind -> maxLength (unknown target)",
+    "markup": "<textarea maxlength.bind=\"n\"></textarea>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "maxLength", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-21 input valueAsNumber.bind defaults to twoWay",
+    "markup": "<input valueasnumber.bind=\"n\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "valueAsNumber", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-22 input valueAsDate.bind defaults to twoWay",
+    "markup": "<input valueasdate.bind=\"d\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "valueAsDate", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-23 input files.bind defaults to twoWay",
+    "markup": "<input files.bind=\"f\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "files", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-24 input disabled.bind is native toView",
+    "markup": "<input disabled.bind=\"d\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "disabled", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-25 button disabled.bind is native toView",
+    "markup": "<button disabled.bind=\"d\"></button>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "disabled", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-26 option selected.bind defaults to twoWay",
+    "markup": "<option selected.bind=\"s\"></option>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "selected", "target": "native", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-27 option value.bind is toView (per DOM schema)",
+    "markup": "<option value.bind=\"v\"></option>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-28 select multiple.bind toView",
+    "markup": "<select multiple.bind=\"m\"></select>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "multiple", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-29 select disabled.bind toView",
+    "markup": "<select disabled.bind=\"d\"></select>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "disabled", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-30 label for.bind -> htmlFor (native)",
+    "markup": "<label for.bind=\"id\"></label>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "htmlFor", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-31 img usemap.bind -> useMap (native)",
+    "markup": "<img usemap.bind=\"m\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "useMap", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-32 td rowSpan.bind -> native",
+    "markup": "<table><tr><td rowspan.bind=\"r\"></td></tr></table>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "rowSpan", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-33 th colSpan.bind -> native",
+    "markup": "<table><tr><th colspan.bind=\"c\"></th></tr></table>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "colSpan", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-34 className.bind stays className (native)",
+    "markup": "<div classname.bind=\"c\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-35 input readonly.bind -> readOnly (toView, unknown target)",
+    "markup": "<input readonly.bind=\"r\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-36 input type.bind -> type (toView, unknown target)",
+    "markup": "<input type.bind=\"t\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "type", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-37 :className toView (already camelCase) on <div>",
+    "markup": "<div :classname=\"cls\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-38 input inputmode.bind -> inputMode (unknown target)",
+    "markup": "<input inputmode.bind=\"m\">",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "inputMode", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-39 au-compose bindable 'model.bind' resolves to bindable toView",
+    "markup": "<au-compose model.bind=\"m\"></au-compose>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "model", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-40 au-slot bindable 'name.bind' resolves to bindable toView",
+    "markup": "<au-slot name.bind=\"n\"></au-slot>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-41 class.bind becomes unknown when <div> DOM props are cleared",
+    "semOverrides": {
+      "dom": {
+        "elements": {
+          "div": {
+            "tag": "div",
+            "props": {},
+            "attrToProp": {}
+          }
+        }
+      }
+    },
+    "markup": "<div class.bind=\"c\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "className", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-42 label htmlFor unknown when label DOM props are cleared",
+    "semOverrides": {
+      "dom": {
+        "elements": {
+          "label": {
+            "tag": "label",
+            "props": {},
+            "attrToProp": { "for": "htmlFor" }
+          }
+        }
+      }
+    },
+    "markup": "<label for.bind=\"id\"></label>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "htmlFor", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-43 property binding on <template> has no element -> AU1104",
+    "markup": "<template title.bind=\"t\"></template>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "title", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-44 au-slot unknown bindable -> AU1104",
+    "markup": "<au-slot foo.bind=\"x\"></au-slot>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-45 au-compose unknown bindable -> AU1104",
+    "markup": "<au-compose bogus.bind=\"x\"></au-compose>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "bogus", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-46 unknown custom element tag -> property target unknown",
+    "markup": "<x-unknown bar.bind=\"y\"></x-unknown>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "bar", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-47 au-compose 'subject.bind' becomes unknown when removed from bindables",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "au-compose": {
+            "kind": "element",
+            "name": "au-compose",
+            "boundary": true,
+            "containerless": false,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<au-compose subject.bind=\"s\"></au-compose>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "subject", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-48 select value.bind becomes unknown when select props are cleared",
+    "semOverrides": {
+      "dom": {
+        "elements": {
+          "select": {
+            "tag": "select",
+            "props": {},
+            "attrToProp": {}
+          }
+        }
+      }
+    },
+    "markup": "<select value.bind=\"x\"></select>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-49 au-compose subject.bind resolves to bindable (toView)",
+    "markup": "<au-compose subject.bind=\"vm\"></au-compose>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "subject", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-50 au-slot name.bind resolves to bindable (toView)",
+    "markup": "<au-slot name.bind=\"slotName\"></au-slot>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-51 focus custom attribute bindable resolves to twoWay",
+    "markup": "<div focus.bind=\"isFocused\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-52 custom element bindable resolves to element bindable",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-panel": {
+            "kind": "element",
+            "name": "x-panel",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<x-panel title.bind=\"vm\"></x-panel>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "title", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-53 custom attribute bindable carries bindable mode for propertyBinding",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "fancy-attr": {
+            "kind": "attribute",
+            "name": "fancy-attr",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "twoWay" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div fancy-attr.bind=\"value\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" }
+      ]
+    }
+  },
+  {
+    "name": "R-P-54 custom element literal bindable becomes setProperty",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-panel": {
+            "kind": "element",
+            "name": "x-panel",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" },
+              "other": { "name": "other", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<x-panel title=\"Hello\" other=\"y\"></x-panel>",
+    "expect": {
+      "items": []
+    }
+  }
+]

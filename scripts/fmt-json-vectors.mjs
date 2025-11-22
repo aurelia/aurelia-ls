@@ -10,13 +10,28 @@ function isScalar(v) {
   return v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 }
 
+function inlineArrayOrNull(arr, maxLen = MAX_INLINE) {
+  if (!Array.isArray(arr)) return null;
+  if (arr.length === 0) return "[]";
+
+  const parts = [];
+  for (const item of arr) {
+    if (!isScalar(item)) return null;
+    parts.push(JSON.stringify(item));
+  }
+
+  const s = `[ ${parts.join(", ")} ]`;
+  return s.length <= maxLen ? s : null;
+}
+
 function inlineObjectOrNull(obj, maxLen = MAX_INLINE) {
   if (obj === null || Array.isArray(obj) || typeof obj !== "object") return null;
   const parts = [];
   for (const k of Object.keys(obj)) {
     const v = obj[k];
-    if (!isScalar(v)) return null; // only inline if all values are scalars
-    parts.push(`${JSON.stringify(k)}: ${JSON.stringify(v)}`);
+    const inlineValue = isScalar(v) ? JSON.stringify(v) : inlineArrayOrNull(v, maxLen);
+    if (!inlineValue) return null; // only inline if all values are simple
+    parts.push(`${JSON.stringify(k)}: ${inlineValue}`);
   }
   const s = `{ ${parts.join(", ")} }`;
   return s.length <= maxLen ? s : null;
@@ -28,6 +43,9 @@ function format(value, depth = 0) {
 
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
+
+    const inlineArray = inlineArrayOrNull(value);
+    if (inlineArray) return inlineArray;
 
     // If the array is all inlineable objects, print one object per line
     const inlineables = value.map(v =>

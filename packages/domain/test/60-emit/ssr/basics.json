@@ -1,0 +1,7 @@
+[
+  {
+    "name": "EM-S-B-01 emits manifest/version for simple interpolation",
+    "markup": "<div>${msg}</div>",
+    "expect": { "manifestVersion": "aurelia-ssr-manifest@0", "templateCount": 1 }
+  }
+]

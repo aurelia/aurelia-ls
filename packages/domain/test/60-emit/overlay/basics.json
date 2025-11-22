@@ -1,0 +1,7 @@
+[
+  {
+    "name": "EM-O-B-01 emits overlay TS and mapping",
+    "markup": "<div>${user.name}</div>",
+    "expect": { "mapping": 1, "textIncludes": [ "__AU_TTC_T0_F0", "o => o.user.name" ] }
+  }
+]

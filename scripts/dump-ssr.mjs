@@ -32,7 +32,7 @@ const VM = {
 };
 
 const args = process.argv.slice(2);
-const inputs = args.length ? args : ["fixtures"]; // default: scan fixtures/
+const inputs = args.length ? args : ["fixtures/ssr"]; // default: scan fixtures/ssr/
 
 // One pass over all inputs (files or directories).
 let totalOut = 0;

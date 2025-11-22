@@ -1,6 +1,6 @@
 /* =============================================================================
  * PHASE 30 — BIND (Scope Graph)
- * LinkedSemantics → ScopeModule (pure, deterministic)
+ * LinkedSemantics -> ScopeModule (pure, deterministic)
  * - Map each expression occurrence to the frame where it is evaluated
  * - Introduce frames for overlay controllers (repeat/with/promise)
  * - Materialize locals: <let>, repeat declaration, repeat contextuals, promise alias
@@ -9,28 +9,28 @@
 
 import type {
   SourceSpan, ExprId,
-  BindingSourceIR, InterpIR, ExprRef,
+  BindingSourceIR, ExprRef,
   TemplateNode,
   ForOfStatement,
   BindingIdentifierOrPattern,
   DestructuringAssignmentExpression,
-  DestructuringAssignmentSingleExpression,
-  DestructuringAssignmentRestExpression,
-  IsAssign,
   BadExpression,
-  BindingIdentifier,
 } from "../../model/ir.js";
 
 import type {
   LinkedSemanticsModule, LinkedTemplate, LinkedRow,
-  LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement,
+  LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement, LinkedHydrateElement, LinkedHydrateAttribute, LinkedElementBindable,
 } from "../20-resolve-host/types.js";
 
 import type {
-  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic,
+  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic, ScopeDiagCode,
 } from "../../model/symbols.js";
 
 import type { RepeatController } from "../../language/registry.js";
+import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
+import { provenanceFromSpan } from "../../model/origin.js";
+import { buildDiagnostic } from "../../diagnostics.js";
+import { exprIdsOf } from "../../expr-utils.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -43,7 +43,7 @@ export function bindScopes(linked: LinkedSemanticsModule): ScopeModule {
   const templates: ScopeTemplate[] = [];
 
   // Index ForOf entries once
-  const forOfIndex = new Map<ExprId, ForOfStatement | BadExpression>();
+  const forOfIndex: ExprIdMap<ForOfStatement | BadExpression> = new Map();
   for (const e of linked.exprTable ?? []) {
     if (e.expressionType === 'IsIterator') {
       forOfIndex.set(e.id, e.ast);
@@ -72,13 +72,14 @@ function buildTemplateScopes(
   t: LinkedTemplate,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
-  forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
+  forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
 ): ScopeTemplate {
   const frames: ScopeFrame[] = [];
-  const exprToFrame: Record<string /* ExprId */, FrameId> = Object.create(null);
+  const frameIds = new FrameIdAllocator();
+  const exprToFrame: ExprIdMap<FrameId> = new Map();
 
   // Root frame (component root)
-  const rootId = nextFrameId(frames);
+  const rootId = frameIds.allocate();
   frames.push({
     id: rootId,
     parent: null,
@@ -90,7 +91,7 @@ function buildTemplateScopes(
   });
 
   // Walk rows at the root template
-  walkRows(t.rows, rootId, frames, exprToFrame, diags, domToLinked, forOfIndex, /*allowLets*/ true);
+  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, /*allowLets*/ true);
 
   return { name: t.name!, frames, root: rootId, exprToFrame };
 }
@@ -99,10 +100,11 @@ function walkRows(
   rows: LinkedRow[],
   currentFrame: FrameId,
   frames: ScopeFrame[],
-  exprToFrame: Record<string, FrameId>,
+  frameIds: FrameIdAllocator,
+  exprToFrame: ExprIdMap<FrameId>,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
-  forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
+  forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
   allowLets: boolean,
 ): void {
   for (const r of rows) {
@@ -119,10 +121,10 @@ function walkRows(
           mapBindingSource(ins.from, currentFrame, exprToFrame);
           break;
         case "listenerBinding":
-          exprToFrame[idOf(ins.from)] = currentFrame;
+          exprToFrame.set(idOf(ins.from), currentFrame);
           break;
         case "refBinding":
-          exprToFrame[idOf(ins.from)] = currentFrame;
+          exprToFrame.set(idOf(ins.from), currentFrame);
           break;
         case "textBinding":
           mapBindingSource(ins.from, currentFrame, exprToFrame);
@@ -145,22 +147,25 @@ function walkRows(
         // ---- Standalone iteratorBinding should not appear (repeat packs it as a prop) ----
         case "iteratorBinding":
           // Header evaluated in the outer frame: record the ForOfStatement id.
-          exprToFrame[ins.forOf.astId] = currentFrame;
+          exprToFrame.set(ins.forOf.astId, currentFrame);
           // Tail options (aux) also evaluate in the outer frame.
           for (const a of ins.aux) mapBindingSource(a.from, currentFrame, exprToFrame);
           break;
 
         // ---- Template controllers ----
         case "hydrateTemplateController": {
+          const isPromiseBranch = ins.res === "promise" && !!ins.branch;
+          const propFrame = isPromiseBranch ? frames[currentFrame]?.parent ?? currentFrame : currentFrame;
+
           // 1) Map controller prop expressions at the *outer* frame.
           for (const p of ins.props) {
             switch (p.kind) {
               case "propertyBinding":
-                mapBindingSource(p.from, currentFrame, exprToFrame);
+                mapBindingSource(p.from, propFrame, exprToFrame);
                 break;
               case "iteratorBinding":
-                exprToFrame[p.forOf.astId] = currentFrame; // header evaluated in outer frame
-                for (const a of p.aux) mapBindingSource(a.from, currentFrame, exprToFrame);
+                exprToFrame.set(p.forOf.astId, propFrame); // header evaluated in outer frame
+                for (const a of p.aux) mapBindingSource(a.from, propFrame, exprToFrame);
                 break;
               default:
                 assertUnreachable(p);
@@ -168,11 +173,11 @@ function walkRows(
           }
           // Switch branches evaluate in outer frame too
           if (ins.branch && ins.branch.kind === "case") {
-            exprToFrame[idOf(ins.branch.expr)] = currentFrame;
+            exprToFrame.set(idOf(ins.branch.expr), propFrame);
           }
 
           // 2) Enter the controller's frame according to semantics.scope
-          const nextFrame = enterControllerFrame(ins, currentFrame, frames);
+          const nextFrame = isPromiseBranch ? currentFrame : enterControllerFrame(ins, currentFrame, frames, frameIds);
 
           // 3) Populate locals / overlays + record origin metadata
           switch (ins.res) {
@@ -181,16 +186,18 @@ function walkRows(
 
               // provenance for plan/typecheck
               const forOfAstId = iter.forOf.astId;
-              frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "repeat", forOfAstId } } as ScopeFrame;
+              const repeatSpan = iter.forOf.loc ?? ins.loc ?? null;
+              setFrameOrigin(nextFrame, frames, { kind: "repeat", forOfAstId, ...provenanceFromSpan("bind", repeatSpan, "repeat controller") });
 
               // locals/contextuals
               const forOfAst = forOfIndex.get(forOfAstId)!;
               if (forOfAst.$kind === 'BadExpression') {
-                diags.push({
-                  code: "AU1201",
-                  message: forOfAst.message ?? "Invalid or unsupported repeat header (could not parse iterator).",
-                  span: forOfAst.span
-                })
+                addDiag(diags, "AU1201", forOfAst.message ?? "Invalid or unsupported repeat header (could not parse iterator).", forOfAst.span);
+                break;
+              }
+              const badPattern = findBadInPattern(forOfAst.declaration);
+              if (badPattern) {
+                addDiag(diags, "AU1201", badPattern.message ?? "Invalid or unsupported repeat header (could not parse iterator).", badPattern.span);
                 break;
               }
               const names = bindingNamesFromDeclaration(forOfAst.declaration);
@@ -209,24 +216,26 @@ function walkRows(
               const valueProp = getValueProp(ins);
               setOverlayBase(nextFrame, frames, { kind: "with", from: valueProp.from, span: valueProp.loc ?? null });
               const ids = exprIdsOf(valueProp.from);
-              if (ids.length > 0) {
-                frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "with", valueExprId: ids[0] } } as ScopeFrame;;
+              const [valueExprId] = ids;
+              if (valueExprId) {
+                const originSpan = valueProp.loc ?? ins.loc ?? null;
+                setFrameOrigin(nextFrame, frames, { kind: "with", valueExprId, ...provenanceFromSpan("bind", originSpan, "'with' controller") });
               }
               break;
             }
             case "promise": {
-              const valueProp = getValueProp(ins);
-              setOverlayBase(nextFrame, frames, { kind: "promise", from: valueProp.from, span: valueProp.loc ?? null });
-              const ids = exprIdsOf(valueProp.from);
-              const branch = ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch") ? ins.branch.kind : undefined;
-              if (ids.length > 0) {
-                frames[nextFrame] = { ...frames[nextFrame], origin: { kind: "promise", valueExprId: ids[0], branch } } as ScopeFrame;;
-              }
-              // Promise alias (then/catch): surface as local if present.
-              if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
-                if (ins.branch.local && ins.branch.local.length > 0) {
-                  addUniqueSymbols(nextFrame, frames, [{ kind: "promiseAlias", name: ins.branch.local, span: ins.loc ?? null }], diags);
+              if (!isPromiseBranch) {
+                const valueProp = getValueProp(ins);
+                const ids = exprIdsOf(valueProp.from);
+                const [valueExprId] = ids;
+                if (valueExprId) {
+                  const originSpan = valueProp.loc ?? ins.loc ?? null;
+                  setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...provenanceFromSpan("bind", originSpan, "promise controller") });
                 }
+              }
+              if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
+                const aliasName = ins.branch.local && ins.branch.local.length > 0 ? ins.branch.local : ins.branch.kind;
+                addUniqueSymbols(nextFrame, frames, [{ kind: "promiseAlias", name: aliasName, branch: ins.branch.kind, span: ins.loc ?? null }], diags);
               }
               break;
             }
@@ -247,8 +256,16 @@ function walkRows(
             // - overlay scope (repeat/with/promise): their <let> belong to that overlay frame
             // - reuse scope (if/switch/portal): their <let> must not leak to the whole frame
             const childAllowsLets = ins.controller.spec.scope === "overlay";
-            walkRows(linkedNested.rows, nextFrame, frames, exprToFrame, diags, domToLinked, forOfIndex, childAllowsLets);
+            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, childAllowsLets);
           }
+          break;
+        }
+        case "hydrateElement": {
+          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame);
+          break;
+        }
+        case "hydrateAttribute": {
+          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame);
           break;
         }
 
@@ -259,22 +276,15 @@ function walkRows(
   }
 }
 
-/* =============================================================================
- * Frame management
- * ============================================================================= */
-
-function nextFrameId(frames: ScopeFrame[]): FrameId {
-  return frames.length as FrameId;
-}
-
 function enterControllerFrame(
   ctrl: LinkedHydrateTemplateController,
   current: FrameId,
   frames: ScopeFrame[],
+  frameIds: FrameIdAllocator,
 ): FrameId {
   switch (ctrl.controller.spec.scope) {
     case "overlay": {
-      const id = nextFrameId(frames);
+      const id = frameIds.allocate();
       frames.push({ id, parent: current, kind: "overlay", overlay: null, symbols: [], origin: null, letValueExprs: null });
       return id;
     }
@@ -288,7 +298,12 @@ function enterControllerFrame(
 
 function setOverlayBase(targetFrame: FrameId, frames: ScopeFrame[], overlay: ScopeFrame["overlay"]): void {
   const f = frames[targetFrame];
-  frames[targetFrame] = { ...f, overlay } as ScopeFrame;;
+  frames[targetFrame] = { ...f, overlay } as ScopeFrame;
+}
+
+function setFrameOrigin(targetFrame: FrameId, frames: ScopeFrame[], origin: ScopeFrame["origin"]): void {
+  const f = frames[targetFrame];
+  frames[targetFrame] = { ...f, origin } as ScopeFrame;
 }
 
 function addUniqueSymbols(targetFrame: FrameId, frames: ScopeFrame[], symbols: ScopeSymbol[], diags: ScopeDiagnostic[]): void {
@@ -297,7 +312,7 @@ function addUniqueSymbols(targetFrame: FrameId, frames: ScopeFrame[], symbols: S
   const existing = new Set(f.symbols.map(s => s.name));
   for (const s of symbols) {
     if (existing.has(s.name)) {
-      diags.push({ code: "AU1202", message: `Duplicate local '${s.name}' in the same scope.`, span: s.span ?? null });
+      addDiag(diags, "AU1202", `Duplicate local '${s.name}' in the same scope.`, s.span ?? null);
       continue;
     }
     f.symbols.push(s);
@@ -313,7 +328,7 @@ function materializeLetSymbols(
   ins: LinkedHydrateLetElement,
   currentFrame: FrameId,
   frames: ScopeFrame[],
-  exprToFrame: Record<string, FrameId>,
+  exprToFrame: ExprIdMap<FrameId>,
   diags: ScopeDiagnostic[],
   publishEnv: boolean,
 ): void {
@@ -367,18 +382,24 @@ function getValueProp(ctrl: LinkedHydrateTemplateController): _LinkedValueProp {
  * Expression → Frame mapping
  * ============================================================================= */
 
-function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: Record<string, FrameId>): void {
-  for (const id of exprIdsOf(src)) out[id] = frame;
+function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: ExprIdMap<FrameId>): void {
+  switch (b.kind) {
+    case "propertyBinding":
+    case "attributeBinding":
+    case "stylePropertyBinding":
+      mapBindingSource(b.from, frame, out);
+      return;
+    case "setProperty":
+      return;
+    default:
+      assertUnreachable(b as never);
+  }
+}
+function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: ExprIdMap<FrameId>): void {
+  for (const id of exprIdsOf(src)) out.set(id, frame);
 }
 
 /** Extract all ExprIds from a BindingSourceIR (ExprRef | InterpIR). */
-function exprIdsOf(src: BindingSourceIR): readonly ExprId[] {
-  return isInterp(src) ? src.exprs.map(e => e.id) : [ (src as ExprRef).id ];
-}
-function isInterp(x: BindingSourceIR): x is InterpIR {
-  return (x as InterpIR).kind === "interp";
-}
-
 /** Single ExprId from ExprRef. */
 function idOf(e: ExprRef): ExprId { return e.id; }
 
@@ -387,59 +408,76 @@ function idOf(e: ExprRef): ExprId { return e.id; }
  * ============================================================================= */
 
 function bindingNamesFromDeclaration(
-  decl: BindingIdentifierOrPattern | DestructuringAssignmentExpression,
+  decl: BindingIdentifierOrPattern | DestructuringAssignmentExpression | BadExpression,
 ): string[] {
-  switch (decl.$kind) {
-    case "BindingIdentifier":
-      return [decl.name];
-
-    case "ArrayBindingPattern":
-      // Elements are parsed under etNone → IsAssign (AccessScope | Assign | ...)
-      return decl.elements.flatMap(bindingNamesFromPatternValue);
-
-    case "ObjectBindingPattern":
-      // Keys are irrelevant here; values carry the local names or defaulted locals
-      return decl.values.flatMap(bindingNamesFromPatternValue);
-
-    case "ArrayDestructuring":
-    case "ObjectDestructuring":
-      return namesFromDestructuringAssignment(decl);
-
-    default:
-      return assertUnreachable(decl as never);
+  if (decl.$kind === "BadExpression") return [];
+  if (decl.$kind === "DestructuringAssignment") {
+    return bindingNamesFromPattern(decl.pattern);
   }
+  return bindingNamesFromPattern(decl);
 }
 
-/** Extract a local from a single pattern slot (array/object value). */
-function bindingNamesFromPatternValue(v: IsAssign | BindingIdentifier): string[] {
-  switch (v.$kind) {
-    case "BindingIdentifier":
-    case "AccessScope": {
-      const name = v.name;
-      return name ? [name] : [];
-    }
-    case "Assign": {
-      const a = v;
-      return a.target.$kind === "AccessScope" ? [a.target.name] : [];
-    }
-    // Other IsAssign cases (literals, calls, etc.) do not introduce names
-    default:
+function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] {
+  switch (pattern.$kind) {
+    case "BadExpression":
       return [];
+    case "BindingIdentifier":
+      return pattern.name ? [pattern.name] : [];
+    case "BindingPatternDefault":
+      return bindingNamesFromPattern(pattern.target);
+    case "BindingPatternHole":
+      return [];
+    case "ArrayBindingPattern": {
+      const names = pattern.elements.flatMap(bindingNamesFromPattern);
+      if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
+      return names;
+    }
+    case "ObjectBindingPattern": {
+      const names = pattern.properties.flatMap(p => bindingNamesFromPattern(p.value));
+      if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
+      return names;
+    }
+    default:
+      return assertUnreachable(pattern as never);
   }
 }
 
-/** Flatten nested destructuring assignment lists into target names. */
-function namesFromDestructuringAssignment(
-  node: DestructuringAssignmentExpression | DestructuringAssignmentSingleExpression | DestructuringAssignmentRestExpression,
-): string[] {
-  switch (node.$kind) {
-    case "ArrayDestructuring":
-    case "ObjectDestructuring":
-      return node.list.flatMap(namesFromDestructuringAssignment);
-    case "DestructuringAssignmentLeaf":
-      // Both Single/Rest leaves share this $kind; target is AccessMemberExpression(name)
-      return [node.target.name];
+function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | null {
+  switch (pattern.$kind) {
+    case "BadExpression":
+      return pattern;
+    case "BindingIdentifier":
+    case "BindingPatternHole":
+      return null;
+    case "BindingPatternDefault":
+      return findBadInPattern(pattern.target);
+    case "ArrayBindingPattern": {
+      for (const el of pattern.elements) {
+        const bad = findBadInPattern(el);
+        if (bad) return bad;
+      }
+      if (pattern.rest) {
+        const bad = findBadInPattern(pattern.rest);
+        if (bad) return bad;
+      }
+      return null;
+    }
+    case "ObjectBindingPattern": {
+      for (const prop of pattern.properties) {
+        const bad = findBadInPattern(prop.value);
+        if (bad) return bad;
+      }
+      if (pattern.rest) {
+        const bad = findBadInPattern(pattern.rest);
+        if (bad) return bad;
+      }
+      return null;
+    }
     default:
-      return assertUnreachable(node as never);
+      return assertUnreachable(pattern as never);
   }
+}
+
+function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null): void {
+  diags.push(buildDiagnostic({ code, message, span, source: "bind" }) as ScopeDiagnostic);
 }

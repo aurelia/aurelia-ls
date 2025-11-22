@@ -1,0 +1,179 @@
+[
+  {
+    "name": "B-01 with overlay: controller value in root; inner binding in overlay",
+    "markup": "<div with.bind=\"ctx\"><span title.bind=\"a\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-02 with (value-less): value expr is 'with' in root; inner binding in overlay",
+    "markup": "<div with><span title.bind=\"a\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "with", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-03 if reuses scope: both expressions in root",
+    "markup": "<div if.bind=\"cond\"><span title.bind=\"a\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "cond", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-04 switch reuses scope: controller value + case + inner text all in root",
+    "markup": "<div switch.bind=\"x\"><template case=\"y\"><b>${z}</b></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "x", "frame": "root" },
+        { "kind": "expr", "code": "y", "frame": "root" },
+        { "kind": "expr", "code": "z", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-05 portal reuses scope: inner binding remains in root",
+    "markup": "<div portal><span title.bind=\"a\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "portal", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-06 nested with → with: inner host binding evaluates in inner overlay",
+    "markup": "<div with.bind=\"outer\"><section with.bind=\"inner\" title.bind=\"t\"></section></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" },
+        { "label": "overlay:with@2", "parent": "overlay:with@1", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "outer", "frame": "root" },
+        { "kind": "expr", "code": "inner", "frame": "overlay:with@1" },
+        { "kind": "expr", "code": "t", "frame": "overlay:with@2" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-07 with + host prop lifted inside overlay",
+    "markup": "<div with.bind=\"ctx\" title.bind=\"t\"></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "t", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-08 text interpolation inside with overlay",
+    "markup": "<div with.bind=\"ctx\">${a} and ${b}</div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "overlay:with@1" },
+        { "kind": "expr", "code": "b", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-09 attribute interpolation inside with overlay",
+    "markup": "<div with.bind=\"ctx\"><span title=\"x ${y} z\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "y", "frame": "overlay:with@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-10 controller chain if → with → portal",
+    "markup": "<div if.bind=\"c\" with.bind=\"ctx\" portal><b title.bind=\"t\"></b></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "c" },
+        { "kind": "expr", "frame": "root", "code": "ctx" },
+        { "kind": "expr", "frame": "overlay:with@1", "code": "portal" },
+        { "kind": "expr", "frame": "overlay:with@1", "code": "t" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-11 custom element bindable evaluates in root frame",
+    "markup": "<au-compose subject.bind=\"vm\"></au-compose>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "vm" }
+      ],
+      "diags": []
+    }
+  }
+]

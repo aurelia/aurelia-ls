@@ -1,0 +1,226 @@
+[
+  {
+    "name": "RPT-01 repeat overlay: header in outer; inner text in repeat overlay",
+    "markup": "<ul repeat.for=\"i of items\"><li>${i}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "i", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-02 repeat inside with: header in with overlay; inner attr binding in repeat overlay",
+    "markup": "<div with.bind=\"ctx\"><ul repeat.for=\"i of items\"><li title.bind=\"t\"></li></ul></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" },
+        { "label": "overlay:repeat@2", "parent": "overlay:with@1", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@2", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "forOfHeader", "frame": "overlay:with@1" },
+        { "kind": "expr", "code": "t", "frame": "overlay:repeat@2" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-03 nested repeat: inner header in outer repeat overlay; inner text uses i and j in inner overlay",
+    "markup": "<ul repeat.for=\"i of items\"><li repeat.for=\"j of i.children\">${i}-${j}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" },
+        { "label": "overlay:repeat@2", "parent": "overlay:repeat@1", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" },
+        { "frame": "overlay:repeat@2", "kind": "repeatLocal", "name": "j" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "forOfHeader", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "i", "frame": "overlay:repeat@2" },
+        { "kind": "expr", "code": "j", "frame": "overlay:repeat@2" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-04 array destructuring locals",
+    "markup": "<div><span repeat.for=\"[a,b] of items\">${a}${b}</span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "a" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "b" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "b", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-05 object destructuring locals",
+    "markup": "<div><span repeat.for=\"{x,y} of items\">${x}${y}</span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "x" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "y" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "x", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "y", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-06 repeat contextuals used in overlay",
+    "markup": "<ul repeat.for=\"i of items\"><li>${$index}-${$length}-${$odd}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "$index", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "$length", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "$odd", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-07 array destructuring with hole + rest",
+    "markup": "<div><span repeat.for=\"[a,,...rest] of items\">${a}-${rest[0]}</span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "a" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "rest" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "rest[0]", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-08 object destructuring with rest",
+    "markup": "<div><span repeat.for=\"{x, y: alias, ...rest} of items\">${alias}-${rest.extra}</span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "x" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "alias" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "rest" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "alias", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "rest.extra", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  }
+]

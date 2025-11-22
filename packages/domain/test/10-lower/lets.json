@@ -1,0 +1,86 @@
+[
+  {
+    "name": "LL-01 <let/> no bindings",
+    "markup": "<template><let></let></template>",
+    "expect": { "lets": [] }
+  },
+  {
+    "name": "LL-02 <let/> with .bind and interpolation",
+    "markup": "<let a.bind=\"b\" c=\"${d}\"></let>",
+    "expect": {
+      "lets": [
+        { "name": "a", "toBindingContext": false, "hasValue": true },
+        { "name": "c", "toBindingContext": false, "hasValue": true }
+      ],
+      "expressions": [
+        { "kind": "letValue", "on": "a", "code": "b", "command": "bind" },
+        { "kind": "letValue", "on": "c", "code": "d" }
+      ]
+    }
+  },
+  {
+    "name": "LL-03 <let to-binding-context>",
+    "markup": "<template><let to-binding-context a.bind=\"a\"></let></template>",
+    "expect": {
+      "lets": [
+        { "name": "a", "toBindingContext": true, "hasValue": true }
+      ],
+      "expressions": [
+        { "kind": "letValue", "on": "a", "code": "a", "command": "bind" }
+      ]
+    }
+  },
+  {
+    "name": "LL-04 let with multiple ${} expressions",
+    "markup": "<let a=\"x ${y} z ${z}\"></let>",
+    "expect": {
+      "lets": [
+        { "name": "a", "toBindingContext": false, "hasValue": true }
+      ],
+      "expressions": [
+        { "kind": "letValue", "on": "a", "code": "y" },
+        { "kind": "letValue", "on": "a", "code": "z" }
+      ]
+    }
+  },
+  {
+    "name": "LL-05 let under if",
+    "markup": "<div if><let a.bind=\"b\"></let></div>",
+    "expect": {
+      "controllers": [
+        { "name": "if" }
+      ],
+      "lets": [
+        { "name": "a", "toBindingContext": false, "hasValue": true }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "if" },
+        { "kind": "letValue", "on": "a", "code": "b", "command": "bind" }
+      ]
+    }
+  },
+  {
+    "name": "LL-06 let interpolation with brace in string",
+    "markup": "<let a=\"${x ? '}': 1}\"></let>",
+    "expect": {
+      "lets": [
+        { "name": "a", "toBindingContext": false, "hasValue": true }
+      ],
+      "expressions": [
+        { "kind": "letValue", "on": "a", "code": "x ? '}': 1" }
+      ]
+    }
+  },
+  {
+    "name": "LL-07 let interpolation without command",
+    "markup": "<let foo=\"${bar}\">",
+    "expect": {
+      "expressions": [
+        { "kind": "letValue", "on": "foo", "code": "bar" }
+      ],
+      "lets": [
+        { "name": "foo", "toBindingContext": false, "hasValue": true }
+      ]
+    }
+  }
+]
