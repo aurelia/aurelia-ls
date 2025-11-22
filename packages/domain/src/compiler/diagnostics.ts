@@ -1,3 +1,5 @@
+import { normalizeSpan } from "./model/span.js";
+import { provenanceSpan } from "./model/origin.js";
 import type { SourceSpan } from "./model/ir.js";
 import type { Origin } from "./model/origin.js";
 
@@ -28,4 +30,10 @@ export interface CompilerDiagnostic<TCode extends string = string> {
   span?: SourceSpan | null;
   related?: DiagnosticRelated[];
   origin?: Origin | null;
+}
+
+/** Resolve the canonical span for a diagnostic, preferring provenance when available. */
+export function diagnosticSpan(diag: CompilerDiagnostic): SourceSpan | null {
+  const resolved = provenanceSpan(diag.origin ?? null) ?? diag.span ?? null;
+  return resolved ? normalizeSpan(resolved) : null;
 }

@@ -3,7 +3,6 @@ import type {
   TemplateControllerInfo,
   TemplateMappingArtifact,
   TemplateMappingEntry,
-  TemplateMappingSegment,
   TemplateNodeInfo,
   TemplateQueryFacade,
 } from "../contracts.js";
@@ -22,6 +21,7 @@ import type {
 import type { TypeRef } from "./language/registry.js";
 import type { DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
+import { pickMappingSegment } from "./mapping.js";
 import { idKey } from "./model/identity.js";
 import { pickNarrowestContaining, spanContainsOffset } from "./model/span.js";
 
@@ -159,8 +159,8 @@ function findSegmentAt(
   entries: readonly TemplateMappingEntry[],
   htmlOffset: number,
 ): { exprId: ExprId; span: SourceSpan; frameId?: FrameId; memberPath?: string } | null {
-  const best = pickNarrowestContaining(segmentPairs(entries), htmlOffset, (pair) => pair.segment.htmlSpan);
-  if (!best) return null;
+  const best = pickMappingSegment(entries, htmlOffset, (segment) => segment.htmlSpan);
+  if (!best || !best.segment) return null;
   const { entry, segment } = best;
   const result: { exprId: ExprId; span: SourceSpan; frameId?: FrameId; memberPath?: string } = {
     exprId: entry.exprId,
@@ -169,14 +169,6 @@ function findSegmentAt(
   if (entry.frameId !== undefined) result.frameId = entry.frameId;
   if (segment.path !== undefined) result.memberPath = segment.path;
   return result;
-}
-
-function* segmentPairs(entries: readonly TemplateMappingEntry[]) {
-  for (const entry of entries) {
-    for (const segment of entry.segments ?? []) {
-      yield { entry, segment };
-    }
-  }
 }
 
 function collectBindables(row: LinkedRow, typeResolver: (target?: TargetSem | { kind: "style" }) => string | undefined): TemplateBindableInfo[] {
