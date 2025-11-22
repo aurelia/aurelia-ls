@@ -13,6 +13,8 @@ import type {
 } from "../../model/ir.js";
 import type { ExpressionType, IExpressionParser } from "../../../parsers/expression-api.js";
 import { extractInterpolationSegments } from "../../../parsers/interpolation.js";
+import { NodeIdGen, deterministicStringId } from "../../model/identity.js";
+export { NodeIdGen } from "../../model/identity.js";
 
 export type P5Node = DefaultTreeAdapterMap["childNode"];
 export type P5Element = DefaultTreeAdapterMap["element"];
@@ -36,22 +38,6 @@ export function isComment(n: P5Node): n is DefaultTreeAdapterMap["commentNode"] 
   return n.nodeName === "#comment";
 }
 
-// buildDomChildren and collectRows derive NodeIds via the same path counters.
-// Because NodeIdGen uses per-level indices, skipping a subtree in collectRows (e.g., local CEs) does not shift sibling NodeIds.
-export class NodeIdGen {
-  private readonly stack: number[] = [];
-  public pushElement(index: number): string {
-    this.stack.push(index);
-    return this.current();
-  }
-  public pop(): void {
-    this.stack.pop();
-  }
-  public current(): string {
-    return this.stack.length === 0 ? "0" : `0/${this.stack.join("/")}`;
-  }
-}
-
 export class ExprTable {
   public entries: ExprTableEntry[] = [];
   private readonly seen = new Map<string, ExprId>();
@@ -68,7 +54,7 @@ export class ExprTable {
 
     let id = this.seen.get(key);
     if (!id) {
-      id = `expr_${hash64(key)}` as ExprId;
+      id = deterministicStringId<"ExprId">("expr", key) as ExprId;
 
       let ast: AnyBindingExpression;
 
@@ -172,18 +158,6 @@ export function parseRepeatTailProps(
 export function toSpan(loc: P5Loc | null, file?: string): SourceSpan | null {
   if (!loc) return null;
   return { start: loc.startOffset, end: loc.endOffset, file: file! };
-}
-
-export function hash64(s: string): string {
-  let h1 = 0x9e3779b1 | 0,
-    h2 = 0x85ebca77 | 0;
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    h1 = (h1 ^ c) * 0x27d4eb2d;
-    h2 = (h2 ^ c) * 0x165667b1;
-  }
-  const u = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
-  return `${u(h1)}${u(h2)}`;
 }
 
 export function normalizeFileForHash(filePath: string): string {

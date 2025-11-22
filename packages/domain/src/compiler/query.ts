@@ -22,6 +22,7 @@ import type {
 import type { TypeRef } from "./language/registry.js";
 import type { DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
+import { spanLength } from "./model/span.js";
 
 export function buildTemplateQuery(
   irModule: IrModule | undefined,
@@ -117,7 +118,7 @@ function pickNodeAt(nodes: NodeIndex[], rows: Map<string, LinkedRow>, offset: nu
   for (const n of nodes) {
     if (n.span == null) continue;
     if (offset < n.span.start || offset > n.span.end) continue;
-    if (!best || (best.span && (n.span!.end - n.span!.start) <= (best.span.end! - best.span.start!))) {
+    if (!best || (best.span && spanLength(n.span) <= spanLength(best.span))) {
       best = n;
     }
   }
@@ -155,7 +156,7 @@ function findSegmentAt(
   for (const entry of entries) {
     for (const seg of entry.segments ?? []) {
       if (htmlOffset >= seg.htmlSpan.start && htmlOffset <= seg.htmlSpan.end) {
-        if (!segmentHit || spanSize(seg.htmlSpan) < spanSize(segmentHit.segment.htmlSpan)) {
+        if (!segmentHit || spanLength(seg.htmlSpan) < spanLength(segmentHit.segment.htmlSpan)) {
           segmentHit = { entry, segment: seg };
         }
       }
@@ -170,10 +171,6 @@ function findSegmentAt(
   if (entry.frameId !== undefined) result.frameId = entry.frameId;
   if (segment.path !== undefined) result.memberPath = segment.path;
   return result;
-}
-
-function spanSize(span: SourceSpan): number {
-  return (span.end ?? 0) - (span.start ?? 0);
 }
 
 function collectBindables(row: LinkedRow, typeResolver: (target?: TargetSem | { kind: "style" }) => string | undefined): TemplateBindableInfo[] {

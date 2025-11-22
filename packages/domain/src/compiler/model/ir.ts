@@ -10,25 +10,11 @@
  * - Expression table entry (dev/LSP lane)
  * ======================================================================================= */
 
-/* ===========================
- * Brands & primitive types
- * =========================== */
+import type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
+import type { SourceSpan, TextSpan } from "./span.js";
 
-type Brand<T, N extends string> = T & { __brand: N };
-
-// NOTE: NodeId uniqueness is **per TemplateIR** (template-local). If a module-global id is
-// ever needed, extend with (templateIndex|fileId) disambiguators.
-export type NodeId = Brand<string, 'NodeId'>; // e.g. '0/2/1', '0/3#text@0', '0/1@attr:value'
-export type ExprId = Brand<string, 'ExprId'>; // deterministic (e.g., hash of file+loc+expressionType+code)
-
-// TODO: Builder currently hardcodes 'html'. Add ns detection for SVG/MathML when needed.
-export type Namespace = 'html' | 'svg' | 'mathml';
-
-export interface SourceSpan {
-  start: number; // inclusive UTF-16 offset
-  end: number;   // exclusive UTF-16 offset
-  file?: string;
-}
+export type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
+export type { SourceSpan, TextSpan } from "./span.js";
 
 export type JsonValue =
   | null | boolean | number | string
@@ -417,15 +403,6 @@ export type AnyBindingExpression =
   | BadExpression;
 
 /* ---- AST nodes ---- */
-
-export interface TextSpan {
-  /**
-   * Offsets into the expression string being parsed.
-   * 0-based UTF-16 code units, [start, end) (end is exclusive).
-   */
-  start: number;
-  end: number;
-}
 
 export interface BindingBehaviorExpression {
   $kind: 'BindingBehavior';
