@@ -2,7 +2,7 @@ import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { LspExpressionParser } from "../../out/parsers/lsp-expression-parser.js";
-import { splitInterpolationText } from "../../out/parsers/interpolation.js";
+import { splitInterpolationText } from "../../out/parsers/lsp-expression-parser.js";
 
 /**
  * Helper: strip span information recursively from an AST node.
