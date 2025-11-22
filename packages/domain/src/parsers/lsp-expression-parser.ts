@@ -56,6 +56,8 @@ import { normalizeSpan, offsetSpan, spanFromBounds } from "../compiler/model/spa
 import { absoluteSpan, ensureSpanFile } from "../compiler/model/source.js";
 import { provenanceFromSpan } from "../compiler/model/origin.js";
 
+type SpanBearing = { span: TextSpan };
+
 /**
  * Core expression parser for Aurelia's binding expression language, tailored
  * for LSP usage.
@@ -204,7 +206,7 @@ export class CoreParser {
     if (this.isBad(target)) return target;
     const value = this.parseAssignExpr();
     if (this.isBad(value)) return value;
-    const span = this.span(target.span.start, value.span.end);
+    const span = this.spanFrom(target, value);
 
     const assign: AssignExpression = {
       $kind: "Assign",
@@ -239,7 +241,7 @@ export class CoreParser {
     if (this.isBad(yes)) return yes;
     if (this.isBad(no)) return no;
 
-    const span = this.span(test.span.start, no.span.end);
+    const span = this.spanFrom(test, no);
 
     const cond: ConditionalExpression = {
       $kind: "Conditional",
@@ -269,7 +271,7 @@ export class CoreParser {
       const right = this.parseBinaryExpr(nextMin);
       if (this.isBad(right)) return right;
 
-      const span = this.span(left.span.start, right.span.end);
+      const span = this.spanFrom(left, right);
 
       const binary: BinaryExpression = {
         $kind: "Binary",
@@ -296,7 +298,7 @@ export class CoreParser {
       this.nextToken(); // consume operator
       const operand = this.parseUnaryExpr();
       if (this.isBad(operand)) return operand;
-      const span = this.span(t.start, this.getEndSpan(operand));
+      const span = this.spanFrom(t.start, operand);
       const unary: UnaryExpression = {
         $kind: "Unary",
         span,
@@ -320,7 +322,7 @@ export class CoreParser {
         next.type === TokenType.PlusPlus ? "++" : "--";
 
       const assignable = this.ensureAssignable(lhs, next);
-      const span = this.span(this.toLocal(assignable.span.start), next.end);
+      const span = this.spanFrom(assignable, next.end);
 
       const unary: UnaryExpression = {
         $kind: "Unary",
@@ -384,7 +386,7 @@ export class CoreParser {
         }
         this.nextToken();
         const name = this.tokenToIdentifierName(nameTok);
-        const span = this.span(this.toLocal(this.getNodeStart(expr)), nameTok.end);
+        const span = this.spanFrom(expr, nameTok.end);
         const member: AccessMemberExpression = {
           $kind: "AccessMember",
           span,
@@ -406,7 +408,7 @@ export class CoreParser {
           const args = this.parseArguments();
           const badArgs = args.find(a => this.isBad(a));
           if (badArgs) return badArgs;
-          const span = this.span(this.toLocal(this.getNodeStart(expr)), this.lastTokenEnd);
+          const span = this.spanFrom(expr, this.lastTokenEnd);
 
           if (this.isAccessScope(expr)) {
             const scope = expr;
@@ -458,7 +460,7 @@ export class CoreParser {
         }
         this.nextToken();
         const name = this.tokenToIdentifierName(next);
-        const span = this.span(this.toLocal(this.getNodeStart(expr)), next.end);
+        const span = this.spanFrom(expr, next.end);
         const member: AccessMemberExpression = {
           $kind: "AccessMember",
           span,
@@ -483,7 +485,7 @@ export class CoreParser {
         const args = this.parseArguments();
         const badArgs = args.find(a => this.isBad(a));
         if (badArgs) return badArgs;
-        const span = this.span(this.toLocal(this.getNodeStart(expr)), this.lastTokenEnd);
+        const span = this.spanFrom(expr, this.lastTokenEnd);
 
         if (this.isAccessScope(expr)) {
           const scope = expr;
@@ -534,7 +536,7 @@ export class CoreParser {
       if (t.type === TokenType.Backtick) {
         const tpl = this.parseTemplateLiteral();
         if (this.isBad(tpl)) return tpl;
-        const span = this.span(this.toLocal(this.getNodeStart(expr)), this.toLocal(tpl.span.end));
+        const span = this.spanFrom(expr, tpl);
         const tagged: TaggedTemplateExpression = {
           $kind: "TaggedTemplate",
           span,
@@ -566,7 +568,7 @@ export class CoreParser {
     }
     this.nextToken(); // ']'
 
-    const span = this.span(this.toLocal(this.getNodeStart(object)), this.lastTokenEnd);
+    const span = this.spanFrom(object, this.lastTokenEnd);
     const node: AccessKeyedExpression = {
       $kind: "AccessKeyed",
       span,
@@ -984,7 +986,7 @@ export class CoreParser {
         args.push(arg);
       }
 
-      const span = this.span(this.toLocal(this.getNodeStart(expr)), this.lastTokenEnd);
+      const span = this.spanFrom(expr, this.lastTokenEnd);
       const vc: ValueConverterExpression = {
         $kind: "ValueConverter",
         span,
@@ -1013,7 +1015,7 @@ export class CoreParser {
         args.push(arg);
       }
 
-      const span = this.span(this.toLocal(this.getNodeStart(behaviorExpr)), this.lastTokenEnd);
+      const span = this.spanFrom(behaviorExpr, this.lastTokenEnd);
       const bb: BindingBehaviorExpression = {
         $kind: "BindingBehavior",
         span,
@@ -1458,7 +1460,7 @@ export class CoreParser {
     const init = this.parseAssignExpr();
     return {
       $kind: "BindingPatternDefault",
-      span: this.span(pattern.span.start, this.getEndSpan(init)),
+      span: this.spanFrom(pattern, init),
       target: pattern,
       default: init,
     };
@@ -1491,7 +1493,7 @@ export class CoreParser {
     const init = this.parseAssignExpr();
     return {
       $kind: "BindingPatternDefault",
-      span: this.span(binding.span.start, this.getEndSpan(init)),
+      span: this.spanFrom(binding, init),
       target: binding,
       default: init,
     };
@@ -1585,7 +1587,7 @@ export class CoreParser {
     };
 
     const body = this.parseAssignExpr();
-    const span = this.span(this.toLocal(paramSpan.start), this.toLocal(this.getEndSpan(body)));
+    const span = this.spanFrom({ span: paramSpan }, body);
 
     const fn: ArrowFunction = {
       $kind: "ArrowFunction",
@@ -1741,7 +1743,7 @@ export class CoreParser {
     this.nextToken(); // '=>'
 
     const body = this.parseAssignExpr();
-    const span = this.span(start, this.toLocal(this.getEndSpan(body)));
+    const span = this.spanFrom(start, body);
 
     const fn: ArrowFunction = {
       $kind: "ArrowFunction",
@@ -1771,12 +1773,18 @@ export class CoreParser {
     return this.span(t.start, t.end);
   }
 
-  private getEndSpan(node: { span: TextSpan }): number {
-    return node.span.end;
+  private localStart(node: SpanBearing): number {
+    return this.toLocal(node.span.start);
   }
 
-  private getNodeStart(node: { span: TextSpan }): number {
-    return node.span.start;
+  private localEnd(node: SpanBearing): number {
+    return this.toLocal(node.span.end);
+  }
+
+  private spanFrom(start: SpanBearing | number, end: SpanBearing | number): SourceSpan {
+    const localStart = typeof start === "number" ? start : this.localStart(start);
+    const localEnd = typeof end === "number" ? end : this.localEnd(end);
+    return this.span(localStart, localEnd);
   }
 
   private error(message: string, token?: Token): BadExpression {

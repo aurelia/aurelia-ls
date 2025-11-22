@@ -869,6 +869,95 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(ast.origin?.origin?.trace?.[0]?.by, "parse");
   });
 
+  test("baseSpan rebases assignment spans without double offset", () => {
+    const parser = new LspExpressionParser();
+    const src = "a=b";
+    const file = toSourceFileId("span.html");
+    const baseSpan = { start: 100, end: 100 + src.length, file };
+
+    const ast = parser.parse(src, "IsProperty", { baseSpan });
+
+    assert.equal(ast.$kind, "Assign");
+    assert.equal(ast.span.start, baseSpan.start);
+    assert.equal(ast.span.end, baseSpan.end);
+    assert.equal(ast.span.file, file);
+
+    assert.equal(ast.target.span.start, baseSpan.start);
+    assert.equal(ast.target.span.end, baseSpan.start + 1);
+    assert.equal(ast.target.span.file, file);
+
+    assert.equal(ast.value.span.start, baseSpan.start + 2);
+    assert.equal(ast.value.span.end, baseSpan.start + src.length);
+    assert.equal(ast.value.span.file, file);
+  });
+
+  test("baseSpan rebases binary, conditional, and unary spans", () => {
+    const parser = new LspExpressionParser();
+    const file = toSourceFileId("rebased.html");
+
+    const binSrc = "a+b";
+    const binBase = { start: 50, end: 50 + binSrc.length, file };
+    const binary = parser.parse(binSrc, "IsProperty", { baseSpan: binBase });
+    assert.equal(binary.$kind, "Binary");
+    assert.equal(binary.span.start, binBase.start);
+    assert.equal(binary.span.end, binBase.end);
+    assert.equal(binary.span.file, file);
+    assert.equal(binary.left.span.start, binBase.start);
+    assert.equal(binary.left.span.end, binBase.start + 1);
+    assert.equal(binary.right.span.start, binBase.start + 2);
+    assert.equal(binary.right.span.end, binBase.end);
+
+    const condSrc = "a?b:c";
+    const condBase = { start: 75, end: 75 + condSrc.length, file };
+    const conditional = parser.parse(condSrc, "IsProperty", { baseSpan: condBase });
+    assert.equal(conditional.$kind, "Conditional");
+    assert.equal(conditional.span.start, condBase.start);
+    assert.equal(conditional.span.end, condBase.end);
+    assert.equal(conditional.condition.span.start, condBase.start);
+    assert.equal(conditional.condition.span.end, condBase.start + 1);
+    assert.equal(conditional.yes.span.start, condBase.start + 2);
+    assert.equal(conditional.yes.span.end, condBase.start + 3);
+    assert.equal(conditional.no.span.start, condBase.start + 4);
+    assert.equal(conditional.no.span.end, condBase.end);
+
+    const unarySrc = "-foo";
+    const unaryBase = { start: 200, end: 200 + unarySrc.length, file };
+    const unary = parser.parse(unarySrc, "IsProperty", { baseSpan: unaryBase });
+    assert.equal(unary.$kind, "Unary");
+    assert.equal(unary.span.start, unaryBase.start);
+    assert.equal(unary.span.end, unaryBase.end);
+    assert.equal(unary.expression.$kind, "AccessScope");
+    assert.equal(unary.expression.span.start, unaryBase.start + 1);
+    assert.equal(unary.expression.span.end, unaryBase.end);
+  });
+
+  test("iterator binding defaults preserve rebased spans", () => {
+    const parser = new LspExpressionParser();
+    const src = "[a=foo] of items";
+    const file = toSourceFileId("repeat.html");
+    const baseSpan = { start: 400, end: 400 + src.length, file };
+
+    const ast = parser.parse(src, "IsIterator", { baseSpan });
+    assert.equal(ast.$kind, "ForOfStatement");
+    assert.equal(ast.span.start, baseSpan.start);
+    assert.equal(ast.span.end, baseSpan.end);
+    assert.equal(ast.span.file, file);
+
+    const decl = ast.declaration;
+    assert.equal(decl.$kind, "ArrayBindingPattern");
+    const first = decl.elements[0];
+    assert.equal(first.$kind, "BindingPatternDefault");
+    assert.equal(first.span.start, baseSpan.start + 1);
+    assert.equal(first.span.end, baseSpan.start + 6);
+    assert.equal(first.span.file, file);
+    assert.equal(first.target.$kind, "BindingIdentifier");
+    assert.equal(first.target.span.start, baseSpan.start + 1);
+    assert.equal(first.target.span.end, baseSpan.start + 2);
+    assert.equal(first.default.span.start, baseSpan.start + 3);
+    assert.equal(first.default.span.end, baseSpan.start + 6);
+    assert.equal(first.default.span.file, file);
+  });
+
   test("bad nested segment in interpolation returns BadExpression", () => {
     const parser = new LspExpressionParser();
     const ast = parser.parse("hello ${foo(}", "Interpolation");
