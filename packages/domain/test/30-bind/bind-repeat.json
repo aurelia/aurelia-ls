@@ -167,5 +167,60 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "RPT-07 array destructuring with hole + rest",
+    "markup": "<div><span repeat.for=\"[a,,...rest] of items\">${a}-${rest[0]}</span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "a" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "rest" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "rest[0]", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "RPT-08 object destructuring with rest",
+    "markup": "<div><span repeat.for=\"{x, y: alias, ...rest} of items\">${alias}-${rest.extra}</span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "x" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "alias" },
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "rest" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "alias", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "code": "rest.extra", "frame": "overlay:repeat@1" }
+      ],
+      "diags": []
+    }
   }
 ]

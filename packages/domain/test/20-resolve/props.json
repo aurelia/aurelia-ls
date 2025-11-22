@@ -601,5 +601,27 @@
         { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" }
       ]
     }
+  },
+  {
+    "name": "R-P-54 custom element literal bindable becomes setProperty",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "x-panel": {
+            "kind": "element",
+            "name": "x-panel",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" },
+              "other": { "name": "other", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<x-panel title=\"Hello\" other=\"y\"></x-panel>",
+    "expect": {
+      "items": []
+    }
   }
 ]

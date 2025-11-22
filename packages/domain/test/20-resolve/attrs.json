@@ -382,5 +382,31 @@
         { "kind": "attr", "attr": "note", "to": "value", "target": "bindable" }
       ]
     }
+  },
+  {
+    "name": "R-A-30 custom attribute property + interpolation bindables",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "fancy-attr": {
+            "kind": "attribute",
+            "name": "fancy-attr",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "twoWay" },
+              "extra": { "name": "extra", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div fancy-attr.bind=\"v\" fancy-attr=\"lit ${x}\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" },
+        { "kind": "attr", "attr": "fancy-attr", "to": "value", "target": "bindable" }
+      ]
+    }
   }
 ]

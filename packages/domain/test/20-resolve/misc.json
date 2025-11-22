@@ -34,5 +34,12 @@
         { "kind": "ref", "on": "component" }
       ]
     }
+  },
+  {
+    "name": "R-M-05 text node interpolation (node semantics text)",
+    "markup": "${msg}",
+    "expect": {
+      "items": []
+    }
   }
 ]
