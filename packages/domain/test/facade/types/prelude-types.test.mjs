@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createProgramFromMemory } from "../_helpers/ts-harness.mjs";
-import { PRELUDE_TS } from "../../out/index.js";
+
+import { createProgramFromMemory } from "../../_helpers/ts-harness.mjs";
+import { PRELUDE_TS } from "../../../out/index.js";
 
 test("Prelude: __au$access and CollectionElement<> typings behave", () => {
   const src = `

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { compileMarkup, vmStub } from "../_helpers/facade-harness.mjs";
-import { createProgramFromMemory } from "../_helpers/ts-harness.mjs";
-import { PRELUDE_TS } from "../../out/index.js";
+import { compileMarkup, vmStub } from "../../_helpers/facade-harness.mjs";
+import { createProgramFromMemory } from "../../_helpers/ts-harness.mjs";
+import { PRELUDE_TS } from "../../../out/index.js";
 
 test("TS diagnostics map back to HTML spans via mapping artifact", () => {
   const html = `<template><input value.bind="user.name" /><input value.bind="missing" /></template>`;

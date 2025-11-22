@@ -4,11 +4,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DEFAULT_SYNTAX, getExpressionParser } from "../../out/index.js";
-import { compileMarkup, vmStub } from "../_helpers/facade-harness.mjs";
+import { DEFAULT_SYNTAX, getExpressionParser } from "../../../out/index.js";
+import { compileMarkup, vmStub } from "../../_helpers/facade-harness.mjs";
 
-const fixtureBase = new URL("../../../../fixtures/overlays/kitchen-sink/", import.meta.url);
-const goldenPath = new URL("../goldens/facade-kitchen-sink.json", import.meta.url);
+const fixtureBase = new URL("../../../../../fixtures/overlays/kitchen-sink/", import.meta.url);
+const goldenPath = new URL("../../goldens/facade-kitchen-sink.json", import.meta.url);
 
 function normalizeFacade(compilation, htmlPath) {
   const fixtureRoot = path.dirname(htmlPath).replace(/\\/g, "/");

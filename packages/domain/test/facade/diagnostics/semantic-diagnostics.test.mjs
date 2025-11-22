@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { compileMarkup, vmStub } from "../_helpers/facade-harness.mjs";
-import { deepMergeSemantics } from "../_helpers/semantics-merge.mjs";
-import { DEFAULT } from "../../out/compiler/language/registry.js";
-import { lowerDocument } from "../../out/compiler/phases/10-lower/lower.js";
-import { resolveHost } from "../../out/compiler/phases/20-resolve-host/resolve.js";
-import { DEFAULT_SYNTAX } from "../../out/compiler/language/syntax.js";
-import { getExpressionParser } from "../../out/index.js";
+import { compileMarkup, vmStub } from "../../_helpers/facade-harness.mjs";
+import { deepMergeSemantics } from "../../_helpers/semantics-merge.mjs";
+import { DEFAULT } from "../../../out/compiler/language/registry.js";
+import { lowerDocument } from "../../../out/compiler/phases/10-lower/lower.js";
+import { resolveHost } from "../../../out/compiler/phases/20-resolve-host/resolve.js";
+import { DEFAULT_SYNTAX } from "../../../out/compiler/language/syntax.js";
+import { getExpressionParser } from "../../../out/index.js";
 
 function collectCodes(diags) {
   return diags.map((d) => d.code);

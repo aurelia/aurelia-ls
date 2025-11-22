@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { emitOverlayFile } from "../../out/compiler/phases/60-emit/overlay/emit.js";
+import { emitOverlayFile } from "../../../out/compiler/phases/60-emit/overlay/emit.js";
 
 test("Emit overlay: TS flavor (type alias + __au$access calls)", () => {
   const plan = {
