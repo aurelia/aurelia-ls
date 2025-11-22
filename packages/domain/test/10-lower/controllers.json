@@ -367,5 +367,47 @@
         { "name": "repeat" }
       ]
     }
+  },
+  {
+    "name": "LC-28 promise before with (prototype path)",
+    "markup": "<div promise.bind=\"p\" with.bind=\"ctx\"></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" },
+        { "name": "with" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "controllerValue", "command": "bind", "code": "ctx" }
+      ]
+    }
+  },
+  {
+    "name": "LC-29 promise branch attr interpolation (attributeBinding marker)",
+    "markup": "<div promise><span then=\"a ${b}\">${b}</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "promise" },
+        { "kind": "text", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LC-30 switch case.bind branch",
+    "markup": "<div switch.bind=\"x\"><template case.bind=\"y\" title=\"t ${y}\"><b>${y}</b></template></div>",
+    "expect": {
+      "controllers": [
+        { "name": "switch" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" },
+        { "kind": "attrInterpolation", "on": "title", "code": "y" },
+        { "kind": "propCommand", "command": "bind", "code": "y" },
+        { "kind": "text", "code": "y" }
+      ]
+    }
   }
 ]

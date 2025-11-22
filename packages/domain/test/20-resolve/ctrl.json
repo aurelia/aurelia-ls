@@ -132,5 +132,29 @@
         { "code": "AU1104" }
       ]
     }
+  },
+  {
+    "name": "R-C-15 repeat tail options (key + unknown) -> AU1106",
+    "markup": "<div repeat.for=\"item of items; key.bind: key; bogus.bind: nope\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ],
+      "diags": [
+        { "code": "AU1106" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-16 switch case.bind and default-case branches",
+    "markup": "<div switch.bind=\"mode\"><template case.bind=\"when\"><b>hit</b></template><template default-case><i>default</i></template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "case", "target": "controller", "effectiveMode": "toView" }
+      ]
+    }
   }
 ]
