@@ -50,6 +50,11 @@ export function normalizeSpan<TSpan extends SpanLike>(span: TSpan): TSpan {
   return { ...span, start: span.end, end: span.start } as TSpan;
 }
 
+/** Normalize a span when present; returns null for null/undefined inputs. */
+export function normalizeSpanMaybe<TSpan extends SpanLike>(span: TSpan | null | undefined): TSpan | null {
+  return span ? normalizeSpan(span) : null;
+}
+
 export function coverSpans<TSpan extends SpanLike>(spans: Iterable<TSpan | null | undefined>): TSpan | null {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;

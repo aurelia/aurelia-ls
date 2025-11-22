@@ -27,7 +27,7 @@ import type {
 } from "../../model/symbols.js";
 
 import type { RepeatController } from "../../language/registry.js";
-import { FrameIdAllocator, type ExprIdMap } from "../../model/identity.js";
+import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { provenanceFromSpan } from "../../model/origin.js";
 import { buildDiagnostic } from "../../diagnostics.js";
 import { exprIdsOf } from "../../expr-utils.js";
@@ -43,7 +43,7 @@ export function bindScopes(linked: LinkedSemanticsModule): ScopeModule {
   const templates: ScopeTemplate[] = [];
 
   // Index ForOf entries once
-  const forOfIndex = new Map<ExprId, ForOfStatement | BadExpression>();
+  const forOfIndex: ExprIdMap<ForOfStatement | BadExpression> = new Map();
   for (const e of linked.exprTable ?? []) {
     if (e.expressionType === 'IsIterator') {
       forOfIndex.set(e.id, e.ast);
@@ -72,7 +72,7 @@ function buildTemplateScopes(
   t: LinkedTemplate,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
-  forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
+  forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
 ): ScopeTemplate {
   const frames: ScopeFrame[] = [];
   const frameIds = new FrameIdAllocator();
@@ -104,7 +104,7 @@ function walkRows(
   exprToFrame: ExprIdMap<FrameId>,
   diags: ScopeDiagnostic[],
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
-  forOfIndex: ReadonlyMap<ExprId, ForOfStatement | BadExpression>,
+  forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
   allowLets: boolean,
 ): void {
   for (const r of rows) {
