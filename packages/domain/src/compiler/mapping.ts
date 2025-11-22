@@ -1,12 +1,11 @@
 import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateMappingSegment } from "../contracts.js";
-import type { ExprId, ExprRef, ExprTableEntry, IrModule, SourceSpan, TextSpan } from "./model/ir.js";
+import type { ExprId, ExprTableEntry, IrModule, SourceSpan, TextSpan } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import {
+  buildExprSpanIndex,
   collectExprMemberSegments,
-  collectExprSpans,
-  ensureExprSpan,
-  resolveExprSpanIndex,
+  type ExprSpanIndex,
   type HtmlMemberSegment,
 } from "./expr-utils.js";
 import {
@@ -18,7 +17,7 @@ import {
   type SpanLike,
 } from "./model/span.js";
 import type { SourceFile } from "./model/source.js";
-import { exprIdMapGet, type ExprIdMapLike } from "./model/identity.js";
+import { exprIdMapGet, type ExprIdMap, type ExprIdMapLike } from "./model/identity.js";
 
 export interface BuildMappingInputs {
   overlayMapping: readonly OverlayEmitMappingEntry[];
@@ -30,7 +29,8 @@ export interface BuildMappingInputs {
 
 export interface BuildMappingResult {
   mapping: TemplateMappingArtifact;
-  exprSpans: Map<ExprId, SourceSpan>;
+  exprSpans: ExprIdMap<SourceSpan>;
+  spanIndex: ExprSpanIndex;
 }
 
 export interface MappingHit {
@@ -41,10 +41,11 @@ export interface MappingHit {
 export type MappingSegmentPair = { entry: TemplateMappingEntry; segment: TemplateMappingSegment };
 
 export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingResult {
-  const exprSpans = resolveExprSpanIndex(collectExprSpans(inputs.ir), inputs.fallbackFile);
+  const exprSpanIndex = buildExprSpanIndex(inputs.ir, inputs.fallbackFile);
+  const exprSpans = exprSpanIndex.spans;
   const memberHtmlSegments = collectExprMemberSegments(inputs.exprTable ?? [], exprSpans);
   const entries: TemplateMappingEntry[] = inputs.overlayMapping.map((m) => {
-    const htmlSpan = normalizeSpan(ensureExprSpan(exprSpans.get(m.exprId), inputs.fallbackFile));
+    const htmlSpan = exprSpanIndex.ensure(m.exprId, inputs.fallbackFile);
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const segments = buildSegmentPairs(m.segments ?? [], htmlSegments);
     return normalizeMappingEntry({
@@ -56,7 +57,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
     });
   });
 
-  return { mapping: { kind: "mapping", entries }, exprSpans };
+  return { mapping: { kind: "mapping", entries }, exprSpans, spanIndex: exprSpanIndex };
 }
 
 /** Map an overlay offset back to the best-matching HTML span. */

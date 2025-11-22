@@ -1,7 +1,8 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
-import type { ExprId, InterpIR, NodeId, BindingSourceIR, ExprRef, TemplateNode } from "../../../model/ir.js";
+import type { ExprId, InterpIR, NodeId, BindingSourceIR, TemplateNode } from "../../../model/ir.js";
 import { brandNumber, idFromKey, idKey, toExprIdMap, HydrationIdAllocator, type FrameId, type HydrationId } from "../../../model/identity.js";
+import { isInterpolation, primaryExprId } from "../../../expr-utils.js";
 import { type SsrPlanModule, type SsrTemplatePlan, type SsrBinding, type SsrController } from "./types.js";
 
 /** Build SSR plan from Linked+Scoped (tap point: after Phase 30 bind). */
@@ -54,7 +55,7 @@ function buildTemplatePlan(
         }
         case "attributeBinding": {
           const src = ins.from as BindingSourceIR | InterpIR;
-          if (isInterp(src)) {
+          if (isInterpolation(src)) {
             const frames = src.exprs.map(e => frameOf(exprToFrame, e.id));
             rowBindings.push({
               kind: "attrInterp",
@@ -65,7 +66,7 @@ function buildTemplatePlan(
               frames,
             });
           } else {
-            const exprId = exprIdFrom(src);
+            const exprId = primaryExprId(src);
             if (exprId) {
               rowBindings.push({
                 kind: "attr",
@@ -80,7 +81,7 @@ function buildTemplatePlan(
           break;
         }
         case "propertyBinding": {
-          const exprId = exprIdFrom(ins.from);
+          const exprId = primaryExprId(ins.from);
           if (exprId) {
             rowBindings.push({ kind: "prop", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId), mode: ins.mode });
             hasDyn = true;
@@ -88,7 +89,7 @@ function buildTemplatePlan(
           break;
         }
         case "stylePropertyBinding": {
-          const exprId = exprIdFrom(ins.from);
+          const exprId = primaryExprId(ins.from);
           if (exprId) {
             rowBindings.push({ kind: "styleProp", to: ins.to, exprId, frame: frameOf(exprToFrame, exprId) });
             hasDyn = true;
@@ -122,7 +123,7 @@ function buildTemplatePlan(
           const hid = ensureHid(nodeId, hidByNode, hidAllocator);
           const locals: Array<{ name: string; exprId: ExprId }> = [];
           for (const lb of ins.instructions) {
-            const exprId = exprIdFrom(lb.from);
+            const exprId = primaryExprId(lb.from);
             if (exprId) locals.push({ name: lb.to, exprId });
           }
           letsByHid[hid] = { toBindingContext: ins.toBindingContext, locals };
@@ -141,7 +142,7 @@ function buildTemplatePlan(
             if (p.kind === "iteratorBinding") {
               forOfExprId = p.forOf.astId;
             } else if (p.kind === "propertyBinding" && p.to === "value") {
-              valueExprId = exprIdFrom(p.from);
+              valueExprId = primaryExprId(p.from);
             }
           }
 
@@ -249,16 +250,6 @@ function nodeKeyFromId(id: NodeId): string {
 
 function nodeIdFromKey(key: string): NodeId {
   return idFromKey<"NodeId">(key);
-}
-
-function exprIdFrom(from: BindingSourceIR): ExprId | undefined {
-  if (isInterp(from)) return from.exprs[0]?.id;
-  const ref = from as ExprRef | undefined;
-  return ref?.id;
-}
-
-function isInterp(src: BindingSourceIR): src is InterpIR {
-  return (src as InterpIR).kind === "interp";
 }
 
 function ensureHid(node: NodeId, map: Record<string, HydrationId>, allocator: HydrationIdAllocator): HydrationId {

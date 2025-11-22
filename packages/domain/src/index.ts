@@ -35,6 +35,13 @@ export {
   type MappingSegmentPair,
   type MappingHit,
 } from "./compiler/mapping.js";
+export {
+  buildExprSpanIndex,
+  exprIdsOf,
+  isInterpolation,
+  primaryExprId,
+  type ExprSpanIndex,
+} from "./compiler/expr-utils.js";
 export type { StageKey, StageArtifactMeta } from "./compiler/pipeline/engine.js";
 export {
   spanContainsOffset,

@@ -6,7 +6,8 @@ import type { OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../../contracts.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "../model/ir.js";
 import { resolveSourceFile } from "../model/source.js";
-import { ensureExprSpan } from "../expr-utils.js";
+import type { ExprSpanIndex } from "../expr-utils.js";
+import type { ExprIdMap } from "../model/identity.js";
 
 export interface OverlayProductArtifacts {
   plan: OverlayPlanModule;
@@ -14,9 +15,10 @@ export interface OverlayProductArtifacts {
   mapping: TemplateMappingArtifact;
   query: TemplateQueryFacade;
   /** Expression spans keyed by exprId (HTML source). */
-  exprSpans: Map<ExprId, SourceSpan>;
+  exprSpans: ExprIdMap<SourceSpan>;
   /** Raw expr table for consumers that need authored ASTs. */
   exprTable: readonly ExprTableEntry[];
+  spanIndex: ExprSpanIndex;
 }
 
 export interface OverlayProductOptions {
@@ -43,7 +45,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
   const overlayPath = path.join(path.dirname(opts.templateFilePath), overlayEmit.filename);
   const exprToFrame = scope.templates?.[0]?.exprToFrame;
 
-  const { mapping, exprSpans } = buildTemplateMapping({
+  const { mapping, exprSpans, spanIndex } = buildTemplateMapping({
     overlayMapping: overlayEmit.mapping,
     ir,
     exprTable: ir.exprTable ?? [],
@@ -55,7 +57,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     exprId: m.exprId,
     overlayStart: m.span.start,
     overlayEnd: m.span.end,
-    htmlSpan: ensureExprSpan(exprSpans.get(m.exprId), sourceFile),
+    htmlSpan: spanIndex.ensure(m.exprId, sourceFile),
   }));
 
   const overlay: OverlayProductResult = {
@@ -67,5 +69,5 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
 
   const query = buildTemplateQuery(ir, linked, mapping, typecheck);
 
-  return { plan: planOut, overlay, mapping, query, exprSpans, exprTable: ir.exprTable ?? [] };
+  return { plan: planOut, overlay, mapping, query, exprSpans, exprTable: ir.exprTable ?? [], spanIndex };
 }

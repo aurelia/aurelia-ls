@@ -15,7 +15,7 @@ import type {
   LinkedElementBindable,
 } from "../20-resolve-host/types.js";
 import type { TypeRef } from "../../language/registry.js";
-import { collectExprSpans } from "../../expr-utils.js";
+import { buildExprSpanIndex, exprIdsOf } from "../../expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
 import type { CompilerDiagnostic } from "../../diagnostics.js";
 import { buildDiagnostic } from "../../diagnostics.js";
@@ -44,7 +44,8 @@ export interface TypecheckOptions {
 export function typecheck(opts: TypecheckOptions): TypecheckModule {
   const expectedByExpr = collectExpectedTypes(opts.linked);
   const inferredByExpr = collectInferredTypes(opts);
-  const diags = collectDiagnostics(expectedByExpr, inferredByExpr, collectExprSpans(opts.ir));
+  const exprSpanIndex = buildExprSpanIndex(opts.ir);
+  const diags = collectDiagnostics(expectedByExpr, inferredByExpr, exprSpanIndex.spans);
 
   return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags };
 }
@@ -98,7 +99,7 @@ function collectInferredTypes(opts: TypecheckOptions): Map<ExprId, string> {
 function collectDiagnostics(
   expected: Map<ExprId, string>,
   inferred: Map<ExprId, string>,
-  spans: Map<ExprId, SourceSpan>,
+  spans: ReadonlyMap<ExprId, SourceSpan>,
 ): TypecheckDiagnostic[] {
   const diags: TypecheckDiagnostic[] = [];
   for (const [id, expectedType] of expected.entries()) {
@@ -184,11 +185,6 @@ function recordExpected(src: BindingSourceIR | ExprRef | InterpIR, type: string 
   if (!type) return;
   const ids = exprIdsOf(src);
   for (const id of ids) expected.set(id, type);
-}
-
-function exprIdsOf(src: BindingSourceIR | ExprRef | InterpIR): readonly ExprId[] {
-  if ((src as InterpIR).kind === "interp") return (src as InterpIR).exprs.map((e) => e.id);
-  return [(src as ExprRef).id];
 }
 
 function targetType(target: TargetSem | TypeRef | { kind: "style" } | undefined): string | null {

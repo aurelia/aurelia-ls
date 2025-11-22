@@ -9,7 +9,7 @@
 
 import type {
   SourceSpan, ExprId,
-  BindingSourceIR, InterpIR, ExprRef,
+  BindingSourceIR, ExprRef,
   TemplateNode,
   ForOfStatement,
   BindingIdentifierOrPattern,
@@ -30,6 +30,7 @@ import type { RepeatController } from "../../language/registry.js";
 import { FrameIdAllocator, type ExprIdMap } from "../../model/identity.js";
 import { provenanceFromSpan } from "../../model/origin.js";
 import { buildDiagnostic } from "../../diagnostics.js";
+import { exprIdsOf } from "../../expr-utils.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -399,13 +400,6 @@ function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: ExprIdMap<F
 }
 
 /** Extract all ExprIds from a BindingSourceIR (ExprRef | InterpIR). */
-function exprIdsOf(src: BindingSourceIR): readonly ExprId[] {
-  return isInterp(src) ? src.exprs.map(e => e.id) : [ (src as ExprRef).id ];
-}
-function isInterp(x: BindingSourceIR): x is InterpIR {
-  return (x as InterpIR).kind === "interp";
-}
-
 /** Single ExprId from ExprRef. */
 function idOf(e: ExprRef): ExprId { return e.id; }
 
