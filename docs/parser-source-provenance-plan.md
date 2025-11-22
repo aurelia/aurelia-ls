@@ -46,8 +46,8 @@ This document captures the target architecture for source-aware parsing and the 
 - [x] `packages/domain/src/parsers/expression-parser.ts`: if keeping the singleton, adjust factory to accept/forward parse context or clarify default behavior (no file).
 - [x] `packages/domain/src/compiler/phases/10-lower/lower-shared.ts`: pass `SourceSpan` (from `spanFromOffsets`) into the parser so AST spans are source-aware at creation; remove any post-parse offset hacks.
 - [x] `packages/domain/src/compiler/phases/30-bind/bind.ts`: ensure diagnostics consume `SourceSpan` directly; simplify any file-attachment code.
-- [ ] `packages/domain/src/compiler/phases/40-typecheck` / emit layers: verify they no longer expect `TextSpan` from expressions or attach files ad-hoc.
-- [ ] Other parser users (tests, fixtures) updated for the new signature.
+- [x] `packages/domain/src/compiler/phases/40-typecheck` / emit layers: verify they no longer expect `TextSpan` from expressions or attach files ad-hoc.
+- [x] Other parser users (tests, fixtures) updated for the new signature.
 
 #### 5) Diagnostics
 - [x] Verify `packages/domain/src/compiler/diagnostics.ts` continues to work with `SourceSpan` (it already does).
@@ -55,7 +55,7 @@ This document captures the target architecture for source-aware parsing and the 
 
 #### 6) Tests and fixtures
 - [x] Update parser tests under `packages/domain/test/parsers/*.test.mjs` for any signature/shape changes and expected spans/files.
-- [ ] Update bind/lower/typecheck tests if they assert span shapes.
+- [x] Update bind/lower/typecheck tests if they assert span shapes.
 - [x] Consider adding a test that parses with a `baseSpan`/`file` and asserts `span.file` is set on nested nodes (including interpolation segments).
 
 #### 7) Helpers and documentation

@@ -13891,13 +13891,13 @@
       {
         "code": "AU1104",
         "message": "Property target 'dataFlag' not found on host <div>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 54,
           "end": 75,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -13920,13 +13920,13 @@
       {
         "code": "AU1104",
         "message": "Attribute 'role' could not be resolved to a property on host <div>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 76,
           "end": 94,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -13949,13 +13949,13 @@
       {
         "code": "AU1104",
         "message": "Property target 'matcher' not found on host <input>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 149,
           "end": 171,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -13978,13 +13978,13 @@
       {
         "code": "AU1104",
         "message": "Property target 'className' not found on host <input>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 172,
           "end": 195,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -14007,13 +14007,13 @@
       {
         "code": "AU1104",
         "message": "Attribute 'class' could not be resolved to a property on host <button>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 232,
           "end": 255,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -14036,13 +14036,13 @@
       {
         "code": "AU1104",
         "message": "Attribute 'class' could not be resolved to a property on host <button>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 266,
           "end": 294,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -14065,13 +14065,13 @@
       {
         "code": "AU1104",
         "message": "Attribute 'style' could not be resolved to a property on host <section>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 513,
           "end": 556,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -14094,13 +14094,13 @@
       {
         "code": "AU1104",
         "message": "Property target 'style' not found on host <span>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 604,
           "end": 625,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -14123,13 +14123,13 @@
       {
         "code": "AU1104",
         "message": "Attribute 'class' could not be resolved to a property on host <article>.",
+        "source": "resolve-host",
+        "severity": "error",
         "span": {
           "start": 804,
           "end": 834,
           "file": "fixtures/overlays/kitchen-sink/template.html"
         },
-        "source": "resolve-host",
-        "severity": "error",
         "origin": {
           "kind": "authored",
           "span": {
@@ -24067,8 +24067,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 5
+            "start": 39,
+            "end": 44,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "klass",
           "ancestor": 0
@@ -24080,8 +24081,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 4
+            "start": 54,
+            "end": 58,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "flag",
           "ancestor": 0
@@ -24093,8 +24095,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 6
+            "start": 76,
+            "end": 82,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "banner",
           "ancestor": 0
@@ -24106,8 +24109,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 5
+            "start": 107,
+            "end": 112,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "value",
           "ancestor": 0
@@ -24119,8 +24123,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 4
+            "start": 129,
+            "end": 133,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "flag",
           "ancestor": 0
@@ -24132,8 +24137,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 7
+            "start": 149,
+            "end": 156,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "matcher",
           "ancestor": 0
@@ -24145,8 +24151,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 10
+            "start": 172,
+            "end": 182,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "inputClass",
           "ancestor": 0
@@ -24158,8 +24165,9 @@
         "ast": {
           "$kind": "CallScope",
           "span": {
-            "start": 0,
-            "end": 6
+            "start": 209,
+            "end": 215,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "doIt",
           "args": [],
@@ -24173,8 +24181,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 8
+            "start": 238,
+            "end": 246,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "btnClass",
           "ancestor": 0
@@ -24186,8 +24195,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 3
+            "start": 256,
+            "end": 259,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "btn",
           "ancestor": 0
@@ -24199,8 +24209,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 7
+            "start": 266,
+            "end": 273,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "pressed",
           "ancestor": 0
@@ -24212,8 +24223,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 4
+            "start": 328,
+            "end": 332,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "comp",
           "ancestor": 0
@@ -24225,8 +24237,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 2
+            "start": 348,
+            "end": 350,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "vm",
           "ancestor": 0
@@ -24238,8 +24251,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 7
+            "start": 369,
+            "end": 376,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "payload",
           "ancestor": 0
@@ -24251,8 +24265,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 3
+            "start": 404,
+            "end": 407,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "cmp",
           "ancestor": 0
@@ -24264,8 +24279,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 9
+            "start": 442,
+            "end": 451,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "isVisible",
           "ancestor": 0
@@ -24277,8 +24293,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 9
+            "start": 464,
+            "end": 473,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "isFocused",
           "ancestor": 0
@@ -24290,8 +24307,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 5
+            "start": 522,
+            "end": 527,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "color",
           "ancestor": 0
@@ -24303,8 +24321,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 2
+            "start": 604,
+            "end": 606,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "bg",
           "ancestor": 0
@@ -24316,8 +24335,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 5
+            "start": 628,
+            "end": 633,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "title",
           "ancestor": 0
@@ -24329,22 +24349,25 @@
         "ast": {
           "$kind": "ForOfStatement",
           "span": {
-            "start": 0,
-            "end": 27
+            "start": 667,
+            "end": 694,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "declaration": {
             "$kind": "BindingIdentifier",
             "span": {
-              "start": 0,
-              "end": 4
+              "start": 667,
+              "end": 671,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "item"
           },
           "iterable": {
             "$kind": "AccessScope",
             "span": {
-              "start": 8,
-              "end": 13
+              "start": 675,
+              "end": 680,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "items",
             "ancestor": 0
@@ -24358,14 +24381,16 @@
         "ast": {
           "$kind": "AccessMember",
           "span": {
-            "start": 0,
-            "end": 7
+            "start": 667,
+            "end": 674,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "object": {
             "$kind": "AccessScope",
             "span": {
-              "start": 0,
-              "end": 4
+              "start": 667,
+              "end": 671,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "item",
             "ancestor": 0
@@ -24380,8 +24405,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 8
+            "start": 708,
+            "end": 716,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "itemsRep",
           "ancestor": 0
@@ -24393,14 +24419,16 @@
         "ast": {
           "$kind": "AccessMember",
           "span": {
-            "start": 0,
-            "end": 7
+            "start": 740,
+            "end": 747,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "object": {
             "$kind": "AccessScope",
             "span": {
-              "start": 0,
-              "end": 4
+              "start": 740,
+              "end": 744,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "item",
             "ancestor": 0
@@ -24415,8 +24443,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 7
+            "start": 758,
+            "end": 765,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "ifBlock",
           "ancestor": 0
@@ -24428,14 +24457,16 @@
         "ast": {
           "$kind": "AccessMember",
           "span": {
-            "start": 0,
-            "end": 14
+            "start": 811,
+            "end": 825,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "object": {
             "$kind": "AccessScope",
             "span": {
-              "start": 0,
-              "end": 4
+              "start": 811,
+              "end": 815,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "item",
             "ancestor": 0
@@ -24450,14 +24481,16 @@
         "ast": {
           "$kind": "AccessMember",
           "span": {
-            "start": 0,
-            "end": 11
+            "start": 852,
+            "end": 863,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "object": {
             "$kind": "AccessScope",
             "span": {
-              "start": 0,
-              "end": 4
+              "start": 852,
+              "end": 856,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "item",
             "ancestor": 0
@@ -24472,8 +24505,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 11
+            "start": 894,
+            "end": 905,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "displayName",
           "ancestor": 0
@@ -24485,8 +24519,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 5
+            "start": 966,
+            "end": 971,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "state",
           "ancestor": 0
@@ -24498,8 +24533,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 6
+            "start": 1065,
+            "end": 1071,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "status",
           "ancestor": 0
@@ -24511,8 +24547,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 8
+            "start": 1163,
+            "end": 1171,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "fallback",
           "ancestor": 0
@@ -24524,8 +24561,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 5
+            "start": 1001,
+            "end": 1006,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "ready",
           "ancestor": 0
@@ -24537,8 +24575,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 6
+            "start": 1324,
+            "end": 1330,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "header",
           "ancestor": 0
@@ -24550,8 +24589,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 6
+            "start": 1357,
+            "end": 1363,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "result",
           "ancestor": 0
@@ -24563,14 +24603,16 @@
         "ast": {
           "$kind": "AccessMember",
           "span": {
-            "start": 0,
-            "end": 9
+            "start": 1436,
+            "end": 1445,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "object": {
             "$kind": "AccessScope",
             "span": {
-              "start": 0,
-              "end": 3
+              "start": 1436,
+              "end": 1439,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "res",
             "ancestor": 0
@@ -24585,14 +24627,16 @@
         "ast": {
           "$kind": "AccessMember",
           "span": {
-            "start": 0,
-            "end": 11
+            "start": 1529,
+            "end": 1540,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "object": {
             "$kind": "AccessScope",
             "span": {
-              "start": 0,
-              "end": 3
+              "start": 1529,
+              "end": 1532,
+              "file": "fixtures/overlays/kitchen-sink/template.html"
             },
             "name": "err",
             "ancestor": 0
@@ -24607,8 +24651,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 6
+            "start": 1597,
+            "end": 1603,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "target",
           "ancestor": 0
@@ -24620,8 +24665,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 9
+            "start": 1618,
+            "end": 1627,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "portalTpl",
           "ancestor": 0
@@ -24633,8 +24679,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 5
+            "start": 1657,
+            "end": 1662,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "title",
           "ancestor": 0
@@ -24646,8 +24693,9 @@
         "ast": {
           "$kind": "AccessScope",
           "span": {
-            "start": 0,
-            "end": 3
+            "start": 1704,
+            "end": 1707,
+            "file": "fixtures/overlays/kitchen-sink/template.html"
           },
           "name": "qux",
           "ancestor": 0
