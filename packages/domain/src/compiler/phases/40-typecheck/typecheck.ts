@@ -18,6 +18,7 @@ import type { TypeRef } from "../../language/registry.js";
 import { collectExprSpans } from "../../expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
 import type { CompilerDiagnostic } from "../../diagnostics.js";
+import { originFromSpan } from "../../model/origin.js";
 
 export type TypecheckDiagnostic = CompilerDiagnostic<"AU1301"> & {
   exprId?: ExprId;
@@ -104,11 +105,13 @@ function collectDiagnostics(
     const actual = inferred.get(id);
     if (!actual) continue;
     if (!shouldReportMismatch(expectedType, actual)) continue;
+    const span = spans.get(id) ?? null;
     diags.push({
       code: "AU1301",
       message: `Type mismatch: expected ${expectedType}, got ${actual}`,
       exprId: id,
-      span: spans.get(id) ?? null,
+      span,
+      origin: originFromSpan("typecheck", span),
       expected: expectedType,
       actual,
       severity: "error",

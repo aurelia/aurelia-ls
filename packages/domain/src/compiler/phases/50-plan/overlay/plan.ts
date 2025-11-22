@@ -13,6 +13,7 @@ import type {
   AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment,
 } from "./types.js";
 
+import { offsetSpan, spanFromBounds } from "../../../model/span.js";
 import type { LinkedSemanticsModule } from "../../20-resolve-host/types.js";
 import type {
   ScopeModule, ScopeTemplate, ScopeFrame, FrameId,
@@ -205,8 +206,9 @@ function collectOneLambdaPerExpression(
         if (expr) {
           const lambda = `o => ${expr.code}`;
           const exprStart = lambda.indexOf("=>") + 2;
+          const exprSpan = spanFromBounds(exprStart, exprStart + expr.code.length);
           const segments = shiftSegments(expr.segments, exprStart);
-          out.push({ exprId: id, lambda, exprSpan: [exprStart, exprStart + expr.code.length], segments });
+          out.push({ exprId: id, lambda, exprSpan, segments });
         }
         break;
       }
@@ -232,7 +234,7 @@ function renderExpressionFromAst(ast: IsBindingBehavior): PrintedExpression | nu
 
 function shiftSegments(segs: OverlayLambdaSegment[], by: number): OverlayLambdaSegment[] {
   if (segs.length === 0) return segs;
-  return segs.map((s) => ({ ...s, span: [s.span[0] + by, s.span[1] + by] }));
+  return segs.map((s) => ({ ...s, span: offsetSpan(s.span, by) }));
 }
 
 function mergeSegments(base: OverlayLambdaSegment[], extra: OverlayLambdaSegment[], offset: number): OverlayLambdaSegment[] {
@@ -289,7 +291,11 @@ function scopeWithName(n: AccessScopeExpression): PrintedExpression {
   if (!n.name) return printed(base, [], pathBase ? pathBase.slice(0, -1) : undefined);
   const code = `${base}.${n.name}`;
   const start = base.length + 1;
-  const seg: OverlayLambdaSegment = { kind: "member", path: `${pathBase}${n.name}`, span: [start, start + n.name.length] };
+  const seg: OverlayLambdaSegment = {
+    kind: "member",
+    path: `${pathBase}${n.name}`,
+    span: spanFromBounds(start, start + n.name.length),
+  };
   return printed(code, [seg], `${pathBase}${n.name}`);
 }
 
@@ -300,7 +306,11 @@ function member(n: AccessMemberExpression): PrintedExpression | null {
   const head = `${base.code}${dot}`;
   const code = `${head}${n.name}`;
   const segs = base.path
-    ? [{ kind: "member", path: `${base.path}.${n.name}`, span: [head.length, head.length + n.name.length] } as OverlayLambdaSegment]
+    ? [{
+      kind: "member",
+      path: `${base.path}.${n.name}`,
+      span: spanFromBounds(head.length, head.length + n.name.length),
+    } as OverlayLambdaSegment]
     : [];
   const segments = mergeSegments(base.segments, segs, 0);
   const path = base.path ? `${base.path}.${n.name}` : undefined;
@@ -316,7 +326,7 @@ function keyed(n: AccessKeyedExpression): PrintedExpression | null {
   const code = `${head}${key.code}]`;
   const path = base.path && key.path ? `${base.path}.${key.path}` : base.path && key.code ? `${base.path}[${key.code}]` : undefined;
   const segs: OverlayLambdaSegment[] = key.path
-    ? [{ kind: "member", path: path ?? key.path, span: [head.length, head.length + key.code.length] }]
+    ? [{ kind: "member", path: path ?? key.path, span: spanFromBounds(head.length, head.length + key.code.length) }]
     : [];
   const inner = mergeSegments(key.segments, segs, head.length);
   const segments = mergeSegments(base.segments, inner, 0);

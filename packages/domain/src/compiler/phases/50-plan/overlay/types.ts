@@ -1,5 +1,6 @@
 import type { FrameId } from "../../../model/symbols.js";
 import type { ExprId } from "../../../model/ir.js";
+import type { TextSpan } from "../../../model/span.js";
 
 /** Injected by the caller; keeps the Plan phase decoupled from TS/compiler state. */
 export interface VmReflection {
@@ -46,7 +47,7 @@ export interface OverlayLambdaPlan {
   exprId: ExprId;
   lambda: string;
   /** Start/end (within `lambda`) of the expression body (after `=>`). */
-  exprSpan: readonly [number, number];
+  exprSpan: TextSpan;
   /** Optional member segments for rename/refs mapping (relative to `lambda`). */
   segments?: readonly OverlayLambdaSegment[] | undefined;
 }
@@ -54,5 +55,5 @@ export interface OverlayLambdaPlan {
 export interface OverlayLambdaSegment {
   kind: "member";
   path: string;
-  span: readonly [number, number];
+  span: TextSpan;
 }

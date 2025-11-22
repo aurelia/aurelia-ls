@@ -53,16 +53,16 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
           return `/** @param {${f.typeExpr}} ${head} */ (${head}) ${tail}`;
         };
         for (const l of f.lambdas) {
-          const lambdaWithDoc = withJSDocParam(l.lambda);
-          const line = `__au$access(${lambdaWithDoc});`;
-          const lambdaStart = line.lastIndexOf("(") + 1;
-          const start = offset + lambdaStart;
-          const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan[0]);
-          const span = spanFromBounds(start, start + lambdaWithDoc.length);
-          mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start, shift) });
-          out.push(line);
-          offset += line.length + 1;
-        }
+        const lambdaWithDoc = withJSDocParam(l.lambda);
+        const line = `__au$access(${lambdaWithDoc});`;
+        const lambdaStart = line.lastIndexOf("(") + 1;
+        const start = offset + lambdaStart;
+        const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan);
+        const span = spanFromBounds(start, start + lambdaWithDoc.length);
+        mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start, shift) });
+        out.push(line);
+        offset += line.length + 1;
+      }
       }
     }
   }
@@ -76,12 +76,12 @@ function mapSegments(segments: readonly OverlayLambdaSegment[] | undefined, lamb
   return segments.map((s) => ({
     kind: "member",
     path: s.path,
-    span: spanFromBounds(lambdaStart + s.span[0] + spanShift, lambdaStart + s.span[1] + spanShift),
+    span: offsetSpan(s.span, lambdaStart + spanShift),
   }));
 }
 
-function computeSegmentShift(original: string, withDoc: string, exprStart: number): number {
-  const originalExprStart = exprStart;
+function computeSegmentShift(original: string, withDoc: string, exprSpan: TextSpan): number {
+  const originalExprStart = exprSpan.start;
   const newExprStart = withDoc.indexOf("=>") + 2;
   return newExprStart - originalExprStart;
 }
