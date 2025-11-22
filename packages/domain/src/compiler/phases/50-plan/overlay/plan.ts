@@ -54,7 +54,8 @@ import type {
   ExprTableEntry,
   BadExpression,
 } from "../../../model/ir.js";
-import type { ExprIdMap, ReadonlyExprIdMap } from "../../../model/identity.js";
+import type { ReadonlyExprIdMap } from "../../../model/identity.js";
+import { indexExprTable } from "../../../expr-utils.js";
 import {
   buildFrameAnalysis,
   typeFromExprAst,
@@ -516,17 +517,6 @@ function ancestorChain(ancestor: number): string {
 
 function escapeBackticks(s: string): string {
   return s.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
-}
-
-/* ===================================================================================== */
-/* Expr-table indexing                                                                    */
-/* ===================================================================================== */
-
-function indexExprTable(table: readonly ExprTableEntry[] | undefined): ReadonlyExprIdMap<ExprTableEntry> {
-  const m: ExprIdMap<ExprTableEntry> = new Map();
-  if (!table) return m;
-  for (const e of table) m.set(e.id, e);
-  return m;
 }
 
 function hasQualifiedVm(vm: AnalyzeOptions["vm"]): vm is AnalyzeOptions["vm"] & { getQualifiedRootVmTypeExpr: () => string } {
