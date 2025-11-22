@@ -12,6 +12,11 @@ import {
   getExpressionParser,
   mapHtmlOffsetToOverlay,
   mapOverlayOffsetToHtml,
+  pickNarrowestContaining,
+  provenanceSpan,
+  preferOrigin,
+  spanContainsOffset,
+  spanLength,
 } from "../../out/index.js";
 import { vmStub } from "../_helpers/facade-harness.mjs";
 
@@ -320,5 +325,30 @@ describe("Facade API coverage", () => {
     assert.ok(entry.htmlSpan.file, "htmlSpan should include a file id");
     assert.ok(String(entry.htmlSpan.file).includes("/"), "file id should be normalized with forward slashes");
     assert.equal(compilation.exprSpans.get(entry.exprId)?.file, entry.htmlSpan.file, "exprSpans and mapping should share the same file id");
+  });
+
+  test("span helpers stay consistent when exported through the facade", () => {
+    const items = [
+      { name: "wide", span: { start: 0, end: 20 } },
+      { name: "narrow", span: { start: 5, end: 10 } },
+      { name: "edge", span: { start: 10, end: 15 } },
+    ];
+    assert.ok(spanContainsOffset(items[0].span, 7));
+    assert.equal(spanLength(items[0].span), 20);
+    const hit = pickNarrowestContaining(items, 7, (i) => i.span);
+    assert.equal(hit?.name, "narrow", "narrowest span should be selected");
+  });
+
+  test("provenance helpers surface spans and prefer richer origins", () => {
+    const spanA = { start: 1, end: 3 };
+    const spanB = { start: 2, end: 4 };
+    const originA = { kind: "authored", span: spanA, trace: [{ by: "a" }] };
+    const originB = { kind: "synthetic", span: spanB, trace: [{ by: "b" }] };
+
+    const chosen = preferOrigin(originA, originB);
+    assert.equal(chosen, originA, "preferOrigin should keep primary when present");
+
+    assert.deepEqual(provenanceSpan(originA), spanA, "provenanceSpan should return origin span");
+    assert.deepEqual(provenanceSpan({ origin: null, fallbackSpan: spanB }), spanB, "fallbackSpan should be used when origin is null");
   });
 });
