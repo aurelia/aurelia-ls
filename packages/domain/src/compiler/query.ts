@@ -22,7 +22,8 @@ import type {
 import type { TypeRef } from "./language/registry.js";
 import type { DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
-import { spanLength } from "./model/span.js";
+import { idKey } from "./model/identity.js";
+import { spanContainsOffset, spanLength, type SpanLike } from "./model/span.js";
 
 export function buildTemplateQuery(
   irModule: IrModule | undefined,
@@ -34,6 +35,7 @@ export function buildTemplateQuery(
   const nodes = indexDomAll(irModule);
   const rowsByTarget = indexRowsAll(linked);
   const expectedByExpr = typecheck.expectedByExpr;
+  const controllers = indexControllers(linked);
 
   return {
     nodeAt(htmlOffset) {
@@ -48,14 +50,13 @@ export function buildTemplateQuery(
     exprAt(htmlOffset) {
       const bestSegment = findSegmentAt(mapping.entries, htmlOffset);
       if (bestSegment) return bestSegment;
-      const hit = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
+      const hit = mapping.entries.find((entry) => spanContainsOffset(entry.htmlSpan, htmlOffset));
       if (!hit) return null;
       return { exprId: hit.exprId, span: hit.htmlSpan, frameId: hit.frameId };
     },
     expectedTypeOf(exprOrBindable) {
       if ("exprId" in exprOrBindable) {
-        const key = exprOrBindable.exprId as ExprId;
-        return expectedByExpr.get(key) ?? null;
+        return expectedByExpr.get(exprOrBindable.exprId) ?? null;
       }
       if ("type" in exprOrBindable) {
         return exprOrBindable.type ?? null;
@@ -63,11 +64,8 @@ export function buildTemplateQuery(
       return null;
     },
     controllerAt(htmlOffset) {
-      const node = pickNodeAt(nodes, rowsByTarget, htmlOffset);
-      if (!node) return null;
-      const row = rowsByTarget.get(rowKey(node.templateIndex, node.id));
-      if (!row) return null;
-      return findControllerAt(row, htmlOffset);
+      const hit = pickNarrowest(controllers, htmlOffset, (c) => c.span);
+      return hit ? { kind: hit.kind, span: hit.span! } : null;
     },
   };
 }
@@ -102,7 +100,7 @@ function indexDomAll(ir: { templates: TemplateIR[] }): NodeIndex[] {
 }
 
 function rowKey(templateIndex: number, id: NodeId): string {
-  return `${templateIndex}:${id}`;
+  return `${templateIndex}:${idKey(id)}`;
 }
 
 function indexRowsAll(linked: LinkedSemanticsModule): Map<string, LinkedRow> {
@@ -113,15 +111,24 @@ function indexRowsAll(linked: LinkedSemanticsModule): Map<string, LinkedRow> {
   return map;
 }
 
-function pickNodeAt(nodes: NodeIndex[], rows: Map<string, LinkedRow>, offset: number): TemplateNodeInfo | null {
-  let best: NodeIndex | null = null;
-  for (const n of nodes) {
-    if (n.span == null) continue;
-    if (offset < n.span.start || offset > n.span.end) continue;
-    if (!best || (best.span && spanLength(n.span) <= spanLength(best.span))) {
-      best = n;
+type ControllerIndex = { kind: TemplateControllerInfo["kind"]; span: SourceSpan | null };
+
+function indexControllers(linked: LinkedSemanticsModule): ControllerIndex[] {
+  const out: ControllerIndex[] = [];
+  for (const t of linked.templates ?? []) {
+    for (const row of t.rows ?? []) {
+      for (const instr of row.instructions ?? []) {
+        if (instr.kind !== "hydrateTemplateController") continue;
+        if (!instr.loc) continue;
+        out.push({ kind: instr.res, span: instr.loc });
+      }
     }
   }
+  return out;
+}
+
+function pickNodeAt(nodes: NodeIndex[], rows: Map<string, LinkedRow>, offset: number): TemplateNodeInfo | null {
+  const best = pickNarrowest(nodes, offset, (n) => n.span ?? null);
   if (!best || !best.span) return null;
   const mappedKind = mapNodeKind(best.kind);
   if (!mappedKind) return null;
@@ -152,18 +159,16 @@ function findSegmentAt(
   entries: readonly TemplateMappingEntry[],
   htmlOffset: number,
 ): { exprId: ExprId; span: SourceSpan; frameId?: FrameId; memberPath?: string } | null {
-  let segmentHit: { entry: TemplateMappingEntry; segment: TemplateMappingSegment } | null = null;
-  for (const entry of entries) {
-    for (const seg of entry.segments ?? []) {
-      if (htmlOffset >= seg.htmlSpan.start && htmlOffset <= seg.htmlSpan.end) {
-        if (!segmentHit || spanLength(seg.htmlSpan) < spanLength(segmentHit.segment.htmlSpan)) {
-          segmentHit = { entry, segment: seg };
-        }
+  const pairs = (function* () {
+    for (const entry of entries) {
+      for (const segment of entry.segments ?? []) {
+        yield { entry, segment };
       }
     }
-  }
-  if (!segmentHit) return null;
-  const { entry, segment } = segmentHit;
+  })();
+  const best = pickNarrowest(pairs, htmlOffset, (pair) => pair.segment.htmlSpan);
+  if (!best) return null;
+  const { entry, segment } = best;
   const result: { exprId: ExprId; span: SourceSpan; frameId?: FrameId; memberPath?: string } = {
     exprId: entry.exprId,
     span: segment.htmlSpan,
@@ -265,22 +270,12 @@ function addType<T extends BindableBase>(base: T, type: string | undefined): T {
   return { ...base, type };
 }
 
-function findControllerAt(row: LinkedRow, htmlOffset: number): TemplateControllerInfo | null {
-  for (const instr of row.instructions ?? []) {
-    if (instr.kind !== "hydrateTemplateController") continue;
-    if (instr.loc && (htmlOffset < instr.loc.start || htmlOffset > instr.loc.end)) continue;
-    const span = instr.loc ?? { start: 0, end: 0 };
-    return { kind: instr.res, span };
-  }
-  return null;
-}
-
 function buildPendingQueryFacade(mapping: TemplateMappingArtifact, typecheck: TypecheckModule): TemplateQueryFacade {
   return {
     nodeAt(_htmlOffset) { return null; },
     bindablesFor(_node) { return null; },
     exprAt(htmlOffset) {
-      const hit = mapping.entries.find((entry) => htmlOffset >= entry.htmlSpan.start && htmlOffset <= entry.htmlSpan.end);
+      const hit = mapping.entries.find((entry) => spanContainsOffset(entry.htmlSpan, htmlOffset));
       if (!hit) return null;
       return { exprId: hit.exprId, span: hit.htmlSpan, frameId: hit.frameId };
     },
@@ -293,4 +288,21 @@ function buildPendingQueryFacade(mapping: TemplateMappingArtifact, typecheck: Ty
     },
     controllerAt(_htmlOffset) { return null; },
   };
+}
+
+function pickNarrowest<T>(
+  items: Iterable<T>,
+  offset: number,
+  spanOf: (item: T) => SpanLike | null | undefined,
+): T | null {
+  // Local generic for query: works over arbitrary items with a span projector, keeping span logic close to query without widening span.ts to domain-specific shapes.
+  let best: { item: T; span: SpanLike } | null = null;
+  for (const item of items) {
+    const span = spanOf(item);
+    if (!span || !spanContainsOffset(span, offset)) continue;
+    if (!best || spanLength(span) < spanLength(best.span)) {
+      best = { item, span };
+    }
+  }
+  return best?.item ?? null;
 }

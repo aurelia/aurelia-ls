@@ -1,5 +1,6 @@
 import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow } from "../../20-resolve-host/types.js";
 import type { TemplateNode, DOMNode, Attr, NodeId, ExprId } from "../../../model/ir.js";
+import { idFromKey } from "../../../model/identity.js";
 import type { SsrPlanModule, SsrTemplatePlan, SsrManifest, SsrBinding, SsrController } from "../../50-plan/ssr/types.js";
 
 /** Emit SSR HTML + JSON manifest. */
@@ -24,8 +25,8 @@ export function emitSsr(
   }
 }
 
-function indexRows(t: LinkedTemplate): Map<string, LinkedRow> {
-  const idToRow: Map<string, LinkedRow> = new Map();
+function indexRows(t: LinkedTemplate): Map<NodeId, LinkedRow> {
+  const idToRow: Map<NodeId, LinkedRow> = new Map();
   for (const row of t.rows) idToRow.set(row.target, row);
   return idToRow;
 }
@@ -34,7 +35,7 @@ function indexRows(t: LinkedTemplate): Map<string, LinkedRow> {
 function renderTemplate(
   dom: TemplateNode,
   plan: SsrTemplatePlan,
-  idToRow: Map<string, LinkedRow>,
+  idToRow: Map<NodeId, LinkedRow>,
   eol: string,
 ): string[] {
   const out: string[] = [];
@@ -45,11 +46,11 @@ function renderTemplate(
 function renderNode(
   n: DOMNode,
   plan: SsrTemplatePlan,
-  idToRow: Map<string, LinkedRow>,
+  idToRow: Map<NodeId, LinkedRow>,
   out: string[],
   eol: string,
 ): void {
-  const nodeKey = n.id as NodeId;
+  const nodeKey = n.id;
   const hid = plan.hidByNode[nodeKey] ?? plan.textBindings.find(tb => tb.target === nodeKey)?.hid;
 
   const row = idToRow.get(nodeKey);
@@ -152,7 +153,7 @@ function makeManifest(tPlan: SsrTemplatePlan, tLinked: LinkedTemplate): string[]
   for (const [nodeKey, hid] of Object.entries(tPlan.hidByNode)) {
     if (seen.has(hid)) continue;
     seen.add(hid);
-    const nodeId = nodeKey as NodeId;
+    const nodeId = idFromKey<"NodeId">(nodeKey);
     const nodeRecord: {
       hid: number;
       nodeId: NodeId;
