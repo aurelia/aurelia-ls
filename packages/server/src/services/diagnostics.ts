@@ -3,25 +3,20 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import {
   diagnosticSpan,
   mapOverlayOffsetToHtml,
-  normalizeSpan,
   shrinkSpanToMapping,
   type TemplateCompilation,
   type CompilerDiagnostic,
-  type SourceSpan,
+  type TemplateMappingEntry,
 } from "@aurelia-ls/domain";
-
-function spanToRange(doc: TextDocument, span: SourceSpan) {
-  const normalized = normalizeSpan(span);
-  return { start: doc.positionAt(normalized.start), end: doc.positionAt(normalized.end) };
-}
+import { spanToRange, spanToRangeOrNull } from "./spans.js";
 
 export function mapCompilerDiagnosticsToLsp(compilation: TemplateCompilation, doc: TextDocument): Diagnostic[] {
   const diags = compilation.diagnostics.all ?? [];
   const mapped: Diagnostic[] = [];
   for (const diag of diags) {
-    const span = diagnosticSpan(diag);
-    if (!span) continue;
-    const shrunk = shrinkSpanToMapping(span, compilation.mapping);
+    const baseSpan = diagnosticSpan(diag);
+    if (!baseSpan) continue;
+    const shrunk = shrinkSpanToMapping(baseSpan, compilation.mapping);
     mapped.push({
       range: spanToRange(doc, shrunk),
       message: diag.message,
@@ -44,8 +39,10 @@ export function mapTsDiagnosticsToLsp(
     const hit = mapOverlayOffsetToHtml(compilation.mapping, d.start);
     if (!hit) continue;
     const htmlSpan = hit.segment ? hit.segment.htmlSpan : hit.entry.htmlSpan;
+    const range = spanToRangeOrNull(doc, htmlSpan);
+    if (!range) continue;
     htmlDiags.push({
-      range: spanToRange(doc, htmlSpan),
+      range,
       message: flattenTsMessage(d.messageText),
       severity: tsSeverityToLsp(d.category),
       source: "aurelia-ttc",
@@ -60,15 +57,14 @@ export function collectBadExpressionDiagnostics(compilation: TemplateCompilation
   for (const entry of compilation.mapping.entries) entriesByExpr.set(entry.exprId, entry);
 
   for (const entry of compilation.exprTable ?? []) {
-    const ast: any = (entry as any).ast;
-    if (!ast || ast.$kind !== "BadExpression") continue;
+    if (entry.ast.$kind !== "BadExpression") continue;
     const mapping = entriesByExpr.get(entry.id);
     const span = mapping?.htmlSpan ?? compilation.exprSpans.get(entry.id) ?? null;
-    if (!span) continue;
-    const normalized = normalizeSpan(span);
-    const message = ast.message ? String(ast.message) : "Malformed expression";
+    const range = spanToRangeOrNull(doc, span);
+    if (!range) continue;
+    const message = entry.ast.message ? String(entry.ast.message) : "Malformed expression";
     diags.push({
-      range: spanToRange(doc, normalized),
+      range,
       message,
       severity: DiagnosticSeverity.Error,
       code: "AU1000",
