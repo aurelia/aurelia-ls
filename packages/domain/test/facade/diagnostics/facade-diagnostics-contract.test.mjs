@@ -1,8 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_SYNTAX, compileTemplate, diagnosticSpan, getExpressionParser } from "../../../out/index.js";
+import {
+  DEFAULT_SYNTAX,
+  PRELUDE_TS,
+  compileTemplate,
+  diagnosticSpan,
+  getExpressionParser,
+  mapOverlayOffsetToHtml,
+} from "../../../out/index.js";
 import { vmStub } from "../../_helpers/facade-harness.mjs";
+import { createProgramFromMemory } from "../../_helpers/ts-harness.mjs";
 
 const defaultParsers = { attrParser: DEFAULT_SYNTAX, exprParser: getExpressionParser() };
 
@@ -130,4 +138,45 @@ test("diagnosticSpan prefers provenance over flat spans", () => {
   assert.equal(resolved?.end, 15);
 });
 
-test.todo("emit + overlay pipelines surface SSR/typecheck diagnostics with source maps attached");
+test("overlay type diagnostics resolve to HTML spans via provenance", () => {
+  const html = `<template><input value.bind="user.missing" /></template>`;
+  const templatePath = "C:/mem/source-map.html";
+  const compilation = compile(html, templatePath, {
+    vm: vmStub({ getRootVmTypeExpr: () => "({ user: { name: string } })" }),
+  });
+
+  const files = {
+    "/mem/__prelude.d.ts": PRELUDE_TS,
+    "/mem/overlay.ts": compilation.overlay.text,
+  };
+  const { ts, program } = createProgramFromMemory(files, Object.keys(files));
+  const overlaySf = program.getSourceFile("/mem/overlay.ts");
+  assert.ok(overlaySf, "overlay source should exist");
+
+  const diags = ts.getPreEmitDiagnostics(program, overlaySf);
+  const missing = diags.find((d) => String(d.messageText).includes("missing"));
+  assert.ok(missing && missing.start !== undefined, "expected TS diagnostic for missing property");
+  const overlaySpan = {
+    start: missing.start,
+    end: missing.start + (missing.length ?? 0),
+    file: compilation.overlay.overlayPath,
+  };
+
+  const mapped = mapOverlayOffsetToHtml(compilation.mapping, overlaySpan.start);
+  assert.ok(mapped, "mapping should translate overlay offsets");
+  const htmlSpan = mapped.entry.htmlSpan;
+  const htmlSnippet = html.slice(htmlSpan.start, htmlSpan.end);
+  assert.ok(htmlSnippet.includes("user.missing"), "mapped entry span should cover authored expression");
+
+  const compilerDiag = {
+    code: "TS-overlay",
+    message: "missing property",
+    source: "overlay-emit",
+    severity: "error",
+    span: overlaySpan,
+    origin: { kind: "authored", span: htmlSpan, trace: [{ by: "overlay-emit", span: htmlSpan }] },
+  };
+
+  const resolved = diagnosticSpan(compilerDiag);
+  assert.deepEqual(resolved, htmlSpan, "diagnosticSpan should favor mapped HTML provenance");
+});
