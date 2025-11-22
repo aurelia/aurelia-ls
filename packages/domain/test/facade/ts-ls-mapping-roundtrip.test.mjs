@@ -27,7 +27,7 @@ test("TS diagnostics map back to HTML spans via mapping artifact", () => {
   assert.ok(missingDiag?.start !== undefined, "should find diagnostic for 'missing'");
 
   const hit = compilation.mapping.entries.find(
-    (m) => missingDiag.start >= m.overlayRange[0] && missingDiag.start <= m.overlayRange[1]
+    (m) => missingDiag.start >= m.overlaySpan.start && missingDiag.start <= m.overlaySpan.end
   );
   assert.ok(hit, "diagnostic should map to a mapping entry");
 
@@ -54,7 +54,7 @@ test("multiple TS diagnostics map back to distinct HTML spans", () => {
   assert.ok(misses.length >= 1, "expected diagnostics for missing properties");
   for (const d of misses) {
     const hit = compilation.mapping.entries.find(
-      (m) => d.start !== undefined && d.start >= m.overlayRange[0] && d.start <= m.overlayRange[1]
+      (m) => d.start !== undefined && d.start >= m.overlaySpan.start && d.start <= m.overlaySpan.end
     );
     assert.ok(hit, "diagnostic should map to html");
     const htmlSlice = html.slice(hit.htmlSpan.start, hit.htmlSpan.end);

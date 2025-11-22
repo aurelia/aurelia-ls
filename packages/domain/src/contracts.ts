@@ -1,4 +1,4 @@
-import type { ExprId, SourceSpan, NodeId, BindingMode } from "./compiler/model/ir.js";
+import type { ExprId, SourceSpan, NodeId, BindingMode, TextSpan } from "./compiler/model/ir.js";
 import type { FrameId } from "./compiler/model/symbols.js";
 import type { Brand } from "./compiler/model/identity.js";
 
@@ -6,12 +6,10 @@ export type AbsPath = string & Brand<"AbsPath">;
 export type OverlayPath = string & Brand<"OverlayPath">;
 export type HtmlPath = string & Brand<"HtmlPath">;
 
-export type Range = readonly [start: number, end: number];
-
 export interface RangeMap {
   kind: "interpolation";
-  html: Range;
-  ts: Range;
+  html: TextSpan;
+  ts: TextSpan;
 }
 
 export interface OverlayArtifact {
@@ -25,7 +23,7 @@ export interface OverlayArtifact {
 export interface TemplateMappingEntry {
   exprId: ExprId;
   htmlSpan: SourceSpan;
-  overlayRange: Range;
+  overlaySpan: TextSpan;
   frameId?: FrameId | undefined;
   segments?: readonly TemplateMappingSegment[] | undefined;
 }
@@ -39,7 +37,7 @@ export interface TemplateMappingSegment {
   kind: "member";
   path: string;
   htmlSpan: SourceSpan;
-  overlaySpan: Range;
+  overlaySpan: TextSpan;
 }
 
 export interface TemplateNodeInfo {

@@ -42,7 +42,7 @@ describe("Facade sweep: query, mapping, diags, semantics", () => {
     const res = compile(html);
     assert.equal(res.overlay.calls.length, res.mapping.entries.length);
     for (const entry of res.mapping.entries) {
-      assert.ok(entry.overlayRange[1] > entry.overlayRange[0]);
+      assert.ok(entry.overlaySpan.end > entry.overlaySpan.start);
       assert.ok(entry.htmlSpan.end > entry.htmlSpan.start);
     }
   });
@@ -196,7 +196,7 @@ describe("Facade sweep: query, mapping, diags, semantics", () => {
     const entry = res.mapping.entries.find((e) => e.segments?.some((s) => s.path.endsWith("address.street")));
     const seg = entry?.segments?.find((s) => s.path.endsWith("address.street"));
     assert.ok(seg);
-    assert.ok(seg?.overlaySpan[1] > seg?.overlaySpan[0]);
+    assert.ok(seg?.overlaySpan.end > seg?.overlaySpan.start);
     assert.ok(seg?.htmlSpan.end > seg?.htmlSpan.start);
   });
 

@@ -5,6 +5,7 @@ import type {
   ExprTableEntry,
   IrModule,
   SourceSpan,
+  TextSpan,
 } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
@@ -41,7 +42,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
     return {
       exprId: m.exprId,
       htmlSpan,
-      overlayRange: [m.start, m.end],
+      overlaySpan: m.span,
       frameId: exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined,
       segments: segments.length > 0 ? segments : undefined,
     };
@@ -52,9 +53,9 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
 
 /** Map an overlay offset back to the best-matching HTML span. */
 export function overlayOffsetToHtml(mapping: TemplateMappingArtifact, overlayOffset: number): MappingHit | null {
-  const best = pickBestSegment(mapping.entries, overlayOffset, (seg) => rangeToSpan(seg.overlaySpan));
+  const best = pickBestSegment(mapping.entries, overlayOffset, (seg) => seg.overlaySpan);
   if (best) return best;
-  const fallback = mapping.entries.find((entry) => spanContainsOffset(rangeToSpan(entry.overlayRange), overlayOffset));
+  const fallback = mapping.entries.find((entry) => spanContainsOffset(entry.overlaySpan, overlayOffset));
   return fallback ? { entry: fallback, segment: null } : null;
 }
 
@@ -67,7 +68,7 @@ export function htmlOffsetToOverlay(mapping: TemplateMappingArtifact, htmlOffset
 }
 
 function buildSegmentPairs(
-  overlaySegments: readonly { path: string; span: readonly [number, number] }[],
+  overlaySegments: readonly { path: string; span: TextSpan }[],
   htmlSegments: readonly HtmlMemberSegment[],
 ): TemplateMappingSegment[] {
   if (overlaySegments.length === 0 || htmlSegments.length === 0) return [];
@@ -78,7 +79,7 @@ function buildSegmentPairs(
     if (idx === -1) continue;
     const h = htmlSegments[idx]!;
     used.add(idx);
-    out.push({ kind: "member", path: seg.path, htmlSpan: h.span, overlaySpan: [seg.span[0], seg.span[1]] });
+    out.push({ kind: "member", path: seg.path, htmlSpan: h.span, overlaySpan: seg.span });
   }
   return out;
 }
@@ -100,8 +101,4 @@ function pickBestSegment(
     }
   }
   return best ? { entry: best.entry, segment: best.segment } : null;
-}
-
-function rangeToSpan(range: readonly [number, number]): SpanLike {
-  return { start: range[0], end: range[1] };
 }

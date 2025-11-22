@@ -28,7 +28,7 @@ import type {
 
 import type { RepeatController } from "../../language/registry.js";
 import { FrameIdAllocator, type ExprIdMap } from "../../model/identity.js";
-import { authoredOrigin, authoredProvenance } from "../../model/origin.js";
+import { originFromSpan, provenanceFromSpan } from "../../model/origin.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -185,7 +185,7 @@ function walkRows(
               // provenance for plan/typecheck
               const forOfAstId = iter.forOf.astId;
               const repeatSpan = iter.forOf.loc ?? ins.loc ?? null;
-              setFrameOrigin(nextFrame, frames, { kind: "repeat", forOfAstId, ...authoredProvenance(repeatSpan, "repeat controller") });
+              setFrameOrigin(nextFrame, frames, { kind: "repeat", forOfAstId, ...provenanceFromSpan("bind", repeatSpan, "repeat controller") });
 
               // locals/contextuals
               const forOfAst = forOfIndex.get(forOfAstId)!;
@@ -217,7 +217,7 @@ function walkRows(
               const [valueExprId] = ids;
               if (valueExprId) {
                 const originSpan = valueProp.loc ?? ins.loc ?? null;
-                setFrameOrigin(nextFrame, frames, { kind: "with", valueExprId, ...authoredProvenance(originSpan, "'with' controller") });
+                setFrameOrigin(nextFrame, frames, { kind: "with", valueExprId, ...provenanceFromSpan("bind", originSpan, "'with' controller") });
               }
               break;
             }
@@ -228,7 +228,7 @@ function walkRows(
                 const [valueExprId] = ids;
                 if (valueExprId) {
                   const originSpan = valueProp.loc ?? ins.loc ?? null;
-                  setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...authoredProvenance(originSpan, "promise controller") });
+                  setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...provenanceFromSpan("bind", originSpan, "promise controller") });
                 }
               }
               if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
@@ -484,5 +484,5 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
 }
 
 function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null): void {
-  diags.push({ code, message, span: span ?? null, origin: authoredOrigin(span ?? null), source: "bind", severity: "error" });
+  diags.push({ code, message, span: span ?? null, origin: originFromSpan("bind", span ?? null), source: "bind", severity: "error" });
 }

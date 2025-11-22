@@ -52,7 +52,7 @@ export function registerCommands(
 
         if (mapping?.mapping?.entries?.length) {
           const rows = mapping.mapping.entries.map((entry: any, i: number) =>
-            `${i + 1}. expr=${entry.exprId} overlay=[${entry.overlayRange?.[0]},${entry.overlayRange?.[1]}) html=[${entry.htmlSpan?.start},${entry.htmlSpan?.end})`,
+            `${i + 1}. expr=${entry.exprId} overlay=[${entry.overlaySpan?.start},${entry.overlaySpan?.end}) html=[${entry.htmlSpan?.start},${entry.htmlSpan?.end})`,
           );
           const body = [`Overlay: ${mapping.overlayPath}`, "", ...rows].join("\n");
           const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Mapping Artifact\n\n${body}` });

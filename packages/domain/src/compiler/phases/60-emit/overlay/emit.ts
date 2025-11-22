@@ -1,5 +1,6 @@
 import type { OverlayLambdaSegment, OverlayPlanModule } from "../../50-plan/overlay/types.js";
 import type { ExprId } from "../../../model/ir.js";
+import { offsetSpan, spanFromBounds, type TextSpan } from "../../../model/span.js";
 
 /**
  * Emit a compact overlay:
@@ -8,15 +9,14 @@ import type { ExprId } from "../../../model/ir.js";
  */
 export interface OverlayEmitMappingEntry {
   exprId: ExprId;
-  start: number;
-  end: number;
+  span: TextSpan;
   segments?: readonly OverlayEmitSegment[] | undefined;
 }
 
 export interface OverlayEmitSegment {
   kind: "member";
   path: string;
-  span: readonly [number, number];
+  span: TextSpan;
 }
 
 export interface OverlayEmitResult {
@@ -39,8 +39,8 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
           const line = `__au$access<${typeRef}>(${l.lambda});`;
           const lambdaStart = line.lastIndexOf("(") + 1; // point at lambda start
           const start = offset + lambdaStart;
-          const end = start + l.lambda.length;
-          mapping.push({ exprId: l.exprId, start, end, segments: mapSegments(l.segments, start) });
+          const span = spanFromBounds(start, start + l.lambda.length);
+          mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start) });
           out.push(line);
           offset += line.length + 1;
         }
@@ -57,9 +57,9 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
           const line = `__au$access(${lambdaWithDoc});`;
           const lambdaStart = line.lastIndexOf("(") + 1;
           const start = offset + lambdaStart;
-          const end = start + lambdaWithDoc.length;
           const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan[0]);
-          mapping.push({ exprId: l.exprId, start, end, segments: mapSegments(l.segments, start, shift) });
+          const span = spanFromBounds(start, start + lambdaWithDoc.length);
+          mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start, shift) });
           out.push(line);
           offset += line.length + 1;
         }
@@ -76,7 +76,7 @@ function mapSegments(segments: readonly OverlayLambdaSegment[] | undefined, lamb
   return segments.map((s) => ({
     kind: "member",
     path: s.path,
-    span: [lambdaStart + s.span[0] + spanShift, lambdaStart + s.span[1] + spanShift],
+    span: spanFromBounds(lambdaStart + s.span[0] + spanShift, lambdaStart + s.span[1] + spanShift),
   }));
 }
 
@@ -131,7 +131,11 @@ export function emitOverlayFile(
   const bannerShift = banner.length;
   const shiftedMapping = bannerShift === 0
     ? adjustedMapping
-    : adjustedMapping.map((m) => ({ exprId: m.exprId, start: m.start + bannerShift, end: m.end + bannerShift }));
+    : adjustedMapping.map((m) => ({
+      exprId: m.exprId,
+      span: offsetSpan(m.span, bannerShift),
+      segments: m.segments?.map((seg) => ({ ...seg, span: offsetSpan(seg.span, bannerShift) })),
+    }));
   return { filename, text: `${banner}${body}${moduleFooter}`, mapping: shiftedMapping };
 }
 
@@ -145,9 +149,14 @@ function adjustMappingForEol(mapping: OverlayEmitMappingEntry[], text: string, e
     if (text.charCodeAt(i) === 10 /* '\n' */) count++;
     prefixNewlines[i + 1] = count;
   }
-  return mapping.map((m) => {
-    const extraStart = prefixNewlines[m.start]!;
-    const extraEnd = prefixNewlines[m.end]!;
-    return { exprId: m.exprId, start: m.start + extraStart, end: m.end + extraEnd };
-  });
+  const adjust = (span: TextSpan): TextSpan => {
+    const extraStart = prefixNewlines[span.start]!;
+    const extraEnd = prefixNewlines[span.end]!;
+    return spanFromBounds(span.start + extraStart, span.end + extraEnd);
+  };
+  return mapping.map((m) => ({
+    exprId: m.exprId,
+    span: adjust(m.span),
+    segments: m.segments?.map((seg) => ({ ...seg, span: adjust(seg.span) })),
+  }));
 }
