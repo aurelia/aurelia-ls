@@ -1,4 +1,4 @@
-import type { IExpressionParser } from "./expression-api.js";
+import type { ExpressionParseContext, IExpressionParser } from "./expression-api.js";
 import { Scanner, TokenType, type Token, CharCode } from "./expression-scanner.js";
 
 import type {
@@ -49,9 +49,12 @@ import type {
   ArrowFunction,
   CustomExpression,
   BadExpression,
+  SourceSpan,
 } from "../compiler/model/ir.js";
 
-import { offsetSpan, spanFromBounds } from "../compiler/model/span.js";
+import { normalizeSpan, offsetSpan, spanFromBounds } from "../compiler/model/span.js";
+import { absoluteSpan, ensureSpanFile } from "../compiler/model/source.js";
+import { provenanceFromSpan } from "../compiler/model/origin.js";
 
 /**
  * Core expression parser for Aurelia's binding expression language, tailored
@@ -60,10 +63,10 @@ import { offsetSpan, spanFromBounds } from "../compiler/model/span.js";
  * This is a fresh implementation that:
  * - consumes tokens from the local Scanner
  * - produces the canonical AST from model/ir.ts
- * - attaches TextSpan to every node
+ * - attaches SourceSpan (with optional file) to every node
  *
- * For v1 this parser is intentionally strict – invalid input throws.
- * Error‑tolerant / BadExpression based recovery can be layered on later.
+ * For v1 this parser is intentionally strict - invalid input throws.
+ * Error-tolerant / BadExpression based recovery can be layered on later.
  */
 export class CoreParser {
   private readonly source: string;
@@ -2148,36 +2151,48 @@ export function parseInterpolationAst(
 
 export class LspExpressionParser implements IExpressionParser {
   // Overload signatures from IExpressionParser
-  parse(expression: string, expressionType: "IsIterator"): ForOfStatement | BadExpression;
-  parse(expression: string, expressionType: "Interpolation"): Interpolation;
+  parse(expression: string, expressionType: "IsIterator", context?: ExpressionParseContext): ForOfStatement | BadExpression;
+  parse(expression: string, expressionType: "Interpolation", context?: ExpressionParseContext): Interpolation;
   parse(
     expression: string,
     expressionType: "IsFunction" | "IsProperty",
+    context?: ExpressionParseContext,
   ): IsBindingBehavior;
-  parse(expression: string, expressionType: "IsCustom"): CustomExpression;
-  parse(expression: string, expressionType: ExpressionType): AnyBindingExpression;
+  parse(expression: string, expressionType: "IsCustom", context?: ExpressionParseContext): CustomExpression;
+  parse(expression: string, expressionType: ExpressionType, context?: ExpressionParseContext): AnyBindingExpression;
 
   // Implementation
+  /**
+   * Parse an expression, optionally rebasing spans to an absolute `baseSpan`
+   * (or `baseOffset`/`file`). Without context, spans stay relative to the
+   * provided expression string.
+   */
   parse(
     expression: string,
     expressionType: ExpressionType,
+    context?: ExpressionParseContext,
   ): AnyBindingExpression {
+    const baseSpan = resolveBaseSpan(expression, context);
+    let ast: AnyBindingExpression;
+
     switch (expressionType) {
       case "IsProperty":
       case "IsFunction": {
         const core = new CoreParser(expression);
-        return core.parseBindingExpression();
+        ast = core.parseBindingExpression();
+        break;
       }
 
       case "IsIterator": {
         const core = new CoreParser(expression);
-        return core.parseIteratorHeader();
+        ast = core.parseIteratorHeader();
+        break;
       }
 
       case "Interpolation": {
         // `${...}` interpolation; reuse CoreParser for each inner segment and
         // offset spans so they are relative to the full interpolation string.
-        return parseInterpolationAst(
+        ast = parseInterpolationAst(
           expression,
           (segment, baseOffset) => {
             const core = new CoreParser(segment);
@@ -2186,6 +2201,7 @@ export class LspExpressionParser implements IExpressionParser {
             return expr;
           },
         );
+        break;
       }
 
       case "IsCustom": {
@@ -2197,19 +2213,50 @@ export class LspExpressionParser implements IExpressionParser {
           span,
           value: expression,
         };
-        return node;
+        ast = node;
+        break;
       }
 
       default:
-        return {
+        ast = {
           $kind: "BadExpression",
           span: spanFromBounds(0, expression.length),
           text: expression,
           message: `Unknown expression type '${expressionType}'`,
         };
+        break;
     }
+
+    return baseSpan ? rebaseExpressionSpans(ast, baseSpan) : ast;
   }
 
+}
+
+export function rebaseExpressionSpans<T extends AnyBindingExpression>(
+  ast: T,
+  baseSpan: SourceSpan,
+): T {
+  const normalizedBase = ensureSpanFile(normalizeSpan(baseSpan), baseSpan.file) ?? normalizeSpan(baseSpan);
+  transformNodeSpans(ast as unknown as Record<string, unknown>, (span, owner) => {
+    const rebased = span.file ? normalizeSpan(span) : absoluteSpan(span, normalizedBase) ?? normalizeSpan(span);
+    if ((owner as any).$kind === "BadExpression" && !(owner as any).origin) {
+      (owner as any).origin = provenanceFromSpan("parse", rebased);
+    }
+    return rebased;
+  });
+  return ast;
+}
+
+function resolveBaseSpan(source: string, context?: ExpressionParseContext): SourceSpan | null {
+  if (!context) return null;
+  const hasContext = context.baseSpan != null || context.baseOffset != null || context.file != null;
+  if (!hasContext) return null;
+  const start = context.baseSpan?.start ?? context.baseOffset ?? 0;
+  const end = context.baseSpan?.end ?? start + source.length;
+  const file = context.baseSpan?.file ?? context.file ?? null;
+  const candidate = file ? { start, end, file } : { start, end };
+  const normalized = normalizeSpan(candidate) as SourceSpan;
+  return ensureSpanFile(normalized, file) ?? normalized;
 }
 
 /**
@@ -2217,36 +2264,32 @@ export class LspExpressionParser implements IExpressionParser {
  * Shared between CoreParser (template literals) and LspExpressionParser (interpolation).
  */
 function offsetNodeSpans(node: Record<string, unknown>, delta: number): void {
-  if (node == null) {
+  transformNodeSpans(node, (span) => offsetSpan(span, delta));
+}
+
+function transformNodeSpans(
+  node: unknown,
+  transform: (span: SourceSpan, owner: Record<string, unknown>) => SourceSpan,
+): void {
+  if (!node || typeof node !== "object") {
     return;
   }
 
-  const anyNode = node as any;
-  if (typeof anyNode !== "object") {
-    return;
-  }
-
-  if (
-    anyNode.span &&
-    typeof anyNode.span.start === "number" &&
-    typeof anyNode.span.end === "number"
-  ) {
-    anyNode.span = offsetSpan(anyNode.span, delta);
+  const anyNode = node as Record<string, unknown>;
+  const span = (anyNode as any).span;
+  if (span && typeof (span as SourceSpan).start === "number" && typeof (span as SourceSpan).end === "number") {
+    (anyNode as any).span = transform(span as SourceSpan, anyNode);
   }
 
   for (const key of Object.keys(anyNode)) {
     if (key === "span") continue;
-    const value = anyNode[key];
+    const value = (anyNode as any)[key];
     if (value == null) continue;
 
     if (Array.isArray(value)) {
-      for (const child of value) {
-        if (child && typeof child === "object") {
-          offsetNodeSpans(child as Record<string, unknown>, delta);
-        }
-      }
+      for (const child of value) transformNodeSpans(child, transform);
     } else if (typeof value === "object") {
-      offsetNodeSpans(value as Record<string, unknown>, delta);
+      transformNodeSpans(value, transform);
     }
   }
 }

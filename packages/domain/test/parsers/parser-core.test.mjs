@@ -2,6 +2,7 @@ import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { LspExpressionParser } from "../../out/parsers/lsp-expression-parser.js";
+import { toSourceFileId } from "../../out/compiler/model/identity.js";
 
 /**
  * Helper: strip span information recursively from an AST node.
@@ -853,6 +854,19 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
     assert.equal(ast.$kind, "BadExpression");
     assert.equal(ast.message, "Expected ',' or ')' in argument list");
     assert.deepEqual(ast.span, { start: 4, end: "foo(".length });
+  });
+
+  test("BadExpression carries parse provenance when rebased", () => {
+    const parser = new LspExpressionParser();
+    const file = toSourceFileId("component.html");
+    const baseSpan = { start: 10, end: 14, file };
+    const ast = parser.parse("foo(", "IsProperty", { baseSpan });
+
+    assert.equal(ast.$kind, "BadExpression");
+    assert.equal(ast.span.file, file);
+    assert.equal(ast.span.start, baseSpan.start + 4);
+    assert.equal(ast.span.end, baseSpan.start + 4);
+    assert.equal(ast.origin?.origin?.trace?.[0]?.by, "parse");
   });
 
   test("bad nested segment in interpolation returns BadExpression", () => {

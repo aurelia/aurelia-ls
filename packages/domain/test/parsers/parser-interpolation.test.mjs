@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { LspExpressionParser } from "../../out/parsers/lsp-expression-parser.js";
 import { splitInterpolationText } from "../../out/parsers/lsp-expression-parser.js";
+import { toSourceFileId } from "../../out/compiler/model/identity.js";
 
 /**
  * Helper: strip span information recursively from an AST node.
@@ -96,6 +97,24 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
     // Expression span should slice back to the inner expression text.
     assert.equal(src.slice(expr.span.start, expr.span.end), "name");
+  });
+
+  test("rebases spans when parse context includes file + baseSpan", () => {
+    const src = "Hello ${name}";
+    const parser = new LspExpressionParser();
+    const file = toSourceFileId("template.html");
+    const baseSpan = { start: 50, end: 50 + src.length, file };
+
+    const ast = parser.parse(src, "Interpolation", { baseSpan });
+
+    assert.equal(ast.span.file, file);
+    assert.equal(ast.span.start, baseSpan.start);
+    assert.equal(ast.span.end, baseSpan.end);
+
+    const expr = ast.expressions[0];
+    assert.equal(expr.span.file, file);
+    assert.equal(expr.span.start, baseSpan.start + 8);
+    assert.equal(expr.span.end, baseSpan.start + 12);
   });
 
   test("multiple interpolations: ${a} and ${b}", () => {
