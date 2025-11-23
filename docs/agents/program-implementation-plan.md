@@ -51,14 +51,14 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Build service: expose overlay/SSR artifacts with normalized paths and stable naming, ready for TS host consumption.
 
 ### Host integration and migration
-- [ ] Add `SourceStore` adapters for LSP `TextDocuments` and any CLI/build inputs; route open/change/close through `TemplateProgram`.
-- [ ] Replace remaining `compileTemplate*` usage in hosts with `TemplateProgram` + services; remove all legacy paths.
-- [ ] Wire TS overlay filesystem to consume overlays via `TemplateBuildService` (no direct pipeline calls) and respect naming conventions.
+- [x] Add `SourceStore` adapters for LSP `TextDocuments` and any CLI/build inputs; route open/change/close through `TemplateProgram`.
+- [x] Replace remaining `compileTemplate*` usage in hosts with `TemplateProgram` + services; remove all legacy paths.
+- [x] Wire TS overlay filesystem to consume overlays via `TemplateBuildService` (no direct pipeline calls) and respect naming conventions.
 - [ ] Introduce telemetry/logging hooks (optional) for cache hits, provenance density, and overlay/SSR materialization timing.
 
 ### Testing and fixtures
-- [ ] Establish a dedicated `packages/domain/test/program` suite for program/provenance/service integration (shared helpers for `SourceStore`, overlay/SSR naming, provenance fixtures).
+- [ ] Establish a dedicated `packages/domain/test/program` suite for program/provenance/service integration (shared helpers for `SourceStore`, overlay/SSR naming, provenance fixtures). Migrate existing `facade` API/golden coverage onto this program-first harness and drop legacy-only variants.
 - [ ] Unit tests for `InMemorySourceStore`, provenance indexing/queries, and `DefaultTemplateProgram` cache invalidation.
 - [ ] Golden/fixture coverage for overlay + SSR artifacts (including path conventions and provenance edges).
 - [ ] Service-level tests for diagnostics mapping, hover/defs/refs/completions/rename, using provenance-backed queries.
-- [ ] Migration/back-compat tests ensuring legacy hosts can coexist during rollout (guarded by feature flags or adapters).
+- [ ] Aggressive cleanup pass: remove/retire legacy host/back-compat scaffolding once program + services cover all entrypoints (no production rollback concerns). Targets: drop `compileTemplate*` host callsites (server `compiler-service.ts`, dump scripts), replace facade mapping helpers with provenance lookups, migrate/deprecate facade API tests in favor of program/service tests, and trim any “legacy coexistence” assertions.

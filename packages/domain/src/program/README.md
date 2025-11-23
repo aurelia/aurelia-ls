@@ -1,6 +1,6 @@
 # Program Layer (experimental)
 
-This folder hosts the experimental `TemplateProgram` architecture that is meant to replace ad-hoc `compileTemplate*` usage. It is **not yet integrated** into all callers (LSP/CLI/tests) and is still being fleshed out.
+This folder hosts the experimental `TemplateProgram` architecture that is meant to replace ad-hoc `compileTemplate*` usage. The LSP server now routes diagnostics/overlay/SSR/features through `TemplateProgram` + services; CLI/build/test wiring is still in progress and the surface may evolve.
 
 > Normative spec: the source of truth for the target design lives in
 > `docs/agents/program-architecture.md`.
@@ -31,7 +31,7 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
   Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift. Cache/provenance invalidation hooks, bulk overlay/SSR builds, and cache stats are available for hosts that want to observe reuse.
 
 - `services.ts`
-  Language/build facades. `DefaultTemplateBuildService` returns host-ready overlay/SSR artifacts (canonical URIs/paths + `SourceFileId` + base names + hashes) sourced from program caches. Diagnostics merge compiler and overlay TypeScript diagnostics via provenance and surface host-agnostic spans. Hover, definitions, and references map template offsets through provenance and TS quick info/definitions; completions combine template bindables with provenance-aware TS completions; rename maps overlay member segments through TypeScript renames back to template edits. Code actions remain stubbed.
+  Language/build facades. `DefaultTemplateBuildService` returns host-ready overlay/SSR artifacts (canonical URIs/paths + `SourceFileId` + base names + hashes) sourced from program caches. Diagnostics merge compiler and overlay TypeScript diagnostics via provenance and surface host-agnostic spans. Hover, definitions, references, completions, and rename map template offsets through provenance and TS integration. Code actions remain stubbed.
 
 ## Key assumptions
 
@@ -48,10 +48,7 @@ The main deltas compared to `docs/agents/program-architecture.md` are:
 
   - SSR mappings (HTML + manifest) are ingested into provenance; continue tightening span coverage as SSR emit evolves.
   - Core stages (10-40) are reused across overlay and SSR via program-level seeds; richer telemetry and single-session reuse are still on the table.
-
-- Language features
-
-  - Flesh out `TemplateLanguageService` hover/defs/refs/completions/code actions/rename using `TemplateProgram.getQuery` plus provenance and TS integration.
+  - Host telemetry/logging hooks (cache/provenance density/overlay materialization) are still optional.
 
 ## Migration hints
 
