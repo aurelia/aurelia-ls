@@ -9,10 +9,25 @@ import { DEFAULT_SEMANTICS } from "../../../domain/out/index.js";
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 
 function createTsProject(source = "export class Example {}", compilerOptions = {}) {
-  const files = new Map([[path.join(process.cwd(), "src", "example.ts"), source]]);
+  const normalizeName = (fileName) => {
+    const normalized = path.normalize(fileName);
+    return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
+  };
+  const files = new Map();
+  if (typeof source === "string") {
+    const abs = path.join(process.cwd(), "src", "example.ts");
+    files.set(normalizeName(abs), source);
+  } else {
+    for (const [fileName, text] of Object.entries(source)) {
+      const abs = path.isAbsolute(fileName) ? fileName : path.join(process.cwd(), fileName);
+      files.set(normalizeName(abs), text);
+    }
+  }
+
   const settings = {
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
+    experimentalDecorators: true,
     ...compilerOptions,
   };
   let version = 1;
@@ -24,11 +39,11 @@ function createTsProject(source = "export class Example {}", compilerOptions = {
     getCurrentDirectory: () => process.cwd(),
     getDefaultLibFileName: (opts) => ts.getDefaultLibFilePath(opts),
     getScriptSnapshot: (fileName) => {
-      const text = files.get(fileName);
+      const text = files.get(normalizeName(fileName));
       return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
     },
-    fileExists: (fileName) => files.has(fileName) || ts.sys.fileExists(fileName),
-    readFile: (fileName) => files.get(fileName) ?? ts.sys.readFile(fileName),
+    fileExists: (fileName) => files.has(normalizeName(fileName)) || ts.sys.fileExists(fileName),
+    readFile: (fileName) => files.get(normalizeName(fileName)) ?? ts.sys.readFile(fileName),
     readDirectory: ts.sys.readDirectory,
   };
 
@@ -41,11 +56,11 @@ function createTsProject(source = "export class Example {}", compilerOptions = {
     getProjectVersion: () => version,
     bumpVersion() { version += 1; },
     addFile(fileName, text) {
-      files.set(fileName, text);
+      files.set(normalizeName(fileName), text);
       version += 1;
     },
     updateFile(fileName, text) {
-      files.set(fileName, text);
+      files.set(normalizeName(fileName), text);
       version += 1;
     },
   };
@@ -83,4 +98,65 @@ test("fingerprint reflects TS project version and root set changes", async () =>
   await index.refresh();
   const afterRootChange = index.currentFingerprint();
   assert.notEqual(afterRootChange, afterVersionBump);
+});
+
+test("discovers Aurelia resources from decorators and bindable members", () => {
+  const tsProject = createTsProject({
+    "src/resources.ts": `
+      const customElement = (options) => (target) => target;
+      const customAttribute = (options) => (target) => target;
+      const valueConverter = (options) => (target) => target;
+      const bindingBehavior = (options) => (target) => target;
+      const templateController = (target) => target;
+      const containerless = (target) => target;
+      const bindable = (options) => (target, key) => {};
+
+      @customElement({ name: 'fancy-box', aliases: ['box'], bindables: ['title', { name: 'count', mode: 'twoWay' }] })
+      export class FancyBox {
+        @bindable({ mode: 'fromView', primary: true }) value!: number;
+      }
+
+      @containerless
+      @customElement({ alias: 'panel' })
+      export class Panel {}
+
+      @templateController
+      @customAttribute({ name: 'if-not', aliases: ['unless'], noMultiBindings: true })
+      export class IfNot {
+        @bindable toggle!: boolean;
+      }
+
+      @valueConverter({ name: 'date-format' })
+      export class DateFormat {}
+
+      @bindingBehavior('throttle')
+      export class Throttle {}
+    `,
+  }, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext });
+
+  const index = new AureliaProjectIndex({ ts: tsProject, logger });
+  const sem = index.currentSemantics();
+
+  const fancy = sem.resources.elements["fancy-box"];
+  assert.ok(fancy, "custom element discovered");
+  assert.equal(fancy.aliases?.includes("box"), true);
+  assert.equal(fancy.bindables.value?.mode, "fromView");
+  assert.equal(fancy.bindables.count?.mode, "twoWay");
+
+  const panel = sem.resources.elements.panel;
+  assert.ok(panel, "fallback name from class detected");
+  assert.equal(panel.containerless, true);
+
+  const ifNot = sem.resources.attributes["if-not"];
+  assert.ok(ifNot, "custom attribute discovered");
+  assert.equal(ifNot.isTemplateController, true);
+  assert.equal(ifNot.primary, "toggle");
+  assert.equal(ifNot.aliases?.includes("unless"), true);
+  assert.equal(ifNot.noMultiBindings, true);
+
+  const vc = sem.resources.valueConverters["date-format"];
+  assert.ok(vc, "value converter discovered");
+
+  const bb = sem.resources.bindingBehaviors.throttle;
+  assert.ok(bb, "binding behavior discovered");
 });
