@@ -44,14 +44,10 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
 
 The main deltas compared to `docs/agents/program-architecture.md` are:
 
-- Provenance
+- SSR provenance and reuse
 
-  - Add SSR ingestion and SSR offsets (HTML/manifest -> template nodes).
-
-- SSR reuse
-
-  - Add SSR provenance ingestion surfaces.
-  - Reuse stages 10-40 between overlay and SSR where possible (shared pipeline session or shared persisted caches).
+  - SSR mappings (HTML + manifest) are ingested into provenance; continue tightening span coverage as SSR emit evolves.
+  - Core stages (10-40) are reused across overlay and SSR via program-level seeds; richer telemetry and single-session reuse are still on the table.
 
 - Language features
 

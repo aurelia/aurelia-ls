@@ -10,7 +10,7 @@ import { DEFAULT as SEM_DEFAULT, type Semantics } from "../compiler/language/reg
 import type { ResourceGraph, ResourceScopeId } from "../compiler/language/resource-graph.js";
 import type { AttributeParser } from "../compiler/language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
-import type { CacheOptions, FingerprintHints, FingerprintToken } from "../compiler/pipeline/engine.js";
+import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../compiler/pipeline/engine.js";
 import { stableHash } from "../compiler/pipeline/hash.js";
 import type { VmReflection } from "../compiler/phases/50-plan/overlay/types.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
@@ -40,6 +40,20 @@ type ResolvedProgramOptions = ProgramOptions & { readonly fingerprints: Fingerpr
 
 interface CachedCompilation {
   readonly compilation: TemplateCompilation;
+  readonly version: number;
+  readonly contentHash: string;
+  readonly optionsFingerprint: string;
+}
+
+interface CachedSsrCompilation {
+  readonly ssr: CompileSsrResult;
+  readonly version: number;
+  readonly contentHash: string;
+  readonly optionsFingerprint: string;
+}
+
+interface CoreStageCacheEntry {
+  readonly stages: Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck">;
   readonly version: number;
   readonly contentHash: string;
   readonly optionsFingerprint: string;
@@ -78,6 +92,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   private readonly fingerprintHints: FingerprintHints;
   private readonly compilationCache = new Map<DocumentUri, CachedCompilation>();
+  private readonly ssrCache = new Map<DocumentUri, CachedSsrCompilation>();
+  private readonly coreCache = new Map<DocumentUri, CoreStageCacheEntry>();
 
   constructor(options: TemplateProgramOptions) {
     const { sourceStore, provenance, ...rest } = options;
@@ -93,12 +109,16 @@ export class DefaultTemplateProgram implements TemplateProgram {
     this.provenance.removeDocument(canonical.uri);
     this.sources.set(canonical.uri, text, version);
     this.compilationCache.delete(canonical.uri);
+    this.ssrCache.delete(canonical.uri);
+    this.coreCache.delete(canonical.uri);
   }
 
   closeTemplate(uri: DocumentUri): void {
     const canonical = this.canonicalUri(uri);
     this.sources.delete(canonical.uri);
     this.compilationCache.delete(canonical.uri);
+    this.ssrCache.delete(canonical.uri);
+    this.coreCache.delete(canonical.uri);
     this.provenance.removeDocument(canonical.uri);
   }
 
@@ -126,11 +146,24 @@ export class DefaultTemplateProgram implements TemplateProgram {
     // NOTE: program-level cache is guarded by content hash + options fingerprint.
     const templatePaths = deriveTemplatePaths(canonical.uri, withOverlayBase(this.options.isJs, this.options.overlayBaseName));
     const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
-    const compilation = compileTemplate(compileOpts);
+    const seed = this.coreSeed(canonical.uri, contentHash);
+    const compilation = compileTemplate(compileOpts, seed ?? undefined);
 
     // Feed overlay mapping into provenance for downstream features.
     const overlayUri = normalizeDocumentUri(compilation.overlay.overlayPath);
     this.provenance.addOverlayMapping(canonical.uri, overlayUri, compilation.mapping);
+
+    this.coreCache.set(canonical.uri, {
+      stages: {
+        "10-lower": compilation.ir,
+        "20-resolve-host": compilation.linked,
+        "30-bind": compilation.scope,
+        "40-typecheck": compilation.typecheck,
+      },
+      version: snap.version,
+      contentHash,
+      optionsFingerprint: this.optionsFingerprint,
+    });
 
     this.compilationCache.set(canonical.uri, {
       compilation,
@@ -152,11 +185,36 @@ export class DefaultTemplateProgram implements TemplateProgram {
   getSsr(uri: DocumentUri): CompileSsrResult {
     const canonical = this.canonicalUri(uri);
     const snap = this.snapshot(canonical.uri);
+    const contentHash = hashSnapshotContent(snap);
+    const cached = this.ssrCache.get(canonical.uri);
+    if (cached && cached.optionsFingerprint === this.optionsFingerprint && cached.contentHash === contentHash) {
+      if (cached.version !== snap.version) {
+        this.ssrCache.set(canonical.uri, { ...cached, version: snap.version });
+      }
+      return cached.ssr;
+    }
+
     const templatePaths = deriveTemplatePaths(canonical.uri, withOverlayBase(this.options.isJs, this.options.overlayBaseName));
-    // SSR currently runs its own product builder; if/when overlay + SSR share
-    // a session, this can be optimized to reuse pipeline artifacts.
     const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
-    return compileTemplateToSSR(compileOpts);
+    const seed = this.coreSeed(canonical.uri, contentHash);
+    const ssr = compileTemplateToSSR(compileOpts, seed ?? undefined);
+
+    this.provenance.addSsrMapping(canonical.uri, templatePaths.ssr.htmlUri, templatePaths.ssr.manifestUri, ssr.mapping);
+
+    this.coreCache.set(canonical.uri, {
+      stages: ssr.core,
+      version: snap.version,
+      contentHash,
+      optionsFingerprint: this.optionsFingerprint,
+    });
+
+    this.ssrCache.set(canonical.uri, {
+      ssr,
+      version: snap.version,
+      contentHash,
+      optionsFingerprint: this.optionsFingerprint,
+    });
+    return ssr;
   }
 
   getQuery(uri: DocumentUri): TemplateQueryFacade {
@@ -165,6 +223,22 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   getMapping(uri: DocumentUri): TemplateMappingArtifact | null {
     return this.getCompilation(uri).mapping ?? null;
+  }
+
+  private coreSeed(
+    uri: DocumentUri,
+    contentHash: string,
+  ): Partial<Record<StageKey, StageOutputs[StageKey]>> | null {
+    const cached = this.coreCache.get(uri);
+    if (!cached) return null;
+    if (cached.optionsFingerprint !== this.optionsFingerprint) return null;
+    if (cached.contentHash !== contentHash) return null;
+    return {
+      "10-lower": cached.stages["10-lower"],
+      "20-resolve-host": cached.stages["20-resolve-host"],
+      "30-bind": cached.stages["30-bind"],
+      "40-typecheck": cached.stages["40-typecheck"],
+    };
   }
 
   private canonicalUri(input: DocumentUri): CanonicalDocumentUri {

@@ -79,10 +79,13 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
 }
 
 /** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
-export function compileTemplate(opts: CompileOptions): TemplateCompilation {
+export function compileTemplate(
+  opts: CompileOptions,
+  seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+): TemplateCompilation {
   const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
   const engine = createDefaultEngine();
-  const session = engine.createSession(buildPipelineOptions(opts, overlayBase));
+  const session = engine.createSession(buildPipelineOptions(opts, overlayBase), seed);
 
   const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
 
@@ -120,29 +123,47 @@ export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayRe
   return compilation.overlay;
 }
 
-export interface CompileSsrResult extends SsrProductResult {}
+export interface CompileSsrResult extends SsrProductResult {
+  core: Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck">;
+  meta: StageMetaSnapshot;
+}
 
 /** Build SSR "server emits" (HTML skeleton + JSON manifest) from a template. */
-export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
+export function compileTemplateToSSR(
+  opts: CompileOptions,
+  seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+): CompileSsrResult {
   const baseName = computeSsrBaseName(opts.templateFilePath, opts.overlayBaseName);
+  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
   const engine = createDefaultEngine();
-  const pipelineOpts: PipelineOptions = {
-    html: opts.html,
-    templateFilePath: opts.templateFilePath,
-    vm: opts.vm,
-    ssr: { eol: "\n" },
-  };
-  if (opts.semantics) pipelineOpts.semantics = opts.semantics;
-  if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
-  if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
-  if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
-  if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
-  const session = engine.createSession(pipelineOpts);
+  const pipelineOpts = buildPipelineOptions(opts, overlayBase);
+  pipelineOpts.ssr = { eol: "\n" };
+  const session = engine.createSession(pipelineOpts, seed);
 
-  return buildSsrProduct(session, {
+  const product = buildSsrProduct(session, {
     templateFilePath: opts.templateFilePath,
     baseName,
   });
+
+  const core: Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck"> = {
+    "10-lower": session.run("10-lower"),
+    "20-resolve-host": session.run("20-resolve-host"),
+    "30-bind": session.run("30-bind"),
+    "40-typecheck": session.run("40-typecheck"),
+  };
+
+  return {
+    ...product,
+    core,
+    meta: collectStageMeta(session, [
+      "10-lower",
+      "20-resolve-host",
+      "30-bind",
+      "40-typecheck",
+      "50-plan-ssr",
+      "60-emit-ssr",
+    ]),
+  };
 }
 
 /* --------------------------

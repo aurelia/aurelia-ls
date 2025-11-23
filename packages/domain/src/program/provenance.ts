@@ -1,4 +1,9 @@
-import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateMappingSegment } from "../contracts.js";
+import type {
+  SsrMappingArtifact,
+  TemplateMappingArtifact,
+  TemplateMappingEntry,
+  TemplateMappingSegment,
+} from "../contracts.js";
 import type { ExprId, NodeId, SourceFileId } from "../compiler/model/identity.js";
 import { spanContainsOffset, spanLength, type SourceSpan } from "../compiler/model/span.js";
 import type { DocumentUri } from "./primitives.js";
@@ -51,12 +56,18 @@ export interface ProvenanceIndex {
    * because TemplateMappingArtifact lacks a path.
    */
   addOverlayMapping(templateUri: DocumentUri, overlayUri: DocumentUri, mapping: TemplateMappingArtifact): void;
+  /**
+   * Ingest SSR mapping (HTML + manifest) for a template.
+   */
+  addSsrMapping(templateUri: DocumentUri, ssrHtmlUri: DocumentUri, manifestUri: DocumentUri, mapping: SsrMappingArtifact): void;
   findByGenerated(uri: DocumentUri, offset: number): ProvenanceEdge[];
   findBySource(uri: DocumentUri, offset: number): ProvenanceEdge[];
   lookupGenerated(uri: DocumentUri, offset: number): OverlayProvenanceHit | null;
   lookupSource(uri: DocumentUri, offset: number): TemplateProvenanceHit | null;
   getOverlayMapping?(templateUri: DocumentUri): TemplateMappingArtifact | null;
   getOverlayUri?(templateUri: DocumentUri): DocumentUri | null;
+  getSsrMapping?(templateUri: DocumentUri): SsrMappingArtifact | null;
+  getSsrUris?(templateUri: DocumentUri): { html: DocumentUri; manifest: DocumentUri } | null;
   removeDocument(uri: DocumentUri): void;
 }
 
@@ -69,6 +80,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   private readonly edgesByFrom = new Map<DocumentUri, ProvenanceEdge[]>();
   private readonly edgesByTo = new Map<DocumentUri, ProvenanceEdge[]>();
   private readonly overlayByTemplate = new Map<DocumentUri, OverlayMappingRecord>();
+  private readonly ssrByTemplate = new Map<DocumentUri, SsrMappingRecord>();
 
   addEdges(edges: Iterable<ProvenanceEdge>): void {
     for (const edge of edges) this.storeEdge(normalizeEdge(edge));
@@ -85,6 +97,22 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
       overlayFile: overlay.file,
     });
     this.addEdges(expandOverlayMapping(template.uri, overlay.uri, normalized));
+  }
+
+  addSsrMapping(templateUri: DocumentUri, ssrHtmlUri: DocumentUri, manifestUri: DocumentUri, mapping: SsrMappingArtifact): void {
+    const template = canonicalDocumentUri(templateUri);
+    const html = canonicalDocumentUri(ssrHtmlUri);
+    const manifest = canonicalDocumentUri(manifestUri);
+    const normalized = normalizeSsrMapping(mapping, template.file, html.file, manifest.file);
+    this.ssrByTemplate.set(template.uri, {
+      mapping: normalized,
+      htmlUri: html.uri,
+      manifestUri: manifest.uri,
+      templateFile: template.file,
+      htmlFile: html.file,
+      manifestFile: manifest.file,
+    });
+    this.addEdges(expandSsrMapping(template.uri, html.uri, manifest.uri, normalized));
   }
 
   findByGenerated(uri: DocumentUri, offset: number): ProvenanceEdge[] {
@@ -134,6 +162,17 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return this.overlayByTemplate.get(canonical)?.overlayUri ?? null;
   }
 
+  getSsrMapping(templateUri: DocumentUri): SsrMappingArtifact | null {
+    const canonical = canonicalDocumentUri(templateUri).uri;
+    return this.ssrByTemplate.get(canonical)?.mapping ?? null;
+  }
+
+  getSsrUris(templateUri: DocumentUri): { html: DocumentUri; manifest: DocumentUri } | null {
+    const canonical = canonicalDocumentUri(templateUri).uri;
+    const record = this.ssrByTemplate.get(canonical);
+    return record ? { html: record.htmlUri, manifest: record.manifestUri } : null;
+  }
+
   removeDocument(uri: DocumentUri): void {
     const canonical = canonicalDocumentUri(uri).uri;
     const urisToDrop = new Set<DocumentUri>([canonical]);
@@ -142,6 +181,14 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
         urisToDrop.add(templateUri);
         urisToDrop.add(record.overlayUri);
         this.overlayByTemplate.delete(templateUri);
+      }
+    }
+    for (const [templateUri, record] of this.ssrByTemplate.entries()) {
+      if (templateUri === canonical || record.htmlUri === canonical || record.manifestUri === canonical) {
+        urisToDrop.add(templateUri);
+        urisToDrop.add(record.htmlUri);
+        urisToDrop.add(record.manifestUri);
+        this.ssrByTemplate.delete(templateUri);
       }
     }
     const keep: ProvenanceEdge[] = [];
@@ -173,6 +220,15 @@ interface OverlayMappingRecord {
   readonly overlayUri: DocumentUri;
   readonly templateFile: SourceFileId;
   readonly overlayFile: SourceFileId;
+}
+
+interface SsrMappingRecord {
+  readonly mapping: SsrMappingArtifact;
+  readonly htmlUri: DocumentUri;
+  readonly manifestUri: DocumentUri;
+  readonly templateFile: SourceFileId;
+  readonly htmlFile: SourceFileId;
+  readonly manifestFile: SourceFileId;
 }
 
 function normalizeEdge(edge: ProvenanceEdge): ProvenanceEdge {
@@ -210,6 +266,21 @@ function normalizeTemplateMapping(
   }));
 
   return { kind: "mapping", entries };
+}
+
+function normalizeSsrMapping(
+  mapping: SsrMappingArtifact,
+  templateFile: SourceFileId,
+  htmlFile: SourceFileId,
+  manifestFile: SourceFileId,
+): SsrMappingArtifact {
+  const entries = mapping.entries.map((entry) => ({
+    ...entry,
+    templateSpan: entry.templateSpan ? resolveSourceSpan(entry.templateSpan, entry.templateSpan.file ?? templateFile) : null,
+    htmlSpan: entry.htmlSpan ? resolveSourceSpan(entry.htmlSpan, entry.htmlSpan.file ?? htmlFile) : null,
+    manifestSpan: entry.manifestSpan ? resolveSourceSpan(entry.manifestSpan, entry.manifestSpan.file ?? manifestFile) : null,
+  }));
+  return { kind: "ssr-mapping", entries };
 }
 
 function expandOverlayMapping(
@@ -251,6 +322,34 @@ function buildOverlayMemberEdge(
     from: { uri: overlayUri, span: seg.overlaySpan, exprId: entry.exprId },
     to: { uri: templateUri, span: seg.htmlSpan, exprId: entry.exprId },
   };
+}
+
+function expandSsrMapping(
+  templateUri: DocumentUri,
+  htmlUri: DocumentUri,
+  manifestUri: DocumentUri,
+  mapping: SsrMappingArtifact,
+): ProvenanceEdge[] {
+  const edges: ProvenanceEdge[] = [];
+  for (const entry of mapping.entries) {
+    if (entry.templateSpan) {
+      if (entry.htmlSpan) {
+        edges.push({
+          kind: "ssrNode",
+          from: { uri: htmlUri, span: entry.htmlSpan, nodeId: entry.nodeId },
+          to: { uri: templateUri, span: entry.templateSpan, nodeId: entry.nodeId },
+        });
+      }
+      if (entry.manifestSpan) {
+        edges.push({
+          kind: "ssrNode",
+          from: { uri: manifestUri, span: entry.manifestSpan, nodeId: entry.nodeId },
+          to: { uri: templateUri, span: entry.templateSpan, nodeId: entry.nodeId },
+        });
+      }
+    }
+  }
+  return edges;
 }
 
 function filterEdgesByOffset(
