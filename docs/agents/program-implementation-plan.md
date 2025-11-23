@@ -24,12 +24,12 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Document option drift handling (when to recreate a program) and expose a cheap comparison hook for hosts.
 
 ### Provenance indexing and queries
-- [ ] Expand overlay mappings into `overlayExpr` edges; include `ExprId` + template spans for expression and interpolation segments.
-- [ ] Expand member-path segments into `overlayMember` edges for rename/refs/hover completeness.
-- [ ] Implement offset-aware queries: `findByGenerated`/`findBySource` should return only edges intersecting the offset, with helpers for overlay->template and template->overlay lookups.
+- [x] Expand overlay mappings into `overlayExpr` edges; include `ExprId` + template spans for expression and interpolation segments.
+- [x] Expand member-path segments into `overlayMember` edges for rename/refs/hover completeness.
+- [x] Implement offset-aware queries: `findByGenerated`/`findBySource` should return only edges intersecting the offset, with helpers for overlay->template and template->overlay lookups.
 - [ ] Add SSR ingestion API (e.g., `addSsrMapping`) that emits `ssrNode` edges connecting SSR HTML/manifest spans to template `NodeId`/spans.
-- [ ] Provide convenience helpers on `ProvenanceIndex` for common lookups (overlay offset -> `{exprId, memberPath?}`, template offset -> `{exprId?, nodeId?}`) to avoid ad-hoc math in services.
-- [ ] Ensure provenance pruning on `closeTemplate` (drop edges/mappings/URIs for the document).
+- [x] Provide convenience helpers on `ProvenanceIndex` for common lookups (overlay offset -> `{exprId, memberPath?}`, template offset -> `{exprId?, nodeId?}`) to avoid ad-hoc math in services.
+- [x] Ensure provenance pruning on `closeTemplate` (drop edges/mappings/URIs for the document).
 
 ### Pipeline reuse and product generation
 - [ ] Share stages 10-40 between overlay and SSR when both are requested (single pipeline session or shared stage cache).
