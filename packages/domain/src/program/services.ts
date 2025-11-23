@@ -113,6 +113,12 @@ export interface TsCompletionEntry {
   documentation?: string;
 }
 
+export interface TsTextEdit {
+  fileName: string;
+  range: TextRange;
+  newText: string;
+}
+
 export interface OverlayDocumentSnapshot {
   uri: DocumentUri;
   file: SourceFileId;
@@ -126,6 +132,7 @@ export interface TypeScriptServices {
   getDefinition?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
   getReferences?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
   getCompletions?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsCompletionEntry[] | null;
+  getRenameEdits?(overlay: OverlayDocumentSnapshot, offset: number, newName: string): readonly TsTextEdit[] | null;
 }
 
 export interface TemplateLanguageServiceOptions {
@@ -275,9 +282,58 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return [];
   }
 
-  renameSymbol(_uri: DocumentUri, _position: Position, _newName: string): TextEdit[] {
-    // TODO: combine provenance + TS/VM symbol info for safe renames.
-    return [];
+  renameSymbol(uri: DocumentUri, position: Position, newName: string): TextEdit[] {
+    const ts = this.options.typescript;
+    if (!ts?.getRenameEdits) return [];
+
+    const canonical = canonicalDocumentUri(uri);
+    const snapshot = this.requireSnapshot(canonical);
+    const offset = offsetAtPosition(snapshot.text, position);
+    if (offset == null) return [];
+
+    const overlayHit = this.program.provenance.lookupSource(canonical.uri, offset);
+    if (!overlayHit || overlayHit.edge.kind !== "overlayMember") return [];
+
+    const overlay = this.overlaySnapshot(canonical.uri);
+    const overlayOffset = projectOverlayOffset(overlayHit, offset);
+    const edits = ts.getRenameEdits(overlay, overlayOffset, newName) ?? [];
+    if (!edits.length) return [];
+
+    const results: TextEdit[] = [];
+    let mappedOverlayEdits = 0;
+    let unmappedOverlayEdits = 0;
+
+    for (const edit of edits) {
+      const normalizedUri = canonicalDocumentUri(edit.fileName).uri;
+      const range = normalizeRange(edit.range);
+      if (!range) continue;
+
+      if (normalizedUri === overlay.uri) {
+        const overlaySpan = spanFromRange(range, overlay.text, overlay.file);
+        if (!overlaySpan) {
+          unmappedOverlayEdits += 1;
+          continue;
+        }
+        const mapped = mapOverlaySpanToTemplate(overlaySpan, overlay, this.program.provenance);
+        if (!mapped) {
+          unmappedOverlayEdits += 1;
+          continue;
+        }
+        const targetSnap = this.program.sources.get(mapped.uri);
+        if (!targetSnap) {
+          unmappedOverlayEdits += 1;
+          continue;
+        }
+        results.push({ uri: mapped.uri, range: spanToRange(mapped.span, targetSnap.text), newText: edit.newText });
+        mappedOverlayEdits += 1;
+        continue;
+      }
+
+      results.push({ uri: normalizedUri, range, newText: edit.newText });
+    }
+
+    if (unmappedOverlayEdits > 0 || mappedOverlayEdits === 0) return [];
+    return dedupeTextEdits(results);
   }
 
   private collectTemplateCompletions(query: TemplateQueryFacade, snapshot: DocumentSnapshot, offset: number): CompletionItem[] {
@@ -624,6 +680,13 @@ function spanToRange(span: SourceSpan, text: string): TextRange {
   };
 }
 
+function spanFromRange(range: TextRange, text: string, file: SourceFileId): SourceSpan | null {
+  const start = offsetAtPosition(text, range.start);
+  const end = offsetAtPosition(text, range.end);
+  if (start == null || end == null) return null;
+  return resolveSourceSpan({ start, end }, file);
+}
+
 function positionAtOffset(text: string, offset: number): Position {
   const length = text.length;
   const clamped = Math.max(0, Math.min(offset, length));
@@ -671,4 +734,16 @@ function tsCategoryToSeverity(cat: TsDiagnosticCategory): DiagnosticSeverity {
     default:
       return "error";
   }
+}
+
+function dedupeTextEdits(edits: readonly TextEdit[]): TextEdit[] {
+  const seen = new Set<string>();
+  const results: TextEdit[] = [];
+  for (const edit of edits) {
+    const key = `${edit.uri}:${rangeKey(edit.range)}:${edit.newText}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(edit);
+  }
+  return results;
 }

@@ -303,6 +303,81 @@ test("completions do not invoke TypeScript when provenance misses", () => {
   assert.equal(tsCalled, false, "TypeScript completions should not run without provenance");
 });
 
+test("rename maps overlay edits back to the template and preserves external edits", () => {
+  const program = createProgram();
+  const uri = "/app/rename.html";
+  const markup = "<template>${person.name}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const mappingEntry = compilation.mapping.entries[0];
+  const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
+  assert.ok(memberSeg, "member segment should be present for rename");
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getRenameEdits(overlay, offset, newName) {
+        assert.equal(newName, "renamedProp");
+        assert.equal(overlay.uri, overlayUri);
+        assert.ok(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end);
+        return [
+          { fileName: overlay.uri, range: spanToRange(memberSeg.overlaySpan, overlay.text), newText: newName },
+          {
+            fileName: "/app/vm.ts",
+            range: { start: { line: 1, character: 4 }, end: { line: 1, character: 8 } },
+            newText: newName,
+          },
+        ];
+      },
+    },
+  });
+
+  const edits = service.renameSymbol(uri, positionAtOffset(markup, memberSeg.htmlSpan.end - 1), "renamedProp");
+  assert.equal(edits.length, 2, "template and VM edits should be returned");
+
+  const templateUri = canonicalDocumentUri(uri).uri;
+  const templateEdit = edits.find((edit) => edit.uri === templateUri);
+  assert.ok(templateEdit, "overlay rename should map to template edit");
+  assert.deepEqual(templateEdit.range, spanToRange(memberSeg.htmlSpan, markup));
+  assert.equal(templateEdit.newText, "renamedProp");
+
+  const vmUri = canonicalDocumentUri("/app/vm.ts").uri;
+  const vmEdit = edits.find((edit) => edit.uri === vmUri);
+  assert.ok(vmEdit, "VM edits should pass through");
+  assert.equal(vmEdit.newText, "renamedProp");
+});
+
+test("rename aborts when overlay edits cannot be mapped to the template", () => {
+  const program = createProgram();
+  const uri = "/app/rename-unmapped.html";
+  const markup = "<template>${person.name}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const mappingEntry = compilation.mapping.entries[0];
+  const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
+  assert.ok(memberSeg, "member segment should be present for rename");
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getRenameEdits(overlay, offset, newName) {
+        assert.equal(overlay.uri, overlayUri);
+        assert.ok(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end);
+        assert.equal(newName, "shouldSkip");
+        // Force an unmapped overlay edit by targeting overlay prelude with no provenance.
+        return [{ fileName: overlay.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: newName }];
+      },
+    },
+  });
+
+  const edits = service.renameSymbol(uri, positionAtOffset(markup, memberSeg.htmlSpan.end - 1), "shouldSkip");
+  assert.deepEqual(edits, [], "rename should abort when overlay edits cannot be mapped");
+});
+
 test("hover uses overlay offset when TS quick info lacks span data", () => {
   const program = createProgram();
   const uri = "/app/hover-fallback.html";
