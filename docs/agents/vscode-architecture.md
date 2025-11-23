@@ -49,7 +49,7 @@ Normative components:
   - LSP shell (`main.ts`) - JSON-RPC, document lifecycle, feature wiring.
   - **TemplateWorkspace** (conceptual):
     - Wraps a domain `TemplateProgram` + `TemplateLanguageService` +
-      `TemplateBuildService`.
+      `TemplateBuildService` (only entrypoint; no `compileTemplate*` fallbacks).
     - Adapts LSP `TextDocuments` to domain `SourceStore`.
   - **TsService** - TS language service (project, checker, completions, defs).
   - **OverlayFs** - virtual FS for overlays (TS sees them as files).
@@ -92,7 +92,7 @@ Responsibilities:
 **LSP shell MUST NOT**:
 
 - Call `compileTemplate*` directly.
-- Reimplement mapping logic.
+- Reimplement mapping/provenance logic (use TemplateProgram + language/build services).
 - Reach into TS or domain internals beyond the facades.
 
 ---
@@ -143,7 +143,8 @@ Construction:
 
 * Options are **stable** for its lifetime. When they change, a **new**
   TemplateWorkspace MUST be created.
-* `TemplateWorkspace` is the **only** way the LSP shell talks to TemplateProgram.
+* `TemplateWorkspace` is the **only** way the LSP shell talks to TemplateProgram
+  (no legacy CompilerService shim).
 
 ---
 
@@ -167,7 +168,7 @@ Existing services are re-interpreted as:
 Normative contract:
 
 * `OverlayFs` MUST NOT generate overlays itself. It only serves what
-  `TemplateBuildService.getOverlay` gives it.
+  `TemplateBuildService.getOverlay` gives it (or SSR via `getSsr`).
 * TsService MUST treat overlays as first-class files and allow module resolution
   across them.
 

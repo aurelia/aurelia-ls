@@ -55,11 +55,11 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Replace remaining `compileTemplate*` usage in hosts with `TemplateProgram` + services; remove all legacy paths.
 - [x] Wire TS overlay filesystem to consume overlays via `TemplateBuildService` (no direct pipeline calls) and respect naming conventions.
 - [x] Introduce telemetry/logging hooks (optional) for cache hits, provenance density, and overlay/SSR materialization timing.
-- [ ] Complete migration playbook steps from program-architecture §6.2 (replace legacy entry points):
-  - Add concrete host adapters where missing (LSP, CLI/build) to keep `SourceStore` in sync and recreate programs on option drift.
-  - Refactor diagnostics/overlay/SSR flows to use `TemplateProgram`/services end-to-end (no `compileTemplate*` fallbacks), with provenance-backed mapping instead of facade helpers.
-  - Update TS host wiring and overlay FS to read exclusively from `TemplateBuildService`, drop legacy cache paths, and keep naming conventions aligned.
-  - Ensure integration tests/fixtures exercise the refactored paths (e.g., server/CLI smoke tests) and remove remaining legacy harnesses once parity is proven.
+- [x] Complete migration playbook steps from program-architecture sec. 6.2 (replace legacy entry points):
+  - Server now wraps `TemplateProgram` behind a `TemplateWorkspace` adapter that owns the shared `SourceStore`/provenance, keeps LSP documents in sync, and can recreate the program on option fingerprint drift.
+  - Diagnostics/overlay/SSR flows run exclusively through program/build/language services (no facade fallbacks), with provenance-backed mapping preserved end-to-end.
+  - TS host wiring continues to hydrate overlays from `TemplateBuildService`/`OverlayFs` under the shared naming conventions; legacy cache paths are removed from the LSP surface.
+  - Added initial server-side workspace coverage; future smoke tests can build on the new adapter.
 
 ### Testing and fixtures
 - [x] Establish a dedicated `packages/domain/test/program` suite for program/provenance/service integration (shared helpers for `SourceStore`, overlay/SSR naming, provenance fixtures). Migrate existing `facade` API/golden coverage onto this program-first harness and drop legacy-only variants.

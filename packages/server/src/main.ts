@@ -27,9 +27,6 @@ import path from "node:path";
 import fs from "node:fs";
 import {
   PRELUDE_TS,
-  DefaultTemplateProgram,
-  DefaultTemplateLanguageService,
-  DefaultTemplateBuildService,
   canonicalDocumentUri,
   deriveTemplatePaths,
   idKey,
@@ -37,6 +34,7 @@ import {
   type DocumentUri,
   type TemplateLanguageDiagnostic,
   type TemplateLanguageDiagnostics,
+  type TemplateLanguageService,
   type TextEdit as TemplateTextEdit,
   type TextRange as TemplateTextRange,
   type HoverInfo,
@@ -45,7 +43,7 @@ import { createPathUtils } from "./services/paths.js";
 import { OverlayFs } from "./services/overlay-fs.js";
 import { TsService } from "./services/ts-service.js";
 import { TsServicesAdapter } from "./services/typescript-services.js";
-import { TemplateDocumentStore } from "./services/template-documents.js";
+import { TemplateWorkspace } from "./services/template-workspace.js";
 import type { Logger } from "./services/types.js";
 
 /* =============================================================================
@@ -69,13 +67,13 @@ const paths = createPathUtils();
 const overlayFs = new OverlayFs(paths);
 const tsService = new TsService(overlayFs, paths, logger, () => workspaceRoot);
 const tsAdapter = new TsServicesAdapter(tsService, paths);
-const program = new DefaultTemplateProgram({
-  vm: createVmReflection(),
-  isJs: false,
+const workspace = new TemplateWorkspace({
+  program: {
+    vm: createVmReflection(),
+    isJs: false,
+  },
+  language: { typescript: tsAdapter },
 });
-const buildService = new DefaultTemplateBuildService(program);
-const languageService = new DefaultTemplateLanguageService(program, { typescript: tsAdapter, buildService });
-const templateDocs = new TemplateDocumentStore(program);
 
 /* =============================================================================
  * Helpers
@@ -106,7 +104,7 @@ function guessLanguage(uri: DocumentUri): string {
 
 function lookupText(uri: DocumentUri): string | null {
   const canonical = canonicalDocumentUri(uri);
-  const snap = program.sources.get(canonical.uri);
+  const snap = workspace.program.sources.get(canonical.uri);
   if (snap) return snap.text;
   const overlay = overlayFs.snapshot(paths.canonical(canonical.path));
   if (overlay) return overlay.text;
@@ -182,7 +180,7 @@ function mapDiagnostics(diags: TemplateLanguageDiagnostics): Diagnostic[] {
   return mapped;
 }
 
-function mapCompletions(items: ReturnType<typeof languageService.getCompletions>): CompletionItem[] {
+function mapCompletions(items: ReturnType<TemplateLanguageService["getCompletions"]>): CompletionItem[] {
   return items.map((item) => {
     const completion: CompletionItem = { label: item.label };
     if (item.detail) completion.detail = item.detail;
@@ -204,7 +202,9 @@ function mapHover(hover: HoverInfo | null): Hover | null {
   };
 }
 
-function mapLocations(locs: ReturnType<typeof languageService.getDefinition> | ReturnType<typeof languageService.getReferences>): Location[] {
+function mapLocations(
+  locs: ReturnType<TemplateLanguageService["getDefinition"]> | ReturnType<TemplateLanguageService["getReferences"]>,
+): Location[] {
   return (locs ?? []).map((loc) => ({ uri: toLspUri(loc.uri), range: toRange(loc.range) }));
 }
 
@@ -221,18 +221,18 @@ function mapWorkspaceEdit(edits: readonly TemplateTextEdit[]): WorkspaceEdit | n
 }
 
 function overlayPathOptions(): { isJs: boolean; overlayBaseName?: string } {
-  return program.options.overlayBaseName === undefined
-    ? { isJs: program.options.isJs }
-    : { isJs: program.options.isJs, overlayBaseName: program.options.overlayBaseName };
+  return workspace.program.options.overlayBaseName === undefined
+    ? { isJs: workspace.program.options.isJs }
+    : { isJs: workspace.program.options.isJs, overlayBaseName: workspace.program.options.overlayBaseName };
 }
 
 function ensureProgramDocument(uri: string): TextDocument | null {
   const live = documents.get(uri);
   if (live) {
-    templateDocs.upsertDocument(live);
+    workspace.upsertDocument(live);
     return live;
   }
-  const snap = templateDocs.ensureFromFile(uri);
+  const snap = workspace.ensureFromFile(uri);
   if (!snap) return null;
   return TextDocument.create(uri, "html", snap.version, snap.text);
 }
@@ -240,15 +240,15 @@ function ensureProgramDocument(uri: string): TextDocument | null {
 async function refreshDocument(doc: TextDocument) {
   try {
     const canonical = canonicalDocumentUri(doc.uri);
-    templateDocs.upsertDocument(doc);
-    const overlay = buildService.getOverlay(canonical.uri);
+    workspace.upsertDocument(doc);
+    const overlay = workspace.buildService.getOverlay(canonical.uri);
     tsService.upsertOverlay(overlay.overlay.path, overlay.overlay.text);
 
-    const diagnostics = languageService.getDiagnostics(canonical.uri);
+    const diagnostics = workspace.languageService.getDiagnostics(canonical.uri);
     const lspDiagnostics = mapDiagnostics(diagnostics);
     connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
 
-    const compilation = program.getCompilation(canonical.uri);
+    const compilation = workspace.program.getCompilation(canonical.uri);
     connection.sendNotification("aurelia/overlayReady", {
       uri: doc.uri,
       overlayPath: overlay.overlay.path,
@@ -276,7 +276,7 @@ connection.onRequest("aurelia/getOverlay", async (params: { uri?: string } | str
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(uri);
-  const artifact = buildService.getOverlay(canonical.uri);
+  const artifact = workspace.buildService.getOverlay(canonical.uri);
   tsService.upsertOverlay(artifact.overlay.path, artifact.overlay.text);
   return {
     overlayPath: artifact.overlay.path,
@@ -299,7 +299,7 @@ connection.onRequest("aurelia/getMapping", async (params: { uri?: string } | str
   if (!uri) return null;
   const canonical = canonicalDocumentUri(uri);
   ensureProgramDocument(uri);
-  const mapping = program.getMapping(canonical.uri);
+  const mapping = workspace.program.getMapping(canonical.uri);
   if (!mapping) return null;
   const derived = deriveTemplatePaths(canonical.uri, overlayPathOptions());
   return { overlayPath: derived.overlay.path, mapping };
@@ -311,14 +311,14 @@ connection.onRequest("aurelia/queryAtPosition", async (params: { uri: string; po
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(uri);
-  const query = program.getQuery(canonical.uri);
+  const query = workspace.program.getQuery(canonical.uri);
   const offset = doc.offsetAt(params.position);
   return {
     expr: query.exprAt(offset),
     node: query.nodeAt(offset),
     controller: query.controllerAt(offset),
     bindables: query.nodeAt(offset) ? query.bindablesFor(query.nodeAt(offset)!) : null,
-    mappingSize: program.getMapping(canonical.uri)?.entries.length ?? 0,
+    mappingSize: workspace.program.getMapping(canonical.uri)?.entries.length ?? 0,
   };
 });
 
@@ -330,7 +330,7 @@ connection.onRequest("aurelia/getSsr", async (params: { uri?: string } | string 
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(uri);
-  const ssr = buildService.getSsr(canonical.uri);
+  const ssr = workspace.buildService.getSsr(canonical.uri);
   return {
     htmlPath: ssr.html.path,
     htmlText: ssr.html.text,
@@ -348,7 +348,7 @@ connection.onRequest("aurelia/dumpState", () => {
     overlayRoots: overlayFs.listScriptRoots(),
     overlays: overlayFs.listOverlays(),
     programRoots: roots,
-    programCache: program.getCacheStats(),
+    programCache: workspace.program.getCacheStats(),
   };
 });
 
@@ -359,7 +359,7 @@ connection.onCompletion((params): CompletionItem[] => {
   const doc = ensureProgramDocument(params.textDocument.uri);
   if (!doc) return [];
   const canonical = canonicalDocumentUri(doc.uri);
-  const completions = languageService.getCompletions(canonical.uri, params.position);
+  const completions = workspace.languageService.getCompletions(canonical.uri, params.position);
   return mapCompletions(completions);
 });
 
@@ -367,28 +367,28 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const doc = ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(doc.uri);
-  return mapHover(languageService.getHover(canonical.uri, params.position));
+  return mapHover(workspace.languageService.getHover(canonical.uri, params.position));
 });
 
 connection.onDefinition((params: TextDocumentPositionParams): Definition | null => {
   const doc = ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(doc.uri);
-  return mapLocations(languageService.getDefinition(canonical.uri, params.position));
+  return mapLocations(workspace.languageService.getDefinition(canonical.uri, params.position));
 });
 
 connection.onReferences((params: ReferenceParams): Location[] | null => {
   const doc = ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(doc.uri);
-  return mapLocations(languageService.getReferences(canonical.uri, params.position));
+  return mapLocations(workspace.languageService.getReferences(canonical.uri, params.position));
 });
 
 connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
   const doc = ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(doc.uri);
-  const edits = languageService.renameSymbol(canonical.uri, params.position, params.newName);
+  const edits = workspace.languageService.renameSymbol(canonical.uri, params.position, params.newName);
   return mapWorkspaceEdit(edits);
 });
 
@@ -396,7 +396,7 @@ connection.onCodeAction((params: CodeActionParams): CodeAction[] | null => {
   const doc = ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(doc.uri);
-  const actions = languageService.getCodeActions(canonical.uri, params.range);
+  const actions = workspace.languageService.getCodeActions(canonical.uri, params.range);
   const mapped: CodeAction[] = [];
   for (const action of actions) {
     const edit = mapWorkspaceEdit(action.edits);
@@ -441,7 +441,7 @@ documents.onDidChangeContent(async (e) => {
 documents.onDidClose((e) => {
   logger.log(`didClose ${e.document.uri}`);
   const canonical = canonicalDocumentUri(e.document.uri);
-  templateDocs.close(canonical.uri);
+  workspace.close(canonical.uri);
   const derived = deriveTemplatePaths(canonical.uri, overlayPathOptions());
   tsService.deleteOverlay(derived.overlay.path);
   connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
