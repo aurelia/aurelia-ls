@@ -48,11 +48,11 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Completions: drive from scope graph + VM reflection + TS completions with provenance-backed span mapping.
 - [x] Rename: use `overlayMember` edges + TS rename to produce template edits; guard against partial coverage.
 - [ ] Code actions: add quick fixes for common diagnostics once diagnostics are merged.
-- [ ] Build service: expose overlay/SSR artifacts with normalized paths and stable naming, ready for TS host consumption.
+- [x] Build service: expose overlay/SSR artifacts with normalized paths and stable naming, ready for TS host consumption.
 
 ### Host integration and migration
 - [ ] Add `SourceStore` adapters for LSP `TextDocuments` and any CLI/build inputs; route open/change/close through `TemplateProgram`.
-- [ ] Replace remaining `compileTemplate*` usage in hosts with `TemplateProgram` + services; keep legacy paths only under feature flags.
+- [ ] Replace remaining `compileTemplate*` usage in hosts with `TemplateProgram` + services; remove all legacy paths.
 - [ ] Wire TS overlay filesystem to consume overlays via `TemplateBuildService` (no direct pipeline calls) and respect naming conventions.
 - [ ] Introduce telemetry/logging hooks (optional) for cache hits, provenance density, and overlay/SSR materialization timing.
 

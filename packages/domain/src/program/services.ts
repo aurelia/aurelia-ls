@@ -1,13 +1,13 @@
 import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/diagnostics.js";
-import type { SourceFileId } from "../compiler/model/identity.js";
+import type { SourceFileId, NormalizedPath } from "../compiler/model/identity.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
 import { spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
-import { canonicalDocumentUri, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
+import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
 import type { ProvenanceIndex, TemplateProvenanceHit } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
-import type { CompileOverlayResult, CompileSsrResult } from "../compiler/facade.js";
-import type { TemplateBindableInfo, TemplateQueryFacade } from "../contracts.js";
+import type { TemplateBindableInfo, TemplateMappingArtifact, TemplateQueryFacade, SsrMappingArtifact } from "../contracts.js";
+import { stableHash } from "../compiler/pipeline/hash.js";
 
 export interface Position {
   line: number;
@@ -41,6 +41,42 @@ export interface DocumentSpan {
   exprId?: TemplateExprId;
   nodeId?: TemplateNodeId;
   memberPath?: string;
+}
+
+export interface CompileCallSite {
+  exprId: TemplateExprId;
+  overlayStart: number;
+  overlayEnd: number;
+  htmlSpan: SourceSpan;
+}
+
+export interface BuildDocument {
+  uri: DocumentUri;
+  path: NormalizedPath;
+  file: SourceFileId;
+}
+
+export interface BuildSnapshot extends BuildDocument {
+  version: number;
+  contentHash: string;
+}
+
+export interface OverlayBuildArtifact {
+  template: BuildSnapshot;
+  overlay: BuildSnapshot & {
+    baseName: string;
+    text: string;
+  };
+  mapping: TemplateMappingArtifact;
+  calls: readonly CompileCallSite[];
+}
+
+export interface SsrBuildArtifact {
+  template: BuildSnapshot;
+  baseName: string;
+  html: BuildSnapshot & { text: string };
+  manifest: BuildSnapshot & { text: string };
+  mapping: SsrMappingArtifact;
 }
 
 export interface DiagnosticRelatedInfo {
@@ -137,6 +173,7 @@ export interface TypeScriptServices {
 
 export interface TemplateLanguageServiceOptions {
   typescript?: TypeScriptServices;
+  buildService?: TemplateBuildService;
 }
 
 export interface CompletionItem {
@@ -160,12 +197,91 @@ export interface TemplateLanguageService {
 }
 
 export interface TemplateBuildService {
-  getOverlay(uri: DocumentUri): CompileOverlayResult;
-  getSsr(uri: DocumentUri): CompileSsrResult;
+  getOverlay(uri: DocumentUri): OverlayBuildArtifact;
+  getSsr(uri: DocumentUri): SsrBuildArtifact;
+}
+
+export class DefaultTemplateBuildService implements TemplateBuildService {
+  constructor(private readonly program: TemplateProgram) {}
+
+  getOverlay(uri: DocumentUri): OverlayBuildArtifact {
+    const canonical = canonicalDocumentUri(uri);
+    const paths = deriveTemplatePaths(canonical.uri, overlayOptions(this.program));
+    const template = this.requireSnapshot(canonical);
+    const overlayProduct = this.program.getOverlay(canonical.uri);
+    const overlayContentHash = stableHash(overlayProduct.text);
+    const mapping = overlayProduct.mapping ?? this.program.getMapping(canonical.uri);
+    if (!mapping) {
+      throw new Error(`TemplateBuildService: missing mapping for ${String(canonical.uri)}; call TemplateProgram.getOverlay first.`);
+    }
+
+    const overlayDoc: BuildDocument = {
+      uri: paths.overlay.uri,
+      path: paths.overlay.path,
+      file: paths.overlay.file,
+    };
+
+    return {
+      template: buildSnapshot(canonical, template.version, stableHash(template.text)),
+      overlay: {
+        ...buildSnapshot(overlayDoc, template.version, overlayContentHash),
+        baseName: paths.overlay.baseName,
+        text: overlayProduct.text,
+      },
+      mapping,
+      calls: overlayProduct.calls,
+    };
+  }
+
+  getSsr(uri: DocumentUri): SsrBuildArtifact {
+    const canonical = canonicalDocumentUri(uri);
+    const paths = deriveTemplatePaths(canonical.uri, overlayOptions(this.program));
+    const template = this.requireSnapshot(canonical);
+    const ssr = this.program.getSsr(canonical.uri);
+    const htmlDoc: BuildDocument = {
+      uri: paths.ssr.htmlUri,
+      path: paths.ssr.htmlPath,
+      file: paths.ssr.htmlFile,
+    };
+    const manifestDoc: BuildDocument = {
+      uri: paths.ssr.manifestUri,
+      path: paths.ssr.manifestPath,
+      file: paths.ssr.manifestFile,
+    };
+
+    return {
+      template: buildSnapshot(canonical, template.version, stableHash(template.text)),
+      baseName: paths.ssr.baseName,
+      html: {
+        ...buildSnapshot(htmlDoc, template.version, stableHash(ssr.htmlText)),
+        text: ssr.htmlText,
+      },
+      manifest: {
+        ...buildSnapshot(manifestDoc, template.version, stableHash(ssr.manifestText)),
+        text: ssr.manifestText,
+      },
+      mapping: ssr.mapping,
+    };
+  }
+
+  private requireSnapshot(canonical: CanonicalDocumentUri): DocumentSnapshot {
+    const snap = this.program.sources.get(canonical.uri);
+    if (!snap) {
+      throw new Error(`TemplateBuildService: no snapshot for ${String(canonical.uri)}. Call upsertTemplate(...) first.`);
+    }
+    return snap;
+  }
 }
 
 export class DefaultTemplateLanguageService implements TemplateLanguageService, TemplateBuildService {
-  constructor(private readonly program: TemplateProgram, private readonly options: TemplateLanguageServiceOptions = {}) {}
+  private readonly build: TemplateBuildService;
+
+  constructor(
+    private readonly program: TemplateProgram,
+    private readonly options: TemplateLanguageServiceOptions = {},
+  ) {
+    this.build = options.buildService ?? new DefaultTemplateBuildService(program);
+  }
 
   getDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostics {
     const canonical = canonicalDocumentUri(uri);
@@ -180,12 +296,12 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return { all, compiler, typescript };
   }
 
-  getOverlay(uri: DocumentUri): CompileOverlayResult {
-    return this.program.getOverlay(uri);
+  getOverlay(uri: DocumentUri): OverlayBuildArtifact {
+    return this.build.getOverlay(uri);
   }
 
-  getSsr(uri: DocumentUri): CompileSsrResult {
-    return this.program.getSsr(uri);
+  getSsr(uri: DocumentUri): SsrBuildArtifact {
+    return this.build.getSsr(uri);
   }
 
   getHover(uri: DocumentUri, position: Position): HoverInfo | null {
@@ -408,14 +524,12 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   }
 
   private overlaySnapshot(templateUri: DocumentUri): OverlayDocumentSnapshot {
-    const overlay = this.program.getOverlay(templateUri);
-    const overlayCanonical = canonicalDocumentUri(overlay.overlayPath);
-    const templateCanonical = canonicalDocumentUri(templateUri);
+    const overlay = this.build.getOverlay(templateUri);
     return {
-      uri: overlayCanonical.uri,
-      file: overlayCanonical.file,
-      text: overlay.text,
-      templateUri: templateCanonical.uri,
+      uri: overlay.overlay.uri,
+      file: overlay.overlay.file,
+      text: overlay.overlay.text,
+      templateUri: overlay.template.uri,
     };
   }
 
@@ -472,6 +586,15 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const raw = ts.getDiagnostics(overlayDoc) ?? [];
     return raw.map((diag) => mapTypeScriptDiagnostic(diag, overlayDoc, this.program.provenance));
   }
+}
+
+function buildSnapshot(doc: BuildDocument, version: number, contentHash: string): BuildSnapshot {
+  return { uri: doc.uri, path: doc.path, file: doc.file, version, contentHash };
+}
+
+function overlayOptions(program: TemplateProgram): { isJs: boolean; overlayBaseName?: string } {
+  const { isJs, overlayBaseName } = program.options;
+  return overlayBaseName === undefined ? { isJs } : { isJs, overlayBaseName };
 }
 
 function describeBindable(bindable: TemplateBindableInfo): string | undefined {

@@ -267,6 +267,8 @@ Example: `TemplateBuildService`:
 * `getSsr(uri)`
 * Optional bulk build APIs.
 
+Build service artifacts SHOULD carry canonical URIs, normalized paths, `SourceFileId`s, and cheap hashes so TS hosts can serve overlays/SSR without re-deriving identity or naming.
+
 These services:
 
 * Depend on `TemplateProgram`.
