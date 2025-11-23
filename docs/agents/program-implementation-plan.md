@@ -37,9 +37,9 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Provide a hook to surface which stages were reused vs re-run (useful for host diagnostics/telemetry).
 
 ### TemplateProgram surface
-- [ ] Add explicit invalidation hooks and/or cache statistics for hosts to observe (cache hits, stage reuse, provenance entries).
-- [ ] Allow bulk build helpers (e.g., `buildAllOverlays`, `buildAllSsr`) that iterate `SourceStore` for workspace-wide operations without bespoke host loops.
-- [ ] Ensure `upsertTemplate/closeTemplate` update provenance and cache state atomically and are safe under concurrent host calls.
+- [x] Add explicit invalidation hooks and/or cache statistics for hosts to observe (cache hits, stage reuse, provenance entries).
+- [x] Allow bulk build helpers (e.g., `buildAllOverlays`, `buildAllSsr`) that iterate `SourceStore` for workspace-wide operations without bespoke host loops.
+- [x] Ensure `upsertTemplate/closeTemplate` update provenance and cache state atomically and are safe under concurrent host calls.
 
 ### Language and build services
 - [ ] Diagnostics: merge compiler + TS overlay diagnostics via provenance; return host-agnostic diagnostics with source/related spans.
