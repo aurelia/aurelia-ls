@@ -47,6 +47,7 @@ import { TsService } from "./services/ts-service.js";
 import { TsServicesAdapter } from "./services/typescript-services.js";
 import { AureliaProjectIndex } from "./services/project-index.js";
 import { TemplateWorkspace } from "./services/template-workspace.js";
+import { VmReflectionService } from "./services/vm-reflection.js";
 import type { Logger } from "./services/types.js";
 
 /* =============================================================================
@@ -70,7 +71,7 @@ const paths = createPathUtils();
 const overlayFs = new OverlayFs(paths);
 const tsService = new TsService(overlayFs, paths, logger);
 const tsAdapter = new TsServicesAdapter(tsService, paths);
-const vmReflection = createVmReflection();
+const vmReflection = new VmReflectionService(tsService, paths, logger);
 
 let projectIndex: AureliaProjectIndex;
 let workspace: TemplateWorkspace;
@@ -78,13 +79,6 @@ let workspace: TemplateWorkspace;
 /* =============================================================================
  * Helpers
  * ========================================================================== */
-function createVmReflection() {
-  return {
-    getRootVmTypeExpr() { return "unknown"; },
-    getSyntheticPrefix() { return "__AU_TTC_"; },
-  };
-}
-
 function ensurePrelude() {
   const root = workspaceRoot ?? process.cwd();
   const preludePath = path.join(root, ".aurelia", "__prelude.d.ts");
@@ -95,7 +89,7 @@ function workspaceProgramOptions() {
   const semantics = projectIndex.currentSemantics();
   const resourceGraph = projectIndex.currentResourceGraph();
   const options: {
-    vm: ReturnType<typeof createVmReflection>;
+    vm: VmReflectionService;
     isJs: boolean;
     semantics: typeof semantics;
     resourceGraph: typeof resourceGraph;
@@ -306,6 +300,7 @@ function overlayPathOptions(): { isJs: boolean; overlayBaseName?: string } {
 function ensureProgramDocument(uri: string): TextDocument | null {
   const live = documents.get(uri);
   if (live) {
+    vmReflection.setActiveTemplate(canonicalDocumentUri(uri).path);
     workspace.change(live);
     return live;
   }
@@ -320,6 +315,7 @@ async function refreshDocument(doc: TextDocument, reason: "open" | "change", opt
       await syncWorkspaceWithIndex();
     }
     const canonical = canonicalDocumentUri(doc.uri);
+    vmReflection.setActiveTemplate(canonical.path);
     if (reason === "open") {
       workspace.open(doc);
     } else {
