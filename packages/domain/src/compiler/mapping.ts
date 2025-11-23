@@ -8,14 +8,7 @@ import {
   type ExprSpanIndex,
   type HtmlMemberSegment,
 } from "./expr-utils.js";
-import {
-  intersectSpans,
-  normalizeSpan,
-  pickNarrowestContaining,
-  spanContainsOffset,
-  spanLength,
-  type SpanLike,
-} from "./model/span.js";
+import { normalizeSpan } from "./model/span.js";
 import type { SourceFile } from "./model/source.js";
 import { exprIdMapGet, type ExprIdMap, type ExprIdMapLike } from "./model/identity.js";
 
@@ -32,13 +25,6 @@ export interface BuildMappingResult {
   exprSpans: ExprIdMap<SourceSpan>;
   spanIndex: ExprSpanIndex;
 }
-
-export interface MappingHit {
-  entry: TemplateMappingEntry;
-  segment?: TemplateMappingSegment | null;
-}
-
-export type MappingSegmentPair = { entry: TemplateMappingEntry; segment: TemplateMappingSegment };
 
 export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingResult {
   const exprSpanIndex = buildExprSpanIndex(inputs.ir, inputs.fallbackFile);
@@ -58,73 +44,6 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
   });
 
   return { mapping: { kind: "mapping", entries }, exprSpans, spanIndex: exprSpanIndex };
-}
-
-/** Map an overlay offset back to the best-matching HTML span. */
-export function overlayOffsetToHtml(mapping: TemplateMappingArtifact, overlayOffset: number): MappingHit | null {
-  const best = pickMappingSegment(mapping.entries, overlayOffset, (seg) => seg.overlaySpan);
-  if (best) return best;
-  const fallback = mapping.entries.find((entry) => spanContainsOffset(entry.overlaySpan, overlayOffset));
-  return fallback ? { entry: fallback, segment: null } : null;
-}
-
-/** Map an HTML offset to the best-matching overlay span. */
-export function htmlOffsetToOverlay(mapping: TemplateMappingArtifact, htmlOffset: number): MappingHit | null {
-  const best = pickMappingSegment(mapping.entries, htmlOffset, (seg) => seg.htmlSpan);
-  if (best) return best;
-  const fallback = mapping.entries.find((entry) => spanContainsOffset(entry.htmlSpan, htmlOffset));
-  return fallback ? { entry: fallback, segment: null } : null;
-}
-
-/** Iterate mapping segments paired with their owning entry (normalized once). */
-export function* mappingSegments(
-  entries: readonly TemplateMappingEntry[],
-): Iterable<MappingSegmentPair> {
-  for (const entry of entries) {
-    for (const segment of entry.segments ?? []) {
-      yield { entry, segment };
-    }
-  }
-}
-
-/** Pick the narrowest segment spanning the offset (HTML or overlay side). */
-export function pickMappingSegment(
-  entries: readonly TemplateMappingEntry[],
-  offset: number,
-  spanOf: (seg: TemplateMappingSegment) => SpanLike,
-): MappingHit | null {
-  const best = pickNarrowestContaining(mappingSegments(entries), offset, (pair) => spanOf(pair.segment));
-  return best ? { entry: best.entry, segment: best.segment } : null;
-}
-
-/** Shrink a span to the narrowest overlap within the mapping (prefers member spans over entry spans). */
-export function shrinkSpanToMapping(span: SourceSpan, mapping: TemplateMappingArtifact): SourceSpan {
-  const normalized = normalizeSpan(span);
-  let bestSpan: SourceSpan | null = null;
-  let bestPriority = Number.POSITIVE_INFINITY;
-
-  const consider = (candidate: SourceSpan | null, priority: number) => {
-    if (!candidate) return;
-    const normalizedCandidate = normalizeSpan(candidate);
-    if (!bestSpan) {
-      bestSpan = normalizedCandidate;
-      bestPriority = priority;
-      return;
-    }
-    const bestLen = spanLength(bestSpan);
-    const candLen = spanLength(normalizedCandidate);
-    if (candLen < bestLen || (candLen === bestLen && priority < bestPriority)) {
-      bestSpan = normalizedCandidate;
-      bestPriority = priority;
-    }
-  };
-
-  for (const entry of mapping.entries) {
-    consider(intersectSpans(normalized, entry.htmlSpan), 1);
-    for (const seg of entry.segments ?? []) consider(intersectSpans(normalized, seg.htmlSpan), 0);
-  }
-
-  return bestSpan ?? normalized;
 }
 
 function buildSegmentPairs(
