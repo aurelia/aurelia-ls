@@ -25,7 +25,7 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
   Canonical `DocumentUri` helpers plus overlay/SSR path conventions (normalized to forward slashes + `SourceFileId`).
 
 - `provenance.ts`
-  Edge contracts and a naive in-memory `ProvenanceIndex`. Overlay mappings are canonicalized (URIs + `SourceFileId` on spans) but segment-level edges and offset-aware queries are still stubbed.
+  Edge contracts and an in-memory `ProvenanceIndex`. Overlay mappings are canonicalized (URIs + `SourceFileId` on spans), expanded into expression/member edges, and exposed through offset-aware queries plus convenience lookups.
 
 - `program.ts`
   Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift.
@@ -46,8 +46,7 @@ The main deltas compared to `docs/agents/program-architecture.md` are:
 
 - Provenance
 
-  - Expand overlay mapping segments into `ProvenanceEdge` instances.
-  - Add offset-aware queries (source <-> overlay <-> TS, SSR <-> template).
+  - Add SSR ingestion and SSR offsets (HTML/manifest -> template nodes).
 
 - SSR reuse
 

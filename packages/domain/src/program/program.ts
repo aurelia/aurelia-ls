@@ -90,6 +90,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void {
     const canonical = this.canonicalUri(uri);
+    this.provenance.removeDocument(canonical.uri);
     this.sources.set(canonical.uri, text, version);
     this.compilationCache.delete(canonical.uri);
   }
@@ -98,6 +99,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     const canonical = this.canonicalUri(uri);
     this.sources.delete(canonical.uri);
     this.compilationCache.delete(canonical.uri);
+    this.provenance.removeDocument(canonical.uri);
   }
 
   private snapshot(uri: DocumentUri): DocumentSnapshot {
