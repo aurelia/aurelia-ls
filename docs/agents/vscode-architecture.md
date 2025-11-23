@@ -7,6 +7,9 @@
 It is **prescriptive**, not a postmortem. Agents SHOULD treat it as normative
 when refactoring the client/server or adding new features.
 
+See `docs/agents/vscode-implementation-plan.md` for the rolling checklist and
+status used to track implementation against this goal architecture.
+
 ---
 
 ## 1. Scope & Goals
