@@ -5,6 +5,7 @@ export { getExpressionParser } from "./parsers/expression-parser.js";
 export { rebaseExpressionSpans } from "./parsers/lsp-expression-parser.js";
 export type { ExpressionParseContext, IExpressionParser } from "./parsers/expression-api.js";
 export { DEFAULT_SYNTAX } from "./compiler/language/syntax.js";
+export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup } from "./compiler/language/registry.js";
 export type { Semantics } from "./compiler/language/registry.js";
 export type {
   ResourceGraph,
@@ -12,6 +13,7 @@ export type {
   ResourceScopeId,
   ResourceCollections,
 } from "./compiler/language/resource-graph.js";
+export { buildResourceGraphFromSemantics } from "./compiler/language/resource-graph.js";
 export {
   computeOverlayBaseName,
   computeSsrBaseName,
