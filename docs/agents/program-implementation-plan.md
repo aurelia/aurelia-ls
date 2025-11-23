@@ -47,7 +47,7 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Definitions/references: map template offsets to overlay/TS spans, ask TS LS, and map results back through provenance.
 - [x] Completions: drive from scope graph + VM reflection + TS completions with provenance-backed span mapping.
 - [x] Rename: use `overlayMember` edges + TS rename to produce template edits; guard against partial coverage.
-- [ ] Code actions: add quick fixes for common diagnostics once diagnostics are merged.
+- [x] Code actions: add quick fixes for common diagnostics once diagnostics are merged.
 - [x] Build service: expose overlay/SSR artifacts with normalized paths and stable naming, ready for TS host consumption.
 
 ### Host integration and migration

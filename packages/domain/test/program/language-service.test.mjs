@@ -303,6 +303,88 @@ test("completions do not invoke TypeScript when provenance misses", () => {
   assert.equal(tsCalled, false, "TypeScript completions should not run without provenance");
 });
 
+test("code actions map TypeScript fixes through provenance and keep external edits", () => {
+  const program = createProgram();
+  const uri = "/app/code-actions.html";
+  const markup = "<template>${person.name}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlay = program.getOverlay(uri);
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const overlayRange = spanToRange(mappingEntry.overlaySpan, overlay.text);
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCodeActions(tsOverlay, start, end) {
+        assert.equal(tsOverlay.uri, overlayUri);
+        assert.ok(
+          start >= mappingEntry.overlaySpan.start && start <= mappingEntry.overlaySpan.end,
+          "overlay start should land inside mapped span",
+        );
+        assert.ok(
+          end >= start && end <= mappingEntry.overlaySpan.end,
+          "overlay end should land inside mapped span",
+        );
+        return [
+          {
+            title: "TS fix",
+            edits: [
+              { fileName: overlayUri, range: overlayRange, newText: "updated" },
+              { fileName: "/app/vm.ts", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: "// vm" },
+            ],
+          },
+        ];
+      },
+    },
+  });
+
+  const actions = service.getCodeActions(uri, spanToRange(mappingEntry.htmlSpan, markup));
+  assert.equal(actions.length, 1);
+  const [action] = actions;
+  assert.equal(action.title, "TS fix");
+  assert.equal(action.source, "typescript");
+  assert.equal(action.kind, "quickfix");
+
+  const templateUri = canonicalDocumentUri(uri).uri;
+  const templateEdit = action.edits.find((edit) => edit.uri === templateUri);
+  assert.ok(templateEdit, "overlay edit should map to template");
+  assert.deepEqual(templateEdit.range, spanToRange(mappingEntry.htmlSpan, markup));
+  assert.equal(templateEdit.newText, "updated");
+
+  const vmUri = canonicalDocumentUri("/app/vm.ts").uri;
+  const vmEdit = action.edits.find((edit) => edit.uri === vmUri);
+  assert.ok(vmEdit, "VM edits should be preserved");
+  assert.equal(vmEdit.newText, "// vm");
+});
+
+test("code actions drop edits when overlay changes cannot be mapped", () => {
+  const program = createProgram();
+  const uri = "/app/code-actions-unmapped.html";
+  const markup = "<template>${value}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCodeActions(tsOverlay) {
+        assert.equal(tsOverlay.uri, overlayUri);
+        // Return an edit against overlay prelude (offset 0) which has no provenance mapping.
+        return [{ title: "unmappable", edits: [{ fileName: overlayUri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: "noop" }] }];
+      },
+    },
+  });
+
+  const actions = service.getCodeActions(uri, spanToRange(mappingEntry.htmlSpan, markup));
+  assert.deepEqual(actions, [], "code actions should drop when overlay edits cannot be mapped");
+});
+
 test("rename maps overlay edits back to the template and preserves external edits", () => {
   const program = createProgram();
   const uri = "/app/rename.html";

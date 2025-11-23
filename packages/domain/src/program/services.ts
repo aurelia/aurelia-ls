@@ -25,6 +25,13 @@ export interface TextEdit {
   newText: string;
 }
 
+export interface TemplateCodeAction {
+  title: string;
+  edits: readonly TextEdit[];
+  kind?: string;
+  source: "template" | "typescript";
+}
+
 export interface Location {
   uri: DocumentUri;
   range: TextRange;
@@ -155,6 +162,11 @@ export interface TsTextEdit {
   newText: string;
 }
 
+export interface TsCodeAction {
+  title: string;
+  edits: readonly TsTextEdit[];
+}
+
 export interface OverlayDocumentSnapshot {
   uri: DocumentUri;
   file: SourceFileId;
@@ -169,6 +181,7 @@ export interface TypeScriptServices {
   getReferences?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
   getCompletions?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsCompletionEntry[] | null;
   getRenameEdits?(overlay: OverlayDocumentSnapshot, offset: number, newName: string): readonly TsTextEdit[] | null;
+  getCodeActions?(overlay: OverlayDocumentSnapshot, start: number, end: number): readonly TsCodeAction[] | null;
 }
 
 export interface TemplateLanguageServiceOptions {
@@ -192,7 +205,7 @@ export interface TemplateLanguageService {
   getCompletions(uri: DocumentUri, position: Position): CompletionItem[];
   getDefinition(uri: DocumentUri, position: Position): Location[];
   getReferences(uri: DocumentUri, position: Position): Location[];
-  getCodeActions(uri: DocumentUri, range: TextRange): TextEdit[];
+  getCodeActions(uri: DocumentUri, range: TextRange): TemplateCodeAction[];
   renameSymbol(uri: DocumentUri, position: Position, newName: string): TextEdit[];
 }
 
@@ -393,9 +406,15 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return this.mapTypeScriptLocations(results, overlay);
   }
 
-  getCodeActions(_uri: DocumentUri, _range: TextRange): TextEdit[] {
-    // TODO: add quick-fix providers once diagnostics stabilize.
-    return [];
+  getCodeActions(uri: DocumentUri, range: TextRange): TemplateCodeAction[] {
+    const canonical = canonicalDocumentUri(uri);
+    const snapshot = this.requireSnapshot(canonical);
+    const normalizedRange = normalizeRange(range);
+    if (!normalizedRange) return [];
+
+    const actions: TemplateCodeAction[] = [];
+    actions.push(...this.collectTypeScriptCodeActions(canonical, snapshot, normalizedRange));
+    return actions;
   }
 
   renameSymbol(uri: DocumentUri, position: Position, newName: string): TextEdit[] {
@@ -415,41 +434,8 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const edits = ts.getRenameEdits(overlay, overlayOffset, newName) ?? [];
     if (!edits.length) return [];
 
-    const results: TextEdit[] = [];
-    let mappedOverlayEdits = 0;
-    let unmappedOverlayEdits = 0;
-
-    for (const edit of edits) {
-      const normalizedUri = canonicalDocumentUri(edit.fileName).uri;
-      const range = normalizeRange(edit.range);
-      if (!range) continue;
-
-      if (normalizedUri === overlay.uri) {
-        const overlaySpan = spanFromRange(range, overlay.text, overlay.file);
-        if (!overlaySpan) {
-          unmappedOverlayEdits += 1;
-          continue;
-        }
-        const mapped = mapOverlaySpanToTemplate(overlaySpan, overlay, this.program.provenance);
-        if (!mapped) {
-          unmappedOverlayEdits += 1;
-          continue;
-        }
-        const targetSnap = this.program.sources.get(mapped.uri);
-        if (!targetSnap) {
-          unmappedOverlayEdits += 1;
-          continue;
-        }
-        results.push({ uri: mapped.uri, range: spanToRange(mapped.span, targetSnap.text), newText: edit.newText });
-        mappedOverlayEdits += 1;
-        continue;
-      }
-
-      results.push({ uri: normalizedUri, range, newText: edit.newText });
-    }
-
-    if (unmappedOverlayEdits > 0 || mappedOverlayEdits === 0) return [];
-    return dedupeTextEdits(results);
+    const mapped = this.mapTypeScriptEdits(edits, overlay, true);
+    return mapped ?? [];
   }
 
   private collectTemplateCompletions(query: TemplateQueryFacade, snapshot: DocumentSnapshot, offset: number): CompletionItem[] {
@@ -510,6 +496,41 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         ...(entry.documentation ? { documentation: entry.documentation } : {}),
         ...(entry.insertText ? { insertText: entry.insertText } : {}),
         ...(entry.sortText ? { sortText: entry.sortText } : {}),
+      });
+    }
+    return results;
+  }
+
+  private collectTypeScriptCodeActions(
+    canonical: CanonicalDocumentUri,
+    snapshot: DocumentSnapshot,
+    range: TextRange,
+  ): TemplateCodeAction[] {
+    const ts = this.options.typescript;
+    if (!ts?.getCodeActions) return [];
+
+    const start = offsetAtPosition(snapshot.text, range.start);
+    const end = offsetAtPosition(snapshot.text, range.end);
+    if (start == null || end == null) return [];
+
+    const overlayHit = this.program.provenance.lookupSource(canonical.uri, start);
+    if (!overlayHit) return [];
+
+    const overlay = this.overlaySnapshot(canonical.uri);
+    const overlayStart = projectOverlayOffset(overlayHit, start);
+    const overlayEnd = projectOverlayOffset(overlayHit, end);
+    const actions = ts.getCodeActions(overlay, overlayStart, overlayEnd) ?? [];
+    if (!actions.length) return [];
+
+    const results: TemplateCodeAction[] = [];
+    for (const action of actions) {
+      const mapped = this.mapTypeScriptEdits(action.edits, overlay, true);
+      if (!mapped?.length) continue;
+      results.push({
+        title: action.title,
+        kind: "quickfix",
+        source: "typescript",
+        edits: mapped,
       });
     }
     return results;
@@ -576,6 +597,52 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       results.push(target);
     }
     return results;
+  }
+
+  private mapTypeScriptEdits(
+    edits: readonly TsTextEdit[],
+    overlay: OverlayDocumentSnapshot,
+    requireOverlayMapping: boolean,
+  ): TextEdit[] | null {
+    const results: TextEdit[] = [];
+    let mappedOverlayEdits = 0;
+    let unmappedOverlayEdits = 0;
+    let overlayEdits = 0;
+
+    for (const edit of edits) {
+      const normalizedUri = canonicalDocumentUri(edit.fileName).uri;
+      const range = normalizeRange(edit.range);
+      if (!range) continue;
+
+      if (normalizedUri === overlay.uri) {
+        overlayEdits += 1;
+        const overlaySpan = spanFromRange(range, overlay.text, overlay.file);
+        if (!overlaySpan) {
+          unmappedOverlayEdits += 1;
+          continue;
+        }
+        const mapped = mapOverlaySpanToTemplate(overlaySpan, overlay, this.program.provenance);
+        if (!mapped) {
+          unmappedOverlayEdits += 1;
+          continue;
+        }
+        const targetSnap = this.program.sources.get(mapped.uri);
+        if (!targetSnap) {
+          unmappedOverlayEdits += 1;
+          continue;
+        }
+        results.push({ uri: mapped.uri, range: spanToRange(mapped.span, targetSnap.text), newText: edit.newText });
+        mappedOverlayEdits += 1;
+        continue;
+      }
+
+      results.push({ uri: normalizedUri, range, newText: edit.newText });
+    }
+
+    if (requireOverlayMapping && overlayEdits > 0 && (unmappedOverlayEdits > 0 || mappedOverlayEdits === 0)) {
+      return null;
+    }
+    return results.length ? dedupeTextEdits(results) : null;
   }
 
   private collectTypeScriptDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostic[] {
