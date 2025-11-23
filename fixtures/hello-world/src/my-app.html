@@ -1,1 +1,10 @@
-<div class="message">${sdf}</div>
+<template>
+  <h1>${greeting}</h1>
+  <p class="info">Count: ${count}</p>
+  <p class="warn">TS diag demo: ${missingProp}</p>
+  <button click.trigger="increment()">Increment</button>
+  <ul>
+    <li repeat.for="item of items">${item.name}</li>
+  </ul>
+  <input value.bind="message" placeholder="Edit message" />
+</template>
