@@ -37,15 +37,15 @@ test("maps TypeScript diagnostics back to template spans", async () => {
       "  existing: number = 1;",
       "}",
     ].join("\n"),
-    "diag.html": "<template>${missing}</template>",
+    "component.html": "<template>${missing}</template>",
   });
 
-  const diagUri = URI.file(path.join(fixture, "diag.html")).toString();
+  const diagUri = URI.file(path.join(fixture, "component.html")).toString();
   const { connection, child, dispose, getStderr } = startServer(fixture);
 
   try {
     await initialize(connection, child, getStderr, fixture);
-    await openDocument(connection, diagUri, "html", fs.readFileSync(path.join(fixture, "diag.html"), "utf8"));
+    await openDocument(connection, diagUri, "html", fs.readFileSync(path.join(fixture, "component.html"), "utf8"));
 
     const diagnostics = await waitForDiagnostics(connection, child, () => getStderr(), diagUri, 5000);
     const tsDiag = diagnostics.find((d) => d.source === "typescript") ?? diagnostics[0];
@@ -79,16 +79,16 @@ test("routes definitions to the view-model via provenance", async () => {
       "  existing: number = 1;",
       "}",
     ].join("\n"),
-    "defs.html": "<template>${existing}</template>",
+    "component.html": "<template>${existing}</template>",
   });
 
-  const defsUri = URI.file(path.join(fixture, "defs.html")).toString();
+  const defsUri = URI.file(path.join(fixture, "component.html")).toString();
   const vmUri = URI.file(path.join(fixture, "component.ts")).toString();
   const { connection, child, dispose, getStderr } = startServer(fixture);
 
   try {
     await initialize(connection, child, getStderr, fixture);
-    await openDocument(connection, defsUri, "html", fs.readFileSync(path.join(fixture, "defs.html"), "utf8"));
+    await openDocument(connection, defsUri, "html", fs.readFileSync(path.join(fixture, "component.html"), "utf8"));
     await waitForDiagnostics(connection, child, () => getStderr(), defsUri, 5000);
 
     const position = { line: 0, character: 13 }; // inside "existing"
