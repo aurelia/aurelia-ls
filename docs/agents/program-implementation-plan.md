@@ -43,8 +43,8 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 
 ### Language and build services
 - [x] Diagnostics: merge compiler + TS overlay diagnostics via provenance; return host-agnostic diagnostics with source/related spans.
-- [ ] Hover: use `TemplateProgram.getQuery` + provenance + TS quick info to surface expression/node info and member types.
-- [ ] Definitions/references: map template offsets to overlay/TS spans, ask TS LS, and map results back through provenance.
+- [x] Hover: use `TemplateProgram.getQuery` + provenance + TS quick info to surface expression/node info and member types.
+- [x] Definitions/references: map template offsets to overlay/TS spans, ask TS LS, and map results back through provenance.
 - [ ] Completions: drive from scope graph + VM reflection + TS completions with provenance-backed span mapping.
 - [ ] Rename: use `overlayMember` edges + TS rename to produce template edits; guard against partial coverage.
 - [ ] Code actions: add quick fixes for common diagnostics once diagnostics are merged.
