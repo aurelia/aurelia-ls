@@ -1,6 +1,7 @@
 # Program Architecture – TemplateProgram Facade (Normative)
 
 This document is **normative for agents**.
+See `docs/agents/program-implementation-plan.md` for the rolling implementation checklist; keep both documents in sync.
 
 It describes the target architecture for moving from ad-hoc `compileTemplate*`
 usage to a program layer built around:
