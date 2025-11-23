@@ -207,6 +207,82 @@ test("references de-duplicate overlay hits and keep VM references", () => {
   assert.deepEqual(templateRef.range, spanToRange(mappingEntry.htmlSpan, markup));
 });
 
+test("references map overlay hits from other templates via provenance", () => {
+  const program = createProgram();
+  const markup = "<template>${shared}</template>";
+  const uriA = "/app/a.html";
+  const uriB = "/app/b.html";
+  program.upsertTemplate(uriA, markup);
+  program.upsertTemplate(uriB, markup);
+
+  const compilationA = program.getCompilation(uriA);
+  const compilationB = program.getCompilation(uriB);
+  const mappingA = compilationA.mapping.entries[0];
+  const mappingB = compilationB.mapping.entries[0];
+  const overlayUriA = canonicalDocumentUri(compilationA.overlay.overlayPath).uri;
+  const overlayUriB = canonicalDocumentUri(compilationB.overlay.overlayPath).uri;
+  const overlayRangeB = spanToRange(mappingB.overlaySpan, compilationB.overlay.text);
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getReferences(tsOverlay, offset) {
+        assert.equal(tsOverlay.uri, overlayUriA);
+        assert.ok(offset >= mappingA.overlaySpan.start && offset <= mappingA.overlaySpan.end);
+        return [
+          {
+            fileName: overlayUriB,
+            range: overlayRangeB,
+            start: mappingB.overlaySpan.start,
+            length: mappingB.overlaySpan.end - mappingB.overlaySpan.start,
+          },
+        ];
+      },
+    },
+  });
+
+  const refs = service.getReferences(uriA, positionAtOffset(markup, mappingA.htmlSpan.start + 1));
+  const target = refs.find((loc) => loc.uri === canonicalDocumentUri(uriB).uri);
+  assert.ok(target, "reference should map overlay B back to template B");
+  assert.deepEqual(target.range, spanToRange(mappingB.htmlSpan, markup));
+});
+
+test("definitions map overlay hits using start/length when range is absent", () => {
+  const program = createProgram();
+  const uri = "/app/defs-offset.html";
+  const markup = "<template>${value}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const overlaySpan = mappingEntry.overlaySpan;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getDefinition(overlay, offset) {
+        assert.equal(overlay.uri, overlayUri);
+        assert.ok(offset >= overlaySpan.start && offset <= overlaySpan.end);
+        return [
+          {
+            fileName: overlayUri,
+            start: overlaySpan.start,
+            length: overlaySpan.end - overlaySpan.start,
+          },
+        ];
+      },
+    },
+  });
+
+  const defs = service.getDefinition(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
+  assert.equal(defs.length, 1);
+  assert.deepEqual(defs[0], {
+    uri: canonicalDocumentUri(uri).uri,
+    range: spanToRange(mappingEntry.htmlSpan, markup),
+  });
+});
+
 test("completions project TypeScript replacement spans through provenance", () => {
   const program = createProgram();
   const uri = "/app/completions-ts.html";
@@ -429,6 +505,52 @@ test("rename maps overlay edits back to the template and preserves external edit
   const vmEdit = edits.find((edit) => edit.uri === vmUri);
   assert.ok(vmEdit, "VM edits should pass through");
   assert.equal(vmEdit.newText, "renamedProp");
+});
+
+test("rename uses start/length fallback when TS edits omit range", () => {
+  const program = createProgram();
+  const uri = "/app/rename-offset.html";
+  const markup = "<template>${person.name}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const mappingEntry = compilation.mapping.entries[0];
+  const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
+  assert.ok(memberSeg, "member segment should be present for rename");
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getRenameEdits(overlay, offset, newName) {
+        assert.equal(overlay.uri, overlayUri);
+        assert.equal(newName, "offsetRename");
+        assert.ok(typeof offset === "number");
+        return [
+          {
+            fileName: overlayUri,
+            start: memberSeg.overlaySpan.start,
+            length: memberSeg.overlaySpan.end - memberSeg.overlaySpan.start,
+            newText: newName,
+          },
+          {
+            fileName: "/app/vm.ts",
+            range: { start: { line: 2, character: 4 }, end: { line: 2, character: 8 } },
+            newText: newName,
+          },
+        ];
+      },
+    },
+  });
+
+  const edits = service.renameSymbol(uri, positionAtOffset(markup, memberSeg.htmlSpan.start + 1), "offsetRename");
+  const templateEdit = edits.find((edit) => edit.uri === canonicalDocumentUri(uri).uri);
+  assert.ok(templateEdit, "overlay edit should map back to template via start/length");
+  assert.deepEqual(templateEdit.range, spanToRange(memberSeg.htmlSpan, markup));
+  assert.equal(templateEdit.newText, "offsetRename");
+
+  const vmEdit = edits.find((edit) => edit.uri === canonicalDocumentUri("/app/vm.ts").uri);
+  assert.ok(vmEdit, "non-overlay edits should be preserved");
 });
 
 test("rename aborts when overlay edits cannot be mapped to the template", () => {

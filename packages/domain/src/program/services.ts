@@ -144,6 +144,8 @@ export interface TsQuickInfo {
 export interface TsLocation {
   fileName: string;
   range: TextRange;
+  start?: number;
+  length?: number;
 }
 
 export interface TsCompletionEntry {
@@ -160,6 +162,8 @@ export interface TsTextEdit {
   fileName: string;
   range: TextRange;
   newText: string;
+  start?: number;
+  length?: number;
 }
 
 export interface TsCodeAction {
@@ -584,13 +588,10 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const results: Location[] = [];
     const seen = new Set<string>();
     for (const loc of locations ?? []) {
-      const range = normalizeRange(loc.range);
+      const mapped = this.mapProvenanceLocation(loc, overlay);
+      const range = mapped?.range ?? normalizeRange(loc.range);
       if (!range) continue;
-      const normalizedUri = canonicalDocumentUri(loc.fileName).uri;
-      const mapped = normalizedUri === overlay.uri
-        ? mapOverlayLocationToTemplate(range, overlay, this.program.provenance, this.program.sources)
-        : null;
-      const target = mapped ?? { uri: normalizedUri, range };
+      const target = mapped ?? { uri: canonicalDocumentUri(loc.fileName).uri, range };
       const key = locationKey(target);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -599,12 +600,20 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return results;
   }
 
+  private mapProvenanceLocation(loc: TsLocation, overlay: OverlayDocumentSnapshot): Location | null {
+    const canonical = canonicalDocumentUri(loc.fileName).uri;
+    const overlayOffset = this.overlayOffsetForLocation(loc, overlay);
+    if (overlayOffset == null) return null;
+    return mapOverlayOffsetToTemplate(canonical, overlayOffset, this.program.provenance, this.program.sources);
+  }
+
   private mapTypeScriptEdits(
     edits: readonly TsTextEdit[],
     overlay: OverlayDocumentSnapshot,
     requireOverlayMapping: boolean,
   ): TextEdit[] | null {
     const results: TextEdit[] = [];
+    const overlayUris = collectOverlayUris(this.program.provenance);
     let mappedOverlayEdits = 0;
     let unmappedOverlayEdits = 0;
     let overlayEdits = 0;
@@ -612,30 +621,19 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     for (const edit of edits) {
       const normalizedUri = canonicalDocumentUri(edit.fileName).uri;
       const range = normalizeRange(edit.range);
-      if (!range) continue;
-
-      if (normalizedUri === overlay.uri) {
+      if (overlayUris.has(normalizedUri)) {
         overlayEdits += 1;
-        const overlaySpan = spanFromRange(range, overlay.text, overlay.file);
-        if (!overlaySpan) {
-          unmappedOverlayEdits += 1;
-          continue;
-        }
-        const mapped = mapOverlaySpanToTemplate(overlaySpan, overlay, this.program.provenance);
+        const mapped = this.mapOverlayEdit(edit, normalizedUri, normalizedUri === overlay.uri ? overlay : null);
         if (!mapped) {
           unmappedOverlayEdits += 1;
           continue;
         }
-        const targetSnap = this.program.sources.get(mapped.uri);
-        if (!targetSnap) {
-          unmappedOverlayEdits += 1;
-          continue;
-        }
-        results.push({ uri: mapped.uri, range: spanToRange(mapped.span, targetSnap.text), newText: edit.newText });
+        results.push(mapped);
         mappedOverlayEdits += 1;
         continue;
       }
 
+      if (!range) continue;
       results.push({ uri: normalizedUri, range, newText: edit.newText });
     }
 
@@ -643,6 +641,37 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       return null;
     }
     return results.length ? dedupeTextEdits(results) : null;
+  }
+
+  private mapOverlayEdit(
+    edit: TsTextEdit,
+    overlayUri: DocumentUri,
+    overlay: OverlayDocumentSnapshot | null,
+  ): TextEdit | null {
+    const overlayOffset = this.overlayOffsetForEdit(edit, overlayUri, overlay);
+    if (overlayOffset == null) return null;
+    const mapped = mapOverlayOffsetToTemplate(overlayUri, overlayOffset, this.program.provenance, this.program.sources);
+    return mapped ? { uri: mapped.uri, range: mapped.range, newText: edit.newText } : null;
+  }
+
+  private overlayOffsetForLocation(
+    loc: Pick<TsLocation, "start" | "range" | "fileName">,
+    overlay: OverlayDocumentSnapshot,
+  ): number | null {
+    if (loc.start != null) return loc.start;
+    const normalizedUri = canonicalDocumentUri(loc.fileName).uri;
+    if (normalizedUri !== overlay.uri || !loc.range) return null;
+    return offsetAtPosition(overlay.text, loc.range.start);
+  }
+
+  private overlayOffsetForEdit(
+    edit: Pick<TsTextEdit, "start" | "range">,
+    overlayUri: DocumentUri,
+    overlay: OverlayDocumentSnapshot | null,
+  ): number | null {
+    if (edit.start != null) return edit.start;
+    if (!edit.range || !overlay || overlay.uri !== overlayUri) return null;
+    return offsetAtPosition(overlay.text, edit.range.start);
   }
 
   private collectTypeScriptDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostic[] {
@@ -748,6 +777,29 @@ function mapOverlaySpanToTemplate(
   return provenanceLocation(hit);
 }
 
+function mapOverlayOffsetToTemplate(
+  overlayUri: DocumentUri,
+  overlayOffset: number,
+  provenance: ProvenanceIndex,
+  sources: { get(uri: DocumentUri): DocumentSnapshot | null },
+): Location | null {
+  const hit = provenance.lookupGenerated(overlayUri, overlayOffset);
+  if (!hit) return null;
+  const snap = sources.get(hit.edge.to.uri);
+  if (!snap) return null;
+  return { uri: hit.edge.to.uri, range: spanToRange(hit.edge.to.span, snap.text) };
+}
+
+function collectOverlayUris(provenance: ProvenanceIndex): Set<DocumentUri> {
+  const overlayUris = new Set<DocumentUri>();
+  const stats = provenance.stats();
+  for (const doc of stats.documents) {
+    const overlayUri = provenance.templateStats(doc.uri).overlayUri;
+    if (overlayUri) overlayUris.add(canonicalDocumentUri(overlayUri).uri);
+  }
+  return overlayUris;
+}
+
 function mapOverlayLocationToTemplate(
   range: TextRange,
   overlay: OverlayDocumentSnapshot,
@@ -756,11 +808,7 @@ function mapOverlayLocationToTemplate(
 ): Location | null {
   const overlayOffset = offsetAtPosition(overlay.text, range.start);
   if (overlayOffset == null) return null;
-  const hit = provenance.lookupGenerated(overlay.uri, overlayOffset);
-  if (!hit) return null;
-  const snap = sources.get(hit.edge.to.uri);
-  if (!snap) return null;
-  return { uri: hit.edge.to.uri, range: spanToRange(hit.edge.to.span, snap.text) };
+  return mapOverlayOffsetToTemplate(overlay.uri, overlayOffset, provenance, sources);
 }
 
 function mapTypeScriptDiagnostic(

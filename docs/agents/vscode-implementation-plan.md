@@ -39,7 +39,7 @@ plus the current checkpoints here.
 - [ ] Diagnostics and feature routing
   - [ ] Template diagnostics via `TemplateLanguageService`; overlay build via `TemplateBuildService`.
   - [ ] TS diagnostics via `TsService`, mapped back with provenance/mapping; send unified LSP diagnostics.
-  - [ ] Hover/completions/defs/refs/rename/code actions: route through TemplateLanguageService + provenance-backed TS calls (no ad-hoc mapping in `main.ts`).
+  - [x] Hover/completions/defs/refs/rename/code actions: route through TemplateLanguageService + provenance-backed TS calls (no ad-hoc mapping in `main.ts`).
 
 - [ ] Overlay/SSR custom requests
   - [ ] `aurelia/getOverlay` and `aurelia/getSsr` call `TemplateBuildService`; update `OverlayFs` only from build outputs.
