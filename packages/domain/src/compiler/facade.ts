@@ -1,4 +1,3 @@
-import path from "node:path";
 import { createDefaultEngine } from "./pipeline.js";
 import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./pipeline/engine.js";
 import type { AttributeParser } from "./language/syntax.js";
@@ -14,6 +13,7 @@ import type { StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/en
 import type { ExprId, ExprTableEntry, SourceSpan } from "./model/ir.js";
 import { htmlOffsetToOverlay, overlayOffsetToHtml, type MappingHit } from "./mapping.js";
 import type { ExprIdMap } from "./model/identity.js";
+import { computeOverlayBaseName, computeSsrBaseName } from "./path-conventions.js";
 
 export interface CompileOptions {
   html: string;
@@ -76,18 +76,6 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
   if (opts.attrParser) base.attrParser = opts.attrParser;
   if (opts.exprParser) base.exprParser = opts.exprParser;
   return base;
-}
-
-function computeOverlayBaseName(templatePath: string, override?: string): string {
-  if (override) return override;
-  const base = path.basename(templatePath, path.extname(templatePath));
-  return `${base}.__au.ttc.overlay`;
-}
-
-function computeSsrBaseName(templatePath: string, override?: string): string {
-  if (override) return override.replace(/\.ssr$/, "");
-  const base = path.basename(templatePath, path.extname(templatePath));
-  return `${base}.__au.ssr`;
 }
 
 /** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */

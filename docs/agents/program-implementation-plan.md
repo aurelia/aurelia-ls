@@ -14,9 +14,9 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 ## Workstreams and Tasks
 
 ### Identity, spans, and path conventions
-- [ ] Normalize spans when indexing provenance (attach `SourceFileId` or `DocumentUri`, keep UTF-16) and avoid storing raw host paths.
-- [ ] Centralize overlay/SSR path conventions (one module for overlay/SSR filenames) and make `TemplateProgram`/services depend on it.
-- [ ] Add helpers/adapters to enforce `DocumentUri` branding at host boundaries (LSP/CLI/TS host).
+- [x] Normalize spans when indexing provenance (attach `SourceFileId` or `DocumentUri`, keep UTF-16) and avoid storing raw host paths.
+- [x] Centralize overlay/SSR path conventions (one module for overlay/SSR filenames) and make `TemplateProgram`/services depend on it.
+- [x] Add helpers/adapters to enforce `DocumentUri` branding at host boundaries (LSP/CLI/TS host).
 
 ### Caching and fingerprints
 - [ ] Surface a program options fingerprint (opaque string/object) and thread option fingerprints into compilation calls.

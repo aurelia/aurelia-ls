@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { PipelineSession } from "../pipeline/engine.js";
+import { normalizePathForId } from "../model/identity.js";
 import type { SsrPlanModule } from "../phases/50-plan/ssr/types.js";
 
 export interface SsrProductOptions {
@@ -20,8 +21,8 @@ export function buildSsrProduct(session: PipelineSession, opts: SsrProductOption
   const ssrEmit = session.run("60-emit-ssr");
 
   const dir = path.dirname(opts.templateFilePath);
-  const htmlPath = path.join(dir, `${opts.baseName}.html`);
-  const manifestPath = path.join(dir, `${opts.baseName}.json`);
+  const htmlPath = normalizePathForId(path.join(dir, `${opts.baseName}.html`));
+  const manifestPath = normalizePathForId(path.join(dir, `${opts.baseName}.json`));
 
   return {
     plan,

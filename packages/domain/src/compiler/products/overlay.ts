@@ -7,7 +7,7 @@ import type { TemplateMappingArtifact, TemplateQueryFacade } from "../../contrac
 import type { ExprId, ExprTableEntry, SourceSpan } from "../model/ir.js";
 import { resolveSourceFile } from "../model/source.js";
 import type { ExprSpanIndex } from "../expr-utils.js";
-import type { ExprIdMap } from "../model/identity.js";
+import { normalizePathForId, type ExprIdMap } from "../model/identity.js";
 
 export interface OverlayProductArtifacts {
   plan: OverlayPlanModule;
@@ -42,7 +42,8 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
   const planOut = session.run("50-plan-overlay");
   const overlayEmit = session.run("60-emit-overlay");
 
-  const overlayPath = path.join(path.dirname(opts.templateFilePath), overlayEmit.filename);
+  const overlayDir = path.dirname(opts.templateFilePath);
+  const overlayPath = normalizePathForId(path.join(overlayDir, overlayEmit.filename));
   const exprToFrame = scope.templates?.[0]?.exprToFrame;
 
   const { mapping, exprSpans, spanIndex } = buildTemplateMapping({

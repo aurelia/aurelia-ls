@@ -16,6 +16,8 @@ import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
 import { InMemorySourceStore, type SourceStore } from "./sources.js";
 import { InMemoryProvenanceIndex, type ProvenanceIndex } from "./provenance.js";
+import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
+import type { NormalizedPath } from "../compiler/model/identity.js";
 
 export interface TemplateProgramOptions {
   readonly vm: VmReflection;
@@ -71,42 +73,48 @@ export class DefaultTemplateProgram implements TemplateProgram {
   }
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void {
-    this.sources.set(uri, text, version);
-    this.compilationCache.delete(uri);
-    this.versionsAtCompile.delete(uri);
+    const canonical = this.canonicalUri(uri);
+    this.sources.set(canonical.uri, text, version);
+    this.compilationCache.delete(canonical.uri);
+    this.versionsAtCompile.delete(canonical.uri);
   }
 
   closeTemplate(uri: DocumentUri): void {
-    this.sources.delete(uri);
-    this.compilationCache.delete(uri);
-    this.versionsAtCompile.delete(uri);
+    const canonical = this.canonicalUri(uri);
+    this.sources.delete(canonical.uri);
+    this.compilationCache.delete(canonical.uri);
+    this.versionsAtCompile.delete(canonical.uri);
   }
 
   private snapshot(uri: DocumentUri): DocumentSnapshot {
-    const snap = this.sources.get(uri);
+    const canonical = this.canonicalUri(uri);
+    const snap = this.sources.get(canonical.uri);
     if (!snap) {
-      throw new Error(`TemplateProgram: no snapshot for document ${String(uri)}. Call upsertTemplate(...) first.`);
+      throw new Error(`TemplateProgram: no snapshot for document ${String(canonical.uri)}. Call upsertTemplate(...) first.`);
     }
     return snap;
   }
 
   getCompilation(uri: DocumentUri): TemplateCompilation {
-    const snap = this.snapshot(uri);
-    const cached = this.compilationCache.get(uri);
-    if (cached && this.versionsAtCompile.get(uri) === snap.version) {
+    const canonical = this.canonicalUri(uri);
+    const snap = this.snapshot(canonical.uri);
+    const cached = this.compilationCache.get(canonical.uri);
+    if (cached && this.versionsAtCompile.get(canonical.uri) === snap.version) {
       return cached;
     }
 
     // NOTE: cache key is (uri, version) assuming options are stable per program.
     // If you swap semantics/resource graph/parsers, create a new program instance.
-    const compileOpts = this.buildCompileOptions(snap, String(uri));
+    const templatePaths = deriveTemplatePaths(canonical.uri, withOverlayBase(this.options.isJs, this.options.overlayBaseName));
+    const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
     const compilation = compileTemplate(compileOpts);
 
     // Feed overlay mapping into provenance for downstream features.
-    this.provenance.addOverlayMapping(uri, compilation.overlay.overlayPath as DocumentUri, compilation.mapping);
+    const overlayUri = normalizeDocumentUri(compilation.overlay.overlayPath);
+    this.provenance.addOverlayMapping(canonical.uri, overlayUri, compilation.mapping);
 
-    this.compilationCache.set(uri, compilation);
-    this.versionsAtCompile.set(uri, snap.version);
+    this.compilationCache.set(canonical.uri, compilation);
+    this.versionsAtCompile.set(canonical.uri, snap.version);
     return compilation;
   }
 
@@ -119,10 +127,12 @@ export class DefaultTemplateProgram implements TemplateProgram {
   }
 
   getSsr(uri: DocumentUri): CompileSsrResult {
-    const snap = this.snapshot(uri);
+    const canonical = this.canonicalUri(uri);
+    const snap = this.snapshot(canonical.uri);
+    const templatePaths = deriveTemplatePaths(canonical.uri, withOverlayBase(this.options.isJs, this.options.overlayBaseName));
     // SSR currently runs its own product builder; if/when overlay + SSR share
     // a session, this can be optimized to reuse pipeline artifacts.
-    const compileOpts = this.buildCompileOptions(snap, String(uri));
+    const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
     return compileTemplateToSSR(compileOpts);
   }
 
@@ -134,7 +144,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
     return this.getCompilation(uri).mapping ?? null;
   }
 
-  private buildCompileOptions(snap: DocumentSnapshot, templatePath: string) {
+  private canonicalUri(input: DocumentUri): CanonicalDocumentUri {
+    return canonicalDocumentUri(input);
+  }
+
+  private buildCompileOptions(snap: DocumentSnapshot, templatePath: NormalizedPath) {
     const opts: {
       html: string;
       templateFilePath: string;
@@ -166,4 +180,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
     return opts;
   }
+}
+
+function withOverlayBase(isJs: boolean, overlayBaseName: string | undefined): { isJs: boolean; overlayBaseName?: string } {
+  return overlayBaseName === undefined ? { isJs } : { isJs, overlayBaseName };
 }
