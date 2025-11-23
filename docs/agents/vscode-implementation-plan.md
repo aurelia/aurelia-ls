@@ -31,10 +31,10 @@ plus the current checkpoints here.
   - [x] Recreate workspace on fingerprint drift while preserving live snapshots.
   - [x] Unit-test lifecycle/caching (`template-workspace.basic.test.mjs`).
 
-- [ ] Rewire LSP shell (`packages/server/src/main.ts`)
-  - [ ] Instantiate `PathUtils`, `OverlayFs`, `TsService`, `AureliaProjectIndex`, `TemplateWorkspace` from index data.
-  - [ ] On initialize: load tsconfig, refresh index, ensure prelude.
-  - [ ] On doc events: call workspace `open/change/close`; rebuild workspace on fingerprint change.
+- [x] Rewire LSP shell (`packages/server/src/main.ts`)
+  - [x] Instantiate `PathUtils`, `OverlayFs`, `TsService`, `AureliaProjectIndex`, `TemplateWorkspace` from index data.
+  - [x] On initialize: load tsconfig, refresh index, ensure prelude.
+  - [x] On doc events: call workspace `open/change/close`; rebuild workspace on fingerprint change.
 
 - [ ] Diagnostics and feature routing
   - [ ] Template diagnostics via `TemplateLanguageService`; overlay build via `TemplateBuildService`.

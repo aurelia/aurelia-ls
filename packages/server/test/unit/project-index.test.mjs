@@ -80,7 +80,7 @@ test("produces a semantics + resource graph snapshot from TS project state", () 
   assert.ok(index.currentFingerprint().length > 0);
 });
 
-test("fingerprint reflects TS project version and root set changes", async () => {
+test("fingerprint tracks resource and root changes", async () => {
   const tsProject = createTsProject();
   const index = new AureliaProjectIndex({ ts: tsProject, logger });
 
@@ -91,13 +91,23 @@ test("fingerprint reflects TS project version and root set changes", async () =>
 
   tsProject.bumpVersion();
   await index.refresh();
-  const afterVersionBump = index.currentFingerprint();
-  assert.notEqual(afterVersionBump, baseline);
+  assert.equal(index.currentFingerprint(), baseline, "project version bumps alone should not affect fingerprint");
+
+  const examplePath = path.join(process.cwd(), "src", "example.ts");
+  tsProject.updateFile(examplePath, `
+    const customElement = (options) => (target) => target;
+
+    @customElement({ name: 'updated-box' })
+    export class UpdatedBox {}
+  `);
+  await index.refresh();
+  const afterResourceChange = index.currentFingerprint();
+  assert.notEqual(afterResourceChange, baseline);
 
   tsProject.addFile(path.join(process.cwd(), "src", "other.ts"), "export const value = 1;");
   await index.refresh();
   const afterRootChange = index.currentFingerprint();
-  assert.notEqual(afterRootChange, afterVersionBump);
+  assert.notEqual(afterRootChange, afterResourceChange);
 });
 
 test("discovers Aurelia resources from decorators and bindable members", () => {

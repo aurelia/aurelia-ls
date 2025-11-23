@@ -43,6 +43,7 @@ import { createPathUtils } from "./services/paths.js";
 import { OverlayFs } from "./services/overlay-fs.js";
 import { TsService } from "./services/ts-service.js";
 import { TsServicesAdapter } from "./services/typescript-services.js";
+import { AureliaProjectIndex } from "./services/project-index.js";
 import { TemplateWorkspace } from "./services/template-workspace.js";
 import type { Logger } from "./services/types.js";
 
@@ -67,13 +68,10 @@ const paths = createPathUtils();
 const overlayFs = new OverlayFs(paths);
 const tsService = new TsService(overlayFs, paths, logger);
 const tsAdapter = new TsServicesAdapter(tsService, paths);
-const workspace = new TemplateWorkspace({
-  program: {
-    vm: createVmReflection(),
-    isJs: false,
-  },
-  language: { typescript: tsAdapter },
-});
+const vmReflection = createVmReflection();
+
+let projectIndex: AureliaProjectIndex;
+let workspace: TemplateWorkspace;
 
 /* =============================================================================
  * Helpers
@@ -89,6 +87,46 @@ function ensurePrelude() {
   const root = workspaceRoot ?? process.cwd();
   const preludePath = path.join(root, ".aurelia", "__prelude.d.ts");
   tsService.ensurePrelude(preludePath, PRELUDE_TS);
+}
+
+function workspaceProgramOptions() {
+  const semantics = projectIndex.currentSemantics();
+  const resourceGraph = projectIndex.currentResourceGraph();
+  const options: {
+    vm: ReturnType<typeof createVmReflection>;
+    isJs: boolean;
+    semantics: typeof semantics;
+    resourceGraph: typeof resourceGraph;
+    resourceScope?: typeof resourceGraph.root | null;
+  } = {
+    vm: vmReflection,
+    isJs: false,
+    semantics,
+    resourceGraph,
+  };
+  const resourceScope = semantics.defaultScope ?? resourceGraph.root ?? null;
+  if (resourceScope !== null) options.resourceScope = resourceScope;
+  return options;
+}
+
+function createWorkspaceFromIndex(): TemplateWorkspace {
+  return new TemplateWorkspace({
+    program: workspaceProgramOptions(),
+    language: { typescript: tsAdapter },
+    fingerprint: projectIndex.currentFingerprint(),
+  });
+}
+
+async function syncWorkspaceWithIndex(): Promise<void> {
+  await projectIndex.refresh();
+  const updated = workspace.reconfigure({
+    program: workspaceProgramOptions(),
+    language: { typescript: tsAdapter },
+    fingerprint: projectIndex.currentFingerprint(),
+  });
+  if (updated) {
+    logger.info(`[workspace] reconfigured fingerprint=${workspace.fingerprint}`);
+  }
 }
 
 function toLspUri(uri: DocumentUri): string {
@@ -229,7 +267,7 @@ function overlayPathOptions(): { isJs: boolean; overlayBaseName?: string } {
 function ensureProgramDocument(uri: string): TextDocument | null {
   const live = documents.get(uri);
   if (live) {
-    workspace.upsertDocument(live);
+    workspace.change(live);
     return live;
   }
   const snap = workspace.ensureFromFile(uri);
@@ -237,10 +275,15 @@ function ensureProgramDocument(uri: string): TextDocument | null {
   return TextDocument.create(uri, "html", snap.version, snap.text);
 }
 
-async function refreshDocument(doc: TextDocument) {
+async function refreshDocument(doc: TextDocument, reason: "open" | "change") {
   try {
+    await syncWorkspaceWithIndex();
     const canonical = canonicalDocumentUri(doc.uri);
-    workspace.upsertDocument(doc);
+    if (reason === "open") {
+      workspace.open(doc);
+    } else {
+      workspace.change(doc);
+    }
     const overlay = workspace.buildService.getOverlay(canonical.uri);
     tsService.upsertOverlay(overlay.overlay.path, overlay.overlay.text);
 
@@ -273,6 +316,7 @@ connection.onRequest("aurelia/getOverlay", async (params: { uri?: string } | str
 
   logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
   if (!uri) return null;
+  await syncWorkspaceWithIndex();
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(uri);
@@ -297,6 +341,7 @@ connection.onRequest("aurelia/getMapping", async (params: { uri?: string } | str
   if (typeof params === "string") uri = params;
   else if (params && typeof params === "object") uri = (params as any).uri;
   if (!uri) return null;
+  await syncWorkspaceWithIndex();
   const canonical = canonicalDocumentUri(uri);
   ensureProgramDocument(uri);
   const mapping = workspace.program.getMapping(canonical.uri);
@@ -308,6 +353,7 @@ connection.onRequest("aurelia/getMapping", async (params: { uri?: string } | str
 connection.onRequest("aurelia/queryAtPosition", async (params: { uri: string; position: Position }) => {
   const uri = params?.uri;
   if (!uri || !params.position) return null;
+  await syncWorkspaceWithIndex();
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(uri);
@@ -327,6 +373,7 @@ connection.onRequest("aurelia/getSsr", async (params: { uri?: string } | string 
   if (typeof params === "string") uri = params;
   else if (params && typeof params === "object") uri = (params as any).uri;
   if (!uri) return null;
+  await syncWorkspaceWithIndex();
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(uri);
@@ -411,11 +458,14 @@ connection.onCodeAction((params: CodeActionParams): CodeAction[] | null => {
 /* =============================================================================
  * LSP lifecycle
  * ========================================================================== */
-connection.onInitialize((params: InitializeParams): InitializeResult => {
+connection.onInitialize(async (params: InitializeParams): Promise<InitializeResult> => {
   workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
   logger.info(`initialize: root=${workspaceRoot ?? "<cwd>"} caseSensitive=${paths.isCaseSensitive()}`);
   tsService.configure({ workspaceRoot });
   ensurePrelude();
+  projectIndex = new AureliaProjectIndex({ ts: tsService, logger });
+  await projectIndex.refresh();
+  workspace = createWorkspaceFromIndex();
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -431,12 +481,12 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 
 documents.onDidOpen(async (e) => {
   logger.log(`didOpen ${e.document.uri}`);
-  await refreshDocument(e.document);
+  await refreshDocument(e.document, "open");
 });
 
 documents.onDidChangeContent(async (e) => {
   logger.log(`didChange ${e.document.uri}`);
-  await refreshDocument(e.document);
+  await refreshDocument(e.document, "change");
 });
 
 documents.onDidClose((e) => {

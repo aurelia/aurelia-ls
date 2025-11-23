@@ -162,7 +162,6 @@ export class AureliaProjectIndex {
       : buildResourceGraphFromSemantics(semantics);
     const resolvedSemantics = semantics.resourceGraph ? semantics : { ...semantics, resourceGraph };
     const fingerprint = hashObject({
-      projectVersion: this.#ts.getProjectVersion(),
       compilerOptions: normalizeCompilerOptions(this.#ts.compilerOptions()),
       roots: [...this.#ts.getRootFileNames()].sort(),
       semantics: resolvedSemantics,
