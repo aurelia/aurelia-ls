@@ -12,6 +12,14 @@ export type {
   ResourceScopeId,
   ResourceCollections,
 } from "./compiler/language/resource-graph.js";
+export {
+  computeOverlayBaseName,
+  computeSsrBaseName,
+  overlayFilename,
+  overlayPath,
+  ssrPaths,
+  type SsrPaths,
+} from "./compiler/path-conventions.js";
 
 export type { VmReflection } from "./compiler/phases/50-plan/overlay/types.js";
 export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./compiler/facade.js";

@@ -21,11 +21,14 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
 - `sources.ts`
   `SourceStore` interface and an in-memory implementation.
 
+- `paths.ts`
+  Canonical `DocumentUri` helpers plus overlay/SSR path conventions (normalized to forward slashes + `SourceFileId`).
+
 - `provenance.ts`
-  Edge contracts and a naive in-memory `ProvenanceIndex`. It currently stores overlay mappings and overlay URIs but does not expand segment-level edges or provide full offset-based queries.
+  Edge contracts and a naive in-memory `ProvenanceIndex`. Overlay mappings are canonicalized (URIs + `SourceFileId` on spans) but segment-level edges and offset-aware queries are still stubbed.
 
 - `program.ts`
-  Default program with a per-document compilation cache keyed by `(uri, snapshot.version)` under the assumption that options are stable for the lifetime of a program. It feeds overlay mapping into `ProvenanceIndex`.
+  Default program with a per-document compilation cache keyed by `(uri, snapshot.version)` under the assumption that options are stable for the lifetime of a program. URIs are canonicalized on entry and overlay mapping is fed into `ProvenanceIndex`.
 
 - `services.ts`
   Language/build facades. Diagnostics and overlay/SSR access are wired; hover/defs/refs/completions/code actions/rename are stubbed.
@@ -50,10 +53,6 @@ The main deltas compared to `docs/agents/program-architecture.md` are:
 
   - Add SSR provenance ingestion surfaces.
   - Reuse stages 10-40 between overlay and SSR where possible (shared pipeline session or shared persisted caches).
-
-- Span normalization
-
-  - Normalize spans with `SourceFileId` or `DocumentUri` when indexing to avoid file-less spans crossing the program boundary.
 
 - Language features
 

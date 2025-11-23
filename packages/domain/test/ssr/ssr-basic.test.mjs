@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { compileTemplateToSSR, getExpressionParser, DEFAULT_SYNTAX } from "../../out/index.js";
+import { compileTemplateToSSR, getExpressionParser, DEFAULT_SYNTAX, normalizePathForId } from "../../out/index.js";
 
 const VM = {
   getRootVmTypeExpr: () => "MyApp",
@@ -31,8 +31,8 @@ test("SSR basic - markers and manifest shape", async () => {
   // Goldens: output equality + path expectations
   const absHtmlPath = path.resolve(fileURLToPath(expectedHtmlUrl));
   const absManifestPath = path.resolve(fileURLToPath(expectedManifestUrl));
-  assert.strictEqual(res.htmlPath, absHtmlPath);
-  assert.strictEqual(res.manifestPath, absManifestPath);
+  assert.strictEqual(res.htmlPath, normalizePathForId(absHtmlPath));
+  assert.strictEqual(res.manifestPath, normalizePathForId(absManifestPath));
   assert.strictEqual(res.htmlText, expectedHtml);
   assert.strictEqual(res.manifestText, expectedManifest);
 
