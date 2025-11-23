@@ -37,8 +37,8 @@ plus the current checkpoints here.
   - [x] On doc events: call workspace `open/change/close`; rebuild workspace on fingerprint change.
 
 - [ ] Diagnostics and feature routing
-  - [ ] Template diagnostics via `TemplateLanguageService`; overlay build via `TemplateBuildService`.
-  - [ ] TS diagnostics via `TsService`, mapped back with provenance/mapping; send unified LSP diagnostics.
+  - [x] Template diagnostics via `TemplateLanguageService`; overlay build via `TemplateBuildService`.
+  - [x] TS diagnostics via `TsService`, mapped back with provenance/mapping; send unified LSP diagnostics.
   - [x] Hover/completions/defs/refs/rename/code actions: route through TemplateLanguageService + provenance-backed TS calls (no ad-hoc mapping in `main.ts`).
 
 - [ ] Overlay/SSR custom requests
