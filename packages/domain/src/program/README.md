@@ -29,6 +29,7 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
 
 - `program.ts`
   Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift. Cache/provenance invalidation hooks, bulk overlay/SSR builds, and cache stats are available for hosts that want to observe reuse.
+  Optional telemetry hooks surface cache hits, materialization timing, and provenance density for hosts that want logging without poking at internals.
 
 - `services.ts`
   Language/build facades. `DefaultTemplateBuildService` returns host-ready overlay/SSR artifacts (canonical URIs/paths + `SourceFileId` + base names + hashes) sourced from program caches. Diagnostics merge compiler and overlay TypeScript diagnostics via provenance and surface host-agnostic spans. Hover, definitions, references, completions, rename, and code actions map template offsets through provenance and TypeScript integration; code actions currently wrap TS quick fixes and project edits back into the template.
@@ -47,8 +48,7 @@ The main deltas compared to `docs/agents/program-architecture.md` are:
 - SSR provenance and reuse
 
   - SSR mappings (HTML + manifest) are ingested into provenance; continue tightening span coverage as SSR emit evolves.
-  - Core stages (10-40) are reused across overlay and SSR via program-level seeds; richer telemetry and single-session reuse are still on the table.
-  - Host telemetry/logging hooks (cache/provenance density/overlay materialization) are still optional.
+  - Core stages (10-40) are reused across overlay and SSR via program-level seeds; single-session reuse is still on the table.
 
 ## Migration hints
 

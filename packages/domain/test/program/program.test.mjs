@@ -130,6 +130,56 @@ test("cache stats totals reflect multi-document builds", () => {
   assert.ok(totals.provenanceEdges > 0);
 });
 
+test("telemetry hooks capture cache/materialization/provenance data", () => {
+  const cacheEvents = [];
+  const materializationEvents = [];
+  const provenanceEvents = [];
+  const program = createProgram({
+    telemetry: {
+      onCacheAccess(event) {
+        cacheEvents.push(event);
+      },
+      onMaterialization(event) {
+        materializationEvents.push(event);
+      },
+      onProvenance(event) {
+        provenanceEvents.push(event);
+      },
+    },
+  });
+  const uri = "/app/telemetry.html";
+
+  program.upsertTemplate(uri, "<template>${name}</template>");
+  program.getOverlay(uri);
+  program.getOverlay(uri);
+  program.getSsr(uri);
+
+  const overlayCaches = cacheEvents.filter((evt) => evt.kind === "overlay");
+  assert.equal(overlayCaches.length, 2);
+  assert.equal(overlayCaches[0]?.programCacheHit, false);
+  assert.equal(overlayCaches[1]?.programCacheHit, true);
+  assert.ok((overlayCaches[0]?.stageReuse.computed.length ?? 0) > 0);
+
+  const ssrCaches = cacheEvents.filter((evt) => evt.kind === "ssr");
+  assert.equal(ssrCaches.length, 1);
+  assert.equal(ssrCaches[0]?.programCacheHit, false);
+
+  const overlayMaterialization = materializationEvents.filter((evt) => evt.kind === "overlay");
+  assert.equal(overlayMaterialization.length, 2);
+  assert.equal(overlayMaterialization[1]?.programCacheHit, true);
+  assert.ok(overlayMaterialization.every((evt) => evt.durationMs >= 0));
+
+  const ssrMaterialization = materializationEvents.filter((evt) => evt.kind === "ssr");
+  assert.equal(ssrMaterialization.length, 1);
+  assert.equal(ssrMaterialization[0]?.programCacheHit, false);
+
+  assert.ok(provenanceEvents.length >= 2);
+  const last = provenanceEvents.at(-1);
+  assert.equal(last?.templateUri, uri);
+  assert.ok((last?.overlayEdges ?? 0) > 0);
+  assert.ok((last?.ssrEdges ?? 0) > 0);
+});
+
 function createVmReflection() {
   return {
     getRootVmTypeExpr() {
@@ -141,9 +191,10 @@ function createVmReflection() {
   };
 }
 
-function createProgram() {
+function createProgram(overrides = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
+    ...overrides,
   });
 }

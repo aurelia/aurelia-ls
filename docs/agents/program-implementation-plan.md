@@ -54,7 +54,7 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Add `SourceStore` adapters for LSP `TextDocuments` and any CLI/build inputs; route open/change/close through `TemplateProgram`.
 - [x] Replace remaining `compileTemplate*` usage in hosts with `TemplateProgram` + services; remove all legacy paths.
 - [x] Wire TS overlay filesystem to consume overlays via `TemplateBuildService` (no direct pipeline calls) and respect naming conventions.
-- [ ] Introduce telemetry/logging hooks (optional) for cache hits, provenance density, and overlay/SSR materialization timing.
+- [x] Introduce telemetry/logging hooks (optional) for cache hits, provenance density, and overlay/SSR materialization timing.
 
 ### Testing and fixtures
 - [ ] Establish a dedicated `packages/domain/test/program` suite for program/provenance/service integration (shared helpers for `SourceStore`, overlay/SSR naming, provenance fixtures). Migrate existing `facade` API/golden coverage onto this program-first harness and drop legacy-only variants.

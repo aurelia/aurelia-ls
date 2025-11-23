@@ -34,9 +34,10 @@ export interface TemplateProgramOptions {
   readonly overlayBaseName?: string;
   readonly sourceStore?: SourceStore;
   readonly provenance?: ProvenanceIndex;
+  readonly telemetry?: TemplateProgramTelemetry;
 }
 
-type ProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance">;
+type ProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance" | "telemetry">;
 type ResolvedProgramOptions = ProgramOptions & { readonly fingerprints: FingerprintHints };
 
 interface CachedCompilation {
@@ -134,6 +135,39 @@ export interface TemplateProgramCacheStats {
   readonly documents: readonly TemplateProgramDocumentStats[];
 }
 
+export interface TemplateProgramCacheAccessEvent {
+  readonly kind: "overlay" | "ssr";
+  readonly uri: DocumentUri;
+  readonly version: number;
+  readonly contentHash: string;
+  readonly optionsFingerprint: string;
+  readonly programCacheHit: boolean;
+  readonly stageReuse: StageReuseSummary;
+}
+
+export interface TemplateProgramMaterializationEvent {
+  readonly kind: "overlay" | "ssr";
+  readonly uri: DocumentUri;
+  readonly durationMs: number;
+  readonly programCacheHit: boolean;
+  readonly stageReuse: StageReuseSummary;
+}
+
+export interface TemplateProgramProvenanceEvent {
+  readonly templateUri: DocumentUri;
+  readonly overlayUri: DocumentUri | null;
+  readonly ssrUris: { html: DocumentUri; manifest: DocumentUri } | null;
+  readonly overlayEdges: number;
+  readonly ssrEdges: number;
+  readonly totalEdges: number;
+}
+
+export interface TemplateProgramTelemetry {
+  readonly onCacheAccess?: (event: TemplateProgramCacheAccessEvent) => void;
+  readonly onMaterialization?: (event: TemplateProgramMaterializationEvent) => void;
+  readonly onProvenance?: (event: TemplateProgramProvenanceEvent) => void;
+}
+
 /**
  * High-level facade over the Aurelia template pipeline.
  * Owns documents, compilation cache, provenance ingestion, and product helpers.
@@ -147,6 +181,7 @@ export interface TemplateProgram {
   readonly optionsFingerprint: string;
   readonly sources: SourceStore;
   readonly provenance: ProvenanceIndex;
+  readonly telemetry: TemplateProgramTelemetry | undefined;
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void;
   invalidateTemplate(uri: DocumentUri): void;
@@ -169,6 +204,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
   readonly optionsFingerprint: string;
   readonly sources: SourceStore;
   readonly provenance: ProvenanceIndex;
+  readonly telemetry: TemplateProgramTelemetry | undefined;
 
   private readonly fingerprintHints: FingerprintHints;
   private readonly compilationCache = new Map<DocumentUri, CachedCompilation>();
@@ -177,12 +213,13 @@ export class DefaultTemplateProgram implements TemplateProgram {
   private readonly accessTrace = new Map<DocumentUri, CacheAccessRecord>();
 
   constructor(options: TemplateProgramOptions) {
-    const { sourceStore, provenance, ...rest } = options;
+    const { sourceStore, provenance, telemetry, ...rest } = options;
     this.fingerprintHints = normalizeFingerprintHints(rest);
     this.options = { ...rest, fingerprints: this.fingerprintHints };
     this.optionsFingerprint = computeProgramOptionsFingerprint(rest, this.fingerprintHints);
     this.sources = sourceStore ?? new InMemorySourceStore();
     this.provenance = provenance ?? new InMemoryProvenanceIndex();
+    this.telemetry = telemetry;
   }
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void {
@@ -219,6 +256,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
   getCompilation(uri: DocumentUri): TemplateCompilation {
     const canonical = this.canonicalUri(uri);
     const snap = this.snapshot(canonical.uri);
+    const startedAt = nowMs();
     const contentHash = hashSnapshotContent(snap);
     const cached = this.compilationCache.get(canonical.uri);
     if (cached && cached.optionsFingerprint === this.optionsFingerprint && cached.contentHash === contentHash) {
@@ -228,9 +266,13 @@ export class DefaultTemplateProgram implements TemplateProgram {
       this.recordAccess(canonical.uri, "overlay", {
         programCacheHit: true,
         stageMeta: cached.compilation.meta,
-        version: cached.version,
+        version: snap.version,
         contentHash,
       });
+      const stageReuse = summarizeStageMeta(cached.compilation.meta);
+      const durationMs = elapsedMs(startedAt);
+      this.emitCacheAccess("overlay", canonical.uri, snap.version, contentHash, stageReuse, true);
+      this.emitMaterialization("overlay", canonical.uri, durationMs, stageReuse, true);
       return cached.compilation;
     }
 
@@ -256,6 +298,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
       optionsFingerprint: this.optionsFingerprint,
     });
 
+    const stageReuse = summarizeStageMeta(compilation.meta);
+    const durationMs = elapsedMs(startedAt);
     this.compilationCache.set(canonical.uri, {
       compilation,
       version: snap.version,
@@ -268,6 +312,9 @@ export class DefaultTemplateProgram implements TemplateProgram {
       version: snap.version,
       contentHash,
     });
+    this.emitCacheAccess("overlay", canonical.uri, snap.version, contentHash, stageReuse, false);
+    this.emitMaterialization("overlay", canonical.uri, durationMs, stageReuse, false);
+    this.emitProvenanceStats(canonical.uri);
     return compilation;
   }
 
@@ -291,6 +338,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
   getSsr(uri: DocumentUri): CompileSsrResult {
     const canonical = this.canonicalUri(uri);
     const snap = this.snapshot(canonical.uri);
+    const startedAt = nowMs();
     const contentHash = hashSnapshotContent(snap);
     const cached = this.ssrCache.get(canonical.uri);
     if (cached && cached.optionsFingerprint === this.optionsFingerprint && cached.contentHash === contentHash) {
@@ -300,9 +348,13 @@ export class DefaultTemplateProgram implements TemplateProgram {
       this.recordAccess(canonical.uri, "ssr", {
         programCacheHit: true,
         stageMeta: cached.ssr.meta,
-        version: cached.version,
+        version: snap.version,
         contentHash,
       });
+      const stageReuse = summarizeStageMeta(cached.ssr.meta);
+      const durationMs = elapsedMs(startedAt);
+      this.emitCacheAccess("ssr", canonical.uri, snap.version, contentHash, stageReuse, true);
+      this.emitMaterialization("ssr", canonical.uri, durationMs, stageReuse, true);
       return cached.ssr;
     }
 
@@ -320,6 +372,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
       optionsFingerprint: this.optionsFingerprint,
     });
 
+    const stageReuse = summarizeStageMeta(ssr.meta);
+    const durationMs = elapsedMs(startedAt);
     this.ssrCache.set(canonical.uri, {
       ssr,
       version: snap.version,
@@ -332,6 +386,9 @@ export class DefaultTemplateProgram implements TemplateProgram {
       version: snap.version,
       contentHash,
     });
+    this.emitCacheAccess("ssr", canonical.uri, snap.version, contentHash, stageReuse, false);
+    this.emitMaterialization("ssr", canonical.uri, durationMs, stageReuse, false);
+    this.emitProvenanceStats(canonical.uri);
     return ssr;
   }
 
@@ -459,6 +516,55 @@ export class DefaultTemplateProgram implements TemplateProgram {
     this.accessTrace.set(uri, { ...existing, [kind]: access });
   }
 
+  private emitCacheAccess(
+    kind: TemplateProgramCacheAccessEvent["kind"],
+    uri: DocumentUri,
+    version: number,
+    contentHash: string,
+    stageReuse: StageReuseSummary,
+    programCacheHit: boolean,
+  ): void {
+    this.telemetry?.onCacheAccess?.({
+      kind,
+      uri,
+      version,
+      contentHash,
+      optionsFingerprint: this.optionsFingerprint,
+      programCacheHit,
+      stageReuse,
+    });
+  }
+
+  private emitMaterialization(
+    kind: TemplateProgramMaterializationEvent["kind"],
+    uri: DocumentUri,
+    durationMs: number,
+    stageReuse: StageReuseSummary,
+    programCacheHit: boolean,
+  ): void {
+    this.telemetry?.onMaterialization?.({
+      kind,
+      uri,
+      durationMs,
+      programCacheHit,
+      stageReuse,
+    });
+  }
+
+  private emitProvenanceStats(templateUri: DocumentUri): void {
+    const handler = this.telemetry?.onProvenance;
+    if (!handler) return;
+    const stats = this.provenance.templateStats(templateUri);
+    handler({
+      templateUri: stats.templateUri,
+      overlayUri: stats.overlayUri,
+      ssrUris: stats.ssrUris,
+      overlayEdges: stats.overlayEdges,
+      ssrEdges: stats.ssrEdges,
+      totalEdges: stats.totalEdges,
+    });
+  }
+
   private resetDocumentState(canonical: CanonicalDocumentUri, dropSource: boolean): void {
     this.compilationCache.delete(canonical.uri);
     this.ssrCache.delete(canonical.uri);
@@ -523,6 +629,14 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
     return opts;
   }
+}
+
+function nowMs(): number {
+  return Date.now();
+}
+
+function elapsedMs(startedAt: number): number {
+  return nowMs() - startedAt;
 }
 
 function withOverlayBase(isJs: boolean, overlayBaseName: string | undefined): { isJs: boolean; overlayBaseName?: string } {
