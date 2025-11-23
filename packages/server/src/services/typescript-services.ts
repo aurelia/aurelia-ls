@@ -10,6 +10,7 @@ import {
   type TsQuickInfo,
   type TsDiagnosticRelated,
   type TsTextEdit,
+  type TsCodeAction,
   type TypeScriptServices,
 } from "@aurelia-ls/domain";
 import { TsService } from "./ts-service.js";
@@ -108,11 +109,67 @@ export class TsServicesAdapter implements TypeScriptServices {
     return edits;
   }
 
+  getCodeActions(overlay: OverlayDocumentSnapshot, start: number, end: number): readonly TsCodeAction[] | null {
+    const path = this.syncOverlay(overlay);
+    const codes = this.collectErrorCodes(path, start, end);
+    if (!codes.length) return [];
+
+    const fixes = this.tsService.getService().getCodeFixesAtPosition(
+      path,
+      start,
+      end,
+      codes,
+      this.formatSettings(),
+      {},
+    );
+    if (!fixes?.length) return [];
+
+    const results: TsCodeAction[] = [];
+    for (const fix of fixes) {
+      const edits: TsTextEdit[] = [];
+      for (const change of fix.changes ?? []) {
+        for (const textChange of change.textChanges ?? []) {
+          const range = this.toRange(change.fileName, textChange.span);
+          if (!range) continue;
+          edits.push({ fileName: change.fileName, range, newText: textChange.newText });
+        }
+      }
+      if (edits.length) {
+        results.push({ title: fix.description, edits });
+      }
+    }
+    return results;
+  }
+
   private syncOverlay(overlay: OverlayDocumentSnapshot): string {
     const canonical = canonicalDocumentUri(overlay.uri);
     const path = this.paths.canonical(canonical.path);
     this.tsService.upsertOverlay(path, overlay.text);
     return path;
+  }
+
+  private collectErrorCodes(path: string, start: number, end: number): number[] {
+    const service = this.tsService.getService();
+    const diagnostics = [
+      ...service.getSyntacticDiagnostics(path),
+      ...service.getSemanticDiagnostics(path),
+      ...service.getSuggestionDiagnostics(path),
+    ];
+    const codes = new Set<number>();
+    for (const diag of diagnostics) {
+      if (typeof diag.code !== "number") continue;
+      if (diag.start === undefined || diag.length === undefined) {
+        codes.add(diag.code);
+        continue;
+      }
+      const diagEnd = diag.start + diag.length;
+      if (diagEnd >= start && diag.start <= end) codes.add(diag.code);
+    }
+    return [...codes];
+  }
+
+  private formatSettings(): ts.FormatCodeSettings {
+    return { ...ts.getDefaultFormatCodeSettings(), convertTabsToSpaces: true };
   }
 
   private toDiagnostic(diag: ts.Diagnostic, fallbackFile: string): TsDiagnostic {

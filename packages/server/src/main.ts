@@ -392,9 +392,20 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
   return mapWorkspaceEdit(edits);
 });
 
-connection.onCodeAction((_params: CodeActionParams): CodeAction[] | null => {
-  // Language service code actions are stubbed for now.
-  return [];
+connection.onCodeAction((params: CodeActionParams): CodeAction[] | null => {
+  const doc = ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  const canonical = canonicalDocumentUri(doc.uri);
+  const actions = languageService.getCodeActions(canonical.uri, params.range);
+  const mapped: CodeAction[] = [];
+  for (const action of actions) {
+    const edit = mapWorkspaceEdit(action.edits);
+    if (!edit) continue;
+    const mappedAction: CodeAction = { title: action.title, edit };
+    if (action.kind) mappedAction.kind = action.kind;
+    mapped.push(mappedAction);
+  }
+  return mapped.length ? mapped : null;
 });
 
 /* =============================================================================
