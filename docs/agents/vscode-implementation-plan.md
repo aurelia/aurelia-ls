@@ -18,11 +18,11 @@ plus the current checkpoints here.
 
 - [ ] Introduce `AureliaProjectIndex`
   - Read `docs/template-lowering-and-binding.md` plus `packages/domain/src/compiler/language/registry.ts` and `packages/domain/src/compiler/language/resource-graph.ts` to align resource shapes/fingerprints.
-  - [ ] Discover Aurelia resources from TS Program + checker; build descriptors.
+  - [x] Discover Aurelia resources from TS Program + checker; build descriptors.
   - [x] Produce `ResourceGraph`, `Semantics`, and a resource/config fingerprint.
   - [x] Expose `refresh/currentResourceGraph/currentSemantics/currentFingerprint`.
   - [x] Add discovery unit tests with small TS fixtures.
-  - [ ] Implement decorator/convention-based crawler (custom elements/attributes, bindables, aliases) and thread into fingerprint.
+  - [x] Implement decorator/convention-based crawler (custom elements/attributes, bindables, aliases) and thread into fingerprint.
   - [ ] Map discovered resources into scoped `ResourceGraph` overlays when applicable.
 
 - [ ] Align `TemplateWorkspace` to goal facade
