@@ -31,7 +31,7 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
   Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift. Cache/provenance invalidation hooks, bulk overlay/SSR builds, and cache stats are available for hosts that want to observe reuse.
 
 - `services.ts`
-  Language/build facades. Diagnostics merge compiler and overlay TypeScript diagnostics via provenance and surface host-agnostic spans; overlay/SSR access is wired. Hover, definitions, and references map template offsets through provenance and TS quick info/definitions; completions/code actions/rename remain stubbed.
+  Language/build facades. Diagnostics merge compiler and overlay TypeScript diagnostics via provenance and surface host-agnostic spans; overlay/SSR access is wired. Hover, definitions, and references map template offsets through provenance and TS quick info/definitions; completions combine template bindables with provenance-aware TS completions. Code actions/rename remain stubbed.
 
 ## Key assumptions
 

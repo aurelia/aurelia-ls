@@ -207,6 +207,102 @@ test("references de-duplicate overlay hits and keep VM references", () => {
   assert.deepEqual(templateRef.range, spanToRange(mappingEntry.htmlSpan, markup));
 });
 
+test("completions project TypeScript replacement spans through provenance", () => {
+  const program = createProgram();
+  const uri = "/app/completions-ts.html";
+  const markup = "<template><span>${value}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCompletions(overlay, offset) {
+        assert.equal(overlay.uri, overlayUri);
+        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        return [
+          {
+            name: "value",
+            kind: "property",
+            replacementSpan: {
+              start: mappingEntry.overlaySpan.start,
+              length: mappingEntry.overlaySpan.end - mappingEntry.overlaySpan.start,
+            },
+          },
+        ];
+      },
+    },
+  });
+
+  const pos = positionAtOffset(markup, mappingEntry.htmlSpan.start + 1);
+  const completions = service.getCompletions(uri, pos);
+  assert.equal(completions.length, 1);
+  const [item] = completions;
+  assert.equal(item.label, "value");
+  assert.equal(item.source, "typescript");
+  assert.deepEqual(item.range, spanToRange(mappingEntry.htmlSpan, markup));
+});
+
+test("completions map TypeScript entries without replacement spans to template spans", () => {
+  const program = createProgram();
+  const uri = "/app/completions-ts-no-replace.html";
+  const markup = "<template><span>${vmProp}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCompletions(overlay, offset) {
+        assert.equal(overlay.uri, overlayUri);
+        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        return [
+          {
+            name: "vmProp",
+            insertText: "vmProp",
+            sortText: "1",
+          },
+        ];
+      },
+    },
+  });
+
+  const pos = positionAtOffset(markup, mappingEntry.htmlSpan.start + 2);
+  const completions = service.getCompletions(uri, pos);
+  assert.equal(completions.length, 1);
+  const [item] = completions;
+  assert.equal(item.label, "vmProp");
+  assert.equal(item.insertText, "vmProp");
+  assert.equal(item.source, "typescript");
+  assert.deepEqual(item.range, spanToRange(mappingEntry.htmlSpan, markup));
+});
+
+test("completions do not invoke TypeScript when provenance misses", () => {
+  const program = createProgram();
+  const uri = "/app/completions-outside.html";
+  const markup = "<template><span>${value}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  let tsCalled = false;
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCompletions() { tsCalled = true; return [{ name: "shouldNotAppear" }]; },
+    },
+  });
+
+  const pos = positionAtOffset(markup, markup.length - 1);
+  const completions = service.getCompletions(uri, pos);
+  assert.equal(completions.length, 0);
+  assert.equal(tsCalled, false, "TypeScript completions should not run without provenance");
+});
+
 test("hover uses overlay offset when TS quick info lacks span data", () => {
   const program = createProgram();
   const uri = "/app/hover-fallback.html";
