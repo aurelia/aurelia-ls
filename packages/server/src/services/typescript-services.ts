@@ -104,7 +104,13 @@ export class TsServicesAdapter implements TypeScriptServices {
       if (!range) continue;
       const prefix = loc.prefixText ?? "";
       const suffix = loc.suffixText ?? "";
-      edits.push({ fileName: loc.fileName, range, newText: `${prefix}${newName}${suffix}` });
+      edits.push({
+        fileName: loc.fileName,
+        range,
+        start: loc.textSpan.start,
+        length: loc.textSpan.length,
+        newText: `${prefix}${newName}${suffix}`,
+      });
     }
     return edits;
   }
@@ -131,7 +137,13 @@ export class TsServicesAdapter implements TypeScriptServices {
         for (const textChange of change.textChanges ?? []) {
           const range = this.toRange(change.fileName, textChange.span);
           if (!range) continue;
-          edits.push({ fileName: change.fileName, range, newText: textChange.newText });
+          edits.push({
+            fileName: change.fileName,
+            range,
+            start: textChange.span.start,
+            length: textChange.span.length,
+            newText: textChange.newText,
+          });
         }
       }
       if (edits.length) {
@@ -202,7 +214,12 @@ export class TsServicesAdapter implements TypeScriptServices {
     for (const entry of entries) {
       const range = this.toRange(entry.fileName, entry.textSpan);
       if (!range) continue;
-      results.push({ fileName: entry.fileName, range });
+      results.push({
+        fileName: entry.fileName,
+        range,
+        start: entry.textSpan.start,
+        length: entry.textSpan.length,
+      });
     }
     return results;
   }
