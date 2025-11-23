@@ -65,7 +65,7 @@ const logger: Logger = {
  * ========================================================================== */
 const paths = createPathUtils();
 const overlayFs = new OverlayFs(paths);
-const tsService = new TsService(overlayFs, paths, logger, () => workspaceRoot);
+const tsService = new TsService(overlayFs, paths, logger);
 const tsAdapter = new TsServicesAdapter(tsService, paths);
 const workspace = new TemplateWorkspace({
   program: {
@@ -414,6 +414,7 @@ connection.onCodeAction((params: CodeActionParams): CodeAction[] | null => {
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
   logger.info(`initialize: root=${workspaceRoot ?? "<cwd>"} caseSensitive=${paths.isCaseSensitive()}`);
+  tsService.configure({ workspaceRoot });
   ensurePrelude();
   return {
     capabilities: {

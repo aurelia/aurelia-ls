@@ -7,15 +7,17 @@ plus the current checkpoints here.
 ## Initial crawl pointers (always do these; not tracked as tasks)
 - Read `docs/agents/vscode-architecture.md` for the normative target.
 - Open `packages/server/src/main.ts`, `packages/server/src/services/*`, and
-  `packages/domain/src/compiler/facade.ts` to refresh current wiring.
+  `packages/domain/src/compiler/program/*` to refresh current wiring.
 
 ## Implementation checklist
-- [ ] Harden TS host and Overlay FS
-  - [ ] Load tsconfig and discover root files; expose `getProjectVersion`, `compilerOptions`, and `getService`.
-  - [ ] Ensure overlays are first-class (module resolution, script roots, versioned snapshots).
-  - [ ] Add unit tests: `packages/server/test/unit/overlay-fs.test.mjs`, `ts-service-host.test.mjs`.
+- [x] Harden TS host and Overlay FS
+  - [x] Load tsconfig and discover root files; expose `getProjectVersion`, `compilerOptions`, and `getService`.
+  - [x] Ensure overlays are first-class (module resolution, script roots, versioned snapshots).
+  - [x] Add unit tests: `packages/server/test/unit/overlay-fs.test.mjs`, `ts-service-host.test.mjs`.
+  - [ ] Wire tsconfig reloads/project-version bumps into LSP lifecycle (config change/reload path).
 
 - [ ] Introduce `AureliaProjectIndex`
+  - Read `docs/template-lowering-and-binding.md` plus `packages/domain/src/compiler/language/registry.ts` and `packages/domain/src/compiler/language/resource-graph.ts` to align resource shapes/fingerprints.
   - [ ] Discover Aurelia resources from TS Program + checker; build descriptors.
   - [ ] Produce `ResourceGraph`, `Semantics`, and a resource/config fingerprint.
   - [ ] Expose `refresh/currentResourceGraph/currentSemantics/currentFingerprint`.
