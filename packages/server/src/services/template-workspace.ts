@@ -12,6 +12,7 @@ import {
   type TemplateBuildService,
   type TemplateLanguageService,
   type TemplateLanguageServiceOptions,
+  type TemplateLanguageDiagnostics,
   type TemplateProgram,
   type TemplateProgramOptions,
 } from "@aurelia-ls/domain";
@@ -25,6 +26,7 @@ export interface TemplateWorkspaceOptions {
   readonly language?: TemplateLanguageServiceOptions;
   readonly sourceStore?: SourceStore;
   readonly provenance?: ProvenanceIndex;
+  readonly fingerprint?: string;
 }
 
 /**
@@ -43,6 +45,7 @@ export class TemplateWorkspace {
   #programOptions: WorkspaceProgramOptions;
   #languageOptions: TemplateLanguageServiceOptions;
   #optionsFingerprint: string;
+  #workspaceFingerprint: string;
 
   constructor(options: TemplateWorkspaceOptions) {
     this.sources = options.sourceStore ?? new InMemorySourceStore();
@@ -52,6 +55,7 @@ export class TemplateWorkspace {
 
     this.#program = this.#createProgram(this.provenance);
     this.#optionsFingerprint = this.#program.optionsFingerprint;
+    this.#workspaceFingerprint = options.fingerprint ?? this.#optionsFingerprint;
     this.#build = new DefaultTemplateBuildService(this.#program);
     this.#language = new DefaultTemplateLanguageService(this.#program, {
       ...this.#languageOptions,
@@ -80,6 +84,18 @@ export class TemplateWorkspace {
     return this.#optionsFingerprint;
   }
 
+  get fingerprint(): string {
+    return this.#workspaceFingerprint;
+  }
+
+  open(doc: TextDocument): DocumentSnapshot {
+    return this.upsertDocument(doc);
+  }
+
+  change(doc: TextDocument): DocumentSnapshot {
+    return this.upsertDocument(doc);
+  }
+
   upsertDocument(doc: TextDocument): DocumentSnapshot {
     return this.#documents.upsertDocument(doc);
   }
@@ -92,6 +108,11 @@ export class TemplateWorkspace {
     return this.#documents.ensureFromFile(uri);
   }
 
+  getDiagnostics(uri: DocumentUri | string): TemplateLanguageDiagnostics {
+    const canonical = canonicalDocumentUri(uri);
+    return this.#language.getDiagnostics(canonical.uri);
+  }
+
   close(uri: DocumentUri | string): void {
     this.#documents.close(uri);
   }
@@ -101,16 +122,21 @@ export class TemplateWorkspace {
    * live document snapshots survive the transition. Returns true when the
    * program was replaced.
    */
-  reconfigure(program: WorkspaceProgramOptions): boolean {
-    const preview = this.#createProgram(new InMemoryProvenanceIndex(), program);
-    if (preview.optionsFingerprint === this.#optionsFingerprint) {
+  reconfigure(options: WorkspaceProgramOptions | TemplateWorkspaceOptions): boolean {
+    const next = this.#normalizeOptions(options);
+    const preview = this.#createProgram(new InMemoryProvenanceIndex(), next.program);
+    const programFingerprint = preview.optionsFingerprint;
+    const workspaceFingerprint = next.fingerprint ?? programFingerprint;
+    if (programFingerprint === this.#optionsFingerprint && workspaceFingerprint === this.#workspaceFingerprint) {
       return false;
     }
 
-    this.#programOptions = program;
+    this.#programOptions = next.program;
+    this.#languageOptions = next.language;
     this.provenance = preview.provenance;
     this.#program = preview;
-    this.#optionsFingerprint = preview.optionsFingerprint;
+    this.#optionsFingerprint = programFingerprint;
+    this.#workspaceFingerprint = workspaceFingerprint;
     this.#build = new DefaultTemplateBuildService(this.#program);
     this.#language = new DefaultTemplateLanguageService(this.#program, {
       ...this.#languageOptions,
@@ -134,5 +160,19 @@ export class TemplateWorkspace {
       sourceStore: this.sources,
       provenance,
     });
+  }
+
+  #normalizeOptions(
+    options: WorkspaceProgramOptions | TemplateWorkspaceOptions,
+  ): { program: WorkspaceProgramOptions; language: TemplateLanguageServiceOptions; fingerprint?: string } {
+    if ("program" in options) {
+      const normalized: { program: WorkspaceProgramOptions; language: TemplateLanguageServiceOptions; fingerprint?: string } = {
+        program: options.program,
+        language: options.language ?? this.#languageOptions,
+      };
+      if (options.fingerprint !== undefined) normalized.fingerprint = options.fingerprint;
+      return normalized;
+    }
+    return { program: options, language: this.#languageOptions };
   }
 }

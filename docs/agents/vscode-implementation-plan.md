@@ -19,15 +19,17 @@ plus the current checkpoints here.
 - [ ] Introduce `AureliaProjectIndex`
   - Read `docs/template-lowering-and-binding.md` plus `packages/domain/src/compiler/language/registry.ts` and `packages/domain/src/compiler/language/resource-graph.ts` to align resource shapes/fingerprints.
   - [ ] Discover Aurelia resources from TS Program + checker; build descriptors.
-  - [ ] Produce `ResourceGraph`, `Semantics`, and a resource/config fingerprint.
-  - [ ] Expose `refresh/currentResourceGraph/currentSemantics/currentFingerprint`.
-  - [ ] Add discovery unit tests with small TS fixtures.
+  - [x] Produce `ResourceGraph`, `Semantics`, and a resource/config fingerprint.
+  - [x] Expose `refresh/currentResourceGraph/currentSemantics/currentFingerprint`.
+  - [x] Add discovery unit tests with small TS fixtures.
+  - [ ] Implement decorator/convention-based crawler (custom elements/attributes, bindables, aliases) and thread into fingerprint.
+  - [ ] Map discovered resources into scoped `ResourceGraph` overlays when applicable.
 
 - [ ] Align `TemplateWorkspace` to goal facade
-  - [ ] Provide explicit `open/change/close` wired to LSP `TextDocuments`.
-  - [ ] Own `SourceStore` + `ProvenanceIndex`; construct `TemplateProgram`/language/build services from index outputs.
-  - [ ] Recreate workspace on fingerprint drift while preserving live snapshots.
-  - [ ] Unit-test lifecycle/caching (`template-workspace.basic.test.mjs`).
+  - [x] Provide explicit `open/change/close` wired to LSP `TextDocuments`.
+  - [x] Own `SourceStore` + `ProvenanceIndex`; construct `TemplateProgram`/language/build services from index outputs.
+  - [x] Recreate workspace on fingerprint drift while preserving live snapshots.
+  - [x] Unit-test lifecycle/caching (`template-workspace.basic.test.mjs`).
 
 - [ ] Rewire LSP shell (`packages/server/src/main.ts`)
   - [ ] Instantiate `PathUtils`, `OverlayFs`, `TsService`, `AureliaProjectIndex`, `TemplateWorkspace` from index data.
