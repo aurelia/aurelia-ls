@@ -83,15 +83,23 @@ export interface CacheOptions {
   dir?: string;
 }
 
+export type FingerprintToken =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly FingerprintToken[]
+  | { readonly [key: string]: FingerprintToken };
+
 export interface FingerprintHints {
-  attrParser?: string;
-  exprParser?: string;
-  semantics?: string;
-  vm?: string;
-  overlay?: string;
-  ssr?: string;
-  analyze?: string;
-  [extra: string]: string | undefined;
+  attrParser?: FingerprintToken;
+  exprParser?: FingerprintToken;
+  semantics?: FingerprintToken;
+  vm?: FingerprintToken;
+  overlay?: FingerprintToken;
+  ssr?: FingerprintToken;
+  analyze?: FingerprintToken;
+  [extra: string]: FingerprintToken | undefined;
 }
 
 export interface StageDefinition<TKey extends StageKey> {

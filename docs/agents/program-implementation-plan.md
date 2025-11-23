@@ -19,9 +19,9 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Add helpers/adapters to enforce `DocumentUri` branding at host boundaries (LSP/CLI/TS host).
 
 ### Caching and fingerprints
-- [ ] Surface a program options fingerprint (opaque string/object) and thread option fingerprints into compilation calls.
-- [ ] Align program-level cache keys with stage fingerprints: guard `(uri, version)` with content hash + option fingerprint where persistence is possible.
-- [ ] Document option drift handling (when to recreate a program) and expose a cheap comparison hook for hosts.
+- [x] Surface a program options fingerprint (opaque string/object) and thread option fingerprints into compilation calls.
+- [x] Align program-level cache keys with stage fingerprints: guard `(uri, version)` with content hash + option fingerprint where persistence is possible.
+- [x] Document option drift handling (when to recreate a program) and expose a cheap comparison hook for hosts.
 
 ### Provenance indexing and queries
 - [ ] Expand overlay mappings into `overlayExpr` edges; include `ExprId` + template spans for expression and interpolation segments.
