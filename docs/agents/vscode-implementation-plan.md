@@ -40,6 +40,7 @@ plus the current checkpoints here.
   - [x] Template diagnostics via `TemplateLanguageService`; overlay build via `TemplateBuildService`.
   - [x] TS diagnostics via `TsService`, mapped back with provenance/mapping; send unified LSP diagnostics.
   - [x] Hover/completions/defs/refs/rename/code actions: route through TemplateLanguageService + provenance-backed TS calls (no ad-hoc mapping in `main.ts`).
+  - [ ] Wire VM typing/reflection so template-to-VM definitions consistently land in the component (qualified root VM type, provenance).
 
 - [ ] Overlay/SSR custom requests
   - [ ] `aurelia/getOverlay` and `aurelia/getSsr` call `TemplateBuildService`; update `OverlayFs` only from build outputs.
