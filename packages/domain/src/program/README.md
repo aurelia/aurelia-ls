@@ -28,7 +28,7 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
   Edge contracts and an in-memory `ProvenanceIndex`. Overlay mappings are canonicalized (URIs + `SourceFileId` on spans), expanded into expression/member edges, and exposed through offset-aware queries plus convenience lookups.
 
 - `program.ts`
-  Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift.
+  Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift. Cache/provenance invalidation hooks, bulk overlay/SSR builds, and cache stats are available for hosts that want to observe reuse.
 
 - `services.ts`
   Language/build facades. Diagnostics and overlay/SSR access are wired; hover/defs/refs/completions/code actions/rename are stubbed.

@@ -49,6 +49,25 @@ export interface TemplateProvenanceHit {
   readonly edge: ProvenanceEdge;
 }
 
+export interface ProvenanceTemplateStats {
+  readonly templateUri: DocumentUri;
+  readonly overlayUri: DocumentUri | null;
+  readonly ssrUris: { html: DocumentUri; manifest: DocumentUri } | null;
+  readonly totalEdges: number;
+  readonly overlayEdges: number;
+  readonly ssrEdges: number;
+}
+
+export interface ProvenanceStats {
+  readonly totalEdges: number;
+  readonly byKind: Partial<Record<ProvenanceKind, number>>;
+  readonly documents: readonly {
+    readonly uri: DocumentUri;
+    readonly edges: number;
+    readonly byKind: Partial<Record<ProvenanceKind, number>>;
+  }[];
+}
+
 export interface ProvenanceIndex {
   addEdges(edges: Iterable<ProvenanceEdge>): void;
   /**
@@ -64,6 +83,8 @@ export interface ProvenanceIndex {
   findBySource(uri: DocumentUri, offset: number): ProvenanceEdge[];
   lookupGenerated(uri: DocumentUri, offset: number): OverlayProvenanceHit | null;
   lookupSource(uri: DocumentUri, offset: number): TemplateProvenanceHit | null;
+  stats(): ProvenanceStats;
+  templateStats(templateUri: DocumentUri): ProvenanceTemplateStats;
   getOverlayMapping?(templateUri: DocumentUri): TemplateMappingArtifact | null;
   getOverlayUri?(templateUri: DocumentUri): DocumentUri | null;
   getSsrMapping?(templateUri: DocumentUri): SsrMappingArtifact | null;
@@ -155,6 +176,56 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   getOverlayMapping(templateUri: DocumentUri): TemplateMappingArtifact | null {
     const canonical = canonicalDocumentUri(templateUri).uri;
     return this.overlayByTemplate.get(canonical)?.mapping ?? null;
+  }
+
+  stats(): ProvenanceStats {
+    const byKind = zeroedKindCounts();
+    const docMap = new Map<DocumentUri, { edges: number; byKind: Record<ProvenanceKind, number> }>();
+    for (const edge of this.edges) {
+      byKind[edge.kind] = (byKind[edge.kind] ?? 0) + 1;
+      bumpDocCounts(docMap, edge.from.uri, edge.kind);
+      bumpDocCounts(docMap, edge.to.uri, edge.kind);
+    }
+    const documents = Array.from(docMap.entries()).map(([uri, stats]) => ({
+      uri,
+      edges: stats.edges,
+      byKind: stats.byKind,
+    }));
+    return { totalEdges: this.edges.length, byKind, documents };
+  }
+
+  templateStats(templateUri: DocumentUri): ProvenanceTemplateStats {
+    const canonical = canonicalDocumentUri(templateUri);
+    const overlay = this.overlayByTemplate.get(canonical.uri);
+    const ssr = this.ssrByTemplate.get(canonical.uri);
+    const trackedUris = new Set<DocumentUri>([canonical.uri]);
+    if (overlay) trackedUris.add(overlay.overlayUri);
+    if (ssr) {
+      trackedUris.add(ssr.htmlUri);
+      trackedUris.add(ssr.manifestUri);
+    }
+
+    let totalEdges = 0;
+    let overlayEdges = 0;
+    let ssrEdges = 0;
+    for (const edge of this.edges) {
+      if (!trackedUris.has(edge.from.uri) && !trackedUris.has(edge.to.uri)) continue;
+      totalEdges += 1;
+      if (edge.kind === "overlayExpr" || edge.kind === "overlayMember") {
+        overlayEdges += 1;
+      } else if (edge.kind === "ssrNode") {
+        ssrEdges += 1;
+      }
+    }
+
+    return {
+      templateUri: canonical.uri,
+      overlayUri: overlay?.overlayUri ?? null,
+      ssrUris: ssr ? { html: ssr.htmlUri, manifest: ssr.manifestUri } : null,
+      totalEdges,
+      overlayEdges,
+      ssrEdges,
+    };
   }
 
   getOverlayUri(templateUri: DocumentUri): DocumentUri | null {
@@ -427,4 +498,24 @@ function ensureEdgeList(map: Map<DocumentUri, ProvenanceEdge[]>, uri: DocumentUr
   const next: ProvenanceEdge[] = [];
   map.set(uri, next);
   return next;
+}
+
+function zeroedKindCounts(): Record<ProvenanceKind, number> {
+  return { overlayExpr: 0, overlayMember: 0, ssrNode: 0, custom: 0 };
+}
+
+function bumpDocCounts(
+  map: Map<DocumentUri, { edges: number; byKind: Record<ProvenanceKind, number> }>,
+  uri: DocumentUri,
+  kind: ProvenanceKind,
+): void {
+  const current = map.get(uri);
+  if (current) {
+    current.edges += 1;
+    current.byKind[kind] = (current.byKind[kind] ?? 0) + 1;
+    return;
+  }
+  const byKind = zeroedKindCounts();
+  byKind[kind] = 1;
+  map.set(uri, { edges: 1, byKind });
 }

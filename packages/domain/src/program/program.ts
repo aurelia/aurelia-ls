@@ -5,6 +5,7 @@ import {
   type CompileSsrResult,
   type TemplateCompilation,
   type TemplateDiagnostics,
+  type StageMetaSnapshot,
 } from "../compiler/facade.js";
 import { DEFAULT as SEM_DEFAULT, type Semantics } from "../compiler/language/registry.js";
 import type { ResourceGraph, ResourceScopeId } from "../compiler/language/resource-graph.js";
@@ -59,6 +60,80 @@ interface CoreStageCacheEntry {
   readonly optionsFingerprint: string;
 }
 
+const STAGE_ORDER: readonly StageKey[] = [
+  "10-lower",
+  "20-resolve-host",
+  "30-bind",
+  "40-typecheck",
+  "50-plan-overlay",
+  "60-emit-overlay",
+  "50-plan-ssr",
+  "60-emit-ssr",
+] as const;
+
+const CORE_STAGE_KEYS: readonly StageKey[] = ["10-lower", "20-resolve-host", "30-bind", "40-typecheck"];
+
+interface CacheAccessEntry {
+  readonly programCacheHit: boolean;
+  readonly stageMeta: StageMetaSnapshot;
+  readonly version: number;
+  readonly contentHash: string;
+}
+
+interface CacheAccessRecord {
+  overlay?: CacheAccessEntry;
+  ssr?: CacheAccessEntry;
+}
+
+export interface StageReuseSummary {
+  readonly seeded: readonly StageKey[];
+  readonly fromCache: readonly StageKey[];
+  readonly computed: readonly StageKey[];
+  readonly meta: StageMetaSnapshot;
+}
+
+export interface TemplateProgramCacheEntryStats {
+  readonly version: number;
+  readonly contentHash: string;
+  readonly optionsFingerprint: string;
+  readonly programCacheHit: boolean;
+  readonly stageReuse: StageReuseSummary | null;
+}
+
+export interface TemplateProgramCoreCacheEntryStats extends TemplateProgramCacheEntryStats {
+  readonly stages: readonly StageKey[];
+}
+
+export interface TemplateProgramProvenanceStats {
+  readonly totalEdges: number;
+  readonly overlayEdges: number;
+  readonly ssrEdges: number;
+  readonly overlayUri: DocumentUri | null;
+  readonly ssrUris: { html: DocumentUri; manifest: DocumentUri } | null;
+}
+
+export interface TemplateProgramDocumentStats {
+  readonly uri: DocumentUri;
+  readonly version: number | null;
+  readonly contentHash: string | null;
+  readonly compilation?: TemplateProgramCacheEntryStats;
+  readonly ssr?: TemplateProgramCacheEntryStats;
+  readonly core?: TemplateProgramCoreCacheEntryStats;
+  readonly provenance: TemplateProgramProvenanceStats;
+}
+
+export interface TemplateProgramCacheStats {
+  readonly optionsFingerprint: string;
+  readonly totals: {
+    readonly sources: number;
+    readonly compilation: number;
+    readonly ssr: number;
+    readonly core: number;
+    readonly provenanceEdges: number;
+  };
+  readonly documents: readonly TemplateProgramDocumentStats[];
+}
+
 /**
  * High-level facade over the Aurelia template pipeline.
  * Owns documents, compilation cache, provenance ingestion, and product helpers.
@@ -74,14 +149,19 @@ export interface TemplateProgram {
   readonly provenance: ProvenanceIndex;
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void;
+  invalidateTemplate(uri: DocumentUri): void;
+  invalidateAll(): void;
   closeTemplate(uri: DocumentUri): void;
 
   getDiagnostics(uri: DocumentUri): TemplateDiagnostics;
   getOverlay(uri: DocumentUri): CompileOverlayResult;
+  buildAllOverlays(): ReadonlyMap<DocumentUri, CompileOverlayResult>;
   getSsr(uri: DocumentUri): CompileSsrResult;
+  buildAllSsr(): ReadonlyMap<DocumentUri, CompileSsrResult>;
   getQuery(uri: DocumentUri): TemplateQueryFacade;
   getMapping(uri: DocumentUri): TemplateMappingArtifact | null;
   getCompilation(uri: DocumentUri): TemplateCompilation;
+  getCacheStats(target?: DocumentUri): TemplateProgramCacheStats;
 }
 
 export class DefaultTemplateProgram implements TemplateProgram {
@@ -94,6 +174,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
   private readonly compilationCache = new Map<DocumentUri, CachedCompilation>();
   private readonly ssrCache = new Map<DocumentUri, CachedSsrCompilation>();
   private readonly coreCache = new Map<DocumentUri, CoreStageCacheEntry>();
+  private readonly accessTrace = new Map<DocumentUri, CacheAccessRecord>();
 
   constructor(options: TemplateProgramOptions) {
     const { sourceStore, provenance, ...rest } = options;
@@ -106,20 +187,24 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void {
     const canonical = this.canonicalUri(uri);
-    this.provenance.removeDocument(canonical.uri);
+    this.resetDocumentState(canonical, false);
     this.sources.set(canonical.uri, text, version);
-    this.compilationCache.delete(canonical.uri);
-    this.ssrCache.delete(canonical.uri);
-    this.coreCache.delete(canonical.uri);
+  }
+
+  invalidateTemplate(uri: DocumentUri): void {
+    const canonical = this.canonicalUri(uri);
+    this.resetDocumentState(canonical, false);
+  }
+
+  invalidateAll(): void {
+    for (const uri of this.collectKnownUris()) {
+      this.resetDocumentState(this.canonicalUri(uri), false);
+    }
   }
 
   closeTemplate(uri: DocumentUri): void {
     const canonical = this.canonicalUri(uri);
-    this.sources.delete(canonical.uri);
-    this.compilationCache.delete(canonical.uri);
-    this.ssrCache.delete(canonical.uri);
-    this.coreCache.delete(canonical.uri);
-    this.provenance.removeDocument(canonical.uri);
+    this.resetDocumentState(canonical, true);
   }
 
   private snapshot(uri: DocumentUri): DocumentSnapshot {
@@ -140,6 +225,12 @@ export class DefaultTemplateProgram implements TemplateProgram {
       if (cached.version !== snap.version) {
         this.compilationCache.set(canonical.uri, { ...cached, version: snap.version });
       }
+      this.recordAccess(canonical.uri, "overlay", {
+        programCacheHit: true,
+        stageMeta: cached.compilation.meta,
+        version: cached.version,
+        contentHash,
+      });
       return cached.compilation;
     }
 
@@ -171,6 +262,12 @@ export class DefaultTemplateProgram implements TemplateProgram {
       contentHash,
       optionsFingerprint: this.optionsFingerprint,
     });
+    this.recordAccess(canonical.uri, "overlay", {
+      programCacheHit: false,
+      stageMeta: compilation.meta,
+      version: snap.version,
+      contentHash,
+    });
     return compilation;
   }
 
@@ -182,6 +279,15 @@ export class DefaultTemplateProgram implements TemplateProgram {
     return this.getCompilation(uri).overlay;
   }
 
+  buildAllOverlays(): ReadonlyMap<DocumentUri, CompileOverlayResult> {
+    const results = new Map<DocumentUri, CompileOverlayResult>();
+    for (const snap of this.sources.all()) {
+      const canonical = this.canonicalUri(snap.uri);
+      results.set(canonical.uri, this.getOverlay(canonical.uri));
+    }
+    return results;
+  }
+
   getSsr(uri: DocumentUri): CompileSsrResult {
     const canonical = this.canonicalUri(uri);
     const snap = this.snapshot(canonical.uri);
@@ -191,6 +297,12 @@ export class DefaultTemplateProgram implements TemplateProgram {
       if (cached.version !== snap.version) {
         this.ssrCache.set(canonical.uri, { ...cached, version: snap.version });
       }
+      this.recordAccess(canonical.uri, "ssr", {
+        programCacheHit: true,
+        stageMeta: cached.ssr.meta,
+        version: cached.version,
+        contentHash,
+      });
       return cached.ssr;
     }
 
@@ -214,7 +326,22 @@ export class DefaultTemplateProgram implements TemplateProgram {
       contentHash,
       optionsFingerprint: this.optionsFingerprint,
     });
+    this.recordAccess(canonical.uri, "ssr", {
+      programCacheHit: false,
+      stageMeta: ssr.meta,
+      version: snap.version,
+      contentHash,
+    });
     return ssr;
+  }
+
+  buildAllSsr(): ReadonlyMap<DocumentUri, CompileSsrResult> {
+    const results = new Map<DocumentUri, CompileSsrResult>();
+    for (const snap of this.sources.all()) {
+      const canonical = this.canonicalUri(snap.uri);
+      results.set(canonical.uri, this.getSsr(canonical.uri));
+    }
+    return results;
   }
 
   getQuery(uri: DocumentUri): TemplateQueryFacade {
@@ -223,6 +350,59 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   getMapping(uri: DocumentUri): TemplateMappingArtifact | null {
     return this.getCompilation(uri).mapping ?? null;
+  }
+
+  getCacheStats(target?: DocumentUri): TemplateProgramCacheStats {
+    const filterUri = target ? this.canonicalUri(target).uri : null;
+    const provenanceStats = this.provenance.stats();
+    const documents: TemplateProgramDocumentStats[] = [];
+    const uris = filterUri ? [filterUri] : Array.from(this.collectKnownUris());
+
+    for (const uri of uris) {
+      const canonical = this.canonicalUri(uri);
+      const snap = this.sources.get(canonical.uri);
+      const compilation = this.compilationCache.get(canonical.uri);
+      const ssr = this.ssrCache.get(canonical.uri);
+      const core = this.coreCache.get(canonical.uri);
+      const provenance = this.provenance.templateStats(canonical.uri);
+
+      const contentHash =
+        (snap ? hashSnapshotContent(snap) : null) ??
+        compilation?.contentHash ??
+        ssr?.contentHash ??
+        core?.contentHash ??
+        null;
+
+      documents.push({
+        uri: canonical.uri,
+        version: snap?.version ?? null,
+        contentHash,
+        ...(compilation ? { compilation: this.overlayCacheStats(canonical.uri, compilation) } : {}),
+        ...(ssr ? { ssr: this.ssrCacheStats(canonical.uri, ssr) } : {}),
+        ...(core ? { core: this.coreCacheStats(core) } : {}),
+        provenance: {
+          totalEdges: provenance.totalEdges,
+          overlayEdges: provenance.overlayEdges,
+          ssrEdges: provenance.ssrEdges,
+          overlayUri: provenance.overlayUri,
+          ssrUris: provenance.ssrUris,
+        },
+      });
+    }
+
+    documents.sort((a, b) => a.uri.localeCompare(b.uri));
+
+    return {
+      optionsFingerprint: this.optionsFingerprint,
+      totals: {
+        sources: this.countSources(),
+        compilation: this.compilationCache.size,
+        ssr: this.ssrCache.size,
+        core: this.coreCache.size,
+        provenanceEdges: provenanceStats.totalEdges,
+      },
+      documents,
+    };
   }
 
   private coreSeed(
@@ -239,6 +419,72 @@ export class DefaultTemplateProgram implements TemplateProgram {
       "30-bind": cached.stages["30-bind"],
       "40-typecheck": cached.stages["40-typecheck"],
     };
+  }
+
+  private overlayCacheStats(uri: DocumentUri, cached: CachedCompilation): TemplateProgramCacheEntryStats {
+    const access = this.accessTrace.get(uri)?.overlay;
+    return {
+      version: cached.version,
+      contentHash: cached.contentHash,
+      optionsFingerprint: cached.optionsFingerprint,
+      programCacheHit: access?.programCacheHit ?? false,
+      stageReuse: summarizeStageMeta(cached.compilation.meta),
+    };
+  }
+
+  private ssrCacheStats(uri: DocumentUri, cached: CachedSsrCompilation): TemplateProgramCacheEntryStats {
+    const access = this.accessTrace.get(uri)?.ssr;
+    return {
+      version: cached.version,
+      contentHash: cached.contentHash,
+      optionsFingerprint: cached.optionsFingerprint,
+      programCacheHit: access?.programCacheHit ?? false,
+      stageReuse: summarizeStageMeta(cached.ssr.meta),
+    };
+  }
+
+  private coreCacheStats(cached: CoreStageCacheEntry): TemplateProgramCoreCacheEntryStats {
+    return {
+      version: cached.version,
+      contentHash: cached.contentHash,
+      optionsFingerprint: cached.optionsFingerprint,
+      programCacheHit: false,
+      stageReuse: null,
+      stages: CORE_STAGE_KEYS,
+    };
+  }
+
+  private recordAccess(uri: DocumentUri, kind: "overlay" | "ssr", access: CacheAccessEntry): void {
+    const existing = this.accessTrace.get(uri) ?? {};
+    this.accessTrace.set(uri, { ...existing, [kind]: access });
+  }
+
+  private resetDocumentState(canonical: CanonicalDocumentUri, dropSource: boolean): void {
+    this.compilationCache.delete(canonical.uri);
+    this.ssrCache.delete(canonical.uri);
+    this.coreCache.delete(canonical.uri);
+    this.accessTrace.delete(canonical.uri);
+    this.provenance.removeDocument(canonical.uri);
+    if (dropSource) this.sources.delete(canonical.uri);
+  }
+
+  private collectKnownUris(): Set<DocumentUri> {
+    const uris = new Set<DocumentUri>();
+    for (const snap of this.sources.all()) {
+      uris.add(this.canonicalUri(snap.uri).uri);
+    }
+    for (const key of this.compilationCache.keys()) uris.add(this.canonicalUri(key).uri);
+    for (const key of this.ssrCache.keys()) uris.add(this.canonicalUri(key).uri);
+    for (const key of this.coreCache.keys()) uris.add(this.canonicalUri(key).uri);
+    const prov = this.provenance.stats();
+    for (const doc of prov.documents) uris.add(this.canonicalUri(doc.uri).uri);
+    return uris;
+  }
+
+  private countSources(): number {
+    let count = 0;
+    for (const _ of this.sources.all()) count += 1;
+    return count;
   }
 
   private canonicalUri(input: DocumentUri): CanonicalDocumentUri {
@@ -281,6 +527,24 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
 function withOverlayBase(isJs: boolean, overlayBaseName: string | undefined): { isJs: boolean; overlayBaseName?: string } {
   return overlayBaseName === undefined ? { isJs } : { isJs, overlayBaseName };
+}
+
+function summarizeStageMeta(meta: StageMetaSnapshot): StageReuseSummary {
+  const seeded: StageKey[] = [];
+  const fromCache: StageKey[] = [];
+  const computed: StageKey[] = [];
+  for (const key of STAGE_ORDER) {
+    const entry = meta[key];
+    if (!entry) continue;
+    if (entry.source === "seed") {
+      seeded.push(key);
+    } else if (entry.source === "cache") {
+      fromCache.push(key);
+    } else {
+      computed.push(key);
+    }
+  }
+  return { seeded, fromCache, computed, meta };
 }
 
 function hashSnapshotContent(snap: DocumentSnapshot): string {
