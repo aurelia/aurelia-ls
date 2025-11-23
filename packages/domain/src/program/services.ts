@@ -7,6 +7,7 @@ import { canonicalDocumentUri, normalizeDocumentUri, type CanonicalDocumentUri }
 import type { ProvenanceIndex, TemplateProvenanceHit } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
 import type { CompileOverlayResult, CompileSsrResult } from "../compiler/facade.js";
+import type { TemplateBindableInfo, TemplateQueryFacade } from "../contracts.js";
 
 export interface Position {
   line: number;
@@ -102,6 +103,16 @@ export interface TsLocation {
   range: TextRange;
 }
 
+export interface TsCompletionEntry {
+  name: string;
+  kind?: string;
+  sortText?: string;
+  insertText?: string;
+  replacementSpan?: { start: number; length: number };
+  detail?: string;
+  documentation?: string;
+}
+
 export interface OverlayDocumentSnapshot {
   uri: DocumentUri;
   file: SourceFileId;
@@ -114,6 +125,7 @@ export interface TypeScriptServices {
   getQuickInfo?(overlay: OverlayDocumentSnapshot, offset: number): TsQuickInfo | null;
   getDefinition?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
   getReferences?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
+  getCompletions?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsCompletionEntry[] | null;
 }
 
 export interface TemplateLanguageServiceOptions {
@@ -124,6 +136,10 @@ export interface CompletionItem {
   label: string;
   detail?: string;
   documentation?: string;
+  insertText?: string;
+  sortText?: string;
+  range?: TextRange;
+  source: "template" | "typescript";
 }
 
 export interface TemplateLanguageService {
@@ -206,9 +222,16 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     };
   }
 
-  getCompletions(_uri: DocumentUri, _position: Position): CompletionItem[] {
-    // TODO: drive completions from scope graph + VM reflection.
-    return [];
+  getCompletions(uri: DocumentUri, position: Position): CompletionItem[] {
+    const canonical = canonicalDocumentUri(uri);
+    const snapshot = this.requireSnapshot(canonical);
+    const offset = offsetAtPosition(snapshot.text, position);
+    if (offset == null) return [];
+
+    const query = this.program.getQuery(canonical.uri);
+    const template = this.collectTemplateCompletions(query, snapshot, offset);
+    const typescript = this.collectTypeScriptCompletions(canonical, snapshot, offset);
+    return dedupeCompletions([...template, ...typescript]);
   }
 
   getDefinition(uri: DocumentUri, position: Position): Location[] {
@@ -255,6 +278,69 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   renameSymbol(_uri: DocumentUri, _position: Position, _newName: string): TextEdit[] {
     // TODO: combine provenance + TS/VM symbol info for safe renames.
     return [];
+  }
+
+  private collectTemplateCompletions(query: TemplateQueryFacade, snapshot: DocumentSnapshot, offset: number): CompletionItem[] {
+    // If we're inside an expression, lean on TypeScript completions instead of guesswork.
+    if (query.exprAt(offset)) return [];
+    const node = query.nodeAt(offset);
+    if (!node) return [];
+    const bindables = query.bindablesFor(node);
+    if (!bindables?.length) return [];
+
+    const range = wordRangeAtOffset(snapshot.text, offset);
+    return bindables.map((bindable) => {
+      const detail = describeBindable(bindable);
+      return {
+        label: bindable.name,
+        source: "template" as const,
+        range,
+        ...(detail ? { detail } : {}),
+        ...(bindable.type ? { documentation: bindable.type } : {}),
+      };
+    });
+  }
+
+  private collectTypeScriptCompletions(
+    canonical: CanonicalDocumentUri,
+    snapshot: DocumentSnapshot,
+    offset: number,
+  ): CompletionItem[] {
+    const ts = this.options.typescript;
+    if (!ts?.getCompletions) return [];
+
+    const overlayHit = this.program.provenance.lookupSource(canonical.uri, offset);
+    if (!overlayHit) return [];
+
+    const overlay = this.overlaySnapshot(canonical.uri);
+    const overlayOffset = projectOverlayOffset(overlayHit, offset);
+    const entries = ts.getCompletions(overlay, overlayOffset) ?? [];
+    if (!entries.length) return [];
+
+    const fallbackSpan = overlayHit.edge.to.span ?? resolveSourceSpan({ start: offset, end: offset }, canonical.file);
+    const results: CompletionItem[] = [];
+    for (const entry of entries) {
+      const overlaySpan = entry.replacementSpan
+        ? resolveSourceSpan(
+          { start: entry.replacementSpan.start, end: entry.replacementSpan.start + entry.replacementSpan.length },
+          overlay.file,
+        )
+        : null;
+      const mapped = overlaySpan ? mapOverlaySpanToTemplate(overlaySpan, overlay, this.program.provenance) : null;
+      const span = mapped?.span ?? fallbackSpan;
+      const detail = entry.detail ?? entry.kind;
+      const range = spanToRange(span, snapshot.text);
+      results.push({
+        label: entry.name,
+        source: "typescript",
+        range,
+        ...(detail ? { detail } : {}),
+        ...(entry.documentation ? { documentation: entry.documentation } : {}),
+        ...(entry.insertText ? { insertText: entry.insertText } : {}),
+        ...(entry.sortText ? { sortText: entry.sortText } : {}),
+      });
+    }
+    return results;
   }
 
   private requireSnapshot(canonical: CanonicalDocumentUri): DocumentSnapshot {
@@ -330,6 +416,58 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const raw = ts.getDiagnostics(overlayDoc) ?? [];
     return raw.map((diag) => mapTypeScriptDiagnostic(diag, overlayDoc, this.program.provenance));
   }
+}
+
+function describeBindable(bindable: TemplateBindableInfo): string | undefined {
+  const mode = bindable.mode ? `[${bindable.mode}]` : null;
+  const source = bindable.source;
+  const type = bindable.type ? `: ${bindable.type}` : "";
+  const parts: string[] = [source];
+  if (mode) parts.push(mode);
+  if (!parts.length && !type) return undefined;
+  return `${parts.join(" ")}${type}`;
+}
+
+function dedupeCompletions(items: readonly CompletionItem[]): CompletionItem[] {
+  const seen = new Set<string>();
+  const results: CompletionItem[] = [];
+  for (const item of items) {
+    const key = `${item.source}:${item.label}:${rangeKey(item.range)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(item);
+  }
+  return results;
+}
+
+function rangeKey(range: TextRange | undefined): string {
+  if (!range) return "none";
+  return `${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
+}
+
+function wordRangeAtOffset(text: string, offset: number): TextRange {
+  const clamped = Math.max(0, Math.min(offset, text.length));
+  let start = clamped;
+  while (start > 0 && isIdentifierChar(text.charCodeAt(start - 1))) start -= 1;
+  let end = clamped;
+  while (end < text.length && isIdentifierChar(text.charCodeAt(end))) end += 1;
+  return {
+    start: positionAtOffset(text, start),
+    end: positionAtOffset(text, end),
+  };
+}
+
+function isIdentifierChar(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) || // 0-9
+    (code >= 65 && code <= 90) || // A-Z
+    (code >= 97 && code <= 122) || // a-z
+    code === 95 /* _ */ ||
+    code === 36 /* $ */ ||
+    code === 45 /* - */ ||
+    code === 46 /* . */ ||
+    code === 58 /* : */
+  );
 }
 
 function mapCompilerDiagnostic(
