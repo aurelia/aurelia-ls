@@ -1,6 +1,7 @@
 import type { AnalyzeOptions, OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
 import type { EmitResult as OverlayEmitResult } from "../phases/60-emit/overlay/emit.js";
 import type { SsrPlanModule } from "../phases/50-plan/ssr/types.js";
+import type { SsrEmitResult } from "../phases/60-emit/ssr/emit.js";
 import type { VmReflection } from "../phases/50-plan/overlay/types.js";
 import type { IrModule } from "../model/ir.js";
 import type { LinkedSemanticsModule } from "../phases/20-resolve-host/types.js";
@@ -37,7 +38,7 @@ export interface StageOutputs {
   "50-plan-overlay": OverlayPlanModule;
   "60-emit-overlay": OverlayEmitResult;
   "50-plan-ssr": SsrPlanModule;
-  "60-emit-ssr": { html: string; manifest: string };
+  "60-emit-ssr": SsrEmitResult;
 }
 
 /**
@@ -152,6 +153,13 @@ export interface StageArtifactMeta {
   cacheKey: string;
   artifactHash: string;
   fromCache: boolean;
+  /**
+   * Where this artifact came from:
+   * - "run": computed in this session
+   * - "cache": loaded from persisted cache
+   * - "seed": provided by the caller
+   */
+  source: "run" | "cache" | "seed";
 }
 
 /** Represents one execution window with memoized stage results. */
@@ -184,7 +192,7 @@ export class PipelineSession {
         const artifactHash = stableHash(output);
         const cacheKey = stableHash({ seed: key, artifactHash, version: def.version });
         this.#results.set(key, output);
-        this.#meta.set(key, { key, version: def.version, cacheKey, artifactHash, fromCache: false });
+        this.#meta.set(key, { key, version: def.version, cacheKey, artifactHash, fromCache: false, source: "seed" });
       }
     }
   }
@@ -233,6 +241,7 @@ export class PipelineSession {
           cacheKey,
           artifactHash: cached.meta.artifactHash,
           fromCache: true,
+          source: "cache",
         };
         this.#meta.set(key, meta);
         this.#results.set(key, cached.artifact);
@@ -242,7 +251,7 @@ export class PipelineSession {
 
     const out = def.run(ctx) as StageOutputs[K];
     const artifactHash = stableHash(out);
-    const meta: StageArtifactMeta = { key, version: def.version, cacheKey, artifactHash, fromCache: false };
+    const meta: StageArtifactMeta = { key, version: def.version, cacheKey, artifactHash, fromCache: false, source: "run" };
     this.#meta.set(key, meta);
     this.#results.set(key, out);
 

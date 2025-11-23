@@ -1,6 +1,7 @@
-import type { ExprId, SourceSpan, NodeId, BindingMode, TextSpan } from "./compiler/model/ir.js";
+import type { ExprId, NodeId, BindingMode, TextSpan } from "./compiler/model/ir.js";
 import type { FrameId } from "./compiler/model/symbols.js";
-import type { Brand } from "./compiler/model/identity.js";
+import type { Brand, HydrationId } from "./compiler/model/identity.js";
+import type { SourceSpan } from "./compiler/model/span.js";
 
 export type AbsPath = string & Brand<"AbsPath">;
 export type OverlayPath = string & Brand<"OverlayPath">;
@@ -38,6 +39,20 @@ export interface TemplateMappingSegment {
   path: string;
   htmlSpan: SourceSpan;
   overlaySpan: TextSpan;
+}
+
+export interface SsrMappingEntry {
+  nodeId: NodeId;
+  /** Hydration id for correlation/debugging (optional). */
+  hid?: HydrationId;
+  templateSpan: SourceSpan | null;
+  htmlSpan?: SourceSpan | null;
+  manifestSpan?: SourceSpan | null;
+}
+
+export interface SsrMappingArtifact {
+  kind: "ssr-mapping";
+  entries: readonly SsrMappingEntry[];
 }
 
 export interface TemplateNodeInfo {

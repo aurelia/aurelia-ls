@@ -215,8 +215,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     run(ctx) {
       const plan = ctx.require("50-plan-ssr");
       const linked = ctx.require("20-resolve-host");
-      const { html, manifest } = emitSsr(plan, linked, { eol: ctx.options.ssr?.eol ?? "\n" });
-      return { html, manifest };
+      return emitSsr(plan, linked, { eol: ctx.options.ssr?.eol ?? "\n" });
     },
   });
 

@@ -27,6 +27,8 @@ export type {
   TemplateMappingArtifact,
   TemplateMappingEntry,
   TemplateMappingSegment,
+  SsrMappingArtifact,
+  SsrMappingEntry,
   TemplateQueryFacade,
   TemplateExpressionInfo,
   TemplateBindableInfo,

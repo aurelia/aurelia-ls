@@ -7,9 +7,9 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Program primitives: `DocumentUri`/`DocumentSnapshot` plus `InMemorySourceStore` and `InMemoryProvenanceIndex` in `packages/domain/src/program`.
 - [x] `DefaultTemplateProgram` orchestrates diagnostics/overlay/SSR queries with per-document `(uri, version)` caching and ingests overlay mapping into provenance.
 - [x] `TemplateLanguageService` / `TemplateBuildService` scaffolds exist; only diagnostics/overlay/SSR are wired.
-- [ ] No option fingerprint exposure at the program level; cache invalidation assumes stable options per instance.
-- [ ] Provenance edges are not expanded; `findByGenerated/findBySource` ignore offsets.
-- [ ] Overlay and SSR do not share pipeline sessions; SSR provenance is not ingested.
+- [x] No option fingerprint exposure at the program level; cache invalidation assumes stable options per instance.
+- [x] Provenance edges are not expanded; `findByGenerated/findBySource` ignore offsets.
+- [x] Overlay and SSR do not share pipeline sessions; SSR provenance is not ingested.
 
 ## Workstreams and Tasks
 
@@ -27,14 +27,14 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Expand overlay mappings into `overlayExpr` edges; include `ExprId` + template spans for expression and interpolation segments.
 - [x] Expand member-path segments into `overlayMember` edges for rename/refs/hover completeness.
 - [x] Implement offset-aware queries: `findByGenerated`/`findBySource` should return only edges intersecting the offset, with helpers for overlay->template and template->overlay lookups.
-- [ ] Add SSR ingestion API (e.g., `addSsrMapping`) that emits `ssrNode` edges connecting SSR HTML/manifest spans to template `NodeId`/spans.
+- [x] Add SSR ingestion API (e.g., `addSsrMapping`) that emits `ssrNode` edges connecting SSR HTML/manifest spans to template `NodeId`/spans.
 - [x] Provide convenience helpers on `ProvenanceIndex` for common lookups (overlay offset -> `{exprId, memberPath?}`, template offset -> `{exprId?, nodeId?}`) to avoid ad-hoc math in services.
 - [x] Ensure provenance pruning on `closeTemplate` (drop edges/mappings/URIs for the document).
 
 ### Pipeline reuse and product generation
-- [ ] Share stages 10-40 between overlay and SSR when both are requested (single pipeline session or shared stage cache).
-- [ ] Keep SSR and overlay artifacts keyed by the same content hash + option fingerprint to avoid redundant recomputation across services.
-- [ ] Provide a hook to surface which stages were reused vs re-run (useful for host diagnostics/telemetry).
+- [x] Share stages 10-40 between overlay and SSR when both are requested (single pipeline session or shared stage cache).
+- [x] Keep SSR and overlay artifacts keyed by the same content hash + option fingerprint to avoid redundant recomputation across services.
+- [x] Provide a hook to surface which stages were reused vs re-run (useful for host diagnostics/telemetry).
 
 ### TemplateProgram surface
 - [ ] Add explicit invalidation hooks and/or cache statistics for hosts to observe (cache hits, stage reuse, provenance entries).
