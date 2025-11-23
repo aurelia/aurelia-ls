@@ -23,7 +23,7 @@ plus the current checkpoints here.
   - [x] Expose `refresh/currentResourceGraph/currentSemantics/currentFingerprint`.
   - [x] Add discovery unit tests with small TS fixtures.
   - [x] Implement decorator/convention-based crawler (custom elements/attributes, bindables, aliases) and thread into fingerprint.
-  - [ ] Map discovered resources into scoped `ResourceGraph` overlays when applicable.
+  - [x] Map discovered resources into scoped `ResourceGraph` overlays when applicable.
 
 - [ ] Align `TemplateWorkspace` to goal facade
   - [x] Provide explicit `open/change/close` wired to LSP `TextDocuments`.

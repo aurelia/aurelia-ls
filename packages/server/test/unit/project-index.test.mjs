@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { AureliaProjectIndex } from "../../out/services/project-index.js";
-import { DEFAULT_SEMANTICS } from "../../../domain/out/index.js";
+import { DEFAULT_SEMANTICS, buildResourceGraphFromSemantics } from "../../../domain/out/index.js";
 
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 
@@ -169,4 +169,31 @@ test("discovers Aurelia resources from decorators and bindable members", () => {
 
   const bb = sem.resources.bindingBehaviors.throttle;
   assert.ok(bb, "binding behavior discovered");
+});
+
+test("maps discoveries into the default resource scope when a graph is provided", () => {
+  const featureScope = "feature-scope";
+  const baseGraph = buildResourceGraphFromSemantics(DEFAULT_SEMANTICS);
+  baseGraph.scopes[featureScope] = { id: featureScope, parent: baseGraph.root, label: "feature", resources: {} };
+  const baseSemantics = { ...DEFAULT_SEMANTICS, resourceGraph: baseGraph, defaultScope: featureScope };
+  const tsProject = createTsProject({
+    "src/components.ts": `
+      const customElement = (options) => (target) => target;
+      @customElement({ name: 'scoped-box' })
+      export class ScopedBox {}
+    `,
+  });
+
+  const index = new AureliaProjectIndex({ ts: tsProject, logger, baseSemantics });
+  const graph = index.currentResourceGraph();
+  const sem = index.currentSemantics();
+
+  assert.equal(graph, sem.resourceGraph);
+
+  const scoped = graph.scopes[featureScope];
+  assert.ok(scoped, "expected scoped overlay to exist");
+  assert.ok(scoped.resources.elements["scoped-box"], "discovered element should be scoped");
+  assert.equal(graph.scopes[graph.root].resources.elements["scoped-box"], undefined, "root scope should remain unchanged");
+  assert.ok(sem.resources.elements["scoped-box"], "semantics should still surface discovered resources");
+  assert.equal(baseGraph.scopes[featureScope].resources.elements?.["scoped-box"], undefined, "base graph should not be mutated");
 });
