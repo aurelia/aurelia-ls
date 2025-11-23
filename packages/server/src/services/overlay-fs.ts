@@ -24,6 +24,12 @@ export class OverlayFs {
     return this.#files.get(this.#paths.canonical(file));
   }
 
+  delete(fileAbs: string): void {
+    const key = this.#paths.canonical(fileAbs);
+    this.#files.delete(key);
+    this.#scriptRoots.delete(key);
+  }
+
   upsert(fileAbs: string, text: string): Snapshot {
     const key = this.#paths.canonical(fileAbs);
     const prev = this.#files.get(key);

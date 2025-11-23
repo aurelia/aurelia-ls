@@ -44,6 +44,13 @@ export class TsService {
     this.#logger.log(`[ts] overlay updated: ${fileAbs} (version=${this.#projectVersion})`);
   }
 
+  deleteOverlay(fileAbs: string): void {
+    this.#overlay.delete(fileAbs);
+    this.#projectVersion++;
+    this.#recreate();
+    this.#logger.log(`[ts] overlay removed: ${fileAbs} (version=${this.#projectVersion})`);
+  }
+
   ensurePrelude(preludePath: string, text: string): void {
     if (this.#overlay.has(preludePath)) return;
     this.upsertOverlay(preludePath, text);
