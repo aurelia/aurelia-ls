@@ -42,7 +42,7 @@ Update the checkboxes as work lands; keep this file aligned with the source of t
 - [x] Ensure `upsertTemplate/closeTemplate` update provenance and cache state atomically and are safe under concurrent host calls.
 
 ### Language and build services
-- [ ] Diagnostics: merge compiler + TS overlay diagnostics via provenance; return host-agnostic diagnostics with source/related spans.
+- [x] Diagnostics: merge compiler + TS overlay diagnostics via provenance; return host-agnostic diagnostics with source/related spans.
 - [ ] Hover: use `TemplateProgram.getQuery` + provenance + TS quick info to surface expression/node info and member types.
 - [ ] Definitions/references: map template offsets to overlay/TS spans, ask TS LS, and map results back through provenance.
 - [ ] Completions: drive from scope graph + VM reflection + TS completions with provenance-backed span mapping.
