@@ -11,6 +11,7 @@ export class OverlayFs {
   #paths: PathUtils;
   #files = new Map<NormalizedPath, Snapshot>();
   #scriptRoots = new Set<NormalizedPath>();
+  #baseRoots = new Set<NormalizedPath>();
 
   constructor(paths: PathUtils) {
     this.#paths = paths;
@@ -39,8 +40,18 @@ export class OverlayFs {
     return next;
   }
 
+  setBaseRoots(files: Iterable<string>): void {
+    this.#baseRoots.clear();
+    for (const file of files) {
+      this.#baseRoots.add(this.#paths.canonical(file));
+    }
+  }
+
   listScriptRoots(): string[] {
-    return Array.from(this.#scriptRoots);
+    const roots = new Set<NormalizedPath>();
+    for (const base of this.#baseRoots) roots.add(base);
+    for (const overlay of this.#scriptRoots) roots.add(overlay);
+    return Array.from(roots);
   }
 
   listOverlays(): string[] {
