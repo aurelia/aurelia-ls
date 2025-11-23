@@ -20,6 +20,8 @@ import {
   type Position,
   type Diagnostic,
   type Range,
+  type DidChangeWatchedFilesParams,
+  type FileEvent,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
@@ -127,6 +129,43 @@ async function syncWorkspaceWithIndex(): Promise<void> {
   if (updated) {
     logger.info(`[workspace] reconfigured fingerprint=${workspace.fingerprint}`);
   }
+}
+
+async function refreshAllOpenDocuments(reason: "open" | "change", options?: { skipSync?: boolean }): Promise<void> {
+  const openDocs = documents.all();
+  for (const doc of openDocs) {
+    await refreshDocument(doc, reason, options);
+  }
+}
+
+function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
+  for (const change of changes) {
+    const fsPath = URI.parse(change.uri).fsPath;
+    const base = path.basename(fsPath).toLowerCase();
+    if (base === "tsconfig.json") return true;
+    if (base === "jsconfig.json") return true;
+    if (base.startsWith("tsconfig.") && base.endsWith(".json")) return true;
+  }
+  return false;
+}
+
+async function reloadProjectConfiguration(reason: string): Promise<void> {
+  if (!projectIndex || !workspace) return;
+  const beforeVersion = tsService.getProjectVersion();
+
+  tsService.configure({ workspaceRoot });
+  await syncWorkspaceWithIndex();
+
+  const versionChanged = tsService.getProjectVersion() !== beforeVersion;
+  const label = `${reason}; version=${tsService.getProjectVersion()} fingerprint=${workspace.fingerprint}`;
+
+  if (versionChanged) {
+    logger.info(`[workspace] tsconfig reload (${label})`);
+  } else {
+    logger.info(`[workspace] tsconfig reload (${label}) [no host change]`);
+  }
+
+  await refreshAllOpenDocuments("change", { skipSync: true });
 }
 
 function toLspUri(uri: DocumentUri): string {
@@ -275,9 +314,11 @@ function ensureProgramDocument(uri: string): TextDocument | null {
   return TextDocument.create(uri, "html", snap.version, snap.text);
 }
 
-async function refreshDocument(doc: TextDocument, reason: "open" | "change") {
+async function refreshDocument(doc: TextDocument, reason: "open" | "change", options?: { skipSync?: boolean }) {
   try {
-    await syncWorkspaceWithIndex();
+    if (!options?.skipSync) {
+      await syncWorkspaceWithIndex();
+    }
     const canonical = canonicalDocumentUri(doc.uri);
     if (reason === "open") {
       workspace.open(doc);
@@ -482,6 +523,18 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
 documents.onDidOpen(async (e) => {
   logger.log(`didOpen ${e.document.uri}`);
   await refreshDocument(e.document, "open");
+});
+
+connection.onDidChangeConfiguration(async () => {
+  logger.log("didChangeConfiguration: reloading tsconfig and project index");
+  await reloadProjectConfiguration("configuration change");
+});
+
+connection.onDidChangeWatchedFiles(async (e: DidChangeWatchedFilesParams) => {
+  if (!e.changes?.length) return;
+  if (!shouldReloadForFileChange(e.changes)) return;
+  logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
+  await reloadProjectConfiguration("watched files");
 });
 
 documents.onDidChangeContent(async (e) => {

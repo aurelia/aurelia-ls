@@ -14,7 +14,7 @@ plus the current checkpoints here.
   - [x] Load tsconfig and discover root files; expose `getProjectVersion`, `compilerOptions`, and `getService`.
   - [x] Ensure overlays are first-class (module resolution, script roots, versioned snapshots).
   - [x] Add unit tests: `packages/server/test/unit/overlay-fs.test.mjs`, `ts-service-host.test.mjs`.
-  - [ ] Wire tsconfig reloads/project-version bumps into LSP lifecycle (config change/reload path).
+  - [x] Wire tsconfig reloads/project-version bumps into LSP lifecycle (config change/reload path).
 
 - [ ] Introduce `AureliaProjectIndex`
   - Read `docs/template-lowering-and-binding.md` plus `packages/domain/src/compiler/language/registry.ts` and `packages/domain/src/compiler/language/resource-graph.ts` to align resource shapes/fingerprints.

@@ -50,9 +50,15 @@ export class AureliaLanguageClient {
       debug: { module: serverModule, transport: TransportKind.ipc, options: { execArgv: ["--inspect=6009"] } },
     };
 
+    const fileEvents = [
+      vscode.workspace.createFileSystemWatcher("**/tsconfig.json"),
+      vscode.workspace.createFileSystemWatcher("**/tsconfig.*.json"),
+      vscode.workspace.createFileSystemWatcher("**/jsconfig.json"),
+    ];
+
     const clientOptions: LanguageClientOptions = {
       documentSelector: [{ pattern: "**/*.html" }],
-      synchronize: {},
+      synchronize: { fileEvents },
     };
 
     this.#client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
