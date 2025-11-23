@@ -28,17 +28,17 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
   Edge contracts and a naive in-memory `ProvenanceIndex`. Overlay mappings are canonicalized (URIs + `SourceFileId` on spans) but segment-level edges and offset-aware queries are still stubbed.
 
 - `program.ts`
-  Default program with a per-document compilation cache keyed by `(uri, snapshot.version)` under the assumption that options are stable for the lifetime of a program. URIs are canonicalized on entry and overlay mapping is fed into `ProvenanceIndex`.
+  Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift.
 
 - `services.ts`
   Language/build facades. Diagnostics and overlay/SSR access are wired; hover/defs/refs/completions/code actions/rename are stubbed.
 
 ## Key assumptions
 
-- Options (semantics, resource graph, parsers, overlay base name, fingerprints) are stable for the lifetime of a program; if they change, create a new instance.
+- Options (semantics, resource graph, parsers, overlay base name, fingerprints) are stable for the lifetime of a program; if they change, create a new instance (use `TemplateProgram.optionsFingerprint` to detect drift cheaply).
 - Stage keys follow the current pipeline: `10-lower`, `20-resolve-host`, `30-bind`, `40-typecheck`, `50-plan-overlay`, `60-emit-overlay` plus SSR plan/emit.
 - `TemplateMappingArtifact` lacks an overlay path; callers must pass the overlay URI when ingesting mappings into provenance.
-- Top-level program caches may use `(uri, version)` as a key as long as version values are content-versioned. Stage-level caches are responsible for content hashing.
+- Program-level caches rely on normalized `DocumentUri` + snapshot content hash + `optionsFingerprint`. Stage-level caches remain responsible for their own content hashing.
 
 ## TODOs / gaps
 
@@ -57,11 +57,6 @@ The main deltas compared to `docs/agents/program-architecture.md` are:
 - Language features
 
   - Flesh out `TemplateLanguageService` hover/defs/refs/completions/code actions/rename using `TemplateProgram.getQuery` plus provenance and TS integration.
-
-- Caching and fingerprints
-
-  - Expose and/or accept a program options fingerprint.
-  - Align program-level cache invalidation with environment fingerprinting (tsconfig/resource graph/semantics).
 
 ## Migration hints
 
