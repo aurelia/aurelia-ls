@@ -15,17 +15,30 @@ const domainMod = await import(pathToFileURL(path.resolve(
   process.cwd(),
   "packages/domain/out/index.js"
 )).href);
+const programMod = await import(pathToFileURL(path.resolve(
+  process.cwd(),
+  "packages/domain/out/program/index.js"
+)).href);
 
+const { DEFAULT_SYNTAX, getExpressionParser } = domainMod;
 const {
-  compileTemplateToOverlay,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-} = domainMod;
+  DefaultTemplateProgram,
+  DefaultTemplateBuildService,
+  canonicalDocumentUri,
+} = programMod;
 
 const VM = {
   getRootVmTypeExpr: () => "any",
   getSyntheticPrefix: () => "__AU_TTC_",
 };
+
+const program = new DefaultTemplateProgram({
+  vm: VM,
+  isJs: false,
+  attrParser: DEFAULT_SYNTAX,
+  exprParser: getExpressionParser(),
+});
+const build = new DefaultTemplateBuildService(program);
 
 const args = process.argv.slice(2);
 const inputs = args.length ? args : ["fixtures/overlays"]; // default: scan overlay fixtures
@@ -41,19 +54,16 @@ for (const input of inputs) {
 
   for (const f of files) {
     const html = await fs.readFile(f, "utf8");
-    const res = compileTemplateToOverlay({
-      html,
-      templateFilePath: f,
-      isJs: false,
-      vm: VM,
-      attrParser: DEFAULT_SYNTAX,
-      exprParser: getExpressionParser(),
-    });
+    const canonical = canonicalDocumentUri(f);
+    program.upsertTemplate(canonical.uri, html);
 
-    await fs.mkdir(path.dirname(res.overlayPath), { recursive: true });
-    await fs.writeFile(res.overlayPath, res.text, "utf8");
+    const overlay = build.getOverlay(canonical.uri);
+    const outPath = path.normalize(overlay.overlay.path);
 
-    console.log(`Overlay → ${rel(res.overlayPath)}`);
+    await fs.mkdir(path.dirname(outPath), { recursive: true });
+    await fs.writeFile(outPath, overlay.overlay.text, "utf8");
+
+    console.log(`Overlay → ${rel(outPath)}`);
     totalOut += 1;
   }
 }

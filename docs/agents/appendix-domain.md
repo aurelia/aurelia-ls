@@ -8,7 +8,6 @@
   Core compiler / analysis pipeline. Pure TS library:
 - HTML -> IR -> LinkedSemantics -> ScopeGraph -> Typecheck -> Plan -> Emit.
   - Exposes:
-    - `compileTemplateToOverlay` (overlay/ttc pipeline)
     - `compileTemplateToSSR` (SSR skeleton + manifest)
     - `PRELUDE_TS`, `getExpressionParser`, `DEFAULT_SYNTAX`, `VmReflection`.
 
@@ -42,7 +41,7 @@ Use these as authoritative descriptions of current runtime semantics; code and t
 - **Generated vs src:** only edit `packages/**/src` and tests; `packages/**/out` is generated.
 - **Tests/build:** `npm run test:spec` runs `tsc -b` then all specs; use it to refresh out/overlay artifacts instead of manual builds.
 - **Goldens:** overlay/SSR goldens live under `fixtures/overlays/*` (source HTML + generated `.__au.ttc.overlay.ts`/`.__au.ssr.{html,json}` via `pnpm dump:overlay` / `pnpm dump:ssr`); tests in `packages/domain/test/goldens` and `packages/domain/test/ssr` compare against those files.
-- **Where things live:** mapping/query in `compiler/facade.ts`; overlay plan in `phases/50-plan/overlay`; overlay emit in `phases/60-emit/overlay`; typecheck scaffold in `phases/40-typecheck`; SSR plan/emit in `phases/50-plan/ssr` and `phases/60-emit/ssr`.
+- **Where things live:** mapping/query in `compiler/products/overlay.ts` and `compiler/query.ts`; overlay plan in `phases/50-plan/overlay`; overlay emit in `phases/60-emit/overlay`; typecheck scaffold in `phases/40-typecheck`; SSR plan/emit in `phases/50-plan/ssr` and `phases/60-emit/ssr`.
 
 ---
 
@@ -347,7 +346,7 @@ Notes:
 
   1. Detect VM type + import specifier from filename (`detectVmSpecifier`, `pascalFromKebab`).
   2. Create a `VmReflection` for that template.
-  3. Call `compileTemplateToOverlay` from `@aurelia-ls/domain`.
+  3. Call `TemplateProgram` / `TemplateBuildService` from `@aurelia-ls/domain`.
   4. Insert/update the overlay in the TS LS virtual FS.
   5. Ask TS for diagnostics for the overlay file.
   6. Map overlay span -> HTML span via `CompileOverlayResult.calls`.

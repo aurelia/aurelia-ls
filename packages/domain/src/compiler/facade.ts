@@ -11,7 +11,6 @@ import { buildSsrProduct, type SsrProductResult } from "./products/ssr.js";
 import type { CompilerDiagnostic } from "./diagnostics.js";
 import type { StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/engine.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "./model/ir.js";
-import { htmlOffsetToOverlay, overlayOffsetToHtml, type MappingHit } from "./mapping.js";
 import type { ExprIdMap } from "./model/identity.js";
 import { computeOverlayBaseName, computeSsrBaseName } from "./path-conventions.js";
 
@@ -118,11 +117,6 @@ export function compileTemplate(
   };
 }
 
-export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayResult {
-  const compilation = compileTemplate(opts);
-  return compilation.overlay;
-}
-
 export interface CompileSsrResult extends SsrProductResult {
   core: Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck">;
   meta: StageMetaSnapshot;
@@ -198,10 +192,3 @@ function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMeta
   return meta;
 }
 
-export function mapOverlayOffsetToHtml(mapping: TemplateMappingArtifact, overlayOffset: number): MappingHit | null {
-  return overlayOffsetToHtml(mapping, overlayOffset);
-}
-
-export function mapHtmlOffsetToOverlay(mapping: TemplateMappingArtifact, htmlOffset: number): MappingHit | null {
-  return htmlOffsetToOverlay(mapping, htmlOffset);
-}

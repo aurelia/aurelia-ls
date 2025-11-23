@@ -599,7 +599,6 @@ program first, then caching/provenance, then advanced features.
 Search for:
 
 * `compileTemplate(...)`
-* `compileTemplateToOverlay(...)`
 * `compileTemplateToSSR(...)`
 * Direct usage of pipeline stages in host code.
 

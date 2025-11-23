@@ -1,4 +1,4 @@
-export { compileTemplate, compileTemplateToOverlay } from "./compiler/facade.js";
+export { compileTemplate } from "./compiler/facade.js";
 export { PRELUDE_TS } from "./prelude.js";
 
 export { getExpressionParser } from "./parsers/expression-parser.js";
@@ -39,14 +39,6 @@ export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
 
 export { compileTemplateToSSR } from "./compiler/facade.js";
 export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
-export { mapOverlayOffsetToHtml, mapHtmlOffsetToOverlay } from "./compiler/facade.js";
-export {
-  mappingSegments,
-  pickMappingSegment,
-  shrinkSpanToMapping,
-  type MappingSegmentPair,
-  type MappingHit,
-} from "./compiler/mapping.js";
 export {
   buildExprSpanIndex,
   exprIdsOf,
