@@ -1,5 +1,5 @@
-import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow } from "../../20-resolve-host/types.js";
-import type { TemplateNode, DOMNode, Attr, NodeId, ExprId } from "../../../model/ir.js";
+import type { LinkedSemanticsModule, LinkedTemplate } from "../../20-resolve-host/types.js";
+import type { DOMNode, Attr, NodeId, ExprId } from "../../../model/ir.js";
 import type { SourceSpan } from "../../../model/span.js";
 import { idFromKey, type HydrationId } from "../../../model/identity.js";
 import type { SsrPlanModule, SsrTemplatePlan, SsrManifest, SsrBinding, SsrController } from "../../50-plan/ssr/types.js";
@@ -29,7 +29,6 @@ export function emitSsr(
   const tLinked = linked.templates[0];
   if (!tPlan || !tLinked) return { html: "", manifest: JSON.stringify(emptyManifest(), null, 2), mappings: [] };
 
-  const idToRow = indexRows(tLinked);
   const templateSpans = indexTemplateSpans(tLinked.dom);
   const mappings = new Map<NodeId, MutableMapping>();
 
@@ -41,7 +40,7 @@ export function emitSsr(
     htmlOffset += chunk.length;
   };
 
-  for (const child of tLinked.dom.children) renderNode(child, tPlan, idToRow, pushHtml, eol, mappings, templateSpans, () => htmlOffset);
+  for (const child of tLinked.dom.children) renderNode(child, tPlan, pushHtml, eol, mappings, templateSpans, () => htmlOffset);
 
   const html = htmlChunks.join("");
   const manifest = makeManifest(tPlan, tLinked, mappings, templateSpans);
@@ -53,17 +52,10 @@ export function emitSsr(
   }
 }
 
-function indexRows(t: LinkedTemplate): Map<NodeId, LinkedRow> {
-  const idToRow: Map<NodeId, LinkedRow> = new Map();
-  for (const row of t.rows) idToRow.set(row.target, row);
-  return idToRow;
-}
-
 /** Render a template's DOM skeleton with markers. */
 function renderNode(
   n: DOMNode,
   plan: SsrTemplatePlan,
-  idToRow: Map<NodeId, LinkedRow>,
   push: (chunk: string) => void,
   eol: string,
   mappings: Map<NodeId, MutableMapping>,
@@ -74,28 +66,18 @@ function renderNode(
   const hid = plan.hidByNode[nodeKey] ?? plan.textBindings.find(tb => tb.target === nodeKey)?.hid;
   const startOffset = currentOffset();
 
-  const ctrls = hid ? plan.controllersByHid[hid] : undefined;
+  const ctrls = hid !== undefined ? plan.controllersByHid[hid] : undefined;
+  const hasControllers = hid !== undefined && Boolean(ctrls?.length);
 
   switch (n.kind) {
     case "element": {
-      if (ctrls && ctrls.length) {
-        for (const c of ctrls) {
-          push(`<!--au:ctrl ${hid} ${c.res} start-->${eol}`);
-          if (c.defLinked) {
-            const nestedRowMap = indexRows(c.defLinked as LinkedTemplate);
-            for (const child of (c.defLinked as LinkedTemplate).dom.children) {
-              renderNode(child, c.def as SsrTemplatePlan, nestedRowMap, push, eol, mappings, templateSpans, currentOffset);
-            }
-          } else {
-            push(`<!--au:ctrl ${hid} ${c.res} def:rendered-by-runtime-->${eol}`);
-          }
-          push(`<!--au:ctrl ${hid} end-->${eol}`);
-        }
+      if (hasControllers && ctrls) {
+        renderControllers(hid, ctrls, push, eol, mappings, templateSpans, currentOffset);
         break;
       }
 
       const attrs: string[] = [];
-      if (hid) attrs.push(`data-au-hid="${hid}"`);
+      if (hid !== undefined) attrs.push(`data-au-hid="${hid}"`);
       const staticOnHid = hid ? plan.staticAttrsByHid[hid] : undefined;
       const staticAttrs = staticOnHid ?? attrsFromDom(n.attrs ?? []);
       for (const [k, v] of Object.entries(staticAttrs)) {
@@ -104,7 +86,7 @@ function renderNode(
       }
 
       push(`<${n.tag}${attrs.length ? " " + attrs.join(" ") : ""}>`);
-      for (const c of n.children) renderNode(c, plan, idToRow, push, eol, mappings, templateSpans, currentOffset);
+      for (const c of n.children) renderNode(c, plan, push, eol, mappings, templateSpans, currentOffset);
       push(`</${n.tag}>`);
       break;
     }
@@ -127,22 +109,11 @@ function renderNode(
     }
 
     case "template": {
-      if (ctrls && ctrls.length) {
-        for (const c of ctrls) {
-          push(`<!--au:ctrl ${hid} ${c.res} start-->${eol}`);
-          if (c.defLinked) {
-            const nestedRowMap = indexRows(c.defLinked as LinkedTemplate);
-            for (const child of (c.defLinked as LinkedTemplate).dom.children) {
-              renderNode(child, c.def as SsrTemplatePlan, nestedRowMap, push, eol, mappings, templateSpans, currentOffset);
-            }
-          } else {
-            push(`<!--au:ctrl ${hid} ${c.res} def:rendered-by-runtime-->${eol}`);
-          }
-          push(`<!--au:ctrl ${hid} end-->${eol}`);
-        }
+      if (hasControllers && ctrls) {
+        renderControllers(hid, ctrls, push, eol, mappings, templateSpans, currentOffset);
         break;
       }
-      for (const c of n.children) renderNode(c, plan, idToRow, push, eol, mappings, templateSpans, currentOffset);
+      for (const c of n.children) renderNode(c, plan, push, eol, mappings, templateSpans, currentOffset);
       break;
     }
 
@@ -226,7 +197,7 @@ function makeManifest(
   return text;
 
   function stripDef(c: SsrController) {
-    const { def, defLinked, ...rest } = c;
+    const { def: _def, defLinked: _defLinked, ...rest } = c;
     return rest;
   }
 }
@@ -335,4 +306,36 @@ function ensureMapping(
   return entry;
 }
 
-interface MutableMapping extends SsrNodeMapping {}
+function renderControllers(
+  hid: HydrationId,
+  ctrls: readonly SsrController[],
+  push: (chunk: string) => void,
+  eol: string,
+  mappings: Map<NodeId, MutableMapping>,
+  templateSpans: Map<NodeId, SourceSpan | null>,
+  currentOffset: () => number,
+): void {
+  for (const ctrl of ctrls) {
+    push(`<!--au:ctrl ${hid} ${ctrl.res} start-->${eol}`);
+    if (ctrl.defLinked) {
+      renderLinkedTemplate(ctrl.defLinked, ctrl.def, push, eol, mappings, templateSpans, currentOffset);
+    } else {
+      push(`<!--au:ctrl ${hid} ${ctrl.res} def:rendered-by-runtime-->${eol}`);
+    }
+    push(`<!--au:ctrl ${hid} end-->${eol}`);
+  }
+}
+
+function renderLinkedTemplate(
+  linked: LinkedTemplate,
+  plan: SsrTemplatePlan,
+  push: (chunk: string) => void,
+  eol: string,
+  mappings: Map<NodeId, MutableMapping>,
+  templateSpans: Map<NodeId, SourceSpan | null>,
+  currentOffset: () => number,
+): void {
+  for (const child of linked.dom.children) renderNode(child, plan, push, eol, mappings, templateSpans, currentOffset);
+}
+
+type MutableMapping = SsrNodeMapping;
