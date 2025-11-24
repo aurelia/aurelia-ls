@@ -1,6 +1,6 @@
 import type { LinkedSemanticsModule, LinkedTemplate } from "../../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
-import type { ExprId, InterpIR, NodeId, BindingSourceIR, TemplateNode } from "../../../model/ir.js";
+import type { ExprId, NodeId, TemplateNode } from "../../../model/ir.js";
 import {
   brandNumber,
   idFromKey,
@@ -56,7 +56,8 @@ function buildTemplatePlan(
     for (const ins of row.instructions) {
       switch (ins.kind) {
         case "textBinding": {
-          const inter = ins.from as InterpIR;
+          if (!isInterpolation(ins.from)) break;
+          const inter = ins.from;
           const hid = ensureHid(nodeId, hidByNode, hidAllocator);
           const span = normalizeSpanMaybe(ins.loc ?? null);
           textBindings.push({ hid, target: nodeId, parts: inter.parts, exprIds: inter.exprs.map(e => e.id), span });
@@ -64,7 +65,7 @@ function buildTemplatePlan(
           break;
         }
         case "attributeBinding": {
-          const src = ins.from as BindingSourceIR | InterpIR;
+          const src = ins.from;
           if (isInterpolation(src)) {
             const frames = src.exprs.map(e => frameOf(scope, e.id));
             rowBindings.push({

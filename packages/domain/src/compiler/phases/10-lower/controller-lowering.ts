@@ -256,9 +256,9 @@ function buildControllerPrototypes(
   };
 
   if (controller === "promise" || controller === "switch") {
-    return [{ res: controller as "promise" | "switch", props: [valueProp] }];
+    return [{ res: controller, props: [valueProp] }];
   }
-  return [{ res: controller as "with" | "if" | "portal", props: [valueProp] }];
+  return [{ res: controller, props: [valueProp] }];
 }
 
 function toRepeatTailIR(
@@ -331,7 +331,7 @@ function injectPromiseBranchesIntoDef(
       for (const a of (kid as P5Element).attrs ?? []) {
         const parsed = attrParser.parse(a.name, a.value ?? "");
         if (parsed.target === "then" || parsed.target === "catch") {
-          branchKind = parsed.target as "then" | "catch";
+          branchKind = parsed.target;
           aliasVar = (a.value?.length ? a.value : branchKind) ?? branchKind;
           branchAttrLoc = attrLoc(kid as P5Element, a.name);
           break;
