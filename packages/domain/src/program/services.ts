@@ -4,6 +4,7 @@ import { resolveSourceSpan } from "../compiler/model/source.js";
 import { spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
+import type { TemplateCompilation } from "../compiler/facade.js";
 import type { ProvenanceIndex, TemplateProvenanceHit } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
 import type { TemplateBindableInfo, TemplateMappingArtifact, TemplateQueryFacade, SsrMappingArtifact } from "../contracts.js";
@@ -194,6 +195,8 @@ export interface TemplateLanguageServiceOptions {
   buildService?: TemplateBuildService;
 }
 
+type TypeNameMap = ReadonlyMap<string, string>;
+
 export interface CompletionItem {
   label: string;
   detail?: string;
@@ -305,6 +308,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const canonical = canonicalDocumentUri(uri);
     const vmDisplayName = getVmDisplayName(this.program.options.vm);
     const vmRootTypeExpr = getVmRootTypeExpr(this.program.options.vm);
+    const typeNames = this.typeNamesFor(canonical);
     const overlayDoc = this.overlaySnapshot(canonical.uri);
     const compiler = this.program
       .getDiagnostics(canonical.uri)
@@ -316,11 +320,12 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
           overlay: overlayDoc,
           provenance: this.program.provenance,
           typescript: this.options.typescript,
+          typeNames,
         }),
       )
       .filter((diag): diag is TemplateLanguageDiagnostic => diag != null);
 
-    const typescript = this.collectTypeScriptDiagnostics(canonical.uri, overlayDoc, vmDisplayName);
+    const typescript = this.collectTypeScriptDiagnostics(canonical.uri, overlayDoc, vmDisplayName, typeNames);
     const all = [...compiler, ...typescript];
 
     return { all, compiler, typescript };
@@ -586,6 +591,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
     const info = ts.getQuickInfo(overlay, overlayOffset);
     if (!info) return null;
+    const typeNames = this.typeNamesFor(canonical);
 
     const overlaySpan = resolveSourceSpan(
       { start: info.start ?? overlayOffset, end: (info.start ?? overlayOffset) + (info.length ?? 0) },
@@ -593,7 +599,8 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     );
     const mapped = mapOverlaySpanToTemplate(overlaySpan, overlay, this.program.provenance);
     const hoverSpan = mapped?.span ?? overlayHit.edge.to.span ?? resolveSourceSpan({ start: offset, end: offset }, snapshot.uri);
-    const text = info.documentation ? `${info.text}\n\n${info.documentation}` : info.text;
+    const rewrittenText = rewriteTypeNames(info.text, typeNames);
+    const text = info.documentation ? `${rewrittenText}\n\n${info.documentation}` : rewrittenText;
     return { text, span: hoverSpan };
   }
 
@@ -723,6 +730,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     uri: DocumentUri,
     overlayDoc: OverlayDocumentSnapshot | null,
     vmDisplayName?: string,
+    typeNames?: TypeNameMap,
   ): TemplateLanguageDiagnostic[] {
     const ts = this.options.typescript;
     if (!ts) return [];
@@ -730,7 +738,16 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const overlay = overlayDoc ?? this.overlaySnapshot(uri);
     const raw = ts.getDiagnostics(overlay) ?? [];
     const displayName = vmDisplayName ?? getVmDisplayName(this.program.options.vm);
-    return raw.map((diag) => mapTypeScriptDiagnostic(diag, overlay, this.program.provenance, displayName));
+    return raw.map((diag) => mapTypeScriptDiagnostic(diag, overlay, this.program.provenance, displayName, typeNames ?? EMPTY_TYPE_NAMES));
+  }
+
+  private typeNamesFor(canonical: CanonicalDocumentUri): TypeNameMap {
+    try {
+      const compilation = this.program.getCompilation(canonical.uri);
+      return collectTypeNames(compilation);
+    } catch {
+      return EMPTY_TYPE_NAMES;
+    }
   }
 }
 
@@ -820,6 +837,7 @@ type CompilerDiagnosticContext = {
   overlay?: OverlayDocumentSnapshot | null | undefined;
   provenance?: ProvenanceIndex | undefined;
   typescript?: TypeScriptServices | undefined;
+  typeNames?: TypeNameMap | undefined;
 };
 
 function mapCompilerDiagnostic(
@@ -842,7 +860,13 @@ function mapCompilerDiagnostic(
         ? context.provenance.lookupSource(templateUri, targetSpan.start)
         : null;
     const overlaySpan = hit?.edge.from.span ?? null;
-    const quickInfoType = lookupQuickInfoType(context?.typescript, context?.overlay ?? null, overlaySpan, hit);
+    const quickInfoType = lookupQuickInfoType(
+      context?.typescript,
+      context?.overlay ?? null,
+      overlaySpan,
+      hit,
+      context?.typeNames ?? EMPTY_TYPE_NAMES,
+    );
     const expected = diag.expected ?? null;
     const actual = quickInfoType ?? diag.actual ?? null;
 
@@ -882,6 +906,7 @@ function lookupQuickInfoType(
   overlay: OverlayDocumentSnapshot | null,
   overlaySpan: SourceSpan | null,
   hit: TemplateProvenanceHit | null,
+  typeNames: TypeNameMap,
 ): string | null {
   if (!ts?.getQuickInfo || !overlay || !overlaySpan) return null;
   // Prefer the exact member segment when available; otherwise sample the span center.
@@ -889,7 +914,8 @@ function lookupQuickInfoType(
   const center = probe.start + Math.max(0, Math.floor(spanLength(probe) / 2));
   const info = ts.getQuickInfo(overlay, center);
   if (!info?.text) return null;
-  return parseQuickInfoType(info.text);
+  const parsed = parseQuickInfoType(info.text);
+  return parsed ? rewriteTypeNames(parsed, typeNames) : null;
 }
 
 function parseQuickInfoType(text: string): string | null {
@@ -960,6 +986,7 @@ function mapTypeScriptDiagnostic(
   overlay: OverlayDocumentSnapshot,
   provenance: ProvenanceIndex,
   vmDisplayName: string,
+  typeNames: TypeNameMap,
 ): TemplateLanguageDiagnostic {
   const overlaySpan = tsSpan(diag, overlay.file);
   const overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
@@ -975,11 +1002,11 @@ function mapTypeScriptDiagnostic(
     const relSpan = tsSpan(rel, rel.fileName ? canonicalDocumentUri(rel.fileName).file : overlay.file);
     const relUri = normalizeDocumentUri(rel.fileName ?? overlay.uri);
     const relLocation = relSpan ? { uri: relUri, span: relSpan } : null;
-    related.push({ message: flattenTsMessage(rel.messageText), location: relLocation });
+    related.push({ message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames), location: relLocation });
   }
 
   const severity = tsCategoryToSeverity(diag.category);
-  const message = formatTypeScriptMessage(diag, vmDisplayName, provenanceHit);
+  const message = formatTypeScriptMessage(diag, vmDisplayName, provenanceHit, typeNames);
   return {
     code: diag.code ?? "TS",
     message,
@@ -1034,15 +1061,53 @@ function flattenTsMessage(msg: string | TsMessageChain | undefined): string {
   return parts.join(" ");
 }
 
+const EMPTY_TYPE_NAMES: TypeNameMap = new Map();
+
+function rewriteTypeNames(text: string, typeNames: TypeNameMap): string {
+  if (!text || typeNames.size === 0) return text;
+  let result = text;
+  for (const [alias, friendly] of typeNames) {
+    if (!alias || !friendly || alias === friendly) continue;
+    const re = new RegExp(`\\b${escapeRegExp(String(alias))}\\b`, "g");
+    result = result.replace(re, friendly);
+  }
+  return result;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function collectTypeNames(compilation: TemplateCompilation | null | undefined): TypeNameMap {
+  const map = new Map<string, string>();
+  if (!compilation) return map;
+  for (const tpl of compilation.overlayPlan.templates ?? []) {
+    if (tpl.vmType?.alias) {
+      const friendly = tpl.vmType.displayName ?? tpl.vmType.typeExpr;
+      if (friendly && friendly !== tpl.vmType.alias) {
+        map.set(tpl.vmType.alias, friendly);
+      }
+    }
+    const frameLabelBase = tpl.vmType?.displayName ?? "frame";
+    for (const frame of tpl.frames ?? []) {
+      if (!frame.typeName) continue;
+      const label = `${frameLabelBase} ${frame.frame}`;
+      if (label !== frame.typeName) map.set(frame.typeName, label);
+    }
+  }
+  return map;
+}
+
 function formatTypeScriptMessage(
   diag: TsDiagnostic,
   vmDisplayName: string,
   hit: ReturnType<ProvenanceIndex["lookupGenerated"]> | null,
+  typeNames: TypeNameMap,
 ): string {
   if (hit?.memberPath) {
     return `Property '${hit.memberPath}' does not exist on ${vmDisplayName}`;
   }
-  return flattenTsMessage(diag.messageText);
+  return rewriteTypeNames(flattenTsMessage(diag.messageText), typeNames);
 }
 
 function projectOverlayOffset(hit: TemplateProvenanceHit, templateOffset: number): number {
