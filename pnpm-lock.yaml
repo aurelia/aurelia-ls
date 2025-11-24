@@ -48,15 +48,6 @@ importers:
 
   packages/domain:
     dependencies:
-      '@aurelia/expression-parser':
-        specifier: 2.0.0-beta.25
-        version: 2.0.0-beta.25
-      '@aurelia/kernel':
-        specifier: 2.0.0-beta.25
-        version: 2.0.0-beta.25
-      '@aurelia/template-compiler':
-        specifier: 2.0.0-beta.25
-        version: 2.0.0-beta.25
       parse5:
         specifier: ^8.0.0
         version: 8.0.0
@@ -80,26 +71,6 @@ importers:
         version: 3.1.0
 
 packages:
-
-  '@aurelia/expression-parser@2.0.0-beta.25':
-    resolution: {integrity: sha512-aIbXxC+jBjeoNX/Pshrj/RYBFDx03YK5MEBG/DAYZUy9GKFguAMNpWGGj4hbtDncZetKtuDAK8sOPMffaF4Tyg==}
-    engines: {node: '>=20.16.0'}
-
-  '@aurelia/kernel@2.0.0-beta.25':
-    resolution: {integrity: sha512-U8I/FH4RJOkXe2igTy4G6U34aSdDLa43f4C+z4IU4jvgVpJTyu9+B92n/tUI7TtE+lOly8sbi7GQbgaPP9lntw==}
-    engines: {node: '>=20.16.0'}
-
-  '@aurelia/metadata@2.0.0-beta.25':
-    resolution: {integrity: sha512-N/TihhPtbM/2FbcOGkCuCOpTjRyQTz7Z3GyNkJGxiIgTdMnzrpslwoC3GT/Qeh3lP28zR96jfAbAOlSyy8wY6g==}
-    engines: {node: '>=20.16.0'}
-
-  '@aurelia/platform@2.0.0-beta.25':
-    resolution: {integrity: sha512-dE8Uk9oX5rjhhFgwEqV/NTUOrVrWaYHIv4MQFxiiDqEpTLyMLQDykVk+Q0sxqeIIw8xWw0XNQUs9NNExEcntjw==}
-    engines: {node: '>=20.16.0'}
-
-  '@aurelia/template-compiler@2.0.0-beta.25':
-    resolution: {integrity: sha512-IfgKKtduYt3VbGRDdzvKdA3RqHWQ7l3y0kp0IpS0OQGL0PYFD3xN/mCiHtjaonFs+siJf9C+LvoGhFkfGA6vPg==}
-    engines: {node: '>=20.16.0'}
 
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
@@ -808,25 +779,6 @@ packages:
     engines: {node: '>=10'}
 
 snapshots:
-
-  '@aurelia/expression-parser@2.0.0-beta.25':
-    dependencies:
-      '@aurelia/kernel': 2.0.0-beta.25
-
-  '@aurelia/kernel@2.0.0-beta.25':
-    dependencies:
-      '@aurelia/metadata': 2.0.0-beta.25
-      '@aurelia/platform': 2.0.0-beta.25
-
-  '@aurelia/metadata@2.0.0-beta.25': {}
-
-  '@aurelia/platform@2.0.0-beta.25': {}
-
-  '@aurelia/template-compiler@2.0.0-beta.25':
-    dependencies:
-      '@aurelia/expression-parser': 2.0.0-beta.25
-      '@aurelia/kernel': 2.0.0-beta.25
-      '@aurelia/metadata': 2.0.0-beta.25
 
   '@bcoe/v8-coverage@1.0.2': {}
 
