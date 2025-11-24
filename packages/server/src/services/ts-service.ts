@@ -117,8 +117,9 @@ export class TsService {
     const target = this.#paths.canonical(overlayPath);
     try {
       void this.#service.getSyntacticDiagnostics(target);
-    } catch (e: any) {
-      this.#logger.error(`getSyntacticDiagnostics threw: ${e?.message ?? String(e)}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.#logger.error(`getSyntacticDiagnostics threw: ${message}`);
     }
     const program = this.#service.getProgram();
     return program?.getSourceFile(target);
@@ -178,16 +179,16 @@ export class TsService {
 
       fileExists: (f) => overlay.fileExists(f),
       readFile: (f) => overlay.readFile(f),
-      readDirectory: ts.sys.readDirectory,
-      directoryExists: ts.sys.directoryExists,
-      getDirectories: ts.sys.getDirectories,
+      readDirectory: (p, extensions, excludes, includes, depth) => ts.sys.readDirectory(p, extensions, excludes, includes, depth),
+      directoryExists: (p) => ts.sys.directoryExists(p),
+      getDirectories: (p) => ts.sys.getDirectories(p),
       realpath: (p) => (overlay.has(p) ? p : ts.sys.realpath ? ts.sys.realpath(p) : p),
 
       resolveModuleNameLiterals: (lits, containingFile, _redirected, options) => {
         const modHost: ts.ModuleResolutionHost = {
           fileExists: (f) => overlay.fileExists(f),
           readFile: (f) => overlay.readFile(f),
-          directoryExists: ts.sys.directoryExists,
+          directoryExists: (p) => ts.sys.directoryExists(p),
           realpath: (p) => (overlay.has(p) ? p : ts.sys.realpath ? ts.sys.realpath(p) : p),
           getCurrentDirectory: getCwd,
         };
@@ -198,7 +199,7 @@ export class TsService {
           } else {
             logger.warn(`resolve FAIL '${lit.text}' from '${containingFile}'`);
           }
-          return { resolvedModule: res.resolvedModule } as ts.ResolvedModuleWithFailedLookupLocations;
+          return { resolvedModule: res.resolvedModule };
         });
       },
     };
@@ -216,7 +217,7 @@ export class TsService {
       return { options: this.#withDefaults({}), rootFileNames: [], configPath: null };
     }
 
-    const read = ts.readConfigFile(configPath, ts.sys.readFile);
+    const read = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
     if (read.error) {
       const message = ts.flattenDiagnosticMessageText(read.error.messageText, " ");
       this.#logger.error(`[ts] failed to read tsconfig at ${configPath}: ${message}`);
@@ -224,9 +225,10 @@ export class TsService {
     }
 
     const parseHost: ts.ParseConfigHost = {
-      fileExists: ts.sys.fileExists,
-      readFile: ts.sys.readFile,
-      readDirectory: ts.sys.readDirectory,
+      fileExists: (p) => ts.sys.fileExists(p),
+      readFile: (p) => ts.sys.readFile(p),
+      readDirectory: (p, extensions, excludes, includes, depth) =>
+        ts.sys.readDirectory(p, extensions, excludes, includes, depth),
       useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames ?? false,
     };
 
@@ -248,7 +250,7 @@ export class TsService {
     if (explicit) {
       return path.isAbsolute(explicit) ? explicit : path.join(searchRoot, explicit);
     }
-    return ts.findConfigFile(searchRoot, ts.sys.fileExists, configFileName ?? "tsconfig.json") ?? null;
+    return ts.findConfigFile(searchRoot, (file) => ts.sys.fileExists(file), configFileName ?? "tsconfig.json") ?? null;
   }
 
   #fingerprint(

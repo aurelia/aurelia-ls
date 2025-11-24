@@ -8,6 +8,10 @@ import type { TsService } from "./ts-service.js";
 
 const VM_EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
 
+function hasSymbolFlag(symbol: ts.Symbol, flag: ts.SymbolFlags): boolean {
+  return Boolean(symbol.getFlags() & flag);
+}
+
 /**
  * VM reflection that derives the root view-model type from the template path's
  * companion module (same basename, TS/JS extensions), picking a named export
@@ -53,14 +57,15 @@ export class VmReflectionService implements VmReflection {
     const checker = program?.getTypeChecker();
     const moduleSymbol = sf && checker ? checker.getSymbolAtLocation(sf) : null;
     const exports = moduleSymbol && checker ? checker.getExportsOfModule(moduleSymbol) : [];
-    const classExport = exports.find((s) => (s.getFlags() & ts.SymbolFlags.Class) !== 0);
-    const defaultExport = exports.find((s) => s.escapedName === "default");
+    const classExport = exports.find((s) => hasSymbolFlag(s, ts.SymbolFlags.Class));
+    const defaultExport = exports.find((s) => s.getName() === "default");
     const target = classExport ?? defaultExport ?? exports[0] ?? null;
     const importPath = this.#toImportPath(companion);
 
     if (target) {
-      const name = target.escapedName === "default" ? "default" : target.getName();
-      this.#lastDisplayName = name === "default" ? this.#baseName(importPath) : name;
+      const name = target.getName();
+      const isDefault = name === "default";
+      this.#lastDisplayName = isDefault ? this.#baseName(importPath) : name;
       const typeRef = `typeof import("${importPath}")["${name}"]`;
       // Prefer instance type so template lookups see instance members/bindables.
       return `InstanceType<${typeRef}>`;

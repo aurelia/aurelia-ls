@@ -38,6 +38,7 @@ import {
   type TemplateLanguageDiagnostic,
   type TemplateLanguageDiagnostics,
   type TemplateLanguageService,
+  type Location as TemplateLocation,
   type TextEdit as TemplateTextEdit,
   type TextRange as TemplateTextRange,
   type HoverInfo,
@@ -114,8 +115,8 @@ function createWorkspaceFromIndex(): TemplateWorkspace {
   });
 }
 
-async function syncWorkspaceWithIndex(): Promise<void> {
-  await projectIndex.refresh();
+function syncWorkspaceWithIndex(): void {
+  projectIndex.refresh();
   const updated = workspace.reconfigure({
     program: workspaceProgramOptions(),
     language: { typescript: tsAdapter },
@@ -149,7 +150,7 @@ async function reloadProjectConfiguration(reason: string): Promise<void> {
   const beforeVersion = tsService.getProjectVersion();
 
   tsService.configure({ workspaceRoot });
-  await syncWorkspaceWithIndex();
+  syncWorkspaceWithIndex();
 
   const versionChanged = tsService.getProjectVersion() !== beforeVersion;
   const label = `${reason}; version=${tsService.getProjectVersion()} fingerprint=${workspace.fingerprint}`;
@@ -274,9 +275,7 @@ function mapHover(hover: HoverInfo | null): Hover | null {
   };
 }
 
-function mapLocations(
-  locs: ReturnType<TemplateLanguageService["getDefinition"]> | ReturnType<TemplateLanguageService["getReferences"]>,
-): Location[] {
+function mapLocations(locs: readonly TemplateLocation[] | null | undefined): Location[] {
   return (locs ?? []).map((loc) => ({ uri: toLspUri(loc.uri), range: toRange(loc.range) }));
 }
 
@@ -287,7 +286,7 @@ function mapWorkspaceEdit(edits: readonly TemplateTextEdit[]): WorkspaceEdit | n
     const uri = toLspUri(edit.uri);
     const lspEdit = { range: toRange(edit.range), newText: edit.newText };
     if (!changes[uri]) changes[uri] = [];
-    changes[uri]!.push(lspEdit);
+    changes[uri].push(lspEdit);
   }
   return { changes };
 }
@@ -333,10 +332,18 @@ function materializeSsr(uri: DocumentUri | string): SsrBuildArtifact | null {
   return workspace.buildService.getSsr(canonical.uri);
 }
 
+type MaybeUriParam = { uri?: string } | string | null;
+
+function uriFromParam(params: MaybeUriParam): string | undefined {
+  if (typeof params === "string") return params;
+  if (params && typeof params === "object" && typeof params.uri === "string") return params.uri;
+  return undefined;
+}
+
 async function refreshDocument(doc: TextDocument, reason: "open" | "change", options?: { skipSync?: boolean }) {
   try {
     if (!options?.skipSync) {
-      await syncWorkspaceWithIndex();
+      syncWorkspaceWithIndex();
     }
     const canonical = canonicalDocumentUri(doc.uri);
     if (reason === "open") {
@@ -348,10 +355,10 @@ async function refreshDocument(doc: TextDocument, reason: "open" | "change", opt
 
     const diagnostics = workspace.languageService.getDiagnostics(canonical.uri);
     const lspDiagnostics = mapDiagnostics(diagnostics);
-    connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
+    await connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
 
     const compilation = workspace.program.getCompilation(canonical.uri);
-    connection.sendNotification("aurelia/overlayReady", {
+    await connection.sendNotification("aurelia/overlayReady", {
       uri: doc.uri,
       overlayPath: overlay?.overlay.path,
       calls: overlay?.calls.length ?? 0,
@@ -359,35 +366,31 @@ async function refreshDocument(doc: TextDocument, reason: "open" | "change", opt
       diags: lspDiagnostics.length,
       meta: compilation.meta,
     });
-  } catch (e: any) {
-    logger.error(`refreshDocument failed: ${e?.stack ?? e}`);
-    connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.stack ?? e.message : String(e);
+    logger.error(`refreshDocument failed: ${message}`);
+    await connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
   }
 }
 
 /* =============================================================================
  * Custom requests (overlay/SSR preview + dump state)
  * ========================================================================== */
-connection.onRequest("aurelia/getOverlay", async (params: { uri?: string } | string | null) => {
-  let uri: string | undefined;
-  if (typeof params === "string") uri = params;
-  else if (params && typeof params === "object") uri = (params as any).uri;
-
+connection.onRequest("aurelia/getOverlay", (params: MaybeUriParam) => {
+  const uri = uriFromParam(params);
   logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
   if (!uri) return null;
-  await syncWorkspaceWithIndex();
+  syncWorkspaceWithIndex();
   const artifact = materializeOverlay(uri);
   return artifact
     ? { fingerprint: workspace.fingerprint, artifact }
     : null;
 });
 
-connection.onRequest("aurelia/getMapping", async (params: { uri?: string } | string | null) => {
-  let uri: string | undefined;
-  if (typeof params === "string") uri = params;
-  else if (params && typeof params === "object") uri = (params as any).uri;
+connection.onRequest("aurelia/getMapping", (params: MaybeUriParam) => {
+  const uri = uriFromParam(params);
   if (!uri) return null;
-  await syncWorkspaceWithIndex();
+  syncWorkspaceWithIndex();
   const canonical = canonicalDocumentUri(uri);
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
@@ -397,10 +400,10 @@ connection.onRequest("aurelia/getMapping", async (params: { uri?: string } | str
   return { overlayPath: derived.overlay.path, mapping };
 });
 
-connection.onRequest("aurelia/queryAtPosition", async (params: { uri: string; position: Position }) => {
+connection.onRequest("aurelia/queryAtPosition", (params: { uri: string; position: Position }) => {
   const uri = params?.uri;
   if (!uri || !params.position) return null;
-  await syncWorkspaceWithIndex();
+  syncWorkspaceWithIndex();
   const doc = ensureProgramDocument(uri);
   if (!doc) return null;
   const canonical = canonicalDocumentUri(uri);
@@ -415,12 +418,10 @@ connection.onRequest("aurelia/queryAtPosition", async (params: { uri: string; po
   };
 });
 
-connection.onRequest("aurelia/getSsr", async (params: { uri?: string } | string | null) => {
-  let uri: string | undefined;
-  if (typeof params === "string") uri = params;
-  else if (params && typeof params === "object") uri = (params as any).uri;
+connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => {
+  const uri = uriFromParam(params);
   if (!uri) return null;
-  await syncWorkspaceWithIndex();
+  syncWorkspaceWithIndex();
   const artifact = materializeSsr(uri);
   if (!artifact) return null;
   return {
@@ -501,13 +502,13 @@ connection.onCodeAction((params: CodeActionParams): CodeAction[] | null => {
 /* =============================================================================
  * LSP lifecycle
  * ========================================================================== */
-connection.onInitialize(async (params: InitializeParams): Promise<InitializeResult> => {
+connection.onInitialize((params: InitializeParams): InitializeResult => {
   workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
   logger.info(`initialize: root=${workspaceRoot ?? "<cwd>"} caseSensitive=${paths.isCaseSensitive()}`);
   tsService.configure({ workspaceRoot });
   ensurePrelude();
   projectIndex = new AureliaProjectIndex({ ts: tsService, logger });
-  await projectIndex.refresh();
+  projectIndex.refresh();
   workspace = createWorkspaceFromIndex();
   return {
     capabilities: {
@@ -522,26 +523,26 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
   };
 });
 
-documents.onDidOpen(async (e) => {
+documents.onDidOpen((e) => {
   logger.log(`didOpen ${e.document.uri}`);
-  await refreshDocument(e.document, "open");
+  void refreshDocument(e.document, "open");
 });
 
-connection.onDidChangeConfiguration(async () => {
+connection.onDidChangeConfiguration(() => {
   logger.log("didChangeConfiguration: reloading tsconfig and project index");
-  await reloadProjectConfiguration("configuration change");
+  void reloadProjectConfiguration("configuration change");
 });
 
-connection.onDidChangeWatchedFiles(async (e: DidChangeWatchedFilesParams) => {
+connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
   if (!e.changes?.length) return;
   if (!shouldReloadForFileChange(e.changes)) return;
   logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
-  await reloadProjectConfiguration("watched files");
+  void reloadProjectConfiguration("watched files");
 });
 
-documents.onDidChangeContent(async (e) => {
+documents.onDidChangeContent((e) => {
   logger.log(`didChange ${e.document.uri}`);
-  await refreshDocument(e.document, "change");
+  void refreshDocument(e.document, "change");
 });
 
 documents.onDidClose((e) => {
@@ -550,7 +551,7 @@ documents.onDidClose((e) => {
   workspace.close(canonical.uri);
   const derived = deriveTemplatePaths(canonical.uri, overlayPathOptions());
   tsService.deleteOverlay(derived.overlay.path);
-  connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
+  void connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
 });
 
 documents.listen(connection);
