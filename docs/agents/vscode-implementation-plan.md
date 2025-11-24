@@ -48,10 +48,10 @@ plus the current checkpoints here.
   - [x] `aurelia/getOverlay` and `aurelia/getSsr` call `TemplateBuildService`; update `OverlayFs` only from build outputs.
   - [x] Return overlay/SSR artifacts (paths, text, mapping, calls) per spec; respect current workspace fingerprint/index.
 
-- [ ] Client alignment (`packages/client`)
-  - [ ] Keep client LSP-only: `AureliaLanguageClient`, `VirtualDocProvider`, commands, status notifications.
-  - [ ] Ensure commands map to updated server requests/notifications.
-  - [ ] Add smoke tests: `activation-smoke.test.mjs`, `commands-overlay.test.mjs`.
+- [x] Client alignment (`packages/client`)
+  - [x] Keep client LSP-only: `AureliaLanguageClient`, `VirtualDocProvider`, commands, status notifications.
+  - [x] Ensure commands map to updated server requests/notifications.
+  - [x] Add smoke tests: `activation-smoke.test.mjs`, `commands-overlay.test.mjs`.
 
 - [x] Integration tests (server)
   - [x] Add in-process LSP tests for diagnostics, hover/defs/refs, overlay/SSR requests, and resource discovery using fixtures under `packages/server/test/integration`.

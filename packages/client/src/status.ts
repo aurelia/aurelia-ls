@@ -1,10 +1,10 @@
-import * as vscode from "vscode";
 import type { OverlayReadyPayload } from "./types.js";
+import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
 
 export class StatusService {
-  #status: vscode.StatusBarItem;
+  #status: import("vscode").StatusBarItem;
 
-  constructor() {
+  constructor(vscode: VscodeApi = getVscodeApi()) {
     this.#status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     this.#status.text = "Aurelia: idle";
     this.#status.command = "aurelia.showOverlay";
