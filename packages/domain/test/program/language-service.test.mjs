@@ -453,6 +453,54 @@ test("completions project TypeScript replacement spans through provenance", () =
   assert.deepEqual(item.range, spanToRange(mappingEntry.htmlSpan, markup));
 });
 
+test("completions map partial replacement spans to the matching slice of the template expression", () => {
+  const program = createProgram();
+  const uri = "/app/completions-partial-span.html";
+  const markup = "<template><span>${person.name}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
+  assert.ok(memberSeg, "member segment should be present for member completions");
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  // Simulate a TS completion that only replaces a subset of the overlay member span.
+  const partialOverlaySpan = {
+    start: memberSeg.overlaySpan.start + 2,
+    length: 3,
+  };
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCompletions(overlay, offset) {
+        assert.equal(overlay.uri, overlayUri);
+        assert.ok(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end);
+        return [
+          {
+            name: "person.name",
+            replacementSpan: partialOverlaySpan,
+          },
+        ];
+      },
+    },
+  });
+
+  const pos = positionAtOffset(markup, memberSeg.htmlSpan.start + 2);
+  const completions = service.getCompletions(uri, pos);
+  assert.equal(completions.length, 1);
+
+  const [item] = completions;
+  assert.equal(item.label, "person.name");
+
+  const expectedRange = spanToRange({
+    start: memberSeg.htmlSpan.start + 2,
+    end: memberSeg.htmlSpan.start + 2 + partialOverlaySpan.length,
+  }, markup);
+  assert.deepEqual(item.range, expectedRange, "partial overlay replacements should map to the same slice in the template");
+});
+
 test("completions map TypeScript entries without replacement spans to template spans", () => {
   const program = createProgram();
   const uri = "/app/completions-ts-no-replace.html";
