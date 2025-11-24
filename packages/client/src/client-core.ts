@@ -1,16 +1,22 @@
-import * as vscode from "vscode";
 import { LanguageClient, TransportKind } from "vscode-languageclient/node.js";
 import type { LanguageClientOptions, ServerOptions } from "vscode-languageclient/node.js";
 import { ClientLogger } from "./log.js";
+import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
+import type { ExtensionContext } from "vscode";
 
-async function fileExists(p: string): Promise<boolean> {
-  try { await vscode.workspace.fs.stat(vscode.Uri.file(p)); return true; } catch { return false; }
+async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(vscode.Uri.file(p));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-async function resolveServerModule(context: vscode.ExtensionContext, logger: ClientLogger): Promise<string> {
+async function resolveServerModule(context: ExtensionContext, logger: ClientLogger, vscode: VscodeApi): Promise<string> {
   const override = process.env.AURELIA_LS_SERVER_PATH;
   if (override) {
-    if (await fileExists(override)) {
+    if (await fileExists(vscode, override)) {
       logger.log(`[client] using server override: ${override}`);
       return override;
     }
@@ -23,7 +29,7 @@ async function resolveServerModule(context: vscode.ExtensionContext, logger: Cli
     vscode.Uri.joinPath(context.extensionUri, "..", "server", "build", "main.js").fsPath,
   ];
   for (const p of candidates) {
-    if (await fileExists(p)) {
+    if (await fileExists(vscode, p)) {
       logger.log(`[client] resolved server module: ${p}`);
       return p;
     }
@@ -36,14 +42,16 @@ async function resolveServerModule(context: vscode.ExtensionContext, logger: Cli
 export class AureliaLanguageClient {
   #client: LanguageClient | undefined;
   #logger: ClientLogger;
+  #vscode: VscodeApi;
 
-  constructor(logger: ClientLogger) {
+  constructor(logger: ClientLogger, vscode: VscodeApi = getVscodeApi()) {
     this.#logger = logger;
+    this.#vscode = vscode;
   }
 
-  async start(context: vscode.ExtensionContext): Promise<LanguageClient> {
+  async start(context: ExtensionContext): Promise<LanguageClient> {
     if (this.#client) return this.#client;
-    const serverModule = await resolveServerModule(context, this.#logger);
+    const serverModule = await resolveServerModule(context, this.#logger, this.#vscode);
 
     const serverOptions: ServerOptions = {
       run: { module: serverModule, transport: TransportKind.ipc },
@@ -51,9 +59,9 @@ export class AureliaLanguageClient {
     };
 
     const fileEvents = [
-      vscode.workspace.createFileSystemWatcher("**/tsconfig.json"),
-      vscode.workspace.createFileSystemWatcher("**/tsconfig.*.json"),
-      vscode.workspace.createFileSystemWatcher("**/jsconfig.json"),
+      this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.json"),
+      this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.*.json"),
+      this.#vscode.workspace.createFileSystemWatcher("**/jsconfig.json"),
     ];
 
     const clientOptions: LanguageClientOptions = {
