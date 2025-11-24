@@ -231,7 +231,7 @@ export function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
     const base = tIsBindingBehavior(n.object as IsBindingBehavior);
     if (!base || base === "unknown") return "unknown";
     if (n.key.$kind === "PrimitiveLiteral") {
-      const keyVal = (n.key as PrimitiveLiteralExpression).value;
+      const keyVal = n.key.value;
       const key = keyVal === undefined ? "undefined" : String(keyVal);
       return indexType(base, [key]);
     }

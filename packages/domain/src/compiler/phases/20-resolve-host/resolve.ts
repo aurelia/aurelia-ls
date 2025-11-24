@@ -487,7 +487,7 @@ function linkHydrateTemplateController(
         branch = { kind: "default" };
         break;
       default:
-        assertUnreachable(ins.branch as never);
+        assertUnreachable(ins.branch);
     }
   }
 

@@ -97,9 +97,13 @@ export function spanContains(haystack: SpanLike | null | undefined, needle: Span
 
 export function spanEquals(a: SpanLike | null | undefined, b: SpanLike | null | undefined): boolean {
   if (!a || !b) return false;
-  const fileA = "file" in a ? (a as SourceSpan).file : undefined;
-  const fileB = "file" in b ? (b as SourceSpan).file : undefined;
+  const fileA = hasFile(a) ? a.file : undefined;
+  const fileB = hasFile(b) ? b.file : undefined;
   return a.start === b.start && a.end === b.end && fileA === fileB;
+}
+
+function hasFile(span: SpanLike): span is SourceSpan {
+  return "file" in span;
 }
 
 /** True when an offset falls within [start, end) of the given span (null-safe). */

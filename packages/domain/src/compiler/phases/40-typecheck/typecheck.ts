@@ -102,7 +102,7 @@ function collectDiagnostics(
     const actual = exprIdMapGet(inferred, id);
     if (!actual) continue;
     if (!shouldReportMismatch(expectedType, actual)) continue;
-    const span = exprIdMapGet(spans as ReadonlyExprIdMap<SourceSpan>, id) ?? null;
+    const span = exprIdMapGet(spans, id) ?? null;
     diags.push({
       exprId: id,
       expected: expectedType,

@@ -245,7 +245,7 @@ export class PipelineSession {
         };
         this.#meta.set(key, meta);
         this.#results.set(key, cached.artifact);
-        return cached.artifact as StageOutputs[K];
+        return cached.artifact;
       }
     }
 
