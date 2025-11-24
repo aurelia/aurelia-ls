@@ -498,7 +498,7 @@ function canonicalAliases(values: readonly string[]): string[] {
 function canonicalBindableName(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return trimmed.replace(/-([a-zA-Z0-9])/g, (_, c) => c.toUpperCase());
+  return trimmed.replace(/-([a-zA-Z0-9])/g, (_match: string, captured: string) => captured.toUpperCase());
 }
 
 function toKebabCase(value: string): string {
@@ -524,7 +524,7 @@ function unwrapDecorator(dec: ts.Decorator): { name: string; args: readonly ts.E
 function decoratorsOf(node: ts.Node): readonly ts.Decorator[] {
   const helper = ts.canHaveDecorators(node) ? ts.getDecorators(node) : undefined;
   const direct = (node as ts.Node & { decorators?: readonly ts.Decorator[] }).decorators;
-  return (helper ?? direct ?? []) as readonly ts.Decorator[];
+  return helper ?? direct ?? [];
 }
 
 function getProp(obj: ts.ObjectLiteralExpression, name: string): ts.PropertyAssignment | undefined {

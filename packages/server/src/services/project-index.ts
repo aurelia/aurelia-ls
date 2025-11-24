@@ -62,7 +62,7 @@ export class AureliaProjectIndex {
     this.#fingerprint = snapshot.fingerprint;
   }
 
-  async refresh(): Promise<void> {
+  refresh(): void {
     const snapshot = this.#computeSnapshot();
     const changed = snapshot.fingerprint !== this.#fingerprint;
     this.#semantics = snapshot.semantics;
