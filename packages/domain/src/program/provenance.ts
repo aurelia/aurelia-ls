@@ -11,6 +11,14 @@ import { canonicalDocumentUri } from "./paths.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
 
 /**
+ * TODO(provenance-refactor)
+ * - Keep all generated↔template projection logic (edge selection + proportional span math) centralized here.
+ * - Expose both directions: projectGeneratedOffset/Span and source→generated helpers for overlay/SSR as needed.
+ * - Ensure span/file normalization for overlay/SSR ingestion lives only here (not scattered across services).
+ * - Align this API surface with docs/agents/appendix-provenance.md and docs/provenance-refactor-milestones.md.
+ */
+
+/**
  * Cross-artifact provenance contracts. These are intentionally minimal so the
  * implementation can evolve (indexed, persisted, etc.) without changing callers.
  */

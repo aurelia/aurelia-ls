@@ -11,6 +11,14 @@ import type { TemplateBindableInfo, TemplateMappingArtifact, TemplateQueryFacade
 import { stableHash } from "../compiler/pipeline/hash.js";
 import type { TypecheckDiagnostic } from "../compiler/phases/40-typecheck/typecheck.js";
 
+/**
+ * TODO(provenance-refactor)
+ * - Treat ProvenanceIndex as the single source-map layer between overlay/SSR artifacts and templates.
+ * - Migrate remaining overlay offset/member heuristics in this file into ProvenanceIndex projection APIs.
+ * - Stop scanning TemplateMappingArtifact directly in services once provenance has full projection coverage.
+ * - Keep this in sync with docs/agents/appendix-provenance.md and docs/provenance-refactor-milestones.md.
+ */
+
 export interface Position {
   line: number;
   character: number;

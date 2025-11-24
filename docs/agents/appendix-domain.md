@@ -55,6 +55,7 @@ It does **not** talk to editors, VS Code APIs, LSP, or concrete TS language serv
   - SSR HTML + manifest, hydration/mapping data, `SsrMappingArtifact`.
 - Mapping & provenance:
   - `TemplateMappingArtifact`, `SsrMappingArtifact`, provenance traces, and utilities to build span indices and mapping edges.
+  - Provenance is the canonical source-map layer; see `docs/agents/appendix-provenance.md` for projection rules and API expectations.
 
 **Program & services**
 
