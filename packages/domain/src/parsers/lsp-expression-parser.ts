@@ -641,7 +641,7 @@ export class CoreParser {
         const node: PrimitiveLiteralExpression = {
           $kind: "PrimitiveLiteral",
           span: this.spanFromToken(t),
-          value: t.value as any,
+          value: t.value,
         };
         return node;
       }

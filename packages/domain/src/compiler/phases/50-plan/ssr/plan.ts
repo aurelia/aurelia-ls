@@ -38,18 +38,18 @@ function buildTemplatePlan(
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   hidAllocator: HydrationIdAllocator,
 ): SsrTemplatePlan {
-  const hidByNode: Record<string, HydrationId> = Object.create(null);
-  const bindingsByHid: Record<HydrationId, SsrBinding[]> = Object.create(null);
-  const controllersByHid: Record<HydrationId, SsrController[]> = Object.create(null);
-  const letsByHid: Record<HydrationId, { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> }> = Object.create(null);
-  const staticAttrsByHid: Record<HydrationId, Record<string, string | null>> = Object.create(null);
+  const hidByNode = createRecord<string, HydrationId>();
+  const bindingsByHid = createRecord<HydrationId, SsrBinding[]>();
+  const controllersByHid = createRecord<HydrationId, SsrController[]>();
+  const letsByHid = createRecord<HydrationId, { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> }>();
+  const staticAttrsByHid = createRecord<HydrationId, Record<string, string | null>>();
   const textBindings: SsrTemplatePlan["textBindings"] = [];
 
   for (const row of t.rows) {
     const nodeId = row.target;
 
     let hasDyn = false;
-    const staticAttrs: Record<string, string | null> = Object.create(null);
+    const staticAttrs = createRecord<string, string | null>();
     const rowBindings: SsrBinding[] = [];
     const rowControllers: SsrController[] = [];
 
@@ -272,4 +272,8 @@ function ensureHid(node: NodeId, map: Record<string, HydrationId>, allocator: Hy
     map[key] = hid;
   }
   return hid;
+}
+
+function createRecord<TKey extends string | number | symbol, TValue>(): Record<TKey, TValue> {
+  return Object.create(null) as Record<TKey, TValue>;
 }

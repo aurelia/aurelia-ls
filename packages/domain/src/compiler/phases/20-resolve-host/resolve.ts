@@ -321,7 +321,7 @@ function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverC
 
 function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateAttribute {
   const res = resolveAttrResRef(ins.res, ctx.lookup);
-  const props = ins.props.map((p) => linkAttributeBindable(p, res, ctx));
+  const props = ins.props.map((p) => linkAttributeBindable(p, res));
   return {
     kind: "hydrateAttribute",
     res,
@@ -416,7 +416,11 @@ function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Link
         pushDiag(ctx.diags, "AU1106", `Unknown repeat option '${p.to}'.`, p.loc);
       }
       if (!p.from && p.value == null) continue;
-      const from = p.from ?? ({ id: ins.forOf.astId, code: p.value! } as any);
+      const from: LinkedIteratorBinding["aux"][number]["from"] = p.from ?? {
+        id: ins.forOf.astId,
+        code: p.value!,
+        loc: p.loc ?? null,
+      };
       aux.push({ name: p.to, from, spec });
     }
   }

@@ -153,7 +153,7 @@ export function emitOverlayFile(
 function adjustMappingForEol(mapping: OverlayEmitMappingEntry[], text: string, eol: "\n" | "\r\n"): OverlayEmitMappingEntry[] {
   if (eol === "\n") return mapping;
   // Each '\n' expands to two chars in the emitted text; precompute prefix counts.
-  const prefixNewlines: number[] = new Array(text.length + 1);
+  const prefixNewlines = new Array<number>(text.length + 1);
   let count = 0;
   prefixNewlines[0] = 0;
   for (let i = 0; i < text.length; i++) {
