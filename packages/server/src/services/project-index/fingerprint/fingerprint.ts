@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import ts from "typescript";
+import type ts from "typescript";
 
 export function normalizeCompilerOptions(options: ts.CompilerOptions): Record<string, unknown> {
   const normalized: Record<string, unknown> = {};

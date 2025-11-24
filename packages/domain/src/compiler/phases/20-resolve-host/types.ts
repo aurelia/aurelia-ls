@@ -29,7 +29,6 @@ import type {
   PortalController,
   Bindable,
   TypeRef,
-  IteratorTailPropSpec,
 } from "../../language/registry.js";
 import type { CompilerDiagnostic } from "../../diagnostics.js";
 

@@ -27,7 +27,7 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
     if (isInterpolation(src)) {
       for (const ref of src.exprs) recordExprSpan(ref.id, ref.loc);
     } else {
-      const ref = src as ExprRef;
+      const ref = src;
       recordExprSpan(ref.id, ref.loc);
     }
   };
@@ -139,7 +139,7 @@ export function buildExprSpanIndex(ir: IrModule, fallback?: SourceFile | SourceF
 
 /** Extract all ExprIds from a BindingSourceIR (ExprRef | InterpIR). */
 export function exprIdsOf(src: BindingSourceIR | ExprRef | InterpIR): readonly ExprId[] {
-  return isInterpolation(src) ? src.exprs.map((e) => e.id) : [(src as ExprRef).id];
+  return isInterpolation(src) ? src.exprs.map((e) => e.id) : [src.id];
 }
 
 /** First ExprId from a binding source (handy for singleton bindings). */
@@ -251,8 +251,8 @@ export function collectExprMemberSegments(
   function toHtmlSpan(span: { start: number; end: number } | undefined, base: SourceSpan): SourceSpan {
     const normalizedBase = normalizeSpan(base);
     if (!span) return normalizedBase;
-    const normalizedSpan = normalizeSpan(span as SourceSpan);
-    if ((normalizedSpan as SourceSpan).file) return normalizedSpan as SourceSpan;
+    const normalizedSpan: SourceSpan = normalizeSpan({ ...span });
+    if (normalizedSpan.file) return normalizedSpan;
     return absoluteSpan(normalizedSpan, normalizedBase) ?? normalizedBase;
   }
 }

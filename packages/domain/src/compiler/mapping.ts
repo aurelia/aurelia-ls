@@ -1,5 +1,5 @@
 import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateMappingSegment } from "../contracts.js";
-import type { ExprId, ExprTableEntry, IrModule, SourceSpan, TextSpan } from "./model/ir.js";
+import type { ExprTableEntry, IrModule, SourceSpan, TextSpan } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import {

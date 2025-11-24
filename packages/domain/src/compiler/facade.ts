@@ -10,7 +10,7 @@ import { buildOverlayProduct, type OverlayProductResult } from "./products/overl
 import { buildSsrProduct, type SsrProductResult } from "./products/ssr.js";
 import type { CompilerDiagnostic } from "./diagnostics.js";
 import type { StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/engine.js";
-import type { ExprId, ExprTableEntry, SourceSpan } from "./model/ir.js";
+import type { ExprTableEntry, SourceSpan } from "./model/ir.js";
 import type { ExprIdMap } from "./model/identity.js";
 import { computeOverlayBaseName, computeSsrBaseName } from "./path-conventions.js";
 

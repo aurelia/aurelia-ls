@@ -1,6 +1,7 @@
 import type { DOMNode, TemplateNode, NodeId } from "../../model/ir.js";
 import type { P5Element, P5Node, P5Template } from "./lower-shared.js";
-import { DomIdAllocator, isComment, isElement, isText, toSpan } from "./lower-shared.js";
+import type { DomIdAllocator } from "./lower-shared.js";
+import { isComment, isElement, isText, toSpan } from "./lower-shared.js";
 import type { SourceFile } from "../../model/source.js";
 
 export function buildDomRoot(

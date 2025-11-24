@@ -11,7 +11,6 @@ import type { TypecheckModule } from "./phases/40-typecheck/typecheck.js";
 import type {
   LinkedAttributeBinding,
   LinkedElementBindable,
-  LinkedHydrateTemplateController,
   LinkedPropertyBinding,
   LinkedRow,
   LinkedSemanticsModule,

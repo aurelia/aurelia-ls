@@ -13,8 +13,8 @@ import {
   type TsCodeAction,
   type TypeScriptServices,
 } from "@aurelia-ls/domain";
-import { TsService } from "./ts-service.js";
-import { PathUtils } from "./paths.js";
+import type { TsService } from "./ts-service.js";
+import type { PathUtils } from "./paths.js";
 
 function asMessageChain(msg: string | ts.DiagnosticMessageChain | undefined): string | TsMessageChain {
   if (!msg) return "";

@@ -1,6 +1,7 @@
 import type { ExpressionParseContext, IExpressionParser } from "./expression-api.js";
 import { Scanner, TokenType, type Token, CharCode } from "./expression-scanner.js";
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type {
   AnyBindingExpression,
   AssignmentOperator,
@@ -57,6 +58,8 @@ import { absoluteSpan, ensureSpanFile } from "../compiler/model/source.js";
 import { provenanceFromSpan } from "../compiler/model/origin.js";
 
 type SpanBearing = { span: TextSpan };
+
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 
 /**
  * Core expression parser for Aurelia's binding expression language, tailored

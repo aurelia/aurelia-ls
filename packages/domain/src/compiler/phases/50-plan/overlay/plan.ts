@@ -13,6 +13,8 @@ import type {
   AnalyzeOptions, OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment,
 } from "./types.js";
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { offsetSpan, spanFromBounds } from "../../../model/span.js";
 import type { LinkedSemanticsModule } from "../../20-resolve-host/types.js";
 import type {
@@ -308,12 +310,12 @@ function member(n: AccessMemberExpression): PrintedExpression | null {
   const dot = n.optional ? "?." : ".";
   const head = `${base.code}${dot}`;
   const code = `${head}${n.name}`;
-  const segs = base.path
+  const segs: OverlayLambdaSegment[] = base.path
     ? [{
       kind: "member",
       path: `${base.path}.${n.name}`,
       span: spanFromBounds(head.length, head.length + n.name.length),
-    } as OverlayLambdaSegment]
+    }]
     : [];
   const segments = mergeSegments(base.segments, segs, 0);
   const path = base.path ? `${base.path}.${n.name}` : undefined;

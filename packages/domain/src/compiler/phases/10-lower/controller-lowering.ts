@@ -38,7 +38,8 @@ export function collectControllers(
   }
   if (!candidates.length) return [];
 
-  const rightmost = candidates[candidates.length - 1]!;
+  const rightmost = candidates[candidates.length - 1];
+  if (!rightmost) return [];
   let current: HydrateTemplateControllerIR[] = buildBaseInstructionsForRightmost(
     el,
     rightmost,
@@ -51,7 +52,9 @@ export function collectControllers(
   );
 
   for (let i = candidates.length - 2; i >= 0; i--) {
-    const { a, s, kind } = candidates[i]!;
+    const candidate = candidates[i];
+    if (!candidate) continue;
+    const { a, s, kind } = candidate;
     const loc = attrLoc(el, a.name);
     const prototypes = buildControllerPrototypes(el, a, s, attrParser, table, loc, sem, kind);
 
@@ -363,7 +366,7 @@ function injectPromiseBranchesIntoDef(
           def: branchDef,
           props: [valueProp],
           alias: branchKind,
-          branch: { kind: branchKind, local: aliasVar! },
+          branch: { kind: branchKind, local: aliasVar ?? branchKind },
           containerless: false,
           loc: toSpan(
             branchAttrLoc ??
@@ -495,5 +498,5 @@ function injectSwitchBranchesIntoDef(
 }
 
 function isElementNode(n: P5Node): n is P5Element {
-  return (n as P5Element).tagName != null;
+  return "tagName" in n;
 }

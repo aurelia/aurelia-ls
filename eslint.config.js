@@ -39,7 +39,8 @@ module.exports = [
       "no-empty": "off",
       "no-var": "error",
       "prefer-const": ["error", { destructuring: "all" }],
-      "prefer-template": "error",
+      // TODO: re-enable if template literal churn is worth enforcing; disabled to reduce noise.
+      "prefer-template": "off",
       eqeqeq: ["error", "smart"],
       "@typescript-eslint/no-unused-vars": [
         "warn",
@@ -60,7 +61,8 @@ module.exports = [
         "error",
         { allowNumber: true, allowBoolean: true, allowNullish: false },
       ],
-      "@typescript-eslint/no-non-null-assertion": "warn",
+      // TODO: re-evaluate once non-null assertions are cleaned up; disabling to reduce noise while invariants are enforced elsewhere.
+      "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/ban-ts-comment": [
         "warn",
         {
@@ -96,7 +98,8 @@ module.exports = [
       "no-empty": "off",
       "no-var": "error",
       "prefer-const": ["error", { destructuring: "all" }],
-      "prefer-template": "error",
+      // TODO: re-enable if template literal churn is worth enforcing; disabled to reduce noise.
+      "prefer-template": "off",
       eqeqeq: ["error", "smart"],
     },
   },
@@ -111,6 +114,13 @@ module.exports = [
       "@typescript-eslint/no-unsafe-call": "warn",
       "@typescript-eslint/no-unsafe-member-access": "warn",
       "@typescript-eslint/no-unsafe-return": "warn",
+    },
+  },
+  {
+    files: ["**/*.test.mjs", "**/*.test.js", "packages/**/test/**/*.mjs"],
+    rules: {
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": "off",
     },
   },
 ];

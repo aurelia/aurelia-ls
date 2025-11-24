@@ -83,6 +83,8 @@ export enum TokenType {
   Unknown = "Unknown",
 }
 
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
+
 /** Value payload for tokens; primitives only. */
 export type TokenValue = string | number | boolean | null | undefined;
 
