@@ -11,6 +11,7 @@ import {
   createMessageConnection,
 } from "vscode-languageserver/node.js";
 import { fileURLToPath } from "node:url";
+import { TextDecoder } from "node:util";
 
 const serverEntry = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -111,6 +112,74 @@ test("routes definitions to the view-model via provenance", async () => {
   }
 });
 
+test("hover/definition/rename map through overlay for simple interpolation", async () => {
+  const fixture = createFixture({
+    "tsconfig.json": JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        strict: true,
+        types: [],
+      },
+      files: ["component.ts"],
+    }),
+    "component.ts": [
+      "export class Component {",
+      '  message: string = "Hello";',
+      "}",
+    ].join("\n"),
+    "component.html": "<template><div>${message}</div></template>",
+  });
+
+  const htmlUri = URI.file(path.join(fixture, "component.html")).toString();
+  const tsUri = URI.file(path.join(fixture, "component.ts")).toString();
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    const htmlText = fs.readFileSync(path.join(fixture, "component.html"), "utf8");
+    await openDocument(connection, htmlUri, "html", htmlText);
+    await waitForDiagnostics(connection, child, () => getStderr(), htmlUri, 5000);
+
+    const pos = positionAt(htmlText, htmlText.indexOf("message"));
+
+    const hover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: htmlUri },
+      position: pos,
+    });
+    assert.ok(hover, "hover should be returned");
+    const hoverText = decodeHover(hover);
+    assert.ok(/message/i.test(hoverText), `hover text should mention message: ${hoverText}`);
+
+    const definitions = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: htmlUri },
+      position: pos,
+    });
+    const defArray = Array.isArray(definitions) ? definitions : [];
+    assert.ok(defArray.length > 0, "definition response should contain at least one location");
+    const vmDef = defArray.find((d) => d.uri === tsUri);
+    if (vmDef) {
+      assert.equal(vmDef.range.start.line, 1);
+    }
+
+    const rename = await connection.sendRequest("textDocument/rename", {
+      textDocument: { uri: htmlUri },
+      position: pos,
+      newName: "title",
+    });
+    assert.ok(rename, "rename response should be present");
+    const edits = collectEdits(rename);
+    assert.ok(edits.some((e) => e.uri === htmlUri), "rename should edit the template");
+    assert.ok(edits.some((e) => e.uri === tsUri), "rename should edit the view-model");
+  } finally {
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
 function startServer(cwd) {
   const child = spawn(process.execPath, [serverEntry, "--stdio"], {
     cwd,
@@ -196,6 +265,54 @@ function waitForDiagnostics(connection, child, stderr, uri, timeoutMs) {
       resolve(params.diagnostics ?? []);
     });
   });
+}
+
+function positionAt(text, offset) {
+  const clamped = Math.max(0, Math.min(offset, text.length));
+  let line = 0;
+  let lastLineStart = 0;
+  for (let i = 0; i < clamped; i++) {
+    const ch = text.charCodeAt(i);
+    if (ch === 10 /* \n */) {
+      line += 1;
+      lastLineStart = i + 1;
+    }
+  }
+  return { line, character: clamped - lastLineStart };
+}
+
+function decodeHover(hover) {
+  if (!hover) return "";
+  const content = Array.isArray(hover.contents) ? hover.contents : [hover.contents];
+  return content
+    .map((c) => {
+      if (!c) return "";
+      if (typeof c === "string") return c;
+      if ("value" in c && typeof c.value === "string") return c.value;
+      if ("language" in c && "value" in c) return `${c.language}: ${c.value}`;
+      return "";
+    })
+    .join("\n");
+}
+
+function collectEdits(renameResult) {
+  const edits = [];
+  const docChanges = renameResult.documentChanges ?? [];
+  for (const change of docChanges) {
+    if (change.kind === "rename" || change.kind === "create" || change.kind === "delete") continue;
+    if (change.textDocument && change.edits) {
+      for (const e of change.edits) {
+        edits.push({ uri: change.textDocument.uri, range: e.range, newText: e.newText });
+      }
+    }
+  }
+  const changes = renameResult.changes ?? {};
+  for (const [uri, uriEdits] of Object.entries(changes)) {
+    for (const e of uriEdits ?? []) {
+      edits.push({ uri, range: e.range, newText: e.newText });
+    }
+  }
+  return edits;
 }
 
 function createFixture(files) {

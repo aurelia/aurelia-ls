@@ -4,10 +4,14 @@ import type { TextSpan } from "../../../model/span.js";
 
 /** Injected by the caller; keeps the Plan phase decoupled from TS/compiler state. */
 export interface VmReflection {
-  /** Union (or single) type expression for the root VM, e.g. "App | Admin". */
+  /** Union (or single) type expression for the root VM instance, e.g. "InstanceType<typeof App>". */
   getRootVmTypeExpr(): string;
   /** Synthetic name prefix for types/constants we create (e.g., "__AU_TTC_"). */
   getSyntheticPrefix(): string;
+  /** Optional friendly name for diagnostics (e.g., "MyApp"). */
+  getDisplayName?(): string;
+  /** Optional qualified type expression for the root VM. */
+  getQualifiedRootVmTypeExpr?(): string;
 }
 
 export interface AnalyzeOptions {
@@ -21,6 +25,15 @@ export interface AnalyzeOptions {
  * Overlay planning output
  * =========================== */
 
+export interface VmTypeInfo {
+  /** Alias injected once per template to keep overlay types readable. */
+  alias: string;
+  /** Type expression referencing the view-model instance type. */
+  typeExpr: string;
+  /** Optional display name for diagnostics. */
+  displayName?: string;
+}
+
 /** Whole-module plan (one per linked+scoped module). */
 export interface OverlayPlanModule {
   templates: TemplateOverlayPlan[];
@@ -29,6 +42,7 @@ export interface OverlayPlanModule {
 /** Per-template overlay plan: type alias(es) and calls grouped by frame. */
 export interface TemplateOverlayPlan {
   name?: string;
+  vmType?: VmTypeInfo;
   frames: FrameOverlayPlan[];
 }
 

@@ -74,6 +74,85 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   assert.equal(diags.all.length, diags.compiler.length + diags.typescript.length);
 });
 
+test("diagnostics use VM display name for missing members", () => {
+  const program = new DefaultTemplateProgram({
+    vm: {
+      getRootVmTypeExpr() { return "MyVm"; },
+      getQualifiedRootVmTypeExpr() { return "MyVm"; },
+      getDisplayName() { return "MyVm"; },
+      getSyntheticPrefix() { return "__AU_TTC_"; },
+    },
+    isJs: false,
+  });
+  const uri = "/app/diag-display.html";
+  program.upsertTemplate(uri, "<template>${missing}</template>");
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const memberSeg = mappingEntry.segments?.[0] ?? mappingEntry;
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics(tsOverlay) {
+        assert.equal(tsOverlay.uri, overlayUri);
+        return [{
+          category: "error",
+          code: 2339,
+          start: memberSeg.overlaySpan.start,
+          length: Math.max(1, memberSeg.overlaySpan.end - memberSeg.overlaySpan.start),
+          messageText: "TS2339: Property 'missing' does not exist on type.",
+        }];
+      },
+    },
+  });
+
+  const diags = service.getDiagnostics(uri);
+  const tsDiag = diags.typescript.find((d) => d.source === "typescript");
+  assert.ok(tsDiag, "typescript diagnostic should be present");
+  assert.equal(tsDiag.message, "Property 'missing' does not exist on MyVm");
+});
+
+test("suppresses AU1301 when TypeScript confirms matching type", () => {
+  const program = new DefaultTemplateProgram({
+    vm: {
+      getRootVmTypeExpr() { return "MyVm"; },
+      getQualifiedRootVmTypeExpr() { return "MyVm"; },
+      getDisplayName() { return "MyVm"; },
+      getSyntheticPrefix() { return "__AU_TTC_"; },
+    },
+    isJs: false,
+  });
+  const uri = "/app/typecheck-noise.html";
+  const markup = "<template><div class.bind=\"greeting\"></div></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  let quickInfoHits = 0;
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics(overlay) {
+        assert.equal(overlay.uri, overlayUri);
+        return [];
+      },
+      getQuickInfo(overlay, offset) {
+        quickInfoHits += 1;
+        assert.equal(overlay.uri, overlayUri);
+        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        return { text: "greeting: string" };
+      },
+    },
+  });
+
+  const diags = service.getDiagnostics(uri);
+  assert.ok(quickInfoHits > 0, "should consult TypeScript quick info for typecheck mismatches");
+  assert.equal(diags.compiler.length, 0, "matching types should suppress AU1301 noise");
+  assert.equal(diags.all.length, 0, "no diagnostics should remain when types align");
+});
+
 test("falls back to overlay spans when provenance has no mapping", () => {
   const program = createProgram();
   const uri = "/app/raw-overlay.html";
