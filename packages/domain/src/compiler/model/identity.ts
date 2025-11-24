@@ -125,7 +125,8 @@ export function deterministicStringId<TBrand extends string>(
 
 export function normalizePathForId(filePath: string): NormalizedPath {
   const normalized = filePath.split("\\").join("/");
-  return brandString<"NormalizedPath">(normalized);
+  const canonical = process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  return brandString<"NormalizedPath">(canonical);
 }
 
 export function toSourceFileId(filePath: string): SourceFileId {

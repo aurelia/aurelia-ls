@@ -31,9 +31,10 @@ import {
   PRELUDE_TS,
   canonicalDocumentUri,
   deriveTemplatePaths,
-  idKey,
   type DocumentSpan,
   type DocumentUri,
+  type OverlayBuildArtifact,
+  type SsrBuildArtifact,
   type TemplateLanguageDiagnostic,
   type TemplateLanguageDiagnostics,
   type TemplateLanguageService,
@@ -306,7 +307,30 @@ function ensureProgramDocument(uri: string): TextDocument | null {
   }
   const snap = workspace.ensureFromFile(uri);
   if (!snap) return null;
+  vmReflection.setActiveTemplate(canonicalDocumentUri(uri).path);
   return TextDocument.create(uri, "html", snap.version, snap.text);
+}
+
+function materializeOverlay(uri: DocumentUri | string): OverlayBuildArtifact | null {
+  const canonical = canonicalDocumentUri(uri);
+  vmReflection.setActiveTemplate(canonical.path);
+  if (!workspace.snapshot(canonical.uri)) {
+    const doc = ensureProgramDocument(uri);
+    if (!doc) return null;
+  }
+  const artifact = workspace.buildService.getOverlay(canonical.uri);
+  tsService.upsertOverlay(artifact.overlay.path, artifact.overlay.text);
+  return artifact;
+}
+
+function materializeSsr(uri: DocumentUri | string): SsrBuildArtifact | null {
+  const canonical = canonicalDocumentUri(uri);
+  vmReflection.setActiveTemplate(canonical.path);
+  if (!workspace.snapshot(canonical.uri)) {
+    const doc = ensureProgramDocument(uri);
+    if (!doc) return null;
+  }
+  return workspace.buildService.getSsr(canonical.uri);
 }
 
 async function refreshDocument(doc: TextDocument, reason: "open" | "change", options?: { skipSync?: boolean }) {
@@ -315,14 +339,12 @@ async function refreshDocument(doc: TextDocument, reason: "open" | "change", opt
       await syncWorkspaceWithIndex();
     }
     const canonical = canonicalDocumentUri(doc.uri);
-    vmReflection.setActiveTemplate(canonical.path);
     if (reason === "open") {
       workspace.open(doc);
     } else {
       workspace.change(doc);
     }
-    const overlay = workspace.buildService.getOverlay(canonical.uri);
-    tsService.upsertOverlay(overlay.overlay.path, overlay.overlay.text);
+    const overlay = materializeOverlay(canonical.uri);
 
     const diagnostics = workspace.languageService.getDiagnostics(canonical.uri);
     const lspDiagnostics = mapDiagnostics(diagnostics);
@@ -331,9 +353,9 @@ async function refreshDocument(doc: TextDocument, reason: "open" | "change", opt
     const compilation = workspace.program.getCompilation(canonical.uri);
     connection.sendNotification("aurelia/overlayReady", {
       uri: doc.uri,
-      overlayPath: overlay.overlay.path,
-      calls: overlay.calls.length,
-      overlayLen: overlay.overlay.text.length,
+      overlayPath: overlay?.overlay.path,
+      calls: overlay?.calls.length ?? 0,
+      overlayLen: overlay?.overlay.text.length ?? 0,
       diags: lspDiagnostics.length,
       meta: compilation.meta,
     });
@@ -354,23 +376,10 @@ connection.onRequest("aurelia/getOverlay", async (params: { uri?: string } | str
   logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
   if (!uri) return null;
   await syncWorkspaceWithIndex();
-  const doc = ensureProgramDocument(uri);
-  if (!doc) return null;
-  const canonical = canonicalDocumentUri(uri);
-  const artifact = workspace.buildService.getOverlay(canonical.uri);
-  tsService.upsertOverlay(artifact.overlay.path, artifact.overlay.text);
-  return {
-    overlayPath: artifact.overlay.path,
-    text: artifact.overlay.text,
-    mapping: artifact.mapping,
-    calls: artifact.calls.map((c) => ({
-      exprId: idKey(c.exprId),
-      overlayStart: c.overlayStart,
-      overlayEnd: c.overlayEnd,
-      htmlStart: c.htmlSpan?.start ?? 0,
-      htmlEnd: c.htmlSpan?.end ?? 0,
-    })),
-  };
+  const artifact = materializeOverlay(uri);
+  return artifact
+    ? { fingerprint: workspace.fingerprint, artifact }
+    : null;
 });
 
 connection.onRequest("aurelia/getMapping", async (params: { uri?: string } | string | null) => {
@@ -380,7 +389,8 @@ connection.onRequest("aurelia/getMapping", async (params: { uri?: string } | str
   if (!uri) return null;
   await syncWorkspaceWithIndex();
   const canonical = canonicalDocumentUri(uri);
-  ensureProgramDocument(uri);
+  const doc = ensureProgramDocument(uri);
+  if (!doc) return null;
   const mapping = workspace.program.getMapping(canonical.uri);
   if (!mapping) return null;
   const derived = deriveTemplatePaths(canonical.uri, overlayPathOptions());
@@ -411,15 +421,11 @@ connection.onRequest("aurelia/getSsr", async (params: { uri?: string } | string 
   else if (params && typeof params === "object") uri = (params as any).uri;
   if (!uri) return null;
   await syncWorkspaceWithIndex();
-  const doc = ensureProgramDocument(uri);
-  if (!doc) return null;
-  const canonical = canonicalDocumentUri(uri);
-  const ssr = workspace.buildService.getSsr(canonical.uri);
+  const artifact = materializeSsr(uri);
+  if (!artifact) return null;
   return {
-    htmlPath: ssr.html.path,
-    htmlText: ssr.html.text,
-    manifestPath: ssr.manifest.path,
-    manifestText: ssr.manifest.text,
+    fingerprint: workspace.fingerprint,
+    artifact,
   };
 });
 

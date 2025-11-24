@@ -1,25 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
-import { URI } from "vscode-uri";
 import {
-  StreamMessageReader,
-  StreamMessageWriter,
-  createMessageConnection,
-} from "vscode-languageserver/node.js";
-import { fileURLToPath } from "node:url";
-import { TextDecoder } from "node:util";
-
-const serverEntry = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "out",
-  "main.js",
-);
+  collectEdits,
+  createFixture,
+  decodeHover,
+  fileUri,
+  initialize,
+  openDocument,
+  positionAt,
+  startServer,
+  waitForDiagnostics,
+  waitForExit,
+} from "./helpers/lsp-harness.mjs";
 
 test("maps TypeScript diagnostics back to template spans", async () => {
   const fixture = createFixture({
@@ -41,7 +35,7 @@ test("maps TypeScript diagnostics back to template spans", async () => {
     "component.html": "<template>${missing}</template>",
   });
 
-  const diagUri = URI.file(path.join(fixture, "component.html")).toString();
+  const diagUri = fileUri(fixture, "component.html");
   const { connection, child, dispose, getStderr } = startServer(fixture);
 
   try {
@@ -83,8 +77,8 @@ test("routes definitions to the view-model via provenance", async () => {
     "component.html": "<template>${existing}</template>",
   });
 
-  const defsUri = URI.file(path.join(fixture, "component.html")).toString();
-  const vmUri = URI.file(path.join(fixture, "component.ts")).toString();
+  const defsUri = fileUri(fixture, "component.html");
+  const vmUri = fileUri(fixture, "component.ts");
   const { connection, child, dispose, getStderr } = startServer(fixture);
 
   try {
@@ -132,8 +126,8 @@ test("hover/definition/rename map through overlay for simple interpolation", asy
     "component.html": "<template><div>${message}</div></template>",
   });
 
-  const htmlUri = URI.file(path.join(fixture, "component.html")).toString();
-  const tsUri = URI.file(path.join(fixture, "component.ts")).toString();
+  const htmlUri = fileUri(fixture, "component.html");
+  const tsUri = fileUri(fixture, "component.ts");
   const { connection, child, dispose, getStderr } = startServer(fixture);
 
   try {
@@ -170,8 +164,10 @@ test("hover/definition/rename map through overlay for simple interpolation", asy
     });
     assert.ok(rename, "rename response should be present");
     const edits = collectEdits(rename);
-    assert.ok(edits.some((e) => e.uri === htmlUri), "rename should edit the template");
-    assert.ok(edits.some((e) => e.uri === tsUri), "rename should edit the view-model");
+    const templateUri = htmlUri.toLowerCase();
+    const vmUri = tsUri.toLowerCase();
+    assert.ok(edits.some((e) => e.uri.toLowerCase() === templateUri), "rename should edit the template");
+    assert.ok(edits.some((e) => e.uri.toLowerCase() === vmUri), "rename should edit the view-model");
   } finally {
     dispose();
     child.kill("SIGKILL");
@@ -179,158 +175,3 @@ test("hover/definition/rename map through overlay for simple interpolation", asy
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 });
-
-function startServer(cwd) {
-  const child = spawn(process.execPath, [serverEntry, "--stdio"], {
-    cwd,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  const stderr = [];
-  child.stderr.on("data", (data) => {
-    stderr.push(data.toString());
-    process.stderr.write(data);
-  });
-  const connection = createMessageConnection(
-    new StreamMessageReader(child.stdout),
-    new StreamMessageWriter(child.stdin),
-  );
-  connection.listen();
-  return {
-    child,
-    connection,
-    getStderr() {
-      return stderr.join("");
-    },
-    dispose() {
-      try {
-        connection.dispose();
-      } catch {}
-    },
-  };
-}
-
-async function initialize(connection, child, stderr, workspaceRoot) {
-  const rootUri = URI.file(workspaceRoot).toString();
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`initialize timeout; stderr=${stderr()}`)), 5000);
-    const onExit = (code, signal) => {
-      clearTimeout(timer);
-      reject(new Error(`server exited before initialize (code=${code} signal=${signal}): ${stderr()}`));
-    };
-    child.once("exit", onExit);
-    connection.sendRequest("initialize", {
-      processId: process.pid,
-      rootUri,
-      capabilities: {},
-    }).then(
-      () => {
-        clearTimeout(timer);
-        child.off("exit", onExit);
-        connection.sendNotification("initialized", {});
-        resolve();
-      },
-      (err) => {
-        clearTimeout(timer);
-        child.off("exit", onExit);
-        reject(err);
-      },
-    );
-  });
-}
-
-async function openDocument(connection, uri, languageId, text) {
-  connection.sendNotification("textDocument/didOpen", {
-    textDocument: {
-      uri,
-      languageId,
-      version: 1,
-      text,
-    },
-  });
-}
-
-function waitForDiagnostics(connection, child, stderr, uri, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("diagnostics timeout")), timeoutMs);
-    const onExit = (code, signal) => {
-      clearTimeout(timer);
-      reject(new Error(`server exited (code=${code ?? "null"} signal=${signal ?? "null"}): ${stderr()}`));
-    };
-    child.once("exit", onExit);
-    const sub = connection.onNotification("textDocument/publishDiagnostics", (params) => {
-      if (params.uri !== uri) return;
-      clearTimeout(timer);
-      child.off("exit", onExit);
-      if (typeof sub.dispose === "function") sub.dispose();
-      resolve(params.diagnostics ?? []);
-    });
-  });
-}
-
-function positionAt(text, offset) {
-  const clamped = Math.max(0, Math.min(offset, text.length));
-  let line = 0;
-  let lastLineStart = 0;
-  for (let i = 0; i < clamped; i++) {
-    const ch = text.charCodeAt(i);
-    if (ch === 10 /* \n */) {
-      line += 1;
-      lastLineStart = i + 1;
-    }
-  }
-  return { line, character: clamped - lastLineStart };
-}
-
-function decodeHover(hover) {
-  if (!hover) return "";
-  const content = Array.isArray(hover.contents) ? hover.contents : [hover.contents];
-  return content
-    .map((c) => {
-      if (!c) return "";
-      if (typeof c === "string") return c;
-      if ("value" in c && typeof c.value === "string") return c.value;
-      if ("language" in c && "value" in c) return `${c.language}: ${c.value}`;
-      return "";
-    })
-    .join("\n");
-}
-
-function collectEdits(renameResult) {
-  const edits = [];
-  const docChanges = renameResult.documentChanges ?? [];
-  for (const change of docChanges) {
-    if (change.kind === "rename" || change.kind === "create" || change.kind === "delete") continue;
-    if (change.textDocument && change.edits) {
-      for (const e of change.edits) {
-        edits.push({ uri: change.textDocument.uri, range: e.range, newText: e.newText });
-      }
-    }
-  }
-  const changes = renameResult.changes ?? {};
-  for (const [uri, uriEdits] of Object.entries(changes)) {
-    for (const e of uriEdits ?? []) {
-      edits.push({ uri, range: e.range, newText: e.newText });
-    }
-  }
-  return edits;
-}
-
-function createFixture(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aurelia-lsp-integ-"));
-  for (const [name, contents] of Object.entries(files)) {
-    const full = path.join(dir, name);
-    fs.mkdirSync(path.dirname(full), { recursive: true });
-    fs.writeFileSync(full, contents, "utf8");
-  }
-  return dir;
-}
-
-function waitForExit(child, timeoutMs = 2000) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(), timeoutMs);
-    child.once("exit", () => {
-      clearTimeout(timer);
-      resolve();
-    });
-  });
-}
