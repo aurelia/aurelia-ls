@@ -940,7 +940,7 @@ function typeTextMatches(expected: string, actual: string): boolean {
   const norm = (t: string) => t.replace(/\s+/g, "").replace(/^\(+/, "").replace(/\)+$/, "");
   if (norm(expected) === norm(actual)) return true;
   if (expected.trim() === "Function") {
-    return /\=\>/.test(actual) || /\bFunction\b/.test(actual) || /\bfunction\b/.test(actual);
+    return /=>/.test(actual) || /\bFunction\b/.test(actual) || /\bfunction\b/.test(actual);
   }
   return false;
 }
@@ -976,17 +976,6 @@ function collectOverlayUris(provenance: ProvenanceIndex): Set<DocumentUri> {
     if (overlayUri) overlayUris.add(canonicalDocumentUri(overlayUri).uri);
   }
   return overlayUris;
-}
-
-function mapOverlayLocationToTemplate(
-  range: TextRange,
-  overlay: OverlayDocumentSnapshot,
-  provenance: ProvenanceIndex,
-  sources: { get(uri: DocumentUri): DocumentSnapshot | null },
-): Location | null {
-  const overlayOffset = offsetAtPosition(overlay.text, range.start);
-  if (overlayOffset == null) return null;
-  return mapOverlayOffsetToTemplate(overlay.uri, overlayOffset, provenance, sources);
 }
 
 function mapTypeScriptDiagnostic(
@@ -1154,13 +1143,6 @@ function spanToRange(span: SourceSpan, text: string): TextRange {
     start: positionAtOffset(text, span.start),
     end: positionAtOffset(text, span.end),
   };
-}
-
-function spanFromRange(range: TextRange, text: string, file: SourceFileId): SourceSpan | null {
-  const start = offsetAtPosition(text, range.start);
-  const end = offsetAtPosition(text, range.end);
-  if (start == null || end == null) return null;
-  return resolveSourceSpan({ start, end }, file);
 }
 
 function positionAtOffset(text: string, offset: number): Position {

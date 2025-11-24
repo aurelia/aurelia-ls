@@ -52,10 +52,8 @@ export function createFailureRecorder(dirname, outFileName) {
     }
     try {
       fs.writeFileSync(outPath, JSON.stringify(records, null, 2), "utf8");
-      // eslint-disable-next-line no-console
       console.error(`Wrote test failure snapshot to ${outPath}`);
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error(`ERROR: failed to write ${outFileName}: ${e.message}`);
     }
   }

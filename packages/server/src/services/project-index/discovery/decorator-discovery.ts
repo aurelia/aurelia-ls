@@ -27,7 +27,7 @@ export function runDecoratorDiscovery(program: ts.Program, logger: Logger): Disc
   for (const sf of files) {
     for (const node of sf.statements) {
       if (!ts.isClassDeclaration(node) || !node.name) continue;
-      const discovered = discoverClassResource(node, checker, canonicalPath(sf.fileName), logger);
+      const discovered = discoverClassResource(node, checker, canonicalPath(sf.fileName));
       if (!discovered) continue;
       registerResource(discovered, resources, descriptors, logger);
     }
@@ -40,7 +40,6 @@ function discoverClassResource(
   node: ts.ClassDeclaration,
   checker: ts.TypeChecker,
   fileName: NormalizedPath,
-  logger: Logger,
 ): DiscoveredResource | null {
   const facts = collectClassDecoratorFacts(node, checker);
   const bindablesFromMembers = collectBindableMembers(node, checker);
@@ -184,7 +183,7 @@ function collectClassDecoratorFacts(node: ts.ClassDeclaration, checker: ts.TypeC
   return facts;
 }
 
-function parseDecorator(dec: ts.Decorator, checker: ts.TypeChecker):
+function parseDecorator(dec: ts.Decorator, _checker: ts.TypeChecker):
   | { kind: "customElement"; name?: string; aliases: string[]; bindables: BindableSpec[]; containerless: boolean }
   | { kind: "customAttribute"; name?: string; aliases: string[]; bindables: BindableSpec[]; isTemplateController: boolean; noMultiBindings: boolean }
   | { kind: "valueConverter"; name?: string; aliases: string[] }
@@ -198,11 +197,11 @@ function parseDecorator(dec: ts.Decorator, checker: ts.TypeChecker):
   if (name === "containerless") return { kind: "containerless" };
   if (name === "templateController") return { kind: "templateController" };
   if (name === "customElement") {
-    const meta = parseResourceOptions(call.args[0], checker);
+    const meta = parseResourceOptions(call.args[0], _checker);
     return { kind: "customElement", ...meta };
   }
   if (name === "customAttribute") {
-    const meta = parseResourceOptions(call.args[0], checker);
+    const meta = parseResourceOptions(call.args[0], _checker);
     const result: { kind: "customAttribute"; name?: string; aliases: string[]; bindables: BindableSpec[]; isTemplateController: boolean; noMultiBindings: boolean } = {
       kind: "customAttribute",
       aliases: meta.aliases,
@@ -226,7 +225,7 @@ function parseDecorator(dec: ts.Decorator, checker: ts.TypeChecker):
 
 function parseResourceOptions(
   arg: ts.Expression | undefined,
-  checker: ts.TypeChecker,
+  _checker: ts.TypeChecker,
 ): ResourceOptionParse {
   if (!arg) return { aliases: [], bindables: [], containerless: false, templateController: false, noMultiBindings: false };
   if (ts.isStringLiteralLike(arg)) {
@@ -237,7 +236,7 @@ function parseResourceOptions(
   const name = readStringProp(arg, "name");
   const alias = readStringProp(arg, "alias");
   const aliases = [...readStringArrayProp(arg, "aliases"), ...(alias ? [alias] : [])];
-  const bindables = readBindables(arg, checker);
+  const bindables = readBindables(arg, _checker);
   const containerless = readBooleanProp(arg, "containerless") ?? false;
   const templateController = (readBooleanProp(arg, "isTemplateController") ?? readBooleanProp(arg, "templateController")) ?? false;
   const noMultiBindings = readBooleanProp(arg, "noMultiBindings") ?? false;
@@ -260,7 +259,7 @@ function parseNameOnlyOptions(
   return result;
 }
 
-function readBindables(obj: ts.ObjectLiteralExpression, checker: ts.TypeChecker): BindableSpec[] {
+function readBindables(obj: ts.ObjectLiteralExpression, _checker: ts.TypeChecker): BindableSpec[] {
   const prop = getProp(obj, "bindables");
   if (!prop || !ts.isArrayLiteralExpression(prop.initializer)) return [];
   const specs: BindableSpec[] = [];
@@ -311,7 +310,7 @@ function collectBindableMembers(node: ts.ClassDeclaration, checker: ts.TypeCheck
   return bindables;
 }
 
-function parseBindableDecorator(dec: ts.Decorator, checker: ts.TypeChecker): { mode?: BindingMode; primary?: boolean } | null {
+function parseBindableDecorator(dec: ts.Decorator, _checker: ts.TypeChecker): { mode?: BindingMode; primary?: boolean } | null {
   const call = unwrapDecorator(dec);
   if (!call || call.name !== "bindable") return null;
   const arg = call.args[0];
