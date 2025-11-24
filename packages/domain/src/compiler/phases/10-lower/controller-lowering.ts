@@ -96,7 +96,7 @@ function buildBaseInstructionsForRightmost(
   collectRows: RowCollector,
   kind: ControllerName
 ): HydrateTemplateControllerIR[] {
-  const { a, s } = rightmost;
+  const { a } = rightmost;
   const loc = attrLoc(el, a.name);
   const raw = a.value ?? "";
 
