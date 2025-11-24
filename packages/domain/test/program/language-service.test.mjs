@@ -113,6 +113,58 @@ test("diagnostics use VM display name for missing members", () => {
   assert.equal(tsDiag.message, "Property 'missing' does not exist on MyVm");
 });
 
+test("TypeScript diagnostics replace overlay aliases with VM display names", () => {
+  const program = new DefaultTemplateProgram({
+    vm: {
+      getRootVmTypeExpr() { return 'InstanceType<typeof import("/app/vm")["VmClass"]>'; },
+      getQualifiedRootVmTypeExpr() { return 'InstanceType<typeof import("/app/vm")["VmClass"]>'; },
+      getDisplayName() { return "FriendlyVm"; },
+      getSyntheticPrefix() { return "__AU_TTC_"; },
+    },
+    isJs: false,
+  });
+  const uri = "/app/noisy.html";
+  program.upsertTemplate(uri, "<template>${value}</template>");
+
+  const compilation = program.getCompilation(uri);
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const alias = compilation.overlayPlan.templates?.[0]?.vmType?.alias ?? "__AU_TTC_VM";
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlaySpan = mappingEntry.overlaySpan;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics(overlay) {
+        assert.equal(overlay.uri, overlayUri);
+        return [{
+          category: "error",
+          code: 2345,
+          start: overlaySpan.start,
+          length: Math.max(1, overlaySpan.end - overlaySpan.start),
+          messageText: `Type '${alias}' is not assignable to type 'string'.`,
+          relatedInformation: [{
+            messageText: `Related ${alias}`,
+            start: overlaySpan.start,
+            length: 1,
+            fileName: overlayUri,
+          }],
+        }];
+      },
+    },
+  });
+
+  const tsDiag = service.getDiagnostics(uri).typescript[0];
+  assert.ok(tsDiag, "typescript diagnostic should be present");
+  assert.ok(tsDiag.message.includes("FriendlyVm"), "alias should be replaced with display name");
+  assert.ok(!tsDiag.message.includes(alias), "raw overlay alias should be hidden");
+
+  const related = tsDiag.related?.find((rel) => rel.message.startsWith("Related"));
+  if (related) {
+    assert.ok(related.message.includes("FriendlyVm"), "related info should use display name");
+    assert.ok(!related.message.includes(alias), "related info should hide alias");
+  }
+});
+
 test("suppresses AU1301 when TypeScript confirms matching type", () => {
   const program = new DefaultTemplateProgram({
     vm: {
