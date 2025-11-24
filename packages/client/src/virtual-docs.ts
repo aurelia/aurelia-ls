@@ -10,7 +10,7 @@ export class VirtualDocProvider implements TextDocumentContentProvider {
     this.#emitter = new vscode.EventEmitter();
   }
 
-  provideTextDocumentContent(uri: Uri): string | Thenable<string> {
+  provideTextDocumentContent(uri: Uri): string | Promise<string> {
     return this.#cache.get(uri.toString()) ?? "";
   }
 

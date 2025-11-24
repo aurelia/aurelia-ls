@@ -1,7 +1,7 @@
-import type { ExtensionContext } from "vscode";
+import type { ExtensionContext, TextEditor } from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node.js";
-import { VirtualDocProvider } from "./virtual-docs.js";
-import { ClientLogger } from "./log.js";
+import { type VirtualDocProvider } from "./virtual-docs.js";
+import { type ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
 import type {
   MappingEntry,
@@ -12,7 +12,7 @@ import type {
   TemplateInfoResponse,
 } from "./types.js";
 
-function activeEditor(vscode: VscodeApi): import("vscode").TextEditor | null {
+function activeEditor(vscode: VscodeApi): TextEditor | null {
   return vscode.window.activeTextEditor ?? null;
 }
 
@@ -23,7 +23,7 @@ function extractOverlayArtifact(response: OverlayResponse | null | undefined): O
   return artifact;
 }
 
-function spanLabel(span: MappingEntry["overlaySpan"] | MappingEntry["htmlSpan"]): string {
+function spanLabel(span: MappingEntry["overlaySpan"]  ): string {
   if (!span) return "[-,-)";
   return `[${span.start},${span.end})`;
 }
