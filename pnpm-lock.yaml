@@ -30,9 +30,6 @@ importers:
 
   packages/domain:
     dependencies:
-      '@aurelia-ls/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@aurelia/expression-parser':
         specifier: 2.0.0-beta.25
         version: 2.0.0-beta.25
@@ -51,9 +48,6 @@ importers:
       '@aurelia-ls/domain':
         specifier: workspace:*
         version: link:../domain
-      '@aurelia-ls/shared':
-        specifier: workspace:*
-        version: link:../shared
       typescript:
         specifier: ^5.5.4
         version: 5.9.3
@@ -63,12 +57,6 @@ importers:
       vscode-languageserver-textdocument:
         specifier: ^1.0.11
         version: 1.0.12
-      vscode-uri:
-        specifier: ^3.0.8
-        version: 3.1.0
-
-  packages/shared:
-    dependencies:
       vscode-uri:
         specifier: ^3.0.8
         version: 3.1.0
