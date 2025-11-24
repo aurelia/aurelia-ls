@@ -47,7 +47,8 @@ export function isEmptySpan(span: SpanLike | null | undefined): boolean {
 
 export function normalizeSpan<TSpan extends SpanLike>(span: TSpan): TSpan {
   if (span.start <= span.end) return span;
-  return { ...span, start: span.end, end: span.start } as TSpan;
+  const swapped: TSpan = { ...span, start: span.end, end: span.start };
+  return swapped;
 }
 
 /** Normalize a span when present; returns null for null/undefined inputs. */
@@ -68,11 +69,13 @@ export function coverSpans<TSpan extends SpanLike>(spans: Iterable<TSpan | null 
   }
 
   if (!template || min === Number.POSITIVE_INFINITY) return null;
-  return { ...(template as object), start: min, end: max } as TSpan;
+  const merged: TSpan = { ...template, start: min, end: max };
+  return merged;
 }
 
 export function offsetSpan<TSpan extends SpanLike>(span: TSpan, delta: number): TSpan {
-  return { ...span, start: span.start + delta, end: span.end + delta } as TSpan;
+  const shifted: TSpan = { ...span, start: span.start + delta, end: span.end + delta };
+  return shifted;
 }
 
 export function intersectSpans<TSpan extends SpanLike>(
@@ -83,7 +86,8 @@ export function intersectSpans<TSpan extends SpanLike>(
   const start = Math.max(a.start, b.start);
   const end = Math.min(a.end, b.end);
   if (end <= start) return null;
-  return { ...(a as object), start, end } as TSpan;
+  const intersected: TSpan = { ...a, start, end };
+  return intersected;
 }
 
 export function spanContains(haystack: SpanLike | null | undefined, needle: SpanLike | null | undefined): boolean {
@@ -93,7 +97,9 @@ export function spanContains(haystack: SpanLike | null | undefined, needle: Span
 
 export function spanEquals(a: SpanLike | null | undefined, b: SpanLike | null | undefined): boolean {
   if (!a || !b) return false;
-  return a.start === b.start && a.end === b.end && ("file" in a ? (a as SourceSpan).file : undefined) === ("file" in b ? (b as SourceSpan).file : undefined);
+  const fileA = "file" in a ? (a as SourceSpan).file : undefined;
+  const fileB = "file" in b ? (b as SourceSpan).file : undefined;
+  return a.start === b.start && a.end === b.end && fileA === fileB;
 }
 
 /** True when an offset falls within [start, end) of the given span (null-safe). */

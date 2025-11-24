@@ -1,4 +1,4 @@
-import type { LinkedSemanticsModule, LinkedTemplate, LinkedRow, LinkedHydrateTemplateController } from "../../20-resolve-host/types.js";
+import type { LinkedSemanticsModule, LinkedTemplate } from "../../20-resolve-host/types.js";
 import type { ScopeModule, ScopeTemplate } from "../../../model/symbols.js";
 import type { ExprId, InterpIR, NodeId, BindingSourceIR, TemplateNode } from "../../../model/ir.js";
 import {

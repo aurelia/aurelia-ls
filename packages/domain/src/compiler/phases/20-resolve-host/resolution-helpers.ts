@@ -208,6 +208,6 @@ export function resolveIteratorAuxSpec(
   return { name: tailSpec.name, mode, type: tailSpec.type ?? null };
 }
 
-function unreachable(x: never): never {
+function unreachable(_x: never): never {
   throw new Error("unreachable");
 }

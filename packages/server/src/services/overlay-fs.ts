@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import type { NormalizedPath } from "@aurelia-ls/domain";
-import { PathUtils } from "./paths.js";
+import type { PathUtils } from "./paths.js";
 
 export interface Snapshot {
   text: string;

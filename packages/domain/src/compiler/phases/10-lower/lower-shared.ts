@@ -12,7 +12,7 @@ import type {
 } from "../../model/ir.js";
 import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../../parsers/expression-api.js";
 import { extractInterpolationSegments } from "../../../parsers/lsp-expression-parser.js";
-import { DomIdAllocator, deterministicStringId } from "../../model/identity.js";
+import { deterministicStringId } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";
 import { spanFromBounds } from "../../model/span.js";

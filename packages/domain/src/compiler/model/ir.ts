@@ -10,6 +10,7 @@
  * - Expression table entry (dev/LSP lane)
  * ======================================================================================= */
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
 import type { Origin, Provenance } from "./origin.js";
 import type { SourceSpan, TextSpan } from "./span.js";

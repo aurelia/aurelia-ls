@@ -1,4 +1,4 @@
-import type { ExprId, SourceSpan, NodeId, InterpIR } from "../../../model/ir.js";
+import type { ExprId, SourceSpan, NodeId } from "../../../model/ir.js";
 import type { FrameId, HydrationId } from "../../../model/identity.js";
 import type { LinkedTemplate } from "../../20-resolve-host/types.js";
 

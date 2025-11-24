@@ -13,7 +13,6 @@ import type {
   IrModule,
   TemplateIR,
   DOMNode,
-  SourceSpan,
   PropertyBindingIR,
   AttributeBindingIR,
   StylePropertyBindingIR,
@@ -33,7 +32,6 @@ import type {
   HydrateElementIR,
   HydrateAttributeIR,
   ElementBindableIR,
-  MultiAttrIR,
 } from "../../model/ir.js";
 
 import { createSemanticsLookup, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
@@ -82,7 +80,7 @@ import {
 } from "./resolution-helpers.js";
 import { resolveNodeSem } from "./node-semantics.js";
 
-function assertUnreachable(x: never): never {
+function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
 }
 
@@ -351,7 +349,6 @@ function linkElementBindable(ins: ElementBindableIR, host: NodeSem, ctx: Resolve
 function linkAttributeBindable(
   ins: ElementBindableIR,
   attr: AttrResRef | null,
-  ctx: ResolverContext,
 ): LinkedElementBindable {
   switch (ins.type) {
     case "propertyBinding": {

@@ -20,7 +20,7 @@ import type {
 
 import type {
   LinkedSemanticsModule, LinkedTemplate, LinkedRow,
-  LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement, LinkedHydrateElement, LinkedHydrateAttribute, LinkedElementBindable,
+  LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement, LinkedElementBindable,
 } from "../20-resolve-host/types.js";
 
 import type {

@@ -3,8 +3,8 @@ import path from "node:path";
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/domain";
 import type { Logger } from "./types.js";
-import { OverlayFs } from "./overlay-fs.js";
-import { PathUtils } from "./paths.js";
+import type { OverlayFs } from "./overlay-fs.js";
+import type { PathUtils } from "./paths.js";
 
 const DEFAULT_COMPILER_OPTIONS: ts.CompilerOptions = {
   target: ts.ScriptTarget.ES2022,

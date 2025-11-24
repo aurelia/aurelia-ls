@@ -1,6 +1,6 @@
 import { parseFragment } from "parse5";
 
-import type { IrModule, TemplateIR, InstructionRow, TemplateNode, NodeId } from "../../model/ir.js";
+import type { IrModule, TemplateIR, InstructionRow, TemplateNode } from "../../model/ir.js";
 import type { AttributeParser } from "../../language/syntax.js";
 import type { Semantics } from "../../language/registry.js";
 import { DEFAULT as DEFAULT_SEMANTICS } from "../../language/registry.js";

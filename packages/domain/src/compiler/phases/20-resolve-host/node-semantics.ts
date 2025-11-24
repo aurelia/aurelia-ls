@@ -11,11 +11,13 @@ export function resolveNodeSem(n: DOMNode | undefined, lookup: SemanticsLookup):
       // Custom component wins when both exist
       const customDef = lookup.element(tag);
       const nativeDef = lookup.domElement(tag);
+      const custom: ElementResRef | null = customDef ? { def: customDef } : null;
+      const native: DomElementRef | null = nativeDef ? { def: nativeDef } : null;
       return {
         kind: "element",
         tag,
-        custom: customDef ? ({ def: customDef } as ElementResRef) : null,
-        native: nativeDef ? ({ def: nativeDef } as DomElementRef) : null,
+        custom,
+        native,
       };
     }
     case "template":
