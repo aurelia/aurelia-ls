@@ -1314,11 +1314,11 @@ export class CoreParser {
         if (trailing.type !== TokenType.EOF) {
           inner.error("Unexpected token after end of template expression", trailing);
         }
-        const node = (inner.failure ?? expr) as unknown as Record<string, unknown>;
+        const node: IsAssign = inner.failure ?? expr;
         if (!exprBase) {
           offsetNodeSpans(node, exprStart);
         }
-        expressions.push(node as unknown as IsAssign);
+        expressions.push(node);
         chunkStart = closing + 1;
         i = chunkStart;
         continue;
@@ -2123,7 +2123,7 @@ export function parseInterpolationAst(
     segment: string,
     baseOffset: number,
     baseSpan: SourceSpan | null,
-  ) => IsBindingBehavior | BadExpression,
+  ) => IsBindingBehavior,
   baseSpan: SourceSpan | null = null,
 ): Interpolation {
   const split = extractInterpolationSegments(text);
@@ -2135,7 +2135,7 @@ export function parseInterpolationAst(
     for (const { code, span } of split.expressions) {
       const exprBase = baseSpan ? absoluteSpan(span, baseSpan) : null;
       const expr = parseExpr(code, span.start, exprBase);
-      expressions.push(expr as IsBindingBehavior);
+      expressions.push(expr);
     }
   }
 
@@ -2199,7 +2199,7 @@ export class LspExpressionParser implements IExpressionParser {
             const core = new CoreParser(segment, segmentBase);
             const expr = core.parseBindingExpression();
             if (!segmentBase) {
-              offsetNodeSpans(expr as unknown as Record<string, unknown>, baseOffset);
+              offsetNodeSpans(expr, baseOffset);
             }
             return expr;
           },
@@ -2226,7 +2226,7 @@ export class LspExpressionParser implements IExpressionParser {
           $kind: "BadExpression",
           span: baseSpan ? normalizeSpan(baseSpan) : spanFromBounds(0, expression.length),
           text: expression,
-          message: `Unknown expression type '${expressionType}'`,
+          message: `Unknown expression type '${String(expressionType)}'`,
           origin: baseSpan ? provenanceFromSpan("parse", baseSpan) : null,
         };
         break;
@@ -2247,10 +2247,10 @@ export function rebaseExpressionSpans<T extends AnyBindingExpression>(
   baseSpan: SourceSpan,
 ): T {
   const normalizedBase = ensureSpanFile(normalizeSpan(baseSpan), baseSpan.file) ?? normalizeSpan(baseSpan);
-  transformNodeSpans(ast as unknown as Record<string, unknown>, (span, owner) => {
+  transformNodeSpans(ast, (span, owner) => {
     const rebased = span.file ? normalizeSpan(span) : absoluteSpan(span, normalizedBase) ?? normalizeSpan(span);
-    if ((owner as any).$kind === "BadExpression" && !(owner as any).origin) {
-      (owner as any).origin = provenanceFromSpan("parse", rebased);
+    if (isBadExpressionNode(owner) && owner.origin == null) {
+      owner.origin = provenanceFromSpan("parse", rebased);
     }
     return rebased;
   });
@@ -2273,32 +2273,43 @@ function resolveBaseSpan(source: string, context?: ExpressionParseContext): Sour
  * Recursively offset all span fields in an AST node by `delta`.
  * Shared between CoreParser (template literals) and LspExpressionParser (interpolation).
  */
-function offsetNodeSpans(node: Record<string, unknown>, delta: number): void {
+function offsetNodeSpans(node: unknown, delta: number): void {
   transformNodeSpans(node, (span) => offsetSpan(span, delta));
+}
+
+type AstNode = { span?: SourceSpan | TextSpan | null; $kind?: string };
+
+function isAstNode(node: unknown): node is AstNode {
+  return typeof node === "object" && node !== null;
+}
+
+function isSpanLike(span: unknown): span is SourceSpan {
+  return !!span && typeof (span as SourceSpan).start === "number" && typeof (span as SourceSpan).end === "number";
+}
+
+function isBadExpressionNode(node: AstNode): node is BadExpression {
+  return node.$kind === "BadExpression";
 }
 
 function transformNodeSpans(
   node: unknown,
-  transform: (span: SourceSpan, owner: Record<string, unknown>) => SourceSpan,
+  transform: (span: SourceSpan, owner: AstNode) => SourceSpan,
 ): void {
-  if (!node || typeof node !== "object") {
+  if (!isAstNode(node)) {
     return;
   }
 
-  const anyNode = node as Record<string, unknown>;
-  const span = (anyNode as any).span;
-  if (span && typeof (span as SourceSpan).start === "number" && typeof (span as SourceSpan).end === "number") {
-    (anyNode as any).span = transform(span as SourceSpan, anyNode);
+  const { span } = node;
+  if (isSpanLike(span)) {
+    node.span = transform(span, node);
   }
 
-  for (const key of Object.keys(anyNode)) {
-    if (key === "span") continue;
-    const value = (anyNode as any)[key];
-    if (value == null) continue;
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key === "span" || value == null) continue;
 
     if (Array.isArray(value)) {
       for (const child of value) transformNodeSpans(child, transform);
-    } else if (typeof value === "object") {
+    } else {
       transformNodeSpans(value, transform);
     }
   }
