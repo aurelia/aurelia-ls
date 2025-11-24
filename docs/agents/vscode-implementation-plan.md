@@ -56,6 +56,6 @@ plus the current checkpoints here.
 - [x] Integration tests (server)
   - [x] Add in-process LSP tests for diagnostics, hover/defs/refs, overlay/SSR requests, and resource discovery using fixtures under `packages/server/test/integration`.
 
-- [ ] Migration and clean-up
-  - [ ] Remove legacy `CompilerService` shims once new wiring is live.
-  - [ ] Keep types strong (no `any`), avoid touching generated `packages/**/out`.
+- [x] Migration and clean-up
+  - [x] Remove legacy `CompilerService` shims once new wiring is live.
+  - [x] Keep types strong (no `any`), avoid touching generated `packages/**/out`.
