@@ -24,7 +24,7 @@ import type {
 } from "../20-resolve-host/types.js";
 
 import type {
-  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic, ScopeDiagCode,
+  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic, ScopeDiagCode, OverlayBase, FrameOrigin,
 } from "../../model/symbols.js";
 
 import type { RepeatController } from "../../language/registry.js";
@@ -35,7 +35,7 @@ import { exprIdsOf } from "../../expr-utils.js";
 import { normalizeSpanMaybe } from "../../model/span.js";
 import type { Origin, Provenance } from "../../model/origin.js";
 
-function assertUnreachable(x: never): never { throw new Error("unreachable"); }
+function assertUnreachable(_x: never): never { throw new Error("unreachable"); }
 
 /* =============================================================================
  * Public API
@@ -49,7 +49,7 @@ export function bindScopes(linked: LinkedSemanticsModule): ScopeModule {
   const exprIndex: ExprIdMap<ExprTableEntry> = new Map();
   const forOfIndex: ExprIdMap<ForOfStatement | BadExpression> = new Map();
   for (const e of linked.exprTable ?? []) {
-    exprIndex.set(e.id, e as ExprTableEntry);
+    exprIndex.set(e.id, e);
     if (e.expressionType === 'IsIterator') {
       forOfIndex.set(e.id, e.ast);
     }
@@ -259,7 +259,7 @@ function walkRows(
               break;
 
             default:
-              assertUnreachable(ins as never);
+              assertUnreachable(ins);
           }
 
           // 4) Recurse into nested template view using the chosen frame
@@ -309,14 +309,16 @@ function enterControllerFrame(
   }
 }
 
-function setOverlayBase(targetFrame: FrameId, frames: ScopeFrame[], overlay: ScopeFrame["overlay"]): void {
-  const f = frames[targetFrame];
-  frames[targetFrame] = { ...f, overlay } as ScopeFrame;
+function setOverlayBase(targetFrame: FrameId, frames: ScopeFrame[], overlay: OverlayBase | null): void {
+  const f = frames[targetFrame]!;
+  const nextFrame: ScopeFrame = { ...f, overlay };
+  frames[targetFrame] = nextFrame;
 }
 
-function setFrameOrigin(targetFrame: FrameId, frames: ScopeFrame[], origin: ScopeFrame["origin"]): void {
-  const f = frames[targetFrame];
-  frames[targetFrame] = { ...f, origin } as ScopeFrame;
+function setFrameOrigin(targetFrame: FrameId, frames: ScopeFrame[], origin: FrameOrigin | null): void {
+  const f = frames[targetFrame]!;
+  const nextFrame: ScopeFrame = { ...f, origin };
+  frames[targetFrame] = nextFrame;
 }
 
 function addUniqueSymbols(targetFrame: FrameId, frames: ScopeFrame[], symbols: ScopeSymbol[], diags: ScopeDiagnostic[]): void {
@@ -348,7 +350,7 @@ function materializeLetSymbols(
 ): void {
   // Record each <let> value expr in the current frame and surface names as locals.
   const f = frames[currentFrame]!;
-  let map = f.letValueExprs ?? (Object.create(null) as Record<string, ExprId>);
+  let map: Record<string, ExprId> = f.letValueExprs ?? createLetValueMap();
 
   for (const lb of ins.instructions) {
     mapBindingSource(lb.from, currentFrame, exprToFrame, badCtx);
@@ -360,7 +362,8 @@ function materializeLetSymbols(
     }
   }
   if (publishEnv) {
-    frames[currentFrame] = { ...f, letValueExprs: map } as ScopeFrame;
+    const nextFrame: ScopeFrame = { ...f, letValueExprs: map };
+    frames[currentFrame] = nextFrame;
   }
 
   // Surface all <let> names as locals in the current frame.
@@ -368,6 +371,12 @@ function materializeLetSymbols(
     const names = ins.instructions.map(lb => lb.to);
     addUniqueSymbols(currentFrame, frames, names.map(n => ({ kind: "let" as const, name: n, span: spanOfLet(ins, n)! })), diags);
   }
+}
+
+function createLetValueMap(): Record<string, ExprId> {
+  const map: Record<string, ExprId> = {};
+  Object.setPrototypeOf(map, null);
+  return map;
 }
 
 function spanOfLet(ins: LinkedHydrateLetElement, _name: string): SourceSpan | null | undefined {
@@ -384,12 +393,16 @@ function getIteratorProp(ctrl: LinkedHydrateTemplateController): LinkedIteratorB
 }
 
 type _LinkedValueProp = Extract<LinkedHydrateTemplateController["props"][number], { kind: "propertyBinding" }>;
+type _LinkedValuePropCandidate = LinkedHydrateTemplateController["props"][number];
 
 function getValueProp(ctrl: LinkedHydrateTemplateController): _LinkedValueProp {
-  for (const p of ctrl.props) {
-    if (p.kind === "propertyBinding" && p.to === "value") return p as _LinkedValueProp;
-  }
+  const valueProp = ctrl.props.find(isValueProp);
+  if (valueProp) return valueProp;
   throw new Error(`${ctrl.res} controller missing 'value' property`);
+}
+
+function isValueProp(prop: _LinkedValuePropCandidate): prop is _LinkedValueProp {
+  return prop.kind === "propertyBinding" && prop.to === "value";
 }
 
 /* =============================================================================
@@ -406,7 +419,7 @@ function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: ExprId
     case "setProperty":
       return;
     default:
-      assertUnreachable(b as never);
+      assertUnreachable(b);
   }
 }
 function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: ExprIdMap<FrameId>, badCtx: BadExprContext): void {
@@ -419,14 +432,17 @@ function mapBindingSource(src: BindingSourceIR, frame: FrameId, out: ExprIdMap<F
 function idOf(e: ExprRef): ExprId { return e.id; }
 
 function forEachExprRef(src: BindingSourceIR, cb: (ref: ExprRef) => void): void {
-  if ((src as { kind?: string }).kind === "interp") {
-    const interp = src as Extract<BindingSourceIR, { kind: "interp" }>;
-    for (const ref of interp.exprs) {
+  if (isInterpolation(src)) {
+    for (const ref of src.exprs) {
       cb(ref);
     }
     return;
   }
-  cb(src as ExprRef);
+  cb(src);
+}
+
+function isInterpolation(src: BindingSourceIR): src is Extract<BindingSourceIR, { kind: "interp" }> {
+  return "exprs" in src;
 }
 
 type BadExprContext = {
@@ -486,7 +502,7 @@ function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] 
       return names;
     }
     default:
-      return assertUnreachable(pattern as never);
+      return assertUnreachable(pattern);
   }
 }
 
@@ -522,7 +538,7 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
       return null;
     }
     default:
-      return assertUnreachable(pattern as never);
+      return assertUnreachable(pattern);
   }
 }
 
@@ -536,6 +552,6 @@ function unwrapOrigin(source: Origin | Provenance | null): Origin | null {
   return (source as Origin).kind ? (source as Origin) : (source as Provenance).origin ?? null;
 }
 
-function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null, origin?: Origin | null | undefined): void {
+function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null, origin?: Origin | null): void {
   diags.push(buildDiagnostic({ code, message, span, origin: origin ?? null, source: "bind" }) as ScopeDiagnostic);
 }
