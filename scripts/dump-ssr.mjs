@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-/* Dump SSR goldens (HTML + JSON) for one or more templates.
- *
- * Usage:
- *   pnpm dump:ssr                             # scan ./fixtures by default
- *   pnpm dump:ssr fixtures/hello-world/src    # dir
- *   pnpm dump:ssr fixtures/**/src/*.html      # rely on shell for glob expansion
- *   pnpm dump:ssr path/to/file.html           # single file
- */
+// Dump SSR goldens (HTML + JSON) for one or more templates.
+//
+// Usage:
+//   pnpm dump:ssr                             # scan ./fixtures by default
+//   pnpm dump:ssr fixtures/hello-world/src    # dir
+//   pnpm dump:ssr "fixtures/**/src/*.html"    # quoted glob for shells that need it
+//   pnpm dump:ssr path/to/file.html           # single file
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -81,7 +80,7 @@ function rel(p) { return path.relative(process.cwd(), p); }
 async function collectHtmlFiles(entry) {
   const st = await fs.stat(entry).catch(() => null);
   if (!st) return [];
-  if (st.isFile()) return entry.endsWith(".html") ? [entry] : [];
+  if (st.isFile()) return isGenerated(entry) || !entry.endsWith(".html") ? [] : [entry];
 
   const out = [];
   const stack = [entry];
@@ -91,8 +90,13 @@ async function collectHtmlFiles(entry) {
     for (const d of ents) {
       const p = path.join(dir, d.name);
       if (d.isDirectory()) stack.push(p);
-      else if (d.isFile() && p.endsWith(".html")) out.push(p);
+      else if (d.isFile() && p.endsWith(".html") && !isGenerated(p)) out.push(p);
     }
   }
   return out;
+}
+
+function isGenerated(filePath) {
+  const base = path.basename(filePath);
+  return /__au\.ssr\./i.test(base) || /__au\.ttc\./i.test(base);
 }
