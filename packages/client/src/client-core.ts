@@ -1,6 +1,6 @@
 import { LanguageClient, TransportKind } from "vscode-languageclient/node.js";
 import type { LanguageClientOptions, ServerOptions } from "vscode-languageclient/node.js";
-import { ClientLogger } from "./log.js";
+import { type ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
 import type { ExtensionContext } from "vscode";
 

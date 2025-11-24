@@ -1,8 +1,9 @@
+import type { StatusBarItem } from "vscode";
 import type { OverlayReadyPayload } from "./types.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
 
 export class StatusService {
-  #status: import("vscode").StatusBarItem;
+  #status: StatusBarItem;
 
   constructor(vscode: VscodeApi = getVscodeApi()) {
     this.#status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
