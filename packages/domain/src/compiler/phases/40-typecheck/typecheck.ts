@@ -82,7 +82,7 @@ function collectInferredTypes(opts: TypecheckOptions): ExprIdMap<string> {
     const entry = exprIndex.get(exprId);
     if (!entry) continue;
     if (entry.expressionType !== "IsProperty" && entry.expressionType !== "IsFunction") continue;
-    const type = typeFromExprAst(entry.ast as any, {
+    const type = typeFromExprAst(entry.ast, {
       rootVm: opts.rootVmType,
       resolveEnv: (depth: number) => resolveEnv(frameId, depth),
     });

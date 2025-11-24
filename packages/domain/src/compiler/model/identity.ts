@@ -70,27 +70,49 @@ export function idMapGet<TBrand extends string, TValue>(
   id: StringId<TBrand>,
 ): TValue | undefined {
   if (!map) return undefined;
-  if (map instanceof Map) return map.get(id);
-  return (map as IdRecord<TBrand, TValue>)[id];
+  if (isIdMap(map)) return map.get(id);
+  const record: IdRecord<TBrand, TValue> = map;
+  return record[id];
 }
 
 export function toIdMap<TBrand extends string, TValue>(map: IdMapLike<TBrand, TValue>): IdMap<TBrand, TValue> {
   if (!map) return new Map();
-  if (map instanceof Map) return new Map(map);
-  const entries = Object.entries(map as Record<string, TValue>).map(
-    ([k, v]) => [k as StringId<TBrand>, v] as const,
-  );
-  return new Map(entries);
+  if (isIdMap(map)) return new Map(map);
+  const record: IdRecord<TBrand, TValue> = map;
+  const result = new Map<StringId<TBrand>, TValue>();
+  const recordKeys = Object.keys(record);
+  for (const key of recordKeys) {
+    const brandedKey = idFromKey<TBrand>(key);
+    if (!Object.prototype.hasOwnProperty.call(record, brandedKey)) continue;
+    const value = record[brandedKey];
+    if (value === undefined) continue;
+    result.set(brandedKey, value);
+  }
+  return result;
 }
 
 export function idMapEntries<TBrand extends string, TValue>(
   map: IdMapLike<TBrand, TValue>,
 ): Iterable<[StringId<TBrand>, TValue]> {
   if (!map) return [];
-  if (map instanceof Map) return map.entries();
-  return Object.entries(map as Record<string, TValue>).map(
-    ([k, v]) => [k as StringId<TBrand>, v] as [StringId<TBrand>, TValue],
-  );
+  if (isIdMap(map)) return map.entries();
+  const record: IdRecord<TBrand, TValue> = map;
+  const entries: Array<[StringId<TBrand>, TValue]> = [];
+  const recordKeys = Object.keys(record);
+  for (const key of recordKeys) {
+    const brandedKey = idFromKey<TBrand>(key);
+    if (!Object.prototype.hasOwnProperty.call(record, brandedKey)) continue;
+    const value = record[brandedKey];
+    if (value === undefined) continue;
+    entries.push([brandedKey, value]);
+  }
+  return entries;
+}
+
+function isIdMap<TBrand extends string, TValue>(
+  map: IdMapLike<TBrand, TValue>,
+): map is ReadonlyMap<StringId<TBrand>, TValue> {
+  return map instanceof Map;
 }
 
 /**

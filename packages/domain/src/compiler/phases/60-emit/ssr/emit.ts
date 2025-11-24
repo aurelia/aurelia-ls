@@ -298,7 +298,7 @@ function indexTemplateSpans(n: DOMNode, out: Map<NodeId, SourceSpan | null> = ne
 }
 
 function attrsFromDom(attrs: readonly Attr[]): Record<string, string | null> {
-  const out: Record<string, string | null> = Object.create(null);
+  const out: Record<string, string | null> = {};
   for (const a of attrs) out[a.name] = a.value;
   return out;
 }
