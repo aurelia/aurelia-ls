@@ -107,9 +107,15 @@ function reducePlanIntent({ ir, scope, pl }) {
 
   const tpl = pl.templates?.[0];
   if (tpl) {
+    const alias = tpl.vmType?.alias;
+    const aliasType = tpl.vmType?.typeExpr;
+    const normalizeTypeExpr = (expr) => {
+      if (!alias || !aliasType) return expr;
+      return expr.split(alias).join(aliasType);
+    };
     for (const f of tpl.frames ?? []) {
       const label = labels[f.frame] ?? `frame#${f.frame}`;
-      frames.push({ label, typeName: f.typeName, typeExpr: f.typeExpr });
+      frames.push({ label, typeName: f.typeName, typeExpr: normalizeTypeExpr(f.typeExpr) });
       for (const lam of f.lambdas ?? []) {
         lambdas.push({
           frame: label,

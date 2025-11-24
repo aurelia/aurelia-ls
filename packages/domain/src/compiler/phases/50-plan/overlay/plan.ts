@@ -101,28 +101,29 @@ function analyzeTemplate(
   const frames: FrameOverlayPlan[] = [];
   // Prefer a collision-safe, qualified VM expr if the adapter provides it.
   const vm = opts.vm;
-  const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
   const prefix = (opts.syntheticPrefix ?? vm.getSyntheticPrefix?.()) || "__AU_TTC_";
+  const vmType = buildVmTypeInfo(vm, prefix);
+  const rootTypeRef = vmType.alias;
 
   // Stable per-frame alias names up front (root-first order already)
   const typeAliasByFrame = new Map<FrameId, string>();
   for (const f of st.frames) typeAliasByFrame.set(f.id, `${prefix}T${templateIndex}_F${f.id}`);
 
   // Build envs + typing hints for all frames
-  const analysis = buildFrameAnalysis(st, exprIndex, rootVm);
+  const analysis = buildFrameAnalysis(st, exprIndex, rootTypeRef);
 
   // Emit overlays
   const typeExprByFrame = new Map<FrameId, string>();
   for (const f of st.frames) {
     const typeName = `${prefix}T${templateIndex}_F${f.id}`;
     const parentExpr = f.parent != null ? typeExprByFrame.get(f.parent) : undefined;
-    const typeExpr = buildFrameTypeExpr(f, rootVm, analysis.hints.get(f.id), analysis.envs, parentExpr);
+    const typeExpr = buildFrameTypeExpr(f, rootTypeRef, analysis.hints.get(f.id), analysis.envs, parentExpr);
     typeExprByFrame.set(f.id, typeExpr);
     const lambdas = collectOneLambdaPerExpression(st, f.id, exprIndex);
     frames.push({ frame: f.id, typeName, typeExpr, lambdas });
   }
 
-  return { name: st.name!, frames };
+  return { name: st.name!, vmType, frames };
 }
 
 /* ===================================================================================== */
@@ -521,4 +522,15 @@ function escapeBackticks(s: string): string {
 
 function hasQualifiedVm(vm: AnalyzeOptions["vm"]): vm is AnalyzeOptions["vm"] & { getQualifiedRootVmTypeExpr: () => string } {
   return typeof (vm as { getQualifiedRootVmTypeExpr?: unknown }).getQualifiedRootVmTypeExpr === "function";
+}
+
+function buildVmTypeInfo(vm: AnalyzeOptions["vm"], prefix: string): { alias: string; typeExpr: string; displayName?: string } {
+  const typeExpr = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
+  const alias = `${prefix}VM`;
+  const displayName = typeof (vm as { getDisplayName?: () => string }).getDisplayName === "function"
+    ? (vm as { getDisplayName: () => string }).getDisplayName()
+    : undefined;
+  const result: { alias: string; typeExpr: string; displayName?: string } = { alias, typeExpr };
+  if (displayName !== undefined) result.displayName = displayName;
+  return result;
 }

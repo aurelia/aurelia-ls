@@ -41,6 +41,7 @@ plus the current checkpoints here.
   - [x] TS diagnostics via `TsService`, mapped back with provenance/mapping; send unified LSP diagnostics.
   - [x] Hover/completions/defs/refs/rename/code actions: route through TemplateLanguageService + provenance-backed TS calls (no ad-hoc mapping in `main.ts`).
   - [x] Wire VM typing/reflection so template-to-VM definitions consistently land in the component (qualified root VM type, provenance).
+  - [ ] Ensure overlay member mapping drives defs/refs/rename: always emit member segments for property/interpolation lambdas in plan/emit, ingest into provenance (`overlayMember` edges), and have LS offsets prefer those segments over raw spans so template rename edits are produced alongside VM edits.
   - [ ] Diagnostic UX: alias VM/overlay types to friendly names and scrub mapped TS messages to avoid noisy `typeof import(...)` unions.
 
 - [ ] Overlay/SSR custom requests

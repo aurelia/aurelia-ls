@@ -15,6 +15,7 @@ const VM_EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
  */
 export class VmReflectionService implements VmReflection {
   #activeTemplate: NormalizedPath | null = null;
+  #lastDisplayName = "unknown";
 
   constructor(
     private readonly ts: TsService,
@@ -27,18 +28,22 @@ export class VmReflectionService implements VmReflection {
   }
 
   getRootVmTypeExpr(): string {
-    return this.#computeVmTypeExpr() ?? "unknown";
+    return this.#computeVmInstanceTypeExpr() ?? "unknown";
   }
 
   getQualifiedRootVmTypeExpr(): string {
     return this.getRootVmTypeExpr();
   }
 
+  getDisplayName(): string {
+    return this.#lastDisplayName;
+  }
+
   getSyntheticPrefix(): string {
     return "__AU_TTC_";
   }
 
-  #computeVmTypeExpr(): string | null {
+  #computeVmInstanceTypeExpr(): string | null {
     if (!this.#activeTemplate) return null;
     const companion = this.#findCompanionVm(this.#activeTemplate);
     if (!companion) return null;
@@ -55,10 +60,14 @@ export class VmReflectionService implements VmReflection {
 
     if (target) {
       const name = target.escapedName === "default" ? "default" : target.getName();
-      return `typeof import("${importPath}")["${name}"]`;
+      this.#lastDisplayName = name === "default" ? this.#baseName(importPath) : name;
+      const typeRef = `typeof import("${importPath}")["${name}"]`;
+      // Prefer instance type so template lookups see instance members/bindables.
+      return `InstanceType<${typeRef}>`;
     }
 
     this.logger.warn(`[vm] no exports found for companion ${companion}, falling back to unknown`);
+    this.#lastDisplayName = "unknown";
     return null;
   }
 
@@ -77,5 +86,10 @@ export class VmReflectionService implements VmReflection {
     // normalize to posix separators for TS import expressions.
     const normalized = normalizePathForId(path.resolve(file));
     return normalized.replace(/\\/g, "/");
+  }
+
+  #baseName(p: string): string {
+    const match = /([^\\/]+?)(\.[a-zA-Z0-9]+)?$/.exec(p);
+    return match?.[1] ?? "unknown";
   }
 }

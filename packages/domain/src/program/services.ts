@@ -8,6 +8,7 @@ import type { ProvenanceIndex, TemplateProvenanceHit } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
 import type { TemplateBindableInfo, TemplateMappingArtifact, TemplateQueryFacade, SsrMappingArtifact } from "../contracts.js";
 import { stableHash } from "../compiler/pipeline/hash.js";
+import type { TypecheckDiagnostic } from "../compiler/phases/40-typecheck/typecheck.js";
 
 export interface Position {
   line: number;
@@ -302,12 +303,24 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
 
   getDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostics {
     const canonical = canonicalDocumentUri(uri);
+    const vmDisplayName = getVmDisplayName(this.program.options.vm);
+    const vmRootTypeExpr = getVmRootTypeExpr(this.program.options.vm);
+    const overlayDoc = this.overlaySnapshot(canonical.uri);
     const compiler = this.program
       .getDiagnostics(canonical.uri)
       .all
-      .map((diag) => mapCompilerDiagnostic(diag, canonical.uri, canonical.file));
+      .map((diag) =>
+        mapCompilerDiagnostic(diag, canonical.uri, canonical.file, {
+          vmDisplayName,
+          vmRootTypeExpr,
+          overlay: overlayDoc,
+          provenance: this.program.provenance,
+          typescript: this.options.typescript,
+        }),
+      )
+      .filter((diag): diag is TemplateLanguageDiagnostic => diag != null);
 
-    const typescript = this.collectTypeScriptDiagnostics(canonical.uri);
+    const typescript = this.collectTypeScriptDiagnostics(canonical.uri, overlayDoc, vmDisplayName);
     const all = [...compiler, ...typescript];
 
     return { all, compiler, typescript };
@@ -383,11 +396,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getDefinition) return [];
 
-    const overlayHit = this.program.provenance.lookupSource(canonical.uri, offset);
+    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = projectOverlayOffset(overlayHit, offset);
+    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
     const results = ts.getDefinition(overlay, overlayOffset) ?? [];
     return this.mapTypeScriptLocations(results, overlay);
   }
@@ -401,11 +414,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getReferences) return [];
 
-    const overlayHit = this.program.provenance.lookupSource(canonical.uri, offset);
+    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = projectOverlayOffset(overlayHit, offset);
+    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
     const results = ts.getReferences(overlay, overlayOffset) ?? [];
     return this.mapTypeScriptLocations(results, overlay);
   }
@@ -430,11 +443,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const offset = offsetAtPosition(snapshot.text, position);
     if (offset == null) return [];
 
-    const overlayHit = this.program.provenance.lookupSource(canonical.uri, offset);
-    if (!overlayHit || overlayHit.edge.kind !== "overlayMember") return [];
+    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
+    if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = projectOverlayOffset(overlayHit, offset);
+    const overlayOffset = overlayOffsetFromHit(overlayHit, offset);
     const edits = ts.getRenameEdits(overlay, overlayOffset, newName) ?? [];
     if (!edits.length) return [];
 
@@ -471,7 +484,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getCompletions) return [];
 
-    const overlayHit = this.program.provenance.lookupSource(canonical.uri, offset);
+    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
@@ -517,12 +530,12 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const end = offsetAtPosition(snapshot.text, range.end);
     if (start == null || end == null) return [];
 
-    const overlayHit = this.program.provenance.lookupSource(canonical.uri, start);
+    const overlayHit = this.lookupOverlayHit(canonical.uri, start);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayStart = projectOverlayOffset(overlayHit, start);
-    const overlayEnd = projectOverlayOffset(overlayHit, end);
+    const overlayStart = this.overlayOffsetForHit(overlayHit, start, canonical.uri);
+    const overlayEnd = this.overlayOffsetForHit(overlayHit, end, canonical.uri);
     const actions = ts.getCodeActions(overlay, overlayStart, overlayEnd) ?? [];
     if (!actions.length) return [];
 
@@ -566,11 +579,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getQuickInfo) return null;
 
-    const overlayHit = this.program.provenance.lookupSource(canonical.uri, offset);
+    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
     if (!overlayHit) return null;
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = projectOverlayOffset(overlayHit, offset);
+    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
     const info = ts.getQuickInfo(overlay, overlayOffset);
     if (!info) return null;
 
@@ -654,6 +667,38 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return mapped ? { uri: mapped.uri, range: mapped.range, newText: edit.newText } : null;
   }
 
+  private lookupOverlayHit(uri: DocumentUri, offset: number): TemplateProvenanceHit | null {
+    const hit = this.program.provenance.lookupSource(uri, offset);
+    if (hit) return hit;
+    try {
+      // Ensure overlay + mapping are materialized; the program caches compilation so this is cheap after first call.
+      this.build.getOverlay(uri);
+    } catch {
+      return null;
+    }
+    return this.program.provenance.lookupSource(uri, offset);
+  }
+
+  private overlayOffsetForHit(hit: TemplateProvenanceHit, templateOffset: number, templateUri: DocumentUri): number {
+    if (hit.edge.kind === "overlayMember") {
+      const span = hit.edge.from.span;
+      return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
+    }
+    if (hit.exprId) {
+      const memberSpan = this.overlayMemberSpan(templateUri, hit.exprId);
+      if (memberSpan) return memberSpan.start + Math.max(0, Math.floor(spanLength(memberSpan) / 2));
+    }
+    return projectOverlayOffset(hit, templateOffset);
+  }
+
+  private overlayMemberSpan(templateUri: DocumentUri, exprId: TemplateExprId): SourceSpan | null {
+    const mapping = this.program.getMapping(templateUri);
+    if (!mapping) return null;
+    const entry = mapping.entries.find((e) => e.exprId === exprId && e.segments && e.segments.length > 0);
+    if (!entry) return null;
+    return entry.segments![0]!.overlaySpan;
+  }
+
   private overlayOffsetForLocation(
     loc: Pick<TsLocation, "start" | "range" | "fileName">,
     overlay: OverlayDocumentSnapshot,
@@ -674,13 +719,18 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return offsetAtPosition(overlay.text, edit.range.start);
   }
 
-  private collectTypeScriptDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostic[] {
+  private collectTypeScriptDiagnostics(
+    uri: DocumentUri,
+    overlayDoc: OverlayDocumentSnapshot | null,
+    vmDisplayName?: string,
+  ): TemplateLanguageDiagnostic[] {
     const ts = this.options.typescript;
     if (!ts) return [];
 
-    const overlayDoc = this.overlaySnapshot(uri);
-    const raw = ts.getDiagnostics(overlayDoc) ?? [];
-    return raw.map((diag) => mapTypeScriptDiagnostic(diag, overlayDoc, this.program.provenance));
+    const overlay = overlayDoc ?? this.overlaySnapshot(uri);
+    const raw = ts.getDiagnostics(overlay) ?? [];
+    const displayName = vmDisplayName ?? getVmDisplayName(this.program.options.vm);
+    return raw.map((diag) => mapTypeScriptDiagnostic(diag, overlay, this.program.provenance, displayName));
   }
 }
 
@@ -691,6 +741,25 @@ function buildSnapshot(doc: BuildDocument, version: number, contentHash: string)
 function overlayOptions(program: TemplateProgram): { isJs: boolean; overlayBaseName?: string } {
   const { isJs, overlayBaseName } = program.options;
   return overlayBaseName === undefined ? { isJs } : { isJs, overlayBaseName };
+}
+
+function getVmDisplayName(vm: TemplateProgram["options"]["vm"]): string {
+  if (!vm) return "Component";
+  const withDisplay = vm as { getDisplayName?: () => string };
+  if (typeof withDisplay.getDisplayName === "function") {
+    const name = withDisplay.getDisplayName();
+    if (name) return name;
+  }
+  return vm.getRootVmTypeExpr ? vm.getRootVmTypeExpr() : "Component";
+}
+
+function getVmRootTypeExpr(vm: TemplateProgram["options"]["vm"]): string {
+  if (!vm) return "Component";
+  if (typeof vm.getQualifiedRootVmTypeExpr === "function") {
+    const qualified = vm.getQualifiedRootVmTypeExpr();
+    if (qualified) return qualified;
+  }
+  return vm.getRootVmTypeExpr();
 }
 
 function describeBindable(bindable: TemplateBindableInfo): string | undefined {
@@ -745,17 +814,54 @@ function isIdentifierChar(code: number): boolean {
   );
 }
 
+type CompilerDiagnosticContext = {
+  vmDisplayName?: string;
+  vmRootTypeExpr?: string;
+  overlay?: OverlayDocumentSnapshot | null | undefined;
+  provenance?: ProvenanceIndex | undefined;
+  typescript?: TypeScriptServices | undefined;
+};
+
 function mapCompilerDiagnostic(
   diag: CompilerDiagnostic,
   templateUri: DocumentUri,
   templateFile: SourceFileId,
-): TemplateLanguageDiagnostic {
+  context?: CompilerDiagnosticContext,
+): TemplateLanguageDiagnostic | null {
   const targetSpan = diagnosticSpan(diag);
   const location = targetSpan ? { uri: templateUri, span: resolveSourceSpan(targetSpan, templateFile) } : null;
   const related = (diag.related ?? []).map((rel) => ({
     message: rel.message,
     location: rel.span ? { uri: templateUri, span: resolveSourceSpan(rel.span, templateFile) } : null,
   }));
+
+  if (isTypecheckMismatch(diag)) {
+    const vmDisplayName = context?.vmDisplayName ?? "Component";
+    const hit =
+      targetSpan && context?.provenance
+        ? context.provenance.lookupSource(templateUri, targetSpan.start)
+        : null;
+    const overlaySpan = hit?.edge.from.span ?? null;
+    const quickInfoType = lookupQuickInfoType(context?.typescript, context?.overlay ?? null, overlaySpan, hit);
+    const expected = diag.expected ?? null;
+    const actual = quickInfoType ?? diag.actual ?? null;
+
+    if (quickInfoType && expected && typeTextMatches(expected, quickInfoType)) {
+      return null;
+    }
+
+    const subject = hit?.memberPath ? `${vmDisplayName}.${hit.memberPath}` : vmDisplayName;
+    return {
+      code: diag.code,
+      message: hit?.memberPath
+        ? `Type mismatch on ${subject}: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`
+        : `Type mismatch: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`,
+      source: diag.source,
+      severity: diag.severity,
+      location,
+      ...(related.length ? { related } : {}),
+    };
+  }
 
   return {
     code: diag.code,
@@ -765,6 +871,44 @@ function mapCompilerDiagnostic(
     location,
     ...(related.length ? { related } : {}),
   };
+}
+
+function isTypecheckMismatch(diag: CompilerDiagnostic): diag is TypecheckDiagnostic {
+  return diag.code === "AU1301" && diag.source === "typecheck";
+}
+
+function lookupQuickInfoType(
+  ts: TypeScriptServices | undefined,
+  overlay: OverlayDocumentSnapshot | null,
+  overlaySpan: SourceSpan | null,
+  hit: TemplateProvenanceHit | null,
+): string | null {
+  if (!ts?.getQuickInfo || !overlay || !overlaySpan) return null;
+  // Prefer the exact member segment when available; otherwise sample the span center.
+  const probe = hit?.edge.from.span ?? overlaySpan;
+  const center = probe.start + Math.max(0, Math.floor(spanLength(probe) / 2));
+  const info = ts.getQuickInfo(overlay, center);
+  if (!info?.text) return null;
+  return parseQuickInfoType(info.text);
+}
+
+function parseQuickInfoType(text: string): string | null {
+  const trimmed = text.trim();
+  const colon = trimmed.lastIndexOf(":");
+  if (colon >= 0 && colon < trimmed.length - 1) {
+    const typePart = trimmed.slice(colon + 1).trim();
+    if (typePart) return typePart;
+  }
+  return trimmed || null;
+}
+
+function typeTextMatches(expected: string, actual: string): boolean {
+  const norm = (t: string) => t.replace(/\s+/g, "").replace(/^\(+/, "").replace(/\)+$/, "");
+  if (norm(expected) === norm(actual)) return true;
+  if (expected.trim() === "Function") {
+    return /\=\>/.test(actual) || /\bFunction\b/.test(actual) || /\bfunction\b/.test(actual);
+  }
+  return false;
 }
 
 function mapOverlaySpanToTemplate(
@@ -815,6 +959,7 @@ function mapTypeScriptDiagnostic(
   diag: TsDiagnostic,
   overlay: OverlayDocumentSnapshot,
   provenance: ProvenanceIndex,
+  vmDisplayName: string,
 ): TemplateLanguageDiagnostic {
   const overlaySpan = tsSpan(diag, overlay.file);
   const overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
@@ -834,9 +979,10 @@ function mapTypeScriptDiagnostic(
   }
 
   const severity = tsCategoryToSeverity(diag.category);
+  const message = formatTypeScriptMessage(diag, vmDisplayName, provenanceHit);
   return {
     code: diag.code ?? "TS",
-    message: flattenTsMessage(diag.messageText),
+    message,
     source: "typescript",
     severity,
     location: mappedLocation ?? overlayLocation,
@@ -888,12 +1034,31 @@ function flattenTsMessage(msg: string | TsMessageChain | undefined): string {
   return parts.join(" ");
 }
 
+function formatTypeScriptMessage(
+  diag: TsDiagnostic,
+  vmDisplayName: string,
+  hit: ReturnType<ProvenanceIndex["lookupGenerated"]> | null,
+): string {
+  if (hit?.memberPath) {
+    return `Property '${hit.memberPath}' does not exist on ${vmDisplayName}`;
+  }
+  return flattenTsMessage(diag.messageText);
+}
+
 function projectOverlayOffset(hit: TemplateProvenanceHit, templateOffset: number): number {
   const templateSpan = hit.edge.to.span;
   const overlaySpan = hit.edge.from.span;
   const relative = Math.max(0, templateOffset - templateSpan.start);
   const overlayRelative = Math.min(relative, spanLength(overlaySpan));
   return overlaySpan.start + overlayRelative;
+}
+
+function overlayOffsetFromHit(hit: TemplateProvenanceHit, templateOffset: number): number {
+  if (hit.edge.kind === "overlayMember") {
+    const span = hit.edge.from.span;
+    return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
+  }
+  return projectOverlayOffset(hit, templateOffset);
 }
 
 function normalizeRange(range: TextRange | null | undefined): TextRange | null {

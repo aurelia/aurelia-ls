@@ -30,6 +30,17 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
   let offset = 0; // track length of out.join("\n") as we build
 
   for (const t of plan.templates) {
+    if (t.vmType?.alias && t.vmType?.typeExpr) {
+      if (!isJs) {
+        const aliasLine = `type ${t.vmType.alias} = ${t.vmType.typeExpr};`;
+        out.push(aliasLine);
+        offset += aliasLine.length + 1;
+      } else {
+        const aliasLine = `/** @typedef {${t.vmType.typeExpr}} ${t.vmType.alias} */`;
+        out.push(aliasLine);
+        offset += aliasLine.length + 1;
+      }
+    }
     for (const f of t.frames) {
       if (!isJs) {
         out.push(`type ${f.typeName} = ${f.typeExpr};`);

@@ -122,11 +122,20 @@ function shouldReportMismatch(expected: string, actual: string): boolean {
   const e = normalizeType(expected);
   const a = normalizeType(actual);
   if (e === "unknown" || e === "any" || a === "unknown" || a === "any") return false;
+   if (e === "Function" && isFunctionLike(actual)) return false;
   return e !== a;
 }
 
 function normalizeType(t: string): string {
   return t.replace(/[\s()]/g, "");
+}
+
+function isFunctionLike(type: string): boolean {
+  const t = type.replace(/\s+/g, "");
+  if (/\bFunction\b/i.test(type)) return true;
+  if (t.includes("=>")) return true;
+  if (t.startsWith("ReturnType<") || t.includes("ReturnType<")) return true;
+  return false;
 }
 
 function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<string>): void {
