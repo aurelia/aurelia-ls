@@ -1,5 +1,5 @@
 import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/diagnostics.js";
-import type { SourceFileId, NormalizedPath } from "../compiler/model/identity.js";
+import { normalizePathForId, type SourceFileId, type NormalizedPath } from "../compiler/model/identity.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
 import { spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
@@ -633,17 +633,25 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     requireOverlayMapping: boolean,
   ): TextEdit[] | null {
     const results: TextEdit[] = [];
-    const overlayUris = collectOverlayUris(this.program.provenance);
+    const overlayUri = overlay ? canonicalDocumentUri(overlay.uri).uri : null;
+    const overlayKey = overlayUri ? normalizePathForId(overlayUri).toLowerCase() : null;
+    const overlayKeys = new Set<string>();
+    if (overlayKey) overlayKeys.add(overlayKey);
+    for (const uri of collectOverlayUris(this.program.provenance)) {
+      overlayKeys.add(normalizePathForId(uri).toLowerCase());
+    }
     let mappedOverlayEdits = 0;
     let unmappedOverlayEdits = 0;
     let overlayEdits = 0;
 
     for (const edit of edits) {
       const normalizedUri = canonicalDocumentUri(edit.fileName).uri;
+      const normalizedKey = normalizePathForId(normalizedUri).toLowerCase();
       const range = normalizeRange(edit.range);
-      if (overlayUris.has(normalizedUri)) {
+      const isOverlayEdit = overlayKeys.has(normalizedKey);
+      if (isOverlayEdit) {
         overlayEdits += 1;
-        const mapped = this.mapOverlayEdit(edit, normalizedUri, normalizedUri === overlay.uri ? overlay : null);
+        const mapped = this.mapOverlayEdit(edit, normalizedUri, overlayKey !== null && normalizedKey === overlayKey ? overlay : null);
         if (!mapped) {
           unmappedOverlayEdits += 1;
           continue;

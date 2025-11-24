@@ -3,6 +3,9 @@ import type { LanguageClient } from "vscode-languageclient/node.js";
 import { VirtualDocProvider } from "./virtual-docs.js";
 import { ClientLogger } from "./log.js";
 
+type OverlayResponse = { artifact?: { overlay: { path: string; text: string }; mapping?: { entries?: unknown[] }; calls?: any[] } } | null;
+type SsrResponse = { artifact?: { html: { text: string; path: string }; manifest: { text: string; path: string } } } | null;
+
 export function registerCommands(
   context: vscode.ExtensionContext,
   client: LanguageClient,
@@ -16,18 +19,16 @@ export function registerCommands(
       const uri = editor.document.uri.toString();
       logger.log(`[client] aurelia.showOverlay request for ${uri}`);
       try {
-        const result = await client.sendRequest<{ overlayPath: string; text: string; calls?: any[] } | null>(
-          "aurelia/getOverlay",
-          { uri },
-        );
-        if (!result) {
+        const response = await client.sendRequest<OverlayResponse>("aurelia/getOverlay", { uri });
+        const overlay = response?.artifact ?? null;
+        if (!overlay) {
           vscode.window.showInformationMessage("No overlay found for this document");
           return;
         }
-        const vUri = virtualDocs.makeUri(result.overlayPath);
-        virtualDocs.update(vUri, result.text);
-        const doc = await vscode.workspace.openTextDocument(vUri.with({ path: vUri.path + ".ts", scheme: "untitled" }));
-        await vscode.window.showTextDocument(doc, { preview: true });
+        const vUri = virtualDocs.makeUri(overlay.overlay.path.endsWith(".ts") ? overlay.overlay.path : `${overlay.overlay.path}.ts`);
+        virtualDocs.update(vUri, overlay.overlay.text);
+        const doc = await vscode.workspace.openTextDocument(vUri);
+        await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
       } catch (e: any) {
         logger.error(`[client] aurelia.showOverlay error: ${e?.message ?? e}`);
         vscode.window.showErrorMessage(`Show Generated Overlay failed: ${e?.message ?? e}`);
@@ -48,7 +49,7 @@ export function registerCommands(
         );
         const overlayFallback = mapping?.mapping?.entries?.length
           ? null
-          : await client.sendRequest<{ overlayPath: string; text: string; calls?: any[] } | null>("aurelia/getOverlay", { uri });
+          : await client.sendRequest<OverlayResponse>("aurelia/getOverlay", { uri });
 
         if (mapping?.mapping?.entries?.length) {
           const rows = mapping.mapping.entries.map((entry: any, i: number) =>
@@ -60,11 +61,12 @@ export function registerCommands(
           return;
         }
 
-        if (overlayFallback?.calls?.length) {
-          const lines = overlayFallback.calls.map((c: any, i: number) =>
+        const overlayArtifact = overlayFallback?.artifact ?? null;
+        if (overlayArtifact?.calls?.length) {
+          const lines = overlayArtifact.calls.map((c: any, i: number) =>
             `${i + 1}. expr=${c.exprId} overlay=[${c.overlayStart},${c.overlayEnd}) html=[${c.htmlStart},${c.htmlEnd})`,
           );
-          const body = [`Overlay: ${overlayFallback.overlayPath}`, "", ...lines].join("\n");
+          const body = [`Overlay: ${overlayArtifact.overlay.path}`, "", ...lines].join("\n");
           const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Overlay Mapping\n\n${body}` });
           await vscode.window.showTextDocument(doc, { preview: true });
           return;
@@ -113,19 +115,17 @@ export function registerCommands(
       const uri = editor.document.uri.toString();
       logger.log(`[client] aurelia.showSsrPreview request for ${uri}`);
       try {
-        const result = await client.sendRequest<{ htmlPath: string; htmlText: string; manifestPath: string; manifestText: string } | null>(
-          "aurelia/getSsr",
-          { uri },
-        );
-        if (!result) {
+        const response = await client.sendRequest<SsrResponse>("aurelia/getSsr", { uri });
+        const ssr = response?.artifact ?? null;
+        if (!ssr) {
           vscode.window.showInformationMessage("No SSR output for this document");
           return;
         }
-        const htmlDoc = await vscode.workspace.openTextDocument({ language: "html", content: result.htmlText });
+        const htmlDoc = await vscode.workspace.openTextDocument({ language: "html", content: ssr.html.text });
         await vscode.window.showTextDocument(htmlDoc, { preview: true });
-        const manifestDoc = await vscode.workspace.openTextDocument({ language: "json", content: result.manifestText });
+        const manifestDoc = await vscode.workspace.openTextDocument({ language: "json", content: ssr.manifest.text });
         await vscode.window.showTextDocument(manifestDoc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
-        logger.log(`[client] SSR preview opened: ${result.htmlPath} / ${result.manifestPath}`);
+        logger.log(`[client] SSR preview opened: ${ssr.html.path} / ${ssr.manifest.path}`);
       } catch (e: any) {
         logger.error(`[client] aurelia.showSsrPreview error: ${e?.message ?? e}`);
         vscode.window.showErrorMessage(`Show SSR Preview failed: ${e?.message ?? e}`);

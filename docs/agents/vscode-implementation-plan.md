@@ -25,7 +25,7 @@ plus the current checkpoints here.
   - [x] Implement decorator/convention-based crawler (custom elements/attributes, bindables, aliases) and thread into fingerprint.
   - [x] Map discovered resources into scoped `ResourceGraph` overlays when applicable.
 
-- [ ] Align `TemplateWorkspace` to goal facade
+- [x] Align `TemplateWorkspace` to goal facade
   - [x] Provide explicit `open/change/close` wired to LSP `TextDocuments`.
   - [x] Own `SourceStore` + `ProvenanceIndex`; construct `TemplateProgram`/language/build services from index outputs.
   - [x] Recreate workspace on fingerprint drift while preserving live snapshots.
@@ -36,7 +36,7 @@ plus the current checkpoints here.
   - [x] On initialize: load tsconfig, refresh index, ensure prelude.
   - [x] On doc events: call workspace `open/change/close`; rebuild workspace on fingerprint change.
 
-- [ ] Diagnostics and feature routing
+- [x] Diagnostics and feature routing
   - [x] Template diagnostics via `TemplateLanguageService`; overlay build via `TemplateBuildService`.
   - [x] TS diagnostics via `TsService`, mapped back with provenance/mapping; send unified LSP diagnostics.
   - [x] Hover/completions/defs/refs/rename/code actions: route through TemplateLanguageService + provenance-backed TS calls (no ad-hoc mapping in `main.ts`).
@@ -44,17 +44,17 @@ plus the current checkpoints here.
   - [x] Ensure overlay member mapping drives defs/refs/rename: always emit member segments for property/interpolation lambdas in plan/emit, ingest into provenance (`overlayMember` edges), and have LS offsets prefer those segments over raw spans so template rename edits are produced alongside VM edits.
   - [x] Diagnostic UX: alias VM/overlay types to friendly names and scrub mapped TS messages to avoid noisy `typeof import(...)` unions.
 
-- [ ] Overlay/SSR custom requests
-  - [ ] `aurelia/getOverlay` and `aurelia/getSsr` call `TemplateBuildService`; update `OverlayFs` only from build outputs.
-  - [ ] Return overlay/SSR artifacts (paths, text, mapping, calls) per spec; respect current workspace fingerprint/index.
+- [x] Overlay/SSR custom requests
+  - [x] `aurelia/getOverlay` and `aurelia/getSsr` call `TemplateBuildService`; update `OverlayFs` only from build outputs.
+  - [x] Return overlay/SSR artifacts (paths, text, mapping, calls) per spec; respect current workspace fingerprint/index.
 
 - [ ] Client alignment (`packages/client`)
   - [ ] Keep client LSP-only: `AureliaLanguageClient`, `VirtualDocProvider`, commands, status notifications.
   - [ ] Ensure commands map to updated server requests/notifications.
   - [ ] Add smoke tests: `activation-smoke.test.mjs`, `commands-overlay.test.mjs`.
 
-- [ ] Integration tests (server)
-  - [ ] Add in-process LSP tests for diagnostics, hover/defs/refs, overlay/SSR requests, and resource discovery using fixtures under `packages/server/test/integration`.
+- [x] Integration tests (server)
+  - [x] Add in-process LSP tests for diagnostics, hover/defs/refs, overlay/SSR requests, and resource discovery using fixtures under `packages/server/test/integration`.
 
 - [ ] Migration and clean-up
   - [ ] Remove legacy `CompilerService` shims once new wiring is live.
