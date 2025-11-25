@@ -50,14 +50,14 @@ Goal: have **one canonical story** for “what document is this?” across compi
 Goal: make **TemplateLanguageService** and friends thin adapters over provenance, not source‑map engines.
 
 - [ ] Refactor `TemplateLanguageService` to use provenance for all cross‑document features:
-  - [ ] TS diagnostics (map overlay spans back to template).
+  - [x] TS diagnostics (map overlay spans back to template).
   - [ ] Hover (overlay → template, and optionally template → overlay when jumping to TS).
   - [ ] Definitions & references (TS locations → template locations).
   - [ ] Rename (TS edits → template edits).
   - [ ] Completions (overlay replacement spans → template ranges).
   - [ ] Code actions (TS edits → template edits).
 - [ ] Remove direct `TemplateMappingArtifact` scans in services:
-  - [ ] Replace `overlayMemberSpan`, `overlayOffsetForHit`, `overlaySpanForEdit`, `overlaySpanForLocation`, `projectOverlayOffset`, etc. with provenance calls.
+  - [ ] Replace remaining ad-hoc helpers (e.g. `overlaySpanForEdit`, `overlaySpanForLocation`; legacy helpers like `projectOverlayOffset` are already removed) with provenance calls.
   - [ ] After migration, `TemplateLanguageService` should only “see” mappings indirectly through the provenance API and the query facade.
 - [ ] Keep the remaining helpers **very small**:
   - [ ] `mapOverlaySpanToTemplate` and similar functions become trivial wrappers that:

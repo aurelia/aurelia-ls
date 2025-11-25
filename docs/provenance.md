@@ -127,38 +127,14 @@ You have *three* overlapping representations of “expression ↔ text ↔ overl
 
 Then:
 
-* `TemplateQueryFacade.exprAt` manually walks `TemplateMappingArtifact.entries` to find the narrowest segment at an HTML offset.
-* `TemplateLanguageService.lookupOverlayHit` goes through `ProvenanceIndex.lookupSource` and then uses *both* provenance hit **and** a direct call to `program.getMapping(templateUri)` to find an overlay member span in some cases (via `overlayMemberSpan`).
+* `TemplateQueryFacade.exprAt` walks `TemplateMappingArtifact.entries` to find the narrowest segment at an HTML offset.
+* `TemplateLanguageService` now leans entirely on provenance projections for cross-document jumps instead of re-reading `TemplateMappingArtifact`.
 
-So the logic is:
+Keep this split intentional: `TemplateMappingArtifact` stays a compiler product; `ProvenanceIndex` is the canonical projection surface between overlay/SSR and templates.
 
-* sometimes we treat `TemplateMappingArtifact` as canonical,
-* sometimes we treat `ProvenanceIndex` as canonical,
-* sometimes we recombine both on the fly.
+### 2.4 "Overlay offset" heuristics sprinkled in services
 
-That’s the biggest “smell”: you clearly *want* one central mapping/provenance graph with query helpers, but the code got there incrementally.
-
-### 2.4 “Overlay offset” heuristics sprinkled in services
-
-In `TemplateLanguageService` you see little patches like:
-
-```ts
-private overlayOffsetForHit(hit, templateOffset, templateUri) {
-  if (hit.edge.kind === "overlayMember") { /* pick center of member segment */ }
-  if (hit.exprId) { /* find first member segment in mapping and pick center */ }
-  return projectOverlayOffset(hit, templateOffset);
-}
-```
-
-…and separate functions to:
-
-* map overlay spans back to template (`mapOverlaySpanToTemplate`),
-* compute overlay spans from TS locations/edits (`overlaySpanForEdit`, `overlaySpanForLocation`),
-* expand overlay edits to template edits via provenance.
-
-All of this *works*, but it’s quite a lot of ad-hoc projection logic living in `services.ts` instead of “the mapping/provenance layer”.
-
-This is exactly the kind of thing Codex will happily duplicate (*“oh, we need to go from A to B again; let me re‑invent a projection helper…”*).
+Projection math for overlay/template hopping now lives in `program/provenance.ts` (`projectGeneratedSpan/Offset`, `projectTemplateSpan/Offset`), with service helpers reduced to span/range conversion and snapshot lookups. Keep it that way: if a new feature needs a projection, add it to `ProvenanceIndex` instead of re-implementing span math in services.
 
 ---
 
@@ -297,25 +273,7 @@ This is mostly documentation + a small amount of shuffling, but it gives Codex a
 
 ### 4.3 Collapse overlay-offset helpers
 
-You currently have:
-
-* `projectOverlayOffset(hit, templateOffset)` (pure function in `services.ts`).
-* `overlayOffsetFromHit(hit, templateOffset)` (adds overlayMember special case).
-* `overlayOffsetForHit(...)` (a method that mixes both, and also consults mapping directly).
-
-After promoting provenance helpers as in 3.2, you can get away with essentially one:
-
-```ts
-// Given a template offset and a provenance hit, get the best overlay offset.
-function overlayOffsetFromHit(hit: TemplateProvenanceHit, templateOffset: number): number
-```
-
-with the semantics you already encode:
-
-* prefer member edges,
-* otherwise project proportionally over the overlayExpr span.
-
-And put that function next to `projectOverlaySpanToTemplateSpan` / `edgePriority` in `program/provenance.ts`, not in services.
+Overlay offset projection now flows through `ProvenanceIndex.projectTemplateOffset/projectTemplateSpan`, so the stack of ad-hoc helpers in services has been removed. Keep any future overlay-offset needs inside `program/provenance.ts` next to `projectOverlaySpanToTemplateSpan` rather than re-introducing service-level math.
 
 ---
 

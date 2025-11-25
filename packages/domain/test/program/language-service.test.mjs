@@ -34,6 +34,9 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   const compilation = program.getCompilation(uri);
   const mappingEntry = compilation.mapping.entries[0];
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const diagStart = mappingEntry.overlaySpan.start + 1;
+  const diagLength = Math.max(1, mappingEntry.overlaySpan.end - mappingEntry.overlaySpan.start - 1);
+  const diagSpan = { start: diagStart, end: diagStart + diagLength };
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(overlay) {
@@ -42,13 +45,13 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
           {
             category: "error",
             code: 2339,
-            start: mappingEntry.overlaySpan.start + 1,
-            length: Math.max(1, mappingEntry.overlaySpan.end - mappingEntry.overlaySpan.start - 1),
+            start: diagStart,
+            length: diagLength,
             messageText: "TS2339: Property 'bar' does not exist on type.",
             relatedInformation: [
               {
                 messageText: "overlay reference",
-                start: mappingEntry.overlaySpan.start,
+                start: diagStart - 1,
                 length: 1,
                 fileName: overlay.uri,
               },
@@ -66,9 +69,10 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
 
   const tsDiag = diags.typescript.find((d) => d.source === "typescript");
   assert.ok(tsDiag, "typescript diagnostics should be present");
+  const projected = program.provenance.projectGeneratedSpan(overlayUri, diagSpan);
+  assert.ok(projected, "typescript diagnostic should map through provenance");
   assert.equal(tsDiag.location?.uri, canonicalDocumentUri(uri).uri);
-  assert.equal(tsDiag.location?.span.start, mappingEntry.htmlSpan.start);
-  assert.equal(tsDiag.location?.span.end, mappingEntry.htmlSpan.end);
+  assert.deepEqual(tsDiag.location?.span, projected.edge.to.span);
   assert.ok(tsDiag.related?.some((rel) => rel.location?.uri === overlayUri), "overlay span should remain as related info");
 
   assert.equal(diags.all.length, diags.compiler.length + diags.typescript.length);
