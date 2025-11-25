@@ -739,11 +739,20 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     templateOffset: number,
     templateUri: DocumentUri,
   ): number {
-    // 1) If we know the expression id, try to use the most specific member
-    //    segment from the mapping whose HTML span contains this offset.
+    // 1) If provenance already says we're on a member edge, trust it and
+    //    aim TS at the center of that member segment.
+    if (hit.edge.kind === "overlayMember") {
+      const span = hit.edge.from.span;
+      return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
+    }
+
+    // 2) Otherwise, if we know the expression id, try to use the most specific
+    //    member segment from the mapping whose HTML span contains this offset.
     if (hit.exprId) {
       const mapping = this.program.getMapping(templateUri);
-      const entry = mapping?.entries.find((e) => e.exprId === hit.exprId && e.segments && e.segments.length > 0);
+      const entry = mapping?.entries.find(
+        (e) => e.exprId === hit.exprId && e.segments && e.segments.length > 0,
+      );
       if (entry) {
         const segments = entry.segments!;
         // Prefer:
@@ -778,12 +787,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         const span = best.overlaySpan;
         return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
       }
-    }
-
-    // 2) If provenance already says we're on a member edge, just use that.
-    if (hit.edge.kind === "overlayMember") {
-      const span = hit.edge.from.span;
-      return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
     }
 
     // 3) Fallback: simple proportional projection inside the overlayExpr span.
