@@ -78,6 +78,38 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   assert.equal(diags.all.length, diags.compiler.length + diags.typescript.length);
 });
 
+test("BadExpression still produces AU1203 and a mapped overlay span", () => {
+  const program = createProgram();
+  const uri = "/app/bad-expr.html";
+  const markup = "<template><div title.bind=\"foo(\"></div></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const entry = compilation.mapping.entries[0];
+
+  assert.ok(entry.overlaySpan.file, "overlay span should carry file metadata");
+  assert.ok(entry.htmlSpan.file, "html span should carry file metadata");
+  assert.ok(
+    compilation.overlay.text.includes("undefined/*bad*/"),
+    "overlay should stay valid with a bad-expression placeholder",
+  );
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics(overlay) {
+        assert.equal(overlay.uri, overlayUri);
+        return [];
+      },
+    },
+  });
+
+  const diags = service.getDiagnostics(uri);
+  const badExpr = diags.compiler.find((d) => d.code === "AU1203");
+  assert.ok(badExpr, "bad expression should surface AU1203");
+  assert.equal(badExpr.location?.uri, canonicalDocumentUri(uri).uri);
+});
+
 test("diagnostics use VM display name for missing members", () => {
   const program = new DefaultTemplateProgram({
     vm: {

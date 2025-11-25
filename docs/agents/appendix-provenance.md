@@ -74,7 +74,7 @@ Edge selection & projection logic lives **inside provenance**:
 
 - Selection priority:
   1. Prefer `overlayMember` over `overlayExpr`.
-  2. Among same‑kind edges, prefer:
+  2. Among same-kind edges, prefer:
      - Larger overlap with the query span/offset.
      - Then narrower edge span (more specific).
      - For members, deeper/more specific `tag` (longer path).
@@ -83,7 +83,12 @@ Edge selection & projection logic lives **inside provenance**:
   - For partial overlap, use **proportional slicing** within the edge and clamp to the target span.
   - For SSR, projection is straight node mapping: `nodeId` + template span; no proportional slicing.
 
-Callers must **not** re‑implement these rules.
+Callers must **not** re-implement these rules.
+
+Notes on normalization and tie-breaks:
+
+- Overlay/SSR mappings are normalized **once** during provenance ingestion; spans get a `file` (`SourceFileId`) there. Do not re-normalize spans in services or callers.
+- When selecting a projection anchor, `overlayExpr` vs `overlayMember` prefers `overlayExpr` if the generated span exactly matches the authored expression span; this equality is span-only (ignores file) to tolerate already-resolved spans. Partial slices still flow through `overlayMember` edges.
 
 ---
 

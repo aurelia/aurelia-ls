@@ -193,8 +193,8 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
 
     // Prefer overlayExpr edges as the projection anchor when the querySpan exactly matches the full expression span.
     // This lets us map the whole expression back to the full template span while still reporting a memberPath from overlayMember segments.
-    const exprEdges = candidates.filter((edge) => edge.kind === "overlayExpr" && edgeOverlap(edge.from.span, querySpan) > 0);
-    const fullExprEdge = exprEdges.find((edge) => spanEquals(edge.from.span, querySpan)) ?? null;
+      const exprEdges = candidates.filter((edge) => edge.kind === "overlayExpr" && edgeOverlap(edge.from.span, querySpan) > 0);
+      const fullExprEdge = exprEdges.find((edge) => spanEquals(edge.from.span, querySpan) || spansEqualLoose(edge.from.span, querySpan)) ?? null;
 
     const projectionEdge = fullExprEdge ?? pickBestEdgeForSpan(candidates, querySpan, "from");
     if (!projectionEdge) return null;
@@ -498,6 +498,10 @@ function normalizeTemplateMapping(
     })),
   }));
   return { kind: "mapping", entries };
+}
+
+function spansEqualLoose(a: SourceSpan, b: SourceSpan): boolean {
+  return a.start === b.start && a.end === b.end;
 }
 
 function normalizeSsrMapping(

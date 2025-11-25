@@ -9,7 +9,7 @@ import {
   type HtmlMemberSegment,
 } from "./expr-utils.js";
 import { normalizeSpan, spanLength } from "./model/span.js";
-import type { SourceFile } from "./model/source.js";
+import { resolveSourceSpan, type SourceFile } from "./model/source.js";
 import { exprIdMapGet, type ExprIdMap, type ExprIdMapLike } from "./model/identity.js";
 import { isInterpolation } from "./expr-utils.js";
 
@@ -18,6 +18,7 @@ export interface BuildMappingInputs {
   ir: IrModule;
   exprTable?: readonly ExprTableEntry[];
   fallbackFile: SourceFile;
+  overlayFile?: SourceFile | null;
   exprToFrame?: ExprIdMapLike<FrameId> | null;
 }
 
@@ -44,7 +45,9 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
 
   const overlayEntries: OverlayEntry[] = inputs.overlayMapping.map((m) => {
     const htmlSpan = exprSpanIndex.ensure(m.exprId, inputs.fallbackFile);
-    const overlaySpan = normalizeSpan(m.span);
+    const overlaySpan = inputs.overlayFile
+      ? resolveSourceSpan(m.span as SourceSpan, inputs.overlayFile)
+      : normalizeSpan(m.span);
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const frameId = exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined;
 
@@ -53,6 +56,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       htmlSegments,
       htmlSpan,
       overlaySpan,
+      inputs.overlayFile ?? null,
     ).map((seg) => ({ ...seg, exprId: m.exprId }));
 
     return {
@@ -90,6 +94,7 @@ function buildSegmentPairs(
   htmlSegments: readonly HtmlMemberSegment[],
   exprHtmlSpan: SourceSpan,
   exprOverlaySpan: TextSpan,
+  overlayFile: SourceFile | null,
 ): TemplateMappingSegment[] {
   if (overlaySegments.length === 0) return [];
 
@@ -123,7 +128,7 @@ function buildSegmentPairs(
       kind: "member",
       path: overlaySeg.path,
       htmlSpan,
-      overlaySpan: normalizeSpan(overlaySeg.span),
+      overlaySpan: overlayFile ? resolveSourceSpan(overlaySeg.span as SourceSpan, overlayFile) : normalizeSpan(overlaySeg.span),
     });
   }
 

@@ -29,6 +29,21 @@ export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }
   const mapping: OverlayEmitMappingEntry[] = [];
   let offset = 0; // track length of out.join("\n") as we build
 
+  // Helpers to make value converters / binding behaviors TS-safe.
+  const helpers = isJs
+    ? [
+        "/** @template T @param {T} value @returns {T} */ const __au_vc = (value, _name, ..._args) => value;",
+        "/** @template T @param {T} value @returns {T} */ const __au_bb = (value, _name, ..._args) => value;",
+      ]
+    : [
+        "function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
+        "function __au_bb<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
+      ];
+  for (const line of helpers) {
+    out.push(line);
+    offset += line.length + 1;
+  }
+
   for (const t of plan.templates) {
     if (t.vmType?.alias && t.vmType?.typeExpr) {
       if (!isJs) {

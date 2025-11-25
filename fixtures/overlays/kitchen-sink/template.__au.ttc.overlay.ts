@@ -1,3 +1,5 @@
+function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }
+function __au_bb<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }
 type __AU_TTC_VM = any;
 type __AU_TTC_T0_F0 = (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {};
 __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.klass);

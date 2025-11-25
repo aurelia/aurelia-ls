@@ -44,6 +44,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
 
   const overlayDir = path.dirname(opts.templateFilePath);
   const overlayPath = normalizePathForId(path.join(overlayDir, overlayEmit.filename));
+  const overlayFile = resolveSourceFile(overlayPath);
   const exprToFrame = scope.templates?.[0]?.exprToFrame;
 
   const { mapping, exprSpans, spanIndex } = buildTemplateMapping({
@@ -51,6 +52,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     ir,
     exprTable: ir.exprTable ?? [],
     fallbackFile: sourceFile,
+    overlayFile,
     exprToFrame: exprToFrame ?? null,
   });
 
