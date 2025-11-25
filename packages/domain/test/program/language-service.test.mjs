@@ -851,6 +851,23 @@ test("completions aim TS at the member segment under the cursor", () => {
   assert.ok(seen[1] >= ageSeg.overlaySpan.start && seen[1] <= ageSeg.overlaySpan.end);
 });
 
+test("buildTemplateMapping preserves all member segments for multi-member expressions", () => {
+  const program = createProgram();
+  const uri = "/app/multi-members.html";
+  const markup = "<template>${person.name} ${person.age}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const entry = compilation.mapping.entries[0];
+
+  const paths = (entry.segments ?? []).map((s) => s.path).sort();
+  assert.deepEqual(paths, ["person.age", "person.name"].sort());
+
+  // Ensure segments are disjoint in HTML.
+  const [nameSeg] = entry.segments.filter((s) => s.path === "person.name");
+  const [ageSeg]  = entry.segments.filter((s) => s.path === "person.age");
+  assert.ok(nameSeg.htmlSpan.end <= ageSeg.htmlSpan.start || ageSeg.htmlSpan.end <= nameSeg.htmlSpan.start);
+});
 
 function positionAtOffset(text, offset) {
   const clamped = Math.max(0, Math.min(offset, text.length));
