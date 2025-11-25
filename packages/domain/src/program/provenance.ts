@@ -5,23 +5,10 @@ import type {
   TemplateMappingSegment,
 } from "../contracts.js";
 import type { ExprId, NodeId, SourceFileId } from "../compiler/model/identity.js";
-import { spanContains, spanContainsOffset, spanLength, type SourceSpan } from "../compiler/model/span.js";
+import { spanContainsOffset, spanLength, type SourceSpan } from "../compiler/model/span.js";
 import type { DocumentUri } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
-
-/**
- * TODO(provenance-refactor)
- * - Keep all generated↔template projection logic (edge selection + proportional span math) centralized here.
- * - Expose both directions: projectGeneratedOffset/Span and source→generated helpers for overlay/SSR as needed.
- * - Ensure span/file normalization for overlay/SSR ingestion lives only here (not scattered across services).
- * - Align this API surface with docs/agents/appendix-provenance.md and docs/provenance-refactor-milestones.md.
- */
-
-/**
- * Cross-artifact provenance contracts. These are intentionally minimal so the
- * implementation can evolve (indexed, persisted, etc.) without changing callers.
- */
 
 /** Discriminant for provenance edges. Keep the set small and generic. */
 export type ProvenanceKind =
@@ -78,33 +65,29 @@ export interface ProvenanceStats {
 
 export interface ProvenanceIndex {
   addEdges(edges: Iterable<ProvenanceEdge>): void;
-  /**
-   * Ingest overlay mapping for a template. Callers must provide the overlay URI
-   * because TemplateMappingArtifact lacks a path.
-   */
   addOverlayMapping(templateUri: DocumentUri, overlayUri: DocumentUri, mapping: TemplateMappingArtifact): void;
-  /**
-   * Ingest SSR mapping (HTML + manifest) for a template.
-   */
   addSsrMapping(templateUri: DocumentUri, ssrHtmlUri: DocumentUri, manifestUri: DocumentUri, mapping: SsrMappingArtifact): void;
+
   findByGenerated(uri: DocumentUri, offset: number): ProvenanceEdge[];
-  /**
-   * Project a generated span back to its template span, when possible.
-   */
+
+  /** Project a generated span back to its template span, when possible. */
   projectGeneratedSpan(uri: DocumentUri, span: SourceSpan): TemplateProvenanceHit | null;
-  /**
-   * Project a generated offset back to its template span, when possible.
-   */
+
+  /** Project a generated offset back to its template span, when possible. */
   projectGeneratedOffset(uri: DocumentUri, offset: number): TemplateProvenanceHit | null;
+
   findBySource(uri: DocumentUri, offset: number): ProvenanceEdge[];
   lookupGenerated(uri: DocumentUri, offset: number): OverlayProvenanceHit | null;
   lookupSource(uri: DocumentUri, offset: number): TemplateProvenanceHit | null;
+
   stats(): ProvenanceStats;
   templateStats(templateUri: DocumentUri): ProvenanceTemplateStats;
+
   getOverlayMapping?(templateUri: DocumentUri): TemplateMappingArtifact | null;
   getOverlayUri?(templateUri: DocumentUri): DocumentUri | null;
   getSsrMapping?(templateUri: DocumentUri): SsrMappingArtifact | null;
   getSsrUris?(templateUri: DocumentUri): { html: DocumentUri; manifest: DocumentUri } | null;
+
   removeDocument(uri: DocumentUri): void;
 }
 
@@ -156,35 +139,19 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     const canonical = canonicalDocumentUri(uri).uri;
     const candidates = this.edgesByFrom.get(canonical);
     if (!candidates) return [];
-    return filterEdgesByOffset(candidates, offset, "from");
+    return filterEdgesBySpan(candidates, pointSpan(offset), "from");
   }
 
   projectGeneratedSpan(uri: DocumentUri, span: SourceSpan): TemplateProvenanceHit | null {
-    const candidates = this.findByGenerated(uri, span.start);
-    if (!candidates.length) return null;
-    let edge: ProvenanceEdge | null = null;
-    let bestPriority = Number.POSITIVE_INFINITY;
-    let bestOverlap = -1;
-    let bestSpanLen = Number.POSITIVE_INFINITY;
-    for (const candidate of candidates) {
-      const priority = edgePriority(candidate.kind);
-      const overlap = overlapLength(candidate.from.span, span);
-      if (overlap <= 0) continue;
-      const spanLen = spanLength(candidate.from.span);
-      const better =
-        priority < bestPriority ||
-        (priority === bestPriority && overlap > bestOverlap) ||
-        (priority === bestPriority && overlap === bestOverlap && spanLen < bestSpanLen);
-      if (better) {
-        edge = candidate;
-        bestPriority = priority;
-        bestOverlap = overlap;
-        bestSpanLen = spanLen;
-      }
-    }
-    if (!edge) edge = candidates[0] ?? null;
+    const canonical = canonicalDocumentUri(uri);
+    const candidates = this.edgesByFrom.get(canonical.uri);
+    if (!candidates) return null;
+
+    const querySpan = resolveSourceSpan(span, canonical.file);
+    const edge = pickBestEdgeForSpan(candidates, querySpan, "from");
     if (!edge) return null;
-    const projected = projectOverlaySpanToTemplateSpan(edge, span);
+
+    const projected = projectEdgeSpanToTemplateSpan(edge, querySpan);
     return {
       edge: {
         ...edge,
@@ -197,19 +164,24 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   }
 
   projectGeneratedOffset(uri: DocumentUri, offset: number): TemplateProvenanceHit | null {
-    return this.projectGeneratedSpan(uri, { start: offset, end: offset });
+    return this.projectGeneratedSpan(uri, pointSpan(offset));
   }
 
   findBySource(uri: DocumentUri, offset: number): ProvenanceEdge[] {
     const canonical = canonicalDocumentUri(uri).uri;
     const candidates = this.edgesByTo.get(canonical);
     if (!candidates) return [];
-    return filterEdgesByOffset(candidates, offset, "to");
+    return filterEdgesBySpan(candidates, pointSpan(offset), "to");
   }
 
   lookupGenerated(uri: DocumentUri, offset: number): OverlayProvenanceHit | null {
-    const edge = pickBestEdge(this.findByGenerated(uri, offset), offset, "from");
+    const canonical = canonicalDocumentUri(uri).uri;
+    const candidates = this.edgesByFrom.get(canonical);
+    if (!candidates) return null;
+
+    const edge = pickBestEdgeForSpan(candidates, pointSpan(offset), "from");
     if (!edge) return null;
+
     const exprId = edge.from.exprId ?? edge.to.exprId;
     return {
       ...(exprId ? { exprId } : {}),
@@ -219,8 +191,13 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   }
 
   lookupSource(uri: DocumentUri, offset: number): TemplateProvenanceHit | null {
-    const edge = pickBestEdge(this.findBySource(uri, offset), offset, "to");
+    const canonical = canonicalDocumentUri(uri).uri;
+    const candidates = this.edgesByTo.get(canonical);
+    if (!candidates) return null;
+
+    const edge = pickBestEdgeForSpan(candidates, pointSpan(offset), "to");
     if (!edge) return null;
+
     const exprId = edge.to.exprId ?? edge.from.exprId;
     return {
       ...(exprId ? { exprId } : {}),
@@ -238,16 +215,19 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   stats(): ProvenanceStats {
     const byKind = zeroedKindCounts();
     const docMap = new Map<DocumentUri, { edges: number; byKind: Record<ProvenanceKind, number> }>();
+
     for (const edge of this.edges) {
       byKind[edge.kind] = (byKind[edge.kind] ?? 0) + 1;
       bumpDocCounts(docMap, edge.from.uri, edge.kind);
       bumpDocCounts(docMap, edge.to.uri, edge.kind);
     }
+
     const documents = Array.from(docMap.entries()).map(([uri, stats]) => ({
       uri,
       edges: stats.edges,
       byKind: stats.byKind,
     }));
+
     return { totalEdges: this.edges.length, byKind, documents };
   }
 
@@ -256,6 +236,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     const overlay = this.overlayByTemplate.get(canonical.uri);
     const ssr = this.ssrByTemplate.get(canonical.uri);
     const trackedUris = new Set<DocumentUri>([canonical.uri]);
+
     if (overlay) trackedUris.add(overlay.overlayUri);
     if (ssr) {
       trackedUris.add(ssr.htmlUri);
@@ -265,6 +246,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     let totalEdges = 0;
     let overlayEdges = 0;
     let ssrEdges = 0;
+
     for (const edge of this.edges) {
       if (!trackedUris.has(edge.from.uri) && !trackedUris.has(edge.to.uri)) continue;
       totalEdges += 1;
@@ -304,6 +286,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   removeDocument(uri: DocumentUri): void {
     const canonical = canonicalDocumentUri(uri).uri;
     const urisToDrop = new Set<DocumentUri>([canonical]);
+
     for (const [templateUri, record] of this.overlayByTemplate.entries()) {
       if (templateUri === canonical || record.overlayUri === canonical) {
         urisToDrop.add(templateUri);
@@ -311,6 +294,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
         this.overlayByTemplate.delete(templateUri);
       }
     }
+
     for (const [templateUri, record] of this.ssrByTemplate.entries()) {
       if (templateUri === canonical || record.htmlUri === canonical || record.manifestUri === canonical) {
         urisToDrop.add(templateUri);
@@ -319,6 +303,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
         this.ssrByTemplate.delete(templateUri);
       }
     }
+
     const keep: ProvenanceEdge[] = [];
     for (const edge of this.edges) {
       if (urisToDrop.has(edge.from.uri) || urisToDrop.has(edge.to.uri)) continue;
@@ -329,10 +314,8 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
 
   private storeEdge(edge: ProvenanceEdge): void {
     this.edges.push(edge);
-    const fromList = ensureEdgeList(this.edgesByFrom, edge.from.uri);
-    fromList.push(edge);
-    const toList = ensureEdgeList(this.edgesByTo, edge.to.uri);
-    toList.push(edge);
+    ensureEdgeList(this.edgesByFrom, edge.from.uri).push(edge);
+    ensureEdgeList(this.edgesByTo, edge.to.uri).push(edge);
   }
 
   private rebuildEdges(edges: readonly ProvenanceEdge[]): void {
@@ -392,7 +375,6 @@ function normalizeTemplateMapping(
       overlaySpan: resolveSourceSpan(segment.overlaySpan, overlayFile),
     })),
   }));
-
   return { kind: "mapping", entries };
 }
 
@@ -460,92 +442,90 @@ function expandSsrMapping(
 ): ProvenanceEdge[] {
   const edges: ProvenanceEdge[] = [];
   for (const entry of mapping.entries) {
-    if (entry.templateSpan) {
-      if (entry.htmlSpan) {
-        edges.push({
-          kind: "ssrNode",
-          from: { uri: htmlUri, span: entry.htmlSpan, nodeId: entry.nodeId },
-          to: { uri: templateUri, span: entry.templateSpan, nodeId: entry.nodeId },
-        });
-      }
-      if (entry.manifestSpan) {
-        edges.push({
-          kind: "ssrNode",
-          from: { uri: manifestUri, span: entry.manifestSpan, nodeId: entry.nodeId },
-          to: { uri: templateUri, span: entry.templateSpan, nodeId: entry.nodeId },
-        });
-      }
+    if (!entry.templateSpan) continue;
+    if (entry.htmlSpan) {
+      edges.push({
+        kind: "ssrNode",
+        from: { uri: htmlUri, span: entry.htmlSpan, nodeId: entry.nodeId },
+        to: { uri: templateUri, span: entry.templateSpan, nodeId: entry.nodeId },
+      });
+    }
+    if (entry.manifestSpan) {
+      edges.push({
+        kind: "ssrNode",
+        from: { uri: manifestUri, span: entry.manifestSpan, nodeId: entry.nodeId },
+        to: { uri: templateUri, span: entry.templateSpan, nodeId: entry.nodeId },
+      });
     }
   }
   return edges;
 }
 
-function filterEdgesByOffset(
+function pointSpan(offset: number): SourceSpan {
+  return { start: offset, end: offset };
+}
+
+function filterEdgesBySpan(
   edges: readonly ProvenanceEdge[],
-  offset: number,
+  query: SourceSpan,
   side: "from" | "to",
 ): ProvenanceEdge[] {
   const hits: ProvenanceEdge[] = [];
   for (const edge of edges) {
     const span = side === "from" ? edge.from.span : edge.to.span;
-    if (spanContainsOffset(span, offset)) hits.push(edge);
+    if (edgeOverlap(span, query) > 0) hits.push(edge);
   }
-  hits.sort((a, b) => compareEdges(a, b, side));
+  hits.sort((a, b) => compareEdgesForSpan(a, b, query, side));
   return hits;
 }
 
-function pickBestEdge(
+function pickBestEdgeForSpan(
   edges: readonly ProvenanceEdge[],
-  offset: number,
+  query: SourceSpan,
   side: "from" | "to",
 ): ProvenanceEdge | null {
-  let best: ProvenanceEdge | null = null;
-  let bestSpan: SourceSpan | null = null;
-  let bestPriority = Number.POSITIVE_INFINITY;
+  let best: { edge: ProvenanceEdge; priority: number; overlap: number; spanLen: number; memberDepth: number } | null = null;
+
   for (const edge of edges) {
     const span = side === "from" ? edge.from.span : edge.to.span;
-    if (!spanContainsOffset(span, offset)) continue;
-    const priority = edgePriority(edge.kind);
-    if (!best) {
-      best = edge;
-      bestSpan = span;
-      bestPriority = priority;
-      continue;
-    }
-    if (priority < bestPriority) {
-      best = edge;
-      bestSpan = span;
-      bestPriority = priority;
-      continue;
-    }
-    const currentSpan = bestSpan ?? span;
-    if (priority === bestPriority) {
-      const specificity = memberSpecificity(edge, best);
-      if (specificity < 0) {
-        best = edge;
-        bestSpan = span;
-        bestPriority = priority;
-        continue;
-      }
-      if (specificity === 0 && spanLength(span) < spanLength(currentSpan)) {
-        best = edge;
-        bestSpan = span;
-        bestPriority = priority;
-      }
-    }
+    const overlap = edgeOverlap(span, query);
+    if (overlap <= 0) continue;
+
+    const candidate = {
+      edge,
+      priority: edgePriority(edge.kind),
+      overlap,
+      spanLen: spanLength(span),
+      memberDepth: memberDepth(edge),
+    };
+
+    if (!best || isBetterEdge(candidate, best)) best = candidate;
   }
-  return best;
+
+  return best?.edge ?? null;
 }
 
-function compareEdges(a: ProvenanceEdge, b: ProvenanceEdge, side: "from" | "to"): number {
-  const prioDelta = edgePriority(a.kind) - edgePriority(b.kind);
-  if (prioDelta !== 0) return prioDelta;
-  const memberDelta = memberSpecificity(a, b);
-  if (memberDelta !== 0) return memberDelta;
+function compareEdgesForSpan(
+  a: ProvenanceEdge,
+  b: ProvenanceEdge,
+  query: SourceSpan,
+  side: "from" | "to",
+): number {
   const spanA = side === "from" ? a.from.span : a.to.span;
   const spanB = side === "from" ? b.from.span : b.to.span;
+
+  const prioDelta = edgePriority(a.kind) - edgePriority(b.kind);
+  if (prioDelta !== 0) return prioDelta;
+
+  const overlapDelta = edgeOverlap(spanB, query) - edgeOverlap(spanA, query);
+  if (overlapDelta !== 0) return overlapDelta;
+
   const lenDelta = spanLength(spanA) - spanLength(spanB);
   if (lenDelta !== 0) return lenDelta;
+
+  const memberDelta = memberDepth(b) - memberDepth(a);
+  if (memberDelta !== 0) return memberDelta;
+
   return 0;
 }
 
@@ -560,19 +540,33 @@ function edgePriority(kind: ProvenanceKind): number {
   }
 }
 
-function memberSpecificity(a: ProvenanceEdge, b: ProvenanceEdge): number {
-  if (a.kind === "overlayMember" && b.kind === "overlayMember") {
-    const lenA = a.tag?.length ?? 0;
-    const lenB = b.tag?.length ?? 0;
-    if (lenA !== lenB) return lenB - lenA; // prefer deeper/more specific member paths
-  }
-  return 0;
+function memberDepth(edge: ProvenanceEdge): number {
+  return edge.kind === "overlayMember" ? edge.tag?.length ?? 0 : 0;
+}
+
+function isBetterEdge(
+  candidate: { priority: number; overlap: number; spanLen: number; memberDepth: number },
+  current: { priority: number; overlap: number; spanLen: number; memberDepth: number },
+): boolean {
+  if (candidate.priority !== current.priority) return candidate.priority < current.priority;
+  if (candidate.overlap !== current.overlap) return candidate.overlap > current.overlap;
+  if (candidate.spanLen !== current.spanLen) return candidate.spanLen < current.spanLen;
+  if (candidate.memberDepth !== current.memberDepth) return candidate.memberDepth > current.memberDepth;
+  return false;
 }
 
 function overlapLength(a: SourceSpan, b: SourceSpan): number {
   const start = Math.max(a.start, b.start);
   const end = Math.min(a.end, b.end);
   return Math.max(0, end - start);
+}
+
+/** Non-zero for any overlap; special-cases point queries. */
+function edgeOverlap(span: SourceSpan, query: SourceSpan): number {
+  const overlap = overlapLength(span, query);
+  if (overlap > 0) return overlap;
+  if (spanLength(query) === 0 && spanContainsOffset(span, query.start)) return 1;
+  return 0;
 }
 
 function ensureEdgeList(map: Map<DocumentUri, ProvenanceEdge[]>, uri: DocumentUri): ProvenanceEdge[] {
@@ -605,20 +599,55 @@ function bumpDocCounts(
 
 /**
  * Project a generated overlay span onto its corresponding template span.
- * Keeps the proportional offset within the edge and preserves file metadata.
+ * - Intersects overlaySlice with edge.from.span.
+ * - Maps relative position proportionally into edge.to.span.
+ * - Clamps + rounds to valid integer offsets.
  */
 export function projectOverlaySpanToTemplateSpan(edge: ProvenanceEdge, overlaySlice: SourceSpan): SourceSpan {
   const from = edge.from.span;
   const to = edge.to.span;
-  const coversFrom = overlaySlice.start <= from.start && overlaySlice.end >= from.end;
-  if (coversFrom) {
-    const targetFile = to.file ?? canonicalDocumentUri(edge.to.uri).file;
-    return resolveSourceSpan(to, targetFile);
+
+  const fromLen = Math.max(1, spanLength(from));
+  const toLen = Math.max(0, spanLength(to));
+
+  // Intersect slice with the valid "from" range.
+  const sliceStart = clamp(overlaySlice.start, from.start, from.end);
+  const sliceEnd = clamp(overlaySlice.end, from.start, from.end);
+
+  // Map to full target.
+  if (sliceStart === from.start && sliceEnd === from.end) {
+    const targetFileFull = to.file ?? canonicalDocumentUri(edge.to.uri).file;
+    return resolveSourceSpan(to, targetFileFull);
   }
-  const relStart = Math.max(0, overlaySlice.start - from.start);
-  const start = Math.min(to.end, to.start + relStart);
-  const length = spanLength(overlaySlice);
-  const end = Math.min(to.end, start + length);
+
+  const startRatio = (sliceStart - from.start) / fromLen;
+  const endRatio = (sliceEnd - from.start) / fromLen;
+
+  const rawStart = to.start + startRatio * toLen;
+  const rawEnd = to.start + endRatio * toLen;
+
+  const clampedStart = clamp(rawStart, to.start, to.end);
+  const clampedEnd = clamp(rawEnd, to.start, to.end);
+
+  const projected = {
+    start: Math.round(Math.min(clampedStart, clampedEnd)),
+    end: Math.round(Math.max(clampedStart, clampedEnd)),
+  };
+
   const targetFile = to.file ?? canonicalDocumentUri(edge.to.uri).file;
-  return resolveSourceSpan({ start, end }, targetFile);
+  return resolveSourceSpan(projected, targetFile);
+}
+
+function projectEdgeSpanToTemplateSpan(edge: ProvenanceEdge, slice: SourceSpan): SourceSpan {
+  if (edge.kind === "ssrNode") {
+    const targetFile = edge.to.span.file ?? canonicalDocumentUri(edge.to.uri).file;
+    return resolveSourceSpan(edge.to.span, targetFile);
+  }
+  return projectOverlaySpanToTemplateSpan(edge, slice);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
 }

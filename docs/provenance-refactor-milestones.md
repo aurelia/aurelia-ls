@@ -8,22 +8,22 @@ A checklist to consolidate mapping/projection under `ProvenanceIndex`, standardi
 
 Goal: establish a **complete, documented surface** for cross‑document mapping.
 
-- [ ] Ensure `ProvenanceIndex` exposes:
-  - [ ] `lookupGenerated(uri, offset): OverlayProvenanceHit | null`
-  - [ ] `lookupSource(uri, offset): TemplateProvenanceHit | null`
-  - [ ] `projectGeneratedOffset(uri, offset): TemplateProvenanceHit | null`
-  - [ ] `projectGeneratedSpan(uri, span): TemplateProvenanceHit | null`
+- [x] Ensure `ProvenanceIndex` exposes:
+  - [x] `lookupGenerated(uri, offset): OverlayProvenanceHit | null`
+  - [x] `lookupSource(uri, offset): TemplateProvenanceHit | null`
+  - [x] `projectGeneratedOffset(uri, offset): TemplateProvenanceHit | null`
+  - [x] `projectGeneratedSpan(uri, span): TemplateProvenanceHit | null`
 - [ ] If/when needed, add mirrored helpers for template → generated projection (e.g. `projectTemplateOffset/Span`) **inside provenance**.
-- [ ] Centralize edge selection and projection math:
-  - [ ] Prefer `overlayMember` over `overlayExpr`.
-  - [ ] Tie‑break by overlap, then narrower span, then deeper member path.
-  - [ ] Implement proportional slicing for partial spans on overlay edges.
-  - [ ] Treat SSR `ssrNode` edges as direct node mappings (no slicing).
-- [ ] Unit tests for:
-  - [ ] overlayExpr edges.
-  - [ ] overlayMember edges (member paths, deeper specificity).
-  - [ ] ssrNode edges (HTML and manifest).
-  - [ ] Partial span projection (start/middle/end of an edge).
+- [x] Centralize edge selection and projection math:
+  - [x] Prefer `overlayMember` over `overlayExpr`.
+  - [x] Tie-break by overlap, then narrower span, then deeper member path.
+  - [x] Implement proportional slicing for partial spans on overlay edges.
+  - [x] Treat SSR `ssrNode` edges as direct node mappings (no slicing).
+- [x] Unit tests for:
+  - [x] overlayExpr edges.
+  - [x] overlayMember edges (member paths, deeper specificity).
+  - [x] ssrNode edges (HTML and manifest).
+  - [x] Partial span projection (start/middle/end of an edge).
 
 ---
 
