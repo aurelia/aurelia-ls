@@ -607,7 +607,13 @@ function pickBestEdgeForSpan(
   query: SourceSpan,
   side: "from" | "to",
 ): ProvenanceEdge | null {
-  let best: { edge: ProvenanceEdge; priority: number; overlap: number; spanLen: number; memberDepth: number } | null = null;
+  let best: {
+    edge: ProvenanceEdge;
+    priority: number;
+    overlap: number;
+    specificity: [number, number];
+    memberDepth: number;
+  } | null = null;
 
   for (const edge of edges) {
     const span = side === "from" ? edge.from.span : edge.to.span;
@@ -618,7 +624,7 @@ function pickBestEdgeForSpan(
       edge,
       priority: edgePriority(edge.kind),
       overlap,
-      spanLen: spanLength(span),
+      specificity: edgeSpecificity(edge, side),
       memberDepth: memberDepth(edge),
     };
 
@@ -643,13 +649,17 @@ function compareEdgesForSpan(
   const overlapDelta = edgeOverlap(spanB, query) - edgeOverlap(spanA, query);
   if (overlapDelta !== 0) return overlapDelta;
 
+  const specificityA = edgeSpecificity(a, side);
+  const specificityB = edgeSpecificity(b, side);
+  const primaryDelta = specificityA[0] - specificityB[0];
+  if (primaryDelta !== 0) return primaryDelta;
+  const secondaryDelta = specificityA[1] - specificityB[1];
+  if (secondaryDelta !== 0) return secondaryDelta;
+
   if (a.kind === "overlayMember" && b.kind === "overlayMember") {
     const memberDelta = memberDepth(b) - memberDepth(a);
     if (memberDelta !== 0) return memberDelta;
   }
-
-  const lenDelta = spanLength(spanA) - spanLength(spanB);
-  if (lenDelta !== 0) return lenDelta;
 
   const memberDelta = memberDepth(b) - memberDepth(a);
   if (memberDelta !== 0) return memberDelta;
@@ -673,17 +683,25 @@ function memberDepth(edge: ProvenanceEdge): number {
 }
 
 function isBetterEdge(
-  candidate: { priority: number; overlap: number; spanLen: number; memberDepth: number },
-  current: { priority: number; overlap: number; spanLen: number; memberDepth: number },
+  candidate: { priority: number; overlap: number; specificity: [number, number]; memberDepth: number },
+  current: { priority: number; overlap: number; specificity: [number, number]; memberDepth: number },
 ): boolean {
   if (candidate.priority !== current.priority) return candidate.priority < current.priority;
   if (candidate.overlap !== current.overlap) return candidate.overlap > current.overlap;
-  if (candidate.priority === 0 && current.priority === 0 && candidate.memberDepth !== current.memberDepth) {
-    return candidate.memberDepth > current.memberDepth;
-  }
-  if (candidate.spanLen !== current.spanLen) return candidate.spanLen < current.spanLen;
+  if (candidate.specificity[0] !== current.specificity[0]) return candidate.specificity[0] < current.specificity[0];
+  if (candidate.specificity[1] !== current.specificity[1]) return candidate.specificity[1] < current.specificity[1];
   if (candidate.memberDepth !== current.memberDepth) return candidate.memberDepth > current.memberDepth;
   return false;
+}
+
+function edgeSpecificity(edge: ProvenanceEdge, side: "from" | "to"): [number, number] {
+  const querySpan = side === "from" ? edge.from.span : edge.to.span;
+  const otherSpan = side === "from" ? edge.to.span : edge.from.span;
+  if (edge.kind === "overlayMember") {
+    // Overlay member specificity is defined by the generated span first, then the template span.
+    return [spanLength(edge.from.span), spanLength(edge.to.span)];
+  }
+  return [spanLength(querySpan), spanLength(otherSpan)];
 }
 
 function overlapLength(a: SourceSpan, b: SourceSpan): number {

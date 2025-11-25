@@ -93,8 +93,23 @@ function mapSegments(segments: readonly OverlayLambdaSegment[] | undefined, lamb
 
 function computeSegmentShift(original: string, withDoc: string, exprSpan: TextSpan): number {
   const originalExprStart = exprSpan.start;
-  const newExprStart = withDoc.indexOf("=>") + 2;
+  const newExprStart = arrowBodyStart(withDoc);
   return newExprStart - originalExprStart;
+}
+
+function arrowBodyStart(lambda: string): number {
+  const arrow = lambda.indexOf("=>");
+  if (arrow < 0) return 0;
+  let idx = arrow + 2;
+  while (idx < lambda.length) {
+    const ch = lambda.charCodeAt(idx);
+    if (ch === 32 /* space */ || ch === 9 /* tab */ || ch === 10 /* \n */ || ch === 13 /* \r */) {
+      idx += 1;
+      continue;
+    }
+    break;
+  }
+  return idx;
 }
 
 /* -----------------------------------------------------------------------------
