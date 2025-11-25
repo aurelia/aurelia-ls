@@ -667,19 +667,20 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   ): TextEdit[] | null {
     const results: TextEdit[] = [];
     const overlayUri = overlay ? canonicalDocumentUri(overlay.uri).uri : null;
-    const overlayKey = overlayUri ? normalizePathForId(overlayUri).toLowerCase() : null;
+    const overlayKey = overlayUri ? canonicalDocumentUri(overlayUri).path.toLowerCase() : null;
     const overlayKeys = new Set<string>();
     if (overlayKey) overlayKeys.add(overlayKey);
     for (const uri of collectOverlayUris(this.program.provenance)) {
-      overlayKeys.add(normalizePathForId(uri).toLowerCase());
+      overlayKeys.add(canonicalDocumentUri(uri).path.toLowerCase());
     }
     let mappedOverlayEdits = 0;
     let unmappedOverlayEdits = 0;
     let overlayEdits = 0;
 
     for (const edit of edits) {
-      const normalizedUri = canonicalDocumentUri(edit.fileName).uri;
-      const normalizedKey = normalizePathForId(normalizedUri).toLowerCase();
+      const normalized = canonicalDocumentUri(edit.fileName);
+      const normalizedUri = normalized.uri;
+      const normalizedKey = normalized.path.toLowerCase();
       const range = normalizeRange(edit.range);
       const isOverlayEdit = overlayKeys.has(normalizedKey);
       if (isOverlayEdit) {
@@ -1050,7 +1051,7 @@ function mapTypeScriptDiagnostic(
 ): TemplateLanguageDiagnostic {
   const overlaySpan = tsSpan(diag, overlay.file);
   const overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
-  const provenanceHit = overlaySpan ? provenance.lookupGenerated(overlay.uri, overlaySpan.start) : null;
+  const provenanceHit = overlaySpan ? provenance.projectGeneratedSpan(overlay.uri, overlaySpan) : null;
   const mappedLocation = provenanceHit ? provenanceLocation(provenanceHit) : null;
 
   const related: DiagnosticRelatedInfo[] = [];
@@ -1063,7 +1064,12 @@ function mapTypeScriptDiagnostic(
     const relSpan = tsSpan(rel, relCanonical.file);
     const relUri = relCanonical.uri;
     const relLocation = relSpan ? { uri: relUri, span: relSpan } : null;
-    related.push({ message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames), location: relLocation });
+    const relHit = relSpan ? provenance.projectGeneratedSpan(relUri, relSpan) : null;
+    const relMapped = relHit ? provenanceLocation(relHit) : null;
+    related.push({
+      message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames),
+      location: relMapped ?? relLocation,
+    });
   }
 
   const severity = tsCategoryToSeverity(diag.category);
@@ -1089,7 +1095,7 @@ function tsSpan(
   return resolveSourceSpan({ start, end: start + len }, file);
 }
 
-function provenanceLocation(hit: ReturnType<ProvenanceIndex["lookupGenerated"]>): DocumentSpan | null {
+function provenanceLocation(hit: TemplateProvenanceHit | OverlayProvenanceHit | null): DocumentSpan | null {
   if (!hit) return null;
   const span = hit.edge.to.span;
   return {
@@ -1162,21 +1168,13 @@ function collectTypeNames(compilation: TemplateCompilation | null | undefined): 
 function formatTypeScriptMessage(
   diag: TsDiagnostic,
   vmDisplayName: string,
-  hit: ReturnType<ProvenanceIndex["lookupGenerated"]> | null,
+  hit: TemplateProvenanceHit | null,
   typeNames: TypeNameMap,
 ): string {
   if (hit?.memberPath) {
     return `Property '${hit.memberPath}' does not exist on ${vmDisplayName}`;
   }
   return rewriteTypeNames(flattenTsMessage(diag.messageText), typeNames);
-}
-
-function projectOverlayOffset(hit: TemplateProvenanceHit, templateOffset: number): number {
-  const templateSpan = hit.edge.to.span;
-  const overlaySpan = hit.edge.from.span;
-  const relative = Math.max(0, templateOffset - templateSpan.start);
-  const overlayRelative = Math.min(relative, spanLength(overlaySpan));
-  return overlaySpan.start + overlayRelative;
 }
 
 function normalizeRange(range: TextRange | null | undefined): TextRange | null {
