@@ -1,11 +1,11 @@
 import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/diagnostics.js";
 import { normalizePathForId, type SourceFileId, type NormalizedPath } from "../compiler/model/identity.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
-import { spanContainsOffset, spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
+import { spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
 import type { TemplateCompilation } from "../compiler/facade.js";
-import type { ProvenanceEdge, ProvenanceIndex, TemplateProvenanceHit } from "./provenance.js";
+import type { OverlayProvenanceHit, ProvenanceEdge, ProvenanceIndex, TemplateProvenanceHit } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
 import type { TemplateBindableInfo, TemplateMappingArtifact, TemplateQueryFacade, SsrMappingArtifact } from "../contracts.js";
 import { stableHash } from "../compiler/pipeline/hash.js";
@@ -409,11 +409,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getDefinition) return [];
 
-    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
+    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
+    const overlayOffset = overlayHit.edge.from.span.start;
     const results = ts.getDefinition(overlay, overlayOffset) ?? [];
     return this.mapTypeScriptLocations(results, overlay);
   }
@@ -427,11 +427,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getReferences) return [];
 
-    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
+    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
+    const overlayOffset = overlayHit.edge.from.span.start;
     const results = ts.getReferences(overlay, overlayOffset) ?? [];
     return this.mapTypeScriptLocations(results, overlay);
   }
@@ -456,11 +456,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const offset = offsetAtPosition(snapshot.text, position);
     if (offset == null) return [];
 
-    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
+    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = overlayOffsetFromHit(overlayHit, offset);
+    const overlayOffset = overlayHit.edge.from.span.start;
     const edits = ts.getRenameEdits(overlay, overlayOffset, newName) ?? [];
     if (!edits.length) return [];
 
@@ -497,11 +497,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getCompletions) return [];
 
-    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
+    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
+    const overlayOffset = overlayHit.edge.from.span.start;
     const entries = ts.getCompletions(overlay, overlayOffset) ?? [];
     if (!entries.length) return [];
 
@@ -543,12 +543,12 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const end = offsetAtPosition(snapshot.text, range.end);
     if (start == null || end == null) return [];
 
-    const overlayHit = this.lookupOverlayHit(canonical.uri, start);
+    const overlayHit = this.projectTemplateSpanToOverlay(canonical, start, end);
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayStart = this.overlayOffsetForHit(overlayHit, start, canonical.uri);
-    const overlayEnd = this.overlayOffsetForHit(overlayHit, end, canonical.uri);
+    const overlayStart = overlayHit.edge.from.span.start;
+    const overlayEnd = overlayHit.edge.from.span.end;
     const actions = ts.getCodeActions(overlay, overlayStart, overlayEnd) ?? [];
     if (!actions.length) return [];
 
@@ -592,11 +592,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const ts = this.options.typescript;
     if (!ts?.getQuickInfo) return null;
 
-    const overlayHit = this.lookupOverlayHit(canonical.uri, offset);
+    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
     if (!overlayHit) return null;
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
+    const overlayOffset = overlayHit.edge.from.span.start;
     const info = ts.getQuickInfo(overlay, overlayOffset);
     if (!info) return null;
     const typeNames = this.typeNamesFor(canonical);
@@ -722,75 +722,31 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text), newText: edit.newText };
   }
 
-  private lookupOverlayHit(uri: DocumentUri, offset: number): TemplateProvenanceHit | null {
-    const hit = this.program.provenance.lookupSource(uri, offset);
+  private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlayProvenanceHit | null {
+    let hit = this.program.provenance.projectTemplateOffset(uri.uri, offset);
     if (hit) return hit;
     try {
-      // Ensure overlay + mapping are materialized; the program caches compilation so this is cheap after first call.
-      this.build.getOverlay(uri);
+      this.build.getOverlay(uri.uri);
     } catch {
       return null;
     }
-    return this.program.provenance.lookupSource(uri, offset);
+    return this.program.provenance.projectTemplateOffset(uri.uri, offset);
   }
 
-  private overlayOffsetForHit(
-    hit: TemplateProvenanceHit,
-    templateOffset: number,
-    templateUri: DocumentUri,
-  ): number {
-    // 1) If provenance already says we're on a member edge, trust it and
-    //    aim TS at the center of that member segment.
-    if (hit.edge.kind === "overlayMember") {
-      const span = hit.edge.from.span;
-      return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
+  private projectTemplateSpanToOverlay(
+    uri: CanonicalDocumentUri,
+    start: number,
+    end: number,
+  ): OverlayProvenanceHit | null {
+    const span = resolveSourceSpan({ start, end }, uri.file);
+    let hit = this.program.provenance.projectTemplateSpan(uri.uri, span);
+    if (hit) return hit;
+    try {
+      this.build.getOverlay(uri.uri);
+    } catch {
+      return null;
     }
-
-    // 2) Otherwise, if we know the expression id, try to use the most specific
-    //    member segment from the mapping whose HTML span contains this offset.
-    if (hit.exprId) {
-      const mapping = this.program.getMapping(templateUri);
-      const entry = mapping?.entries.find(
-        (e) => e.exprId === hit.exprId && e.segments && e.segments.length > 0,
-      );
-      if (entry) {
-        const segments = entry.segments!;
-        // Prefer:
-        // - segments whose htmlSpan contains the offset;
-        // - among those, narrower spans first;
-        // - then deeper member paths (more specific).
-        let best = segments[0]!;
-        let bestScore = -1;
-
-        for (const seg of segments) {
-          const contains = spanContainsOffset(seg.htmlSpan, templateOffset) ? 1 : 0;
-
-          // If we already have a segment that contains the offset, don't
-          // downgrade to one that doesn't.
-          if (contains === 0 && bestScore > 0) continue;
-
-          if (contains > bestScore) {
-            best = seg;
-            bestScore = contains;
-            continue;
-          }
-
-          if (contains === bestScore && contains > 0) {
-            const segLen = spanLength(seg.htmlSpan);
-            const bestLen = spanLength(best.htmlSpan);
-            if (segLen < bestLen || (segLen === bestLen && seg.path.length > best.path.length)) {
-              best = seg;
-            }
-          }
-        }
-
-        const span = best.overlaySpan;
-        return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
-      }
-    }
-
-    // 3) Fallback: simple proportional projection inside the overlayExpr span.
-    return projectOverlayOffset(hit, templateOffset);
+    return this.program.provenance.projectTemplateSpan(uri.uri, span);
   }
 
   private overlayOffsetForLocation(
@@ -1221,14 +1177,6 @@ function projectOverlayOffset(hit: TemplateProvenanceHit, templateOffset: number
   const relative = Math.max(0, templateOffset - templateSpan.start);
   const overlayRelative = Math.min(relative, spanLength(overlaySpan));
   return overlaySpan.start + overlayRelative;
-}
-
-function overlayOffsetFromHit(hit: TemplateProvenanceHit, templateOffset: number): number {
-  if (hit.edge.kind === "overlayMember") {
-    const span = hit.edge.from.span;
-    return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
-  }
-  return projectOverlayOffset(hit, templateOffset);
 }
 
 function normalizeRange(range: TextRange | null | undefined): TextRange | null {
