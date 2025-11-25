@@ -820,6 +820,38 @@ test("navigation short-circuits when no provenance hit at position", () => {
   assert.equal(called, false, "TS services should not be invoked when provenance misses");
 });
 
+test("completions aim TS at the member segment under the cursor", () => {
+  const program = createProgram();
+  const uri = "/app/completions-multi-member.html";
+  const markup = "<template>${person.name} ${person.age}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const entry = compilation.mapping.entries[0];
+  const nameSeg = entry.segments.find((s) => s.path === "person.name");
+  const ageSeg = entry.segments.find((s) => s.path === "person.age");
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const seen = [];
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCompletions(overlay, offset) {
+        assert.equal(overlay.uri, overlayUri);
+        seen.push(offset);
+        return [{ name: "dummy" }];
+      },
+    },
+  });
+
+  service.getCompletions(uri, positionAtOffset(markup, nameSeg.htmlSpan.start + 1));
+  service.getCompletions(uri, positionAtOffset(markup, ageSeg.htmlSpan.start + 1));
+
+  assert.ok(seen[0] >= nameSeg.overlaySpan.start && seen[0] <= nameSeg.overlaySpan.end);
+  assert.ok(seen[1] >= ageSeg.overlaySpan.start && seen[1] <= ageSeg.overlaySpan.end);
+});
+
+
 function positionAtOffset(text, offset) {
   const clamped = Math.max(0, Math.min(offset, text.length));
   let line = 0;

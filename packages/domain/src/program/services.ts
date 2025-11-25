@@ -1,7 +1,7 @@
 import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/diagnostics.js";
 import { normalizePathForId, type SourceFileId, type NormalizedPath } from "../compiler/model/identity.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
-import { spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
+import { spanContainsOffset, spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
 import type { TemplateCompilation } from "../compiler/facade.js";
@@ -734,24 +734,60 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return this.program.provenance.lookupSource(uri, offset);
   }
 
-  private overlayOffsetForHit(hit: TemplateProvenanceHit, templateOffset: number, templateUri: DocumentUri): number {
+  private overlayOffsetForHit(
+    hit: TemplateProvenanceHit,
+    templateOffset: number,
+    templateUri: DocumentUri,
+  ): number {
+    // 1) If we know the expression id, try to use the most specific member
+    //    segment from the mapping whose HTML span contains this offset.
+    if (hit.exprId) {
+      const mapping = this.program.getMapping(templateUri);
+      const entry = mapping?.entries.find((e) => e.exprId === hit.exprId && e.segments && e.segments.length > 0);
+      if (entry) {
+        const segments = entry.segments!;
+        // Prefer:
+        // - segments whose htmlSpan contains the offset;
+        // - among those, narrower spans first;
+        // - then deeper member paths (more specific).
+        let best = segments[0]!;
+        let bestScore = -1;
+
+        for (const seg of segments) {
+          const contains = spanContainsOffset(seg.htmlSpan, templateOffset) ? 1 : 0;
+
+          // If we already have a segment that contains the offset, don't
+          // downgrade to one that doesn't.
+          if (contains === 0 && bestScore > 0) continue;
+
+          if (contains > bestScore) {
+            best = seg;
+            bestScore = contains;
+            continue;
+          }
+
+          if (contains === bestScore && contains > 0) {
+            const segLen = spanLength(seg.htmlSpan);
+            const bestLen = spanLength(best.htmlSpan);
+            if (segLen < bestLen || (segLen === bestLen && seg.path.length > best.path.length)) {
+              best = seg;
+            }
+          }
+        }
+
+        const span = best.overlaySpan;
+        return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
+      }
+    }
+
+    // 2) If provenance already says we're on a member edge, just use that.
     if (hit.edge.kind === "overlayMember") {
       const span = hit.edge.from.span;
       return span.start + Math.max(0, Math.floor(spanLength(span) / 2));
     }
-    if (hit.exprId) {
-      const memberSpan = this.overlayMemberSpan(templateUri, hit.exprId);
-      if (memberSpan) return memberSpan.start + Math.max(0, Math.floor(spanLength(memberSpan) / 2));
-    }
-    return projectOverlayOffset(hit, templateOffset);
-  }
 
-  private overlayMemberSpan(templateUri: DocumentUri, exprId: TemplateExprId): SourceSpan | null {
-    const mapping = this.program.getMapping(templateUri);
-    if (!mapping) return null;
-    const entry = mapping.entries.find((e) => e.exprId === exprId && e.segments && e.segments.length > 0);
-    if (!entry) return null;
-    return entry.segments![0]!.overlaySpan;
+    // 3) Fallback: simple proportional projection inside the overlayExpr span.
+    return projectOverlayOffset(hit, templateOffset);
   }
 
   private overlayOffsetForLocation(
