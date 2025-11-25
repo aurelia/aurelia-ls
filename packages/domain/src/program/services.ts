@@ -3,7 +3,7 @@ import { normalizePathForId, type SourceFileId, type NormalizedPath } from "../c
 import { resolveSourceSpan } from "../compiler/model/source.js";
 import { spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
-import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
+import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
 import type { TemplateCompilation } from "../compiler/facade.js";
 import type { ProvenanceEdge, ProvenanceIndex, TemplateProvenanceHit } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
@@ -1041,7 +1041,7 @@ function collectOverlayUris(provenance: ProvenanceIndex): Set<DocumentUri> {
   const stats = provenance.stats();
   for (const doc of stats.documents) {
     const overlayUri = provenance.templateStats(doc.uri).overlayUri;
-    if (overlayUri) overlayUris.add(canonicalDocumentUri(overlayUri).uri);
+    if (overlayUri) overlayUris.add(overlayUri);
   }
   return overlayUris;
 }
@@ -1064,8 +1064,9 @@ function mapTypeScriptDiagnostic(
   }
 
   for (const rel of diag.relatedInformation ?? []) {
-    const relSpan = tsSpan(rel, rel.fileName ? canonicalDocumentUri(rel.fileName).file : overlay.file);
-    const relUri = normalizeDocumentUri(rel.fileName ?? overlay.uri);
+    const relCanonical = rel.fileName ? canonicalDocumentUri(rel.fileName) : canonicalDocumentUri(overlay.uri);
+    const relSpan = tsSpan(rel, relCanonical.file);
+    const relUri = relCanonical.uri;
     const relLocation = relSpan ? { uri: relUri, span: relSpan } : null;
     related.push({ message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames), location: relLocation });
   }

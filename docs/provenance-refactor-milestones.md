@@ -35,13 +35,13 @@ Goal: have **one canonical story** for “what document is this?” across compi
   - [ ] All program/server code that crosses document boundaries uses `canonicalDocumentUri` to get `(uri, path, file)`.
   - [ ] Compiler code continues to use `normalizePathForId` / `SourceFileId` for internal identities.
 - [ ] Ensure span/file normalization for overlay/SSR ingestion lives in provenance only:
-  - [ ] `addOverlayMapping` normalizes all `TemplateMappingArtifact.entries` spans to carry `file`.
-  - [ ] `addSsrMapping` normalizes all `SsrMappingArtifact.entries` spans to carry `file`.
-  - [ ] No other layer re‑normalizes mapping spans for cross‑document work.
-- [ ] Rename program‑level `Origin`:
-  - [ ] Change `program/primitives.ts` `Origin` to `DocumentOrigin` (or similar).
-  - [ ] Update program/server call sites to use `DocumentSpan`/`DocumentOrigin` terminology.
-  - [ ] Keep compiler `Origin`/`Provenance` unchanged and conceptually separate.
+  - [x] `addOverlayMapping` normalizes all `TemplateMappingArtifact.entries` spans to carry `file`.
+  - [x] `addSsrMapping` normalizes all `SsrMappingArtifact.entries` spans to carry `file`.
+  - [ ] No other layer re-normalizes mapping spans for cross-document work.
+- [ ] Rename program-level `Origin`:
+  - [x] Remove the unused `Origin` helper from `program/primitives.ts` to avoid collisions with compiler `Origin`.
+  - [ ] Update program/server call sites to use `DocumentSpan` terminology (or add `DocumentOrigin` if we reintroduce one intentionally).
+  - [x] Keep compiler `Origin`/`Provenance` unchanged and conceptually separate.
 
 ---
 

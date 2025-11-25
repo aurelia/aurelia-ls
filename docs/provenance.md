@@ -270,29 +270,9 @@ That removes the current cycle where:
 
 These are “little” things but they matter for letting Codex behave:
 
-### 4.1 Rename the program-level Origin
+### 4.1 Simplify program-level origins
 
-In `program/primitives.ts`:
-
-```ts
-export interface Origin {
-  readonly uri: DocumentUri;
-  readonly span: SourceSpan;
-}
-```
-
-This is not the same as `compiler/model/origin.ts`’s Origin. I’d rename it to something like:
-
-```ts
-export interface DocumentOrigin {
-  uri: DocumentUri;
-  span: SourceSpan;
-}
-```
-
-or even fold it into the existing `DocumentSpan` in `services.ts` and drop the extra type entirely.
-
-That removes one overloaded “Origin” and makes it clearer that **domain Origin** is for diagnostics/AST provenance, while **program provenance** is about cross-document mapping edges.
+`program/primitives.ts` used to export its own `Origin` shape (URI + span), which collided in name with `compiler/model/origin.ts`. That helper has been removed; prefer `DocumentSpan` in services + `CanonicalDocumentUri` (`uri`, `path`, `file`) for cross-layer identity. This keeps **domain Origin** for diagnostics/AST provenance and **program provenance** focused on mapping edges.
 
 ### 4.2 Strict boundaries for “who owns spans”
 
