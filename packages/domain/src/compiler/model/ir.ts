@@ -653,6 +653,11 @@ export interface BadExpression {
   message?: string;
   /** Optional provenance for diagnostics (parse failures, etc.). */
   origin?: Origin | Provenance | null;
+  /**
+   * Tooling note: LSP/overlay emitters may recover by emitting a TS-safe placeholder
+   * mapped to this span (and surfacing a parser diagnostic) to keep overlays valid
+   * while still pointing squiggles at the template location.
+   */
 }
 
 /**

@@ -115,15 +115,26 @@ describe("Overlay mapped emitter", () => {
         { path: "$parent.$parent" },
       ],
     },
+    {
+      name: "bad expression placeholder",
+      ast: {
+        $kind: "BadExpression",
+        span: { start: 10, end: 14 },
+        text: "oops",
+        message: "parse error",
+        origin: null,
+      },
+      expectCode: "undefined/*bad*/",
+    },
   ];
 
   for (const c of cases) {
     test(c.name, () => {
-      const ast = parse(c.src, c.type ?? "IsProperty");
+      const ast = c.ast ?? parse(c.src, c.type ?? "IsProperty");
       const emitted = emitMappedExpression(ast);
       assert.ok(emitted, "expected emit result");
       assert.ok(typeof emitted.code === "string" && emitted.code.length > 0);
-      assert.ok(Array.isArray(emitted.segments) && emitted.segments.length > 0);
+      assert.ok(Array.isArray(emitted.segments));
       emitted.segments.forEach((seg) => {
         assert.ok(seg.path && typeof seg.path === "string");
         assert.ok(typeof seg.span.start === "number" && typeof seg.span.end === "number");
@@ -133,6 +144,11 @@ describe("Overlay mapped emitter", () => {
         for (const exp of c.expectSegments) {
           assert.ok(paths.includes(exp.path), `expected path ${exp.path} in segments: ${paths.join(", ")}`);
         }
+      }
+      if (c.expectCode) {
+        assert.equal(emitted.code, c.expectCode);
+        assert.equal(emitted.segments.length, 0);
+        assert.ok(emitted.mappings.some((m) => m.source.start === (c.ast?.span.start ?? 0) && m.source.end === (c.ast?.span.end ?? 0)));
       }
     });
   }
