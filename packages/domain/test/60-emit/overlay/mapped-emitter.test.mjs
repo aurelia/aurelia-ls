@@ -95,6 +95,26 @@ describe("Overlay mapped emitter", () => {
       name: "call function optional",
       src: "fn?.(foo)",
     },
+    {
+      name: "optional + keyed span/path",
+      src: "foo?.bar?.baz[qux]",
+      expectSegments: [
+        { path: "foo.bar.baz.qux" },
+        { path: "foo.bar.baz" },
+        { path: "foo.bar" },
+        { path: "foo" },
+        { path: "qux" },
+      ],
+    },
+    {
+      name: "$parent hop path",
+      src: "$parent.$parent.vm.foo",
+      expectSegments: [
+        { path: "$parent.$parent.vm.foo" },
+        { path: "$parent.$parent.vm" },
+        { path: "$parent.$parent" },
+      ],
+    },
   ];
 
   for (const c of cases) {
@@ -108,6 +128,12 @@ describe("Overlay mapped emitter", () => {
         assert.ok(seg.path && typeof seg.path === "string");
         assert.ok(typeof seg.span.start === "number" && typeof seg.span.end === "number");
       });
+      if (c.expectSegments) {
+        const paths = emitted.segments.map((s) => s.path);
+        for (const exp of c.expectSegments) {
+          assert.ok(paths.includes(exp.path), `expected path ${exp.path} in segments: ${paths.join(", ")}`);
+        }
+      }
     });
   }
 });

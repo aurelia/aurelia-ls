@@ -216,15 +216,17 @@ function emitAccessScope(node: AccessScopeExpression): EmitResult {
   const code = node.name ? `${base}.${node.name}` : base;
   const pathBase = pathPrefix(node.ancestor);
   const path = node.name ? (pathBase ? `${pathBase}.${node.name}` : node.name) : pathBase || undefined;
-  const segments: OverlayLambdaSegment[] = node.name && path
-    ? [{
+  const segments: OverlayLambdaSegment[] = [];
+  if (pathBase) {
+    segments.push({ kind: "member", path: pathBase, span: spanFromBounds(2, base.length) });
+  }
+  if (node.name && path) {
+    segments.push({
       kind: "member",
       path,
       span: spanFromBounds(base.length + 1, base.length + 1 + node.name.length),
-    }]
-    : path
-      ? [{ kind: "member", path, span: spanFromBounds(0, code.length) }]
-      : [];
+    });
+  }
   return combine(node, [code], segments);
 }
 
@@ -233,7 +235,8 @@ function emitAccessMember(node: AccessMemberExpression): EmitResult {
   const head = `${obj.code}${node.optional ? "?." : "."}`;
   const memberStart = head.length;
   const memberSpan = spanFromBounds(memberStart, memberStart + node.name.length);
-  const path = appendPath(obj.segments, node.name);
+  const basePath = deepestPath(obj.segments);
+  const path = basePath ? `${basePath}.${node.name}` : node.name;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
   return combine(node, [obj, head.slice(obj.code.length), node.name], segments);
 }
@@ -244,8 +247,8 @@ function emitAccessKeyed(node: AccessKeyedExpression): EmitResult {
   const head = `${obj.code}${node.optional ? "?." : ""}[`;
   const close = "]";
   const memberSpan = spanFromBounds(head.length, head.length + key.code.length);
-  const keyPath = lastPath(key.segments) ?? key.code;
-  const basePath = lastPath(obj.segments);
+  const keyPath = deepestPath(key.segments) ?? key.code;
+  const basePath = deepestPath(obj.segments);
   const path = basePath ? `${basePath}.${keyPath}` : keyPath;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
   return combine(node, [obj, head.slice(obj.code.length), key, close], segments);
@@ -512,4 +515,13 @@ function lastPath(segments: readonly OverlayLambdaSegment[]): string | undefined
 function pathPrefix(ancestor: number): string {
   if (ancestor <= 0) return "";
   return Array.from({ length: ancestor }, () => "$parent").join(".");
+}
+
+function deepestPath(segments: readonly OverlayLambdaSegment[]): string | undefined {
+  let best: string | undefined;
+  for (const seg of segments) {
+    if (!seg.path) continue;
+    if (!best || seg.path.length > best.length) best = seg.path;
+  }
+  return best;
 }
