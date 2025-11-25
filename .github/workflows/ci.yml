@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Lint
+        run: pnpm lint:domain
+
       - name: Test with coverage
         run: |
           set -o pipefail
