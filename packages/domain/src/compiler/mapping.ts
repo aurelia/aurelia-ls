@@ -1,5 +1,5 @@
 import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateMappingSegment } from "../contracts.js";
-import type { ExprTableEntry, IrModule, SourceSpan, TextSpan } from "./model/ir.js";
+import type { BindingSourceIR, ExprId, ExprTableEntry, IrModule, SourceSpan, TextSpan } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
 import {
@@ -11,6 +11,7 @@ import {
 import { normalizeSpan, spanLength } from "./model/span.js";
 import type { SourceFile } from "./model/source.js";
 import { exprIdMapGet, type ExprIdMap, type ExprIdMapLike } from "./model/identity.js";
+import { isInterpolation } from "./expr-utils.js";
 
 export interface BuildMappingInputs {
   overlayMapping: readonly OverlayEmitMappingEntry[];
@@ -30,27 +31,56 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
   const exprSpanIndex = buildExprSpanIndex(inputs.ir, inputs.fallbackFile);
   const exprSpans = exprSpanIndex.spans;
   const memberHtmlSegments = collectExprMemberSegments(inputs.exprTable ?? [], exprSpans);
+  const interpolationGroups = collectInterpolationGroups(inputs.ir);
 
-  const entries: TemplateMappingEntry[] = inputs.overlayMapping.map((m) => {
+  type OwnedSegment = TemplateMappingSegment & { exprId: ExprId };
+  type OverlayEntry = {
+    exprId: ExprId;
+    htmlSpan: SourceSpan;
+    overlaySpan: TextSpan;
+    frameId?: FrameId;
+    segments: OwnedSegment[];
+  };
+
+  const overlayEntries: OverlayEntry[] = inputs.overlayMapping.map((m) => {
     const htmlSpan = exprSpanIndex.ensure(m.exprId, inputs.fallbackFile);
     const overlaySpan = normalizeSpan(m.span);
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
+    const frameId = exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined;
 
     const segments = buildSegmentPairs(
       m.segments ?? [],
       htmlSegments,
       htmlSpan,
       overlaySpan,
-    );
+    ).map((seg) => ({ ...seg, exprId: m.exprId }));
 
-    return normalizeMappingEntry({
+    return {
       exprId: m.exprId,
       htmlSpan,
       overlaySpan,
-      frameId: exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined,
-      segments: segments.length > 0 ? segments : undefined,
-    });
+      ...(frameId !== undefined ? { frameId } : {}),
+      segments,
+    };
   });
+
+  const segmentsByExpr = new Map<ExprId, OwnedSegment[]>(overlayEntries.map((e) => [e.exprId, e.segments]));
+  const aggregatedSegments = new Map<ExprId, TemplateMappingSegment[] | undefined>();
+
+  for (const entry of overlayEntries) {
+    const groupedSegments = mergeGroupSegments(entry.exprId, interpolationGroups, segmentsByExpr);
+    aggregatedSegments.set(entry.exprId, groupedSegments);
+  }
+
+  const entries: TemplateMappingEntry[] = overlayEntries.map((entry) =>
+    normalizeMappingEntry({
+      exprId: entry.exprId,
+      htmlSpan: entry.htmlSpan,
+      overlaySpan: entry.overlaySpan,
+      ...(entry.frameId !== undefined ? { frameId: entry.frameId } : {}),
+      ...(aggregatedSegments.get(entry.exprId)?.length ? { segments: aggregatedSegments.get(entry.exprId) } : {}),
+    }),
+  );
 
   return { mapping: { kind: "mapping", entries }, exprSpans, spanIndex: exprSpanIndex };
 }
@@ -164,4 +194,120 @@ function clamp(value: number, min: number, max: number): number {
   if (value < min) return min;
   if (value > max) return max;
   return value;
+}
+
+function collectInterpolationGroups(ir: IrModule): Map<ExprId, ExprId[]> {
+  const groups = new Map<ExprId, ExprId[]>();
+  const record = (exprs: readonly { id: ExprId }[] | undefined) => {
+    if (!exprs || exprs.length === 0) return;
+    const ids = exprs.map((e) => e.id);
+    for (const id of ids) {
+      if (!groups.has(id)) groups.set(id, ids);
+    }
+  };
+  const recordSource = (src: BindingSourceIR | undefined) => {
+    if (!src) return;
+    if (isInterpolation(src)) record(src.exprs);
+  };
+
+  for (const t of ir.templates) {
+    for (const row of t.rows ?? []) {
+      for (const ins of row.instructions ?? []) {
+        switch (ins.type) {
+          case "propertyBinding":
+          case "attributeBinding":
+          case "stylePropertyBinding":
+          case "textBinding":
+            recordSource(ins.from);
+            break;
+          case "hydrateTemplateController":
+            for (const p of ins.props ?? []) {
+              if (p.type === "propertyBinding") recordSource(p.from);
+            }
+            if (ins.branch?.kind === "case") {
+              recordSource(ins.branch.expr);
+            }
+            break;
+          case "hydrateLetElement":
+            for (const lb of ins.instructions ?? []) recordSource(lb.from);
+            break;
+          default:
+            break;
+        }
+      }
+    }
+  }
+
+  return groups;
+}
+
+function mergeGroupSegments(
+  exprId: ExprId,
+  groups: Map<ExprId, ExprId[]>,
+  segmentsByExpr: Map<ExprId, (TemplateMappingSegment & { exprId: ExprId })[]>,
+): TemplateMappingSegment[] | undefined {
+  const group = groups.get(exprId) ?? [exprId];
+  const combined: (TemplateMappingSegment & { exprId: ExprId })[] = [];
+  for (const id of group) {
+    const segs = segmentsByExpr.get(id);
+    if (segs) combined.push(...segs);
+  }
+  if (combined.length === 0) return undefined;
+
+  // For multi-expression interpolations, keep only the deepest paths to avoid
+  // duplicating shared roots (e.g., "person" alongside "person.name"/"person.age").
+  const paths = new Map<string, (TemplateMappingSegment & { exprId: ExprId })[]>();
+  for (const seg of combined) {
+    const bucket = paths.get(seg.path);
+    if (bucket) bucket.push(seg);
+    else paths.set(seg.path, [seg]);
+  }
+
+  const isLeaf = (path: string): boolean => {
+    for (const other of paths.keys()) {
+      if (other === path) continue;
+      if (isPathPrefix(path, other)) return false;
+    }
+    return true;
+  };
+
+  const pickBest = (candidates: (TemplateMappingSegment & { exprId: ExprId })[]): TemplateMappingSegment & { exprId: ExprId } => {
+    let best = candidates[0]!;
+    for (let i = 1; i < candidates.length; i += 1) {
+      const current = candidates[i]!;
+      // Prefer segments that belong to the current expression.
+      if (current.exprId === exprId && best.exprId !== exprId) {
+        best = current;
+        continue;
+      }
+      if (best.exprId === exprId && current.exprId !== exprId) continue;
+      const bestHtml = spanLength(best.htmlSpan);
+      const curHtml = spanLength(current.htmlSpan);
+      if (curHtml < bestHtml) {
+        best = current;
+        continue;
+      }
+      const bestOverlay = spanLength(best.overlaySpan);
+      const curOverlay = spanLength(current.overlaySpan);
+      if (curOverlay < bestOverlay) best = current;
+    }
+    return best;
+  };
+
+  const leavesOnly = group.length > 1;
+  const results: TemplateMappingSegment[] = [];
+  for (const [path, segs] of paths.entries()) {
+    if (leavesOnly && !isLeaf(path)) continue;
+    const chosen = pickBest(segs);
+    results.push({ kind: "member", path, htmlSpan: chosen.htmlSpan, overlaySpan: chosen.overlaySpan });
+  }
+
+  return results;
+}
+
+function isPathPrefix(path: string, other: string): boolean {
+  if (path.length >= other.length) return false;
+  if (!other.startsWith(path)) return false;
+  const boundary = other.charAt(path.length);
+  return boundary === "." || boundary === "[";
 }
