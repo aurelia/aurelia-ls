@@ -136,6 +136,72 @@ test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () =>
   assert.equal(innerResult.end, 117);
 });
 
+test("overlay projection scales proportionally when overlay and template spans differ", () => {
+  const provenance = new InMemoryProvenanceIndex();
+  const scaledMapping = {
+    kind: "mapping",
+    entries: [
+      {
+        exprId: "scaled",
+        htmlSpan: { start: 500, end: 530, file: templateUri },
+        overlaySpan: { start: 0, end: 10 },
+      },
+    ],
+  };
+  provenance.addOverlayMapping(templateUri, overlayUri, scaledMapping);
+
+  const hit = provenance.projectGeneratedSpan(overlayUri, { start: 2, end: 4 });
+  assert.ok(hit);
+  assert.equal(hit?.exprId, "scaled");
+  // overlay [0,10] -> html [500,530]; slice [2,4] => ratios 0.2..0.4 => [506,512]
+  assert.equal(hit?.edge.to.span.start, 506);
+  assert.equal(hit?.edge.to.span.end, 512);
+});
+
+test("projectGeneratedSpan breaks ties on member depth after overlap and span length", () => {
+  const provenance = new InMemoryProvenanceIndex();
+  const tieMapping = {
+    kind: "mapping",
+    entries: [
+      {
+        exprId: "shallow",
+        htmlSpan: { start: 100, end: 120, file: templateUri },
+        overlaySpan: { start: 0, end: 20 },
+        segments: [
+          {
+            kind: "member",
+            path: "user",
+            htmlSpan: { start: 100, end: 110, file: templateUri },
+            overlaySpan: { start: 0, end: 10 },
+          },
+        ],
+      },
+      {
+        exprId: "deep",
+        htmlSpan: { start: 200, end: 220, file: templateUri },
+        overlaySpan: { start: 0, end: 20 },
+        segments: [
+          {
+            kind: "member",
+            path: "user.name",
+            htmlSpan: { start: 200, end: 210, file: templateUri },
+            overlaySpan: { start: 0, end: 10 },
+          },
+        ],
+      },
+    ],
+  };
+  provenance.addOverlayMapping(templateUri, overlayUri, tieMapping);
+
+  const hit = provenance.projectGeneratedSpan(overlayUri, { start: 5, end: 8 });
+  assert.ok(hit);
+  assert.equal(hit?.memberPath, "user.name");
+  assert.equal(hit?.exprId, "deep");
+  // overlay [0,10] -> html [200,210]; slice [5,8] => [205,208]
+  assert.equal(hit?.edge.to.span.start, 205);
+  assert.equal(hit?.edge.to.span.end, 208);
+});
+
 test("member specificity prefers deeper member segments when multiple match", () => {
   const provenance = new InMemoryProvenanceIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
@@ -212,17 +278,17 @@ test("ssr mappings expand to provenance edges and project back to template", () 
   assert.ok(htmlSliceHit);
   assert.equal(htmlSliceHit?.edge.kind, "ssrNode");
   assert.equal(htmlSliceHit?.nodeId, "node1");
-  // html [0,20] -> template [200,240]; slice [5,15] => [205,215]
-  assert.equal(htmlSliceHit?.edge.to.span.start, 205);
-  assert.equal(htmlSliceHit?.edge.to.span.end, 215);
+  // SSR edges do not slice; we always map back to the full template span.
+  assert.equal(htmlSliceHit?.edge.to.span.start, 200);
+  assert.equal(htmlSliceHit?.edge.to.span.end, 240);
 
   const manifestOffsetHit = provenance.projectGeneratedOffset(ssrManifestUri, 60);
   assert.ok(manifestOffsetHit);
   assert.equal(manifestOffsetHit?.edge.kind, "ssrNode");
   assert.equal(manifestOffsetHit?.nodeId, "node1");
-  // manifest [40,80] -> template [200,240]; offset 60 => [220,220]
-  assert.equal(manifestOffsetHit?.edge.to.span.start, 220);
-  assert.equal(manifestOffsetHit?.edge.to.span.end, 220);
+  // Offset projection also returns the full template span for SSR nodes.
+  assert.equal(manifestOffsetHit?.edge.to.span.start, 200);
+  assert.equal(manifestOffsetHit?.edge.to.span.end, 240);
 
   assert.ok(provenance.getSsrMapping(templateUri));
   const ssrUris = provenance.getSsrUris(templateUri);
