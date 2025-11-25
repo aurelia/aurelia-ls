@@ -50,9 +50,9 @@ Provenance is expressed as **edges** between `(uri, span)` pairs with optional i
 
 Offset‑based queries that pick the “best” edge for a point:
 
-- From generated → template:
+- From generated -> template:
   - `lookupGenerated(uri, offset): OverlayProvenanceHit | null`
-- From template → generated:
+- From template -> generated:
   - `lookupSource(uri, offset): TemplateProvenanceHit | null`
 
 These are what **TemplateLanguageService** and the server should normally call.
@@ -61,11 +61,12 @@ These are what **TemplateLanguageService** and the server should normally call.
 
 Span‑based projection when callers already have a span:
 
-- Generated → template:
+- Generated -> template:
   - `projectGeneratedOffset(uri, offset): TemplateProvenanceHit | null`
   - `projectGeneratedSpan(uri, span): TemplateProvenanceHit | null`
-- Template → generated:
+- Template -> generated:
   - Add mirrored helpers as needed (e.g. `projectTemplateOffset`, `projectTemplateSpan`) **inside provenance** rather than re‑implementing span math in services. Until then, higher‑level helpers (like `mapOverlaySpanToTemplate`) should be thin wrappers that delegate to provenance.
+- `projectGeneratedOffsetToDocumentSpan` / `projectGeneratedSpanToDocumentSpan` return template‑side `DocumentSpan` directly; use them instead of re‑assembling hits in services.
 
 ### 3.3 Edge selection rules
 
