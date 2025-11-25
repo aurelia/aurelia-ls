@@ -53,5 +53,21 @@
         { "code": "AU1201" }
       ]
     }
+  },
+  {
+    "name": "DG-04 invalid binding expression surfaces AU1203",
+    "markup": "<div title.bind=\"foo(\"></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "foo(", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1203" }
+      ]
+    }
   }
 ]

@@ -9,7 +9,6 @@ import type {
   ArrayLiteralExpression,
   AssignExpression,
   BindingBehaviorExpression,
-  BindingIdentifier,
   CallFunctionExpression,
   CallGlobalExpression,
   CallMemberExpression,
@@ -17,9 +16,6 @@ import type {
   ConditionalExpression,
   IsAssign,
   IsBindingBehavior,
-  IsBinary,
-  IsLeftHandSide,
-  IsUnary,
   ObjectLiteralExpression,
   PrimitiveLiteralExpression,
   TaggedTemplateExpression,
@@ -29,9 +25,6 @@ import type {
   AccessScopeExpression,
   AccessMemberExpression,
   AccessKeyedExpression,
-  AccessBoundaryExpression,
-  AccessThisExpression,
-  AccessGlobalExpression,
   ArrowFunction,
   BadExpression,
   ParenExpression,
@@ -39,15 +32,10 @@ import type {
   BinaryExpression,
   DestructuringAssignmentExpression,
   BindingPattern,
-  BindingPatternDefault,
-  ArrayBindingPattern,
-  BindingPatternHole,
-  ObjectBindingPattern,
-  CustomExpression,
   Interpolation,
 } from "../../../model/ir.js";
 import type { OverlayLambdaSegment } from "./types.js";
-import type { SourceSpan, TextSpan } from "../../../model/span.js";
+import { spanLength, type SourceSpan, type TextSpan } from "../../../model/span.js";
 
 /**
  * Span-aware emission result for a single expression.
@@ -168,29 +156,29 @@ function emitBindingBehavior(node: MappableExpression): EmitResult {
     case "BadExpression":
       // Parser recovery: keep overlay syntactically valid with a TS-safe placeholder
       // while still mapping the authored span for diagnostics.
-      return simpleToken(node, "undefined/*bad*/");
+      return badToken(node, "undefined/*bad*/");
     case "Custom":
       return simpleToken(node, "");
-    default: {
-      const _exhaustive: never = node;
-      return simpleToken(node as BadExpression, "");
-    }
+    default:
+      return simpleToken(node, "");
   }
 }
 
 function emitBindingBehaviorExpr(node: BindingBehaviorExpression): EmitResult {
   const expr = emitBindingBehavior(node.expression);
   const args = emitArgsParts(node.args);
-  const parts: (string | EmitResult)[] = [expr, " & ", node.name];
-  if (args.length) parts.push(":", ...args);
+  const parts: (string | EmitResult)[] = ["__au_bb(", expr, ", ", JSON.stringify(node.name)];
+  if (args.length) parts.push(", ", ...args);
+  parts.push(")");
   return combine(node, parts);
 }
 
 function emitValueConverter(node: ValueConverterExpression): EmitResult {
   const expr = emitBindingBehavior(node.expression);
   const args = emitArgsParts(node.args);
-  const parts: (string | EmitResult)[] = [expr, " | ", node.name];
-  if (args.length) parts.push(":", ...args);
+  const parts: (string | EmitResult)[] = ["__au_vc(", expr, ", ", JSON.stringify(node.name)];
+  if (args.length) parts.push(", ", ...args);
+  parts.push(")");
   return combine(node, parts);
 }
 
@@ -287,7 +275,7 @@ function emitCallFunction(node: CallFunctionExpression): EmitResult {
   const fn = emitBindingBehavior(node.func);
   const args = emitArgsParts(node.args);
   const path = lastPath(fn.segments);
-  const segments: OverlayLambdaSegment[] = path ? [{ kind: "member", path, span: spanFromBounds(0, fn.code.length) }] : [];
+    const segments: OverlayLambdaSegment[] = path ? [{ kind: "member", path, span: spanFromBounds(0, fn.code.length) }] : [];
   return combine(node, [fn, node.optional ? "?." : "", "(", ...args, ")"], segments);
 }
 
@@ -410,7 +398,7 @@ function emitBindingPattern(node: BindingPattern): EmitResult {
       return combine(node, parts);
     }
     default:
-      return simpleToken(node as BadExpression, "");
+      return simpleToken(node, "");
   }
 }
 
@@ -473,6 +461,12 @@ function simpleToken(node: { span: SourceSpan }, text: string): EmitResult {
   };
 }
 
+function badToken(node: BadExpression, text: string): EmitResult {
+  const authoredLength = Math.max(0, spanLength(node.span));
+  const padded = authoredLength > text.length ? text.padEnd(authoredLength, " ") : text;
+  return simpleToken(node, padded);
+}
+
 function shiftSpan(span: TextSpan, by: number): TextSpan {
   return { start: span.start + by, end: span.end + by };
 }
@@ -497,11 +491,6 @@ function ancestorChain(ancestor: number): string {
 function ancestorPath(ancestor: number, name: string): string {
   const prefix = pathPrefix(ancestor);
   return prefix ? `${prefix}.${name}` : name;
-}
-
-function appendPath(segments: OverlayLambdaSegment[], tail: string): string {
-  const last = segments[segments.length - 1];
-  return last?.path ? `${last.path}.${tail}` : tail;
 }
 
 function lastPath(segments: readonly OverlayLambdaSegment[]): string | undefined {
