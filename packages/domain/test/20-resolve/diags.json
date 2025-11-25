@@ -1,0 +1,14 @@
+[
+  {
+    "name": "R-D-02 repeat with unknown tail option surfaces AU1106",
+    "markup": "<ul repeat.for=\"item of items; bogus: true\"></ul>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ],
+      "diags": [
+        { "code": "AU1106" }
+      ]
+    }
+  }
+]

@@ -1,382 +1,557 @@
 import {
-  createConnection, ProposedFeatures, TextDocuments, TextDocumentSyncKind,
-  DiagnosticSeverity, type InitializeParams, type InitializeResult,
+  createConnection,
+  ProposedFeatures,
+  TextDocuments,
+  TextDocumentSyncKind,
+  DiagnosticSeverity as LspDiagnosticSeverity,
+  DiagnosticTag,
+  type InitializeParams,
+  type InitializeResult,
+  type CompletionItem,
+  type Hover,
+  type Definition,
+  type Location,
+  type WorkspaceEdit,
+  type ReferenceParams,
+  type RenameParams,
+  type TextDocumentPositionParams,
+  type CodeAction,
+  type CodeActionParams,
+  type Position,
+  type Diagnostic,
+  type Range,
+  type DidChangeWatchedFilesParams,
+  type FileEvent,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as ts from "typescript";
-
+import path from "node:path";
+import fs from "node:fs";
 import {
-  compileTemplateToOverlay, PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX
+  PRELUDE_TS,
+  canonicalDocumentUri,
+  deriveTemplatePaths,
+  type DocumentSpan,
+  type DocumentUri,
+  type OverlayBuildArtifact,
+  type SsrBuildArtifact,
+  type TemplateLanguageDiagnostic,
+  type TemplateLanguageDiagnostics,
+  type TemplateLanguageService,
+  type Location as TemplateLocation,
+  type TextEdit as TemplateTextEdit,
+  type TextRange as TemplateTextRange,
+  type HoverInfo,
 } from "@aurelia-ls/domain";
-import type { VmReflection } from "@aurelia-ls/domain";
+import { createPathUtils } from "./services/paths.js";
+import { OverlayFs } from "./services/overlay-fs.js";
+import { TsService } from "./services/ts-service.js";
+import { TsServicesAdapter } from "./services/typescript-services.js";
+import { AureliaProjectIndex } from "./services/project-index.js";
+import { TemplateWorkspace } from "./services/template-workspace.js";
+import { VmReflectionService } from "./services/vm-reflection.js";
+import type { Logger } from "./services/types.js";
 
-/* ============================================================================
- * Logging (verbose)
+/* =============================================================================
+ * Logging + LSP wiring
  * ========================================================================== */
 const connection = createConnection(ProposedFeatures.all);
-const log  = (m: string) => connection.console.log(`[aurelia-ls] ${m}`);
-const info = (m: string) => connection.console.info(`[aurelia-ls] ${m}`);
-const warn = (m: string) => connection.console.warn(`[aurelia-ls] ${m}`);
-const err  = (m: string) => connection.console.error(`[aurelia-ls] ${m}`);
-
 const documents = new TextDocuments(TextDocument);
 let workspaceRoot: string | null = null;
 
-/* ============================================================================
- * Canonicalization & in-memory FS for TS LS
- * ========================================================================== */
-const CASE_SENSITIVE = ts.sys.useCaseSensitiveFileNames ?? false;
-const normalizeSlashes = (f: string) => f.replace(/\\/g, '/');
-const canonical = (f: string) => {
-  const s = normalizeSlashes(f);
-  return CASE_SENSITIVE ? s : s.toLowerCase();
+const logger: Logger = {
+  log: (m: string) => connection.console.log(`[aurelia-ls] ${m}`),
+  info: (m: string) => connection.console.info(`[aurelia-ls] ${m}`),
+  warn: (m: string) => connection.console.warn(`[aurelia-ls] ${m}`),
+  error: (m: string) => connection.console.error(`[aurelia-ls] ${m}`),
 };
 
-type Snapshot = { text: string; version: number };
-const overlayFiles   = new Map<string, Snapshot>();
-const scriptFileKeys = new Set<string>();
-const htmlToOverlay  = new Map<string, { path: string; text: string }>();
-
-let projectVersion = 1;
-let PRELUDE_PATH = "";
-
-/* ============================================================================
- * TS Language Service plumbing
+/* =============================================================================
+ * Core services
  * ========================================================================== */
-function compilerOptions(): ts.CompilerOptions {
-  return {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    strict: true,
-    allowJs: true,
-    checkJs: false,
-    skipLibCheck: true,
-    resolveJsonModule: true,
-    noEmit: true,
-    verbatimModuleSyntax: true,
-    allowImportingTsExtensions: true, // crucial for import("./my-app.ts")
-    types: [],
-  };
-}
+const paths = createPathUtils();
+const overlayFs = new OverlayFs(paths);
+const tsService = new TsService(overlayFs, paths, logger);
+const tsAdapter = new TsServicesAdapter(tsService, paths);
+const vmReflection = new VmReflectionService(tsService, paths, logger);
 
-const host: ts.LanguageServiceHost = {
-  getCompilationSettings: () => compilerOptions(),
-  getCurrentDirectory: () => workspaceRoot ?? process.cwd(),
-  getDefaultLibFileName: (o) => ts.getDefaultLibFilePath(o),
-  getProjectVersion: () => String(projectVersion),
-  useCaseSensitiveFileNames: () => CASE_SENSITIVE,
+let projectIndex: AureliaProjectIndex;
+let workspace: TemplateWorkspace;
 
-  getScriptFileNames: () => Array.from(scriptFileKeys),
-  getScriptVersion: (f) => overlayFiles.get(canonical(f))?.version.toString() ?? "0",
-
-  getScriptSnapshot: (f) => {
-    const key = canonical(f);
-    const v = overlayFiles.get(key);
-    if (v) {
-      log(`[host] getScriptSnapshot HIT overlay: ${f} → ${key}`);
-      return ts.ScriptSnapshot.fromString(v.text);
-    }
-    try {
-      if (fs.existsSync(f)) {
-        log(`[host] getScriptSnapshot HIT disk: ${f}`);
-        return ts.ScriptSnapshot.fromString(fs.readFileSync(f, "utf8"));
-      }
-    } catch {}
-    warn(`[host] getScriptSnapshot MISS: ${f} → ${key}`);
-    return undefined;
-  },
-
-  fileExists: (f) => {
-    const key = canonical(f);
-    const exists = overlayFiles.has(key) || fs.existsSync(f);
-    if (!exists) warn(`[host] fileExists MISS: ${f} → ${key}`);
-    return exists;
-  },
-  readFile: (f) => overlayFiles.get(canonical(f))?.text ?? (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : undefined),
-  readDirectory: ts.sys.readDirectory,
-  directoryExists: ts.sys.directoryExists,
-  getDirectories: ts.sys.getDirectories,
-
-  realpath: (p) => (overlayFiles.has(canonical(p)) ? p : (ts.sys.realpath ? ts.sys.realpath(p) : p)),
-
-  // Optional instrumentation of module resolution
-  resolveModuleNameLiterals(lits, containingFile, redirected, options) {
-    const modHost: ts.ModuleResolutionHost = {
-      fileExists: (f) => overlayFiles.has(canonical(f)) || fs.existsSync(f),
-      readFile:   (f) => overlayFiles.get(canonical(f))?.text ?? (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : undefined),
-      directoryExists: ts.sys.directoryExists,
-      realpath: (p) =>
-        overlayFiles.has(canonical(p))
-          ? p
-          : ts.sys.realpath ? ts.sys.realpath(p) : p,
-      getCurrentDirectory: () => workspaceRoot ?? process.cwd(),
-    };
-    return lits.map(lit => {
-      const res = ts.resolveModuleName(lit.text, containingFile, options, modHost);
-      if (res.resolvedModule) {
-        log(`resolve OK '${lit.text}' from '${containingFile}' → '${res.resolvedModule.resolvedFileName}'`);
-      } else {
-        warn(`resolve FAIL '${lit.text}' from '${containingFile}'`);
-      }
-      return { resolvedModule: res.resolvedModule } as ts.ResolvedModuleWithFailedLookupLocations;
-    });
-  },
-};
-
-let tsService: ts.LanguageService = ts.createLanguageService(host);
-function recreateLanguageService() {
-  try { tsService.dispose(); } catch {}
-  tsService = ts.createLanguageService(host);
-  log(`LanguageService recreated (projectVersion=${projectVersion})`);
-}
-
-/* ============================================================================
- * Parsers (DI) — one-time
- * ========================================================================== */
-const exprParser = getExpressionParser();
-const attrParser = DEFAULT_SYNTAX;
-
-/* ============================================================================
+/* =============================================================================
  * Helpers
  * ========================================================================== */
 function ensurePrelude() {
   const root = workspaceRoot ?? process.cwd();
-  PRELUDE_PATH = path.join(root, ".aurelia", "__prelude.d.ts");
-  const key = canonical(PRELUDE_PATH);
-  if (!overlayFiles.has(key)) {
-    overlayFiles.set(key, { text: PRELUDE_TS, version: 1 });
-    scriptFileKeys.add(key);
-    projectVersion++;
-    recreateLanguageService();
-    log(`Prelude installed @ ${PRELUDE_PATH}`);
-  }
+  const preludePath = path.join(root, ".aurelia", "__prelude.d.ts");
+  tsService.ensurePrelude(preludePath, PRELUDE_TS);
 }
 
-function upsertOverlay(fileAbs: string, text: string) {
-  const key = canonical(fileAbs);
-  const prev = overlayFiles.get(key);
-  if (!prev) {
-    scriptFileKeys.add(key);
-    projectVersion++;
-    log(`Overlay added root: ${fileAbs}`);
-  }
-  overlayFiles.set(key, { text, version: (prev?.version ?? 0) + 1 });
-  projectVersion++;
-  recreateLanguageService();
-  log(`Overlay updated: ${fileAbs} (len=${text.length})`);
-}
-
-function uriToFsPath(uri: string): string {
-  return URI.parse(uri).fsPath;
-}
-function spanToRange(doc: TextDocument, start: number, end: number) {
-  return { start: doc.positionAt(start), end: doc.positionAt(end) };
-}
-function pascalFromKebab(n: string): string {
-  return n.split(/[-_]/g).filter(Boolean)
-          .map(s => (s[0] ? s[0].toUpperCase() + s.slice(1) : s)).join("");
-}
-function detectVmSpecifier(htmlPath: string, base: string): string {
-  const dir = path.dirname(htmlPath);
-  const candidates = [".ts", ".tsx", ".mts", ".cts", ".d.ts", ".js", ".jsx", ".mjs", ".cjs"];
-  for (const ext of candidates) {
-    const p = path.join(dir, `${base}${ext}`);
-    if (fs.existsSync(p)) return `./${base}${ext}`;
-  }
-  return `./${base}`;
-}
-function preview(s: string, n = 200) { return s.length <= n ? s : s.slice(0, n) + " …"; }
-function flattenTsMessage(msg: string | ts.DiagnosticMessageChain): string {
-  if (typeof msg === "string") return msg;
-  const parts: string[] = [msg.messageText];
-  let next = msg.next?.[0];
-  while (next) { parts.push(next.messageText); next = next.next?.[0]; }
-  return parts.join(" ");
-}
-function tsSeverityToLsp(cat: ts.DiagnosticCategory): DiagnosticSeverity {
-  switch (cat) {
-    case ts.DiagnosticCategory.Error: return DiagnosticSeverity.Error;
-    case ts.DiagnosticCategory.Warning: return DiagnosticSeverity.Warning;
-    case ts.DiagnosticCategory.Suggestion: return DiagnosticSeverity.Hint;
-    case ts.DiagnosticCategory.Message: return DiagnosticSeverity.Information;
-    default: return DiagnosticSeverity.Error;
-  }
-}
-
-/** Force create the SourceFile inside Program, then return it. */
-function forceOverlaySourceFile(overlayPathCanon: string): ts.SourceFile | undefined {
-  try {
-    const syn = tsService.getSyntacticDiagnostics(overlayPathCanon);
-    log(`syntactic diags for overlay: ${syn.length}`);
-  } catch (e: any) {
-    err(`getSyntacticDiagnostics threw: ${e?.message || e}`);
-  }
-  const program = tsService.getProgram();
-  return program?.getSourceFile(overlayPathCanon);
-}
-
-/* ============================================================================
- * Core: compile + overlay + diagnostics
- * ========================================================================== */
-async function compileAndUpdateOverlay(doc: TextDocument) {
-  const fsPath = uriToFsPath(doc.uri);
-  const lang = (doc as any).languageId ?? "<unknown>";
-  log(`compileAndUpdateOverlay: uri=${doc.uri} fsPath=${fsPath} lang=${lang}`);
-  if (path.extname(fsPath).toLowerCase() !== ".html") {
-    log(`skip (not .html): ${fsPath}`);
-    return;
-  }
-
-  const base = path.basename(fsPath, ".html");
-  const vmTypeNameGuess = pascalFromKebab(base);
-  const vmSpecifier = detectVmSpecifier(fsPath, base);
-  info(`vmType: ${vmTypeNameGuess}, vmSpecifier: ${vmSpecifier}`);
-
-  const vm: VmReflection = {
-    getRootVmTypeExpr() { return `import("${vmSpecifier}").${vmTypeNameGuess}`; },
-    getSyntheticPrefix() { return "__AU_TTC_"; },
+function workspaceProgramOptions() {
+  const semantics = projectIndex.currentSemantics();
+  const resourceGraph = projectIndex.currentResourceGraph();
+  const options: {
+    vm: VmReflectionService;
+    isJs: boolean;
+    semantics: typeof semantics;
+    resourceGraph: typeof resourceGraph;
+    resourceScope?: typeof resourceGraph.root | null;
+  } = {
+    vm: vmReflection,
+    isJs: false,
+    semantics,
+    resourceGraph,
   };
+  const resourceScope = semantics.defaultScope ?? resourceGraph.root ?? null;
+  if (resourceScope !== null) options.resourceScope = resourceScope;
+  return options;
+}
 
-  // Domain pipeline (HTML → IR → Linked → Scope → Plan → Emit)
-  // e.g. :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3} :contentReference[oaicite:4]{index=4} :contentReference[oaicite:5]{index=5} :contentReference[oaicite:6]{index=6}
-  let result: ReturnType<typeof compileTemplateToOverlay> | null = null;
-  try {
-    result = compileTemplateToOverlay({
-      html: doc.getText(),
-      templateFilePath: fsPath,
-      isJs: false,
-      vm,
-      attrParser,
-      exprParser,
-    });
-  } catch (e: any) {
-    err(`compileTemplateToOverlay threw: ${e?.stack || e}`);
-    connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
-    return;
-  }
-  if (!result) { warn(`no overlay result for ${fsPath}`); return; }
-
-  upsertOverlay(result.overlayPath, result.text);
-  htmlToOverlay.set(canonical(fsPath), { path: result.overlayPath, text: result.text });
-
-  const accessCount = (result.text.match(/__au\$access/g) || []).length;
-  log(`overlay@${result.overlayPath} len=${result.text.length} calls=${accessCount} preview:\n${preview(result.text)}`);
-  log(`calls mapping entries: ${result.calls.length}`);
-
-  const overlayCanon = canonical(result.overlayPath);
-  const sf = forceOverlaySourceFile(overlayCanon);
-  const program = tsService.getProgram();
-  const roots = (program?.getRootFileNames() ?? []).map(canonical);
-  log(`TS roots (${roots.length}):\n - ${roots.join("\n - ")}`);
-
-  if (!program || !sf) {
-    warn(`overlay SourceFile not ready in program: ${overlayCanon}`);
-    connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
-    return;
-  }
-
-  const diags = ts.getPreEmitDiagnostics(program, sf);
-  log(`overlay diagnostics: ${diags.length}`);
-
-  const htmlDiags = [];
-  for (const d of diags) {
-    if (d.start == null || d.length == null) continue;
-    const start = d.start;
-    const call = result.calls.find((c) => start >= c.overlayStart && start <= c.overlayEnd);
-    if (!call) continue;
-
-    const range = spanToRange(doc, call.htmlSpan.start, call.htmlSpan.end);
-    const message = flattenTsMessage(d.messageText);
-    const severity = tsSeverityToLsp(d.category);
-    htmlDiags.push({ range, message, severity, source: "aurelia-ttc" });
-  }
-
-  log(`remapped diagnostics: ${htmlDiags.length}`);
-  connection.sendDiagnostics({ uri: doc.uri, diagnostics: htmlDiags });
-
-  connection.sendNotification("aurelia/overlayReady", {
-    uri: doc.uri,
-    overlayPath: result.overlayPath,
-    calls: result.calls.length,
-    overlayLen: result.text.length,
-    diags: htmlDiags.length,
+function createWorkspaceFromIndex(): TemplateWorkspace {
+  return new TemplateWorkspace({
+    program: workspaceProgramOptions(),
+    language: { typescript: tsAdapter },
+    fingerprint: projectIndex.currentFingerprint(),
   });
 }
 
-/* ============================================================================
- * Custom requests (overlay preview + dump state)
- * ========================================================================== */
-type GetOverlayParams = { uri?: string } | string | null;
-type GetOverlayResult = { overlayPath: string; text: string } | null;
+function syncWorkspaceWithIndex(): void {
+  projectIndex.refresh();
+  const updated = workspace.reconfigure({
+    program: workspaceProgramOptions(),
+    language: { typescript: tsAdapter },
+    fingerprint: projectIndex.currentFingerprint(),
+  });
+  if (updated) {
+    logger.info(`[workspace] reconfigured fingerprint=${workspace.fingerprint}`);
+  }
+}
 
-connection.onRequest("aurelia/getOverlay", async (params: GetOverlayParams): Promise<GetOverlayResult> => {
-  let uri: string | undefined;
-  if (typeof params === "string") uri = params;
-  else if (params && typeof params === "object") uri = (params as any).uri;
+async function refreshAllOpenDocuments(reason: "open" | "change", options?: { skipSync?: boolean }): Promise<void> {
+  const openDocs = documents.all();
+  for (const doc of openDocs) {
+    await refreshDocument(doc, reason, options);
+  }
+}
 
-  log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
+function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
+  for (const change of changes) {
+    const fsPath = URI.parse(change.uri).fsPath;
+    const base = path.basename(fsPath).toLowerCase();
+    if (base === "tsconfig.json") return true;
+    if (base === "jsconfig.json") return true;
+    if (base.startsWith("tsconfig.") && base.endsWith(".json")) return true;
+  }
+  return false;
+}
 
-  if (uri) {
-    const fsPath = uriToFsPath(uri);
-    const key = canonical(fsPath);
-    let rec = htmlToOverlay.get(key);
+async function reloadProjectConfiguration(reason: string): Promise<void> {
+  if (!projectIndex || !workspace) return;
+  const beforeVersion = tsService.getProjectVersion();
 
-    if (!rec) {
-      log(`overlay missing for ${fsPath} — compiling on demand`);
-      const doc = documents.get(uri);
-      if (doc) await compileAndUpdateOverlay(doc);
-      rec = htmlToOverlay.get(key);
-    }
+  tsService.configure({ workspaceRoot });
+  syncWorkspaceWithIndex();
 
-    if (rec) {
-      log(`overlay found for ${fsPath} → ${rec.path} (len=${rec.text.length})`);
-      return { overlayPath: rec.path, text: rec.text };
-    }
-    warn(`overlay still not found for ${fsPath}`);
-    return null;
+  const versionChanged = tsService.getProjectVersion() !== beforeVersion;
+  const label = `${reason}; version=${tsService.getProjectVersion()} fingerprint=${workspace.fingerprint}`;
+
+  if (versionChanged) {
+    logger.info(`[workspace] tsconfig reload (${label})`);
+  } else {
+    logger.info(`[workspace] tsconfig reload (${label}) [no host change]`);
   }
 
-  const last = Array.from(htmlToOverlay.values()).pop();
-  return last ? { overlayPath: last.path, text: last.text } : null;
+  await refreshAllOpenDocuments("change", { skipSync: true });
+}
+
+function toLspUri(uri: DocumentUri): string {
+  const canonical = canonicalDocumentUri(uri);
+  return URI.file(canonical.path).toString();
+}
+
+function guessLanguage(uri: DocumentUri): string {
+  if (uri.endsWith(".ts") || uri.endsWith(".js")) return "typescript";
+  if (uri.endsWith(".json")) return "json";
+  return "html";
+}
+
+function lookupText(uri: DocumentUri): string | null {
+  const canonical = canonicalDocumentUri(uri);
+  const snap = workspace.program.sources.get(canonical.uri);
+  if (snap) return snap.text;
+  const overlay = overlayFs.snapshot(paths.canonical(canonical.path));
+  if (overlay) return overlay.text;
+  try {
+    return fs.readFileSync(canonical.path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function spanToRange(loc: DocumentSpan): Range | null {
+  const text = lookupText(loc.uri);
+  if (!text) return null;
+  const doc = TextDocument.create(toLspUri(loc.uri), guessLanguage(loc.uri), 0, text);
+  return { start: doc.positionAt(loc.span.start), end: doc.positionAt(loc.span.end) };
+}
+
+function toRange(range: TemplateTextRange): Range {
+  return {
+    start: { line: range.start.line, character: range.start.character },
+    end: { line: range.end.line, character: range.end.character },
+  };
+}
+
+function toLspSeverity(sev: TemplateLanguageDiagnostic["severity"]): LspDiagnosticSeverity {
+  switch (sev) {
+    case "warning":
+      return LspDiagnosticSeverity.Warning;
+    case "info":
+      return LspDiagnosticSeverity.Information;
+    default:
+      return LspDiagnosticSeverity.Error;
+  }
+}
+
+function toLspTags(tags: readonly string[] | undefined): DiagnosticTag[] | undefined {
+  if (!tags?.length) return undefined;
+  const mapped: DiagnosticTag[] = [];
+  for (const tag of tags) {
+    if (tag === "unnecessary") mapped.push(DiagnosticTag.Unnecessary);
+    if (tag === "deprecated") mapped.push(DiagnosticTag.Deprecated);
+  }
+  return mapped.length ? mapped : undefined;
+}
+
+function mapDiagnostics(diags: TemplateLanguageDiagnostics): Diagnostic[] {
+  const mapped: Diagnostic[] = [];
+  for (const diag of diags.all) {
+    const range = diag.location ? spanToRange(diag.location) : null;
+    if (!range) continue;
+    const tags = diag.tags ? toLspTags(diag.tags) : undefined;
+    const related = diag.related
+      ?.map((rel) => {
+        if (!rel.location) return null;
+        const relRange = spanToRange(rel.location);
+        return relRange ? { message: rel.message, location: { uri: toLspUri(rel.location.uri), range: relRange } } : null;
+      })
+      .filter((r): r is NonNullable<typeof r> => Boolean(r));
+
+    const base: Diagnostic = {
+      range,
+      message: diag.message,
+      severity: toLspSeverity(diag.severity),
+      code: diag.code,
+      source: diag.source,
+    };
+
+    if (related?.length) base.relatedInformation = related;
+    if (tags) base.tags = tags;
+
+    mapped.push(base);
+  }
+  return mapped;
+}
+
+function mapCompletions(items: ReturnType<TemplateLanguageService["getCompletions"]>): CompletionItem[] {
+  return items.map((item) => {
+    const completion: CompletionItem = { label: item.label };
+    if (item.detail) completion.detail = item.detail;
+    if (item.documentation) completion.documentation = item.documentation;
+    if (item.sortText) completion.sortText = item.sortText;
+    if (item.insertText) completion.insertText = item.insertText;
+    if (item.range) {
+      completion.textEdit = { range: toRange(item.range), newText: item.insertText ?? item.label };
+    }
+    return completion;
+  });
+}
+
+function mapHover(hover: HoverInfo | null): Hover | null {
+  if (!hover) return null;
+  return {
+    contents: { kind: "markdown", value: hover.contents },
+    range: toRange(hover.range),
+  };
+}
+
+function mapLocations(locs: readonly TemplateLocation[] | null | undefined): Location[] {
+  return (locs ?? []).map((loc) => ({ uri: toLspUri(loc.uri), range: toRange(loc.range) }));
+}
+
+function mapWorkspaceEdit(edits: readonly TemplateTextEdit[]): WorkspaceEdit | null {
+  if (!edits.length) return null;
+  const changes: Record<string, { range: Range; newText: string }[]> = {};
+  for (const edit of edits) {
+    const uri = toLspUri(edit.uri);
+    const lspEdit = { range: toRange(edit.range), newText: edit.newText };
+    if (!changes[uri]) changes[uri] = [];
+    changes[uri].push(lspEdit);
+  }
+  return { changes };
+}
+
+function overlayPathOptions(): { isJs: boolean; overlayBaseName?: string } {
+  return workspace.program.options.overlayBaseName === undefined
+    ? { isJs: workspace.program.options.isJs }
+    : { isJs: workspace.program.options.isJs, overlayBaseName: workspace.program.options.overlayBaseName };
+}
+
+function ensureProgramDocument(uri: string): TextDocument | null {
+  const live = documents.get(uri);
+  if (live) {
+    vmReflection.setActiveTemplate(canonicalDocumentUri(uri).path);
+    workspace.change(live);
+    return live;
+  }
+  const snap = workspace.ensureFromFile(uri);
+  if (!snap) return null;
+  vmReflection.setActiveTemplate(canonicalDocumentUri(uri).path);
+  return TextDocument.create(uri, "html", snap.version, snap.text);
+}
+
+function materializeOverlay(uri: DocumentUri | string): OverlayBuildArtifact | null {
+  const canonical = canonicalDocumentUri(uri);
+  vmReflection.setActiveTemplate(canonical.path);
+  if (!workspace.snapshot(canonical.uri)) {
+    const doc = ensureProgramDocument(uri);
+    if (!doc) return null;
+  }
+  const artifact = workspace.buildService.getOverlay(canonical.uri);
+  tsService.upsertOverlay(artifact.overlay.path, artifact.overlay.text);
+  return artifact;
+}
+
+function materializeSsr(uri: DocumentUri | string): SsrBuildArtifact | null {
+  const canonical = canonicalDocumentUri(uri);
+  vmReflection.setActiveTemplate(canonical.path);
+  if (!workspace.snapshot(canonical.uri)) {
+    const doc = ensureProgramDocument(uri);
+    if (!doc) return null;
+  }
+  return workspace.buildService.getSsr(canonical.uri);
+}
+
+type MaybeUriParam = { uri?: string } | string | null;
+
+function uriFromParam(params: MaybeUriParam): string | undefined {
+  if (typeof params === "string") return params;
+  if (params && typeof params === "object" && typeof params.uri === "string") return params.uri;
+  return undefined;
+}
+
+async function refreshDocument(doc: TextDocument, reason: "open" | "change", options?: { skipSync?: boolean }) {
+  try {
+    if (!options?.skipSync) {
+      syncWorkspaceWithIndex();
+    }
+    const canonical = canonicalDocumentUri(doc.uri);
+    if (reason === "open") {
+      workspace.open(doc);
+    } else {
+      workspace.change(doc);
+    }
+    const overlay = materializeOverlay(canonical.uri);
+
+    const diagnostics = workspace.languageService.getDiagnostics(canonical.uri);
+    const lspDiagnostics = mapDiagnostics(diagnostics);
+    await connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
+
+    const compilation = workspace.program.getCompilation(canonical.uri);
+    await connection.sendNotification("aurelia/overlayReady", {
+      uri: doc.uri,
+      overlayPath: overlay?.overlay.path,
+      calls: overlay?.calls.length ?? 0,
+      overlayLen: overlay?.overlay.text.length ?? 0,
+      diags: lspDiagnostics.length,
+      meta: compilation.meta,
+    });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.stack ?? e.message : String(e);
+    logger.error(`refreshDocument failed: ${message}`);
+    await connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
+  }
+}
+
+/* =============================================================================
+ * Custom requests (overlay/SSR preview + dump state)
+ * ========================================================================== */
+connection.onRequest("aurelia/getOverlay", (params: MaybeUriParam) => {
+  const uri = uriFromParam(params);
+  logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
+  if (!uri) return null;
+  syncWorkspaceWithIndex();
+  const artifact = materializeOverlay(uri);
+  return artifact
+    ? { fingerprint: workspace.fingerprint, artifact }
+    : null;
 });
 
-connection.onRequest("aurelia/dumpState", () => {
-  const roots = tsService.getProgram()?.getRootFileNames() ?? [];
+connection.onRequest("aurelia/getMapping", (params: MaybeUriParam) => {
+  const uri = uriFromParam(params);
+  if (!uri) return null;
+  syncWorkspaceWithIndex();
+  const canonical = canonicalDocumentUri(uri);
+  const doc = ensureProgramDocument(uri);
+  if (!doc) return null;
+  const mapping = workspace.program.getMapping(canonical.uri);
+  if (!mapping) return null;
+  const derived = deriveTemplatePaths(canonical.uri, overlayPathOptions());
+  return { overlayPath: derived.overlay.path, mapping };
+});
+
+connection.onRequest("aurelia/queryAtPosition", (params: { uri: string; position: Position }) => {
+  const uri = params?.uri;
+  if (!uri || !params.position) return null;
+  syncWorkspaceWithIndex();
+  const doc = ensureProgramDocument(uri);
+  if (!doc) return null;
+  const canonical = canonicalDocumentUri(uri);
+  const query = workspace.program.getQuery(canonical.uri);
+  const offset = doc.offsetAt(params.position);
   return {
-    workspaceRoot,
-    caseSensitive: CASE_SENSITIVE,
-    projectVersion,
-    prelude: PRELUDE_PATH,
-    overlayRoots: Array.from(scriptFileKeys),
-    overlays: Array.from(overlayFiles.keys()),
-    htmlToOverlay: Array.from(htmlToOverlay.entries()),
-    programRoots: roots,
+    expr: query.exprAt(offset),
+    node: query.nodeAt(offset),
+    controller: query.controllerAt(offset),
+    bindables: query.nodeAt(offset) ? query.bindablesFor(query.nodeAt(offset)!) : null,
+    mappingSize: workspace.program.getMapping(canonical.uri)?.entries.length ?? 0,
   };
 });
 
-/* ============================================================================
+connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => {
+  const uri = uriFromParam(params);
+  if (!uri) return null;
+  syncWorkspaceWithIndex();
+  const artifact = materializeSsr(uri);
+  if (!artifact) return null;
+  return {
+    fingerprint: workspace.fingerprint,
+    artifact,
+  };
+});
+
+connection.onRequest("aurelia/dumpState", () => {
+  const roots = tsService.getService().getProgram()?.getRootFileNames() ?? [];
+  return {
+    workspaceRoot,
+    caseSensitive: paths.isCaseSensitive(),
+    projectVersion: tsService.getProjectVersion(),
+    overlayRoots: overlayFs.listScriptRoots(),
+    overlays: overlayFs.listOverlays(),
+    programRoots: roots,
+    programCache: workspace.program.getCacheStats(),
+  };
+});
+
+/* =============================================================================
+ * LSP feature wiring (completions/hover/defs/refs/rename/code actions)
+ * ========================================================================== */
+connection.onCompletion((params): CompletionItem[] => {
+  const doc = ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return [];
+  const canonical = canonicalDocumentUri(doc.uri);
+  const completions = workspace.languageService.getCompletions(canonical.uri, params.position);
+  return mapCompletions(completions);
+});
+
+connection.onHover((params: TextDocumentPositionParams): Hover | null => {
+  const doc = ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  const canonical = canonicalDocumentUri(doc.uri);
+  return mapHover(workspace.languageService.getHover(canonical.uri, params.position));
+});
+
+connection.onDefinition((params: TextDocumentPositionParams): Definition | null => {
+  const doc = ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  const canonical = canonicalDocumentUri(doc.uri);
+  return mapLocations(workspace.languageService.getDefinition(canonical.uri, params.position));
+});
+
+connection.onReferences((params: ReferenceParams): Location[] | null => {
+  const doc = ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  const canonical = canonicalDocumentUri(doc.uri);
+  return mapLocations(workspace.languageService.getReferences(canonical.uri, params.position));
+});
+
+connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
+  const doc = ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  const canonical = canonicalDocumentUri(doc.uri);
+  const edits = workspace.languageService.renameSymbol(canonical.uri, params.position, params.newName);
+  return mapWorkspaceEdit(edits);
+});
+
+connection.onCodeAction((params: CodeActionParams): CodeAction[] | null => {
+  const doc = ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+  const canonical = canonicalDocumentUri(doc.uri);
+  const actions = workspace.languageService.getCodeActions(canonical.uri, params.range);
+  const mapped: CodeAction[] = [];
+  for (const action of actions) {
+    const edit = mapWorkspaceEdit(action.edits);
+    if (!edit) continue;
+    const mappedAction: CodeAction = { title: action.title, edit };
+    if (action.kind) mappedAction.kind = action.kind;
+    mapped.push(mappedAction);
+  }
+  return mapped.length ? mapped : null;
+});
+
+/* =============================================================================
  * LSP lifecycle
  * ========================================================================== */
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
-  info(`initialize: root=${workspaceRoot ?? "<cwd>"} caseSensitive=${CASE_SENSITIVE}`);
+  logger.info(`initialize: root=${workspaceRoot ?? "<cwd>"} caseSensitive=${paths.isCaseSensitive()}`);
+  tsService.configure({ workspaceRoot });
   ensurePrelude();
+  projectIndex = new AureliaProjectIndex({ ts: tsService, logger });
+  projectIndex.refresh();
+  workspace = createWorkspaceFromIndex();
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
+      completionProvider: { triggerCharacters: ["<", " ", ".", ":", "@", "$", "{"] },
+      hoverProvider: true,
+      definitionProvider: true,
+      referencesProvider: true,
+      renameProvider: true,
+      codeActionProvider: true,
     },
   };
 });
 
-documents.onDidOpen(async (e) => { log(`didOpen ${e.document.uri}`); await compileAndUpdateOverlay(e.document); });
-documents.onDidChangeContent(async (e) => { log(`didChange ${e.document.uri}`); await compileAndUpdateOverlay(e.document); });
+documents.onDidOpen((e) => {
+  logger.log(`didOpen ${e.document.uri}`);
+  void refreshDocument(e.document, "open");
+});
+
+connection.onDidChangeConfiguration(() => {
+  logger.log("didChangeConfiguration: reloading tsconfig and project index");
+  void reloadProjectConfiguration("configuration change");
+});
+
+connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
+  if (!e.changes?.length) return;
+  if (!shouldReloadForFileChange(e.changes)) return;
+  logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
+  void reloadProjectConfiguration("watched files");
+});
+
+documents.onDidChangeContent((e) => {
+  logger.log(`didChange ${e.document.uri}`);
+  void refreshDocument(e.document, "change");
+});
+
 documents.onDidClose((e) => {
-  log(`didClose ${e.document.uri}`);
-  connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
+  logger.log(`didClose ${e.document.uri}`);
+  const canonical = canonicalDocumentUri(e.document.uri);
+  workspace.close(canonical.uri);
+  const derived = deriveTemplatePaths(canonical.uri, overlayPathOptions());
+  tsService.deleteOverlay(derived.overlay.path);
+  void connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
 });
 
 documents.listen(connection);

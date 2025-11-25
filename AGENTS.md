@@ -1,465 +1,189 @@
-# AGENTS.md — AI guide to `aurelia-ls`
+# AGENTS
 
-Audience: AI assistants / codegen tools working on this repo.
-Goal: make changes safely, in line with the architectural intent.
-
----
-
-## 1. House rules
-
-These are **hard constraints**:
-
-- **Strongly-typed contracts**
-  - Prefer explicit interfaces and discriminated unions.
-  - Avoid `any` unless it’s genuinely “unknown” and cannot be expressed better.
-
-- **Minimal defensive programming**
-  - Code may assume callers respect contracts.
-  - Prefer clear types + invariants over runtime guards.
-
-- **Pure compiler phases**
-  - `10-lower`, `20-resolve-host`, `30-bind`, `50-plan`, `60-emit` are all **pure**:
-    - No global state.
-    - No I/O.
-    - No mutation of their input data structures.
-  - They return **new** objects instead of mutating arguments.
-
-- **Modern TypeScript**
-  - Target TS 5.x idioms.
-  - No legacy `namespace` or ambient junk.
-
-When in doubt, copy the style of the phase you’re touching.
+This file defines the architectural rules for `aurelia-ls` and how code should be organized across packages. It is the canonical source of truth for **where things belong** and **what each layer is allowed to do**.
 
 ---
 
-## 2. High-level architecture
+## 1. Mandatory process for changes
 
-### Packages
+Before changing code:
 
-- **`packages/domain`**
-  Core compiler / analysis pipeline. Pure TS library:
-  - HTML → IR → LinkedSemantics → ScopeGraph → (Typecheck TBD) → Plan → Emit.
-  - Exposes:
-    - `compileTemplateToOverlay` (overlay/ttc pipeline)
-    - `compileTemplateToSSR` (SSR skeleton + manifest)
-    - `PRELUDE_TS`, `getExpressionParser`, `DEFAULT_SYNTAX`, `VmReflection`.
+1. Read this file.
+2. For each package you intend to modify, read its appendix in `docs/agents`:
+   - `docs/agents/appendix-domain.md` for `packages/domain`.
+   - `docs/agents/appendix-server.md` for `packages/server`.
 
-- **`packages/server`**
-  LSP server that:
-  - Watches `.html` files.
-  - Uses `@aurelia-ls/domain` to build TS overlays.
-  - Feeds overlays into a TS Language Service.
-  - Maps TS diagnostics back into HTML ranges.
+For any non-trivial task (more than a small local tweak):
 
-- **`packages/client`**
-  VS Code extension:
-  - Starts the server (`LanguageClient`).
-  - Provides commands (`aurelia.showOverlay`, `aurelia.dumpState`).
-
-- **`packages/shared`**
-  Small cross‑package utilities shared by client/server.
+1. Identify which package(s) should contain the change using the mapping in section 4.
+2. Sketch a short plan grouped by package (files to touch, responsibilities per layer).
+3. Implement in small batches, keeping edits confined to the correct layer.
+4. Run the relevant tests/commands for each package (via its `package.json` scripts).
 
 ---
 
-## 3. Compiler pipeline contracts
+## 2. Architecture overview
 
-This section is the main thing Codex should understand before touching compiler code.
+The repo is organized into three main layers:
 
-### 3.1 Data flow overview
+### 2.1 `packages/domain` - compiler & program
 
-Core types:
+- Pure, in-process Aurelia template compiler + program facade.
+- Deterministic, mutation-free phases; no direct IO, no LSP, no VS Code, no TS host.
+- Responsibilities:
+  - Template IR, spans, identity, provenance, symbols.
+  - Phases: 10-lower -> 20-resolve-host -> 30-bind -> 40-typecheck -> 50/60 overlay & SSR.
+  - Overlay/SSR products, mappings, diagnostics, and queries (`TemplateQueryFacade`).
+  - `DefaultTemplateProgram` + `TemplateLanguageService` + `TemplateBuildService` as a **query-based compiler/program** over templates.
 
-- `IrModule` — HTML → IR (`model/ir.ts`)
-- `LinkedSemanticsModule` — IR + Semantics → linked host info (`20-resolve-host/types.ts`)
-- `ScopeModule` — Linked → scope graph (`model/symbols.ts`)
-- `OverlayPlanModule` — Linked + Scope → overlay plan (`50-plan/types.ts`)
+### 2.2 `packages/server` - LSP host & TS integration
 
-Pipeline:
+- LSP server for Aurelia templates; bridges editors to the compiler/program layer.
+- Responsibilities:
+  - LSP connection, `TextDocuments`, initialize/shutdown.
+  - TypeScript environment: `PathUtils`, `OverlayFs`, `TsService`, `TsServicesAdapter`.
+  - Aurelia project semantics: `AureliaProjectIndex`, discovery + scoping (`Semantics` + `ResourceGraph`).
+  - `TemplateWorkspace` + `TemplateDocumentStore` + `VmReflectionService` orchestration.
+  - LSP features (completion/hover/defs/refs/rename/code actions) delegating to `TemplateLanguageService` with mapping back to template spans.
+  - Custom RPCs: `aurelia/getOverlay`, `aurelia/getMapping`, `aurelia/queryAtPosition`, `aurelia/getSsr`, `aurelia/dumpState`.
 
-```ts
-// 10 — Lower
-function lowerDocument(html: string, opts: BuildIrOptions): IrModule;
+### 2.3 `packages/client` - VS Code extension
 
-// 20 — Resolve host semantics
-function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule;
+- Thin VS Code host for the language server.
+- Responsibilities:
+  - Start/stop the LSP client and resolve the server module (`AureliaLanguageClient`).
+  - Commands: `aurelia.showOverlay`, `aurelia.showOverlayMapping`, `aurelia.showTemplateInfo`, `aurelia.showSsrPreview`, `aurelia.dumpState`.
+  - UI wiring: status bar (`StatusService`), output (`ClientLogger`), virtual docs (`VirtualDocProvider`).
 
-// 30 — Bind (scope graph)
-function bindScopes(linked: LinkedSemanticsModule): ScopeModule;
+---
 
-// 40 — Typecheck (planned)
-// (currently a placeholder; type-ish logic lives in Plan)
+## 3. Layering constraints (hard rules)
 
-// 50 — Plan (overlay)
-function plan(
-  linked: LinkedSemanticsModule,
-  scope: ScopeModule,
-  opts: AnalyzeOptions
-): OverlayPlanModule;
+### 3.1 Dependency direction
 
-// 60 — Emit overlay
-function emitOverlayFile(
-  plan: OverlayPlanModule,
-  opts: { isJs: boolean } & EmitOptions
-): EmitResult;
-````
+- `packages/domain`
+  - Must not depend on `packages/server` or `packages/client`.
+  - Must not import LSP, VS Code, Node/FS APIs, or concrete TS language service hosts.
 
-And the façade:
+- `packages/server`
+  - May depend on `packages/domain`.
+  - Must not depend on `packages/client` or `vscode`.
+  - All TS/FS/LSP IO lives here.
 
-```ts
-// packages/domain/src/compiler/facade.ts
-export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayResult;
-export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult;
-```
+- `packages/client`
+  - May depend on `vscode` and the compiled server entrypoint.
+  - Must not import directly from `packages/domain` and must not host compiler logic.
 
-**Invariants across phases:**
+### 3.2 Responsibility boundaries
 
-* Version tags (`version: 'aurelia-ir@1'` / `'aurelia-linked@1'` / `'aurelia-scope@1'`) are stable schema IDs.
-* `NodeId` uniqueness is **per `TemplateIR`**.
-* `ExprId` is stable per `(file|span|expressionType|code)` (see `ExprTable` in `lower.ts`).
-* Later phases **never mutate** earlier phase objects; they build linked/derived views.
+- Template syntax, semantics, IR, scopes, typechecking, overlay/SSR structure -> `packages/domain` only.
+- TS config loading, TS LS lifecycle, overlay filesystem, project indexing, workspace orchestration -> `packages/server`.
+- Editor UI, commands, status, virtual document presentation -> `packages/client`.
 
-### 3.2 Phase 10 — Lower (HTML → IR)
+---
 
-Entry:
-`packages/domain/src/compiler/phases/10-lower/lower.ts`
+## 4. Where changes belong (routing table)
 
-Key points:
+Use this table to decide **which package(s)** should contain a change:
 
-* Uses `parse5` to build a DOM fragment, then rewrites into:
+| Change type                                                                 | Package(s)                     |
+|----------------------------------------------------------------------------|--------------------------------|
+| New Aurelia template syntax / binding rule / directive semantics           | `packages/domain`             |
+| New template typechecking rule / diagnostics                               | `packages/domain`             |
+| Changes to overlay TS output shape or mapping                              | `packages/domain`             |
+| Changes to SSR output or SSR mapping                                       | `packages/domain`             |
+| New resource type or discovery strategy (decorator, convention, DI)        | `packages/server` (`AureliaProjectIndex` + scoping) |
+| Changes to how templates are wired to TS overlays / VM types               | `packages/server` (`TemplateWorkspace`, `VmReflectionService`, `TsService`) + domain contracts as needed |
+| New template-aware LSP feature (hover/completion/defs/refs/rename/actions) | `packages/domain` (query/service) + `packages/server` (LSP handler) |
+| New Aurelia-specific RPC (overlay, mapping, SSR, template query)           | `packages/server`             |
+| New VS Code command or UI behaviour                                        | `packages/client`             |
 
-  * Static DOM tree (`DOMNode`, `TemplateIR`).
-  * Instruction rows (`InstructionRow`) per `NodeId`.
-  * Expression table (`exprTable: ExprTableEntry[]`).
+If a change seems to span multiple layers, split it into separate steps per package rather than cross-cutting edits.
 
-* Expression parsing:
+---
 
-  * Done via `IExpressionParser` (`parsers/expression-api.ts`).
-  * All expressions are recorded in `exprTable` with a stable `ExprId`.
-  * Parser failures must **not** crash; they produce `BadExpression` instead.
+## 5. Domain layer: key invariants
 
-* Responsibilities:
-
-  * Syntax only: HTML structure, binding commands, template controllers, interpolation.
-  * Does **not** use `Semantics` or DOM schema.
-  * Emits:
-
-    * `HydrateTemplateControllerIR` for repeat/with/promise/if/switch/portal.
-    * `HydrateLetElementIR` for `<let>`.
-    * Bindings (`PropertyBindingIR`, `TextBindingIR`, etc).
-
-If you extend Aurelia syntax (e.g., new attribute shape), this is usually the first phase to touch.
-
-### 3.3 Phase 20 — Resolve host semantics (IR → LinkedSemantics)
-
-Entry:
-`packages/domain/src/compiler/phases/20-resolve-host/resolve.ts`
-
-Input/Output:
-
-```ts
-function resolveHost(ir: IrModule, sem: Semantics): LinkedSemanticsModule;
-```
-
-Responsibilities:
-
-* Determine **host node** semantics for each row:
-
-  * Custom element vs native DOM vs template vs text/comment.
-* Normalize binding targets:
-
-  * Attribute → property mapping (per tag / global / camelCase fallback).
-  * Two‑way defaults (`Semantics.twoWayDefaults`) into `effectiveMode`.
-* Attach semantic targets:
-
-  * Custom element bindables.
-  * Native DOM props.
-  * Controller props (repeat/with/promise/if/switch/portal).
-* Produce AU11xx diagnostics:
-
-  * Unknown controller, unknown event, unknown target, etc.
+`packages/domain` should be understood as a **query-based compiler** over templates: a long-running, incremental computation over an immutable graph of templates + semantics, with cached queries.
 
 Invariants:
 
-* No mutation of `IrModule`.
-* `LinkedInstruction` mirrors `InstructionIR` but has additional `target: TargetSem`, `controller: ControllerSem`, etc.
-* Attributes with `data-*` / `aria-*` stay attribute‑only (never mapped to props).
+- Phases (10-60) are pure functions over in-memory data; no IO, no global mutable state.
+- Stage dependencies are explicit and go through the pipeline engine (`PipelineSession`); stages may not implicitly reach into later stages.
+- Public surface is through:
+  - `compileTemplate`, `compileTemplateToSSR`,
+  - `DefaultTemplateProgram`,
+  - `TemplateLanguageService`, `TemplateBuildService`, `TemplateQueryFacade`, and contract types.
+- All generated artifacts (overlay/SSR) must have complete mappings back to authored templates (no unmapped spans for user-visible constructs).
 
-### 3.4 Phase 30 — Bind (scope graph)
+When adding language features:
 
-Entry:
-`packages/domain/src/compiler/phases/30-bind/bind.ts`
+- Extend semantics/registry and the phase graph in order; do not add ad-hoc code paths that bypass phases.
+- Expose new information to other layers by extending query/program/service contracts instead of reaching into internal modules.
 
-Input/Output:
+---
 
-```ts
-function bindScopes(linked: LinkedSemanticsModule): ScopeModule;
-```
+## 6. Server layer: key invariants
 
-Responsibilities:
-
-* Build a **frame tree** (`ScopeTemplate.frames: ScopeFrame[]`):
-
-  * `root` frame (component root).
-  * `overlay` frames for repeat/with/promise.
-  * Reuse‑scope controllers (if/switch/portal) reuse the parent frame.
-* Attach **overlay bases**:
-
-  * `with`: overlay base is `value`.
-  * `promise`: overlay base is `Awaited<value>` per branch (then/catch).
-* Introduce locals:
-
-  * `<let>` names.
-  * `repeat.for` locals and contextuals (`$index`, `$length`, etc).
-  * Promise branch alias (`then="r"`, `catch="e"`).
-* Build `exprToFrame` mapping:
-
-  * For every `ExprId`, record **which frame** it is evaluated in.
+`packages/server` turns the domain compiler/program into an LSP service on top of a TS project. Treat it as an incremental "world" manager: TS config + project files + Aurelia resources + open documents -> snapshot -> queries.
 
 Invariants:
 
-* Bind never changes linked structures; it only walks them.
-* Nested templates from controllers are part of the **same** `ScopeTemplate`; there is one scope template per module root.
+- TypeScript integration goes through `TsService` + `TsServicesAdapter` + `OverlayFs`; no direct `ts.LanguageService` use outside this path.
+- Aurelia resource discovery/scoping goes through `AureliaProjectIndex` + scoping planner; do not special-case resources in LSP handlers.
+- `TemplateWorkspace`:
+  - Is the only place that configures `DefaultTemplateProgram` and `TemplateLanguageService` for the current TS/semantics configuration.
+  - Uses fingerprints (TS options + Semantics/ResourceGraph) to decide when to reconfigure while preserving document snapshots.
+- LSP handlers:
+  - Always ensure overlays are materialized and synced before asking TS for anything.
+  - Call into `TemplateLanguageService` for template-aware features, mapping through provenance to/from template spans.
 
-### 3.5 Phase 40 — Typecheck (planned)
+Document open/change must keep to this pipeline:
 
-Directory:
-`packages/domain/src/compiler/phases/40-typecheck/`
+1. Update project index / fingerprints as needed.
+2. Mirror document into `TemplateDocumentStore` / program `SourceStore`.
+3. Compile overlay via program.
+4. Inject overlay text into `TsService` (`OverlayFs`).
+5. Collect template + TS diagnostics.
+6. Send `aurelia/overlayReady`.
 
-Currently only a placeholder (`.gitkeep`). Type‑level analysis for editor features will live here eventually, separate from TTC planning.
+---
 
-Until then:
+## 7. Client layer: key invariants
 
-* Some type reasoning lives inside **Plan** (see below).
-* Tests under `packages/domain/test/typecheck` simulate end‑to‑end behavior via overlays.
-
-### 3.6 Phase 50 — Plan (overlay planning)
-
-Entry:
-`packages/domain/src/compiler/phases/50-plan/plan.ts`
-
-Input/Output:
-
-```ts
-function plan(
-  linked: LinkedSemanticsModule,
-  scope: ScopeModule,
-  opts: AnalyzeOptions
-): OverlayPlanModule;
-```
-
-Responsibilities:
-
-* Build a type‑level model per frame:
-
-  * Use `VmReflection` (`opts.vm`) to obtain a root VM type expression.
-  * Respect overlay base (`with`, `promise`) and `repeat` iterable type.
-  * Incorporate locals (`<let>`, repeat locals, contextuals, promise alias).
-* Compute **frame overlay type**:
-
-  * Root VM, minus shadowed keys.
-  * Overlay base, minus locals.
-  * Locals object.
-  * `$parent`, `$vm`, `$this` segments.
-* Generate **one lambda per expression occurrence** in that frame:
-
-  * Lambdas look like `o => o.user.name`.
-  * Expressions are reconstructed from AST (`ExprTableEntry.ast`).
+`packages/client` is a VS Code extension only.
 
 Invariants:
 
-* Plan is pure: it doesn’t depend on TS APIs or file system.
-* It must be safe to evaluate on any valid `LinkedSemanticsModule` + `ScopeModule` (even with `BadExpression` entries).
-
-### 3.7 Phase 60 — Emit (overlay TS/JS)
-
-Entry:
-`packages/domain/src/compiler/phases/60-emit/overlay.ts`
-
-Key APIs:
-
-```ts
-export function emitOverlay(
-  plan: OverlayPlanModule,
-  opts: { isJs: boolean }
-): string;
-
-export function emitOverlayFile(
-  plan: OverlayPlanModule,
-  opts: EmitOptions & { isJs: boolean }
-): EmitResult;
-```
-
-Responsibilities:
-
-* Turn overlay plan into concrete TS / JS:
-
-  * **TS**:
-
-    ```ts
-    type __AU_TTC_T0_F1 = ...;
-    __au$access<__AU_TTC_T0_F1>(o => o.user.name);
-    ```
-
-  * **JS (JSDoc)**:
-
-    ```js
-    __au$access(
-      /** @param {<type expr>} o */
-      (o) => o.user.name
-    );
-    ```
-
-* Root frame can skip a named type alias to improve diagnostics.
-
-Invariants:
-
-* Must match `PRELUDE_TS`:
-
-  * `__au$access<T>(fn: (o: T) => unknown): void`
-  * `CollectionElement<T>`, `TupleElement<T, I>` helpers.
+- All language intelligence flows through LSP; no direct parsing or TS analysis in the client.
+- Commands only:
+  - Call server RPCs.
+  - Render results (virtual docs, markdown summaries, status bar).
+- No Aurelia semantics or compiler logic here; if the client needs new data, add/extend an RPC in `packages/server` and/or query in `packages/domain`.
 
 ---
 
-## 4. LSP / TS overlay integration (high-level)
+## 8. Final checklist for any change
 
-### Server (`packages/server/src/main.ts`)
+Before accepting a change, verify:
 
-* Builds a `ts.LanguageService` over:
+1. **Layering**
+   - No new forbidden imports (domain -> server/client, server -> client, or VS Code/Node into domain).
 
-  * Workspace files.
-  * In‑memory overlays.
-  * A prelude file (`PRELUDE_TS` in `.aurelia/__prelude.d.ts`).
+2. **Responsibility**
+   - Language/semantics/typechecking logic lives in `packages/domain`.
+   - TS/FS/LSP logic lives in `packages/server`.
+   - UI/commands live in `packages/client`.
 
-* For each `.html` document:
+3. **Incremental model**
+   - Domain still behaves as a query-based compiler with explicit stages and stable caching.
+   - Server continues to treat TS+Semantics+documents as fingerprints/snapshots, not ad-hoc mutable global state.
 
-  1. Detect VM type + import specifier from filename (`detectVmSpecifier`, `pascalFromKebab`).
-  2. Create a `VmReflection` for that template.
-  3. Call `compileTemplateToOverlay` from `@aurelia-ls/domain`.
-  4. Insert/update the overlay in the TS LS virtual FS.
-  5. Ask TS for diagnostics for the overlay file.
-  6. Map overlay span → HTML span via `CompileOverlayResult.calls`.
-  7. Send LSP diagnostics back to the client.
+4. **Tests**
+   - From the repo root, run at least:
+     - `npm run lint`
+     - `npm run test:spec`
+   - For any package with its own scripts, run the relevant `npm run ...` commands from that package as well.
+   - Update or add tests where needed to cover new behavior.
 
-### Client (`packages/client/src/extension.ts`)
-
-* Starts the server as a Node IPC process.
-* Provides commands:
-
-  * `aurelia.showOverlay` — fetch overlay text from server and show in a TS editor.
-  * `aurelia.dumpState` — debug info from the server side.
-
----
-
-## 5. Expression parsing contracts
-
-File: `packages/domain/src/parsers/expression-api.ts`
-
-Core interface:
-
-```ts
-export interface IExpressionParser {
-  parse(expr: string, type: "IsIterator"): ForOfStatement;
-  parse(expr: string, type: "Interpolation"): Interpolation;
-  parse(expr: string, type: "IsFunction" | "IsProperty"): IsBindingBehavior;
-  parse(expr: string, type: "IsCustom"): CustomExpression;
-  parse(expr: string, type: ExpressionType): AnyBindingExpression;
-}
-```
-
-Important:
-
-* The parser should be **re‑entrant**: each `parse` call can allocate internal state, but the object itself is safe to reuse across compilations.
-* On failure, the lowerer wraps failures in `BadExpression` via `ExprTable` and **never throws**.
-* Any change to AST shape must keep the discriminated union `$kind` intact.
-
----
-
-## 6. How an AI agent should work in this repo
-
-When modifying or adding code:
-
-1. **Stay pipeline‑shaped**
-
-   * New features should plug into the existing phases where possible.
-   * Avoid adding ad‑hoc cross‑phase shortcuts; prefer:
-
-     * `IrModule` → `LinkedSemanticsModule` → `ScopeModule` → `OverlayPlanModule`.
-
-2. **Respect purity boundaries**
-
-   * `packages/domain` must not do I/O or access TS/VS Code APIs.
-   * LSP logic (`packages/server`, `packages/client`) must treat `@aurelia-ls/domain` as a pure library.
-
-3. **Keep contracts stable**
-
-   * If you change:
-
-     * `IrModule`, `LinkedSemanticsModule`, `ScopeModule`, `OverlayPlanModule`, or `VmReflection`,
-     * then also update:
-
-       * Corresponding tests under `packages/domain/test/**`.
-       * Any top‑level façades (`compiler/facade.ts`, `src/index.ts`).
-   * Version tags (`"aurelia-ir@1"`, etc.) must **not** change without a conscious schema bump.
-
-4. **Testing expectations**
-
-   * For compiler changes, run at least:
-
-     * `pnpm test:domain`
-   * For focused work on a phase:
-
-     * Lower: `pnpm test:lower`
-     * Resolve: `pnpm test:resolve`
-     * Bind: `pnpm test:bind`
-     * Typecheck-ish flows: `pnpm test:typecheck`
-     * SSR: `pnpm test:ssr`
-   * Tests are in `packages/domain/test/**` and mostly data‑driven JSON vectors.
-
-5. **Safe areas vs. dangerous areas**
-
-   * **Relatively safe to change**:
-
-     * Local helpers inside a single phase file (`lower.ts`, `resolve.ts`, `bind.ts`, `plan.ts`, `overlay.ts`) where types keep you honest.
-     * New test vectors / fixtures.
-     * New helper functions that don’t alter public exports.
-
-   * **Require extra care / human review**:
-
-     * Public APIs in `packages/domain/src/index.ts` and `compiler/facade.ts`.
-     * Core models (`model/ir.ts`, `model/symbols.ts`, `language/registry.ts`).
-     * LSP server wiring (`packages/server/src/main.ts`), especially TS LS hosting.
-
----
-
-## 7. If you’re adding a new feature
-
-When implementing a new capability (e.g. new template controller, new binding command):
-
-1. Identify the phase(s) you need:
-
-   * Syntax only → `10-lower` (+ tests under `test/lower`).
-   * Semantic mapping → `20-resolve-host`.
-   * Scoping / locals → `30-bind`.
-   * Type overlay → `50-plan` + `60-emit`.
-
-2. Extend **models first**:
-
-   * Update `model/ir.ts`, `language/registry.ts`, or `model/symbols.ts` as needed.
-   * Keep them minimal and strongly typed.
-
-3. Wire phases **in order**:
-
-   * Lowerer produces IR shape.
-   * Resolver interprets semantics.
-   * Bind materializes scope.
-   * Plan/Emit handle overlay typing.
-
-4. Add or extend tests:
-
-   * Prefer JSON vector tests over ad‑hoc assertions where possible.
-   * If behavior affects overlays, add/update a `typecheck` test.
-
----
-
-This file is intended for both humans and AI agents.
-If a future change makes this inaccurate, please update it alongside the code change.
+If any of these fail, adjust the design or split the change until the architecture remains consistent.

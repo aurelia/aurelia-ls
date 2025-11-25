@@ -1,128 +1,82 @@
-import * as vscode from "vscode";
-import { LanguageClient, TransportKind } from "vscode-languageclient/node.js";
-import type { LanguageClientOptions, ServerOptions } from "vscode-languageclient/node.js";
-import * as fs from "node:fs";
+import { ClientLogger } from "./log.js";
+import { StatusService } from "./status.js";
+import { registerCommands } from "./commands.js";
+import { VirtualDocProvider } from "./virtual-docs.js";
+import type { OverlayReadyPayload } from "./types.js";
+import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
+import type { AureliaLanguageClient } from "./client-core.js";
+import type { ExtensionContext } from "vscode";
 
-let client: LanguageClient | undefined;
-const out = vscode.window.createOutputChannel("Aurelia LS (Client)");
+let client: AureliaLanguageClient | undefined;
+let status: StatusService | undefined;
+let logger: ClientLogger | undefined;
+let virtualDocs: VirtualDocProvider | undefined;
 
-function fileExists(p: string): boolean {
-  try { fs.statSync(p); return true; } catch { return false; }
+let AureliaLanguageClientCtor: ((logger: ClientLogger, vscode: VscodeApi) => AureliaLanguageClient) | null = null;
+
+async function createLanguageClient(logger: ClientLogger, vscode: VscodeApi): Promise<AureliaLanguageClient> {
+  // Lazy import so tests can load extension.ts without pulling in vscode-languageclient (which requires the VS Code runtime).
+  if (AureliaLanguageClientCtor === null) {
+    const mod = await import("./client-core.js");
+    const Ctor = mod.AureliaLanguageClient;
+    AureliaLanguageClientCtor = (l, v) => new Ctor(l, v);
+  }
+  return AureliaLanguageClientCtor(logger, vscode);
 }
 
-function resolveServerModule(context: vscode.ExtensionContext): string {
-  // Power-user override
-  const override = process.env.AURELIA_LS_SERVER_PATH;
-  if (override && fileExists(override)) {
-    out.appendLine(`[client] using server override: ${override}`);
-    return override;
-  }
-
-  // Try common dev/build layouts
-  const candidates = [
-    // when server bundle is shipped inside the extension (packaged scenario)
-    vscode.Uri.joinPath(context.extensionUri, "dist", "server", "main.js").fsPath,
-    // monorepo dev: compiled TS output
-    vscode.Uri.joinPath(context.extensionUri, "..", "server", "out", "main.js").fsPath,
-    // alternative bundling layout
-    vscode.Uri.joinPath(context.extensionUri, "..", "server", "dist", "main.js").fsPath,
-    vscode.Uri.joinPath(context.extensionUri, "..", "server", "build", "main.js").fsPath,
-  ];
-
-  for (const p of candidates) {
-    if (fileExists(p)) {
-      out.appendLine(`[client] resolved server module: ${p}`);
-      return p;
-    }
-  }
-
-  const msg = `Cannot locate server module. Tried:\n${candidates.map(c => `- ${c}`).join("\n")}`;
-  out.appendLine(`[client] ${msg}`);
-  throw new Error(msg);
+export interface ActivationServices {
+  vscode?: VscodeApi;
+  logger?: ClientLogger;
+  status?: StatusService;
+  virtualDocs?: VirtualDocProvider;
+  languageClient?: AureliaLanguageClient;
 }
 
-export async function activate(context: vscode.ExtensionContext) {
-  out.appendLine("[client] activate");
+export async function activate(context: ExtensionContext, services: ActivationServices = {}) {
+  const vscode = services.vscode ?? getVscodeApi();
+  logger = services.logger ?? new ClientLogger("Aurelia LS (Client)", vscode);
+  status = services.status ?? new StatusService(vscode);
+  virtualDocs = services.virtualDocs ?? new VirtualDocProvider(vscode);
+  client = services.languageClient ?? (await createLanguageClient(logger, vscode));
 
-  const serverModule = resolveServerModule(context);
+  const lsp = await client.start(context);
 
-  const serverOptions: ServerOptions = {
-    run:   { module: serverModule, transport: TransportKind.ipc },
-    debug: { module: serverModule, transport: TransportKind.ipc, options: { execArgv: ["--inspect=6009"] } },
-  };
+  // Register overlay virtual docs
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(VirtualDocProvider.scheme, virtualDocs));
 
-  const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ pattern: "**/*.html" }],
-    synchronize: {},
-  };
+  // Commands
+  registerCommands(context, lsp, virtualDocs, logger, vscode);
 
-  client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
-
-  await client.start();
-  out.appendLine("[client] started");
-
-  context.subscriptions.push({
-    dispose: () => {
-      out.appendLine("[client] dispose → stop()");
-      void client?.stop();
-    },
-  });
-
-  // Server notifications
-  client.onNotification("aurelia/overlayReady", (payload: any) => {
-    out.appendLine(
+  // Notifications
+  lsp.onNotification("aurelia/overlayReady", (payload: OverlayReadyPayload) => {
+    logger?.log(
       `[client] overlayReady: ${JSON.stringify({
         uri: payload?.uri,
         overlayPath: payload?.overlayPath,
         calls: payload?.calls,
         diags: payload?.diags,
-      })}`
+      })}`,
     );
+    status?.overlayReady(payload);
   });
 
-  // Command: Show Generated Overlay
-  context.subscriptions.push(
-    vscode.commands.registerCommand("aurelia.showOverlay", async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) { vscode.window.showInformationMessage("No active editor"); return; }
-      const uri = editor.document.uri.toString();
-      out.appendLine(`[client] aurelia.showOverlay → request for ${uri}`);
-      try {
-        const result = await client!.sendRequest<{ overlayPath: string; text: string } | null>(
-          "aurelia/getOverlay",
-          { uri }
-        );
-        if (!result) {
-          vscode.window.showInformationMessage("No overlay found for this document");
-          out.appendLine(`[client] aurelia.showOverlay: result=null`);
-          return;
-        }
-        out.appendLine(`[client] aurelia.showOverlay: ${result.overlayPath} len=${result.text.length}`);
-        const doc = await vscode.workspace.openTextDocument({ language: "typescript", content: result.text });
-        await vscode.window.showTextDocument(doc, { preview: true });
-      } catch (e: any) {
-        out.appendLine(`[client] aurelia.showOverlay error: ${e?.message || e}`);
-        vscode.window.showErrorMessage(`Show Generated Overlay failed: ${e?.message || e}`);
-      }
-    })
-  );
-
-  // Command: Dump LS state → client output channel
-  context.subscriptions.push(
-    vscode.commands.registerCommand("aurelia.dumpState", async () => {
-      out.appendLine("[client] aurelia.dumpState");
-      try {
-        const state = await client!.sendRequest<any>("aurelia/dumpState");
-        out.appendLine(JSON.stringify(state, null, 2));
-        vscode.window.showInformationMessage("Dumped state to 'Aurelia LS (Client)' output.");
-      } catch (e: any) {
-        out.appendLine(`[client] dumpState error: ${e?.message || e}`);
-      }
-    })
-  );
+  context.subscriptions.push({
+    dispose: () => {
+      status?.dispose();
+      void client?.stop();
+    },
+  });
 }
 
 export async function deactivate() {
-  out.appendLine("[client] deactivate");
-  try { await client?.stop(); } catch { /* ignore */ }
+  status?.dispose();
+  status = undefined;
+  try {
+    await client?.stop();
+  } catch {
+    /* ignore */
+  }
+  client = undefined;
+  virtualDocs = undefined;
+  logger = undefined;
 }

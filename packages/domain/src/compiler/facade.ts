@@ -1,236 +1,194 @@
-import path from "node:path";
-
-// Phases
-import { lowerDocument } from "./phases/10-lower/lower.js";
-import { resolveHost } from "./phases/20-resolve-host/resolve.js";
-import { bindScopes } from "./phases/30-bind/bind.js";
-import { plan } from "./phases/50-plan/plan.js";
-import { emitOverlayFile } from "./phases/60-emit/overlay.js";
-
-// Types
-import type { SourceSpan, ExprId, BindingSourceIR, InterpIR, ExprRef } from "./model/ir.js";
-import type { VmReflection, OverlayPlanModule } from "./phases/50-plan/types.js";
-
-// Parsers
-import { getExpressionParser } from "../parsers/expression-parser.js";
+import { createDefaultEngine } from "./pipeline.js";
+import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./pipeline/engine.js";
+import type { AttributeParser } from "./language/syntax.js";
 import type { IExpressionParser } from "../parsers/expression-api.js";
-import type { BuildIrOptions } from "./phases/10-lower/lower.js";
-
-import { DEFAULT as SEM_DEFAULT } from "./language/registry.js";
-import { DEFAULT_SYNTAX, type AttributeParser } from "./language/syntax.js";
-
-// SSR
-import { planSsr } from "./phases/50-plan/ssr-plan.js";
-import { emitSsr } from "./phases/60-emit/ssr.js";
-import type { SsrPlanModule } from "./phases/50-plan/ssr-types.js";
-
-/* =======================================================================================
- * Public façade
- * ======================================================================================= */
+import type { Semantics } from "./language/registry.js";
+import type { ResourceGraph, ResourceScopeId } from "./language/resource-graph.js";
+import type { VmReflection } from "./phases/50-plan/overlay/types.js";
+import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
+import { buildOverlayProduct, type OverlayProductResult } from "./products/overlay.js";
+import { buildSsrProduct, type SsrProductResult } from "./products/ssr.js";
+import type { CompilerDiagnostic } from "./diagnostics.js";
+import type { StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/engine.js";
+import type { ExprTableEntry, SourceSpan } from "./model/ir.js";
+import type { ExprIdMap } from "./model/identity.js";
+import { computeOverlayBaseName, computeSsrBaseName } from "./path-conventions.js";
 
 export interface CompileOptions {
   html: string;
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
+  semantics?: Semantics;
+  resourceGraph?: ResourceGraph;
+  resourceScope?: ResourceScopeId | null;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   overlayBaseName?: string;
+  cache?: CacheOptions;
+  fingerprints?: FingerprintHints;
 }
 
-export interface CompileOverlayResult {
-  overlayPath: string;
-  text: string;
-  calls: Array<{ exprId: ExprId; overlayStart: number; overlayEnd: number; htmlSpan: SourceSpan }>;
+export type CompileOverlayResult = OverlayProductResult;
+
+export interface TemplateDiagnostics {
+  /** Flat list of all diagnostics from the pipeline. */
+  all: CompilerDiagnostic[];
+  /** Per-stage view keyed by diagnostic source. */
+  bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>>;
 }
 
-export function compileTemplateToOverlay(opts: CompileOptions): CompileOverlayResult {
-  const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
-  const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
+export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
-  // 1) HTML → IR
-  const ir = lowerDocument(opts.html, {
-    file: opts.templateFilePath,
-    name: path.basename(opts.templateFilePath),
-    attrParser,
-    exprParser,
-  } as BuildIrOptions); // lowerer reads both contracts.
-
-  // 2) IR → Linked
-  const linked = resolveHost(ir, SEM_DEFAULT);
-
-  // 3) Linked → ScopeGraph
-  const scope = bindScopes(linked);
-
-  // 4) ScopeGraph → Overlay plan
-  //    Use a stable salt to avoid type-alias collisions across multiple overlays in the same TS program.
-  const overlayBase = opts.overlayBaseName ?? `${path.basename(opts.templateFilePath, path.extname(opts.templateFilePath))}.__au.ttc.overlay`;
-  const salt = shortHash(`${opts.templateFilePath}|${overlayBase}`);
-  const syntheticPrefix = `${opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_"}${salt}_`;
-  const planOut: OverlayPlanModule = plan(linked, scope, { isJs: opts.isJs, vm: opts.vm, syntheticPrefix });
-
-  // 5) Plan → overlay text
-  const overlayPath = path.join(path.dirname(opts.templateFilePath), `${overlayBase}${opts.isJs ? ".js" : ".ts"}`);
-  const { text } = emitOverlayFile(planOut, { isJs: !!opts.isJs, filename: overlayBase });
-
-  // 6) Mapping
-  const exprSpans = collectExprSpansFromIr(ir);
-  const idsInPlanOrder = listExprIdsInPlanEmissionOrder(scope);
-  const callRanges = listOverlayCallRanges(text, opts.isJs);
-
-  const count = Math.min(idsInPlanOrder.length, callRanges.length);
-  const calls = new Array<{ exprId: ExprId; overlayStart: number; overlayEnd: number; htmlSpan: SourceSpan }>(count);
-  for (let i = 0; i < count; i++) {
-    const exprId = idsInPlanOrder[i]!;
-    const htmlSpan = exprSpans.get(exprId) ?? { start: 0, end: 0, file: opts.templateFilePath };
-    const { start: overlayStart, end: overlayEnd } = callRanges[i]!;
-    calls[i] = { exprId, overlayStart, overlayEnd, htmlSpan };
-  }
-
-  return { overlayPath, text, calls };
+export interface TemplateCompilation {
+  ir: StageOutputs["10-lower"];
+  linked: StageOutputs["20-resolve-host"];
+  scope: StageOutputs["30-bind"];
+  typecheck: StageOutputs["40-typecheck"];
+  overlayPlan: StageOutputs["50-plan-overlay"];
+  overlay: CompileOverlayResult;
+  mapping: TemplateMappingArtifact;
+  query: TemplateQueryFacade;
+  /** Authored expression table + spans for tooling (hover/refs). */
+  exprTable: readonly ExprTableEntry[];
+  exprSpans: ExprIdMap<SourceSpan>;
+  diagnostics: TemplateDiagnostics;
+  meta: StageMetaSnapshot;
 }
 
-/* =======================================================================================
- * Mapping helpers
- * ======================================================================================= */
-
-function collectExprSpansFromIr(ir: { templates: any[] }): Map<ExprId, SourceSpan> {
-  const out = new Map<ExprId, SourceSpan>();
-  const visitSource = (src: BindingSourceIR) => {
-    if (isInterp(src)) {
-      for (const r of src.exprs) if (!out.has(r.id) && r.loc) out.set(r.id, r.loc);
-    } else {
-      const r = src as ExprRef;
-      if (!out.has(r.id) && r.loc) out.set(r.id, r.loc);
-    }
+function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): PipelineOptions {
+  const base: PipelineOptions = {
+    html: opts.html,
+    templateFilePath: opts.templateFilePath,
+    vm: opts.vm,
+    overlay: {
+      isJs: opts.isJs,
+      filename: overlayBaseName,
+      syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
+    },
   };
-  for (const t of ir.templates) {
-    for (const row of t.rows ?? []) {
-      for (const ins of row.instructions ?? []) {
-        switch (ins.type) {
-          case "propertyBinding":
-          case "attributeBinding":
-          case "stylePropertyBinding":
-          case "textBinding":
-            visitSource(ins.from);
-            break;
-          case "listenerBinding":
-          case "refBinding":
-            if (ins.from?.loc) out.set(ins.from.id, ins.from.loc);
-            break;
-          case "hydrateTemplateController":
-            for (const p of ins.props ?? []) {
-              if (p.type === "iteratorBinding") {
-                // header id recorded via ForOfIR.astId (mapped elsewhere)
-              } else if (p.type === "propertyBinding") {
-                visitSource(p.from);
-              }
-            }
-            if (ins.branch?.kind === "case") {
-              if (ins.branch.expr.loc) out.set(ins.branch.expr.id, ins.branch.expr.loc);
-            }
-            break;
-          case "hydrateLetElement":
-            for (const lb of ins.instructions ?? []) visitSource(lb.from);
-            break;
-          default:
-            break;
-        }
-      }
-    }
+  if (opts.semantics) base.semantics = opts.semantics;
+  if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
+  if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
+  if (opts.cache) base.cache = opts.cache;
+  if (opts.fingerprints) base.fingerprints = opts.fingerprints;
+  if (opts.attrParser) base.attrParser = opts.attrParser;
+  if (opts.exprParser) base.exprParser = opts.exprParser;
+  return base;
+}
+
+/** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
+export function compileTemplate(
+  opts: CompileOptions,
+  seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+): TemplateCompilation {
+  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
+  const engine = createDefaultEngine();
+  const session = engine.createSession(buildPipelineOptions(opts, overlayBase), seed);
+
+  const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
+
+  const ir = session.run("10-lower");
+  const linked = session.run("20-resolve-host");
+  const scope = session.run("30-bind");
+  const typecheck = session.run("40-typecheck");
+  const overlayPlan = overlayArtifacts.plan;
+
+  return {
+    ir,
+    linked,
+    scope,
+    typecheck,
+    overlayPlan,
+    overlay: overlayArtifacts.overlay,
+    mapping: overlayArtifacts.mapping,
+    query: overlayArtifacts.query,
+    exprTable: overlayArtifacts.exprTable,
+    exprSpans: overlayArtifacts.exprSpans,
+    diagnostics: buildDiagnostics(linked, scope, typecheck),
+    meta: collectStageMeta(session, [
+      "10-lower",
+      "20-resolve-host",
+      "30-bind",
+      "40-typecheck",
+      "50-plan-overlay",
+      "60-emit-overlay",
+    ]),
+  };
+}
+
+export interface CompileSsrResult extends SsrProductResult {
+  core: Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck">;
+  meta: StageMetaSnapshot;
+}
+
+/** Build SSR "server emits" (HTML skeleton + JSON manifest) from a template. */
+export function compileTemplateToSSR(
+  opts: CompileOptions,
+  seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+): CompileSsrResult {
+  const baseName = computeSsrBaseName(opts.templateFilePath, opts.overlayBaseName);
+  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
+  const engine = createDefaultEngine();
+  const pipelineOpts = buildPipelineOptions(opts, overlayBase);
+  pipelineOpts.ssr = { eol: "\n" };
+  const session = engine.createSession(pipelineOpts, seed);
+
+  const product = buildSsrProduct(session, {
+    templateFilePath: opts.templateFilePath,
+    baseName,
+  });
+
+  const core: Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck"> = {
+    "10-lower": session.run("10-lower"),
+    "20-resolve-host": session.run("20-resolve-host"),
+    "30-bind": session.run("30-bind"),
+    "40-typecheck": session.run("40-typecheck"),
+  };
+
+  return {
+    ...product,
+    core,
+    meta: collectStageMeta(session, [
+      "10-lower",
+      "20-resolve-host",
+      "30-bind",
+      "40-typecheck",
+      "50-plan-ssr",
+      "60-emit-ssr",
+    ]),
+  };
+}
+
+/* --------------------------
+ * Helpers
+ * ------------------------ */
+
+function buildDiagnostics(
+  linked: StageOutputs["20-resolve-host"],
+  scope: StageOutputs["30-bind"],
+  typecheck: StageOutputs["40-typecheck"],
+): TemplateDiagnostics {
+  const flat = [
+    ...(linked?.diags ?? []),
+    ...(scope?.diags ?? []),
+    ...(typecheck?.diags ?? []),
+  ];
+
+  const bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>> = {};
+  for (const d of flat) {
+    if (!bySource[d.source]) bySource[d.source] = [];
+    bySource[d.source]!.push(d);
   }
-  return out;
+  return { all: flat, bySource };
+}
 
-  function isInterp(x: BindingSourceIR): x is InterpIR {
-    return (x as InterpIR).kind === "interp";
+function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMetaSnapshot {
+  const meta: StageMetaSnapshot = {};
+  for (const k of keys) {
+    const m = session.meta(k);
+    if (m) meta[k] = m;
   }
+  return meta;
 }
 
-export interface CompileSsrResult {
-  htmlPath: string;
-  htmlText: string;
-  manifestPath: string;
-  manifestText: string;
-  plan: SsrPlanModule; // handy for debugging/tests
-}
-
-/** Build SSR “server emits” (HTML skeleton + JSON manifest) from a template. */
-export function compileTemplateToSSR(opts: CompileOptions): CompileSsrResult {
-  const exprParser = opts.exprParser ? opts.exprParser : getExpressionParser();
-  const attrParser = opts.attrParser ? opts.attrParser : DEFAULT_SYNTAX;
-
-  // 1) HTML → IR
-  const ir = lowerDocument(opts.html, {
-    file: opts.templateFilePath,
-    name: path.basename(opts.templateFilePath),
-    attrParser,
-    exprParser,
-  } as BuildIrOptions);
-
-  // 2) IR → Linked
-  const linked = resolveHost(ir, SEM_DEFAULT);
-
-  // 3) Linked → ScopeGraph
-  const scope = bindScopes(linked);
-
-  // 4) Linked+Scoped → SSR plan
-  const plan = planSsr(linked, scope);
-
-  // 5) Emit SSR artifacts
-  const { html, manifest } = emitSsr(plan, linked, { eol: "\n" });
-
-  // 6) Paths
-  const base = opts.overlayBaseName ?? `${path.basename(opts.templateFilePath, path.extname(opts.templateFilePath))}.__au.ssr`;
-  const dir = path.dirname(opts.templateFilePath);
-  const htmlPath = path.join(dir, `${base}.html`);
-  const manifestPath = path.join(dir, `${base}.json`);
-
-  return { htmlPath, htmlText: html, manifestPath, manifestText: manifest, plan };
-}
-
-
-function listExprIdsInPlanEmissionOrder(scope: any): ExprId[] {
-  const st = scope.templates?.[0];
-  if (!st) return [];
-  const out: ExprId[] = [];
-  const seen = new Set<string>();
-  for (const frame of st.frames as any[]) {
-    for (const [idStr, fid] of Object.entries(st.exprToFrame as Record<string, number>)) {
-      if (fid !== frame.id) continue;
-      if (seen.has(idStr)) continue;
-      seen.add(idStr);
-      out.push(idStr as ExprId);
-    }
-  }
-  return out;
-}
-
-function listOverlayCallRanges(text: string, _isJs: boolean): Array<{ start: number; end: number }> {
-  const ranges: Array<{ start: number; end: number }> = [];
-  let idx = 0;
-  while (idx < text.length) {
-    const pos = text.indexOf("__au$access", idx);
-    if (pos < 0) break;
-    let open = text.indexOf("(", pos);
-    if (open < 0) break;
-    const close = text.indexOf(")", open);
-    if (close < 0) break;
-    ranges.push({ start: open + 1, end: close });
-    idx = close + 1;
-  }
-  return ranges;
-}
-
-/**
- * Stable 32-bit FNV-1a hash → 6-hex salt.
- * Keeps emitted identifiers short but unique across overlays.
- */
-function shortHash(s: string): string {
-  let h = 0x811c9dc5 >>> 0;           // FNV offset basis
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);     // FNV prime
-  }
-  const hex = (h >>> 0).toString(16);
-  return hex.slice(-6).padStart(6, "0");
-}

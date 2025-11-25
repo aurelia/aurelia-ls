@@ -124,7 +124,11 @@ export async function compileFromEntry({
   attrParser,
 }) {
   const domainIndexUrl = new URL("../../../out/index.js", import.meta.url);
-  const { compileTemplateToOverlay } = await import(domainIndexUrl.href);
+  const {
+    DefaultTemplateProgram,
+    DefaultTemplateBuildService,
+    canonicalDocumentUri,
+  } = await import(domainIndexUrl.href);
 
   const vm = {
     // Crucial: refer to the class in the same file, not a synthetic type alias.
@@ -132,15 +136,16 @@ export async function compileFromEntry({
     getSyntheticPrefix: () => "__AU_TTC_",
   };
 
-  const { text: overlay } = compileTemplateToOverlay({
-    html,
-    templateFilePath: `C:/mem/${markupFile}`,
-    isJs,
+  const program = new DefaultTemplateProgram({
     vm,
+    isJs,
     exprParser,
     attrParser,
     overlayBaseName,
   });
+  const uri = canonicalDocumentUri(`C:/mem/${markupFile}`).uri;
+  program.upsertTemplate(uri, html);
+  const overlay = new DefaultTemplateBuildService(program).getOverlay(uri).overlay.text;
 
   // Prepare the full entry file (prelude is global; overlay is per-file)
   const sess = await getSession(isJs);

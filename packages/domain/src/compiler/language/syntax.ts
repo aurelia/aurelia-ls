@@ -188,8 +188,15 @@ const DOT_DEFS: AttributePatternDefinition<DotKeys>[] = [
 ];
 
 const DOT_IMPL: IAttributePattern<DotKeys> = {
-  'PART.PART': (rawName, rawValue, parts) => new AttrSyntax(rawName, rawValue, parts[0]!, parts[1]!),
-  'PART.PART.PART': (rawName, rawValue, parts) => new AttrSyntax(rawName, rawValue, `${parts[0]}.${parts[1]}`, parts[2]!),
+  'PART.PART': (rawName, rawValue, parts) => {
+    const [target, command] = parts;
+    return new AttrSyntax(rawName, rawValue, target!, command!);
+  },
+  'PART.PART.PART': (rawName, rawValue, parts) => {
+    const [first, second, command] = parts;
+    const target = `${first!}.${second!}`;
+    return new AttrSyntax(rawName, rawValue, target, command!);
+  },
 };
 
 /* -------------------------------------------------------------------------------------------------

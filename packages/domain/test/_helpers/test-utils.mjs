@@ -40,14 +40,20 @@ export function createFailureRecorder(dirname, outFileName) {
   }
 
   function writeOut() {
-    if (!records.length) return;
     const outPath = path.join(dirname, outFileName);
+    if (!records.length) {
+      // Clean up stale failure file if present.
+      try {
+        if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+      } catch {
+        /* ignore cleanup errors */
+      }
+      return;
+    }
     try {
       fs.writeFileSync(outPath, JSON.stringify(records, null, 2), "utf8");
-      // eslint-disable-next-line no-console
       console.error(`Wrote test failure snapshot to ${outPath}`);
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error(`ERROR: failed to write ${outFileName}: ${e.message}`);
     }
   }

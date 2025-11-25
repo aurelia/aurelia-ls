@@ -2,7 +2,8 @@ import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { LspExpressionParser } from "../../out/parsers/lsp-expression-parser.js";
-import { splitInterpolationText } from "../../out/parsers/interpolation.js";
+import { splitInterpolationText } from "../../out/parsers/lsp-expression-parser.js";
+import { toSourceFileId } from "../../out/compiler/model/identity.js";
 
 /**
  * Helper: strip span information recursively from an AST node.
@@ -30,6 +31,12 @@ describe("interpolation splitting", () => {
     assert.equal(split, null);
   });
 
+  test("unterminated ${ yields null", () => {
+    const src = "Hello ${name";
+    const split = splitInterpolationText(src);
+    assert.equal(split, null);
+  });
+
   test("simple hello ${name}", () => {
     const src = "Hello ${name}";
     const split = splitInterpolationText(src);
@@ -40,6 +47,8 @@ describe("interpolation splitting", () => {
 
     const span0 = split.exprSpans[0];
     assert.equal(src.slice(span0.start, span0.end), "name");
+    assert.equal(span0.start, 8);
+    assert.equal(span0.end, 12);
   });
 
   test("adjacent interpolations ${a}${b}", () => {
@@ -51,6 +60,8 @@ describe("interpolation splitting", () => {
     assert.equal(split.exprSpans.length, 2);
     assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "a");
     assert.equal(src.slice(split.exprSpans[1].start, split.exprSpans[1].end), "b");
+    assert.equal(split.exprSpans[0].start, 2);
+    assert.equal(split.exprSpans[0].end, 3);
   });
 
   test("nested braces and strings inside interpolation", () => {
@@ -62,6 +73,7 @@ describe("interpolation splitting", () => {
     assert.equal(split.exprSpans.length, 1);
     const exprText = src.slice(split.exprSpans[0].start, split.exprSpans[0].end);
     assert.equal(exprText, " foo ? { y: 1 } : { y: 2 } ");
+    assert.equal(split.exprSpans[0].start, 4);
   });
 });
 
@@ -85,6 +97,24 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
     // Expression span should slice back to the inner expression text.
     assert.equal(src.slice(expr.span.start, expr.span.end), "name");
+  });
+
+  test("rebases spans when parse context includes file + baseSpan", () => {
+    const src = "Hello ${name}";
+    const parser = new LspExpressionParser();
+    const file = toSourceFileId("template.html");
+    const baseSpan = { start: 50, end: 50 + src.length, file };
+
+    const ast = parser.parse(src, "Interpolation", { baseSpan });
+
+    assert.equal(ast.span.file, file);
+    assert.equal(ast.span.start, baseSpan.start);
+    assert.equal(ast.span.end, baseSpan.end);
+
+    const expr = ast.expressions[0];
+    assert.equal(expr.span.file, file);
+    assert.equal(expr.span.start, baseSpan.start + 8);
+    assert.equal(expr.span.end, baseSpan.start + 12);
   });
 
   test("multiple interpolations: ${a} and ${b}", () => {
@@ -140,5 +170,24 @@ describe("LspExpressionParser / Interpolation AST", () => {
     assert.deepEqual(ast.parts, [src]);
     assert.equal(ast.expressions.length, 0);
     assert.equal(src.slice(ast.span.start, ast.span.end), src);
+  });
+
+  test("unterminated ${ in text yields plain parts", () => {
+    const src = "Hello ${name";
+    const parser = new LspExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    assert.equal(ast.$kind, "Interpolation");
+    assert.deepEqual(ast.parts, [src]);
+    assert.equal(ast.expressions.length, 0);
+  });
+
+  test("invalid inner expression becomes BadExpression", () => {
+    const src = "Hello ${1 =}";
+    const parser = new LspExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+    assert.equal(ast.expressions[0].$kind, "BadExpression");
+    assert.equal(ast.expressions[0].message, "Left-hand side is not assignable");
+    assert.ok(ast.expressions[0].span.start >= 7);
   });
 });

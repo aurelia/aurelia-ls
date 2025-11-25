@@ -37,6 +37,7 @@ export enum TokenType {
   Colon = "Colon",               // :
   Semicolon = "Semicolon",       // ;
   Dot = "Dot",                   // .
+  Ellipsis = "Ellipsis",         // ...
   Question = "Question",         // ?
   QuestionDot = "QuestionDot",   // ?.
   Backtick = "Backtick",         // `
@@ -81,6 +82,8 @@ export enum TokenType {
   // Fallback for unexpected characters
   Unknown = "Unknown",
 }
+
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
 
 /** Value payload for tokens; primitives only. */
 export type TokenValue = string | number | boolean | null | undefined;
@@ -227,8 +230,14 @@ export class Scanner {
         return this.makeToken(TokenType.Semicolon, start, this.index, undefined);
       }
       case CharCode.Dot: {
-        // Leading-dot numeric literals are handled earlier; so here we always
-        // produce a plain Dot.
+        const next = this.charCodeAt(this.index + 1);
+        const next2 = this.charCodeAt(this.index + 2);
+        // Leading-dot numeric literals are handled earlier; so here we either
+        // produce an ellipsis or a plain Dot.
+        if (next === CharCode.Dot && next2 === CharCode.Dot) {
+          this.index += 3;
+          return this.makeToken(TokenType.Ellipsis, start, this.index, undefined);
+        }
         this.index++;
         return this.makeToken(TokenType.Dot, start, this.index, undefined);
       }
@@ -653,8 +662,8 @@ export class Scanner {
     return ch >= CharCode.Zero && ch <= CharCode.Nine;
   }
 
-  private isIdentifierStart(ch: number): boolean {
-    // ASCII letters + $ + _
+    private isIdentifierStart(ch: number): boolean {
+    if (ch < 0) return false;
     if (
       (ch >= CharCode.UppercaseA && ch <= CharCode.UppercaseZ) ||
       (ch >= CharCode.LowercaseA && ch <= CharCode.LowercaseZ) ||
@@ -663,16 +672,12 @@ export class Scanner {
     ) {
       return true;
     }
-
-    // TODO: Extend to full IdentifierStart_BMP from the spec (IdentifierStart_BMP ranges).
-    return false;
+    return isInRanges(ch, IdentifierStartBmpRanges);
   }
 
   private isIdentifierPart(ch: number): boolean {
     if (this.isIdentifierStart(ch)) return true;
     if (this.isDigit(ch)) return true;
-
-    // TODO: Extend to IdentifierPart_BMP (IdentifierStart_BMP ∪ DecimalNumber) from the spec.
     return false;
   }
 
@@ -685,7 +690,7 @@ export class Scanner {
 // CharCode constants
 // ----------------------------------------------------------------------------------------
 
-const enum CharCode {
+export const enum CharCode {
   // ASCII control & whitespace
   Tab = 0x0009,
   LineFeed = 0x000a,
@@ -748,5 +753,50 @@ const enum CharCode {
   LowercaseV = 0x0076,       // v
   LowercaseE = 0x0065,       // e
   UppercaseE = 0x0045,       // E
+}
+
+// IdentifierStart_BMP ranges.
+const IdentifierStartBmpRanges: ReadonlyArray<readonly [number, number]> = [
+  [0x0024, 0x0024], // $
+  [0x0041, 0x005a], // A-Z
+  [0x005f, 0x005f], // _
+  [0x0061, 0x007a], // a-z
+  [0x00aa, 0x00aa],
+  [0x00ba, 0x00ba],
+  [0x00c0, 0x00d6],
+  [0x00d8, 0x00f6],
+  [0x00f8, 0x02b8],
+  [0x02e0, 0x02e4],
+  [0x1d00, 0x1d25],
+  [0x1d2c, 0x1d5c],
+  [0x1d62, 0x1d65],
+  [0x1d6b, 0x1d77],
+  [0x1d79, 0x1dbe],
+  [0x1e00, 0x1eff],
+  [0x2071, 0x2071],
+  [0x207f, 0x207f],
+  [0x2090, 0x209c],
+  [0x212a, 0x212b],
+  [0x2132, 0x2132],
+  [0x214e, 0x214e],
+  [0x2160, 0x2188],
+  [0x2c60, 0x2c7f],
+  [0xa722, 0xa787],
+  [0xa78b, 0xa7ae],
+  [0xa7b0, 0xa7b7],
+  [0xa7f7, 0xa7ff],
+  [0xab30, 0xab5a],
+  [0xab5c, 0xab64],
+  [0xfb00, 0xfb06],
+  [0xff21, 0xff3a],
+  [0xff41, 0xff5a],
+];
+
+function isInRanges(ch: number, ranges: ReadonlyArray<readonly [number, number]>): boolean {
+  for (let i = 0; i < ranges.length; i++) {
+    const [start, end] = ranges[i]!;
+    if (ch >= start && ch <= end) return true;
+  }
+  return false;
 }
 

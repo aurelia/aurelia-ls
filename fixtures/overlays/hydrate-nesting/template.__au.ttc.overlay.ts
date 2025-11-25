@@ -1,0 +1,13 @@
+function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }
+function __au_bb<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }
+type __AU_TTC_VM = AppVm;
+type __AU_TTC_T0_F0 = (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {};
+__au$access<(__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.cardTitle);
+type __AU_TTC_T0_F1 = (Omit<(__AU_TTC_VM), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & {} & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {};
+__au$access<__AU_TTC_T0_F1>(o => o.item.label);
+__au$access<__AU_TTC_T0_F1>(o => o.item.details);
+type __AU_TTC_T0_F2 = (Omit<(Omit<(__AU_TTC_VM), keyof (NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['details'])>), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & (Omit<(NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['details']), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (Omit<(__AU_TTC_VM), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & {} & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & { $this: (NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['details']) };
+__au$access<__AU_TTC_T0_F2>(o => o.color);
+__au$access<__AU_TTC_T0_F2>(o => o.summary);
+
+export {}

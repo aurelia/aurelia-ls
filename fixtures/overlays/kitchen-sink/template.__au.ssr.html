@@ -1,0 +1,65 @@
+
+  <div data-au-hid="1" containerless="" class="host ${klass}" data-flag.bind="flag" role.attr="banner">
+    <input data-au-hid="2" value.two-way="value" checked.bind="flag" matcher.bind="matcher" class.bind="inputClass"></input>
+    <button data-au-hid="3" click.trigger="doIt()" class="btn ${btnClass}" ref="btn" aria-pressed.class="pressed">Action</button>
+
+    <au-compose data-au-hid="4" ...$bindables></au-compose>
+
+    <section data-au-hid="5" data-x="x" ...$attrs class="the-section">
+      <span data-au-hid="6" class="title"><!--au:tb 7@0 expr=expr_8819760002542080--></span>
+    </section>
+
+    <!--au:ctrl 8 repeat start-->
+<div data-au-hid="9" ref="itemsRep">
+      <!--au:ctrl 10 if start-->
+
+        <article data-au-hid="12" containerless="" class="card ${item.cardClass}">
+          <!--au:ctrl 13 with start-->
+<span>
+            <let data-au-hid="14" name.bind="displayName" to-binding-context=""></let>
+            <!--au:ctrl 15 switch start-->
+
+              <!--au:ctrl 20 switch start-->
+
+                <strong data-au-hid="21" class="ready"><!--au:tb 22@0 expr=expr_6b73e000ce8c0000--></strong>
+              <!--au:ctrl 20 end-->
+
+              
+                <em><!--au:tb 19@0 expr=expr_48300400b44f2100--></em>
+              
+            <!--au:ctrl 15 end-->
+
+          </span><!--au:ctrl 13 end-->
+
+        </article>
+      <!--au:ctrl 10 end-->
+
+    </div><!--au:ctrl 8 end-->
+
+
+    <au-slot name="header"><!--au:tb 23@0 expr=expr_80436300fc4a2c80--></au-slot>
+
+    <!--au:ctrl 24 promise start-->
+
+      <!--au:ctrl 29 promise start-->
+
+        <div data-au-hid="30" class="done"><!--au:tb 31@0 expr=expr_64f0bd401612db60--></div>
+      <!--au:ctrl 29 end-->
+
+      <!--au:ctrl 32 promise start-->
+
+        <div data-au-hid="33" class="error"><!--au:tb 34@0 expr=expr_629a0840db36cf00--></div>
+      <!--au:ctrl 32 end-->
+
+    <!--au:ctrl 24 end-->
+
+
+    <!--au:ctrl 35 portal start-->
+
+      <p>Teleported <!--au:tb 37@0 expr=expr_3857b8009b4d23c0--></p>
+    <!--au:ctrl 35 end-->
+
+
+    <let data-au-hid="38" foo="bar" baz.bind="qux"></let>
+  </div>
+

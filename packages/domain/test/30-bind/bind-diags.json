@@ -1,0 +1,73 @@
+[
+  {
+    "name": "DG-01 duplicate let names in with overlay -> AU1202",
+    "markup": "<div with.bind=\"ctx\"><let a.bind=\"x\"></let><let a.bind=\"y\"></let></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+      ],
+      "locals": [
+        { "frame": "overlay:with@1", "kind": "let", "name": "a" }
+      ],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "x", "frame": "overlay:with@1" },
+        { "kind": "expr", "code": "y", "frame": "overlay:with@1" }
+      ],
+      "diags": [
+        { "code": "AU1202" }
+      ]
+    }
+  },
+  {
+    "name": "DG-02 repeat header missing 'of' -> AU1201",
+    "markup": "<ul repeat.for=\"item items\"></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1201" }
+      ]
+    }
+  },
+  {
+    "name": "DG-03 repeat header bad destructuring -> AU1201",
+    "markup": "<ul repeat.for=\"{x,,y} of items\"></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1201" }
+      ]
+    }
+  },
+  {
+    "name": "DG-04 invalid binding expression surfaces AU1203",
+    "markup": "<div title.bind=\"foo(\"></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "foo(", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1203" }
+      ]
+    }
+  }
+]

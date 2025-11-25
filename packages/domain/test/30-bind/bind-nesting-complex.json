@@ -1,0 +1,74 @@
+[
+  {
+    "name": "NX-01 with â†’ repeat â†’ with â†’ promise(then) â†’ inner text & event",
+    "markup": "<div with.bind=\"ctx\"><ul repeat.for=\"i of items\"><section with.bind=\"w\"><div promise.bind=\"p\"><template then><button @click=\"go(i)\" title.bind=\"t\">${w}</button></template></div></section></ul></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" },
+        { "label": "overlay:repeat@2", "parent": "overlay:with@1", "kind": "overlay", "overlay": null, "origin": "repeat" },
+        { "label": "overlay:with@3", "parent": "overlay:repeat@2", "kind": "overlay", "overlay": "with", "origin": "with" },
+        { "label": "overlay:promise@4", "parent": "overlay:with@3", "kind": "overlay", "overlay": null, "origin": "promise" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@2", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$middle" },
+        { "frame": "overlay:promise@4", "kind": "promiseAlias", "name": "then" }
+      ],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "ctx" },
+        { "kind": "forOfHeader", "frame": "overlay:with@1" },
+        { "kind": "expr", "frame": "overlay:repeat@2", "code": "w" },
+        { "kind": "expr", "frame": "overlay:with@3", "code": "p" },
+        { "kind": "expr", "frame": "overlay:promise@4", "code": "go(i)" },
+        { "kind": "expr", "frame": "overlay:promise@4", "code": "t" },
+        { "kind": "expr", "frame": "overlay:promise@4", "code": "w" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "NX-02 repeat â†’ repeat â†’ promise(catch) inside inner",
+    "markup": "<ul repeat.for=\"i of items\"><li repeat.for=\"j of i.list\"><div promise><template catch><span>${j}</span></template></div></li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" },
+        { "label": "overlay:repeat@2", "parent": "overlay:repeat@1", "kind": "overlay", "overlay": null, "origin": "repeat" },
+        { "label": "overlay:promise@3", "parent": "overlay:repeat@2", "kind": "overlay", "overlay": null, "origin": "promise" }
+      ],
+      "locals": [
+        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" },
+        { "frame": "overlay:repeat@2", "kind": "repeatLocal", "name": "j" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$index" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$first" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$last" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$even" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$odd" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$length" },
+        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$middle" },
+        { "frame": "overlay:promise@3", "kind": "promiseAlias", "name": "catch" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "forOfHeader", "frame": "overlay:repeat@1" },
+        { "kind": "expr", "frame": "overlay:repeat@2", "code": "promise" },
+        { "kind": "expr", "frame": "overlay:promise@3", "code": "j" }
+      ],
+      "diags": []
+    }
+  }
+]

@@ -8,7 +8,12 @@
  * - Template/module containers
  * ======================================================================================= */
 
-import type { SourceSpan, ExprId, BindingSourceIR } from "./ir.js";
+import type { SourceSpan, BindingSourceIR } from "./ir.js";
+import type { FrameId, ExprId, ReadonlyExprIdMap } from "./identity.js";
+import type { Provenance } from "./origin.js";
+import type { CompilerDiagnostic } from "../diagnostics.js";
+
+export type { FrameId } from "./identity.js";
 
 /* ===========================
  * Diagnostics (scoping only)
@@ -17,20 +22,14 @@ import type { SourceSpan, ExprId, BindingSourceIR } from "./ir.js";
 /** AU12xx = ScopeGraph diagnostics (scoping-only; type errors belong to Typecheck). */
 export type ScopeDiagCode =
   | "AU1201" // Invalid/unsupported repeat destructuring pattern (MVP: shallow only)
-  | "AU1202"; // Duplicate local name in the same frame
+  | "AU1202" // Duplicate local name in the same frame
+  | "AU1203"; // Invalid or unsupported expression (parser error)
 
-export interface ScopeDiagnostic {
-  code: ScopeDiagCode;
-  message: string;
-  span?: SourceSpan | null;
-}
+export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode>;
 
 /* ===========================
  * Frames & templates
  * =========================== */
-
-/** Frame ids are stable within a single ScopeTemplate only. */
-export type FrameId = number & { __brand?: "FrameId" };
 
 export type FrameKind =
   | "root"     // component root
@@ -38,18 +37,16 @@ export type FrameKind =
 
 /** Provenance for frames, to help later phases reconstruct types precisely. */
 export type FrameOrigin =
-  | { kind: "repeat";  forOfAstId: ExprId }
-  | { kind: "with";    valueExprId: ExprId }
-  | { kind: "promise"; valueExprId: ExprId; branch?: "then" | "catch" };
+  | ({ kind: "repeat";  forOfAstId: ExprId } & Provenance)
+  | ({ kind: "with";    valueExprId: ExprId } & Provenance)
+  | ({ kind: "promise"; valueExprId: ExprId; branch?: "then" | "catch" } & Provenance);
 
 /**
  * Overlay base kinds:
  * - 'with'     : with.value
- * - 'promise'  : promise.value (Awaited), constrained by branch
  */
 export type OverlayBase =
-  | { kind: "with"; from: BindingSourceIR; span?: SourceSpan | null }
-  | { kind: "promise"; from: BindingSourceIR; span?: SourceSpan | null };
+  | { kind: "with"; from: BindingSourceIR; span?: SourceSpan | null };
 
 /**
  * Symbols visible in a frame.
@@ -61,17 +58,11 @@ export type OverlayBase =
  * NOTE(binding-context): `<let to-binding-context>` does not change lexical visibility;
  * it only affects the *write lane* at runtime. We track names uniformly here.
  */
-export type SymbolKind =
-  | "let"
-  | "repeatLocal"
-  | "repeatContextual"
-  | "promiseAlias";
-
-export interface ScopeSymbol {
-  kind: SymbolKind;
-  name: string;
-  span?: SourceSpan | null;
-}
+export type ScopeSymbol =
+  | { kind: "let"; name: string; span?: SourceSpan | null }
+  | { kind: "repeatLocal"; name: string; span?: SourceSpan | null }
+  | { kind: "repeatContextual"; name: string; span?: SourceSpan | null }
+  | { kind: "promiseAlias"; name: string; branch: "then" | "catch"; span?: SourceSpan | null };
 
 export interface ScopeFrame {
   id: FrameId;
@@ -82,8 +73,7 @@ export interface ScopeFrame {
    * Optional overlay base. When present, unresolved identifiers should be interpreted
    * as properties of this base (before falling back to parent frames).
    *
-   * - 'with'     → controller value
-   * - 'promise'  → resolved value (branch)
+   * - 'with': controller value
    *
    * (repeat has explicit locals/contextuals instead of an overlay base.)
    */
@@ -116,7 +106,7 @@ export interface ScopeTemplate {
    * Map each expression occurrence to the frame where it is evaluated.
    * Keyed by ExprId (string brand).
    */
-  exprToFrame: Record<string /* ExprId */, FrameId>;
+  exprToFrame: ReadonlyExprIdMap<FrameId>;
 }
 
 export interface ScopeModule {

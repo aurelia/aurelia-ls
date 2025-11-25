@@ -1,0 +1,12 @@
+<template>
+  <section class="panel">
+    <x-card title.bind="cardTitle">
+      <div repeat.for="item of items">
+        <button click.trigger="select(item)">${item.label}</button>
+        <div with.bind="item.details">
+          <p highlight.attr="color">${summary}</p>
+        </div>
+      </div>
+    </x-card>
+  </section>
+</template>

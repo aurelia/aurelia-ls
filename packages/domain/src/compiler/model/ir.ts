@@ -10,25 +10,13 @@
  * - Expression table entry (dev/LSP lane)
  * ======================================================================================= */
 
-/* ===========================
- * Brands & primitive types
- * =========================== */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
+import type { Origin, Provenance } from "./origin.js";
+import type { SourceSpan, TextSpan } from "./span.js";
 
-type Brand<T, N extends string> = T & { __brand: N };
-
-// NOTE: NodeId uniqueness is **per TemplateIR** (template-local). If a module-global id is
-// ever needed, extend with (templateIndex|fileId) disambiguators.
-export type NodeId = Brand<string, 'NodeId'>; // e.g. '0/2/1', '0/3#text@0', '0/1@attr:value'
-export type ExprId = Brand<string, 'ExprId'>; // deterministic (e.g., hash of file+loc+expressionType+code)
-
-// TODO: Builder currently hardcodes 'html'. Add ns detection for SVG/MathML when needed.
-export type Namespace = 'html' | 'svg' | 'mathml';
-
-export interface SourceSpan {
-  start: number; // inclusive UTF-16 offset
-  end: number;   // exclusive UTF-16 offset
-  file?: string;
-}
+export type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
+export type { SourceSpan, TextSpan } from "./span.js";
 
 export type JsonValue =
   | null | boolean | number | string
@@ -375,9 +363,12 @@ export type IsPrimary =
   | AccessGlobalExpression
   | ArrayLiteralExpression
   | ObjectLiteralExpression
+  | ParenExpression
   | PrimitiveLiteralExpression
   | TemplateExpression
-  | NewExpression;
+  | NewExpression
+  | CustomExpression
+  | BadExpression;
 
 export type IsLeftHandSide =
   | IsPrimary
@@ -387,37 +378,37 @@ export type IsLeftHandSide =
   | CallScopeExpression
   | AccessMemberExpression
   | AccessKeyedExpression
-  | TaggedTemplateExpression;
+  | TaggedTemplateExpression
+  | BadExpression;
 
-export type IsUnary = IsLeftHandSide | UnaryExpression;
-export type IsBinary = IsUnary | BinaryExpression;
-export type IsConditional = IsBinary | ConditionalExpression;
-export type IsAssign = IsConditional | AssignExpression | ArrowFunction | BadExpression;
+export type IsUnary = IsLeftHandSide | UnaryExpression | BadExpression;
+export type IsBinary = IsUnary | BinaryExpression | BadExpression;
+export type IsConditional = IsBinary | ConditionalExpression | BadExpression;
+export type IsAssign = IsConditional | AssignExpression | ArrowFunction | DestructuringAssignmentExpression | BadExpression;
 export type IsValueConverter = IsAssign | ValueConverterExpression;
 export type IsBindingBehavior = IsValueConverter | BindingBehaviorExpression;
 export type IsAssignable = AccessScopeExpression | AccessKeyedExpression | AccessMemberExpression | AssignExpression;
-export type BindingIdentifierOrPattern = BindingIdentifier | ArrayBindingPattern | ObjectBindingPattern;
+export type BindingPattern =
+  | BindingIdentifier
+  | BindingPatternDefault
+  | BindingPatternHole
+  | ArrayBindingPattern
+  | ObjectBindingPattern
+  | BadExpression;
+export type BindingIdentifierOrPattern = BindingPattern;
 export type IsExpression = IsBindingBehavior | Interpolation;
 export type AnyBindingExpression =
   | Interpolation
   | ForOfStatement
   | CustomExpression
-  | IsBindingBehavior;
+  | IsBindingBehavior
+  | BadExpression;
 
 /* ---- AST nodes ---- */
 
-export interface TextSpan {
-  /**
-   * Offsets into the expression string being parsed.
-   * 0-based UTF-16 code units, [start, end) (end is exclusive).
-   */
-  start: number;
-  end: number;
-}
-
 export interface BindingBehaviorExpression {
   $kind: 'BindingBehavior';
-  span: TextSpan;
+  span: SourceSpan;
   expression: IsBindingBehavior;
   name: string;
   args: IsAssign[];
@@ -425,7 +416,7 @@ export interface BindingBehaviorExpression {
 
 export interface ValueConverterExpression {
   $kind: 'ValueConverter';
-  span: TextSpan;
+  span: SourceSpan;
   expression: IsValueConverter;
   name: string;
   args: IsAssign[];
@@ -433,7 +424,7 @@ export interface ValueConverterExpression {
 
 export interface AssignExpression {
   $kind: 'Assign';
-  span: TextSpan;
+  span: SourceSpan;
   target: IsAssignable;
   value: IsAssign;
   op: AssignmentOperator;
@@ -441,7 +432,7 @@ export interface AssignExpression {
 
 export interface ConditionalExpression {
   $kind: 'Conditional';
-  span: TextSpan;
+  span: SourceSpan;
   condition: IsBinary;
   yes: IsAssign;
   no: IsAssign;
@@ -449,31 +440,31 @@ export interface ConditionalExpression {
 
 export interface AccessGlobalExpression {
   $kind: 'AccessGlobal';
-  span: TextSpan;
+  span: SourceSpan;
   name: string;
 }
 
 export interface AccessThisExpression {
   $kind: 'AccessThis';
-  span: TextSpan;
+  span: SourceSpan;
   ancestor: number;
 }
 
 export interface AccessBoundaryExpression {
   $kind: 'AccessBoundary';
-  span: TextSpan;
+  span: SourceSpan;
 }
 
 export interface AccessScopeExpression {
   $kind: 'AccessScope';
-  span: TextSpan;
+  span: SourceSpan;
   name: string;
   ancestor: number;
 }
 
 export interface AccessMemberExpression {
   $kind: 'AccessMember';
-  span: TextSpan;
+  span: SourceSpan;
   object: IsLeftHandSide;
   name: string;
   optional: boolean;
@@ -481,22 +472,28 @@ export interface AccessMemberExpression {
 
 export interface AccessKeyedExpression {
   $kind: 'AccessKeyed';
-  span: TextSpan;
+  span: SourceSpan;
   object: IsLeftHandSide;
   key: IsAssign;
   optional: boolean;
 }
 
+export interface ParenExpression {
+  $kind: 'Paren';
+  span: SourceSpan;
+  expression: IsAssign;
+}
+
 export interface NewExpression {
   $kind: 'New';
-  span: TextSpan;
+  span: SourceSpan;
   func: IsLeftHandSide;
   args: IsAssign[];
 }
 
 export interface CallScopeExpression {
   $kind: 'CallScope';
-  span: TextSpan;
+  span: SourceSpan;
   name: string;
   args: IsAssign[];
   ancestor: number;
@@ -505,7 +502,7 @@ export interface CallScopeExpression {
 
 export interface CallMemberExpression {
   $kind: 'CallMember';
-  span: TextSpan;
+  span: SourceSpan;
   object: IsLeftHandSide;
   name: string;
   args: IsAssign[];
@@ -515,7 +512,7 @@ export interface CallMemberExpression {
 
 export interface CallFunctionExpression {
   $kind: 'CallFunction';
-  span: TextSpan;
+  span: SourceSpan;
   func: IsLeftHandSide;
   args: IsAssign[];
   optional: boolean;
@@ -523,14 +520,14 @@ export interface CallFunctionExpression {
 
 export interface CallGlobalExpression {
   $kind: 'CallGlobal';
-  span: TextSpan;
+  span: SourceSpan;
   name: string;
   args: IsAssign[];
 }
 
 export interface BinaryExpression {
   $kind: 'Binary';
-  span: TextSpan;
+  span: SourceSpan;
   operation: BinaryOperator;
   left: IsBinary;
   right: IsBinary;
@@ -538,70 +535,57 @@ export interface BinaryExpression {
 
 export interface UnaryExpression {
   $kind: 'Unary';
-  span: TextSpan;
+  span: SourceSpan;
   operation: UnaryOperator;
-  expression: IsLeftHandSide;
+  expression: IsUnary;
   pos: 0 | 1; // 0: prefix, 1: suffix
 }
 
 export interface PrimitiveLiteralExpression {
   $kind: 'PrimitiveLiteral';
-  span: TextSpan;
+  span: SourceSpan;
   value: null | undefined | number | boolean | string;
 }
 
 export interface ArrayLiteralExpression {
   $kind: 'ArrayLiteral';
-  span: TextSpan;
+  span: SourceSpan;
   elements: IsAssign[];
 }
 
 export interface ObjectLiteralExpression {
   $kind: 'ObjectLiteral';
-  span: TextSpan;
+  span: SourceSpan;
   keys: (number | string)[];
   values: IsAssign[];
 }
 
 export interface TemplateExpression {
   $kind: 'Template';
-  span: TextSpan;
+  span: SourceSpan;
   cooked: string[];
   expressions: IsAssign[];
 }
 
 export interface TaggedTemplateExpression {
   $kind: 'TaggedTemplate';
-  span: TextSpan;
+  span: SourceSpan;
   cooked: (string[] & { raw?: string[] });
   func: IsLeftHandSide;
   expressions: IsAssign[];
 }
 
-export interface ArrayBindingPattern {
-  $kind: 'ArrayBindingPattern';
-  span: TextSpan;
-  elements: IsAssign[];
-}
-
-export interface ObjectBindingPattern {
-  $kind: 'ObjectBindingPattern';
-  span: TextSpan;
-  keys: (string | number)[];
-  values: IsAssign[];
-}
-
 export interface BindingIdentifier {
   $kind: 'BindingIdentifier';
-  span: TextSpan;
+  span: SourceSpan;
   name: string;
 }
 
 // Kept in expr table for precise scoping of repeat; IR also carries a lighter ForOfIR.
 export interface ForOfStatement {
   $kind: 'ForOfStatement';
-  span: TextSpan;
-  declaration: BindingIdentifierOrPattern | DestructuringAssignmentExpression;
+  span: SourceSpan;
+  declaration: BindingIdentifierOrPattern;
   iterable: IsBindingBehavior;
   semiIdx: number;
 }
@@ -609,44 +593,52 @@ export interface ForOfStatement {
 // Text interpolation is lowered to TextBindingIR with InterpIR (parts + expr refs).
 export interface Interpolation {
   $kind: 'Interpolation';
-  span: TextSpan;
+  span: SourceSpan;
   parts: string[];
   expressions: IsBindingBehavior[];
 }
 
+export interface BindingPatternDefault {
+  $kind: 'BindingPatternDefault';
+  span: SourceSpan;
+  target: BindingPattern;
+  default: IsAssign;
+}
+
+export interface BindingPatternHole {
+  $kind: 'BindingPatternHole';
+  span: SourceSpan;
+}
+
+export interface ArrayBindingPattern {
+  $kind: 'ArrayBindingPattern';
+  span: SourceSpan;
+  elements: BindingPattern[];
+  rest?: BindingPattern | null;
+}
+
+export interface ObjectBindingPatternProperty {
+  key: string | number;
+  value: BindingPattern;
+}
+
+export interface ObjectBindingPattern {
+  $kind: 'ObjectBindingPattern';
+  span: SourceSpan;
+  properties: ObjectBindingPatternProperty[];
+  rest?: BindingPattern | null;
+}
+
 export interface DestructuringAssignmentExpression {
-  $kind: 'ArrayDestructuring' | 'ObjectDestructuring';
-  span: TextSpan;
-  list: DestructuringAssignmentNode[];
-  source?: AccessMemberExpression | AccessKeyedExpression;
-  initializer?: IsBindingBehavior;
-}
-
-export type DestructuringAssignmentNode =
-  | DestructuringAssignmentExpression
-  | DestructuringAssignmentSingleExpression
-  | DestructuringAssignmentRestExpression;
-
-export interface DestructuringAssignmentSingleExpression {
-  $kind: 'DestructuringAssignmentLeaf';
-  leafKind: 'single';
-  span: TextSpan;
-  target: AccessMemberExpression;
-  source: AccessMemberExpression | AccessKeyedExpression;
-  initializer?: IsBindingBehavior;
-}
-
-export interface DestructuringAssignmentRestExpression {
-  $kind: 'DestructuringAssignmentLeaf';
-  leafKind: 'rest';
-  span: TextSpan;
-  target: AccessMemberExpression;
-  indexOrProperties: string[] | number;
+  $kind: 'DestructuringAssignment';
+  span: SourceSpan;
+  pattern: BindingPattern;
+  source: IsAssign;
 }
 
 export interface ArrowFunction {
   $kind: 'ArrowFunction';
-  span: TextSpan;
+  span: SourceSpan;
   args: BindingIdentifier[];
   body: IsAssign;
   rest: boolean;
@@ -654,11 +646,18 @@ export interface ArrowFunction {
 
 export interface BadExpression {
   $kind: 'BadExpression';
-  span: TextSpan;
+  span: SourceSpan;
   /** Raw text of the segment that failed to parse (optional). */
   text?: string;
   /** Human-readable parser message (optional). */
   message?: string;
+  /** Optional provenance for diagnostics (parse failures, etc.). */
+  origin?: Origin | Provenance | null;
+  /**
+   * Tooling note: LSP/overlay emitters may recover by emitting a TS-safe placeholder
+   * mapped to this span (and surfacing a parser diagnostic) to keep overlays valid
+   * while still pointing squiggles at the template location.
+   */
 }
 
 /**
@@ -668,7 +667,7 @@ export interface BadExpression {
  */
 export interface CustomExpression {
   $kind: 'Custom';
-  span: TextSpan;
+  span: SourceSpan;
   value: unknown;
 }
 

@@ -19,6 +19,7 @@ import type {
 
 import type {
   ElementRes,
+  AttrRes,
   DomElement,
   DomProp,
   RepeatController,
@@ -28,11 +29,11 @@ import type {
   PortalController,
   Bindable,
   TypeRef,
-  IteratorTailPropSpec,
 } from "../../language/registry.js";
+import type { CompilerDiagnostic } from "../../diagnostics.js";
 
 /* ===========================
- * Diagnostics (Resolve‑Host)
+ * Diagnostics (Resolve-Host)
  * =========================== */
 
 /** AU11xx = Semantics/host-linker diagnostics. */
@@ -44,11 +45,7 @@ export type SemDiagCode =
   | "AU1105" // Repeat missing iterator binding (reserved)
   | "AU1106"; // Repeat tail option not recognized/wrong syntax
 
-export interface SemDiagnostic {
-  code: SemDiagCode;
-  message: string;
-  span?: SourceSpan | null;
-}
+export type SemDiagnostic = CompilerDiagnostic<SemDiagCode>;
 
 /* ===========================
  * Linked module / template / row
@@ -83,6 +80,7 @@ export type NodeSem =
 
 export interface ElementResRef { def: ElementRes }
 export interface DomElementRef   { def: DomElement }
+export interface AttrResRef      { def: AttrRes }
 
 /* ===========================
  * Instruction linking
@@ -99,6 +97,8 @@ export type LinkedInstruction =
   | LinkedSetProperty
   | LinkedSetClassAttribute
   | LinkedSetStyleAttribute
+  | LinkedHydrateElement
+  | LinkedHydrateAttribute
   | LinkedHydrateTemplateController
   | LinkedHydrateLetElement
   | LinkedIteratorBinding;
@@ -190,9 +190,30 @@ export interface LinkedSetStyleAttribute extends BaseLinked {
   value: string;
 }
 
+export interface LinkedHydrateElement extends BaseLinked {
+  kind: "hydrateElement";
+  res: ElementResRef | null;
+  props: LinkedElementBindable[];
+  projections?: { slot?: string | null; def: TemplateIR }[] | null;
+  containerless?: boolean;
+}
+
+export interface LinkedHydrateAttribute extends BaseLinked {
+  kind: "hydrateAttribute";
+  res: AttrResRef | null;
+  alias: string | null;
+  props: LinkedElementBindable[];
+}
+
+export type LinkedElementBindable =
+  | LinkedPropertyBinding
+  | LinkedAttributeBinding
+  | LinkedStylePropertyBinding
+  | LinkedSetProperty;
+
 /**
  * Hydrate a <let> element.
- * - Transparent at host‑semantics level; the Bind phase consumes the inner let bindings directly.
+ * - Transparent at host-semantics level; the Bind phase consumes the inner let bindings directly.
  */
 export interface LinkedHydrateLetElement extends BaseLinked {
   kind: "hydrateLetElement";
@@ -210,11 +231,20 @@ export interface LinkedIteratorBinding extends BaseLinked {
   aux: LinkedAuxProp[];
 }
 
-/** `repeat` tail option item. Unknown options keep `spec` undefined and trigger AU1106. */
 export interface LinkedAuxProp {
   name: string;                // option name, e.g., 'key'
   from: BindingSourceIR;
-  spec?: IteratorTailPropSpec; // linked spec when recognized
+  /** Matched semantics spec (null when unknown). */
+  spec: IteratorAuxSpec | null;
+}
+
+/** Normalized iterator tail spec with optional mode override. */
+export interface IteratorAuxSpec {
+  name: string;
+  /** Optional mode override for .bind vs literal usage. */
+  mode: BindingMode | null;
+  /** Optional type hint for downstream analysis. */
+  type?: TypeRef | null;
 }
 
 /**
@@ -254,6 +284,7 @@ export type ControllerBranch =
  */
 export type TargetSem =
   | { kind: "element.bindable"; element: ElementResRef; bindable: Bindable }
+  | { kind: "attribute.bindable"; attribute: AttrResRef; bindable: Bindable }
   | { kind: "element.nativeProp"; element: DomElementRef; prop: DomProp }
   | { kind: "controller.prop"; controller: ControllerSem; bindable: Bindable }
   | { kind: "attribute"; attr: string }
