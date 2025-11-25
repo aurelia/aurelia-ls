@@ -6,7 +6,7 @@ import type {
 } from "../contracts.js";
 import type { ExprId, NodeId, SourceFileId } from "../compiler/model/identity.js";
 import { spanContainsOffset, spanEquals, spanLength, type SourceSpan } from "../compiler/model/span.js";
-import type { DocumentUri } from "./primitives.js";
+import type { DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
 
@@ -42,6 +42,14 @@ export interface TemplateProvenanceHit {
   readonly nodeId?: NodeId;
   readonly memberPath?: string;
   readonly edge: ProvenanceEdge;
+}
+
+export interface DocumentSpan {
+  readonly uri: DocumentUri;
+  readonly span: SourceSpan;
+  readonly exprId?: TemplateExprId;
+  readonly nodeId?: TemplateNodeId;
+  readonly memberPath?: string;
 }
 
 export interface ProvenanceTemplateStats {
@@ -95,6 +103,34 @@ export interface ProvenanceIndex {
   getSsrUris?(templateUri: DocumentUri): { html: DocumentUri; manifest: DocumentUri } | null;
 
   removeDocument(uri: DocumentUri): void;
+}
+
+export function provenanceHitToDocumentSpan(hit: OverlayProvenanceHit | TemplateProvenanceHit | null): DocumentSpan | null {
+  if (!hit) return null;
+  const target = hit.edge.to;
+  return {
+    uri: target.uri,
+    span: target.span,
+    ...(target.nodeId ? { nodeId: target.nodeId } : {}),
+    ...(hit.exprId ? { exprId: hit.exprId } : {}),
+    ...(hit.memberPath ? { memberPath: hit.memberPath } : {}),
+  };
+}
+
+export function projectGeneratedSpanToDocumentSpan(
+  provenance: Pick<ProvenanceIndex, "projectGeneratedSpan">,
+  uri: DocumentUri,
+  span: SourceSpan,
+): DocumentSpan | null {
+  return provenanceHitToDocumentSpan(provenance.projectGeneratedSpan(uri, span));
+}
+
+export function projectGeneratedOffsetToDocumentSpan(
+  provenance: Pick<ProvenanceIndex, "projectGeneratedOffset">,
+  uri: DocumentUri,
+  offset: number,
+): DocumentSpan | null {
+  return provenanceHitToDocumentSpan(provenance.projectGeneratedOffset(uri, offset));
 }
 
 /**

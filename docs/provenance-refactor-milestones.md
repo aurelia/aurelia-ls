@@ -13,7 +13,7 @@ Goal: establish a **complete, documented surface** for cross‑document mapping.
   - [x] `lookupSource(uri, offset): TemplateProvenanceHit | null`
   - [x] `projectGeneratedOffset(uri, offset): TemplateProvenanceHit | null`
   - [x] `projectGeneratedSpan(uri, span): TemplateProvenanceHit | null`
-- [ ] If/when needed, add mirrored helpers for template → generated projection (e.g. `projectTemplateOffset/Span`) **inside provenance**.
+- [x] If/when needed, add mirrored helpers for template -> generated projection (e.g. `projectTemplateOffset/Span`) **inside provenance**.
 - [x] Centralize edge selection and projection math:
   - [x] Prefer `overlayMember` over `overlayExpr`.
   - [x] Tie-break by overlap, then narrower span, then deeper member path.
@@ -49,18 +49,18 @@ Goal: have **one canonical story** for “what document is this?” across compi
 
 Goal: make **TemplateLanguageService** and friends thin adapters over provenance, not source‑map engines.
 
-- [ ] Refactor `TemplateLanguageService` to use provenance for all cross‑document features:
+- [x] Refactor `TemplateLanguageService` to use provenance for all cross‑document features:
   - [x] TS diagnostics (map overlay spans back to template).
-  - [ ] Hover (overlay → template, and optionally template → overlay when jumping to TS).
-  - [ ] Definitions & references (TS locations → template locations).
-  - [ ] Rename (TS edits → template edits).
-  - [ ] Completions (overlay replacement spans → template ranges).
-  - [ ] Code actions (TS edits → template edits).
+  - [x] Hover (overlay -> template, and optionally template -> overlay when jumping to TS).
+  - [x] Definitions & references (TS locations -> template locations).
+  - [x] Rename (TS edits -> template edits).
+  - [x] Completions (overlay replacement spans -> template ranges).
+  - [x] Code actions (TS edits -> template edits).
 - [ ] Remove direct `TemplateMappingArtifact` scans in services:
   - [ ] Replace remaining ad-hoc helpers (e.g. `overlaySpanForEdit`, `overlaySpanForLocation`; legacy helpers like `projectOverlayOffset` are already removed) with provenance calls.
-  - [ ] After migration, `TemplateLanguageService` should only “see” mappings indirectly through the provenance API and the query facade.
-- [ ] Keep the remaining helpers **very small**:
-  - [ ] `mapOverlaySpanToTemplate` and similar functions become trivial wrappers that:
+  - [x] After migration, `TemplateLanguageService` should only “see” mappings indirectly through the provenance API and the query facade.
+- [x] Keep the remaining helpers **very small**:
+  - [x] `mapOverlaySpanToTemplate` and similar functions become trivial wrappers that:
     - Take TS spans/ranges.
     - Convert to `SourceSpan` with a file.
     - Delegate to provenance.
@@ -75,10 +75,10 @@ Goal: clarify who owns what between compiler, program, and server.
 - [ ] Codify that:
   - [ ] `TemplateMappingArtifact` and `SsrMappingArtifact` are **products** of the compiler and the overlay/SSR planning pipeline.
   - [ ] `TemplateQueryFacade` is the **template‑only query surface** (nodeAt, bindablesFor, exprAt, expectedTypeOf).
-  - [ ] `ProvenanceIndex` is the **only cross‑document mapping surface** (overlay/SSR ↔ template).
+  - [ ] `ProvenanceIndex` is the **only cross‑document mapping surface** (overlay/SSR <-> template).
 - [ ] For any new “expr/member at offset” or “jump between artifacts” feature:
-  - [ ] First ask: “Is this template‑local?” → use `TemplateQueryFacade`.
-  - [ ] Otherwise → add a provenance helper or use an existing one; **do not** re‑scan mapping artifacts.
+  - [ ] First ask: “Is this template‑local?” -> use `TemplateQueryFacade`.
+  - [ ] Otherwise -> add a provenance helper or use an existing one; **do not** re‑scan mapping artifacts.
 - [ ] Keep direct access to `TemplateMappingArtifact` / `SsrMappingArtifact` limited to:
   - [ ] Compiler internals (mapping/query/build).
   - [ ] Program ingestion (provenance).

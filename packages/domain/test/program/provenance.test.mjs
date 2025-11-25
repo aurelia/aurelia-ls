@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import { idFromKey } from "../../out/compiler/model/identity.js";
 import {
   InMemoryProvenanceIndex,
+  projectGeneratedOffsetToDocumentSpan,
+  projectGeneratedSpanToDocumentSpan,
+  provenanceHitToDocumentSpan,
   projectOverlaySpanToTemplateSpan,
 } from "../../out/program/provenance.js";
 
@@ -112,6 +115,19 @@ test("overlay projection via projectGeneratedSpan/projectGeneratedOffset", () =>
   // cursor at overlay 22 (2 chars into [20,30]) => 2 chars into [110,120]
   assert.equal(offsetHit?.edge.to.span.start, 112);
   assert.equal(offsetHit?.edge.to.span.end, 112);
+});
+
+test("projectGeneratedSpanToDocumentSpan materializes mapped document spans", () => {
+  const provenance = new InMemoryProvenanceIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, mapping);
+
+  const mapped = projectGeneratedSpanToDocumentSpan(provenance, overlayUri, { start: 21, end: 26 });
+  assert.ok(mapped);
+  assert.equal(mapped.uri, templateUri);
+  assert.equal(mapped.exprId, "expr1");
+  assert.equal(mapped.memberPath, "user.name");
+  assert.equal(mapped.span.start, 111);
+  assert.equal(mapped.span.end, 116);
 });
 
 test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () => {
@@ -272,6 +288,9 @@ test("ssr mappings expand to provenance edges and project back to template", () 
   const templateHit = provenance.lookupSource(templateUri, 210);
   assert.equal(templateHit?.nodeId, "node1");
   assert.equal(templateHit?.edge.kind, "ssrNode");
+  const templateSpan = provenanceHitToDocumentSpan(templateHit);
+  assert.ok(templateSpan);
+  assert.equal(String(templateSpan?.nodeId), "node1");
 
   // projectGeneratedSpan/projectGeneratedOffset use the same projection helper
   const htmlSliceHit = provenance.projectGeneratedSpan(ssrHtmlUri, { start: 5, end: 15 });
@@ -294,6 +313,18 @@ test("ssr mappings expand to provenance edges and project back to template", () 
   const ssrUris = provenance.getSsrUris(templateUri);
   assert.equal(ssrUris?.html, ssrHtmlUri);
   assert.equal(ssrUris?.manifest, ssrManifestUri);
+});
+
+test("projectGeneratedOffsetToDocumentSpan keeps SSR node ids on document spans", () => {
+  const provenance = new InMemoryProvenanceIndex();
+  provenance.addSsrMapping(templateUri, ssrHtmlUri, ssrManifestUri, ssrMapping);
+
+  const mapped = projectGeneratedOffsetToDocumentSpan(provenance, ssrManifestUri, 60);
+  assert.ok(mapped);
+  assert.equal(mapped.uri, templateUri);
+  assert.equal(String(mapped.nodeId), "node1");
+  assert.equal(mapped.span.start, 200);
+  assert.equal(mapped.span.end, 240);
 });
 
 test("provenance stats and templateStats aggregate edges by kind and document", () => {
