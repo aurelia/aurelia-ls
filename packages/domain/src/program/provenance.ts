@@ -451,6 +451,7 @@ function expandOverlayMapping(
   for (const entry of mapping.entries) {
     edges.push(buildOverlayExprEdge(templateUri, overlayUri, entry));
     for (const seg of entry.segments ?? []) {
+      if (edgeOverlap(seg.overlaySpan, entry.overlaySpan) === 0) continue;
       edges.push(buildOverlayMemberEdge(templateUri, overlayUri, entry, seg));
     }
   }
@@ -569,6 +570,11 @@ function compareEdgesForSpan(
   const overlapDelta = edgeOverlap(spanB, query) - edgeOverlap(spanA, query);
   if (overlapDelta !== 0) return overlapDelta;
 
+  if (a.kind === "overlayMember" && b.kind === "overlayMember") {
+    const memberDelta = memberDepth(b) - memberDepth(a);
+    if (memberDelta !== 0) return memberDelta;
+  }
+
   const lenDelta = spanLength(spanA) - spanLength(spanB);
   if (lenDelta !== 0) return lenDelta;
 
@@ -599,6 +605,9 @@ function isBetterEdge(
 ): boolean {
   if (candidate.priority !== current.priority) return candidate.priority < current.priority;
   if (candidate.overlap !== current.overlap) return candidate.overlap > current.overlap;
+  if (candidate.priority === 0 && current.priority === 0 && candidate.memberDepth !== current.memberDepth) {
+    return candidate.memberDepth > current.memberDepth;
+  }
   if (candidate.spanLen !== current.spanLen) return candidate.spanLen < current.spanLen;
   if (candidate.memberDepth !== current.memberDepth) return candidate.memberDepth > current.memberDepth;
   return false;
@@ -692,6 +701,9 @@ function projectEdgeSpanToTemplateSpan(edge: ProvenanceEdge, slice: SourceSpan):
     const targetFile = edge.to.span.file ?? canonicalDocumentUri(edge.to.uri).file;
     return resolveSourceSpan(edge.to.span, targetFile);
   }
+  if (edge.kind === "overlayMember") {
+    return projectOverlayMemberSlice(edge, slice);
+  }
   return projectOverlaySpanToTemplateSpan(edge, slice);
 }
 
@@ -699,4 +711,32 @@ function clamp(value: number, min: number, max: number): number {
   if (value < min) return min;
   if (value > max) return max;
   return value;
+}
+
+function projectOverlayMemberSlice(edge: ProvenanceEdge, slice: SourceSpan): SourceSpan {
+  const from = edge.from.span;
+  const to = edge.to.span;
+
+  if (slice.start <= from.start && slice.end >= from.end) {
+    const targetFileFull = to.file ?? canonicalDocumentUri(edge.to.uri).file;
+    return resolveSourceSpan(to, targetFileFull);
+  }
+
+  const start = clamp(slice.start, from.start, from.end);
+  const end = slice.end;
+
+  const translated = {
+    start: to.start + (start - from.start),
+    end: to.start + (end - from.start),
+  };
+  const clamped = {
+    start: clamp(translated.start, to.start, to.end),
+    end: clamp(translated.end, to.start, to.end),
+  };
+  const ordered = {
+    start: Math.min(clamped.start, clamped.end),
+    end: Math.max(clamped.start, clamped.end),
+  };
+  const targetFile = to.file ?? canonicalDocumentUri(edge.to.uri).file;
+  return resolveSourceSpan(ordered, targetFile);
 }
