@@ -1,15 +1,9 @@
 /**
  * TODO(mapped-emitter)
  * - Integrate into overlay plan (replace string printer) and have emit.ts only offset/prefix.
- * - Member paths: derive from AST (call scope/member/global, optional, keyed) with stable path model.
  * - Destructuring patterns: emit with full mappings (array/object/rest/defaults).
- * - Optional/keyed mapping math: verify spans stay aligned under nesting/optionals.
  * - JS mode: validate JSDoc wrapping shift with mappings/segments.
- * - Tests: overlay mapped emitter cases (members, optionals, calls, templates, destructuring, JS mode).
-  * - Normalize mappings with files when wiring into plan artifacts; avoid double-normalizing later.
-  * - Path stability: settle on canonical path strings ($this/$parent^n/brackets) and reuse.
-  * - BadExpression handling: decide placeholder vs. empty code and how mappings propagate.
-  * - Add a thin adapter for plan.ts to consume this emitter without touching call sites everywhere.
+ * - Normalize mappings with files when wiring into plan artifacts; avoid double-normalizing later.
  */
 import type {
   ArrayLiteralExpression,
@@ -172,7 +166,9 @@ function emitBindingBehavior(node: MappableExpression): EmitResult {
     case "ArrowFunction":
       return emitArrow(node);
     case "BadExpression":
-      return simpleToken(node, node.text ?? "");
+      // Parser recovery: keep overlay syntactically valid with a TS-safe placeholder
+      // while still mapping the authored span for diagnostics.
+      return simpleToken(node, "undefined/*bad*/");
     case "Custom":
       return simpleToken(node, "");
     default: {
