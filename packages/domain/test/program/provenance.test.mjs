@@ -218,6 +218,42 @@ test("projectGeneratedSpan breaks ties on member depth after overlap and span le
   assert.equal(hit?.edge.to.span.end, 208);
 });
 
+test("member selection prefers narrower spans before deeper paths", () => {
+  const provenance = new InMemoryProvenanceIndex();
+  const narrowVsDeep = {
+    kind: "mapping",
+    entries: [
+      {
+        exprId: "expr",
+        htmlSpan: { start: 400, end: 430, file: templateUri },
+        overlaySpan: { start: 0, end: 20 },
+        segments: [
+          {
+            kind: "member",
+            path: "user",
+            htmlSpan: { start: 405, end: 415, file: templateUri },
+            overlaySpan: { start: 0, end: 10 },
+          },
+          {
+            kind: "member",
+            path: "user.details.name",
+            htmlSpan: { start: 420, end: 445, file: templateUri },
+            overlaySpan: { start: 0, end: 25 },
+          },
+        ],
+      },
+    ],
+  };
+
+  provenance.addOverlayMapping(templateUri, overlayUri, narrowVsDeep);
+
+  const hit = provenance.lookupGenerated(overlayUri, 5);
+  assert.ok(hit);
+  assert.equal(hit?.edge.kind, "overlayMember");
+  // Even though the deeper path exists, the narrower span wins first.
+  assert.equal(hit?.memberPath, "user");
+});
+
 test("member specificity prefers deeper member segments when multiple match", () => {
   const provenance = new InMemoryProvenanceIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);

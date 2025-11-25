@@ -724,7 +724,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   }
 
   private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlayProvenanceHit | null {
-    let hit = this.program.provenance.projectTemplateOffset(uri.uri, offset);
+    const hit = this.program.provenance.projectTemplateOffset(uri.uri, offset);
     if (hit) return hit;
     try {
       this.build.getOverlay(uri.uri);
@@ -740,7 +740,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     end: number,
   ): OverlayProvenanceHit | null {
     const span = resolveSourceSpan({ start, end }, uri.file);
-    let hit = this.program.provenance.projectTemplateSpan(uri.uri, span);
+    const hit = this.program.provenance.projectTemplateSpan(uri.uri, span);
     if (hit) return hit;
     try {
       this.build.getOverlay(uri.uri);

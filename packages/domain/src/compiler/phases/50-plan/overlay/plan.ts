@@ -65,6 +65,7 @@ import {
   type FrameTypingHints,
   type Env,
 } from "../../shared/type-analysis.js";
+import { emitPrintedExpression } from "./mapped-emitter.js";
 
 function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 
@@ -210,7 +211,7 @@ function collectOneLambdaPerExpression(
         const expr = renderExpressionFromAst(entry.ast);
         if (expr) {
           const lambda = `o => ${expr.code}`;
-          const exprStart = lambda.indexOf("=>") + 2;
+          const exprStart = lambda.length - expr.code.length;
           const exprSpan = spanFromBounds(exprStart, exprStart + expr.code.length);
           const segments = shiftSegments(expr.segments, exprStart);
           out.push({ exprId: id, lambda, exprSpan, segments });
@@ -227,300 +228,20 @@ function collectOneLambdaPerExpression(
 }
 
 /* ===================================================================================== */
-/* Expression rendering                                                                   */
-/* ===================================================================================== */
+/* Expression rendering                                                           */
 
-type PrintableAst = IsBindingBehavior | IsAssign | IsLeftHandSide | IsUnary;
-type PrintedExpression = { code: string; segments: OverlayLambdaSegment[]; path?: string };
+type PrintedExpression = { code: string; segments: readonly OverlayLambdaSegment[]; path?: string };
 
 function renderExpressionFromAst(ast: IsBindingBehavior): PrintedExpression | null {
-  return printIsBindingBehavior(ast);
+  const emitted = emitPrintedExpression(ast);
+  return emitted ? { ...emitted } : null;
 }
 
-function shiftSegments(segs: OverlayLambdaSegment[], by: number): OverlayLambdaSegment[] {
-  if (segs.length === 0) return segs;
+function shiftSegments(segs: readonly OverlayLambdaSegment[], by: number): OverlayLambdaSegment[] {
+  if (segs.length === 0) return [];
   return segs.map((s) => ({ ...s, span: offsetSpan(s.span, by) }));
 }
 
-function mergeSegments(base: OverlayLambdaSegment[], extra: OverlayLambdaSegment[], offset: number): OverlayLambdaSegment[] {
-  if (extra.length === 0) return base;
-  return base.concat(shiftSegments(extra, offset));
-}
-
-function printIsBindingBehavior(n: PrintableAst): PrintedExpression | null {
-  switch (n.$kind) {
-    case "BindingBehavior": return printIsBindingBehavior(n.expression);
-    case "ValueConverter":  return printIsBindingBehavior(n.expression);
-
-    case "Assign":          return printAssign(n);
-    case "Conditional":     return printConditional(n);
-
-    case "AccessThis":      return baseThis(n);
-    case "AccessBoundary":  return boundaryVm();
-    case "AccessScope":     return scopeWithName(n);
-    case "AccessMember":    return member(n);
-    case "AccessKeyed":     return keyed(n);
-
-    case "CallScope":       return callScope(n);
-    case "CallMember":      return callMember(n);
-    case "CallFunction":    return callFunction(n);
-    case "CallGlobal":      return callGlobal(n);
-
-    case "New":             return newExpr(n);
-    case "Binary":          return binary(n);
-    case "Unary":           return unary(n);
-
-    case "PrimitiveLiteral":return primitive(n);
-    case "ArrayLiteral":    return arrayLit(n);
-    case "ObjectLiteral":   return objectLit(n);
-    case "Paren":           return paren(n);
-
-    case "Template":        return template(n);
-    case "TaggedTemplate":  return taggedTemplate(n);
-
-    default:
-      return null;
-  }
-}
-
-/* ---- Primitives / simple nodes ---- */
-function boundaryVm(): PrintedExpression {
-  return printed("o.$vm", []);
-}
-function baseThis(n: AccessThisExpression): PrintedExpression {
-  return printed(ancestorChain(n.ancestor), [], n.ancestor === 0 ? "$this" : `$parent^${n.ancestor}`);
-}
-function scopeWithName(n: AccessScopeExpression): PrintedExpression {
-  const base = ancestorChain(n.ancestor);
-  const pathBase = n.ancestor === 0 ? "" : `$parent^${n.ancestor}.`;
-  if (!n.name) return printed(base, [], pathBase ? pathBase.slice(0, -1) : undefined);
-  const code = `${base}.${n.name}`;
-  const start = base.length + 1;
-  const seg: OverlayLambdaSegment = {
-    kind: "member",
-    path: `${pathBase}${n.name}`,
-    span: spanFromBounds(start, start + n.name.length),
-  };
-  return printed(code, [seg], `${pathBase}${n.name}`);
-}
-
-function member(n: AccessMemberExpression): PrintedExpression | null {
-  const base = printLeft(n.object);
-  if (!base) return null;
-  const dot = n.optional ? "?." : ".";
-  const head = `${base.code}${dot}`;
-  const code = `${head}${n.name}`;
-  const segs: OverlayLambdaSegment[] = base.path
-    ? [{
-      kind: "member",
-      path: `${base.path}.${n.name}`,
-      span: spanFromBounds(head.length, head.length + n.name.length),
-    }]
-    : [];
-  const segments = mergeSegments(base.segments, segs, 0);
-  const path = base.path ? `${base.path}.${n.name}` : undefined;
-  return printed(code, segments, path);
-}
-
-function keyed(n: AccessKeyedExpression): PrintedExpression | null {
-  const base = printLeft(n.object);
-  const key = printIsAssign(n.key);
-  if (!base || !key) return null;
-  const opt = n.optional ? "?." : "";
-  const head = `${base.code}${opt}[`;
-  const code = `${head}${key.code}]`;
-  const path = base.path && key.path ? `${base.path}.${key.path}` : base.path && key.code ? `${base.path}[${key.code}]` : undefined;
-  const segs: OverlayLambdaSegment[] = key.path
-    ? [{ kind: "member", path: path ?? key.path, span: spanFromBounds(head.length, head.length + key.code.length) }]
-    : [];
-  const inner = mergeSegments(key.segments, segs, head.length);
-  const segments = mergeSegments(base.segments, inner, 0);
-  return printed(code, segments, path);
-}
-
-function callScope(n: CallScopeExpression): PrintedExpression | null {
-  const callee = scopeWithName({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: null! /* spans handled separately */ });
-  const args = joinArgs(n.args);
-  const head = `${callee.code}${n.optional ? "?." : ""}(`;
-  const code = `${head}${args.code})`;
-  const segments = mergeSegments(callee.segments, args.segments, head.length);
-  return printed(code, segments);
-}
-
-function callMember(n: CallMemberExpression): PrintedExpression | null {
-  const obj = printLeft(n.object);
-  if (!obj) return null;
-  const head = `${obj.code}${n.optionalMember ? "?." : "."}${n.name}`;
-  const args = joinArgs(n.args);
-  const callHead = `${head}${n.optionalCall ? "?." : ""}(`;
-  const code = `${callHead}${args.code})`;
-  const segments = mergeSegments(obj.segments, args.segments, callHead.length);
-  return printed(code, segments);
-}
-
-function callFunction(n: CallFunctionExpression): PrintedExpression | null {
-  const fn = printLeft(n.func);
-  if (!fn) return null;
-  const args = joinArgs(n.args);
-  const head = `${fn.code}${n.optional ? "?." : ""}(`;
-  const code = `${head}${args.code})`;
-  const segments = mergeSegments(fn.segments, args.segments, head.length);
-  return printed(code, segments);
-}
-
-function callGlobal(_n: CallGlobalExpression): PrintedExpression | null {
-  return null;
-}
-
-function newExpr(n: NewExpression): PrintedExpression | null {
-  const f = printLeft(n.func);
-  if (!f) return null;
-  const args = joinArgs(n.args);
-  const head = `new ${f.code}(`;
-  const code = `${head}${args.code})`;
-  const segments = mergeSegments(f.segments, args.segments, head.length);
-  return printed(code, segments);
-}
-
-function binary(n: BinaryExpression): PrintedExpression | null {
-  const l = printIsBindingBehavior(n.left);
-  const r = printIsBindingBehavior(n.right);
-  if (!l || !r) return null;
-  const leftHead = `(${l.code}) ${n.operation} (`;
-  const code = `${leftHead}${r.code})`;
-  const segments = mergeSegments(l.segments, r.segments, leftHead.length);
-  return printed(code, segments);
-}
-
-function unary(n: UnaryExpression): PrintedExpression | null {
-  const e = printIsBindingBehavior(n.expression);
-  if (!e) return null;
-  const code = n.pos === 0 ? `${n.operation}${e.code}` : `${e.code}${n.operation}`;
-  return printed(code, e.segments, e.path);
-}
-
-function primitive(n: PrimitiveLiteralExpression): PrintedExpression {
-  const code = n.value === undefined ? "undefined" : JSON.stringify(n.value);
-  return printed(code, []);
-}
-
-function arrayLit(n: ArrayLiteralExpression): PrintedExpression | null {
-  const parts: string[] = [];
-  let segments: OverlayLambdaSegment[] = [];
-  for (let i = 0; i < n.elements.length; i++) {
-    const el = printIsAssign(n.elements[i]!);
-    if (!el) return null;
-    const prefix = i === 0 ? "" : ", ";
-    const offset = parts.join("").length + prefix.length;
-    parts.push(`${prefix}${el.code}`);
-    segments = mergeSegments(segments, el.segments, offset);
-  }
-  const code = `[${parts.join("")}]`;
-  return printed(code, segments);
-}
-
-function objectLit(n: ObjectLiteralExpression): PrintedExpression | null {
-  const parts: string[] = [];
-  let segments: OverlayLambdaSegment[] = [];
-  for (let i = 0; i < n.keys.length; i++) {
-    const keyAst = n.keys[i];
-    const val = printIsAssign(n.values[i]!);
-    if (!val) return null;
-    const key = typeof keyAst === "number" ? String(keyAst) : JSON.stringify(keyAst);
-    const prefix = i === 0 ? "" : ", ";
-    const offset = parts.join("").length + prefix.length + key.length + 2;
-    parts.push(`${prefix}${key}: ${val.code}`);
-    segments = mergeSegments(segments, val.segments, offset);
-  }
-  const code = `{ ${parts.join("")} }`;
-  return printed(code, segments);
-}
-
-function paren(n: ParenExpression): PrintedExpression | null {
-  const inner = printIsAssign(n.expression);
-  if (!inner) return null;
-  return printed(`(${inner.code})`, shiftSegments(inner.segments, 1), inner.path);
-}
-
-function template(n: TemplateExpression): PrintedExpression | null {
-  const pieces: string[] = [];
-  let segments: OverlayLambdaSegment[] = [];
-  pieces.push(escapeBackticks(n.cooked[0] ?? ""));
-  for (let i = 0; i < n.expressions.length; i++) {
-    const e = printIsAssign(n.expressions[i]!);
-    if (!e) return null;
-    const before = pieces.join("");
-    pieces.push(`\${${e.code}}${escapeBackticks(n.cooked[i + 1] ?? "")}`);
-    segments = mergeSegments(segments, e.segments, before.length + 2);
-  }
-  return printed(`\`${pieces.join("")}\``, segments);
-}
-
-function taggedTemplate(n: TaggedTemplateExpression): PrintedExpression | null {
-  const f = printLeft(n.func);
-  if (!f) return null;
-  const t = template({ $kind: "Template", cooked: n.cooked, expressions: n.expressions, span: null! /* spans handled elsewhere */ });
-  if (!t) return null;
-  const code = `${f.code}${t.code}`;
-  const segments = mergeSegments(f.segments, t.segments, f.code.length);
-  return printed(code, segments);
-}
-
-/* ---- Composite / helpers ---- */
-
-function printAssign(n: AssignExpression): PrintedExpression | null {
-  const t = printIsBindingBehavior(n.target);
-  const v = printIsBindingBehavior(n.value);
-  if (!t || !v) return null;
-  const code = `${t.code} ${n.op} ${v.code}`;
-  const segments = mergeSegments(t.segments, v.segments, t.code.length + 1 + n.op.length + 1);
-  return printed(code, segments);
-}
-
-function printConditional(n: ConditionalExpression): PrintedExpression | null {
-  const c = printIsBindingBehavior(n.condition);
-  const y = printIsBindingBehavior(n.yes);
-  const no = printIsBindingBehavior(n.no);
-  if (!c || !y || !no) return null;
-  const head = `(${c.code}) ? (${y.code}) : (`;
-  const code = `${head}${no.code})`;
-  const segments = mergeSegments(mergeSegments(c.segments, y.segments, head.length - y.code.length - 3), no.segments, head.length);
-  return printed(code, segments);
-}
-
-function joinArgs(args: IsAssign[]): PrintedExpression {
-  const parts: string[] = [];
-  let segments: OverlayLambdaSegment[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = printIsAssign(args[i]!);
-    if (!a) continue;
-    const prefix = i === 0 ? "" : ", ";
-    const offset = parts.join("").length + prefix.length;
-    parts.push(`${prefix}${a.code}`);
-    segments = mergeSegments(segments, a.segments, offset);
-  }
-  return printed(parts.join(""), segments);
-}
-
-function printIsAssign(n: IsAssign): PrintedExpression | null {
-  return printIsBindingBehavior(n as IsBindingBehavior);
-}
-
-function printLeft(n: IsLeftHandSide): PrintedExpression | null {
-  return printIsBindingBehavior(n as IsBindingBehavior);
-}
-
-function printed(code: string, segments: OverlayLambdaSegment[], path?: string): PrintedExpression {
-  return path ? { code, segments, path } : { code, segments };
-}
-
-function ancestorChain(ancestor: number): string {
-  return ancestor > 0 ? `o${".$parent".repeat(ancestor)}` : "o";
-}
-
-function escapeBackticks(s: string): string {
-  return s.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
-}
 
 function hasQualifiedVm(vm: AnalyzeOptions["vm"]): vm is AnalyzeOptions["vm"] & { getQualifiedRootVmTypeExpr: () => string } {
   return typeof (vm as { getQualifiedRootVmTypeExpr?: unknown }).getQualifiedRootVmTypeExpr === "function";
