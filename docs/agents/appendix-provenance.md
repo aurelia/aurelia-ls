@@ -141,11 +141,11 @@ Callers must **not** re‑implement these rules.
 ## 6. Terminology guardrails
 
 - **Compiler provenance vs. program provenance**
-  - `compiler/model/origin.ts` defines `Origin` / `Provenance` for compiler diagnostics and stage‑level provenance (e.g. where a type error came from).
-  - `program/provenance.ts` defines cross‑document provenance between artifacts (overlay/SSR) and templates.
+  - `compiler/model/origin.ts` defines `Origin` / `Provenance` for compiler diagnostics and stage-level provenance (e.g. where a type error came from).
+  - `program/provenance.ts` defines cross-document provenance between artifacts (overlay/SSR) and templates.
   - These are related but distinct concepts; do **not** reuse one in place of the other.
-- **Program‑level `Origin` name**
-  - The `Origin` interface in `program/primitives.ts` (URI + span) must be renamed (e.g. `DocumentOrigin`) to avoid colliding with compiler `Origin`. Prefer `DocumentSpan` / `DocumentOrigin` naming in program and server code.
+- **Program-level origins**
+  - The old `Origin` helper in `program/primitives.ts` was removed; prefer `DocumentSpan` plus `CanonicalDocumentUri` (`uri`, `path`, `file`) when a location needs to cross program/server boundaries.
 - **“expr/member at offset”**
   - If you need “which expression/member is under this offset?” and it involves overlay TS or SSR, you **must** go through provenance (`lookupSource` / `lookupGenerated` / `project*`).
   - Template‑only queries (expr at offset in HTML, without jumping to overlay or SSR) can go through `TemplateQueryFacade` directly.

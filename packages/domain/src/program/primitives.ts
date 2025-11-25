@@ -19,15 +19,6 @@ export interface DocumentSnapshot {
   readonly text: string;
 }
 
-/**
- * Minimal provenance marker tying a span to a concrete document.
- * Use this when a full IR origin is overkill.
- */
-export interface Origin {
-  readonly uri: DocumentUri;
-  readonly span: SourceSpan;
-}
-
 /** Brand a string as a DocumentUri without validation (utility for adapters). */
 export function asDocumentUri(input: string): DocumentUri {
   return input as DocumentUri;
