@@ -5,7 +5,7 @@ import type {
   TemplateMappingSegment,
 } from "../contracts.js";
 import type { ExprId, NodeId, SourceFileId } from "../compiler/model/identity.js";
-import { spanContainsOffset, spanLength, type SourceSpan } from "../compiler/model/span.js";
+import { spanContainsOffset, spanEquals, spanLength, type SourceSpan } from "../compiler/model/span.js";
 import type { DocumentUri } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";
 import { resolveSourceSpan } from "../compiler/model/source.js";
@@ -148,19 +148,68 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     if (!candidates) return null;
 
     const querySpan = resolveSourceSpan(span, canonical.file);
-    const edge = pickBestEdgeForSpan(candidates, querySpan, "from");
-    if (!edge) return null;
 
-    const projected = projectEdgeSpanToTemplateSpan(edge, querySpan);
-    return {
-      edge: {
-        ...edge,
-        to: { ...edge.to, span: projected },
-      },
-      ...(edge.from.exprId ? { exprId: edge.from.exprId } : edge.to.exprId ? { exprId: edge.to.exprId } : {}),
-      ...(edge.kind === "overlayMember" && edge.tag ? { memberPath: edge.tag } : {}),
-      ...(edge.to.nodeId ? { nodeId: edge.to.nodeId } : {}),
+    // Prefer overlayExpr edges as the projection anchor when the querySpan exactly matches the full expression span.
+    // This lets us map the whole expression back to the full template span while still reporting a memberPath from overlayMember segments.
+    const exprEdges = candidates.filter((edge) => edge.kind === "overlayExpr" && edgeOverlap(edge.from.span, querySpan) > 0);
+    const fullExprEdge = exprEdges.find((edge) => spanEquals(edge.from.span, querySpan)) ?? null;
+
+    const projectionEdge = fullExprEdge ?? pickBestEdgeForSpan(candidates, querySpan, "from");
+    if (!projectionEdge) return null;
+
+    const projectedSpan = projectEdgeSpanToTemplateSpan(projectionEdge, querySpan);
+    const exprId = projectionEdge.from.exprId ?? projectionEdge.to.exprId;
+    const nodeId = projectionEdge.to.nodeId ?? projectionEdge.from.nodeId;
+
+    // Derive memberPath independently from the projection edge:
+    // - full expression slice: prefer the member segment whose span == expr span (e.g. "user")
+    // - partial slice: prefer the deepest member (e.g. "user.name")
+    let memberPath: string | undefined;
+
+    if (exprId) {
+      const memberEdgesForExpr = candidates.filter(
+        (edge) =>
+          edge.kind === "overlayMember" &&
+          (edge.from.exprId ?? edge.to.exprId) === exprId &&
+          edgeOverlap(edge.from.span, querySpan) > 0,
+      );
+
+      if (memberEdgesForExpr.length > 0) {
+        if (fullExprEdge) {
+          // Full expression slice -> pick the member that covers the full expr span, if any.
+          const coveringMembers = memberEdgesForExpr.filter((edge) => spanEquals(edge.from.span, fullExprEdge.from.span));
+          const chosen =
+            coveringMembers[0] ??
+            memberEdgesForExpr.reduce<ProvenanceEdge | undefined>((best, edge) => {
+              if (!best) return edge;
+              const bestDepth = memberDepth(best);
+              const depth = memberDepth(edge);
+              // For full slices, shallower is generally the "root" member.
+              return depth < bestDepth ? edge : best;
+            }, undefined);
+
+          memberPath = chosen?.tag;
+        } else {
+          // Partial slice -> deepest matching member wins (existing behavior, but restricted to this exprId).
+          const bestMember = pickBestEdgeForSpan(memberEdgesForExpr, querySpan, "from");
+          if (bestMember) memberPath = bestMember.tag;
+        }
+      }
+    }
+
+    const resultEdge: ProvenanceEdge = {
+      ...projectionEdge,
+      to: { ...projectionEdge.to, span: projectedSpan },
     };
+
+    const hit: TemplateProvenanceHit = {
+      edge: resultEdge,
+      ...(exprId ? { exprId } : {}),
+      ...(nodeId ? { nodeId } : {}),
+      ...(memberPath ? { memberPath } : {}),
+    };
+
+    return hit;
   }
 
   projectGeneratedOffset(uri: DocumentUri, offset: number): TemplateProvenanceHit | null {

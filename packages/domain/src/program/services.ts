@@ -501,7 +501,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (!overlayHit) return [];
 
     const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = projectOverlayOffset(overlayHit, offset);
+    const overlayOffset = this.overlayOffsetForHit(overlayHit, offset, canonical.uri);
     const entries = ts.getCompletions(overlay, overlayOffset) ?? [];
     if (!entries.length) return [];
 
