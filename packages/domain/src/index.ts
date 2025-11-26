@@ -1,10 +1,10 @@
 export { compileTemplate } from "./compiler/facade.js";
 export { PRELUDE_TS } from "./prelude.js";
 
-export { getExpressionParser } from "./parsers/expression-parser.js";
-export { rebaseExpressionSpans } from "./parsers/lsp-expression-parser.js";
-export type { ExpressionParseContext, IExpressionParser } from "./parsers/expression-api.js";
-export { DEFAULT_SYNTAX } from "./compiler/language/syntax.js";
+export { getExpressionParser } from "./compiler/parsing/expression-parser.js";
+export { rebaseExpressionSpans } from "./compiler/parsing/lsp-expression-parser.js";
+export type { ExpressionParseContext, IExpressionParser } from "./compiler/parsing/lsp-expression-parser.js";
+export { DEFAULT_SYNTAX } from "./compiler/parsing/attribute-parser.js";
 export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup } from "./compiler/language/registry.js";
 export type { Semantics } from "./compiler/language/registry.js";
 export type {

@@ -9,8 +9,8 @@ import {
 } from "../compiler/facade.js";
 import { DEFAULT as SEM_DEFAULT, type Semantics } from "../compiler/language/registry.js";
 import type { ResourceGraph, ResourceScopeId } from "../compiler/language/resource-graph.js";
-import type { AttributeParser } from "../compiler/language/syntax.js";
-import type { IExpressionParser } from "../parsers/expression-api.js";
+import type { AttributeParser } from "../compiler/parsing/attribute-parser.js";
+import type { IExpressionParser } from "../compiler/parsing/lsp-expression-parser.js";
 import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../compiler/pipeline/engine.js";
 import { stableHash } from "../compiler/pipeline/hash.js";
 import type { VmReflection } from "../compiler/phases/50-plan/overlay/types.js";

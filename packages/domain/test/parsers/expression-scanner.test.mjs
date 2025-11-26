@@ -1,7 +1,7 @@
 import test, { describe }  from "node:test";
 import assert from "node:assert/strict";
 
-import { Scanner, TokenType } from "../../out/parsers/expression-scanner.js";
+import { Scanner, TokenType } from "../../out/compiler/parsing/expression-scanner.js";
 
 /**
  * Scan the entire input and return all tokens including EOF.

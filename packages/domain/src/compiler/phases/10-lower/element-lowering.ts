@@ -1,4 +1,4 @@
-import type { AttributeParser } from "../../language/syntax.js";
+import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { Semantics } from "../../language/registry.js";
 import type {
   ElementBindableIR,

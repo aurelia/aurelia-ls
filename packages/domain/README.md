@@ -10,9 +10,9 @@ Pure, in-process Aurelia template compiler and program facade. Everything in thi
 - Public contract types for tooling are in `contracts.ts` (TemplateMappingArtifact, SsrMappingArtifact, TemplateQueryFacade shape, bindable/query info).
 
 ## Language and parsing
-- Attribute parsing is handled by `compiler/language/syntax.ts` (`AttributeParser`, pattern registry, `AttrSyntax`); default patterns live in `DEFAULT_SYNTAX`.
+- Attribute parsing is handled by `compiler/parsing/attribute-parser.ts` (`AttributeParser`, pattern registry, `AttrSyntax`); default patterns live in `DEFAULT_SYNTAX`.
 - Semantics + registry live in `compiler/language/registry.ts`: DOM schema, resource catalogs (elements/attributes/controllers/valueConverters/bindingBehaviors), naming rules, event schema, two-way defaults. Resource scoping is modeled by `compiler/language/resource-graph.ts` (scope graph, `materializeResourcesForScope`).
-- Expressions are parsed via `parsers/lsp-expression-parser.ts` behind the `IExpressionParser` contract (`parsers/expression-api.ts`); `getExpressionParser()` in `parsers/expression-parser.ts` provides a shared instance. Tokenization utilities live in `parsers/expression-scanner.ts`.
+- Expressions are parsed via `compiler/parsing/lsp-expression-parser.ts` behind the `IExpressionParser` contract; `getExpressionParser()` in `compiler/parsing/expression-parser.ts` provides a shared instance. Tokenization utilities live in `compiler/parsing/expression-scanner.ts`.
 
 ## Pipeline engine and caching
 - `compiler/pipeline/engine.ts` defines the stage DAG contract (`StageKey`, `StageDefinition`, `StageOutputs`, `PipelineOptions`) and executes stages via `PipelineSession`. Each stage declares deps, a pure fingerprint, and a run function. Fingerprints and artifacts are hashed with `stableHash`.

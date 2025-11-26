@@ -1,4 +1,4 @@
-import type { AttributeParser } from "../../language/syntax.js";
+import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
 import type { ExprTable, P5Element } from "./lower-shared.js";
 import { attrLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";

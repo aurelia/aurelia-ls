@@ -1,8 +1,8 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { LspExpressionParser } from "../../out/parsers/lsp-expression-parser.js";
-import { splitInterpolationText } from "../../out/parsers/lsp-expression-parser.js";
+import { LspExpressionParser } from "../../out/compiler/parsing/lsp-expression-parser.js";
+import { splitInterpolationText } from "../../out/compiler/parsing/lsp-expression-parser.js";
 import { toSourceFileId } from "../../out/compiler/model/identity.js";
 
 /**

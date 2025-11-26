@@ -9,8 +9,8 @@ import type { ScopeModule } from "../model/symbols.js";
 import type { TypecheckModule } from "../phases/40-typecheck/typecheck.js";
 import type { Semantics } from "../language/registry.js";
 import type { ResourceGraph, ResourceScopeId } from "../language/resource-graph.js";
-import type { AttributeParser } from "../language/syntax.js";
-import type { IExpressionParser } from "../../parsers/expression-api.js";
+import type { AttributeParser } from "../parsing/attribute-parser.js";
+import type { IExpressionParser } from "../parsing/lsp-expression-parser.js";
 import { stableHash } from "./hash.js";
 import { FileStageCache, type StageCache, type StageCacheEntry, createDefaultCacheDir } from "./cache.js";
 

@@ -1,4 +1,4 @@
-import type { IExpressionParser } from "./expression-api.js";
+import type { IExpressionParser } from "./lsp-expression-parser.js";
 import { LspExpressionParser } from "./lsp-expression-parser.js";
 
 /**

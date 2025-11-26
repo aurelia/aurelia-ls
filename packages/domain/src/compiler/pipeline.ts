@@ -1,10 +1,10 @@
 import { PipelineEngine, type PipelineOptions, type StageOutputs, type CacheOptions, type FingerprintHints } from "./pipeline/engine.js";
 import { createDefaultStageDefinitions } from "./pipeline/stages.js";
-import type { AttributeParser } from "./language/syntax.js";
+import type { AttributeParser } from "./parsing/attribute-parser.js";
 import type { Semantics } from "./language/registry.js";
 import type { ResourceGraph, ResourceScopeId } from "./language/resource-graph.js";
 import type { VmReflection } from "./phases/50-plan/overlay/types.js";
-import type { IExpressionParser } from "../parsers/expression-api.js";
+import type { IExpressionParser } from "./parsing/lsp-expression-parser.js";
 
 export interface CoreCompileOptions {
   html: string;

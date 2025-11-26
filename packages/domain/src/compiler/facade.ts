@@ -1,7 +1,7 @@
 import { createDefaultEngine } from "./pipeline.js";
 import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./pipeline/engine.js";
-import type { AttributeParser } from "./language/syntax.js";
-import type { IExpressionParser } from "../parsers/expression-api.js";
+import type { AttributeParser } from "./parsing/attribute-parser.js";
+import type { IExpressionParser } from "./parsing/lsp-expression-parser.js";
 import type { Semantics } from "./language/registry.js";
 import type { ResourceGraph, ResourceScopeId } from "./language/resource-graph.js";
 import type { VmReflection } from "./phases/50-plan/overlay/types.js";

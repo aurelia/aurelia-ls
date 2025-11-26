@@ -1,7 +1,7 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { AttrSyntax, AttributeParser, createDefaultSyntax, registerBuiltins } from "../../out/compiler/language/syntax.js";
+import { AttrSyntax, AttributeParser, createDefaultSyntax, registerBuiltins } from "../../out/compiler/parsing/attribute-parser.js";
 
 describe("attribute parser / built-ins", () => {
   test("parses dot binding (PART.PART)", () => {

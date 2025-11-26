@@ -41,7 +41,7 @@
     "dump:ssr": "pnpm -w build && node scripts/dump-ssr.mjs",
     "dump:overlay": "pnpm -w build && node scripts/dump-overlays.mjs",
     "test:parsers": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/parsers/*.test.mjs",
-    "test:parsers:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/parsers/**/*.js\" --exclude \"**/*.test.*\" -r text -r text-summary node --test packages/domain/test/parsers/*.test.mjs",
+    "test:parsers:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/parsing/**/*.js\" --exclude \"**/*.test.*\" -r text -r text-summary node --test packages/domain/test/parsers/*.test.mjs",
     "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/domain/test"
   },
   "devDependencies": {

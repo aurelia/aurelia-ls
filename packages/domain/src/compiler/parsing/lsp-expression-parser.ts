@@ -1,4 +1,3 @@
-import type { ExpressionParseContext, IExpressionParser } from "./expression-api.js";
 import { Scanner, TokenType, type Token, CharCode } from "./expression-scanner.js";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -51,11 +50,28 @@ import type {
   CustomExpression,
   BadExpression,
   SourceSpan,
-} from "../compiler/model/ir.js";
+  SourceFileId,
+} from "../model/ir.js";
 
-import { normalizeSpan, offsetSpan, spanFromBounds } from "../compiler/model/span.js";
-import { absoluteSpan, ensureSpanFile } from "../compiler/model/source.js";
-import { provenanceFromSpan } from "../compiler/model/origin.js";
+import { normalizeSpan, offsetSpan, spanFromBounds } from "../model/span.js";
+import { absoluteSpan, ensureSpanFile } from "../model/source.js";
+import { provenanceFromSpan } from "../model/origin.js";
+
+export type { ExpressionType } from "../model/ir.js";
+
+export interface ExpressionParseContext {
+  readonly baseSpan?: SourceSpan;
+  readonly baseOffset?: number;
+  readonly file?: SourceFileId;
+}
+
+export interface IExpressionParser {
+  parse(expression: string, expressionType: "IsIterator", context?: ExpressionParseContext): ForOfStatement | BadExpression;
+  parse(expression: string, expressionType: "Interpolation", context?: ExpressionParseContext): Interpolation;
+  parse(expression: string, expressionType: "IsFunction" | "IsProperty", context?: ExpressionParseContext): IsBindingBehavior;
+  parse(expression: string, expressionType: "IsCustom", context?: ExpressionParseContext): CustomExpression;
+  parse(expression: string, expressionType: ExpressionType, context?: ExpressionParseContext): AnyBindingExpression;
+}
 
 type SpanBearing = { span: TextSpan };
 
