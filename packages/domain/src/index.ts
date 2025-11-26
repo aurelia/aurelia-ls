@@ -29,14 +29,15 @@ export type {
   TemplateMappingArtifact,
   TemplateMappingEntry,
   TemplateMappingSegment,
-  SsrMappingArtifact,
-  SsrMappingEntry,
+} from "./compiler/mapping.js";
+export type {
   TemplateQueryFacade,
   TemplateExpressionInfo,
   TemplateBindableInfo,
   TemplateNodeInfo,
   TemplateControllerInfo,
-} from "./contracts.js";
+} from "./compiler/query.js";
+export type { SsrMappingArtifact, SsrMappingEntry } from "./compiler/products/ssr.js";
 export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
 
 export { compileTemplateToSSR } from "./compiler/facade.js";

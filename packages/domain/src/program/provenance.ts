@@ -1,9 +1,9 @@
+import type { SsrMappingArtifact } from "../compiler/products/ssr.js";
 import type {
-  SsrMappingArtifact,
   TemplateMappingArtifact,
   TemplateMappingEntry,
   TemplateMappingSegment,
-} from "../contracts.js";
+} from "../compiler/mapping.js";
 import type { ExprId, NodeId, SourceFileId } from "../compiler/model/identity.js";
 import { spanContainsOffset, spanEquals, spanLength, type SourceSpan } from "../compiler/model/span.js";
 import type { DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";

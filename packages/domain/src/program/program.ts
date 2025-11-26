@@ -14,7 +14,8 @@ import type { IExpressionParser } from "../compiler/parsing/lsp-expression-parse
 import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../compiler/pipeline/engine.js";
 import { stableHash } from "../compiler/pipeline/hash.js";
 import type { VmReflection } from "../compiler/phases/50-plan/overlay/types.js";
-import type { TemplateMappingArtifact, TemplateQueryFacade } from "../contracts.js";
+import type { TemplateMappingArtifact } from "../compiler/mapping.js";
+import type { TemplateQueryFacade } from "../compiler/query.js";
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
 import { InMemorySourceStore, type SourceStore } from "./sources.js";
 import { InMemoryProvenanceIndex, type ProvenanceIndex } from "./provenance.js";

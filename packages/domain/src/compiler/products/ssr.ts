@@ -1,10 +1,25 @@
 import path from "node:path";
 import type { PipelineSession } from "../pipeline/engine.js";
-import { normalizePathForId, toSourceFileId, type SourceFileId } from "../model/identity.js";
+import { normalizePathForId, toSourceFileId, type HydrationId, type SourceFileId } from "../model/identity.js";
 import type { SsrPlanModule } from "../phases/50-plan/ssr/types.js";
 import type { SsrNodeMapping } from "../phases/60-emit/ssr/emit.js";
+import type { NodeId } from "../model/ir.js";
 import { resolveSourceSpan } from "../model/source.js";
-import type { SsrMappingArtifact, SsrMappingEntry } from "../../contracts.js";
+import type { SourceSpan } from "../model/span.js";
+
+export interface SsrMappingEntry {
+  nodeId: NodeId;
+  /** Hydration id for correlation/debugging (optional). */
+  hid?: HydrationId;
+  templateSpan: SourceSpan | null;
+  htmlSpan?: SourceSpan | null;
+  manifestSpan?: SourceSpan | null;
+}
+
+export interface SsrMappingArtifact {
+  kind: "ssr-mapping";
+  entries: readonly SsrMappingEntry[];
+}
 
 export interface SsrProductOptions {
   templateFilePath: string;

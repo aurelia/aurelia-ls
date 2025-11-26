@@ -15,7 +15,9 @@ import {
   type TemplateProvenanceHit,
 } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
-import type { TemplateBindableInfo, TemplateMappingArtifact, TemplateQueryFacade, SsrMappingArtifact } from "../contracts.js";
+import type { TemplateBindableInfo, TemplateQueryFacade } from "../compiler/query.js";
+import type { TemplateMappingArtifact } from "../compiler/mapping.js";
+import type { SsrMappingArtifact } from "../compiler/products/ssr.js";
 import { stableHash } from "../compiler/pipeline/hash.js";
 import type { TypecheckDiagnostic } from "../compiler/phases/40-typecheck/typecheck.js";
 

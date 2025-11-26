@@ -1,4 +1,3 @@
-import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateMappingSegment } from "../contracts.js";
 import type { BindingSourceIR, ExprId, ExprTableEntry, IrModule, SourceSpan, TextSpan } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./phases/60-emit/overlay/emit.js";
@@ -12,6 +11,26 @@ import { normalizeSpan, spanLength } from "./model/span.js";
 import { resolveSourceSpan, type SourceFile } from "./model/source.js";
 import { exprIdMapGet, type ExprIdMap, type ExprIdMapLike } from "./model/identity.js";
 import { isInterpolation } from "./expr-utils.js";
+
+export interface TemplateMappingEntry {
+  exprId: ExprId;
+  htmlSpan: SourceSpan;
+  overlaySpan: TextSpan;
+  frameId?: FrameId | undefined;
+  segments?: readonly TemplateMappingSegment[] | undefined;
+}
+
+export interface TemplateMappingArtifact {
+  kind: "mapping";
+  entries: readonly TemplateMappingEntry[];
+}
+
+export interface TemplateMappingSegment {
+  kind: "member";
+  path: string;
+  htmlSpan: SourceSpan;
+  overlaySpan: TextSpan;
+}
 
 export interface BuildMappingInputs {
   overlayMapping: readonly OverlayEmitMappingEntry[];

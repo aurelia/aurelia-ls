@@ -1,12 +1,3 @@
-import type {
-  TemplateBindableInfo,
-  TemplateControllerInfo,
-  TemplateMappingArtifact,
-  TemplateMappingEntry,
-  TemplateMappingSegment,
-  TemplateNodeInfo,
-  TemplateQueryFacade,
-} from "../contracts.js";
 import type { TypecheckModule } from "./phases/40-typecheck/typecheck.js";
 import type {
   LinkedAttributeBinding,
@@ -19,10 +10,46 @@ import type {
   TargetSem,
 } from "./phases/20-resolve-host/types.js";
 import type { TypeRef } from "./language/registry.js";
-import type { DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR } from "./model/ir.js";
+import type { BindingMode, DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR } from "./model/ir.js";
 import type { FrameId } from "./model/symbols.js";
 import { idKey } from "./model/identity.js";
 import { pickNarrowestContaining, spanContainsOffset } from "./model/span.js";
+import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateMappingSegment } from "./mapping.js";
+
+export interface TemplateNodeInfo {
+  id: NodeId;
+  kind: "element" | "attribute" | "text" | "comment";
+  hostKind: "custom" | "native" | "none";
+  span: SourceSpan;
+  templateIndex: number;
+}
+
+export interface TemplateBindableInfo {
+  name: string;
+  mode?: BindingMode;
+  source: "component" | "custom-attribute" | "native" | "controller";
+  type?: string;
+}
+
+export interface TemplateExpressionInfo {
+  exprId: ExprId;
+  span: SourceSpan;
+  frameId?: FrameId | undefined;
+  memberPath?: string;
+}
+
+export interface TemplateControllerInfo {
+  kind: "repeat" | "with" | "if" | "switch" | "promise" | "portal";
+  span: SourceSpan;
+}
+
+export interface TemplateQueryFacade {
+  nodeAt(htmlOffset: number): TemplateNodeInfo | null;
+  bindablesFor(node: TemplateNodeInfo): TemplateBindableInfo[] | null;
+  exprAt(htmlOffset: number): TemplateExpressionInfo | null;
+  expectedTypeOf(expr: TemplateExpressionInfo | TemplateBindableInfo): string | null;
+  controllerAt(htmlOffset: number): TemplateControllerInfo | null;
+}
 
 export function buildTemplateQuery(
   irModule: IrModule | undefined,

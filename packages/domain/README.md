@@ -7,7 +7,7 @@ Pure, in-process Aurelia template compiler and program facade. Everything in thi
 - `compiler/model/span.ts` and `compiler/model/source.ts` define Text/Source spans (UTF-16), normalization, offset math, and SourceFile resolution/branding. `spanContainsOffset`, `narrowestContainingSpan`, and `coverSpans` are reused across phases.
 - `compiler/model/origin.ts` carries provenance (`Origin`/`Provenance`) for diagnostics/mapping with helpers to derive stage-tagged origins and traces.
 - IR lives in `compiler/model/ir.ts`: DOM tree, instruction IR (bindings, controllers, lets, rows), expression AST/table, and shared JsonValue. Scope graph is in `compiler/model/symbols.ts` (frames, overlay bases, locals, expr-to-frame map, AU12xx diagnostics).
-- Public contract types for tooling are in `contracts.ts` (TemplateMappingArtifact, SsrMappingArtifact, TemplateQueryFacade shape, bindable/query info).
+- Public contract types for tooling live alongside their owners: mapping artifacts in `compiler/mapping.ts`, SSR mappings in `compiler/products/ssr.ts`, and query-facing types in `compiler/query.ts` (bindable/query info, TemplateQueryFacade).
 
 ## Language and parsing
 - Attribute parsing is handled by `compiler/parsing/attribute-parser.ts` (`AttributeParser`, pattern registry, `AttrSyntax`); default patterns live in `DEFAULT_SYNTAX`.
