@@ -1,5 +1,7 @@
 import type { AnalyzeOptions, OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
+import type { AotPlanModule } from "../phases/50-plan/aot/types.js";
 import type { EmitResult as OverlayEmitResult } from "../phases/60-emit/overlay/emit.js";
+import type { EmitResult as AotEmitResult } from "../phases/60-emit/aot/emit.js";
 import type { SsrPlanModule } from "../phases/50-plan/ssr/types.js";
 import type { SsrEmitResult } from "../phases/60-emit/ssr/emit.js";
 import type { VmReflection } from "../phases/50-plan/overlay/types.js";
@@ -24,6 +26,8 @@ export type StageKey =
   | "40-typecheck"
   | "50-plan-overlay"
   | "60-emit-overlay"
+  | "50-plan-aot"
+  | "60-emit-aot"
   | "50-plan-ssr"
   | "60-emit-ssr";
 
@@ -37,6 +41,8 @@ export interface StageOutputs {
   "40-typecheck": TypecheckModule;
   "50-plan-overlay": OverlayPlanModule;
   "60-emit-overlay": OverlayEmitResult;
+  "50-plan-aot": AotPlanModule;
+  "60-emit-aot": AotEmitResult;
   "50-plan-ssr": SsrPlanModule;
   "60-emit-ssr": SsrEmitResult;
 }
@@ -68,6 +74,12 @@ export interface PipelineOptions {
     eol?: "\n" | "\r\n";
     syntheticPrefix?: string;
   };
+  aot?: {
+    isJs?: boolean;
+    filename?: string;
+    banner?: string;
+    eol?: "\n" | "\r\n";
+  };
   ssr?: {
     eol?: "\n" | "\r\n";
   };
@@ -98,6 +110,7 @@ export interface FingerprintHints {
   semantics?: FingerprintToken;
   vm?: FingerprintToken;
   overlay?: FingerprintToken;
+  aot?: FingerprintToken;
   ssr?: FingerprintToken;
   analyze?: FingerprintToken;
   [extra: string]: FingerprintToken | undefined;

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { computeOverlayBaseName, computeSsrBaseName } from "../compiler/path-conventions.js";
+import { computeAotBaseName, computeOverlayBaseName, computeSsrBaseName } from "../compiler/path-conventions.js";
 import { normalizePathForId, toSourceFileId, type NormalizedPath, type SourceFileId } from "../compiler/model/identity.js";
 import { asDocumentUri, type DocumentUri } from "./primitives.js";
 
@@ -49,6 +49,13 @@ export interface TemplatePathConventions {
     readonly uri: DocumentUri;
     readonly file: SourceFileId;
   };
+  readonly aot: {
+    readonly baseName: string;
+    readonly filename: string;
+    readonly path: NormalizedPath;
+    readonly uri: DocumentUri;
+    readonly file: SourceFileId;
+  };
   readonly ssr: {
     readonly baseName: string;
     readonly htmlPath: NormalizedPath;
@@ -66,7 +73,7 @@ export interface TemplatePathConventions {
  */
 export function deriveTemplatePaths(
   template: string | DocumentUri,
-  opts: { isJs: boolean; overlayBaseName?: string },
+  opts: { isJs: boolean; overlayBaseName?: string; aotBaseName?: string },
 ): TemplatePathConventions {
   const templateId = canonicalDocumentUri(template);
   const dir = path.posix.dirname(templateId.path);
@@ -75,6 +82,11 @@ export function deriveTemplatePaths(
   const overlayFilename = `${overlayBase}${opts.isJs ? ".js" : ".ts"}`;
   const overlayPath = normalizePathForId(path.posix.join(dir, overlayFilename));
   const overlayUri = asDocumentUri(overlayPath);
+
+  const aotBase = computeAotBaseName(templateId.path, opts.aotBaseName);
+  const aotFilename = `${aotBase}${opts.isJs ? ".js" : ".ts"}`;
+  const aotPath = normalizePathForId(path.posix.join(dir, aotFilename));
+  const aotUri = asDocumentUri(aotPath);
 
   const ssrBase = computeSsrBaseName(templateId.path, opts.overlayBaseName);
   const htmlPath = normalizePathForId(path.posix.join(dir, `${ssrBase}.html`));
@@ -90,6 +102,13 @@ export function deriveTemplatePaths(
       path: overlayPath,
       uri: overlayUri,
       file: toSourceFileId(overlayPath),
+    },
+    aot: {
+      baseName: aotBase,
+      filename: aotFilename,
+      path: aotPath,
+      uri: aotUri,
+      file: toSourceFileId(aotPath),
     },
     ssr: {
       baseName: ssrBase,

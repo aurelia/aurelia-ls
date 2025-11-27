@@ -16,15 +16,18 @@ export type {
 export { buildResourceGraphFromSemantics } from "./compiler/language/resource-graph.js";
 export {
   computeOverlayBaseName,
+  computeAotBaseName,
   computeSsrBaseName,
   overlayFilename,
   overlayPath,
+  aotFilename,
+  aotPath,
   ssrPaths,
   type SsrPaths,
 } from "./compiler/path-conventions.js";
 
 export type { VmReflection } from "./compiler/phases/50-plan/overlay/types.js";
-export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./compiler/facade.js";
+export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot, CompileAotResult } from "./compiler/facade.js";
 export type {
   TemplateMappingArtifact,
   TemplateMappingEntry,
@@ -38,10 +41,13 @@ export type {
   TemplateControllerInfo,
 } from "./compiler/query.js";
 export type { SsrMappingArtifact, SsrMappingEntry } from "./compiler/products/ssr.js";
+export type { AotMappingArtifact, AotMappingEntry, AotMappingSegment } from "./compiler/aot-mapping.js";
 export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
 
 export { compileTemplateToSSR } from "./compiler/facade.js";
+export { compileTemplateToAot } from "./compiler/facade.js";
 export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
+export type { AotPlanModule } from "./compiler/phases/50-plan/aot/types.js";
 export {
   buildExprSpanIndex,
   exprIdsOf,

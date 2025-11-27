@@ -18,6 +18,7 @@ import type { TemplateProgram } from "./program.js";
 import type { TemplateBindableInfo, TemplateQueryFacade } from "../compiler/query.js";
 import type { TemplateMappingArtifact } from "../compiler/mapping.js";
 import type { SsrMappingArtifact } from "../compiler/products/ssr.js";
+import type { AotMappingArtifact } from "../compiler/aot-mapping.js";
 import { stableHash } from "../compiler/pipeline/hash.js";
 import type { TypecheckDiagnostic } from "../compiler/phases/40-typecheck/typecheck.js";
 
@@ -98,6 +99,12 @@ export interface SsrBuildArtifact {
   html: BuildSnapshot & { text: string };
   manifest: BuildSnapshot & { text: string };
   mapping: SsrMappingArtifact;
+}
+
+export interface AotBuildArtifact {
+  template: BuildSnapshot;
+  aot: BuildSnapshot & { baseName: string; text: string };
+  mapping: AotMappingArtifact;
 }
 
 export interface DiagnosticRelatedInfo {
@@ -232,6 +239,7 @@ export interface TemplateLanguageService {
 export interface TemplateBuildService {
   getOverlay(uri: DocumentUri): OverlayBuildArtifact;
   getSsr(uri: DocumentUri): SsrBuildArtifact;
+  getAot(uri: DocumentUri): AotBuildArtifact;
 }
 
 export class DefaultTemplateBuildService implements TemplateBuildService {
@@ -297,6 +305,28 @@ export class DefaultTemplateBuildService implements TemplateBuildService {
     };
   }
 
+  getAot(uri: DocumentUri): AotBuildArtifact {
+    const canonical = canonicalDocumentUri(uri);
+    const paths = deriveTemplatePaths(canonical.uri, overlayOptions(this.program));
+    const template = this.requireSnapshot(canonical);
+    const aot = this.program.getAot(canonical.uri);
+    const aotDoc: BuildDocument = {
+      uri: paths.aot.uri,
+      path: paths.aot.path,
+      file: paths.aot.file,
+    };
+
+    return {
+      template: buildSnapshot(canonical, template.version, stableHash(template.text)),
+      aot: {
+        ...buildSnapshot(aotDoc, template.version, stableHash(aot.aot.text)),
+        baseName: paths.aot.baseName,
+        text: aot.aot.text,
+      },
+      mapping: aot.mapping,
+    };
+  }
+
   private requireSnapshot(canonical: CanonicalDocumentUri): DocumentSnapshot {
     const snap = this.program.sources.get(canonical.uri);
     if (!snap) {
@@ -349,6 +379,10 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
 
   getSsr(uri: DocumentUri): SsrBuildArtifact {
     return this.build.getSsr(uri);
+  }
+
+  getAot(uri: DocumentUri): AotBuildArtifact {
+    return this.build.getAot(uri);
   }
 
   getHover(uri: DocumentUri, position: Position): HoverInfo | null {
@@ -823,9 +857,13 @@ function buildSnapshot(doc: BuildDocument, version: number, contentHash: string)
   return { uri: doc.uri, path: doc.path, file: doc.file, version, contentHash };
 }
 
-function overlayOptions(program: TemplateProgram): { isJs: boolean; overlayBaseName?: string } {
-  const { isJs, overlayBaseName } = program.options;
-  return overlayBaseName === undefined ? { isJs } : { isJs, overlayBaseName };
+function overlayOptions(program: TemplateProgram): { isJs: boolean; overlayBaseName?: string; aotBaseName?: string } {
+  const { isJs, overlayBaseName, aotBaseName } = program.options;
+  const result: { isJs: boolean; overlayBaseName?: string; aotBaseName?: string } = { isJs };
+  if (overlayBaseName !== undefined) result.overlayBaseName = overlayBaseName;
+  if (aotBaseName !== undefined) result.aotBaseName = aotBaseName;
+  else if (overlayBaseName !== undefined) result.aotBaseName = overlayBaseName;
+  return result;
 }
 
 function getVmDisplayName(vm: TemplateProgram["options"]["vm"]): string {

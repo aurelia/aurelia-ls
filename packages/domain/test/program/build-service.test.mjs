@@ -128,9 +128,23 @@ test("language service delegates build calls when provided", () => {
     },
     mapping: { kind: "ssr-mapping", entries: [] },
   };
+  const aotArtifact = {
+    template: baseSnapshot,
+    aot: {
+      uri: paths.aot.uri,
+      path: paths.aot.path,
+      file: paths.aot.file,
+      version: 1,
+      contentHash: "aot",
+      baseName: paths.aot.baseName,
+      text: "// aot",
+    },
+    mapping: { kind: "aot-mapping", entries: [] },
+  };
 
   let overlayCalls = 0;
   let ssrCalls = 0;
+  let aotCalls = 0;
   const buildService = {
     getOverlay(requestedUri) {
       overlayCalls += 1;
@@ -142,14 +156,21 @@ test("language service delegates build calls when provided", () => {
       assert.equal(canonicalDocumentUri(requestedUri).uri, canonical.uri);
       return ssrArtifact;
     },
+    getAot(requestedUri) {
+      aotCalls += 1;
+      assert.equal(canonicalDocumentUri(requestedUri).uri, canonical.uri);
+      return aotArtifact;
+    },
   };
 
   const service = new DefaultTemplateLanguageService(program, { buildService });
 
   assert.equal(service.getOverlay(uri), overlayArtifact);
   assert.equal(service.getSsr(uri), ssrArtifact);
+  assert.equal(service.getAot(uri), aotArtifact);
   assert.equal(overlayCalls, 1);
   assert.equal(ssrCalls, 1);
+  assert.equal(aotCalls, 1);
 });
 
 function createVmReflection() {

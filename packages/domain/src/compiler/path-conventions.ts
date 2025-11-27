@@ -33,6 +33,30 @@ export function overlayPath(templatePath: string, isJs: boolean, overrideBase?: 
 }
 
 /**
+ * Compute the base name for AOT artifacts (without extension).
+ * Uses `<basename>.__au.aot` by default; strips a trailing `.aot` when an override is provided.
+ */
+export function computeAotBaseName(templatePath: string, override?: string): string {
+  if (override) return override.replace(/\.aot$/, "");
+  const normalized = normalizePathLike(templatePath);
+  const base = path.posix.basename(normalized, path.posix.extname(normalized));
+  return `${base}.__au.aot`;
+}
+
+export function aotFilename(templatePath: string, isJs: boolean, overrideBase?: string): string {
+  const base = computeAotBaseName(templatePath, overrideBase);
+  const ext = isJs ? ".js" : ".ts";
+  return `${base}${ext}`;
+}
+
+export function aotPath(templatePath: string, isJs: boolean, overrideBase?: string): NormalizedPath {
+  const normalized = normalizePathLike(templatePath);
+  const dir = path.posix.dirname(normalized);
+  const filename = aotFilename(normalized, isJs, overrideBase);
+  return normalizePathLike(path.posix.join(dir, filename));
+}
+
+/**
  * Compute the base name for SSR artifacts (without extension).
  * Uses `<basename>.__au.ssr` by default; strips a trailing `.ssr` when an override is provided.
  */

@@ -1,4 +1,5 @@
 import type { SsrMappingArtifact } from "../compiler/products/ssr.js";
+import type { AotMappingArtifact, AotMappingEntry, AotMappingSegment } from "../compiler/aot-mapping.js";
 import type {
   TemplateMappingArtifact,
   TemplateMappingEntry,
@@ -14,6 +15,8 @@ import { resolveSourceSpan } from "../compiler/model/source.js";
 export type ProvenanceKind =
   | "overlayExpr"   // overlay TS <-> template expression
   | "overlayMember" // overlay TS member path segment <-> template member segment
+  | "aotExpr"       // AOT output <-> template expression
+  | "aotMember"     // AOT member segment <-> template member segment
   | "ssrNode"       // SSR output <-> template node
   | "custom";       // reserved for tooling/plugins
 
@@ -55,9 +58,11 @@ export interface DocumentSpan {
 export interface ProvenanceTemplateStats {
   readonly templateUri: DocumentUri;
   readonly overlayUri: DocumentUri | null;
+  readonly aotUri: DocumentUri | null;
   readonly ssrUris: { html: DocumentUri; manifest: DocumentUri } | null;
   readonly totalEdges: number;
   readonly overlayEdges: number;
+  readonly aotEdges: number;
   readonly ssrEdges: number;
 }
 
@@ -74,6 +79,7 @@ export interface ProvenanceStats {
 export interface ProvenanceIndex {
   addEdges(edges: Iterable<ProvenanceEdge>): void;
   addOverlayMapping(templateUri: DocumentUri, overlayUri: DocumentUri, mapping: TemplateMappingArtifact): void;
+  addAotMapping(templateUri: DocumentUri, aotUri: DocumentUri, mapping: AotMappingArtifact): void;
   addSsrMapping(templateUri: DocumentUri, ssrHtmlUri: DocumentUri, manifestUri: DocumentUri, mapping: SsrMappingArtifact): void;
 
   findByGenerated(uri: DocumentUri, offset: number): ProvenanceEdge[];
@@ -99,6 +105,8 @@ export interface ProvenanceIndex {
 
   getOverlayMapping?(templateUri: DocumentUri): TemplateMappingArtifact | null;
   getOverlayUri?(templateUri: DocumentUri): DocumentUri | null;
+  getAotMapping?(templateUri: DocumentUri): AotMappingArtifact | null;
+  getAotUri?(templateUri: DocumentUri): DocumentUri | null;
   getSsrMapping?(templateUri: DocumentUri): SsrMappingArtifact | null;
   getSsrUris?(templateUri: DocumentUri): { html: DocumentUri; manifest: DocumentUri } | null;
 
@@ -142,6 +150,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   private readonly edgesByFrom = new Map<DocumentUri, ProvenanceEdge[]>();
   private readonly edgesByTo = new Map<DocumentUri, ProvenanceEdge[]>();
   private readonly overlayByTemplate = new Map<DocumentUri, OverlayMappingRecord>();
+  private readonly aotByTemplate = new Map<DocumentUri, AotMappingRecord>();
   private readonly ssrByTemplate = new Map<DocumentUri, SsrMappingRecord>();
 
   addEdges(edges: Iterable<ProvenanceEdge>): void {
@@ -159,6 +168,19 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
       overlayFile: overlay.file,
     });
     this.addEdges(expandOverlayMapping(template.uri, overlay.uri, normalized));
+  }
+
+  addAotMapping(templateUri: DocumentUri, aotUri: DocumentUri, mapping: AotMappingArtifact): void {
+    const template = canonicalDocumentUri(templateUri);
+    const aot = canonicalDocumentUri(aotUri);
+    const normalized = normalizeAotMapping(mapping, template.file, aot.file);
+    this.aotByTemplate.set(template.uri, {
+      mapping: normalized,
+      aotUri: aot.uri,
+      templateFile: template.file,
+      aotFile: aot.file,
+    });
+    this.addEdges(expandAotMapping(template.uri, aot.uri, normalized));
   }
 
   addSsrMapping(templateUri: DocumentUri, ssrHtmlUri: DocumentUri, manifestUri: DocumentUri, mapping: SsrMappingArtifact): void {
@@ -193,7 +215,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
 
     // Prefer overlayExpr edges as the projection anchor when the querySpan exactly matches the full expression span.
     // This lets us map the whole expression back to the full template span while still reporting a memberPath from overlayMember segments.
-      const exprEdges = candidates.filter((edge) => edge.kind === "overlayExpr" && edgeOverlap(edge.from.span, querySpan) > 0);
+    const exprEdges = candidates.filter(
+      (edge) =>
+        (edge.kind === "overlayExpr" || edge.kind === "aotExpr") &&
+        edgeOverlap(edge.from.span, querySpan) > 0,
+    );
       const fullExprEdge = exprEdges.find((edge) => spanEquals(edge.from.span, querySpan) || spansEqualLoose(edge.from.span, querySpan)) ?? null;
 
     const projectionEdge = fullExprEdge ?? pickBestEdgeForSpan(candidates, querySpan, "from");
@@ -211,7 +237,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     if (exprId) {
       const memberEdgesForExpr = candidates.filter(
         (edge) =>
-          edge.kind === "overlayMember" &&
+          (edge.kind === "overlayMember" || edge.kind === "aotMember") &&
           (edge.from.exprId ?? edge.to.exprId) === exprId &&
           edgeOverlap(edge.from.span, querySpan) > 0,
       );
@@ -266,7 +292,14 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     const querySpan = resolveSourceSpan(span, canonical.file);
     const projectionEdge = pickBestEdgeForSpan(candidates, querySpan, "to");
     if (!projectionEdge) return null;
-    if (projectionEdge.kind !== "overlayExpr" && projectionEdge.kind !== "overlayMember") return null;
+    if (
+      projectionEdge.kind !== "overlayExpr" &&
+      projectionEdge.kind !== "overlayMember" &&
+      projectionEdge.kind !== "aotExpr" &&
+      projectionEdge.kind !== "aotMember"
+    ) {
+      return null;
+    }
 
     const projectedSpan = projectTemplateSpanToOverlaySpan(projectionEdge, querySpan);
     const exprId = projectionEdge.to.exprId ?? projectionEdge.from.exprId;
@@ -280,7 +313,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     const hit: OverlayProvenanceHit = {
       edge: resultEdge,
       ...(exprId ? { exprId } : {}),
-      ...(projectionEdge.kind === "overlayMember" && projectionEdge.tag ? { memberPath: projectionEdge.tag } : {}),
+      ...(
+        (projectionEdge.kind === "overlayMember" || projectionEdge.kind === "aotMember") && projectionEdge.tag
+          ? { memberPath: projectionEdge.tag }
+          : {}
+      ),
     };
     return hit;
   }
@@ -307,7 +344,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     const exprId = edge.from.exprId ?? edge.to.exprId;
     return {
       ...(exprId ? { exprId } : {}),
-      ...(edge.kind === "overlayMember" && edge.tag ? { memberPath: edge.tag } : {}),
+      ...(
+        (edge.kind === "overlayMember" || edge.kind === "aotMember") && edge.tag
+          ? { memberPath: edge.tag }
+          : {}
+      ),
       edge,
     };
   }
@@ -324,7 +365,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return {
       ...(exprId ? { exprId } : {}),
       ...(edge.to.nodeId ? { nodeId: edge.to.nodeId } : {}),
-      ...(edge.kind === "overlayMember" && edge.tag ? { memberPath: edge.tag } : {}),
+      ...(
+        (edge.kind === "overlayMember" || edge.kind === "aotMember") && edge.tag
+          ? { memberPath: edge.tag }
+          : {}
+      ),
       edge,
     };
   }
@@ -332,6 +377,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   getOverlayMapping(templateUri: DocumentUri): TemplateMappingArtifact | null {
     const canonical = canonicalDocumentUri(templateUri).uri;
     return this.overlayByTemplate.get(canonical)?.mapping ?? null;
+  }
+
+  getAotMapping(templateUri: DocumentUri): AotMappingArtifact | null {
+    const canonical = canonicalDocumentUri(templateUri).uri;
+    return this.aotByTemplate.get(canonical)?.mapping ?? null;
   }
 
   stats(): ProvenanceStats {
@@ -356,10 +406,12 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   templateStats(templateUri: DocumentUri): ProvenanceTemplateStats {
     const canonical = canonicalDocumentUri(templateUri);
     const overlay = this.overlayByTemplate.get(canonical.uri);
+    const aot = this.aotByTemplate.get(canonical.uri);
     const ssr = this.ssrByTemplate.get(canonical.uri);
     const trackedUris = new Set<DocumentUri>([canonical.uri]);
 
     if (overlay) trackedUris.add(overlay.overlayUri);
+    if (aot) trackedUris.add(aot.aotUri);
     if (ssr) {
       trackedUris.add(ssr.htmlUri);
       trackedUris.add(ssr.manifestUri);
@@ -367,6 +419,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
 
     let totalEdges = 0;
     let overlayEdges = 0;
+    let aotEdges = 0;
     let ssrEdges = 0;
 
     for (const edge of this.edges) {
@@ -374,6 +427,8 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
       totalEdges += 1;
       if (edge.kind === "overlayExpr" || edge.kind === "overlayMember") {
         overlayEdges += 1;
+      } else if (edge.kind === "aotExpr" || edge.kind === "aotMember") {
+        aotEdges += 1;
       } else if (edge.kind === "ssrNode") {
         ssrEdges += 1;
       }
@@ -382,9 +437,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return {
       templateUri: canonical.uri,
       overlayUri: overlay?.overlayUri ?? null,
+      aotUri: aot?.aotUri ?? null,
       ssrUris: ssr ? { html: ssr.htmlUri, manifest: ssr.manifestUri } : null,
       totalEdges,
       overlayEdges,
+      aotEdges,
       ssrEdges,
     };
   }
@@ -392,6 +449,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   getOverlayUri(templateUri: DocumentUri): DocumentUri | null {
     const canonical = canonicalDocumentUri(templateUri).uri;
     return this.overlayByTemplate.get(canonical)?.overlayUri ?? null;
+  }
+
+  getAotUri(templateUri: DocumentUri): DocumentUri | null {
+    const canonical = canonicalDocumentUri(templateUri).uri;
+    return this.aotByTemplate.get(canonical)?.aotUri ?? null;
   }
 
   getSsrMapping(templateUri: DocumentUri): SsrMappingArtifact | null {
@@ -414,6 +476,14 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
         urisToDrop.add(templateUri);
         urisToDrop.add(record.overlayUri);
         this.overlayByTemplate.delete(templateUri);
+      }
+    }
+
+    for (const [templateUri, record] of this.aotByTemplate.entries()) {
+      if (templateUri === canonical || record.aotUri === canonical) {
+        urisToDrop.add(templateUri);
+        urisToDrop.add(record.aotUri);
+        this.aotByTemplate.delete(templateUri);
       }
     }
 
@@ -453,6 +523,13 @@ interface OverlayMappingRecord {
   readonly overlayUri: DocumentUri;
   readonly templateFile: SourceFileId;
   readonly overlayFile: SourceFileId;
+}
+
+interface AotMappingRecord {
+  readonly mapping: AotMappingArtifact;
+  readonly aotUri: DocumentUri;
+  readonly templateFile: SourceFileId;
+  readonly aotFile: SourceFileId;
 }
 
 interface SsrMappingRecord {
@@ -504,6 +581,24 @@ function spansEqualLoose(a: SourceSpan, b: SourceSpan): boolean {
   return a.start === b.start && a.end === b.end;
 }
 
+function normalizeAotMapping(
+  mapping: AotMappingArtifact,
+  templateFile: SourceFileId,
+  aotFile: SourceFileId,
+): AotMappingArtifact {
+  const entries = mapping.entries.map((entry) => ({
+    ...entry,
+    htmlSpan: resolveSourceSpan(entry.htmlSpan, templateFile),
+    aotSpan: resolveSourceSpan(entry.aotSpan, aotFile),
+    segments: entry.segments?.map((segment) => ({
+      ...segment,
+      htmlSpan: resolveSourceSpan(segment.htmlSpan, templateFile),
+      aotSpan: resolveSourceSpan(segment.aotSpan, aotFile),
+    })),
+  }));
+  return { kind: "aot-mapping", entries };
+}
+
 function normalizeSsrMapping(
   mapping: SsrMappingArtifact,
   templateFile: SourceFileId,
@@ -535,6 +630,22 @@ function expandOverlayMapping(
   return edges;
 }
 
+function expandAotMapping(
+  templateUri: DocumentUri,
+  aotUri: DocumentUri,
+  mapping: AotMappingArtifact,
+): ProvenanceEdge[] {
+  const edges: ProvenanceEdge[] = [];
+  for (const entry of mapping.entries) {
+    edges.push(buildAotExprEdge(templateUri, aotUri, entry));
+    for (const seg of entry.segments ?? []) {
+      if (edgeOverlap(seg.aotSpan, entry.aotSpan) === 0) continue;
+      edges.push(buildAotMemberEdge(templateUri, aotUri, entry, seg));
+    }
+  }
+  return edges;
+}
+
 function buildOverlayExprEdge(
   templateUri: DocumentUri,
   overlayUri: DocumentUri,
@@ -543,6 +654,18 @@ function buildOverlayExprEdge(
   return {
     kind: "overlayExpr",
     from: { uri: overlayUri, span: entry.overlaySpan, exprId: entry.exprId },
+    to: { uri: templateUri, span: entry.htmlSpan, exprId: entry.exprId },
+  };
+}
+
+function buildAotExprEdge(
+  templateUri: DocumentUri,
+  aotUri: DocumentUri,
+  entry: AotMappingEntry,
+): ProvenanceEdge {
+  return {
+    kind: "aotExpr",
+    from: { uri: aotUri, span: entry.aotSpan, exprId: entry.exprId },
     to: { uri: templateUri, span: entry.htmlSpan, exprId: entry.exprId },
   };
 }
@@ -557,6 +680,20 @@ function buildOverlayMemberEdge(
     kind: "overlayMember",
     tag: seg.path,
     from: { uri: overlayUri, span: seg.overlaySpan, exprId: entry.exprId },
+    to: { uri: templateUri, span: seg.htmlSpan, exprId: entry.exprId },
+  };
+}
+
+function buildAotMemberEdge(
+  templateUri: DocumentUri,
+  aotUri: DocumentUri,
+  entry: AotMappingEntry,
+  seg: AotMappingSegment,
+): ProvenanceEdge {
+  return {
+    kind: "aotMember",
+    tag: seg.path,
+    from: { uri: aotUri, span: seg.aotSpan, exprId: entry.exprId },
     to: { uri: templateUri, span: seg.htmlSpan, exprId: entry.exprId },
   };
 }
@@ -677,13 +814,17 @@ function edgePriority(kind: ProvenanceKind): number {
       return 0;
     case "overlayExpr":
       return 1;
-    default:
+    case "aotMember":
       return 2;
+    case "aotExpr":
+      return 3;
+    default:
+      return 4;
   }
 }
 
 function memberDepth(edge: ProvenanceEdge): number {
-  return edge.kind === "overlayMember" ? edge.tag?.length ?? 0 : 0;
+  return edge.kind === "overlayMember" || edge.kind === "aotMember" ? edge.tag?.length ?? 0 : 0;
 }
 
 function isBetterEdge(
@@ -701,7 +842,7 @@ function isBetterEdge(
 function edgeSpecificity(edge: ProvenanceEdge, side: "from" | "to"): [number, number] {
   const querySpan = side === "from" ? edge.from.span : edge.to.span;
   const otherSpan = side === "from" ? edge.to.span : edge.from.span;
-  if (edge.kind === "overlayMember") {
+  if (edge.kind === "overlayMember" || edge.kind === "aotMember") {
     // Overlay member specificity is defined by the generated span first, then the template span.
     return [spanLength(edge.from.span), spanLength(edge.to.span)];
   }
@@ -731,7 +872,14 @@ function ensureEdgeList(map: Map<DocumentUri, ProvenanceEdge[]>, uri: DocumentUr
 }
 
 function zeroedKindCounts(): Record<ProvenanceKind, number> {
-  return { overlayExpr: 0, overlayMember: 0, ssrNode: 0, custom: 0 };
+  return {
+    overlayExpr: 0,
+    overlayMember: 0,
+    aotExpr: 0,
+    aotMember: 0,
+    ssrNode: 0,
+    custom: 0,
+  };
 }
 
 function bumpDocCounts(
@@ -796,7 +944,7 @@ function projectEdgeSpanToTemplateSpan(edge: ProvenanceEdge, slice: SourceSpan):
     const targetFile = edge.to.span.file ?? canonicalDocumentUri(edge.to.uri).file;
     return resolveSourceSpan(edge.to.span, targetFile);
   }
-  if (edge.kind === "overlayMember") {
+  if (edge.kind === "overlayMember" || edge.kind === "aotMember") {
     return projectOverlayMemberSlice(edge, slice);
   }
   return projectOverlaySpanToTemplateSpan(edge, slice);

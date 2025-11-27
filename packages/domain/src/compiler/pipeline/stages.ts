@@ -5,6 +5,8 @@ import { bindScopes } from "../phases/30-bind/bind.js";
 import { typecheck } from "../phases/40-typecheck/typecheck.js";
 import { plan as planOverlay } from "../phases/50-plan/overlay/plan.js";
 import { emitOverlayFile } from "../phases/60-emit/overlay/emit.js";
+import { planAot } from "../phases/50-plan/aot/plan.js";
+import { emitAotFile } from "../phases/60-emit/aot/emit.js";
 import { planSsr } from "../phases/50-plan/ssr/plan.js";
 import { emitSsr } from "../phases/60-emit/ssr/emit.js";
 import { DEFAULT as SEM_DEFAULT } from "../language/registry.js";
@@ -188,6 +190,49 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       if (overlayOpts.banner) emitOpts.banner = overlayOpts.banner;
       if (overlayOpts.filename) emitOpts.filename = overlayOpts.filename;
       return emitOverlayFile(plan, emitOpts);
+    },
+  });
+
+  definitions.push({
+    key: "50-plan-aot",
+    version: "1",
+    deps: ["10-lower", "30-bind"],
+    fingerprint(ctx) {
+      const aotOpts = ctx.options.aot ?? {};
+      return ctx.options.fingerprints?.aot ?? {
+        isJs: aotOpts.isJs ?? ctx.options.overlay?.isJs ?? false,
+      };
+    },
+    run(ctx) {
+      const ir = ctx.require("10-lower");
+      const scope = ctx.require("30-bind");
+      return planAot(ir, scope);
+    },
+  });
+
+  definitions.push({
+    key: "60-emit-aot",
+    version: "1",
+    deps: ["50-plan-aot"],
+    fingerprint(ctx) {
+      const aotOpts = ctx.options.aot ?? {};
+      return {
+        isJs: aotOpts.isJs ?? ctx.options.overlay?.isJs ?? false,
+        banner: aotOpts.banner ?? null,
+        eol: aotOpts.eol ?? "\n",
+        filename: aotOpts.filename ?? null,
+      };
+    },
+    run(ctx) {
+      const plan = ctx.require("50-plan-aot");
+      const aotOpts = ctx.options.aot ?? {};
+      const emitOpts: Parameters<typeof emitAotFile>[1] = {
+        isJs: aotOpts.isJs ?? ctx.options.overlay?.isJs ?? false,
+      };
+      if (aotOpts.eol) emitOpts.eol = aotOpts.eol;
+      if (aotOpts.banner) emitOpts.banner = aotOpts.banner;
+      if (aotOpts.filename) emitOpts.filename = aotOpts.filename;
+      return emitAotFile(plan, emitOpts);
     },
   });
 

@@ -25,14 +25,16 @@ This appendix documents how mapping/projection is owned and consumed across the 
 Provenance is expressed as **edges** between `(uri, span)` pairs with optional ids:
 
 - Edge kinds:
-  - `overlayExpr` – whole expression in overlay TS ↔ whole expression in template.
-  - `overlayMember` – member path segment in overlay TS ↔ corresponding segment in template.
-  - `ssrNode` – SSR HTML/manifest node ↔ template DOM node (by `NodeId`).
+  - `overlayExpr` - whole expression in overlay TS <-> whole expression in template.
+  - `overlayMember` - member path segment in overlay TS <-> corresponding segment in template.
+  - `aotExpr` - whole expression in AOT output <-> whole expression in template.
+  - `aotMember` - member path segment in AOT output <-> corresponding segment in template.
+  - `ssrNode` - SSR HTML/manifest node <-> template DOM node (by `NodeId`).
 - Each edge has:
-  - `from`: generated side (overlay TS, SSR HTML, SSR manifest).
+  - `from`: generated side (overlay TS, AOT output, SSR HTML, SSR manifest).
   - `to`: template side (HTML).
   - Optional `exprId` and/or `nodeId`.
-  - Optional `tag` for `overlayMember` (member path string).
+  - Optional `tag` for `overlayMember` / `aotMember` (member path string).
 
 **Invariants:**
 

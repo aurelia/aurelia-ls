@@ -1,6 +1,6 @@
 # Program Layer (experimental)
 
-This folder hosts the experimental `TemplateProgram` architecture that is meant to replace ad-hoc `compileTemplate*` usage. The LSP server now routes diagnostics/overlay/SSR/features through `TemplateProgram` + services; CLI/build/test wiring is still in progress and the surface may evolve.
+This folder hosts the experimental `TemplateProgram` architecture that is meant to replace ad-hoc `compileTemplate*` usage. The LSP server now routes diagnostics/overlay/SSR/AOT/features through `TemplateProgram` + services; CLI/build/test wiring is still in progress and the surface may evolve.
 
 > Normative spec: the source of truth for the target design lives in
 > `docs/agents/program-architecture.md`.
@@ -8,7 +8,7 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
 
 ## Goals
 
-- One facade (`TemplateProgram`) that owns documents, compilation cache, provenance ingestion, and product helpers (overlay/SSR/query).
+- One facade (`TemplateProgram`) that owns documents, compilation cache, provenance ingestion, and product helpers (overlay/SSR/AOT/query).
 - Shared primitives: `DocumentUri` (alias to `UriString`), `DocumentSnapshot`, `SourceStore`, `ProvenanceIndex`.
 - Editor/build surfaces speak URI/Position/Range (`TemplateLanguageService` / `TemplateBuildService`); the compiler pipeline stays pure and isolated.
 - Keep identity/span brands centralized (`UriString` / `NormalizedPath` / `SourceFileId` plus `SourceSpan`); no new ad-hoc brands.
@@ -22,22 +22,22 @@ This folder hosts the experimental `TemplateProgram` architecture that is meant 
   `SourceStore` interface and an in-memory implementation.
 
 - `paths.ts`
-  Canonical `DocumentUri` helpers plus overlay/SSR path conventions (normalized to forward slashes + `SourceFileId`).
+  Canonical `DocumentUri` helpers plus overlay/SSR/AOT path conventions (normalized to forward slashes + `SourceFileId`).
 
 - `provenance.ts`
   Edge contracts and an in-memory `ProvenanceIndex`. Overlay mappings are canonicalized (URIs + `SourceFileId` on spans), expanded into expression/member edges, and exposed through offset-aware queries plus convenience lookups.
 
 - `program.ts`
-  Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay mapping is fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift. Cache/provenance invalidation hooks, bulk overlay/SSR builds, and cache stats are available for hosts that want to observe reuse.
+  Default program with a per-document compilation cache guarded by snapshot content hash + program `optionsFingerprint` (versions are tracked for bookkeeping). URIs are canonicalized on entry, overlay/AOT/SSR mappings are fed into `ProvenanceIndex`, and `optionsFingerprint` is exposed for hosts to detect option drift. Cache/provenance invalidation hooks, bulk overlay/SSR/AOT builds, and cache stats are available for hosts that want to observe reuse.
   Optional telemetry hooks surface cache hits, materialization timing, and provenance density for hosts that want logging without poking at internals.
 
 - `services.ts`
-  Language/build facades. `DefaultTemplateBuildService` returns host-ready overlay/SSR artifacts (canonical URIs/paths + `SourceFileId` + base names + hashes) sourced from program caches. Diagnostics merge compiler and overlay TypeScript diagnostics via provenance and surface host-agnostic spans. Hover, definitions, references, completions, rename, and code actions map template offsets through provenance and TypeScript integration; code actions currently wrap TS quick fixes and project edits back into the template.
+  Language/build facades. `DefaultTemplateBuildService` returns host-ready overlay/SSR/AOT artifacts (canonical URIs/paths + `SourceFileId` + base names + hashes) sourced from program caches. Diagnostics merge compiler and overlay TypeScript diagnostics via provenance and surface host-agnostic spans. Hover, definitions, references, completions, rename, and code actions map template offsets through provenance and TypeScript integration; code actions currently wrap TS quick fixes and project edits back into the template.
 
 ## Key assumptions
 
-- Options (semantics, resource graph, parsers, overlay base name, fingerprints) are stable for the lifetime of a program; if they change, create a new instance (use `TemplateProgram.optionsFingerprint` to detect drift cheaply).
-- Stage keys follow the current pipeline: `10-lower`, `20-resolve-host`, `30-bind`, `40-typecheck`, `50-plan-overlay`, `60-emit-overlay` plus SSR plan/emit.
+- Options (semantics, resource graph, parsers, overlay/AOT base names, fingerprints) are stable for the lifetime of a program; if they change, create a new instance (use `TemplateProgram.optionsFingerprint` to detect drift cheaply).
+- Stage keys follow the current pipeline: `10-lower`, `20-resolve-host`, `30-bind`, `40-typecheck`, `50-plan-overlay`, `60-emit-overlay`, `50-plan-aot`, `60-emit-aot` plus SSR plan/emit.
 - `TemplateMappingArtifact` lacks an overlay path; callers must pass the overlay URI when ingesting mappings into provenance.
 - Program-level caches rely on normalized `DocumentUri` + snapshot content hash + `optionsFingerprint`. Stage-level caches remain responsible for their own content hashing.
 

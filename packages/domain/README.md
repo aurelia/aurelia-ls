@@ -31,6 +31,7 @@ Pure, in-process Aurelia template compiler and program facade. Everything in thi
 
 ## Products, mapping, and query
 - `compiler/products/overlay.ts` orchestrates overlay product assembly using a `PipelineSession`: runs 10/20/30/40/50/60, builds template mappings, and constructs the template query facade. Overlay path is normalized alongside per-callsite offsets.
+- `compiler/products/aot.ts` assembles the AOT product: runs 10/30 plus AOT plan/emit, builds `AotMappingArtifact`, and returns normalized paths/text for provenance.
 - `compiler/mapping.ts` builds `TemplateMappingArtifact` by correlating overlay emit spans with authored spans (`buildExprSpanIndex`, member path pairing). Returns expr span index for downstream use.
 - `compiler/query.ts` exposes `TemplateQueryFacade` over authored HTML: node/expr/controller lookup by offset, bindable discovery, and expected type resolution using linked rows + typecheck output + mapping segments.
 - `compiler/expr-utils.ts` collects expression spans across IR, builds span indexes, extracts member segments, and supplies helpers (`exprIdsOf`, `primaryExprId`, `buildExprSpanIndex`).
@@ -38,7 +39,7 @@ Pure, in-process Aurelia template compiler and program facade. Everything in thi
 - Path helpers in `compiler/path-conventions.ts` compute overlay/SSR base names, filenames, and normalized paths.
 
 ## Facade entrypoints
-- `compiler/facade.ts` is the main consumer API: `compileTemplate()` (overlay product + mapping/query + diagnostics/meta) and `compileTemplateToSSR()` (SSR HTML/manifest + core stage outputs). Both build pipeline options, choose overlay/SSR base names, and expose per-stage metadata snapshots.
+- `compiler/facade.ts` is the main consumer API: `compileTemplate()` (overlay product + mapping/query + diagnostics/meta), `compileTemplateToAot()` (AOT text + mapping + diagnostics/meta), and `compileTemplateToSSR()` (SSR HTML/manifest + core stage outputs). Both build pipeline options, choose overlay/AOT/SSR base names, and expose per-stage metadata snapshots.
 - `compiler/pipeline.ts` provides `createDefaultEngine()` plus `runCorePipeline()` to get IR/link/bind/typecheck without product planning.
 - Public exports are consolidated in `src/index.ts`.
 
