@@ -43,7 +43,7 @@ export function emitSsr(
   for (const child of tLinked.dom.children) renderNode(child, tPlan, pushHtml, eol, mappings, templateSpans, () => htmlOffset);
 
   const html = htmlChunks.join("");
-  const manifest = makeManifest(tPlan, tLinked, mappings, templateSpans);
+  const manifest = makeManifest(tPlan, tLinked, mappings, templateSpans, linked);
 
   return { html, manifest, mappings: Array.from(mappings.values()) };
 
@@ -137,6 +137,7 @@ function makeManifest(
   tLinked: LinkedTemplate,
   mappings: Map<NodeId, MutableMapping>,
   templateSpans: Map<NodeId, SourceSpan | null>,
+  linkedModule: LinkedSemanticsModule,
 ): string {
   const nodes: Array<{
     hid: HydrationId;
@@ -185,7 +186,20 @@ function makeManifest(
     if (lets) nodeRecord.lets = lets;
     nodes.push(nodeRecord);
   }
-  const { text, spans } = buildManifestText(tPlan.name, nodes);
+
+  // Collect all ExprIds referenced in the SSR plan
+  const referencedExprIds = collectReferencedExprIds(tPlan);
+
+  // Build map of ExprId → expression code from linked rows
+  const exprCodeById = buildExprCodeMap(tLinked);
+
+  // Create expressions array from collected IDs and their codes
+  const expressions = Array.from(referencedExprIds).map((id) => {
+    const expr = exprCodeById.get(id);
+    return expr ? { id, ...expr } : { id, code: "" };
+  });
+
+  const { text, spans } = buildManifestText(tPlan.name, nodes, expressions.length > 0 ? expressions : undefined);
   const hidByNodeId = new Map<NodeId, HydrationId>();
   for (const node of nodes) hidByNodeId.set(node.nodeId, node.hid);
   for (const [nodeId, span] of spans) {
@@ -202,6 +216,100 @@ function makeManifest(
   }
 }
 
+/** Collect all ExprIds referenced in the SSR plan. */
+function collectReferencedExprIds(plan: SsrTemplatePlan): Set<ExprId> {
+  const exprIds = new Set<ExprId>();
+
+  // Collect from text bindings
+  for (const tb of plan.textBindings) {
+    for (const exprId of tb.exprIds) exprIds.add(exprId);
+  }
+
+  // Collect from bindings by HID
+  for (const bindings of Object.values(plan.bindingsByHid)) {
+    for (const binding of bindings ?? []) {
+      switch (binding.kind) {
+        case "prop":
+        case "styleProp":
+        case "attr":
+        case "listener":
+        case "ref":
+          exprIds.add(binding.exprId);
+          break;
+        case "attrInterp":
+          for (const exprId of binding.exprIds) exprIds.add(exprId);
+          break;
+      }
+    }
+  }
+
+  // Collect from controllers
+  for (const controllers of Object.values(plan.controllersByHid)) {
+    for (const controller of controllers ?? []) {
+      if (controller.forOfExprId) exprIds.add(controller.forOfExprId);
+      if (controller.valueExprId) exprIds.add(controller.valueExprId);
+      if (controller.branch?.exprId) exprIds.add(controller.branch.exprId);
+    }
+  }
+
+  // Collect from let bindings
+  for (const lets of Object.values(plan.letsByHid)) {
+    for (const local of lets?.locals ?? []) {
+      exprIds.add(local.exprId);
+    }
+  }
+
+  return exprIds;
+}
+
+/** Build map of ExprId → expression code from linked rows. */
+function buildExprCodeMap(
+  tLinked: LinkedTemplate,
+): Map<ExprId, { code: string; loc?: SourceSpan | null }> {
+  const exprCodeById = new Map<ExprId, { code: string; loc?: SourceSpan | null }>();
+
+  for (const row of tLinked.rows) {
+    for (const ins of row.instructions) {
+      switch (ins.kind) {
+        case "textBinding":
+        case "attributeBinding":
+        case "propertyBinding":
+        case "stylePropertyBinding": {
+          const from = ins.from;
+          if (typeof from === "object" && "code" in from && "id" in from) {
+            // ExprRef
+            addExprIfNotExists(from);
+          } else if (typeof from === "object" && from.kind === "interp") {
+            // InterpIR
+            for (const expr of from.exprs) {
+              addExprIfNotExists(expr);
+            }
+          }
+          break;
+        }
+        case "listenerBinding":
+        case "refBinding": {
+          const from = ins.from;
+          addExprIfNotExists(from);
+          break;
+        }
+      }
+    }
+  }
+
+  function addExprIfNotExists(expr: { code: string; id: ExprId; loc?: SourceSpan | null }): void {
+    if (!exprCodeById.has(expr.id)) {
+      if (expr.loc !== null && expr.loc !== undefined) {
+        exprCodeById.set(expr.id, { code: expr.code, loc: expr.loc });
+      } else {
+        exprCodeById.set(expr.id, { code: expr.code });
+      }
+    }
+  }
+
+  return exprCodeById;
+}
+
 function buildManifestText(
   name: string | undefined,
   nodes: Array<{
@@ -213,6 +321,11 @@ function buildManifestText(
     bindings?: SsrBinding[];
     controllers?: Omit<SsrController, "def" | "defLinked">[];
     lets?: { toBindingContext: boolean; locals: Array<{ name: string; exprId: ExprId }> };
+  }>,
+  expressions?: Array<{
+    id: ExprId;
+    code: string;
+    loc?: SourceSpan | null;
   }>,
 ): { text: string; spans: Map<NodeId, SourceSpan> } {
   const parts: string[] = [];
@@ -226,6 +339,22 @@ function buildManifestText(
 
   push("{\n");
   push(`  "version": "aurelia-ssr-manifest@0",\n`);
+
+  // Emit expressions array if present
+  if (expressions && expressions.length > 0) {
+    push(`  "expressions": [\n`);
+    for (let i = 0; i < expressions.length; i++) {
+      const expr = expressions[i]!;
+      const exprObj: { id: ExprId; code: string; loc?: SourceSpan | null } = { id: expr.id, code: expr.code };
+      if (expr.loc) exprObj.loc = expr.loc;
+      const exprText = JSON.stringify(exprObj, null, 2);
+      const indented = indent(exprText, "    ");
+      push(indented);
+      push(i < expressions.length - 1 ? ",\n" : "\n");
+    }
+    push("  ],\n");
+  }
+
   push(`  "templates": [\n`);
   push("    {\n");
   if (name !== undefined) push(`      "name": ${JSON.stringify(name)},\n`);

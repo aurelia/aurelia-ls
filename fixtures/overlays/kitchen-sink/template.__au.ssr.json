@@ -1,5 +1,223 @@
 {
   "version": "aurelia-ssr-manifest@0",
+  "expressions": [
+    {
+      "id": "expr_8819760002542080",
+      "code": "title",
+      "loc": {
+        "start": 628,
+        "end": 633,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_6b73e000ce8c0000",
+      "code": ""
+    },
+    {
+      "id": "expr_48300400b44f2100",
+      "code": ""
+    },
+    {
+      "id": "expr_80436300fc4a2c80",
+      "code": "header",
+      "loc": {
+        "start": 1324,
+        "end": 1330,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_64f0bd401612db60",
+      "code": ""
+    },
+    {
+      "id": "expr_629a0840db36cf00",
+      "code": ""
+    },
+    {
+      "id": "expr_3857b8009b4d23c0",
+      "code": ""
+    },
+    {
+      "id": "expr_a7b76800de6ddb60",
+      "code": "klass",
+      "loc": {
+        "start": 39,
+        "end": 44,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_a1b00c805b2a7090",
+      "code": "flag",
+      "loc": {
+        "start": 54,
+        "end": 75,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_8c07700045d79c00",
+      "code": "banner",
+      "loc": {
+        "start": 76,
+        "end": 94,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_2128cd004e357080",
+      "code": "value",
+      "loc": {
+        "start": 107,
+        "end": 128,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_29fef7003c419400",
+      "code": "flag",
+      "loc": {
+        "start": 129,
+        "end": 148,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_5fe8d1804c462680",
+      "code": "matcher",
+      "loc": {
+        "start": 149,
+        "end": 171,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_840d47b056000e00",
+      "code": "inputClass",
+      "loc": {
+        "start": 172,
+        "end": 195,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_357884c02c22d340",
+      "code": "doIt()",
+      "loc": {
+        "start": 209,
+        "end": 231,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_2aa8490051f79200",
+      "code": "btnClass",
+      "loc": {
+        "start": 238,
+        "end": 246,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_0a4a9bc0c5907800",
+      "code": "btn",
+      "loc": {
+        "start": 256,
+        "end": 265,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_b5632300315ec700",
+      "code": "pressed",
+      "loc": {
+        "start": 266,
+        "end": 294,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_0f74860070d12d00",
+      "code": "cmp",
+      "loc": {
+        "start": 404,
+        "end": 413,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_73a5ba00c4b16600",
+      "code": "color",
+      "loc": {
+        "start": 522,
+        "end": 527,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_f5fc6100316210c0",
+      "code": "bg",
+      "loc": {
+        "start": 604,
+        "end": 625,
+        "file": "fixtures/overlays/kitchen-sink/template.html"
+      }
+    },
+    {
+      "id": "expr_bc62434006cb5840",
+      "code": ""
+    },
+    {
+      "id": "expr_e936c18076c60500",
+      "code": ""
+    },
+    {
+      "id": "expr_627f4380510da200",
+      "code": ""
+    },
+    {
+      "id": "expr_22288f00f033b8bc",
+      "code": ""
+    },
+    {
+      "id": "expr_26624b1018a679c0",
+      "code": ""
+    },
+    {
+      "id": "expr_776ad0007996dc80",
+      "code": ""
+    },
+    {
+      "id": "expr_0015ee8064ddeb2c",
+      "code": ""
+    },
+    {
+      "id": "expr_4749e40088d3f180",
+      "code": ""
+    },
+    {
+      "id": "expr_dd329680c6f20700",
+      "code": ""
+    },
+    {
+      "id": "expr_75da2a8098d5ee80",
+      "code": ""
+    },
+    {
+      "id": "expr_928d4500b6772710",
+      "code": ""
+    },
+    {
+      "id": "expr_594da1807976bb00",
+      "code": ""
+    },
+    {
+      "id": "expr_1841aa8052390600",
+      "code": ""
+    }
+  ],
   "templates": [
     {
       "name": "template.html",

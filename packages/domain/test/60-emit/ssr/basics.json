@@ -3,5 +3,25 @@
     "name": "EM-S-B-01 emits manifest/version for simple interpolation",
     "markup": "<div>${msg}</div>",
     "expect": { "manifestVersion": "aurelia-ssr-manifest@0", "templateCount": 1 }
+  },
+  {
+    "name": "EM-S-B-02 captures expression code for text interpolation",
+    "markup": "<div>${message}</div>",
+    "expect": { "manifestVersion": "aurelia-ssr-manifest@0", "templateCount": 1, "expressionCount": 1 }
+  },
+  {
+    "name": "EM-S-B-03 captures nested property expression",
+    "markup": "<div>${person.name}</div>",
+    "expect": { "manifestVersion": "aurelia-ssr-manifest@0", "templateCount": 1, "expressionCount": 1 }
+  },
+  {
+    "name": "EM-S-B-04 captures multiple expressions in single template",
+    "markup": "<div>${first} and ${last}</div>",
+    "expect": { "manifestVersion": "aurelia-ssr-manifest@0", "templateCount": 1, "expressionCount": 2 }
+  },
+  {
+    "name": "EM-S-B-05 captures property binding expression",
+    "markup": "<input value.bind=\"userName\" />",
+    "expect": { "manifestVersion": "aurelia-ssr-manifest@0", "templateCount": 1, "expressionCount": 1 }
   }
 ]

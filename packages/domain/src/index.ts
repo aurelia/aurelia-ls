@@ -46,6 +46,8 @@ export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
 
 export { compileTemplateToSSR } from "./compiler/facade.js";
 export { compileTemplateToAot } from "./compiler/facade.js";
+export { renderToString } from "./ssr-renderer/index.js";
+export type { RenderToStringOptions, RenderToStringResult, HydrationState } from "./ssr-renderer/index.js";
 export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
 export type { AotPlanModule } from "./compiler/phases/50-plan/aot/types.js";
 export {

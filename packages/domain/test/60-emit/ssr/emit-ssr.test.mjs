@@ -44,6 +44,7 @@ describe("Emit SSR (60)", () => {
       const intent = {
         manifestVersion: parsed.version,
         templateCount: (parsed.templates ?? []).length,
+        expressionCount: (parsed.expressions ?? []).length,
       };
 
       const missing = [];
@@ -52,6 +53,9 @@ describe("Emit SSR (60)", () => {
       }
       if (v.expect?.templateCount != null && intent.templateCount !== v.expect.templateCount) {
         missing.push(`templateCount:${v.expect.templateCount}`);
+      }
+      if (v.expect?.expressionCount != null && intent.expressionCount !== v.expect.expressionCount) {
+        missing.push(`expressionCount:${v.expect.expressionCount}`);
       }
 
       assert.ok(

@@ -60,6 +60,12 @@ export interface SsrController {
 /** Compact manifest we emit alongside HTML for "server emits". */
 export interface SsrManifest {
   version: "aurelia-ssr-manifest@0";
+  /** Expression table: maps ExprId to source code for server-side evaluation. */
+  expressions?: Array<{
+    id: ExprId;
+    code: string; // exact authored expression source
+    loc?: SourceSpan | null;
+  }>;
   templates: Array<{
     name?: string;
     nodes: Array<{

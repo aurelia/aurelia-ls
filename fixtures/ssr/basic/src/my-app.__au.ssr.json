@@ -1,5 +1,46 @@
 {
   "version": "aurelia-ssr-manifest@0",
+  "expressions": [
+    {
+      "id": "expr_dfa74600dd9e0b50",
+      "code": "name",
+      "loc": {
+        "start": 30,
+        "end": 34,
+        "file": "fixtures/ssr/basic/src/my-app.html"
+      }
+    },
+    {
+      "id": "expr_221e7800fad23b10",
+      "code": ""
+    },
+    {
+      "id": "expr_bc0f4a000462fa80",
+      "code": ""
+    },
+    {
+      "id": "expr_5c0f5900b94d6380",
+      "code": "name",
+      "loc": {
+        "start": 63,
+        "end": 80,
+        "file": "fixtures/ssr/basic/src/my-app.html"
+      }
+    },
+    {
+      "id": "expr_98f9eb002be2f6c0",
+      "code": "onInput($event)",
+      "loc": {
+        "start": 81,
+        "end": 105,
+        "file": "fixtures/ssr/basic/src/my-app.html"
+      }
+    },
+    {
+      "id": "expr_383d9f807145a900",
+      "code": ""
+    }
+  ],
   "templates": [
     {
       "name": "my-app.html",

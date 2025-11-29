@@ -1,5 +1,48 @@
 {
   "version": "aurelia-ssr-manifest@0",
+  "expressions": [
+    {
+      "id": "expr_a8cfbb00cc2ee300",
+      "code": "title",
+      "loc": {
+        "start": 56,
+        "end": 61,
+        "file": "fixtures/ssr/nested/template.html"
+      }
+    },
+    {
+      "id": "expr_dd80828093541510",
+      "code": ""
+    },
+    {
+      "id": "expr_757d9400e5f38d80",
+      "code": ""
+    },
+    {
+      "id": "expr_106ffd80d50e1f40",
+      "code": ""
+    },
+    {
+      "id": "expr_4284ddc0cf677a00",
+      "code": ""
+    },
+    {
+      "id": "expr_c1800400227d7740",
+      "code": ""
+    },
+    {
+      "id": "expr_1f8cfd303aee5680",
+      "code": ""
+    },
+    {
+      "id": "expr_08486dc00a11a840",
+      "code": ""
+    },
+    {
+      "id": "expr_73fc5500ab71c8d0",
+      "code": ""
+    }
+  ],
   "templates": [
     {
       "name": "template.html",
