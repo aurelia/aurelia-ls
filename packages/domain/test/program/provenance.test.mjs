@@ -1,19 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { idFromKey } from "../../out/compiler/model/identity.js";
 import {
   InMemoryProvenanceIndex,
   projectGeneratedOffsetToDocumentSpan,
   projectGeneratedSpanToDocumentSpan,
   provenanceHitToDocumentSpan,
   projectOverlaySpanToTemplateSpan,
-} from "../../out/program/provenance.js";
+} from "../../out/index.js";
 
 const templateUri = "/app/components/example.html";
 const overlayUri = "/app/components/example.__au.ttc.ts";
-const ssrHtmlUri = "/app/components/example.__au.ssr.html";
-const ssrManifestUri = "/app/components/example.__au.ssr.json";
 
 const mapping = {
   kind: "mapping",
@@ -38,19 +35,6 @@ const mapping = {
           overlaySpan: { start: 20, end: 30 },
         },
       ],
-    },
-  ],
-};
-
-const ssrMapping = {
-  kind: "ssr-mapping",
-  entries: [
-    {
-      nodeId: idFromKey("node1"),
-      hid: 1,
-      templateSpan: { start: 200, end: 240, file: templateUri },
-      htmlSpan: { start: 0, end: 20 },
-      manifestSpan: { start: 40, end: 80 },
     },
   ],
 };
@@ -308,72 +292,15 @@ test("lookupGenerated falls back to overlayExpr when no member segment covers of
   assert.equal(outsideSegment?.edge.kind, "overlayExpr");
 });
 
-test("ssr mappings expand to provenance edges and project back to template", () => {
-  const provenance = new InMemoryProvenanceIndex();
-  provenance.addSsrMapping(templateUri, ssrHtmlUri, ssrManifestUri, ssrMapping);
-
-  const htmlEdges = provenance.findByGenerated(ssrHtmlUri, 5);
-  assert.equal(htmlEdges.length, 1);
-  assert.equal(htmlEdges[0]?.kind, "ssrNode");
-  assert.equal(String(htmlEdges[0]?.to.nodeId), "node1");
-
-  const manifestEdges = provenance.findByGenerated(ssrManifestUri, 60);
-  assert.equal(manifestEdges.length, 1);
-  assert.equal(manifestEdges[0]?.kind, "ssrNode");
-
-  const templateHit = provenance.lookupSource(templateUri, 210);
-  assert.equal(templateHit?.nodeId, "node1");
-  assert.equal(templateHit?.edge.kind, "ssrNode");
-  const templateSpan = provenanceHitToDocumentSpan(templateHit);
-  assert.ok(templateSpan);
-  assert.equal(String(templateSpan?.nodeId), "node1");
-
-  // projectGeneratedSpan/projectGeneratedOffset use the same projection helper
-  const htmlSliceHit = provenance.projectGeneratedSpan(ssrHtmlUri, { start: 5, end: 15 });
-  assert.ok(htmlSliceHit);
-  assert.equal(htmlSliceHit?.edge.kind, "ssrNode");
-  assert.equal(htmlSliceHit?.nodeId, "node1");
-  // SSR edges do not slice; we always map back to the full template span.
-  assert.equal(htmlSliceHit?.edge.to.span.start, 200);
-  assert.equal(htmlSliceHit?.edge.to.span.end, 240);
-
-  const manifestOffsetHit = provenance.projectGeneratedOffset(ssrManifestUri, 60);
-  assert.ok(manifestOffsetHit);
-  assert.equal(manifestOffsetHit?.edge.kind, "ssrNode");
-  assert.equal(manifestOffsetHit?.nodeId, "node1");
-  // Offset projection also returns the full template span for SSR nodes.
-  assert.equal(manifestOffsetHit?.edge.to.span.start, 200);
-  assert.equal(manifestOffsetHit?.edge.to.span.end, 240);
-
-  assert.ok(provenance.getSsrMapping(templateUri));
-  const ssrUris = provenance.getSsrUris(templateUri);
-  assert.equal(ssrUris?.html, ssrHtmlUri);
-  assert.equal(ssrUris?.manifest, ssrManifestUri);
-});
-
-test("projectGeneratedOffsetToDocumentSpan keeps SSR node ids on document spans", () => {
-  const provenance = new InMemoryProvenanceIndex();
-  provenance.addSsrMapping(templateUri, ssrHtmlUri, ssrManifestUri, ssrMapping);
-
-  const mapped = projectGeneratedOffsetToDocumentSpan(provenance, ssrManifestUri, 60);
-  assert.ok(mapped);
-  assert.equal(mapped.uri, templateUri);
-  assert.equal(String(mapped.nodeId), "node1");
-  assert.equal(mapped.span.start, 200);
-  assert.equal(mapped.span.end, 240);
-});
-
-test("provenance stats and templateStats aggregate edges by kind and document", () => {
+test("provenance stats aggregate edges by kind and document", () => {
   const provenance = new InMemoryProvenanceIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
-  provenance.addSsrMapping(templateUri, ssrHtmlUri, ssrManifestUri, ssrMapping);
 
   const stats = provenance.stats();
-  // overlay: 1 overlayExpr + 2 overlayMember; ssr: 2 ssrNode
-  assert.equal(stats.totalEdges, 5);
+  // overlay: 1 overlayExpr + 2 overlayMember
+  assert.equal(stats.totalEdges, 3);
   assert.equal(stats.byKind.overlayExpr, 1);
   assert.equal(stats.byKind.overlayMember, 2);
-  assert.equal(stats.byKind.ssrNode, 2);
   assert.equal(stats.byKind.custom, 0);
 
   const byDoc = new Map(stats.documents.map((d) => [d.uri, d]));
@@ -386,49 +313,29 @@ test("provenance stats and templateStats aggregate edges by kind and document", 
 
   const templateDoc = byDoc.get(templateUri);
   assert.ok(templateDoc);
-  assert.equal(templateDoc.edges, 5);
+  assert.equal(templateDoc.edges, 3);
   assert.equal(templateDoc.byKind.overlayExpr, 1);
   assert.equal(templateDoc.byKind.overlayMember, 2);
-  assert.equal(templateDoc.byKind.ssrNode, 2);
-
-  const htmlDoc = byDoc.get(ssrHtmlUri);
-  assert.ok(htmlDoc);
-  assert.equal(htmlDoc.edges, 1);
-  assert.equal(htmlDoc.byKind.ssrNode, 1);
-
-  const manifestDoc = byDoc.get(ssrManifestUri);
-  assert.ok(manifestDoc);
-  assert.equal(manifestDoc.edges, 1);
-  assert.equal(manifestDoc.byKind.ssrNode, 1);
 
   const templateStats = provenance.templateStats(templateUri);
   assert.equal(templateStats.templateUri, templateUri);
   assert.equal(templateStats.overlayUri, overlayUri);
-  assert.deepEqual(templateStats.ssrUris, { html: ssrHtmlUri, manifest: ssrManifestUri });
-  assert.equal(templateStats.totalEdges, 5);
+  assert.equal(templateStats.totalEdges, 3);
   assert.equal(templateStats.overlayEdges, 3);
-  assert.equal(templateStats.ssrEdges, 2);
 });
 
-test("provenance pruning drops edges and overlay/ssr cache entries", () => {
+test("provenance pruning drops edges and overlay cache entries", () => {
   const provenance = new InMemoryProvenanceIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
-  provenance.addSsrMapping(templateUri, ssrHtmlUri, ssrManifestUri, ssrMapping);
 
   assert.ok(provenance.findByGenerated(overlayUri, 22).length > 0);
-  assert.ok(provenance.findByGenerated(ssrHtmlUri, 5).length > 0);
   provenance.removeDocument(templateUri);
 
   assert.equal(provenance.findByGenerated(overlayUri, 22).length, 0);
   assert.equal(provenance.getOverlayMapping(templateUri), null);
   assert.equal(provenance.getOverlayUri(templateUri), null);
-  assert.equal(provenance.findByGenerated(ssrHtmlUri, 5).length, 0);
-  assert.equal(provenance.getSsrMapping(templateUri), null);
-  assert.equal(provenance.getSsrUris(templateUri), null);
 
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
-  provenance.addSsrMapping(templateUri, ssrHtmlUri, ssrManifestUri, ssrMapping);
   provenance.removeDocument(overlayUri);
   assert.equal(provenance.findBySource(templateUri, 115).length, 0);
-  assert.equal(provenance.findBySource(templateUri, 210).length, 0);
 });

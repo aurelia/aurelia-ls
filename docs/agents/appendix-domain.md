@@ -36,8 +36,8 @@ Does **not** own: editors, VS Code, LSP, concrete TS LS hosts, filesystem IO.
 ### Compiler Stages
 
 - Pipeline engine: stage definitions, dependencies, fingerprints, caching
-- Analysis: 10-lower, 20-resolve, 30-bind, 40-typecheck
-- Synthesis: overlay (plan + emit), runtime (plan + emit-code + emit-manifest)
+- Analysis stages: `10-lower`, `20-resolve`, `30-bind`, `40-typecheck`
+- Synthesis stages: `overlay:plan`, `overlay:emit` (runtime stages planned but not yet implemented)
 
 ### Products & Mapping
 

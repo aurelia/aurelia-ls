@@ -1,28 +1,36 @@
+// Compiler facade
 import {
   compileTemplate,
-  compileTemplateToSSR,
-  compileTemplateToAot,
   type CompileOverlayResult,
-  type CompileSsrResult,
-  type CompileAotResult,
   type TemplateCompilation,
   type TemplateDiagnostics,
   type StageMetaSnapshot,
 } from "../compiler/facade.js";
-import { DEFAULT as SEM_DEFAULT, type Semantics } from "../compiler/language/registry.js";
-import type { ResourceGraph, ResourceScopeId } from "../compiler/language/resource-graph.js";
-import type { AttributeParser } from "../compiler/parsing/attribute-parser.js";
-import type { IExpressionParser } from "../compiler/parsing/lsp-expression-parser.js";
-import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../compiler/pipeline/engine.js";
-import { stableHash } from "../compiler/pipeline/hash.js";
-import type { VmReflection } from "../compiler/phases/50-plan/overlay/types.js";
-import type { TemplateMappingArtifact } from "../compiler/mapping.js";
-import type { TemplateQueryFacade } from "../compiler/query.js";
+
+// Model imports (via barrel)
+import type { NormalizedPath } from "../compiler/model/index.js";
+
+// Language imports (via barrel)
+import { DEFAULT as SEM_DEFAULT, type Semantics, type ResourceGraph, type ResourceScopeId } from "../compiler/language/index.js";
+
+// Parsing imports (via barrel)
+import type { AttributeParser, IExpressionParser } from "../compiler/parsing/index.js";
+
+// Shared imports (via barrel)
+import type { VmReflection } from "../compiler/shared/index.js";
+
+// Pipeline imports (via barrel)
+import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../compiler/pipeline/index.js";
+import { stableHash } from "../compiler/pipeline/index.js";
+
+// Synthesis imports (via barrel)
+import type { TemplateMappingArtifact, TemplateQueryFacade } from "../compiler/synthesis/index.js";
+
+// Program layer imports
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
 import { InMemorySourceStore, type SourceStore } from "./sources.js";
 import { InMemoryProvenanceIndex, type ProvenanceIndex } from "./provenance.js";
 import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
-import type { NormalizedPath } from "../compiler/model/identity.js";
 
 export interface TemplateProgramOptions {
   readonly vm: VmReflection;
@@ -35,7 +43,6 @@ export interface TemplateProgramOptions {
   readonly cache?: CacheOptions;
   readonly fingerprints?: FingerprintHints;
   readonly overlayBaseName?: string;
-  readonly aotBaseName?: string;
   readonly sourceStore?: SourceStore;
   readonly provenance?: ProvenanceIndex;
   readonly telemetry?: TemplateProgramTelemetry;
@@ -51,22 +58,8 @@ interface CachedCompilation {
   readonly optionsFingerprint: string;
 }
 
-interface CachedSsrCompilation {
-  readonly ssr: CompileSsrResult;
-  readonly version: number;
-  readonly contentHash: string;
-  readonly optionsFingerprint: string;
-}
-
-interface CachedAotCompilation {
-  readonly aot: CompileAotResult;
-  readonly version: number;
-  readonly contentHash: string;
-  readonly optionsFingerprint: string;
-}
-
 interface CoreStageCacheEntry {
-  readonly stages: Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck">;
+  readonly stages: Pick<StageOutputs, "10-lower" | "20-resolve" | "30-bind" | "40-typecheck">;
   readonly version: number;
   readonly contentHash: string;
   readonly optionsFingerprint: string;
@@ -74,18 +67,14 @@ interface CoreStageCacheEntry {
 
 const STAGE_ORDER: readonly StageKey[] = [
   "10-lower",
-  "20-resolve-host",
+  "20-resolve",
   "30-bind",
   "40-typecheck",
-  "50-plan-overlay",
-  "60-emit-overlay",
-  "50-plan-aot",
-  "60-emit-aot",
-  "50-plan-ssr",
-  "60-emit-ssr",
+  "overlay:plan",
+  "overlay:emit",
 ] as const;
 
-const CORE_STAGE_KEYS: readonly StageKey[] = ["10-lower", "20-resolve-host", "30-bind", "40-typecheck"];
+const CORE_STAGE_KEYS: readonly StageKey[] = ["10-lower", "20-resolve", "30-bind", "40-typecheck"];
 
 interface CacheAccessEntry {
   readonly programCacheHit: boolean;
@@ -96,8 +85,6 @@ interface CacheAccessEntry {
 
 interface CacheAccessRecord {
   overlay?: CacheAccessEntry;
-  aot?: CacheAccessEntry;
-  ssr?: CacheAccessEntry;
 }
 
 export interface StageReuseSummary {
@@ -122,11 +109,9 @@ export interface TemplateProgramCoreCacheEntryStats extends TemplateProgramCache
 export interface TemplateProgramProvenanceStats {
   readonly totalEdges: number;
   readonly overlayEdges: number;
-  readonly aotEdges: number;
-  readonly ssrEdges: number;
+  readonly runtimeEdges: number;
   readonly overlayUri: DocumentUri | null;
-  readonly aotUri: DocumentUri | null;
-  readonly ssrUris: { html: DocumentUri; manifest: DocumentUri } | null;
+  readonly runtimeUri: DocumentUri | null;
 }
 
 export interface TemplateProgramDocumentStats {
@@ -134,8 +119,6 @@ export interface TemplateProgramDocumentStats {
   readonly version: number | null;
   readonly contentHash: string | null;
   readonly compilation?: TemplateProgramCacheEntryStats;
-  readonly ssr?: TemplateProgramCacheEntryStats;
-  readonly aot?: TemplateProgramCacheEntryStats;
   readonly core?: TemplateProgramCoreCacheEntryStats;
   readonly provenance: TemplateProgramProvenanceStats;
 }
@@ -145,8 +128,6 @@ export interface TemplateProgramCacheStats {
   readonly totals: {
     readonly sources: number;
     readonly compilation: number;
-    readonly ssr: number;
-    readonly aot: number;
     readonly core: number;
     readonly provenanceEdges: number;
   };
@@ -154,7 +135,7 @@ export interface TemplateProgramCacheStats {
 }
 
 export interface TemplateProgramCacheAccessEvent {
-  readonly kind: "overlay" | "ssr" | "aot";
+  readonly kind: "overlay";
   readonly uri: DocumentUri;
   readonly version: number;
   readonly contentHash: string;
@@ -164,7 +145,7 @@ export interface TemplateProgramCacheAccessEvent {
 }
 
 export interface TemplateProgramMaterializationEvent {
-  readonly kind: "overlay" | "ssr" | "aot";
+  readonly kind: "overlay";
   readonly uri: DocumentUri;
   readonly durationMs: number;
   readonly programCacheHit: boolean;
@@ -174,11 +155,9 @@ export interface TemplateProgramMaterializationEvent {
 export interface TemplateProgramProvenanceEvent {
   readonly templateUri: DocumentUri;
   readonly overlayUri: DocumentUri | null;
-  readonly aotUri: DocumentUri | null;
-  readonly ssrUris: { html: DocumentUri; manifest: DocumentUri } | null;
+  readonly runtimeUri: DocumentUri | null;
   readonly overlayEdges: number;
-  readonly aotEdges: number;
-  readonly ssrEdges: number;
+  readonly runtimeEdges: number;
   readonly totalEdges: number;
 }
 
@@ -211,10 +190,6 @@ export interface TemplateProgram {
   getDiagnostics(uri: DocumentUri): TemplateDiagnostics;
   getOverlay(uri: DocumentUri): CompileOverlayResult;
   buildAllOverlays(): ReadonlyMap<DocumentUri, CompileOverlayResult>;
-  getSsr(uri: DocumentUri): CompileSsrResult;
-  buildAllSsr(): ReadonlyMap<DocumentUri, CompileSsrResult>;
-  getAot(uri: DocumentUri): CompileAotResult;
-  buildAllAot(): ReadonlyMap<DocumentUri, CompileAotResult>;
   getQuery(uri: DocumentUri): TemplateQueryFacade;
   getMapping(uri: DocumentUri): TemplateMappingArtifact | null;
   getCompilation(uri: DocumentUri): TemplateCompilation;
@@ -230,8 +205,6 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   private readonly fingerprintHints: FingerprintHints;
   private readonly compilationCache = new Map<DocumentUri, CachedCompilation>();
-  private readonly aotCache = new Map<DocumentUri, CachedAotCompilation>();
-  private readonly ssrCache = new Map<DocumentUri, CachedSsrCompilation>();
   private readonly coreCache = new Map<DocumentUri, CoreStageCacheEntry>();
   private readonly accessTrace = new Map<DocumentUri, CacheAccessRecord>();
 
@@ -302,7 +275,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     // NOTE: program-level cache is guarded by content hash + options fingerprint.
     const templatePaths = deriveTemplatePaths(
       canonical.uri,
-      withOverlayBase(this.options.isJs, this.options.overlayBaseName, this.options.aotBaseName),
+      withOverlayBase(this.options.isJs, this.options.overlayBaseName),
     );
     const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
     const seed = this.coreSeed(canonical.uri, contentHash);
@@ -315,7 +288,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     this.coreCache.set(canonical.uri, {
       stages: {
         "10-lower": compilation.ir,
-        "20-resolve-host": compilation.linked,
+        "20-resolve": compilation.linked,
         "30-bind": compilation.scope,
         "40-typecheck": compilation.typecheck,
       },
@@ -361,144 +334,6 @@ export class DefaultTemplateProgram implements TemplateProgram {
     return results;
   }
 
-  getSsr(uri: DocumentUri): CompileSsrResult {
-    const canonical = this.canonicalUri(uri);
-    const snap = this.snapshot(canonical.uri);
-    const startedAt = nowMs();
-    const contentHash = hashSnapshotContent(snap);
-    const cached = this.ssrCache.get(canonical.uri);
-    if (cached && cached.optionsFingerprint === this.optionsFingerprint && cached.contentHash === contentHash) {
-      if (cached.version !== snap.version) {
-        this.ssrCache.set(canonical.uri, { ...cached, version: snap.version });
-      }
-      this.recordAccess(canonical.uri, "ssr", {
-        programCacheHit: true,
-        stageMeta: cached.ssr.meta,
-        version: snap.version,
-        contentHash,
-      });
-      const stageReuse = summarizeStageMeta(cached.ssr.meta);
-      const durationMs = elapsedMs(startedAt);
-      this.emitCacheAccess("ssr", canonical.uri, snap.version, contentHash, stageReuse, true);
-      this.emitMaterialization("ssr", canonical.uri, durationMs, stageReuse, true);
-      return cached.ssr;
-    }
-
-    const templatePaths = deriveTemplatePaths(
-      canonical.uri,
-      withOverlayBase(this.options.isJs, this.options.overlayBaseName, this.options.aotBaseName),
-    );
-    const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
-    const seed = this.coreSeed(canonical.uri, contentHash);
-    const ssr = compileTemplateToSSR(compileOpts, seed ?? undefined);
-
-    this.provenance.addSsrMapping(canonical.uri, templatePaths.ssr.htmlUri, templatePaths.ssr.manifestUri, ssr.mapping);
-
-    this.coreCache.set(canonical.uri, {
-      stages: ssr.core,
-      version: snap.version,
-      contentHash,
-      optionsFingerprint: this.optionsFingerprint,
-    });
-
-    const stageReuse = summarizeStageMeta(ssr.meta);
-    const durationMs = elapsedMs(startedAt);
-    this.ssrCache.set(canonical.uri, {
-      ssr,
-      version: snap.version,
-      contentHash,
-      optionsFingerprint: this.optionsFingerprint,
-    });
-    this.recordAccess(canonical.uri, "ssr", {
-      programCacheHit: false,
-      stageMeta: ssr.meta,
-      version: snap.version,
-      contentHash,
-    });
-    this.emitCacheAccess("ssr", canonical.uri, snap.version, contentHash, stageReuse, false);
-    this.emitMaterialization("ssr", canonical.uri, durationMs, stageReuse, false);
-    this.emitProvenanceStats(canonical.uri);
-    return ssr;
-  }
-
-  getAot(uri: DocumentUri): CompileAotResult {
-    const canonical = this.canonicalUri(uri);
-    const snap = this.snapshot(canonical.uri);
-    const startedAt = nowMs();
-    const contentHash = hashSnapshotContent(snap);
-    const cached = this.aotCache.get(canonical.uri);
-    if (cached && cached.optionsFingerprint === this.optionsFingerprint && cached.contentHash === contentHash) {
-      if (cached.version !== snap.version) {
-        this.aotCache.set(canonical.uri, { ...cached, version: snap.version });
-      }
-      this.recordAccess(canonical.uri, "aot", {
-        programCacheHit: true,
-        stageMeta: cached.aot.meta,
-        version: snap.version,
-        contentHash,
-      });
-      const stageReuse = summarizeStageMeta(cached.aot.meta);
-      const durationMs = elapsedMs(startedAt);
-      this.emitCacheAccess("aot", canonical.uri, snap.version, contentHash, stageReuse, true);
-      this.emitMaterialization("aot", canonical.uri, durationMs, stageReuse, true);
-      return cached.aot;
-    }
-
-    const templatePaths = deriveTemplatePaths(
-      canonical.uri,
-      withOverlayBase(this.options.isJs, this.options.overlayBaseName, this.options.aotBaseName),
-    );
-    const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
-    const seed = this.coreSeed(canonical.uri, contentHash);
-    const aot = compileTemplateToAot(compileOpts, seed ?? undefined);
-
-    this.provenance.addAotMapping(canonical.uri, templatePaths.aot.uri, aot.mapping);
-
-    this.coreCache.set(canonical.uri, {
-      stages: aot.core,
-      version: snap.version,
-      contentHash,
-      optionsFingerprint: this.optionsFingerprint,
-    });
-
-    const stageReuse = summarizeStageMeta(aot.meta);
-    const durationMs = elapsedMs(startedAt);
-    this.aotCache.set(canonical.uri, {
-      aot,
-      version: snap.version,
-      contentHash,
-      optionsFingerprint: this.optionsFingerprint,
-    });
-    this.recordAccess(canonical.uri, "aot", {
-      programCacheHit: false,
-      stageMeta: aot.meta,
-      version: snap.version,
-      contentHash,
-    });
-    this.emitCacheAccess("aot", canonical.uri, snap.version, contentHash, stageReuse, false);
-    this.emitMaterialization("aot", canonical.uri, durationMs, stageReuse, false);
-    this.emitProvenanceStats(canonical.uri);
-    return aot;
-  }
-
-  buildAllSsr(): ReadonlyMap<DocumentUri, CompileSsrResult> {
-    const results = new Map<DocumentUri, CompileSsrResult>();
-    for (const snap of this.sources.all()) {
-      const canonical = this.canonicalUri(snap.uri);
-      results.set(canonical.uri, this.getSsr(canonical.uri));
-    }
-    return results;
-  }
-
-  buildAllAot(): ReadonlyMap<DocumentUri, CompileAotResult> {
-    const results = new Map<DocumentUri, CompileAotResult>();
-    for (const snap of this.sources.all()) {
-      const canonical = this.canonicalUri(snap.uri);
-      results.set(canonical.uri, this.getAot(canonical.uri));
-    }
-    return results;
-  }
-
   getQuery(uri: DocumentUri): TemplateQueryFacade {
     return this.getCompilation(uri).query;
   }
@@ -517,15 +352,12 @@ export class DefaultTemplateProgram implements TemplateProgram {
       const canonical = this.canonicalUri(uri);
       const snap = this.sources.get(canonical.uri);
       const compilation = this.compilationCache.get(canonical.uri);
-      const aot = this.aotCache.get(canonical.uri);
-      const ssr = this.ssrCache.get(canonical.uri);
       const core = this.coreCache.get(canonical.uri);
       const provenance = this.provenance.templateStats(canonical.uri);
 
       const contentHash =
         (snap ? hashSnapshotContent(snap) : null) ??
         compilation?.contentHash ??
-        ssr?.contentHash ??
         core?.contentHash ??
         null;
 
@@ -534,17 +366,13 @@ export class DefaultTemplateProgram implements TemplateProgram {
         version: snap?.version ?? null,
         contentHash,
         ...(compilation ? { compilation: this.overlayCacheStats(canonical.uri, compilation) } : {}),
-        ...(aot ? { aot: this.aotCacheStats(canonical.uri, aot) } : {}),
-        ...(ssr ? { ssr: this.ssrCacheStats(canonical.uri, ssr) } : {}),
         ...(core ? { core: this.coreCacheStats(core) } : {}),
         provenance: {
           totalEdges: provenance.totalEdges,
           overlayEdges: provenance.overlayEdges,
-          aotEdges: provenance.aotEdges,
-          ssrEdges: provenance.ssrEdges,
+          runtimeEdges: provenance.runtimeEdges,
           overlayUri: provenance.overlayUri,
-          aotUri: provenance.aotUri,
-          ssrUris: provenance.ssrUris,
+          runtimeUri: provenance.runtimeUri,
         },
       });
     }
@@ -556,8 +384,6 @@ export class DefaultTemplateProgram implements TemplateProgram {
       totals: {
         sources: this.countSources(),
         compilation: this.compilationCache.size,
-        aot: this.aotCache.size,
-        ssr: this.ssrCache.size,
         core: this.coreCache.size,
         provenanceEdges: provenanceStats.totalEdges,
       },
@@ -575,7 +401,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     if (cached.contentHash !== contentHash) return null;
     return {
       "10-lower": cached.stages["10-lower"],
-      "20-resolve-host": cached.stages["20-resolve-host"],
+      "20-resolve": cached.stages["20-resolve"],
       "30-bind": cached.stages["30-bind"],
       "40-typecheck": cached.stages["40-typecheck"],
     };
@@ -592,28 +418,6 @@ export class DefaultTemplateProgram implements TemplateProgram {
     };
   }
 
-  private aotCacheStats(uri: DocumentUri, cached: CachedAotCompilation): TemplateProgramCacheEntryStats {
-    const access = this.accessTrace.get(uri)?.aot;
-    return {
-      version: cached.version,
-      contentHash: cached.contentHash,
-      optionsFingerprint: cached.optionsFingerprint,
-      programCacheHit: access?.programCacheHit ?? false,
-      stageReuse: summarizeStageMeta(cached.aot.meta),
-    };
-  }
-
-  private ssrCacheStats(uri: DocumentUri, cached: CachedSsrCompilation): TemplateProgramCacheEntryStats {
-    const access = this.accessTrace.get(uri)?.ssr;
-    return {
-      version: cached.version,
-      contentHash: cached.contentHash,
-      optionsFingerprint: cached.optionsFingerprint,
-      programCacheHit: access?.programCacheHit ?? false,
-      stageReuse: summarizeStageMeta(cached.ssr.meta),
-    };
-  }
-
   private coreCacheStats(cached: CoreStageCacheEntry): TemplateProgramCoreCacheEntryStats {
     return {
       version: cached.version,
@@ -625,7 +429,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     };
   }
 
-  private recordAccess(uri: DocumentUri, kind: "overlay" | "ssr" | "aot", access: CacheAccessEntry): void {
+  private recordAccess(uri: DocumentUri, kind: "overlay", access: CacheAccessEntry): void {
     const existing = this.accessTrace.get(uri) ?? {};
     this.accessTrace.set(uri, { ...existing, [kind]: access });
   }
@@ -672,19 +476,15 @@ export class DefaultTemplateProgram implements TemplateProgram {
     handler({
       templateUri: stats.templateUri,
       overlayUri: stats.overlayUri,
-      aotUri: stats.aotUri,
-      ssrUris: stats.ssrUris,
+      runtimeUri: stats.runtimeUri,
       overlayEdges: stats.overlayEdges,
-      aotEdges: stats.aotEdges,
-      ssrEdges: stats.ssrEdges,
+      runtimeEdges: stats.runtimeEdges,
       totalEdges: stats.totalEdges,
     });
   }
 
   private resetDocumentState(canonical: CanonicalDocumentUri, dropSource: boolean): void {
     this.compilationCache.delete(canonical.uri);
-    this.aotCache.delete(canonical.uri);
-    this.ssrCache.delete(canonical.uri);
     this.coreCache.delete(canonical.uri);
     this.accessTrace.delete(canonical.uri);
     this.provenance.removeDocument(canonical.uri);
@@ -697,8 +497,6 @@ export class DefaultTemplateProgram implements TemplateProgram {
       uris.add(this.canonicalUri(snap.uri).uri);
     }
     for (const key of this.compilationCache.keys()) uris.add(this.canonicalUri(key).uri);
-    for (const key of this.aotCache.keys()) uris.add(this.canonicalUri(key).uri);
-    for (const key of this.ssrCache.keys()) uris.add(this.canonicalUri(key).uri);
     for (const key of this.coreCache.keys()) uris.add(this.canonicalUri(key).uri);
     const prov = this.provenance.stats();
     for (const doc of prov.documents) uris.add(this.canonicalUri(doc.uri).uri);
@@ -727,7 +525,6 @@ export class DefaultTemplateProgram implements TemplateProgram {
       attrParser?: AttributeParser;
       exprParser?: IExpressionParser;
       overlayBaseName?: string;
-      aotBaseName?: string;
       cache?: CacheOptions;
       fingerprints?: FingerprintHints;
     } = {
@@ -743,7 +540,6 @@ export class DefaultTemplateProgram implements TemplateProgram {
     if (this.options.attrParser !== undefined) opts.attrParser = this.options.attrParser;
     if (this.options.exprParser !== undefined) opts.exprParser = this.options.exprParser;
     if (this.options.overlayBaseName !== undefined) opts.overlayBaseName = this.options.overlayBaseName;
-    if (this.options.aotBaseName !== undefined) opts.aotBaseName = this.options.aotBaseName;
     if (this.options.cache !== undefined) opts.cache = this.options.cache;
     opts.fingerprints = this.fingerprintHints;
 
@@ -762,12 +558,9 @@ function elapsedMs(startedAt: number): number {
 function withOverlayBase(
   isJs: boolean,
   overlayBaseName: string | undefined,
-  aotBaseName?: string,
-): { isJs: boolean; overlayBaseName?: string; aotBaseName?: string } {
-  const base: { isJs: boolean; overlayBaseName?: string; aotBaseName?: string } = { isJs };
+): { isJs: boolean; overlayBaseName?: string } {
+  const base: { isJs: boolean; overlayBaseName?: string } = { isJs };
   if (overlayBaseName !== undefined) base.overlayBaseName = overlayBaseName;
-  if (aotBaseName !== undefined) base.aotBaseName = aotBaseName;
-  else if (overlayBaseName !== undefined) base.aotBaseName = overlayBaseName;
   return base;
 }
 
@@ -796,19 +589,15 @@ function hashSnapshotContent(snap: DocumentSnapshot): string {
 function computeProgramOptionsFingerprint(options: ProgramOptions, hints: FingerprintHints): string {
   const sem = options.semantics ?? SEM_DEFAULT;
   const overlayHint = hints.overlay ?? { isJs: options.isJs, syntheticPrefix: options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_" };
-  const aotHint = hints.aot ?? { isJs: options.isJs };
   const fingerprint: Record<string, FingerprintHints[keyof FingerprintHints]> = {
     isJs: options.isJs,
     overlayBaseName: options.overlayBaseName ?? null,
-    aotBaseName: options.aotBaseName ?? null,
     semantics: hints.semantics ?? stableHash(sem),
     resourceGraph: fingerprintResourceGraph(options, sem),
     attrParser: hints.attrParser ?? (options.attrParser ? "custom" : "default"),
     exprParser: hints.exprParser ?? (options.exprParser ? "custom" : "default"),
     vm: hints.vm ?? fingerprintVm(options.vm),
     overlay: overlayHint,
-    aot: aotHint,
-    ssr: hints.ssr ?? null,
     analyze: hints.analyze ?? null,
     extra: extractExtraFingerprintHints(hints),
   };
@@ -825,9 +614,6 @@ function normalizeFingerprintHints(options: ProgramOptions): FingerprintHints {
   if (base.overlay === undefined) {
     const syntheticPrefix = options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_";
     base.overlay = { isJs: options.isJs, syntheticPrefix };
-  }
-  if (base.aot === undefined) {
-    base.aot = { isJs: options.isJs };
   }
   return base;
 }
@@ -860,8 +646,6 @@ function extractExtraFingerprintHints(hints: FingerprintHints): Record<string, F
       key === "semantics" ||
       key === "vm" ||
       key === "overlay" ||
-      key === "aot" ||
-      key === "ssr" ||
       key === "analyze"
     ) {
       continue;

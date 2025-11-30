@@ -1,18 +1,22 @@
-import type { AnalyzeOptions, OverlayPlanModule } from "../phases/50-plan/overlay/types.js";
-import type { AotPlanModule } from "../phases/50-plan/aot/types.js";
-import type { EmitResult as OverlayEmitResult } from "../phases/60-emit/overlay/emit.js";
-import type { EmitResult as AotEmitResult } from "../phases/60-emit/aot/emit.js";
-import type { SsrPlanModule } from "../phases/50-plan/ssr/types.js";
-import type { SsrEmitResult } from "../phases/60-emit/ssr/emit.js";
-import type { VmReflection } from "../phases/50-plan/overlay/types.js";
-import type { IrModule } from "../model/ir.js";
-import type { LinkedSemanticsModule } from "../phases/20-resolve-host/types.js";
-import type { ScopeModule } from "../model/symbols.js";
-import type { TypecheckModule } from "../phases/40-typecheck/typecheck.js";
-import type { Semantics } from "../language/registry.js";
-import type { ResourceGraph, ResourceScopeId } from "../language/resource-graph.js";
-import type { AttributeParser } from "../parsing/attribute-parser.js";
-import type { IExpressionParser } from "../parsing/lsp-expression-parser.js";
+// Model imports (via barrel)
+import type { IrModule, ScopeModule } from "../model/index.js";
+
+// Language imports (via barrel)
+import type { Semantics, ResourceGraph, ResourceScopeId } from "../language/index.js";
+
+// Parsing imports (via barrel)
+import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
+
+// Shared imports (via barrel)
+import type { VmReflection, SynthesisOptions } from "../shared/index.js";
+
+// Analysis imports (via barrel)
+import type { LinkedSemanticsModule, TypecheckModule } from "../analysis/index.js";
+
+// Synthesis imports (via barrel)
+import type { OverlayPlanModule, OverlayEmitResult } from "../synthesis/index.js";
+
+// Local imports
 import { stableHash } from "./hash.js";
 import { FileStageCache, type StageCache, type StageCacheEntry, createDefaultCacheDir } from "./cache.js";
 
@@ -21,35 +25,27 @@ import { FileStageCache, type StageCache, type StageCacheEntry, createDefaultCac
  */
 export type StageKey =
   | "10-lower"
-  | "20-resolve-host"
+  | "20-resolve"
   | "30-bind"
   | "40-typecheck"
-  | "50-plan-overlay"
-  | "60-emit-overlay"
-  | "50-plan-aot"
-  | "60-emit-aot"
-  | "50-plan-ssr"
-  | "60-emit-ssr";
+  | "overlay:plan"
+  | "overlay:emit";
 
 /**
  * Output types per stage. Strong typing keeps products honest about dependencies.
  */
 export interface StageOutputs {
   "10-lower": IrModule;
-  "20-resolve-host": LinkedSemanticsModule;
+  "20-resolve": LinkedSemanticsModule;
   "30-bind": ScopeModule;
   "40-typecheck": TypecheckModule;
-  "50-plan-overlay": OverlayPlanModule;
-  "60-emit-overlay": OverlayEmitResult;
-  "50-plan-aot": AotPlanModule;
-  "60-emit-aot": AotEmitResult;
-  "50-plan-ssr": SsrPlanModule;
-  "60-emit-ssr": SsrEmitResult;
+  "overlay:plan": OverlayPlanModule;
+  "overlay:emit": OverlayEmitResult;
 }
 
 /**
  * Pipeline-wide options shared by all stages; product-specific knobs hang off
- * sub-objects to avoid leaking overlay/SSR concerns into the core.
+ * sub-objects to avoid leaking overlay concerns into the core.
  */
 export interface PipelineOptions {
   html: string;
@@ -74,16 +70,7 @@ export interface PipelineOptions {
     eol?: "\n" | "\r\n";
     syntheticPrefix?: string;
   };
-  aot?: {
-    isJs?: boolean;
-    filename?: string;
-    banner?: string;
-    eol?: "\n" | "\r\n";
-  };
-  ssr?: {
-    eol?: "\n" | "\r\n";
-  };
-  analyze?: AnalyzeOptions;
+  analyze?: SynthesisOptions;
   // TODO(productize): optional typecheck-only product settings (diagnostics gating, severity levels).
 }
 
@@ -110,8 +97,6 @@ export interface FingerprintHints {
   semantics?: FingerprintToken;
   vm?: FingerprintToken;
   overlay?: FingerprintToken;
-  aot?: FingerprintToken;
-  ssr?: FingerprintToken;
   analyze?: FingerprintToken;
   [extra: string]: FingerprintToken | undefined;
 }

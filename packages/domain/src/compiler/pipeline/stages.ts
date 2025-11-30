@@ -1,24 +1,84 @@
 import path from "node:path";
-import { lowerDocument } from "../phases/10-lower/lower.js";
-import { resolveHost } from "../phases/20-resolve-host/resolve.js";
-import { bindScopes } from "../phases/30-bind/bind.js";
-import { typecheck } from "../phases/40-typecheck/typecheck.js";
-import { plan as planOverlay } from "../phases/50-plan/overlay/plan.js";
-import { emitOverlayFile } from "../phases/60-emit/overlay/emit.js";
-import { planAot } from "../phases/50-plan/aot/plan.js";
-import { emitAotFile } from "../phases/60-emit/aot/emit.js";
-import { planSsr } from "../phases/50-plan/ssr/plan.js";
-import { emitSsr } from "../phases/60-emit/ssr/emit.js";
-import { DEFAULT as SEM_DEFAULT } from "../language/registry.js";
-import { materializeResourcesForScope } from "../language/resource-graph.js";
-import { DEFAULT_SYNTAX } from "../parsing/attribute-parser.js";
-import { getExpressionParser } from "../parsing/expression-parser.js";
+
+// Model imports (via barrel)
+import { resolveSourceFile } from "../model/index.js";
+
+// Language imports (via barrel)
+import { DEFAULT as SEM_DEFAULT, materializeResourcesForScope, type Semantics, type ResourceGraph, type ResourceScopeId } from "../language/index.js";
+
+// Parsing imports (via barrel)
+import { DEFAULT_SYNTAX, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
+
+// Shared imports (via barrel)
+import type { VmReflection, SynthesisOptions } from "../shared/index.js";
+
+// Analysis imports (via barrel)
+import { lowerDocument, resolveHost, bindScopes, typecheck } from "../analysis/index.js";
+
+// Synthesis imports (via barrel)
+import { planOverlay, emitOverlayFile, type OverlayEmitOptions } from "../synthesis/index.js";
+
+// Local imports
 import { PipelineEngine } from "./engine.js";
-import type { StageDefinition, StageKey, StageOutputs, PipelineOptions } from "./engine.js";
-import type { AnalyzeOptions } from "../phases/50-plan/overlay/types.js";
-import type { EmitOptions as OverlayEmitOptions } from "../phases/60-emit/overlay/emit.js";
+import type { StageDefinition, StageKey, StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./engine.js";
 import { stableHash } from "./hash.js";
-import { resolveSourceFile } from "../model/source.js";
+
+/* =======================================================================================
+ * CORE PIPELINE TYPES & FACTORIES
+ * ======================================================================================= */
+
+export interface CoreCompileOptions {
+  html: string;
+  templateFilePath: string;
+  semantics?: Semantics;
+  resourceGraph?: ResourceGraph;
+  resourceScope?: ResourceScopeId | null;
+  attrParser?: AttributeParser;
+  exprParser?: IExpressionParser;
+  vm: VmReflection;
+  cache?: CacheOptions;
+  fingerprints?: FingerprintHints;
+}
+
+export interface CorePipelineResult {
+  ir: StageOutputs["10-lower"];
+  linked: StageOutputs["20-resolve"];
+  scope: StageOutputs["30-bind"];
+  typecheck: StageOutputs["40-typecheck"];
+}
+
+/**
+ * Create a pipeline engine with the default stage graph.
+ */
+export function createDefaultEngine(): PipelineEngine {
+  return new PipelineEngine(createDefaultStageDefinitions());
+}
+
+/**
+ * Run the pure pipeline up to typecheck (10 -> 40).
+ */
+export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
+  const engine = createDefaultEngine();
+  const pipelineOpts: PipelineOptions = {
+    html: opts.html,
+    templateFilePath: opts.templateFilePath,
+    vm: opts.vm,
+  };
+  if (opts.semantics) pipelineOpts.semantics = opts.semantics;
+  if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
+  if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
+  if (opts.cache) pipelineOpts.cache = opts.cache;
+  if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
+  if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
+  if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
+  const session = engine.createSession(pipelineOpts);
+  return {
+    ir: session.run("10-lower"),
+    linked: session.run("20-resolve"),
+    scope: session.run("30-bind"),
+    typecheck: session.run("40-typecheck"),
+  };
+}
 
 function assertOption<T>(value: T | undefined, name: string): T {
   if (value === undefined || value === null) {
@@ -85,7 +145,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   });
 
   definitions.push({
-    key: "20-resolve-host",
+    key: "20-resolve",
     version: "2",
     deps: ["10-lower"],
     fingerprint(ctx) {
@@ -109,12 +169,12 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "30-bind",
     version: "1",
-    deps: ["20-resolve-host"],
+    deps: ["20-resolve"],
     fingerprint() {
       return "scope@1";
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve-host");
+      const linked = ctx.require("20-resolve");
       return bindScopes(linked);
     },
   });
@@ -122,7 +182,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "40-typecheck",
     version: "1",
-    deps: ["10-lower", "20-resolve-host", "30-bind"],
+    deps: ["10-lower", "20-resolve", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
@@ -130,7 +190,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       return { vm: vmToken, root: rootVm };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve-host");
+      const linked = ctx.require("20-resolve");
       const scope = ctx.require("30-bind");
       const ir = ctx.require("10-lower");
       const vm = assertOption(ctx.options.vm, "vm");
@@ -141,9 +201,9 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   });
 
   definitions.push({
-    key: "50-plan-overlay",
+    key: "overlay:plan",
     version: "1",
-    deps: ["20-resolve-host", "30-bind"],
+    deps: ["20-resolve", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const overlayOpts = ctx.options.overlay ?? { isJs: false };
@@ -157,10 +217,10 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve-host");
+      const linked = ctx.require("20-resolve");
       const scope = ctx.require("30-bind");
       const vm = assertOption(ctx.options.vm, "vm");
-      const overlayOpts: AnalyzeOptions = {
+      const overlayOpts: SynthesisOptions = {
         isJs: ctx.options.overlay?.isJs ?? false,
         vm,
         syntheticPrefix: ctx.options.overlay?.syntheticPrefix ?? vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
@@ -170,9 +230,9 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   });
 
   definitions.push({
-    key: "60-emit-overlay",
+    key: "overlay:emit",
     version: "1",
-    deps: ["50-plan-overlay"],
+    deps: ["overlay:plan"],
     fingerprint(ctx) {
       const overlayOpts = ctx.options.overlay ?? { isJs: false };
       return {
@@ -183,7 +243,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const plan = ctx.require("50-plan-overlay");
+      const plan = ctx.require("overlay:plan");
       const overlayOpts = ctx.options.overlay ?? { isJs: false };
       const emitOpts: OverlayEmitOptions & { isJs: boolean } = { isJs: overlayOpts.isJs };
       if (overlayOpts.eol) emitOpts.eol = overlayOpts.eol;
@@ -193,94 +253,23 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     },
   });
 
-  definitions.push({
-    key: "50-plan-aot",
-    version: "1",
-    deps: ["10-lower", "30-bind"],
-    fingerprint(ctx) {
-      const aotOpts = ctx.options.aot ?? {};
-      return ctx.options.fingerprints?.aot ?? {
-        isJs: aotOpts.isJs ?? ctx.options.overlay?.isJs ?? false,
-      };
-    },
-    run(ctx) {
-      const ir = ctx.require("10-lower");
-      const scope = ctx.require("30-bind");
-      return planAot(ir, scope);
-    },
-  });
-
-  definitions.push({
-    key: "60-emit-aot",
-    version: "1",
-    deps: ["50-plan-aot"],
-    fingerprint(ctx) {
-      const aotOpts = ctx.options.aot ?? {};
-      return {
-        isJs: aotOpts.isJs ?? ctx.options.overlay?.isJs ?? false,
-        banner: aotOpts.banner ?? null,
-        eol: aotOpts.eol ?? "\n",
-        filename: aotOpts.filename ?? null,
-      };
-    },
-    run(ctx) {
-      const plan = ctx.require("50-plan-aot");
-      const aotOpts = ctx.options.aot ?? {};
-      const emitOpts: Parameters<typeof emitAotFile>[1] = {
-        isJs: aotOpts.isJs ?? ctx.options.overlay?.isJs ?? false,
-      };
-      if (aotOpts.eol) emitOpts.eol = aotOpts.eol;
-      if (aotOpts.banner) emitOpts.banner = aotOpts.banner;
-      if (aotOpts.filename) emitOpts.filename = aotOpts.filename;
-      return emitAotFile(plan, emitOpts);
-    },
-  });
-
-  definitions.push({
-    key: "50-plan-ssr",
-    version: "1",
-    deps: ["20-resolve-host", "30-bind"],
-    fingerprint() {
-      return "ssr-plan@1";
-    },
-    run(ctx) {
-      const linked = ctx.require("20-resolve-host");
-      const scope = ctx.require("30-bind");
-      return planSsr(linked, scope);
-    },
-  });
-
-  definitions.push({
-    key: "60-emit-ssr",
-    version: "1",
-    deps: ["50-plan-ssr", "20-resolve-host"],
-    fingerprint(ctx) {
-      return ctx.options.fingerprints?.ssr ?? { eol: ctx.options.ssr?.eol ?? "\n" };
-    },
-    run(ctx) {
-      const plan = ctx.require("50-plan-ssr");
-      const linked = ctx.require("20-resolve-host");
-      return emitSsr(plan, linked, { eol: ctx.options.ssr?.eol ?? "\n" });
-    },
-  });
-
   return definitions;
 }
 
 /**
  * Shape used by tests/clients that only need the pure pipeline (up to typecheck).
  */
-export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-resolve-host" | "30-bind" | "40-typecheck"> {
+export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-resolve" | "30-bind" | "40-typecheck"> {
   const engine = new PipelineEngine(createDefaultStageDefinitions());
   const session = engine.createSession(options);
   return {
     "10-lower": session.run("10-lower"),
-    "20-resolve-host": session.run("20-resolve-host"),
+    "20-resolve": session.run("20-resolve"),
     "30-bind": session.run("30-bind"),
     "40-typecheck": session.run("40-typecheck"),
   };
 }
 
-function hasQualifiedVm(vm: AnalyzeOptions["vm"]): vm is AnalyzeOptions["vm"] & { getQualifiedRootVmTypeExpr: () => string } {
+function hasQualifiedVm(vm: VmReflection): vm is VmReflection & { getQualifiedRootVmTypeExpr: () => string } {
   return typeof (vm as { getQualifiedRootVmTypeExpr?: unknown }).getQualifiedRootVmTypeExpr === "function";
 }

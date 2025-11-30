@@ -11,7 +11,7 @@
 import type { SourceSpan, BindingSourceIR } from "./ir.js";
 import type { FrameId, ExprId, ReadonlyExprIdMap } from "./identity.js";
 import type { Provenance } from "./origin.js";
-import type { CompilerDiagnostic } from "../diagnostics.js";
+import type { CompilerDiagnostic } from "./diagnostics.js";
 
 export type { FrameId } from "./identity.js";
 

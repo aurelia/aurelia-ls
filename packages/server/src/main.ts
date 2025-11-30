@@ -34,7 +34,6 @@ import {
   type DocumentSpan,
   type DocumentUri,
   type OverlayBuildArtifact,
-  type SsrBuildArtifact,
   type TemplateLanguageDiagnostic,
   type TemplateLanguageDiagnostics,
   type TemplateLanguageService,
@@ -322,16 +321,6 @@ function materializeOverlay(uri: DocumentUri | string): OverlayBuildArtifact | n
   return artifact;
 }
 
-function materializeSsr(uri: DocumentUri | string): SsrBuildArtifact | null {
-  const canonical = canonicalDocumentUri(uri);
-  vmReflection.setActiveTemplate(canonical.path);
-  if (!workspace.snapshot(canonical.uri)) {
-    const doc = ensureProgramDocument(uri);
-    if (!doc) return null;
-  }
-  return workspace.buildService.getSsr(canonical.uri);
-}
-
 type MaybeUriParam = { uri?: string } | string | null;
 
 function uriFromParam(params: MaybeUriParam): string | undefined {
@@ -374,7 +363,7 @@ async function refreshDocument(doc: TextDocument, reason: "open" | "change", opt
 }
 
 /* =============================================================================
- * Custom requests (overlay/SSR preview + dump state)
+ * Custom requests (overlay preview + dump state)
  * ========================================================================== */
 connection.onRequest("aurelia/getOverlay", (params: MaybeUriParam) => {
   const uri = uriFromParam(params);
@@ -421,13 +410,9 @@ connection.onRequest("aurelia/queryAtPosition", (params: { uri: string; position
 connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => {
   const uri = uriFromParam(params);
   if (!uri) return null;
-  syncWorkspaceWithIndex();
-  const artifact = materializeSsr(uri);
-  if (!artifact) return null;
-  return {
-    fingerprint: workspace.fingerprint,
-    artifact,
-  };
+  // TODO: SSR pipeline not yet implemented - return null for now
+  logger.info(`aurelia/getSsr: SSR not yet available for ${uri}`);
+  return null;
 });
 
 connection.onRequest("aurelia/dumpState", () => {

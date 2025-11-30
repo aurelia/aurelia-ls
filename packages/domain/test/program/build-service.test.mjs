@@ -43,31 +43,6 @@ test("build service exposes canonical overlay artifacts", () => {
   assert.notEqual(updated.template.contentHash, artifact.template.contentHash);
 });
 
-test("build service exposes canonical SSR artifacts", () => {
-  const program = createProgram();
-  const build = new DefaultTemplateBuildService(program);
-  const uri = "/app/build-ssr.html";
-  const markup = "<template><span>${value}</span></template>";
-  program.upsertTemplate(uri, markup);
-
-  const artifact = build.getSsr(uri);
-  const derived = deriveTemplatePaths(uri, { isJs: false });
-
-  assert.equal(artifact.baseName, derived.ssr.baseName);
-  assert.equal(artifact.template.version, 1);
-  assert.ok(artifact.template.contentHash.length > 0);
-
-  assert.equal(artifact.html.uri, canonicalDocumentUri(derived.ssr.htmlUri).uri);
-  assert.equal(artifact.html.path, derived.ssr.htmlPath);
-  assert.ok(artifact.html.text.length > 0);
-
-  assert.equal(artifact.manifest.uri, canonicalDocumentUri(derived.ssr.manifestUri).uri);
-  assert.equal(artifact.manifest.path, derived.ssr.manifestPath);
-  assert.ok(artifact.manifest.text.length > 0);
-
-  assert.ok(artifact.mapping.entries.length > 0);
-});
-
 test("build service respects custom overlay base name and JS extension", () => {
   const program = createProgram({ isJs: true, overlayBaseName: "custom.overlay" });
   const build = new DefaultTemplateBuildService(program);
@@ -76,14 +51,10 @@ test("build service respects custom overlay base name and JS extension", () => {
 
   const derived = deriveTemplatePaths(uri, { isJs: true, overlayBaseName: "custom.overlay" });
   const overlay = build.getOverlay(uri);
-  const ssr = build.getSsr(uri);
 
   assert.equal(overlay.overlay.baseName, "custom.overlay");
   assert.equal(overlay.overlay.path, derived.overlay.path);
   assert.ok(overlay.overlay.uri.endsWith(".js"));
-  assert.equal(ssr.baseName, derived.ssr.baseName);
-  assert.equal(ssr.html.path, derived.ssr.htmlPath);
-  assert.equal(ssr.manifest.path, derived.ssr.manifestPath);
 });
 
 test("language service delegates build calls when provided", () => {
@@ -114,63 +85,20 @@ test("language service delegates build calls when provided", () => {
     mapping: { kind: "mapping", entries: [] },
     calls: [],
   };
-  const ssrArtifact = {
-    template: baseSnapshot,
-    baseName: paths.ssr.baseName,
-    html: { uri: paths.ssr.htmlUri, path: paths.ssr.htmlPath, file: paths.ssr.htmlFile, version: 1, contentHash: "html", text: "<html></html>" },
-    manifest: {
-      uri: paths.ssr.manifestUri,
-      path: paths.ssr.manifestPath,
-      file: paths.ssr.manifestFile,
-      version: 1,
-      contentHash: "manifest",
-      text: "{}",
-    },
-    mapping: { kind: "ssr-mapping", entries: [] },
-  };
-  const aotArtifact = {
-    template: baseSnapshot,
-    aot: {
-      uri: paths.aot.uri,
-      path: paths.aot.path,
-      file: paths.aot.file,
-      version: 1,
-      contentHash: "aot",
-      baseName: paths.aot.baseName,
-      text: "// aot",
-    },
-    mapping: { kind: "aot-mapping", entries: [] },
-  };
 
   let overlayCalls = 0;
-  let ssrCalls = 0;
-  let aotCalls = 0;
   const buildService = {
     getOverlay(requestedUri) {
       overlayCalls += 1;
       assert.equal(canonicalDocumentUri(requestedUri).uri, canonical.uri);
       return overlayArtifact;
     },
-    getSsr(requestedUri) {
-      ssrCalls += 1;
-      assert.equal(canonicalDocumentUri(requestedUri).uri, canonical.uri);
-      return ssrArtifact;
-    },
-    getAot(requestedUri) {
-      aotCalls += 1;
-      assert.equal(canonicalDocumentUri(requestedUri).uri, canonical.uri);
-      return aotArtifact;
-    },
   };
 
   const service = new DefaultTemplateLanguageService(program, { buildService });
 
   assert.equal(service.getOverlay(uri), overlayArtifact);
-  assert.equal(service.getSsr(uri), ssrArtifact);
-  assert.equal(service.getAot(uri), aotArtifact);
   assert.equal(overlayCalls, 1);
-  assert.equal(ssrCalls, 1);
-  assert.equal(aotCalls, 1);
 });
 
 function createVmReflection() {

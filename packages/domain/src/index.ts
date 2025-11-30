@@ -1,63 +1,53 @@
-export { compileTemplate } from "./compiler/facade.js";
+// Domain package public API
+//
+// This barrel exports the main compilation, parsing, language, and program APIs.
+// Import from here rather than deep paths for stability.
+
+// === Prelude ===
 export { PRELUDE_TS } from "./prelude.js";
 
-export { getExpressionParser } from "./compiler/parsing/expression-parser.js";
-export { rebaseExpressionSpans } from "./compiler/parsing/lsp-expression-parser.js";
-export type { ExpressionParseContext, IExpressionParser } from "./compiler/parsing/lsp-expression-parser.js";
-export { DEFAULT_SYNTAX } from "./compiler/parsing/attribute-parser.js";
-export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup } from "./compiler/language/registry.js";
-export type { Semantics } from "./compiler/language/registry.js";
-export type {
-  ResourceGraph,
-  ResourceScope,
-  ResourceScopeId,
-  ResourceCollections,
-} from "./compiler/language/resource-graph.js";
-export { buildResourceGraphFromSemantics } from "./compiler/language/resource-graph.js";
+// === Compiler (via barrel) ===
+// Re-export selected compiler APIs for external consumers.
+
+// Facade
+export { compileTemplate } from "./compiler/index.js";
+export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./compiler/index.js";
+
+// Parsing
+export { getExpressionParser, rebaseExpressionSpans, DEFAULT_SYNTAX } from "./compiler/index.js";
+export type { ExpressionParseContext, IExpressionParser } from "./compiler/index.js";
+
+// Language / Semantics
+export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics } from "./compiler/index.js";
+export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections } from "./compiler/index.js";
+
+// Synthesis (Overlay)
 export {
   computeOverlayBaseName,
-  computeAotBaseName,
-  computeSsrBaseName,
   overlayFilename,
   overlayPath,
-  aotFilename,
-  aotPath,
-  ssrPaths,
-  type SsrPaths,
-} from "./compiler/path-conventions.js";
-
-export type { VmReflection } from "./compiler/phases/50-plan/overlay/types.js";
-export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot, CompileAotResult } from "./compiler/facade.js";
+} from "./compiler/index.js";
 export type {
+  VmReflection,
+  SynthesisOptions,
   TemplateMappingArtifact,
   TemplateMappingEntry,
   TemplateMappingSegment,
-} from "./compiler/mapping.js";
-export type {
   TemplateQueryFacade,
   TemplateExpressionInfo,
   TemplateBindableInfo,
   TemplateNodeInfo,
   TemplateControllerInfo,
-} from "./compiler/query.js";
-export type { SsrMappingArtifact, SsrMappingEntry } from "./compiler/products/ssr.js";
-export type { AotMappingArtifact, AotMappingEntry, AotMappingSegment } from "./compiler/aot-mapping.js";
-export type { CompilerDiagnostic } from "./compiler/diagnostics.js";
+} from "./compiler/index.js";
 
-export { compileTemplateToSSR } from "./compiler/facade.js";
-export { compileTemplateToAot } from "./compiler/facade.js";
-export { renderToString } from "./ssr-renderer/index.js";
-export type { RenderToStringOptions, RenderToStringResult, HydrationState } from "./ssr-renderer/index.js";
-export type { SsrPlanModule } from "./compiler/phases/50-plan/ssr/types.js";
-export type { AotPlanModule } from "./compiler/phases/50-plan/aot/types.js";
-export {
-  buildExprSpanIndex,
-  exprIdsOf,
-  isInterpolation,
-  primaryExprId,
-  type ExprSpanIndex,
-} from "./compiler/expr-utils.js";
-export type { StageKey, StageArtifactMeta } from "./compiler/pipeline/engine.js";
+// Shared Infrastructure
+export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./compiler/index.js";
+export type { CompilerDiagnostic, ExprSpanIndex } from "./compiler/index.js";
+
+// Pipeline
+export type { StageKey, StageArtifactMeta } from "./compiler/index.js";
+
+// Model (Foundation)
 export {
   spanContainsOffset,
   spanLength,
@@ -69,20 +59,14 @@ export {
   offsetSpan,
   toSourceSpan,
   toSourceLoc,
-  type SpanLike,
-  type SourceSpan,
-  type TextSpan,
-} from "./compiler/model/span.js";
-export {
   idKey,
   idFromKey,
   normalizePathForId,
   toSourceFileId,
-  type NormalizedPath,
-  type SourceFileId,
-} from "./compiler/model/identity.js";
-export { diagnosticSpan } from "./compiler/diagnostics.js";
-export { provenanceSpan, preferOrigin } from "./compiler/model/origin.js";
+  provenanceSpan,
+  preferOrigin,
+} from "./compiler/index.js";
+export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId } from "./compiler/index.js";
 
-// Program facade + services (experimental)
+// === Program ===
 export * from "./program/index.js";

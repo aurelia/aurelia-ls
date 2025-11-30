@@ -1,94 +1,17 @@
-import test, { describe } from "node:test";
-import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { runVectorTests, getDirname, lowerOpts } from "../_helpers/vector-runner.mjs";
+import { diffByKey } from "../_helpers/test-utils.mjs";
 
-import { createFailureRecorder, fmtList } from "../_helpers/test-utils.mjs";
-import { deepMergeSemantics } from "../_helpers/semantics-merge.mjs";
+import { lowerDocument } from "../../out/compiler/index.js";
 
-import { getExpressionParser, DEFAULT_SYNTAX } from "../../out/index.js";
-import { lowerDocument } from "../../out/compiler/phases/10-lower/lower.js";
-import { DEFAULT as SEM_DEFAULT } from "../../out/compiler/language/registry.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const vectorFiles = fs.readdirSync(__dirname)
-  .filter((f) => f.endsWith(".json") && f !== "failures.json")
-  .sort();
-const vectors = vectorFiles.flatMap((file) => {
-  const full = path.join(__dirname, file);
-  return JSON.parse(fs.readFileSync(full, "utf8")).map((v) => ({ ...v, file }));
+runVectorTests({
+  dirname: getDirname(import.meta.url),
+  suiteName: "Lower (10)",
+  execute: (v, ctx) => reduceIrToLowerIntent(lowerDocument(v.markup, lowerOpts(ctx))),
+  compare: compareLowerIntent,
+  categories: ["expressions", "controllers", "lets", "elements", "attributes"],
 });
 
-const { recordFailure, attachWriter } = createFailureRecorder(__dirname, "failures.json");
-attachWriter();
-
-describe("Lower (10)", () => {
-  for (const v of vectors) {
-    const suite = v.file === "spec-sweep.json" ? "SpecSweep" : "Vectors";
-    test(`[${suite}] ${v.name}`, () => {
-      const sem = v.semOverrides ? deepMergeSemantics(SEM_DEFAULT, v.semOverrides) : SEM_DEFAULT;
-      const ir = lowerDocument(v.markup, {
-        attrParser: DEFAULT_SYNTAX,
-        exprParser: getExpressionParser(),
-        file: "mem.html",
-        name: "mem",
-        sem,
-      });
-      const intent = reduceIrToLowerIntent(ir);
-      const expected = v.expect ?? {};
-
-      const diff = compareIntent(intent, expected);
-      const { missing, extra } = diff;
-
-      const anyMissing =
-        missing.expressions.length ||
-        missing.controllers.length ||
-        missing.lets.length ||
-        missing.elements.length ||
-        missing.attributes.length;
-      const anyExtra =
-        extra.expressions.length ||
-        extra.controllers.length ||
-        extra.lets.length ||
-        extra.elements.length ||
-        extra.attributes.length;
-
-      if (anyMissing || anyExtra) {
-        recordFailure({
-          file: v.file,
-          name: v.name,
-          markup: v.markup,
-          expected,
-          actual: intent,
-          diff,
-        });
-      }
-
-      assert.ok(
-        !anyMissing,
-        "Lower intent is missing expected items." +
-        fmtList("missing.expressions", missing.expressions) +
-        fmtList("missing.controllers", missing.controllers) +
-        fmtList("missing.lets",       missing.lets) +
-        fmtList("missing.elements",   missing.elements) +
-        fmtList("missing.attributes", missing.attributes) +
-        "\nSee failures.json for full snapshot."
-      );
-
-      assert.ok(
-        !anyExtra,
-        "Lower intent has unexpected extras." +
-        fmtList("extra.expressions", extra.expressions) +
-        fmtList("extra.controllers", extra.controllers) +
-        fmtList("extra.lets",       extra.lets) +
-        fmtList("extra.elements",   extra.elements) +
-        fmtList("extra.attributes", extra.attributes) +
-        "\nSee failures.json for full snapshot."
-      );
-    });
-  }
-});
+// --- Intent Reduction ---
 
 function modeToCommand(mode) {
   switch (mode) {
@@ -226,42 +149,29 @@ function reduceIrToLowerIntent(irModule) {
   return out;
 }
 
-function compareIntent(actual, expected) {
+// --- Intent Comparison ---
+
+function compareLowerIntent(actual, expected) {
   const keyExpr = (e) => `${e.kind ?? ""}|${e.on ?? ""}|${e.command ?? ""}|${e.code ?? ""}|${e.name ?? ""}|${e.toBindingContext ? 1 : 0}|${e.hasValue ? 1 : 0}`;
   const keyElem = (e) => `${e.res ?? ""}|${e.containerless ? 1 : 0}|${(e.props ?? []).join(",")}`;
   const keyAttr = (e) => `${e.res ?? ""}|${e.alias ?? ""}|${(e.props ?? []).join(",")}`;
-  const toSet = (list, keyFn) => new Set((list ?? []).map(keyFn));
 
-  const a = {
-    expressions: toSet(actual.expressions, keyExpr),
-    controllers: toSet(actual.controllers, keyExpr),
-    lets: toSet(actual.lets, keyExpr),
-    elements: toSet(actual.elements, keyElem),
-    attributes: toSet(actual.attributes, keyAttr),
-  };
-  const e = {
-    expressions: toSet(expected.expressions, keyExpr),
-    controllers: toSet(expected.controllers, keyExpr),
-    lets: toSet(expected.lets, keyExpr),
-    elements: toSet(expected.elements, keyElem),
-    attributes: toSet(expected.attributes, keyAttr),
-  };
+  const { missing: missingExpressions, extra: extraExpressions } =
+    diffByKey(actual.expressions, expected.expressions, keyExpr);
+  const { missing: missingControllers, extra: extraControllers } =
+    diffByKey(actual.controllers, expected.controllers, keyExpr);
+  const { missing: missingLets, extra: extraLets } =
+    diffByKey(actual.lets, expected.lets, keyExpr);
+  const { missing: missingElements, extra: extraElements } =
+    diffByKey(actual.elements, expected.elements, keyElem);
+  const { missing: missingAttributes, extra: extraAttributes } =
+    diffByKey(actual.attributes, expected.attributes, keyAttr);
 
-  const missing = {
-    expressions: [...e.expressions].filter((k) => !a.expressions.has(k)),
-    controllers: [...e.controllers].filter((k) => !a.controllers.has(k)),
-    lets: [...e.lets].filter((k) => !a.lets.has(k)),
-    elements: [...e.elements].filter((k) => !a.elements.has(k)),
-    attributes: [...e.attributes].filter((k) => !a.attributes.has(k)),
+  return {
+    missingExpressions, extraExpressions,
+    missingControllers, extraControllers,
+    missingLets, extraLets,
+    missingElements, extraElements,
+    missingAttributes, extraAttributes,
   };
-
-  const extra = {
-    expressions: [...a.expressions].filter((k) => !e.expressions.has(k)),
-    controllers: [...a.controllers].filter((k) => !e.controllers.has(k)),
-    lets: [...a.lets].filter((k) => !e.lets.has(k)),
-    elements: [...a.elements].filter((k) => !e.elements.has(k)),
-    attributes: [...a.attributes].filter((k) => !e.attributes.has(k)),
-  };
-
-  return { missing, extra };
 }

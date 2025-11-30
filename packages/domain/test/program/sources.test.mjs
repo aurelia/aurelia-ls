@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { InMemorySourceStore } from "../../out/program/sources.js";
+import { InMemorySourceStore } from "../../out/index.js";
 
 test("InMemorySourceStore auto-increments versions and overwrites snapshots", () => {
   const store = new InMemorySourceStore();

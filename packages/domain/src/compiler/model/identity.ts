@@ -15,7 +15,6 @@ export type NumericId<TBrand extends string> = Branded<number, TBrand>;
 export type NodeId = StringId<"NodeId">; // e.g. '0/2/1', '0/3#text@0', '0/1@attr:value'
 export type ExprId = StringId<"ExprId">; // deterministic (e.g., hash of file+loc+expressionType+code)
 export type FrameId = NumericId<"FrameId">;
-export type HydrationId = NumericId<"HydrationId">;
 export type TemplateId = StringId<"TemplateId">;
 export type SourceFileId = StringId<"SourceFileId">;
 export type NormalizedPath = StringId<"NormalizedPath">;
@@ -133,7 +132,7 @@ export function hashIdentity(source: string): string {
   return `${asUintHex(h1)}${asUintHex(h2)}`;
 }
 
-export function stableHash(source: string | readonly string[]): string {
+function hashForId(source: string | readonly string[]): string {
   const key = typeof source === "string" ? source : source.join("|");
   return hashIdentity(key);
 }
@@ -142,7 +141,7 @@ export function deterministicStringId<TBrand extends string>(
   prefix: string,
   payload: string | readonly string[],
 ): StringId<TBrand> {
-  return `${prefix}_${stableHash(payload)}` as StringId<TBrand>;
+  return `${prefix}_${hashForId(payload)}` as StringId<TBrand>;
 }
 
 export function normalizePathForId(filePath: string): NormalizedPath {
@@ -302,6 +301,3 @@ export class SequentialIdAllocator<TBrand extends string> {
 }
 
 export class FrameIdAllocator extends SequentialIdAllocator<"FrameId"> {}
-
-/** Sequential allocator for hydration ids (SSR markers). */
-export class HydrationIdAllocator extends SequentialIdAllocator<"HydrationId"> {}

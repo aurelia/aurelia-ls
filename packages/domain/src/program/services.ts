@@ -1,10 +1,25 @@
-import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/diagnostics.js";
-import type { SourceFileId, NormalizedPath } from "../compiler/model/identity.js";
-import { resolveSourceSpan } from "../compiler/model/source.js";
-import { spanEquals, spanLength, type SourceSpan, type SpanLike } from "../compiler/model/span.js";
+// Model imports (via barrel)
+import type { SourceFileId, NormalizedPath, SourceSpan, SpanLike } from "../compiler/model/index.js";
+import { resolveSourceSpan, spanEquals, spanLength } from "../compiler/model/index.js";
+
+// Shared imports (via barrel)
+import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/shared/index.js";
+
+// Pipeline imports (via barrel)
+import { stableHash } from "../compiler/pipeline/index.js";
+
+// Analysis imports (via barrel)
+import type { TypecheckDiagnostic } from "../compiler/analysis/index.js";
+
+// Synthesis imports (via barrel)
+import type { TemplateBindableInfo, TemplateQueryFacade, TemplateMappingArtifact } from "../compiler/synthesis/index.js";
+
+// Compiler facade
+import type { TemplateCompilation } from "../compiler/facade.js";
+
+// Program layer imports
 import type { DocumentSnapshot, DocumentUri, TemplateExprId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
-import type { TemplateCompilation } from "../compiler/facade.js";
 import {
   provenanceHitToDocumentSpan,
   projectGeneratedOffsetToDocumentSpan,
@@ -15,16 +30,10 @@ import {
   type TemplateProvenanceHit,
 } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
-import type { TemplateBindableInfo, TemplateQueryFacade } from "../compiler/query.js";
-import type { TemplateMappingArtifact } from "../compiler/mapping.js";
-import type { SsrMappingArtifact } from "../compiler/products/ssr.js";
-import type { AotMappingArtifact } from "../compiler/aot-mapping.js";
-import { stableHash } from "../compiler/pipeline/hash.js";
-import type { TypecheckDiagnostic } from "../compiler/phases/40-typecheck/typecheck.js";
 
 /**
  * TODO(provenance-refactor)
- * - Treat ProvenanceIndex as the single source-map layer between overlay/SSR artifacts and templates.
+ * - Treat ProvenanceIndex as the single source-map layer between generated artifacts and templates.
  * - Migrate remaining overlay offset/member heuristics in this file into ProvenanceIndex projection APIs.
  * - Stop scanning TemplateMappingArtifact directly in services once provenance has full projection coverage.
  * - Keep this in sync with docs/agents/appendix-provenance.md and docs/provenance-refactor-milestones.md.
@@ -91,20 +100,6 @@ export interface OverlayBuildArtifact {
   };
   mapping: TemplateMappingArtifact;
   calls: readonly CompileCallSite[];
-}
-
-export interface SsrBuildArtifact {
-  template: BuildSnapshot;
-  baseName: string;
-  html: BuildSnapshot & { text: string };
-  manifest: BuildSnapshot & { text: string };
-  mapping: SsrMappingArtifact;
-}
-
-export interface AotBuildArtifact {
-  template: BuildSnapshot;
-  aot: BuildSnapshot & { baseName: string; text: string };
-  mapping: AotMappingArtifact;
 }
 
 export interface DiagnosticRelatedInfo {
@@ -238,8 +233,6 @@ export interface TemplateLanguageService {
 
 export interface TemplateBuildService {
   getOverlay(uri: DocumentUri): OverlayBuildArtifact;
-  getSsr(uri: DocumentUri): SsrBuildArtifact;
-  getAot(uri: DocumentUri): AotBuildArtifact;
 }
 
 export class DefaultTemplateBuildService implements TemplateBuildService {
@@ -271,59 +264,6 @@ export class DefaultTemplateBuildService implements TemplateBuildService {
       },
       mapping,
       calls: overlayProduct.calls,
-    };
-  }
-
-  getSsr(uri: DocumentUri): SsrBuildArtifact {
-    const canonical = canonicalDocumentUri(uri);
-    const paths = deriveTemplatePaths(canonical.uri, overlayOptions(this.program));
-    const template = this.requireSnapshot(canonical);
-    const ssr = this.program.getSsr(canonical.uri);
-    const htmlDoc: BuildDocument = {
-      uri: paths.ssr.htmlUri,
-      path: paths.ssr.htmlPath,
-      file: paths.ssr.htmlFile,
-    };
-    const manifestDoc: BuildDocument = {
-      uri: paths.ssr.manifestUri,
-      path: paths.ssr.manifestPath,
-      file: paths.ssr.manifestFile,
-    };
-
-    return {
-      template: buildSnapshot(canonical, template.version, stableHash(template.text)),
-      baseName: paths.ssr.baseName,
-      html: {
-        ...buildSnapshot(htmlDoc, template.version, stableHash(ssr.htmlText)),
-        text: ssr.htmlText,
-      },
-      manifest: {
-        ...buildSnapshot(manifestDoc, template.version, stableHash(ssr.manifestText)),
-        text: ssr.manifestText,
-      },
-      mapping: ssr.mapping,
-    };
-  }
-
-  getAot(uri: DocumentUri): AotBuildArtifact {
-    const canonical = canonicalDocumentUri(uri);
-    const paths = deriveTemplatePaths(canonical.uri, overlayOptions(this.program));
-    const template = this.requireSnapshot(canonical);
-    const aot = this.program.getAot(canonical.uri);
-    const aotDoc: BuildDocument = {
-      uri: paths.aot.uri,
-      path: paths.aot.path,
-      file: paths.aot.file,
-    };
-
-    return {
-      template: buildSnapshot(canonical, template.version, stableHash(template.text)),
-      aot: {
-        ...buildSnapshot(aotDoc, template.version, stableHash(aot.aot.text)),
-        baseName: paths.aot.baseName,
-        text: aot.aot.text,
-      },
-      mapping: aot.mapping,
     };
   }
 
@@ -375,14 +315,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
 
   getOverlay(uri: DocumentUri): OverlayBuildArtifact {
     return this.build.getOverlay(uri);
-  }
-
-  getSsr(uri: DocumentUri): SsrBuildArtifact {
-    return this.build.getSsr(uri);
-  }
-
-  getAot(uri: DocumentUri): AotBuildArtifact {
-    return this.build.getAot(uri);
   }
 
   getHover(uri: DocumentUri, position: Position): HoverInfo | null {
@@ -857,12 +789,10 @@ function buildSnapshot(doc: BuildDocument, version: number, contentHash: string)
   return { uri: doc.uri, path: doc.path, file: doc.file, version, contentHash };
 }
 
-function overlayOptions(program: TemplateProgram): { isJs: boolean; overlayBaseName?: string; aotBaseName?: string } {
-  const { isJs, overlayBaseName, aotBaseName } = program.options;
-  const result: { isJs: boolean; overlayBaseName?: string; aotBaseName?: string } = { isJs };
+function overlayOptions(program: TemplateProgram): { isJs: boolean; overlayBaseName?: string } {
+  const { isJs, overlayBaseName } = program.options;
+  const result: { isJs: boolean; overlayBaseName?: string } = { isJs };
   if (overlayBaseName !== undefined) result.overlayBaseName = overlayBaseName;
-  if (aotBaseName !== undefined) result.aotBaseName = aotBaseName;
-  else if (overlayBaseName !== undefined) result.aotBaseName = overlayBaseName;
   return result;
 }
 

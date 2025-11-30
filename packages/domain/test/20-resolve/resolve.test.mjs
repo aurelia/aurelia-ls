@@ -1,85 +1,37 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { createFailureRecorder, fmtList } from "../_helpers/test-utils.mjs";
+import { runVectorTests, getDirname, lowerOpts } from "../_helpers/vector-runner.mjs";
 import { deepMergeSemantics } from "../_helpers/semantics-merge.mjs";
 
-import { getExpressionParser, DEFAULT_SYNTAX } from "../../out/index.js";
-import { lowerDocument } from "../../out/compiler/phases/10-lower/lower.js";
-import { DEFAULT } from "../../out/compiler/language/registry.js";
-import { resolveHost } from "../../out/compiler/phases/20-resolve-host/resolve.js";
-import { materializeResourcesForScope } from "../../out/compiler/language/resource-graph.js";
+import {
+  getExpressionParser,
+  DEFAULT_SYNTAX,
+  lowerDocument,
+  DEFAULT,
+  resolveHost,
+  materializeResourcesForScope,
+} from "../../out/compiler/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dirname = getDirname(import.meta.url);
 
-const vectorFiles = fs.readdirSync(__dirname)
-  .filter((f) => f.endsWith(".json") && f !== "failures.json")
-  .sort();
-const vectors = vectorFiles.flatMap((file) => {
-  const full = path.join(__dirname, file);
-  return JSON.parse(fs.readFileSync(full, "utf8")).map((v) => ({ ...v, file }));
+// --- Vector Tests ---
+
+runVectorTests({
+  dirname,
+  suiteName: "Resolve (20)",
+  execute: (v, ctx) => {
+    const ir = lowerDocument(v.markup, lowerOpts(ctx));
+    const linked = resolveHost(ir, ctx.sem);
+    return reduceLinkedIntent(linked);
+  },
+  compare: compareResolveIntent,
+  categories: ["items", "diags"],
 });
 
-const { recordFailure, attachWriter } = createFailureRecorder(__dirname, "failures.json");
-attachWriter();
+// --- Additional Non-Vector Tests ---
 
-describe("Resolve (20)", () => {
-  for (const v of vectors) {
-    test(v.name, () => {
-      const sem = v.semOverrides ? deepMergeSemantics(DEFAULT, v.semOverrides) : DEFAULT;
-      const ir = lowerDocument(v.markup, {
-        attrParser: DEFAULT_SYNTAX,
-        exprParser: getExpressionParser(),
-        file: "mem.html",
-        name: "mem",
-        sem,
-      });
-      const linked = resolveHost(ir, sem);
-      const intent = reduceLinkedIntent(linked);
-      const expected = v.expect ?? {};
-
-      const diff = compareIntent(intent, expected);
-      const { missing, extra } = diff;
-
-      const anyMissing =
-        missing.items.length ||
-        missing.diags.length;
-      const anyExtra =
-        extra.items.length ||
-        extra.diags.length;
-
-      if (anyMissing || anyExtra) {
-        recordFailure({
-          file: v.file,
-          name: v.name,
-          markup: v.markup,
-          expected,
-          actual: intent,
-          diff,
-        });
-      }
-
-      assert.ok(
-        !anyMissing,
-        "Resolve intent is missing expected items." +
-        fmtList("missing.items", missing.items) +
-        fmtList("missing.diags", missing.diags) +
-        "\nSee failures.json for full snapshot."
-      );
-
-      assert.ok(
-        !anyExtra,
-        "Resolve intent has unexpected extras." +
-        fmtList("extra.items", extra.items) +
-        fmtList("extra.diags", extra.diags) +
-        "\nSee failures.json for full snapshot."
-      );
-    });
-  }
-
+describe("Resolve (20) - Resource Graph", () => {
   test("resource graph: local scope overlays root but not parent scopes", () => {
     const baseSem = deepMergeSemantics(DEFAULT, {
       resources: {
@@ -231,6 +183,8 @@ describe("Resolve (20)", () => {
   });
 });
 
+// --- Intent Reduction ---
+
 function reduceLinkedIntent(linked) {
   const items = [];
   const diags = (linked.diags ?? []).map((d) => d.code);
@@ -333,55 +287,6 @@ function visitTemplate(template, items, visit) {
   }
 }
 
-function compareIntent(actual, expected) {
-  const toCountMap = (list, keyFn) => {
-    const map = new Map();
-    for (const item of list ?? []) {
-      const k = keyFn(item);
-      map.set(k, (map.get(k) ?? 0) + 1);
-    }
-    return map;
-  };
-  const a = {
-    items: toCountMap(actual.items, (e) => JSON.stringify(e)),
-    diags: toCountMap(actual.diags, (e) => e),
-  };
-  const e = {
-    items: toCountMap(expected.items ?? [], (e) => JSON.stringify(e)),
-    diags: toCountMap((expected.diags ?? []).map((d) => d.code ?? d), (e) => e),
-  };
-
-  const diffCounts = (actualMap, expectedMap) => {
-    const missing = [];
-    const extra = [];
-    const keys = new Set([...actualMap.keys(), ...expectedMap.keys()]);
-    for (const k of keys) {
-      const aCount = actualMap.get(k) ?? 0;
-      const eCount = expectedMap.get(k) ?? 0;
-      if (eCount > aCount) {
-        for (let i = 0; i < eCount - aCount; i++) missing.push(k);
-      } else if (aCount > eCount) {
-        for (let i = 0; i < aCount - eCount; i++) extra.push(k);
-      }
-    }
-    return { missing, extra };
-  };
-
-  const items = diffCounts(a.items, e.items);
-  const diags = diffCounts(a.diags, e.diags);
-
-  return {
-    missing: {
-      items: items.missing,
-      diags: diags.missing,
-    },
-    extra: {
-      items: items.extra,
-      diags: diags.extra,
-    },
-  };
-}
-
 function mapTarget(target) {
   if (!target) return "unknown";
   switch (target.kind) {
@@ -427,4 +332,51 @@ function pushBindingItem(items, p) {
     default:
       break;
   }
+}
+
+// --- Intent Comparison ---
+
+function compareResolveIntent(actual, expected) {
+  const toCountMap = (list, keyFn) => {
+    const map = new Map();
+    for (const item of list ?? []) {
+      const k = keyFn(item);
+      map.set(k, (map.get(k) ?? 0) + 1);
+    }
+    return map;
+  };
+  const a = {
+    items: toCountMap(actual.items, (e) => JSON.stringify(e)),
+    diags: toCountMap(actual.diags, (e) => e),
+  };
+  const e = {
+    items: toCountMap(expected.items ?? [], (e) => JSON.stringify(e)),
+    diags: toCountMap((expected.diags ?? []).map((d) => d.code ?? d), (e) => e),
+  };
+
+  const diffCounts = (actualMap, expectedMap) => {
+    const missing = [];
+    const extra = [];
+    const keys = new Set([...actualMap.keys(), ...expectedMap.keys()]);
+    for (const k of keys) {
+      const aCount = actualMap.get(k) ?? 0;
+      const eCount = expectedMap.get(k) ?? 0;
+      if (eCount > aCount) {
+        for (let i = 0; i < eCount - aCount; i++) missing.push(k);
+      } else if (aCount > eCount) {
+        for (let i = 0; i < aCount - eCount; i++) extra.push(k);
+      }
+    }
+    return { missing, extra };
+  };
+
+  const items = diffCounts(a.items, e.items);
+  const diags = diffCounts(a.diags, e.diags);
+
+  return {
+    missingItems: items.missing,
+    extraItems: items.extra,
+    missingDiags: diags.missing,
+    extraDiags: diags.extra,
+  };
 }
