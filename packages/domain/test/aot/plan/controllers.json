@@ -1,0 +1,69 @@
+[
+  {
+    "name": "RP-C-001 if controller basic",
+    "markup": "<div if.bind=\"isVisible\">Content</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "content": "Content" }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "if", "frameId": 0, "hasElse": false }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-C-002 repeat basic",
+    "markup": "<div repeat.for=\"item of items\">${item}</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "repeat", "frameId": 1, "locals": ["item"], "contextuals": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] }
+      ],
+      "expressions": [
+        { "kind": "ForOfStatement", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 1 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
+        { "frameId": 1, "parentFrameId": 0, "kind": "repeat", "locals": ["iterator:item"], "overrideContext": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] }
+      ]
+    }
+  },
+  {
+    "name": "RP-C-003 with controller",
+    "markup": "<div with.bind=\"person\">${name}</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "with", "frameId": 1 }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 1 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
+        { "frameId": 1, "parentFrameId": 0, "kind": "with", "locals": [], "overrideContext": [] }
+      ]
+    }
+  }
+]

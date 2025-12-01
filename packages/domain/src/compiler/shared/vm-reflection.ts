@@ -20,7 +20,7 @@ export interface VmReflection {
 
 /**
  * Options for synthesis stages that need VM information.
- * Used by overlay:plan and future runtime:plan stages.
+ * Used by overlay:plan and future aot:plan stages.
  */
 export interface SynthesisOptions {
   isJs: boolean;

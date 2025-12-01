@@ -16,7 +16,7 @@ import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 import { lowerDocument, resolveHost, bindScopes, typecheck } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
-import { planOverlay, emitOverlayFile, type OverlayEmitOptions } from "../synthesis/index.js";
+import { planOverlay, emitOverlayFile, type OverlayEmitOptions, buildAotPlan, type AotPlanOptions } from "../synthesis/index.js";
 
 // Local imports
 import { PipelineEngine } from "./engine.js";
@@ -250,6 +250,31 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       if (overlayOpts.banner) emitOpts.banner = overlayOpts.banner;
       if (overlayOpts.filename) emitOpts.filename = overlayOpts.filename;
       return emitOverlayFile(plan, emitOpts);
+    },
+  });
+
+  /* ===========================================================================
+   * AOT synthesis stages
+   * =========================================================================== */
+
+  definitions.push({
+    key: "aot:plan",
+    version: "1",
+    deps: ["20-resolve", "30-bind"],
+    fingerprint(ctx) {
+      const aotOpts = ctx.options.aot ?? {};
+      return {
+        includeLocations: aotOpts.includeLocations ?? false,
+      };
+    },
+    run(ctx) {
+      const linked = ctx.require("20-resolve");
+      const scope = ctx.require("30-bind");
+      const aotOpts: AotPlanOptions = {
+        templateFilePath: ctx.options.templateFilePath,
+        includeLocations: ctx.options.aot?.includeLocations ?? false,
+      };
+      return buildAotPlan(linked, scope, aotOpts);
     },
   });
 

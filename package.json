@@ -32,6 +32,7 @@
     "test:overlay-plan": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec \"packages/domain/test/overlay/plan/**/*.test.mjs\"",
     "test:overlay-plan:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/synthesis/overlay/*.js\" --include \"packages/domain/out/compiler/analysis/shared/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/overlay-plan node --test --test-reporter=spec \"packages/domain/test/overlay/plan/**/*.test.mjs\"",
     "test:overlay-emit": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec \"packages/domain/test/overlay/emit/**/*.test.mjs\"",
+    "test:aot-plan": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec \"packages/domain/test/aot/plan/**/*.test.mjs\"",
     "test:40-typecheck": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/40-typecheck/typecheck.test.mjs",
     "test:40-typecheck:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/analysis/40-typecheck/*.js\" --include \"packages/domain/out/compiler/analysis/shared/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/40-typecheck node --test --test-reporter=spec packages/domain/test/40-typecheck/typecheck.test.mjs",
     "test:integration": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/integration/*.test.mjs",

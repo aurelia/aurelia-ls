@@ -14,7 +14,7 @@ import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 import type { LinkedSemanticsModule, TypecheckModule } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
-import type { OverlayPlanModule, OverlayEmitResult } from "../synthesis/index.js";
+import type { OverlayPlanModule, OverlayEmitResult, AotPlan } from "../synthesis/index.js";
 
 // Local imports
 import { stableHash } from "./hash.js";
@@ -29,7 +29,8 @@ export type StageKey =
   | "30-bind"
   | "40-typecheck"
   | "overlay:plan"
-  | "overlay:emit";
+  | "overlay:emit"
+  | "aot:plan";
 
 /**
  * Output types per stage. Strong typing keeps products honest about dependencies.
@@ -41,6 +42,7 @@ export interface StageOutputs {
   "40-typecheck": TypecheckModule;
   "overlay:plan": OverlayPlanModule;
   "overlay:emit": OverlayEmitResult;
+  "aot:plan": AotPlan;
 }
 
 /**
@@ -69,6 +71,10 @@ export interface PipelineOptions {
     banner?: string;
     eol?: "\n" | "\r\n";
     syntheticPrefix?: string;
+  };
+  aot?: {
+    /** Include source locations in plan nodes */
+    includeLocations?: boolean;
   };
   analyze?: SynthesisOptions;
   // TODO(productize): optional typecheck-only product settings (diagnostics gating, severity levels).
