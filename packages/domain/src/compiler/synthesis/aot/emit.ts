@@ -1,0 +1,558 @@
+/* =============================================================================
+ * AOT EMIT - Transform AotPlan to SerializedDefinition
+ * -----------------------------------------------------------------------------
+ * Consumes: AotPlan (from plan stage)
+ * Produces: AotCodeResult (serialized instructions + expressions + mapping)
+ *
+ * This stage walks the plan tree and emits serialized instructions organized
+ * by hydration target index. The output is ready for:
+ * - Direct JSON serialization for build output
+ * - Translation to Aurelia's runtime format (via codec)
+ * ============================================================================= */
+
+import type {
+  AotPlan,
+  AotCodeResult,
+  SerializedDefinition,
+  SerializedInstruction,
+  SerializedPropertyBinding,
+  SerializedInterpolation,
+  SerializedTextBinding,
+  SerializedListenerBinding,
+  SerializedRefBinding,
+  SerializedSetProperty,
+  SerializedHydrateElement,
+  SerializedHydrateAttribute,
+  SerializedHydrateTemplateController,
+  SerializedExpression,
+  AotMappingEntry,
+  PlanNode,
+  PlanElementNode,
+  PlanTextNode,
+  PlanBinding,
+  PlanCustomElement,
+  PlanCustomAttr,
+  PlanController,
+} from "./types.js";
+
+/* =============================================================================
+ * Public API
+ * ============================================================================= */
+
+export interface AotEmitOptions {
+  /** Template name (for the definition) */
+  name?: string;
+}
+
+/**
+ * Emit serialized instructions from an AotPlan.
+ */
+export function emitAotCode(
+  plan: AotPlan,
+  options: AotEmitOptions = {},
+): AotCodeResult {
+  const ctx = new EmitContext(plan, options);
+  const definition = ctx.emitDefinition(plan.root, options.name ?? "template");
+
+  return {
+    definition,
+    expressions: ctx.getExpressions(),
+    mapping: ctx.getMapping(),
+  };
+}
+
+/* =============================================================================
+ * Emit Context
+ * ============================================================================= */
+
+class EmitContext {
+  private readonly plan: AotPlan;
+  private readonly options: AotEmitOptions;
+  private readonly mapping: AotMappingEntry[] = [];
+  private nestedTemplateIndex = 0;
+
+  constructor(plan: AotPlan, options: AotEmitOptions) {
+    this.plan = plan;
+    this.options = options;
+  }
+
+  getExpressions(): SerializedExpression[] {
+    return this.plan.expressions.map((e) => ({
+      id: e.id,
+      ast: e.ast,
+    }));
+  }
+
+  getMapping(): AotMappingEntry[] {
+    return this.mapping;
+  }
+
+  /**
+   * Emit a definition for a template subtree.
+   */
+  emitDefinition(root: PlanNode, name: string): SerializedDefinition {
+    const instructions: SerializedInstruction[][] = [];
+    const nestedTemplates: SerializedDefinition[] = [];
+
+    // Walk the tree and collect instructions by target index
+    this.emitNode(root, instructions, nestedTemplates);
+
+    return {
+      name,
+      instructions,
+      nestedTemplates,
+      targetCount: instructions.length,
+    };
+  }
+
+  /**
+   * Emit instructions for a node and its descendants.
+   */
+  private emitNode(
+    node: PlanNode,
+    instructions: SerializedInstruction[][],
+    nestedTemplates: SerializedDefinition[],
+  ): void {
+    switch (node.kind) {
+      case "element":
+        this.emitElement(node, instructions, nestedTemplates);
+        break;
+      case "text":
+        this.emitText(node, instructions);
+        break;
+      case "comment":
+        // Comments don't produce instructions
+        break;
+      case "fragment":
+        for (const child of node.children) {
+          this.emitNode(child, instructions, nestedTemplates);
+        }
+        break;
+    }
+  }
+
+  /**
+   * Emit instructions for an element node.
+   */
+  private emitElement(
+    node: PlanElementNode,
+    instructions: SerializedInstruction[][],
+    nestedTemplates: SerializedDefinition[],
+  ): void {
+    // Process template controllers first (outside-in order)
+    // Controllers wrap the element, so their instructions come first
+    for (const ctrl of node.controllers) {
+      this.emitController(ctrl, node, instructions, nestedTemplates);
+    }
+
+    // If this element is a hydration target, emit its instructions
+    if (node.targetIndex !== undefined) {
+      const row = this.getOrCreateRow(instructions, node.targetIndex);
+
+      // Custom element hydration
+      if (node.customElement) {
+        row.push(this.emitHydrateElement(node.customElement));
+      }
+
+      // Custom attribute hydrations
+      for (const ca of node.customAttrs) {
+        row.push(this.emitHydrateAttribute(ca));
+      }
+
+      // Element bindings
+      for (const binding of node.bindings) {
+        row.push(this.emitBinding(binding));
+      }
+    }
+
+    // Recurse into children (unless wrapped by a controller that handles them)
+    if (node.controllers.length === 0) {
+      for (const child of node.children) {
+        this.emitNode(child, instructions, nestedTemplates);
+      }
+    }
+  }
+
+  /**
+   * Emit instructions for a text node.
+   */
+  private emitText(
+    node: PlanTextNode,
+    instructions: SerializedInstruction[][],
+  ): void {
+    if (node.interpolation && node.targetIndex !== undefined) {
+      const row = this.getOrCreateRow(instructions, node.targetIndex);
+      row.push({
+        type: "textBinding",
+        parts: node.interpolation.parts,
+        exprIds: node.interpolation.exprIds,
+      } satisfies SerializedTextBinding);
+    }
+  }
+
+  /**
+   * Emit a template controller.
+   */
+  private emitController(
+    ctrl: PlanController,
+    hostNode: PlanElementNode,
+    instructions: SerializedInstruction[][],
+    nestedTemplates: SerializedDefinition[],
+  ): void {
+    // Create nested template definition for the controller's content
+    const templateIndex = this.nestedTemplateIndex++;
+    const templateName = `${ctrl.kind}_${templateIndex}`;
+
+    // Build nested definition from the controller's template
+    const nestedDef = this.emitControllerTemplate(ctrl, hostNode, templateName);
+    nestedTemplates.push(nestedDef);
+
+    // Create the hydrate instruction for this controller
+    const hydrateCtrl: SerializedHydrateTemplateController = {
+      type: "hydrateTemplateController",
+      resource: ctrl.kind,
+      templateIndex,
+      instructions: this.emitControllerBindings(ctrl),
+    };
+
+    // Controllers get their own target
+    if (ctrl.targetIndex !== undefined) {
+      const row = this.getOrCreateRow(instructions, ctrl.targetIndex);
+      row.push(hydrateCtrl);
+    }
+  }
+
+  /**
+   * Emit the nested template for a controller.
+   */
+  private emitControllerTemplate(
+    ctrl: PlanController,
+    hostNode: PlanElementNode,
+    name: string,
+  ): SerializedDefinition {
+    // The controller's template contains the host element
+    // We need to emit it without the controller wrapper
+    const innerInstructions: SerializedInstruction[][] = [];
+    const innerNested: SerializedDefinition[] = [];
+
+    // Emit the host element without its controllers
+    this.emitElementWithoutControllers(hostNode, innerInstructions, innerNested);
+
+    // Handle controller-specific nested templates (else, cases, etc.)
+    this.emitControllerBranches(ctrl, innerNested);
+
+    return {
+      name,
+      instructions: innerInstructions,
+      nestedTemplates: innerNested,
+      targetCount: innerInstructions.length,
+    };
+  }
+
+  /**
+   * Emit element without its template controllers (for nested templates).
+   */
+  private emitElementWithoutControllers(
+    node: PlanElementNode,
+    instructions: SerializedInstruction[][],
+    nestedTemplates: SerializedDefinition[],
+  ): void {
+    // If this element is a hydration target, emit its instructions
+    if (node.targetIndex !== undefined) {
+      const row = this.getOrCreateRow(instructions, node.targetIndex);
+
+      // Custom element hydration
+      if (node.customElement) {
+        row.push(this.emitHydrateElement(node.customElement));
+      }
+
+      // Custom attribute hydrations
+      for (const ca of node.customAttrs) {
+        row.push(this.emitHydrateAttribute(ca));
+      }
+
+      // Element bindings
+      for (const binding of node.bindings) {
+        row.push(this.emitBinding(binding));
+      }
+    }
+
+    // Recurse into children
+    for (const child of node.children) {
+      this.emitNode(child, instructions, nestedTemplates);
+    }
+  }
+
+  /**
+   * Emit controller-specific branches (else, cases, then/catch, etc.).
+   */
+  private emitControllerBranches(
+    ctrl: PlanController,
+    nestedTemplates: SerializedDefinition[],
+  ): void {
+    switch (ctrl.kind) {
+      case "if":
+        if (ctrl.elseTemplate) {
+          const elseIndex = this.nestedTemplateIndex++;
+          nestedTemplates.push(
+            this.emitDefinition(ctrl.elseTemplate, `else_${elseIndex}`),
+          );
+        }
+        break;
+      case "switch":
+        for (const caseBranch of ctrl.cases ?? []) {
+          if (caseBranch.template) {
+            const caseIndex = this.nestedTemplateIndex++;
+            nestedTemplates.push(
+              this.emitDefinition(caseBranch.template, `case_${caseIndex}`),
+            );
+          }
+        }
+        if (ctrl.defaultTemplate) {
+          const defaultIndex = this.nestedTemplateIndex++;
+          nestedTemplates.push(
+            this.emitDefinition(ctrl.defaultTemplate, `default_${defaultIndex}`),
+          );
+        }
+        break;
+      case "promise":
+        if (ctrl.pendingTemplate) {
+          const pendingIndex = this.nestedTemplateIndex++;
+          nestedTemplates.push(
+            this.emitDefinition(ctrl.pendingTemplate, `pending_${pendingIndex}`),
+          );
+        }
+        if (ctrl.thenTemplate) {
+          const thenIndex = this.nestedTemplateIndex++;
+          nestedTemplates.push(
+            this.emitDefinition(ctrl.thenTemplate, `then_${thenIndex}`),
+          );
+        }
+        if (ctrl.catchTemplate) {
+          const catchIndex = this.nestedTemplateIndex++;
+          nestedTemplates.push(
+            this.emitDefinition(ctrl.catchTemplate, `catch_${catchIndex}`),
+          );
+        }
+        break;
+    }
+  }
+
+  /**
+   * Emit bindings for a controller (its own bindable properties).
+   */
+  private emitControllerBindings(ctrl: PlanController): SerializedInstruction[] {
+    const result: SerializedInstruction[] = [];
+
+    switch (ctrl.kind) {
+      case "repeat":
+        // repeat has an iteratorBinding (special)
+        // For now, emit as a property binding to 'items'
+        if (ctrl.iteratorExprId) {
+          result.push({
+            type: "propertyBinding",
+            to: "items",
+            exprId: ctrl.iteratorExprId,
+            mode: "toView",
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+      case "if":
+        if (ctrl.conditionExprId) {
+          result.push({
+            type: "propertyBinding",
+            to: "value",
+            exprId: ctrl.conditionExprId,
+            mode: "toView",
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+      case "with":
+        if (ctrl.valueExprId) {
+          result.push({
+            type: "propertyBinding",
+            to: "value",
+            exprId: ctrl.valueExprId,
+            mode: "toView",
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+      case "switch":
+        if (ctrl.valueExprId) {
+          result.push({
+            type: "propertyBinding",
+            to: "value",
+            exprId: ctrl.valueExprId,
+            mode: "toView",
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+      case "promise":
+        if (ctrl.valueExprId) {
+          result.push({
+            type: "propertyBinding",
+            to: "value",
+            exprId: ctrl.valueExprId,
+            mode: "toView",
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+      case "portal":
+        if (ctrl.targetExprId) {
+          result.push({
+            type: "propertyBinding",
+            to: "target",
+            exprId: ctrl.targetExprId,
+            mode: "toView",
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+    }
+
+    return result;
+  }
+
+  /**
+   * Emit a binding instruction.
+   */
+  private emitBinding(binding: PlanBinding): SerializedInstruction {
+    switch (binding.type) {
+      case "propertyBinding":
+        return {
+          type: "propertyBinding",
+          to: binding.to,
+          exprId: binding.exprId,
+          mode: binding.mode,
+        } satisfies SerializedPropertyBinding;
+
+      case "attributeBinding":
+        return {
+          type: "propertyBinding",
+          to: binding.to,
+          exprId: binding.exprId,
+          mode: "toView",
+        } satisfies SerializedPropertyBinding;
+
+      case "attributeInterpolation":
+        return {
+          type: "interpolation",
+          to: binding.to,
+          parts: binding.parts,
+          exprIds: binding.exprIds,
+        } satisfies SerializedInterpolation;
+
+      case "styleBinding":
+        return {
+          type: "propertyBinding",
+          to: `style.${binding.property}`,
+          exprId: binding.exprId,
+          mode: "toView",
+        } satisfies SerializedPropertyBinding;
+
+      case "listenerBinding": {
+        const listener: SerializedListenerBinding = {
+          type: "listenerBinding",
+          to: binding.event,
+          exprId: binding.exprId,
+          capture: binding.capture,
+        };
+        if (binding.modifier !== undefined) {
+          listener.modifier = binding.modifier;
+        }
+        return listener;
+      }
+
+      case "refBinding":
+        return {
+          type: "refBinding",
+          to: binding.to,
+          exprId: binding.exprId,
+        } satisfies SerializedRefBinding;
+    }
+  }
+
+  /**
+   * Emit hydrate instruction for a custom element.
+   */
+  private emitHydrateElement(ce: PlanCustomElement): SerializedHydrateElement {
+    const instructions: SerializedInstruction[] = [];
+
+    // Emit bindings
+    for (const binding of ce.bindings) {
+      instructions.push({
+        type: "propertyBinding",
+        to: binding.to,
+        exprId: binding.exprId,
+        mode: binding.mode,
+      } satisfies SerializedPropertyBinding);
+    }
+
+    // Emit static props
+    for (const prop of ce.staticProps) {
+      instructions.push({
+        type: "setProperty",
+        to: prop.name,
+        value: prop.value,
+      } satisfies SerializedSetProperty);
+    }
+
+    const result: SerializedHydrateElement = {
+      type: "hydrateElement",
+      resource: ce.resource,
+      instructions,
+    };
+    if (ce.containerless) {
+      result.containerless = true;
+    }
+    return result;
+  }
+
+  /**
+   * Emit hydrate instruction for a custom attribute.
+   */
+  private emitHydrateAttribute(ca: PlanCustomAttr): SerializedHydrateAttribute {
+    const instructions: SerializedInstruction[] = [];
+
+    // Emit bindings
+    for (const binding of ca.bindings) {
+      instructions.push({
+        type: "propertyBinding",
+        to: binding.to,
+        exprId: binding.exprId,
+        mode: binding.mode,
+      } satisfies SerializedPropertyBinding);
+    }
+
+    // Emit static props
+    for (const prop of ca.staticProps) {
+      instructions.push({
+        type: "setProperty",
+        to: prop.name,
+        value: prop.value,
+      } satisfies SerializedSetProperty);
+    }
+
+    const result: SerializedHydrateAttribute = {
+      type: "hydrateAttribute",
+      resource: ca.resource,
+      instructions,
+    };
+    if (ca.alias !== undefined) {
+      result.alias = ca.alias;
+    }
+    return result;
+  }
+
+  /**
+   * Get or create instruction row for a target index.
+   */
+  private getOrCreateRow(
+    instructions: SerializedInstruction[][],
+    targetIndex: number,
+  ): SerializedInstruction[] {
+    while (instructions.length <= targetIndex) {
+      instructions.push([]);
+    }
+    return instructions[targetIndex]!;
+  }
+}

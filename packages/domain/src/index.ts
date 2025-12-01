@@ -40,6 +40,46 @@ export type {
   TemplateControllerInfo,
 } from "./compiler/index.js";
 
+// Synthesis (AOT) - for build tools
+export { buildAotPlan, emitAotCode } from "./compiler/index.js";
+export type {
+  AotPlan,
+  AotPlanOptions,
+  AotCodeResult,
+  AotEmitOptions,
+  SerializedDefinition,
+  SerializedInstruction,
+  PlanNode,
+  PlanElementNode,
+  PlanTextNode,
+  PlanCommentNode,
+  PlanFragmentNode,
+  PlanBinding,
+  PlanPropertyBinding,
+  PlanAttributeBinding,
+  PlanAttributeInterpolation,
+  PlanStyleBinding,
+  PlanListenerBinding,
+  PlanRefBinding,
+  PlanTextInterpolation,
+  PlanStaticAttr,
+  PlanCustomElement,
+  PlanCustomAttr,
+  PlanController,
+  PlanRepeatController,
+  PlanIfController,
+  PlanWithController,
+  PlanSwitchController,
+  PlanPromiseController,
+  PlanPortalController,
+  PlanExpression,
+  PlanScope,
+} from "./compiler/index.js";
+
+// Analysis (for build tools)
+export { lowerDocument, resolveHost, bindScopes } from "./compiler/index.js";
+export type { BuildIrOptions } from "./compiler/index.js";
+
 // Shared Infrastructure
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./compiler/index.js";
 export type { CompilerDiagnostic, ExprSpanIndex } from "./compiler/index.js";
@@ -66,7 +106,33 @@ export {
   provenanceSpan,
   preferOrigin,
 } from "./compiler/index.js";
-export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId } from "./compiler/index.js";
+export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId } from "./compiler/index.js";
+
+// Expression AST types (for evaluation)
+export type {
+  AnyBindingExpression,
+  IsBindingBehavior,
+  IsAssign,
+  IsBinary,
+  IsLeftHandSide,
+  AccessScopeExpression,
+  AccessMemberExpression,
+  AccessKeyedExpression,
+  AccessThisExpression,
+  PrimitiveLiteralExpression,
+  BinaryExpression,
+  UnaryExpression,
+  ConditionalExpression,
+  ArrayLiteralExpression,
+  ObjectLiteralExpression,
+  CallScopeExpression,
+  CallMemberExpression,
+  CallFunctionExpression,
+  Interpolation,
+  ForOfStatement,
+  TemplateExpression,
+  BindingIdentifier,
+} from "./compiler/index.js";
 
 // === Program ===
 export * from "./program/index.js";

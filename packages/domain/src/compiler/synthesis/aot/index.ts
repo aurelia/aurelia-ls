@@ -67,3 +67,7 @@ export type {
 
 // Plan function
 export { buildAotPlan } from "./plan.js";
+
+// Emit function
+export { emitAotCode } from "./emit.js";
+export type { AotEmitOptions } from "./emit.js";
