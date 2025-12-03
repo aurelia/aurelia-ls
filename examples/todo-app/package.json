@@ -1,0 +1,22 @@
+{
+  "name": "todo-app",
+  "description": "Aurelia 2 Todo App example (using local aurelia submodule)",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "aurelia": "*"
+  },
+  "devDependencies": {
+    "@aurelia/vite-plugin": "*",
+    "@types/node": "^22.10.2",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

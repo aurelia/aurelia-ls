@@ -13,6 +13,7 @@ module.exports = [
       "fixtures/**",
       ".aurelia-cache/**",
       "**/*.tsbuildinfo",
+      "examples/**",
     ],
   },
   {

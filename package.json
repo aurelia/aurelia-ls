@@ -9,6 +9,7 @@
   },
   "pnpm": {
     "overrides": {
+      "aurelia": "file:aurelia/packages/aurelia",
       "@aurelia/kernel": "file:aurelia/packages/kernel",
       "@aurelia/metadata": "file:aurelia/packages/metadata",
       "@aurelia/platform": "file:aurelia/packages/platform",
@@ -16,7 +17,13 @@
       "@aurelia/runtime": "file:aurelia/packages/runtime",
       "@aurelia/runtime-html": "file:aurelia/packages/runtime-html",
       "@aurelia/expression-parser": "file:aurelia/packages/expression-parser",
-      "@aurelia/template-compiler": "file:aurelia/packages/template-compiler"
+      "@aurelia/template-compiler": "file:aurelia/packages/template-compiler",
+      "@aurelia/fetch-client": "file:aurelia/packages/fetch-client",
+      "@aurelia/router": "file:aurelia/packages/router",
+      "@aurelia/route-recognizer": "file:aurelia/packages/route-recognizer",
+      "@aurelia/testing": "file:aurelia/packages/testing",
+      "@aurelia/vite-plugin": "file:aurelia/packages-tooling/vite-plugin",
+      "@aurelia/plugin-conventions": "file:aurelia/packages-tooling/plugin-conventions"
     }
   },
   "scripts": {
