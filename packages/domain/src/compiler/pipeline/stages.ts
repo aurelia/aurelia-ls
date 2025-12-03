@@ -16,7 +16,7 @@ import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 import { lowerDocument, resolveHost, bindScopes, typecheck } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
-import { planOverlay, emitOverlayFile, type OverlayEmitOptions, buildAotPlan, type AotPlanOptions } from "../synthesis/index.js";
+import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
 
 // Local imports
 import { PipelineEngine } from "./engine.js";
@@ -274,7 +274,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         templateFilePath: ctx.options.templateFilePath,
         includeLocations: ctx.options.aot?.includeLocations ?? false,
       };
-      return buildAotPlan(linked, scope, aotOpts);
+      return planAot(linked, scope, aotOpts);
     },
   });
 

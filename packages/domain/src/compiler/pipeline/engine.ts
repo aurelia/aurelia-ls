@@ -14,7 +14,7 @@ import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 import type { LinkedSemanticsModule, TypecheckModule } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
-import type { OverlayPlanModule, OverlayEmitResult, AotPlan } from "../synthesis/index.js";
+import type { OverlayPlanModule, OverlayEmitResult, AotPlanModule } from "../synthesis/index.js";
 
 // Local imports
 import { stableHash } from "./hash.js";
@@ -42,7 +42,7 @@ export interface StageOutputs {
   "40-typecheck": TypecheckModule;
   "overlay:plan": OverlayPlanModule;
   "overlay:emit": OverlayEmitResult;
-  "aot:plan": AotPlan;
+  "aot:plan": AotPlanModule;
 }
 
 /**

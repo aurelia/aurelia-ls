@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, createCompilerContext } from "../../_helpers/vector-runner.mjs";
 import { diffByKey } from "../../_helpers/test-utils.mjs";
 
-import { lowerDocument, resolveHost, bindScopes, buildAotPlan } from "../../../out/compiler/index.js";
+import { lowerDocument, resolveHost, bindScopes, planAot } from "../../../out/compiler/index.js";
 
 runVectorTests({
   dirname: getDirname(import.meta.url),
@@ -10,7 +10,7 @@ runVectorTests({
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
     const linked = resolveHost(ir, ctx.sem);
     const scope = bindScopes(linked);
-    const plan = buildAotPlan(linked, scope, { templateFilePath: "test.html" });
+    const plan = planAot(linked, scope, { templateFilePath: "test.html" });
     return reducePlanIntent(plan);
   },
   compare: compareAotPlanIntent,

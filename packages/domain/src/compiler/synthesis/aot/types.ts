@@ -3,9 +3,10 @@
  * -----------------------------------------------------------------------------
  * Abstract intermediate representation for AOT compilation.
  *
- * The AotPlan is target-agnostic: it captures everything needed to generate
- * Aurelia instructions without being coupled to the runtime's serialization format.
- * The emit stage adapts the plan to the concrete instruction format.
+ * The AotPlanModule is target-agnostic: it captures everything needed to
+ * generate Aurelia instructions without being coupled to the runtime's
+ * serialization format. The emit stage adapts the plan to the concrete
+ * instruction format.
  *
  * Key design principles:
  * - Expressions referenced by ExprId, stored in separate table
@@ -27,10 +28,10 @@ import type {
 } from "../../model/index.js";
 
 /* =============================================================================
- * AOT PLAN - Top-level container
+ * AOT PLAN MODULE - Top-level container
  * ============================================================================= */
 
-export interface AotPlan {
+export interface AotPlanModule {
   version: "aurelia-aot-plan@1";
 
   /** Root template node (synthetic fragment containing top-level nodes) */

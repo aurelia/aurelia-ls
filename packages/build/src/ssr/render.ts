@@ -9,15 +9,38 @@ import { DI, Registration } from "@aurelia/kernel";
 import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { createServerPlatform, getDocument } from "./platform.js";
+import {
+  processSSROutput,
+  type HydrationManifest,
+  type SSRProcessOptions,
+} from "./ssr-processor.js";
 
 export interface RenderOptions {
   /** Component state */
   state: Record<string, unknown>;
+
+  /**
+   * SSR processing options.
+   * When provided, enables post-render processing for clean HTML output.
+   */
+  ssr?: SSRProcessOptions & {
+    /**
+     * Initial hydration manifest.
+     * Required when stripMarkers is true.
+     */
+    manifest?: HydrationManifest;
+  };
 }
 
 export interface RenderResult {
-  /** Rendered HTML with hydration markers */
+  /** Rendered HTML (clean if ssr.stripMarkers=true) */
   html: string;
+
+  /**
+   * Hydration manifest (with elementPaths if ssr.stripMarkers=true).
+   * Only present when ssr options are provided.
+   */
+  manifest?: HydrationManifest;
 }
 
 export interface ComponentDefinition {
@@ -95,13 +118,27 @@ export async function renderToString(
   au.app({ host, component: Component });
   await au.start();
 
-  // Get rendered HTML
-  const html = host.innerHTML;
+  // Process SSR output if options provided
+  let result: RenderResult;
+
+  if (options.ssr) {
+    const initialManifest = options.ssr.manifest ?? {
+      targetCount: 0,
+      controllers: {},
+    };
+    const processed = processSSROutput(host, initialManifest, options.ssr);
+    result = {
+      html: processed.html,
+      manifest: processed.manifest,
+    };
+  } else {
+    result = { html: host.innerHTML };
+  }
 
   // Cleanup
   await au.stop(true);
 
-  return { html };
+  return result;
 }
 
 /**
@@ -138,11 +175,25 @@ export async function renderComponent<T extends object>(
   au.app({ host, component: instance });
   await au.start();
 
-  // Get rendered HTML
-  const html = host.innerHTML;
+  // Process SSR output if options provided
+  let result: RenderResult;
+
+  if (options.ssr) {
+    const initialManifest = options.ssr.manifest ?? {
+      targetCount: 0,
+      controllers: {},
+    };
+    const processed = processSSROutput(host, initialManifest, options.ssr);
+    result = {
+      html: processed.html,
+      manifest: processed.manifest,
+    };
+  } else {
+    result = { html: host.innerHTML };
+  }
 
   // Cleanup
   await au.stop(true);
 
-  return { html };
+  return result;
 }

@@ -15,15 +15,27 @@ export {
   lowerDocument,
   resolveHost,
   bindScopes,
-  buildAotPlan,
+  planAot,
   emitAotCode,
+  emitTemplate,
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
-  type AotPlan,
+  type AotPlanModule,
   type AotCodeResult,
   type SerializedDefinition,
+  type TemplateEmitResult,
 } from "@aurelia-ls/domain";
+
+// AOT compilation API
+export {
+  compileWithAot,
+  compileAndRenderAot,
+  type AotCompileOptions,
+  type AotCompileResult,
+  type CompileAndRenderAotOptions,
+  type CompileAndRenderAotResult,
+} from "./aot.js";
 
 // Runtime re-exports for SSR consumers
 export { DI, Registration } from "@aurelia/kernel";

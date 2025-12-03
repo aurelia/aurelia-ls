@@ -41,14 +41,30 @@ export type {
 } from "./compiler/index.js";
 
 // Synthesis (AOT) - for build tools
-export { buildAotPlan, emitAotCode } from "./compiler/index.js";
+export { planAot, emitAotCode, emitTemplate } from "./compiler/index.js";
+export type { TemplateEmitResult, TemplateEmitOptions } from "./compiler/index.js";
 export type {
-  AotPlan,
+  AotPlanModule,
   AotPlanOptions,
   AotCodeResult,
   AotEmitOptions,
   SerializedDefinition,
   SerializedInstruction,
+  SerializedExpression,
+  SerializedPropertyBinding,
+  SerializedTextBinding,
+  SerializedInterpolation,
+  SerializedListenerBinding,
+  SerializedRefBinding,
+  SerializedSetProperty,
+  SerializedSetAttribute,
+  SerializedHydrateElement,
+  SerializedHydrateAttribute,
+  SerializedHydrateTemplateController,
+  SerializedHydrateLetElement,
+  SerializedIteratorBinding,
+  SerializedAuxBinding,
+  SerializedLetBinding,
   PlanNode,
   PlanElementNode,
   PlanTextNode,
@@ -106,7 +122,7 @@ export {
   provenanceSpan,
   preferOrigin,
 } from "./compiler/index.js";
-export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId } from "./compiler/index.js";
+export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode } from "./compiler/index.js";
 
 // Expression AST types (for evaluation)
 export type {

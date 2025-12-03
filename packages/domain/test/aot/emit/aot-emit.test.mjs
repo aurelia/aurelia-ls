@@ -21,7 +21,7 @@ import {
   lowerDocument,
   resolveHost,
   bindScopes,
-  buildAotPlan,
+  planAot,
   emitAotCode,
   getExpressionParser,
   DEFAULT_SYNTAX,
@@ -66,7 +66,7 @@ function runPipeline(markup, ctx) {
   });
   const linked = resolveHost(ir, ctx.sem);
   const scope = bindScopes(linked);
-  const plan = buildAotPlan(linked, scope, { templateFilePath: "test.html" });
+  const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });
   return result;
 }

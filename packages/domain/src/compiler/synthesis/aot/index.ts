@@ -1,13 +1,15 @@
 /* =============================================================================
  * AOT SYNTHESIS - Public API
  * -----------------------------------------------------------------------------
- * Re-exports the public surface for AOT compilation.
+ * IMPORTANT: Consumers should import from this barrel, not from deep paths.
+ * Each synthesis target (overlay, aot) follows consistent export patterns.
  * ============================================================================= */
 
-// Types
+// -----------------------------------------------------------------------------
+// Plan types (from plan stage)
+// -----------------------------------------------------------------------------
 export type {
-  // Plan types
-  AotPlan,
+  AotPlanModule,
   AotPlanOptions,
   PlanNode,
   PlanElementNode,
@@ -40,11 +42,16 @@ export type {
   PlanScopeKind,
   PlanLocal,
   PlanLocalSource,
+} from "./types.js";
 
-  // Emit types
+// -----------------------------------------------------------------------------
+// Emit types (from emit stage)
+// -----------------------------------------------------------------------------
+export type {
   AotCodeResult,
   SerializedDefinition,
   SerializedInstruction,
+  SerializedExpression,
   SerializedPropertyBinding,
   SerializedInterpolation,
   SerializedTextBinding,
@@ -59,15 +66,19 @@ export type {
   SerializedHydrateTemplateController,
   SerializedHydrateLetElement,
   SerializedLetBinding,
-  SerializedExpression,
-
-  // Mapping types
   AotMappingEntry,
 } from "./types.js";
 
-// Plan function
-export { buildAotPlan } from "./plan.js";
-
-// Emit function
-export { emitAotCode } from "./emit.js";
 export type { AotEmitOptions } from "./emit.js";
+
+// -----------------------------------------------------------------------------
+// Template emit types (from emit-template stage)
+// -----------------------------------------------------------------------------
+export type { TemplateEmitResult, TemplateEmitOptions } from "./emit-template.js";
+
+// -----------------------------------------------------------------------------
+// Functions
+// -----------------------------------------------------------------------------
+export { planAot } from "./plan.js";
+export { emitAotCode } from "./emit.js";
+export { emitTemplate } from "./emit-template.js";

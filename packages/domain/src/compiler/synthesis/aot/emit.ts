@@ -1,7 +1,7 @@
 /* =============================================================================
- * AOT EMIT - Transform AotPlan to SerializedDefinition
+ * AOT EMIT - Transform AotPlanModule to SerializedDefinition
  * -----------------------------------------------------------------------------
- * Consumes: AotPlan (from plan stage)
+ * Consumes: AotPlanModule (from plan stage)
  * Produces: AotCodeResult (serialized instructions + expressions + mapping)
  *
  * This stage walks the plan tree and emits serialized instructions organized
@@ -11,7 +11,7 @@
  * ============================================================================= */
 
 import type {
-  AotPlan,
+  AotPlanModule,
   AotCodeResult,
   SerializedDefinition,
   SerializedInstruction,
@@ -45,10 +45,10 @@ export interface AotEmitOptions {
 }
 
 /**
- * Emit serialized instructions from an AotPlan.
+ * Emit serialized instructions from an AotPlanModule.
  */
 export function emitAotCode(
-  plan: AotPlan,
+  plan: AotPlanModule,
   options: AotEmitOptions = {},
 ): AotCodeResult {
   const ctx = new EmitContext(plan, options);
@@ -66,12 +66,12 @@ export function emitAotCode(
  * ============================================================================= */
 
 class EmitContext {
-  private readonly plan: AotPlan;
+  private readonly plan: AotPlanModule;
   private readonly options: AotEmitOptions;
   private readonly mapping: AotMappingEntry[] = [];
   private nestedTemplateIndex = 0;
 
-  constructor(plan: AotPlan, options: AotEmitOptions) {
+  constructor(plan: AotPlanModule, options: AotEmitOptions) {
     this.plan = plan;
     this.options = options;
   }

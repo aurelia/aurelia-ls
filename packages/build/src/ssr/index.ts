@@ -18,3 +18,24 @@ export {
   getDocument,
   type ServerPlatformOptions,
 } from "./platform.js";
+
+export {
+  translateInstructions,
+  type TranslationContext,
+  type NestedDefinition,
+} from "./instruction-translator.js";
+
+// SSR Post-Processing (clean HTML output)
+export {
+  processSSROutput,
+  computeElementPaths,
+  computePath,
+  stripAuHidAttributes,
+  embedManifest,
+  resolvePath,
+  type HydrationManifest,
+  type ControllerManifest,
+  type ViewManifest,
+  type SSRProcessOptions,
+  type SSRProcessResult,
+} from "./ssr-processor.js";

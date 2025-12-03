@@ -1,8 +1,8 @@
 /* =============================================================================
- * AOT PLAN - Transform analysis output to AotPlan
+ * AOT PLAN - Transform analysis output to AotPlanModule
  * -----------------------------------------------------------------------------
  * Consumes: LinkedSemanticsModule (20-resolve), ScopeModule (30-bind)
- * Produces: AotPlan (abstract instruction graph)
+ * Produces: AotPlanModule (abstract instruction graph)
  *
  * Key responsibilities:
  * - Walk linked template structure and build PlanNodes
@@ -49,7 +49,7 @@ import type {
 import { indexExprTable } from "../../shared/expr-utils.js";
 
 import type {
-  AotPlan,
+  AotPlanModule,
   AotPlanOptions,
   PlanNode,
   PlanElementNode,
@@ -87,13 +87,13 @@ import type {
  * ============================================================================= */
 
 /**
- * Build a AotPlan from linked semantics and scope analysis.
+ * Build an AotPlanModule from linked semantics and scope analysis.
  */
-export function buildAotPlan(
+export function planAot(
   linked: LinkedSemanticsModule,
   scope: ScopeModule,
   options: AotPlanOptions,
-): AotPlan {
+): AotPlanModule {
   const ctx = new PlanningContext(linked, scope, options);
 
   // Only process the root template (nested templates are handled via controllers)

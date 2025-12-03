@@ -1,0 +1,274 @@
+/**
+ * AOT Compilation API
+ *
+ * Provides high-level functions for ahead-of-time compilation of Aurelia templates.
+ * This integrates the domain compiler with the instruction translator to produce
+ * output that can be rendered directly by the Aurelia runtime.
+ */
+
+import {
+  lowerDocument,
+  resolveHost,
+  bindScopes,
+  planAot,
+  emitAotCode,
+  emitTemplate,
+  getExpressionParser,
+  DEFAULT_SYNTAX,
+  DEFAULT_SEMANTICS,
+  type AotPlanModule,
+  type AotCodeResult,
+  type SerializedDefinition,
+} from "@aurelia-ls/domain";
+import type { IInstruction } from "@aurelia/template-compiler";
+import { translateInstructions, type NestedDefinition } from "./ssr/instruction-translator.js";
+import type { HydrationManifest, SSRProcessOptions } from "./ssr/ssr-processor.js";
+import type { RenderOptions } from "./ssr/render.js";
+
+/* =============================================================================
+ * Public API
+ * ============================================================================= */
+
+export interface AotCompileOptions {
+  /** Template file path (for provenance tracking) */
+  templatePath?: string;
+  /** Component name */
+  name?: string;
+}
+
+export interface AotCompileResult {
+  /** Compiled template HTML with hydration markers */
+  template: string;
+  /** Translated Aurelia instructions (ready for runtime) */
+  instructions: IInstruction[][];
+  /** Nested template definitions (for template controllers) */
+  nestedDefs: NestedDefinition[];
+  /** Target count for validation */
+  targetCount: number;
+  /** Raw AOT output (for debugging/inspection) */
+  raw: {
+    plan: AotPlanModule;
+    codeResult: AotCodeResult;
+  };
+}
+
+/**
+ * Compile a template using the domain compiler AOT pipeline.
+ *
+ * This runs the full compilation pipeline:
+ * 1. Parse and lower (10-lower)
+ * 2. Resolve semantics (20-resolve)
+ * 3. Bind scopes (30-bind)
+ * 4. Build AOT plan
+ * 5. Emit instructions and template HTML
+ * 6. Translate to Aurelia runtime format
+ *
+ * @param markup - The Aurelia template markup
+ * @param options - Compilation options
+ * @returns AOT compilation result ready for rendering
+ *
+ * @example
+ * ```typescript
+ * const result = compileWithAot('<div>${message}</div>', {
+ *   name: 'my-component',
+ * });
+ *
+ * // Use with renderToString
+ * await renderToString({
+ *   template: result.template,
+ *   instructions: result.instructions,
+ * }, { state: { message: 'Hello' } });
+ * ```
+ */
+export function compileWithAot(
+  markup: string,
+  options: AotCompileOptions = {},
+): AotCompileResult {
+  const templatePath = options.templatePath ?? "template.html";
+  const name = options.name ?? "template";
+
+  // 1. Run domain compiler analysis pipeline
+  const exprParser = getExpressionParser();
+
+  const ir = lowerDocument(markup, {
+    attrParser: DEFAULT_SYNTAX,
+    exprParser,
+    file: templatePath,
+    name,
+    sem: DEFAULT_SEMANTICS,
+  });
+
+  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+  const scoped = bindScopes(linked);
+
+  // 2. Build AOT plan
+  const plan = planAot(linked, scoped, {
+    templateFilePath: templatePath,
+  });
+
+  // 3. Emit serialized instructions
+  const codeResult = emitAotCode(plan, { name });
+
+  // 4. Emit template HTML with markers
+  const templateResult = emitTemplate(plan);
+
+  // 5. Emit nested template HTML (for template controllers)
+  const nestedHtml = emitNestedTemplates(plan, codeResult.definition);
+
+  // 6. Translate to Aurelia runtime format
+  const { instructions, nestedDefs } = translateInstructions(
+    codeResult.definition.instructions,
+    codeResult.expressions,
+    codeResult.definition.nestedTemplates,
+    nestedHtml,
+  );
+
+  return {
+    template: templateResult.html,
+    instructions,
+    nestedDefs,
+    targetCount: codeResult.definition.targetCount,
+    raw: {
+      plan,
+      codeResult,
+    },
+  };
+}
+
+/* =============================================================================
+ * Internal Helpers
+ * ============================================================================= */
+
+/**
+ * Emit HTML for nested templates (used by template controllers).
+ *
+ * For each nested template in the definition, we need to produce the HTML
+ * that will be used when the controller renders its content.
+ */
+function emitNestedTemplates(
+  plan: AotPlanModule,
+  definition: SerializedDefinition,
+): string[] {
+  const nestedHtml: string[] = [];
+
+  // For now, we extract template content from the plan's controller templates
+  // This is a simplified approach - a full implementation would track
+  // which nodes correspond to which nested templates
+
+  for (let i = 0; i < definition.nestedTemplates.length; i++) {
+    // For template controllers, the content is typically the element itself
+    // We emit a placeholder that the runtime will populate
+    // TODO: Properly extract nested template HTML from plan
+    nestedHtml.push("");
+  }
+
+  return nestedHtml;
+}
+
+/* =============================================================================
+ * High-Level Render API
+ * ============================================================================= */
+
+export interface CompileAndRenderAotOptions {
+  /** Component state for rendering */
+  state: Record<string, unknown>;
+  /** Template file path (for source maps) */
+  templatePath?: string;
+  /** Component name */
+  name?: string;
+
+  /**
+   * SSR post-processing options.
+   * Use to strip `au-hid` markers for clean HTML output.
+   */
+  ssr?: Omit<SSRProcessOptions, "manifest">;
+}
+
+export interface CompileAndRenderAotResult {
+  /** Rendered HTML (clean if ssr.stripMarkers=true) */
+  html: string;
+  /** AOT compilation result (for debugging) */
+  aot: AotCompileResult;
+  /**
+   * Hydration manifest (with elementPaths if ssr.stripMarkers=true).
+   * Only present when ssr options are provided.
+   */
+  manifest?: HydrationManifest;
+}
+
+/**
+ * Compile with AOT and render to HTML in one step.
+ *
+ * This uses the domain compiler for AOT compilation and the Aurelia runtime
+ * for rendering. Unlike `compileAndRender`, this uses pre-compiled instructions
+ * rather than letting the runtime compile the template.
+ *
+ * @param markup - The Aurelia template markup
+ * @param options - Compilation and render options
+ * @returns The rendered HTML with AOT compilation result
+ *
+ * @example
+ * ```typescript
+ * const result = await compileAndRenderAot(
+ *   '<div>${message}</div>',
+ *   { state: { message: 'Hello World' } }
+ * );
+ * console.log(result.html); // '<div>Hello World</div>'
+ * ```
+ */
+export async function compileAndRenderAot(
+  markup: string,
+  options: CompileAndRenderAotOptions,
+): Promise<CompileAndRenderAotResult> {
+  // Import renderToString dynamically to avoid circular deps
+  const { renderToString } = await import("./ssr/render.js");
+
+  // Compile with AOT
+  const aotOptions: AotCompileOptions = {
+    name: options.name ?? "ssr-root",
+  };
+  if (options.templatePath !== undefined) {
+    aotOptions.templatePath = options.templatePath;
+  }
+  const aot = compileWithAot(markup, aotOptions);
+
+  // Build initial manifest from AOT compilation
+  const initialManifest: HydrationManifest = {
+    targetCount: aot.targetCount,
+    controllers: {},
+  };
+
+  // Build render options
+  const renderOptions: RenderOptions = {
+    state: options.state,
+  };
+
+  // Add SSR processing options if provided
+  if (options.ssr) {
+    renderOptions.ssr = {
+      ...options.ssr,
+      manifest: initialManifest,
+    };
+  }
+
+  // Render using pre-compiled definition
+  const renderResult = await renderToString(
+    {
+      template: aot.template,
+      instructions: aot.instructions,
+      name: options.name ?? "ssr-root",
+    },
+    renderOptions,
+  );
+
+  const result: CompileAndRenderAotResult = {
+    html: renderResult.html,
+    aot,
+  };
+
+  if (renderResult.manifest) {
+    result.manifest = renderResult.manifest;
+  }
+
+  return result;
+}
