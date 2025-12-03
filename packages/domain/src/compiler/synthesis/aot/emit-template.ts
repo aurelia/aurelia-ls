@@ -52,6 +52,68 @@ export function emitTemplate(
   return { html };
 }
 
+/**
+ * Collect HTML for all nested templates (controller content).
+ *
+ * Returns HTML strings in the same order that emit.ts creates
+ * nested template definitions (depth-first tree walk order).
+ *
+ * Each nested template HTML is the content that goes inside
+ * `<!--au-start-->...<!--au-end-->` markers.
+ */
+export function collectNestedTemplateHtml(
+  plan: AotPlanModule,
+  options: TemplateEmitOptions = {},
+): string[] {
+  const ctx = new TemplateEmitContext(options);
+  const htmlStrings: string[] = [];
+  collectNestedFromNode(plan.root, htmlStrings, ctx);
+  return htmlStrings;
+}
+
+/**
+ * Walk the tree and collect nested template HTML in order.
+ */
+function collectNestedFromNode(
+  node: PlanNode,
+  htmlStrings: string[],
+  ctx: TemplateEmitContext,
+): void {
+  switch (node.kind) {
+    case "element":
+      collectNestedFromElement(node, htmlStrings, ctx);
+      break;
+    case "fragment":
+      for (const child of node.children) {
+        collectNestedFromNode(child, htmlStrings, ctx);
+      }
+      break;
+    // text and comment nodes don't have nested templates
+  }
+}
+
+/**
+ * Collect nested template HTML from an element and its children.
+ */
+function collectNestedFromElement(
+  node: PlanElementNode,
+  htmlStrings: string[],
+  ctx: TemplateEmitContext,
+): void {
+  // Process controllers first (same order as emit.ts)
+  for (const _ctrl of node.controllers) {
+    // Emit the content for this controller's nested template
+    // This is the element WITHOUT its controller wrapper
+    const content = emitElementContent(node, ctx);
+    htmlStrings.push(content);
+  }
+
+  // Recurse into children
+  for (const child of node.children) {
+    collectNestedFromNode(child, htmlStrings, ctx);
+  }
+}
+
 /* =============================================================================
  * Emit Context
  * ============================================================================= */

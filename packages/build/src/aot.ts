@@ -13,12 +13,12 @@ import {
   planAot,
   emitAotCode,
   emitTemplate,
+  collectNestedTemplateHtml,
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
   type AotPlanModule,
   type AotCodeResult,
-  type SerializedDefinition,
 } from "@aurelia-ls/domain";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./ssr/instruction-translator.js";
@@ -113,7 +113,7 @@ export function compileWithAot(
   const templateResult = emitTemplate(plan);
 
   // 5. Emit nested template HTML (for template controllers)
-  const nestedHtml = emitNestedTemplates(plan, codeResult.definition);
+  const nestedHtml = emitNestedTemplates(plan);
 
   // 6. Translate to Aurelia runtime format
   const { instructions, nestedDefs } = translateInstructions(
@@ -142,27 +142,14 @@ export function compileWithAot(
 /**
  * Emit HTML for nested templates (used by template controllers).
  *
- * For each nested template in the definition, we need to produce the HTML
- * that will be used when the controller renders its content.
+ * For each nested template in the definition, we produce the HTML
+ * content that will be used when the controller renders its views.
+ * The HTML strings are collected in depth-first order matching emit.ts.
  */
 function emitNestedTemplates(
   plan: AotPlanModule,
-  definition: SerializedDefinition,
 ): string[] {
-  const nestedHtml: string[] = [];
-
-  // For now, we extract template content from the plan's controller templates
-  // This is a simplified approach - a full implementation would track
-  // which nodes correspond to which nested templates
-
-  for (let i = 0; i < definition.nestedTemplates.length; i++) {
-    // For template controllers, the content is typically the element itself
-    // We emit a placeholder that the runtime will populate
-    // TODO: Properly extract nested template HTML from plan
-    nestedHtml.push("");
-  }
-
-  return nestedHtml;
+  return collectNestedTemplateHtml(plan);
 }
 
 /* =============================================================================

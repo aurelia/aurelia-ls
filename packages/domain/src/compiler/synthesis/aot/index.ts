@@ -81,4 +81,4 @@ export type { TemplateEmitResult, TemplateEmitOptions } from "./emit-template.js
 // -----------------------------------------------------------------------------
 export { planAot } from "./plan.js";
 export { emitAotCode } from "./emit.js";
-export { emitTemplate } from "./emit-template.js";
+export { emitTemplate, collectNestedTemplateHtml } from "./emit-template.js";

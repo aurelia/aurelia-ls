@@ -1,55 +1,37 @@
 /**
  * SSR Post-Render Processor
  *
- * Processes SSR output to optionally strip `au-hid` markers and compute
- * path-based element identification for clean HTML delivery.
+ * Wraps Aurelia's SSR post-render processing with additional options
+ * for manifest delivery (embedding in HTML).
  *
- * This aligns with industry standards (React 16+, Vue, Svelte) where
- * per-element hydration attributes are not present in delivered HTML.
- * Comment markers (<!--au:N-->, <!--au-start-->, <!--au-end-->) remain
- * as they are universally acceptable and necessary for render locations.
+ * The core marker stripping is delegated to `@aurelia/runtime-html`'s
+ * `processSSROutput` to ensure perfect parity with client hydration.
  */
+
+import {
+  processSSROutput as aureliaProcessSSROutput,
+  type IHydrationManifest,
+  type IControllerManifest,
+  type IViewManifest,
+} from "@aurelia/runtime-html";
 
 /* global Element, HTMLCollection */
 
 /* =============================================================================
- * Types
+ * Re-exported Types from Aurelia Runtime
  * ============================================================================= */
 
 /**
  * Hydration manifest with optional element paths.
- *
- * When `elementPaths` is present, the client runtime can locate element
- * targets by walking the DOM tree instead of querying for `au-hid` attributes.
+ * Re-exported from @aurelia/runtime-html for convenience.
  */
-export interface HydrationManifest {
-  /** Total number of targets in the global index space */
-  targetCount: number;
+export type HydrationManifest = IHydrationManifest;
+export type ControllerManifest = IControllerManifest;
+export type ViewManifest = IViewManifest;
 
-  /** Controller entries keyed by render location's target index */
-  controllers?: Record<number, ControllerManifest>;
-
-  /**
-   * Element paths for path-based target resolution.
-   * Maps target index to array of child indices from root.
-   * Only present when `stripMarkers: true`.
-   */
-  elementPaths?: Record<number, number[]>;
-}
-
-export interface ControllerManifest {
-  /** Controller type (e.g., 'repeat', 'if', 'switch') */
-  type?: string;
-  /** View manifests for this controller */
-  views: ViewManifest[];
-}
-
-export interface ViewManifest {
-  /** Global target indices for bindings in this view */
-  targets: number[];
-  /** Number of DOM root nodes (defaults to 1) */
-  nodeCount?: number;
-}
+/* =============================================================================
+ * Build Package Options & Types
+ * ============================================================================= */
 
 /**
  * Options for SSR output processing.
@@ -97,8 +79,9 @@ export interface SSRProcessResult {
 /**
  * Process SSR output to optionally strip markers and compute element paths.
  *
- * This function should be called after Aurelia renders to the host element
- * but before extracting the HTML string for delivery to the client.
+ * This wraps Aurelia's `processSSROutput` with additional options for
+ * manifest delivery. When `stripMarkers: true`, delegates to the runtime
+ * implementation to ensure parity with client hydration.
  *
  * @param host - The host element containing rendered content
  * @param manifest - The initial hydration manifest from rendering
@@ -128,35 +111,35 @@ export function processSSROutput(
     manifestScriptId = "__AU_MANIFEST__",
   } = options;
 
-  // Start with the provided manifest
-  let augmentedManifest: HydrationManifest = { ...manifest };
+  let resultHtml: string;
+  let resultManifest: HydrationManifest;
 
-  // If stripping markers, compute paths and remove au-hid attributes
   if (stripMarkers) {
-    const elementPaths = computeElementPaths(host);
-    augmentedManifest = {
-      ...augmentedManifest,
-      elementPaths,
-    };
-    stripAuHidAttributes(host);
+    // Use Aurelia's implementation for marker stripping and path computation
+    const auResult = aureliaProcessSSROutput(host, manifest);
+    resultHtml = auResult.html;
+    resultManifest = auResult.manifest;
+  } else {
+    // No processing - just extract HTML
+    resultHtml = host.innerHTML;
+    resultManifest = { ...manifest };
   }
 
-  // Handle manifest embedding
+  // Handle manifest embedding (our additional feature)
   if (manifestDelivery === "embedded" || manifestDelivery === "both") {
-    embedManifest(host, augmentedManifest, manifestScriptId);
+    embedManifest(host, resultManifest, manifestScriptId);
+    // Re-extract HTML after embedding
+    resultHtml = host.innerHTML;
   }
-
-  // Extract HTML
-  const html = host.innerHTML;
 
   return {
-    html,
-    manifest: augmentedManifest,
+    html: resultHtml,
+    manifest: resultManifest,
   };
 }
 
 /* =============================================================================
- * Path Computation
+ * Path Computation Utilities
  * ============================================================================= */
 
 /**
@@ -171,9 +154,7 @@ export function processSSROutput(
 export function computeElementPaths(root: Element): Record<number, number[]> {
   const elementPaths: Record<number, number[]> = {};
 
-  // Find all elements with au-hid attribute
   const auHidElements = root.querySelectorAll("[au-hid]");
-
   for (const el of auHidElements) {
     const targetId = parseInt(el.getAttribute("au-hid")!, 10);
     const path = computePath(root, el);
@@ -289,14 +270,14 @@ export function embedManifest(
 }
 
 /* =============================================================================
- * Path Resolution (for reference - actual impl goes in runtime)
+ * Path Resolution (for testing/validation)
  * ============================================================================= */
 
 /**
  * Resolve an element by its path from root.
  *
- * This is a reference implementation. The actual implementation
- * will be in the Aurelia runtime's `_collectTargets()` method.
+ * This is provided for testing/validation. The actual client-side
+ * implementation is in Aurelia runtime's `_collectTargets()` method.
  *
  * @param root - The root element to start from
  * @param path - Array of child indices
