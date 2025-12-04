@@ -7,10 +7,13 @@
   "type": "module",
   "scripts": {
     "start": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "ssr": "node ssr-render.mjs",
+    "ssr:dev": "node server.mjs"
   },
   "dependencies": {
-    "aurelia": "*"
+    "aurelia": "*",
+    "@aurelia-ls/build": "workspace:*"
   },
   "devDependencies": {
     "@aurelia/vite-plugin": "*",

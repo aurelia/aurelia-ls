@@ -53,6 +53,17 @@ export function emitTemplate(
 }
 
 /**
+ * Hierarchical nested template HTML structure.
+ * Matches the structure of SerializedDefinition.nestedTemplates.
+ */
+export interface NestedTemplateHtmlNode {
+  /** HTML content for this nested template */
+  html: string;
+  /** HTML for nested templates within this one */
+  nested: NestedTemplateHtmlNode[];
+}
+
+/**
  * Collect HTML for all nested templates (controller content).
  *
  * Returns HTML strings in the same order that emit.ts creates
@@ -60,6 +71,8 @@ export function emitTemplate(
  *
  * Each nested template HTML is the content that goes inside
  * `<!--au-start-->...<!--au-end-->` markers.
+ *
+ * @deprecated Use collectNestedTemplateHtmlTree for hierarchical structure
  */
 export function collectNestedTemplateHtml(
   plan: AotPlanModule,
@@ -69,6 +82,20 @@ export function collectNestedTemplateHtml(
   const htmlStrings: string[] = [];
   collectNestedFromNode(plan.root, htmlStrings, ctx);
   return htmlStrings;
+}
+
+/**
+ * Collect HTML for nested templates in a hierarchical structure.
+ *
+ * Returns a structure that matches SerializedDefinition.nestedTemplates,
+ * making it easy to match HTML with the correct nested definition.
+ */
+export function collectNestedTemplateHtmlTree(
+  plan: AotPlanModule,
+  options: TemplateEmitOptions = {},
+): NestedTemplateHtmlNode[] {
+  const ctx = new TemplateEmitContext(options);
+  return collectNestedFromNodeTree(plan.root, ctx);
 }
 
 /**
@@ -100,17 +127,127 @@ function collectNestedFromElement(
   htmlStrings: string[],
   ctx: TemplateEmitContext,
 ): void {
-  // Process controllers first (same order as emit.ts)
-  for (const _ctrl of node.controllers) {
-    // Emit the content for this controller's nested template
-    // This is the element WITHOUT its controller wrapper
-    const content = emitElementContent(node, ctx);
-    htmlStrings.push(content);
+  // Process controllers - each controller has template(s) that become nested definitions
+  for (const ctrl of node.controllers) {
+    // Get template(s) from this controller
+    const templates = getControllerTemplates(ctrl);
+
+    for (const template of templates) {
+      // Create a child context with fresh local-to-global mapping
+      // but shared global counter for unique marker IDs
+      const nestedCtx = ctx.forNestedTemplate();
+
+      // Emit the template content
+      const content = emitNode(template, nestedCtx);
+      htmlStrings.push(content);
+
+      // Recurse into the template to find more nested controllers
+      // Use the nested context to continue with the same global counter
+      collectNestedFromNode(template, htmlStrings, nestedCtx);
+    }
   }
 
-  // Recurse into children
+  // Recurse into children (will be empty when controllers exist,
+  // but handled via ctrl.template above)
   for (const child of node.children) {
     collectNestedFromNode(child, htmlStrings, ctx);
+  }
+}
+
+/* =============================================================================
+ * Tree-based nested template collection
+ * ============================================================================= */
+
+/**
+ * Collect nested template HTML in a hierarchical tree structure.
+ * This matches the structure of SerializedDefinition.nestedTemplates.
+ */
+function collectNestedFromNodeTree(
+  node: PlanNode,
+  ctx: TemplateEmitContext,
+): NestedTemplateHtmlNode[] {
+  switch (node.kind) {
+    case "element":
+      return collectNestedFromElementTree(node, ctx);
+    case "fragment":
+      // Collect from all children and flatten
+      const results: NestedTemplateHtmlNode[] = [];
+      for (const child of node.children) {
+        results.push(...collectNestedFromNodeTree(child, ctx));
+      }
+      return results;
+    default:
+      return [];
+  }
+}
+
+/**
+ * Collect nested template HTML from an element in tree structure.
+ *
+ * For each controller on an element, we:
+ * 1. Emit the HTML for the controller's template(s)
+ * 2. Recursively collect nested templates WITHIN that template
+ * 3. Then collect from the element's children (which are empty if controllers exist)
+ */
+function collectNestedFromElementTree(
+  node: PlanElementNode,
+  ctx: TemplateEmitContext,
+): NestedTemplateHtmlNode[] {
+  const results: NestedTemplateHtmlNode[] = [];
+
+  // Process controllers - each controller creates nested definition(s)
+  for (const ctrl of node.controllers) {
+    const templates = getControllerTemplates(ctrl);
+
+    for (const template of templates) {
+      // Create child context with fresh local-to-global mapping
+      // but shared global counter for unique marker IDs
+      const nestedCtx = ctx.forNestedTemplate();
+
+      // Emit HTML for this template
+      const html = emitNode(template, nestedCtx);
+
+      // Recursively collect nested templates within this template
+      // Use the nested context to continue with the same global counter
+      const nested = collectNestedFromNodeTree(template, nestedCtx);
+
+      results.push({ html, nested });
+    }
+  }
+
+  // Also collect from element's children
+  // (empty when controllers exist, but still check)
+  for (const child of node.children) {
+    results.push(...collectNestedFromNodeTree(child, ctx));
+  }
+
+  return results;
+}
+
+/**
+ * Get all templates from a controller.
+ * Different controller types have different template properties.
+ */
+function getControllerTemplates(ctrl: PlanController): PlanNode[] {
+  switch (ctrl.kind) {
+    case "repeat":
+    case "with":
+    case "portal":
+      return [ctrl.template];
+    case "if":
+      const ifTemplates: PlanNode[] = [ctrl.template];
+      if (ctrl.elseTemplate) ifTemplates.push(ctrl.elseTemplate);
+      return ifTemplates;
+    case "switch":
+      const switchTemplates: PlanNode[] = ctrl.cases.map(c => c.template);
+      if (ctrl.defaultTemplate) switchTemplates.push(ctrl.defaultTemplate);
+      return switchTemplates;
+    case "promise":
+      const promiseTemplates: PlanNode[] = [];
+      if (ctrl.pendingTemplate) promiseTemplates.push(ctrl.pendingTemplate);
+      if (ctrl.thenTemplate) promiseTemplates.push(ctrl.thenTemplate);
+      if (ctrl.catchTemplate) promiseTemplates.push(ctrl.catchTemplate);
+      return promiseTemplates;
   }
 }
 
@@ -123,6 +260,14 @@ class TemplateEmitContext {
 
   constructor(options: TemplateEmitOptions) {
     this.options = options;
+  }
+
+  /**
+   * Create a child context for a nested template.
+   * Each nested template uses LOCAL indices (starting from 0).
+   */
+  forNestedTemplate(): TemplateEmitContext {
+    return new TemplateEmitContext(this.options);
   }
 }
 
@@ -163,7 +308,11 @@ function emitElement(node: PlanElementNode, ctx: TemplateEmitContext): string {
  * Emit an element wrapped by template controllers.
  *
  * Template controllers create a marker structure:
- * <!--au:N--><!--au-start-->...content...<!--au-end-->
+ * <!--au:N--><!--au-start--><!--au-end-->
+ *
+ * IMPORTANT: The element content is NOT included in the parent template.
+ * The content (including the element itself) goes in the nested template,
+ * which is collected separately via collectNestedTemplateHtml().
  */
 function emitElementWithControllers(
   node: PlanElementNode,
@@ -173,8 +322,9 @@ function emitElementWithControllers(
   // So we reverse to get the outermost controller first
   const controllers = [...node.controllers].reverse();
 
-  // Start with the innermost content (the element without controllers)
-  let content = emitElementContent(node, ctx);
+  // Start with empty content - the actual element goes in the nested template
+  // The au-start/au-end markers are placeholders that the runtime replaces
+  let content = "";
 
   // Wrap with each controller's markers (inside-out → outside-in)
   for (const ctrl of controllers) {
@@ -226,7 +376,7 @@ function emitStandardElement(node: PlanElementNode, ctx: TemplateEmitContext): s
 function buildAttributes(node: PlanElementNode, _ctx: TemplateEmitContext): string {
   const parts: string[] = [];
 
-  // Add au-hid if this is a target
+  // Add au-hid if this is a target (uses LOCAL index from plan)
   if (node.targetIndex !== undefined) {
     parts.push(`au-hid="${node.targetIndex}"`);
   }
@@ -261,6 +411,7 @@ function emitControllerWrapper(
   content: string,
   _ctx: TemplateEmitContext,
 ): string {
+  // Uses LOCAL index from plan
   const targetIndex = ctrl.targetIndex ?? 0;
   return `<!--au:${targetIndex}--><!--au-start-->${content}<!--au-end-->`;
 }
@@ -269,7 +420,11 @@ function emitControllerWrapper(
  * Emit a text node.
  *
  * Static text: emit content as-is
- * Interpolation: emit parts with <!--au:N--> markers and space nodes
+ * Interpolation: emit ONLY the marker, not the static parts.
+ *
+ * The static parts are stored in the TextBindingInstruction's Interpolation
+ * and are evaluated by the runtime. If we include them here too, they would
+ * be duplicated in the output.
  */
 function emitText(node: PlanTextNode, _ctx: TemplateEmitContext): string {
   // Static text
@@ -277,27 +432,13 @@ function emitText(node: PlanTextNode, _ctx: TemplateEmitContext): string {
     return escapeHtml(node.content ?? "");
   }
 
-  // Text interpolation
-  // Format: part0 <!--au:N--> part1 <!--au:N--> part2
-  // Note: We add a space after the marker for cloning compatibility
-  const { parts, exprIds } = node.interpolation;
-  const result: string[] = [];
-
-  for (let i = 0; i < parts.length; i++) {
-    // Emit static part
-    result.push(escapeHtml(parts[i] ?? ""));
-
-    // Emit marker if there's an expression after this part
-    if (i < exprIds.length) {
-      // Use the text node's target index
-      const targetIndex = node.targetIndex ?? 0;
-      // Each expression in interpolation shares the same target
-      // The marker format includes the expression index for multi-expression interpolations
-      result.push(`<!--au:${targetIndex}--> `);
-    }
-  }
-
-  return result.join("");
+  // Text interpolation - emit only the marker followed by a space
+  // The runtime will evaluate the full interpolation (parts + expressions)
+  // and replace the marker + text node with the result.
+  // The space is required because the runtime expects a nextSibling text node.
+  // Uses LOCAL index from plan
+  const targetIndex = node.targetIndex ?? 0;
+  return `<!--au:${targetIndex}--> `;
 }
 
 /**

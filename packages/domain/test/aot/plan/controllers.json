@@ -4,7 +4,7 @@
     "markup": "<div if.bind=\"isVisible\">Content</div>",
     "expect": {
       "nodes": [
-        { "kind": "element", "tag": "div", "hasTarget": true },
+        { "kind": "element", "tag": "div", "hasTarget": false },
         { "kind": "element", "tag": "div", "hasTarget": false },
         { "kind": "text", "content": "Content" }
       ],
@@ -25,7 +25,7 @@
     "markup": "<div repeat.for=\"item of items\">${item}</div>",
     "expect": {
       "nodes": [
-        { "kind": "element", "tag": "div", "hasTarget": true },
+        { "kind": "element", "tag": "div", "hasTarget": false },
         { "kind": "element", "tag": "div", "hasTarget": false },
         { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
       ],
@@ -48,7 +48,7 @@
     "markup": "<div with.bind=\"person\">${name}</div>",
     "expect": {
       "nodes": [
-        { "kind": "element", "tag": "div", "hasTarget": true },
+        { "kind": "element", "tag": "div", "hasTarget": false },
         { "kind": "element", "tag": "div", "hasTarget": false },
         { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
       ],

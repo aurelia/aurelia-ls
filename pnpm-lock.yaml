@@ -55,6 +55,9 @@ importers:
 
   examples/todo-app:
     dependencies:
+      '@aurelia-ls/build':
+        specifier: workspace:*
+        version: link:../../packages/build
       aurelia:
         specifier: file:../../aurelia/packages/aurelia
         version: file:aurelia/packages/aurelia
@@ -111,6 +114,9 @@ importers:
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@22.19.1)
 
   packages/client:
     dependencies:

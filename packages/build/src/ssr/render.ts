@@ -6,7 +6,7 @@
  */
 
 import { DI, Registration } from "@aurelia/kernel";
-import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
+import { Aurelia, IPlatform, StandardConfiguration, ISSRContextToken } from "@aurelia/runtime-html";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { createServerPlatform, getDocument } from "./platform.js";
 import {
@@ -79,11 +79,13 @@ export async function renderToString(
   const platform = createServerPlatform();
   const doc = getDocument(platform);
 
-  // Create DI container with platform
+  // Create DI container with platform and SSR context
   const container = DI.createContainer();
   container.register(
     StandardConfiguration,
     Registration.instance(IPlatform, platform),
+    // Register SSR context to preserve markers in rendered output
+    Registration.instance(ISSRContextToken, { preserveMarkers: true }),
   );
 
   // Create template element
@@ -155,11 +157,13 @@ export async function renderComponent<T extends object>(
   const platform = createServerPlatform();
   const doc = getDocument(platform);
 
-  // Create DI container with platform
+  // Create DI container with platform and SSR context
   const container = DI.createContainer();
   container.register(
     StandardConfiguration,
     Registration.instance(IPlatform, platform),
+    // Register SSR context to preserve markers in rendered output
+    Registration.instance(ISSRContextToken, { preserveMarkers: true }),
   );
 
   // Apply state to a new instance

@@ -19,3 +19,6 @@ Thumbs.db
 coverage/
 
 .aurelia-cache
+
+# Example outputs
+examples/*-output.html

@@ -11,8 +11,6 @@
 import {
   processSSROutput as aureliaProcessSSROutput,
   type IHydrationManifest,
-  type IControllerManifest,
-  type IViewManifest,
 } from "@aurelia/runtime-html";
 
 /* global Element, HTMLCollection */
@@ -26,8 +24,6 @@ import {
  * Re-exported from @aurelia/runtime-html for convenience.
  */
 export type HydrationManifest = IHydrationManifest;
-export type ControllerManifest = IControllerManifest;
-export type ViewManifest = IViewManifest;
 
 /* =============================================================================
  * Build Package Options & Types

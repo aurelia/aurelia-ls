@@ -34,8 +34,12 @@ export {
   embedManifest,
   resolvePath,
   type HydrationManifest,
-  type ControllerManifest,
-  type ViewManifest,
   type SSRProcessOptions,
   type SSRProcessResult,
 } from "./ssr-processor.js";
+
+// Re-export manifest types from Aurelia runtime for convenience
+export type {
+  IControllerManifest as ControllerManifest,
+  IViewManifest as ViewManifest,
+} from "@aurelia/runtime-html";

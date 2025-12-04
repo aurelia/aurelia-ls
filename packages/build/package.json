@@ -8,10 +8,22 @@
     ".": {
       "import": "./out/index.js",
       "types": "./out/index.d.ts"
+    },
+    "./vite": {
+      "import": "./out/vite/index.js",
+      "types": "./out/vite/index.d.ts"
     }
   },
   "scripts": {
     "build": "tsc -b"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@aurelia-ls/domain": "workspace:*",
@@ -26,6 +38,7 @@
     "jsdom": "^25.0.1"
   },
   "devDependencies": {
-    "@types/jsdom": "^21.1.7"
+    "@types/jsdom": "^21.1.7",
+    "vite": "^6.0.0"
   }
 }

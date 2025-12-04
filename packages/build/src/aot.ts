@@ -13,17 +13,19 @@ import {
   planAot,
   emitAotCode,
   emitTemplate,
-  collectNestedTemplateHtml,
+  collectNestedTemplateHtmlTree,
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
   type AotPlanModule,
   type AotCodeResult,
+  type NestedTemplateHtmlNode,
 } from "@aurelia-ls/domain";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./ssr/instruction-translator.js";
 import type { HydrationManifest, SSRProcessOptions } from "./ssr/ssr-processor.js";
 import type { RenderOptions } from "./ssr/render.js";
+import { generateManifest } from "./ssr/manifest-generator.js";
 
 /* =============================================================================
  * Public API
@@ -113,14 +115,15 @@ export function compileWithAot(
   const templateResult = emitTemplate(plan);
 
   // 5. Emit nested template HTML (for template controllers)
-  const nestedHtml = emitNestedTemplates(plan);
+  // Uses tree structure to match hierarchical nested template definitions
+  const nestedHtmlTree = collectNestedTemplateHtmlTree(plan);
 
   // 6. Translate to Aurelia runtime format
   const { instructions, nestedDefs } = translateInstructions(
     codeResult.definition.instructions,
     codeResult.expressions,
     codeResult.definition.nestedTemplates,
-    nestedHtml,
+    nestedHtmlTree,
   );
 
   return {
@@ -133,23 +136,6 @@ export function compileWithAot(
       codeResult,
     },
   };
-}
-
-/* =============================================================================
- * Internal Helpers
- * ============================================================================= */
-
-/**
- * Emit HTML for nested templates (used by template controllers).
- *
- * For each nested template in the definition, we produce the HTML
- * content that will be used when the controller renders its views.
- * The HTML strings are collected in depth-first order matching emit.ts.
- */
-function emitNestedTemplates(
-  plan: AotPlanModule,
-): string[] {
-  return collectNestedTemplateHtml(plan);
 }
 
 /* =============================================================================
@@ -219,11 +205,8 @@ export async function compileAndRenderAot(
   }
   const aot = compileWithAot(markup, aotOptions);
 
-  // Build initial manifest from AOT compilation
-  const initialManifest: HydrationManifest = {
-    targetCount: aot.targetCount,
-    controllers: {},
-  };
+  // Generate manifest from instructions and state
+  const initialManifest = generateManifest(aot.instructions, options.state);
 
   // Build render options
   const renderOptions: RenderOptions = {

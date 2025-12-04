@@ -41,8 +41,18 @@ export type {
 } from "./compiler/index.js";
 
 // Synthesis (AOT) - for build tools
-export { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtml } from "./compiler/index.js";
-export type { TemplateEmitResult, TemplateEmitOptions } from "./compiler/index.js";
+export {
+  planAot,
+  emitAotCode,
+  emitTemplate,
+  collectNestedTemplateHtml,
+  collectNestedTemplateHtmlTree,
+} from "./compiler/index.js";
+export type {
+  TemplateEmitResult,
+  TemplateEmitOptions,
+  NestedTemplateHtmlNode,
+} from "./compiler/index.js";
 export type {
   AotPlanModule,
   AotPlanOptions,

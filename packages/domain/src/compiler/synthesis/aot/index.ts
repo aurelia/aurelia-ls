@@ -74,11 +74,19 @@ export type { AotEmitOptions } from "./emit.js";
 // -----------------------------------------------------------------------------
 // Template emit types (from emit-template stage)
 // -----------------------------------------------------------------------------
-export type { TemplateEmitResult, TemplateEmitOptions } from "./emit-template.js";
+export type {
+  TemplateEmitResult,
+  TemplateEmitOptions,
+  NestedTemplateHtmlNode,
+} from "./emit-template.js";
 
 // -----------------------------------------------------------------------------
 // Functions
 // -----------------------------------------------------------------------------
 export { planAot } from "./plan.js";
 export { emitAotCode } from "./emit.js";
-export { emitTemplate, collectNestedTemplateHtml } from "./emit-template.js";
+export {
+  emitTemplate,
+  collectNestedTemplateHtml,
+  collectNestedTemplateHtmlTree,
+} from "./emit-template.js";

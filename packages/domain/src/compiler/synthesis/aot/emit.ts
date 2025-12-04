@@ -19,6 +19,7 @@ import type {
   SerializedInterpolation,
   SerializedTextBinding,
   SerializedListenerBinding,
+  SerializedIteratorBinding,
   SerializedRefBinding,
   SerializedSetProperty,
   SerializedHydrateElement,
@@ -199,9 +200,10 @@ class EmitContext {
     instructions: SerializedInstruction[][],
     nestedTemplates: SerializedDefinition[],
   ): void {
-    // Create nested template definition for the controller's content
-    const templateIndex = this.nestedTemplateIndex++;
-    const templateName = `${ctrl.kind}_${templateIndex}`;
+    // Use array length as the template index (relative to sibling nested templates)
+    const templateIndex = nestedTemplates.length;
+    // Use global counter for unique naming
+    const templateName = `${ctrl.kind}_${this.nestedTemplateIndex++}`;
 
     // Build nested definition from the controller's template
     const nestedDef = this.emitControllerTemplate(ctrl, hostNode, templateName);
@@ -224,28 +226,37 @@ class EmitContext {
 
   /**
    * Emit the nested template for a controller.
+   *
+   * Nested templates need local target indices (starting from 0), but the plan
+   * uses global indices. This method emits with global indices, then compacts
+   * the instructions to use local indices.
    */
   private emitControllerTemplate(
     ctrl: PlanController,
-    hostNode: PlanElementNode,
+    _hostNode: PlanElementNode,
     name: string,
   ): SerializedDefinition {
-    // The controller's template contains the host element
-    // We need to emit it without the controller wrapper
     const innerInstructions: SerializedInstruction[][] = [];
     const innerNested: SerializedDefinition[] = [];
 
-    // Emit the host element without its controllers
-    this.emitElementWithoutControllers(hostNode, innerInstructions, innerNested);
+    // Emit from the controller's template (which has the full nested structure)
+    // instead of hostNode (which has empty children in the plan design)
+    const template = getControllerMainTemplate(ctrl);
+    if (template) {
+      this.emitNode(template, innerInstructions, innerNested);
+    }
 
     // Handle controller-specific nested templates (else, cases, etc.)
     this.emitControllerBranches(ctrl, innerNested);
 
+    // Compact instructions to use local indices (remove empty rows)
+    const compacted = compactInstructions(innerInstructions);
+
     return {
       name,
-      instructions: innerInstructions,
+      instructions: compacted,
       nestedTemplates: innerNested,
-      targetCount: innerInstructions.length,
+      targetCount: compacted.length,
     };
   }
 
@@ -346,15 +357,13 @@ class EmitContext {
 
     switch (ctrl.kind) {
       case "repeat":
-        // repeat has an iteratorBinding (special)
-        // For now, emit as a property binding to 'items'
+        // repeat uses an iteratorBinding with ForOfStatement
         if (ctrl.iteratorExprId) {
           result.push({
-            type: "propertyBinding",
+            type: "iteratorBinding",
             to: "items",
             exprId: ctrl.iteratorExprId,
-            mode: "toView",
-          } satisfies SerializedPropertyBinding);
+          } satisfies SerializedIteratorBinding);
         }
         break;
       case "if":
@@ -555,4 +564,44 @@ class EmitContext {
     }
     return instructions[targetIndex]!;
   }
+}
+
+/* =============================================================================
+ * Helper Functions
+ * ============================================================================= */
+
+/**
+ * Get the main template from a controller.
+ * Different controller types have different template properties.
+ */
+function getControllerMainTemplate(ctrl: PlanController): PlanNode | undefined {
+  switch (ctrl.kind) {
+    case "repeat":
+    case "with":
+    case "portal":
+    case "if":
+      return ctrl.template;
+    case "switch":
+      // Switch doesn't have a single main template
+      return undefined;
+    case "promise":
+      // Promise uses thenTemplate as the main template
+      return ctrl.thenTemplate;
+  }
+}
+
+/**
+ * Compact a sparse instruction array by removing empty rows.
+ *
+ * The plan stage assigns global target indices, but nested templates need
+ * local indices starting from 0. This function compacts the array by removing
+ * empty rows, effectively converting global indices to local indices.
+ *
+ * @returns The compacted instruction array with sequential indices
+ */
+function compactInstructions(
+  instructions: SerializedInstruction[][],
+): SerializedInstruction[][] {
+  // Filter out empty rows
+  return instructions.filter(row => row.length > 0);
 }

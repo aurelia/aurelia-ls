@@ -140,8 +140,8 @@ class PlanningContext {
   /** Expression index for AST lookups */
   readonly exprIndex: ReadonlyExprIdMap<ExprTableEntry>;
 
-  /** Map from TemplateNode to LinkedTemplate */
-  readonly domToLinked: WeakMap<TemplateNode, LinkedTemplate>;
+  /** Map from DOM node to linked template (for nested template lookup) */
+  private readonly domToLinked: WeakMap<TemplateNode, LinkedTemplate>;
 
   /** Collected expressions */
   private readonly expressions: Map<ExprId, PlanExpression> = new Map();
@@ -149,8 +149,11 @@ class PlanningContext {
   /** Expression to frame mapping from scope analysis */
   readonly exprToFrame: ReadonlyExprIdMap<FrameId>;
 
-  /** Next hydration target index */
-  private nextTargetIndex = 0;
+  /**
+   * Stack of target counters - each template (root and nested) has its own counter.
+   * This ensures nested templates use LOCAL indices starting from 0, not global indices.
+   */
+  private targetCounterStack: number[] = [0];
 
   constructor(
     linked: LinkedSemanticsModule,
@@ -162,7 +165,8 @@ class PlanningContext {
     this.options = options;
     this.exprIndex = indexExprTable(linked.exprTable);
 
-    // Build DOM → LinkedTemplate map
+    // Build map from DOM node to linked template for nested template lookup
+    // All templates (root + nested) are in linked.templates with their DOM nodes
     this.domToLinked = new WeakMap();
     for (const t of linked.templates) {
       this.domToLinked.set(t.dom, t);
@@ -173,14 +177,32 @@ class PlanningContext {
     this.exprToFrame = rootScope?.exprToFrame ?? new Map();
   }
 
-  /** Allocate a hydration target index */
-  allocateTarget(): number {
-    return this.nextTargetIndex++;
+  /** Look up the LinkedTemplate for a given DOM node (used for nested templates) */
+  getLinkedTemplate(dom: TemplateNode): LinkedTemplate | undefined {
+    return this.domToLinked.get(dom);
   }
 
-  /** Get current target count */
+  /** Allocate a hydration target index (local to current template scope) */
+  allocateTarget(): number {
+    const stackIndex = this.targetCounterStack.length - 1;
+    const index = this.targetCounterStack[stackIndex]!;
+    this.targetCounterStack[stackIndex] = index + 1;
+    return index;
+  }
+
+  /** Get current target count (for current template scope) */
   get targetCount(): number {
-    return this.nextTargetIndex;
+    return this.targetCounterStack[this.targetCounterStack.length - 1]!;
+  }
+
+  /** Push a new target scope when entering a nested template */
+  pushTargetScope(): void {
+    this.targetCounterStack.push(0);
+  }
+
+  /** Pop target scope when leaving a nested template, returns its target count */
+  popTargetScope(): number {
+    return this.targetCounterStack.pop() ?? 0;
   }
 
   /** Register an expression in the plan */
@@ -203,11 +225,6 @@ class PlanningContext {
   /** Get all collected expressions */
   getExpressions(): PlanExpression[] {
     return Array.from(this.expressions.values());
-  }
-
-  /** Look up LinkedTemplate for a nested template node */
-  getLinkedTemplate(dom: TemplateNode): LinkedTemplate | undefined {
-    return this.domToLinked.get(dom);
   }
 }
 
@@ -412,8 +429,12 @@ function transformElement(
     }
   }
 
-  // Add static attrs from DOM node
+  // Add static attrs from DOM node, but filter out binding attributes
   for (const attr of node.attrs) {
+    // Skip attributes that are binding commands (e.g., 'if.bind', 'repeat.for', 'value.bind')
+    if (isBindingAttribute(attr.name)) {
+      continue;
+    }
     // Check if we already have this attr from instructions
     if (!staticAttrs.some(a => a.name === attr.name)) {
       staticAttrs.push({ name: attr.name, value: attr.value });
@@ -441,12 +462,23 @@ function transformElement(
     children,
   };
 
-  if (needsTarget) {
-    result.targetIndex = ctx.allocateTarget();
-  }
-
-  if (customElement) {
-    result.customElement = customElement;
+  // When element has template controllers, the element itself does NOT get a target
+  // in the parent template. The controller markers are the targets in the parent.
+  // The element's bindings, custom element, and custom attributes are handled
+  // in the nested template (processed via transformNestedTemplate).
+  if (controllers.length > 0) {
+    // Clear bindings from parent element - they'll be in nested template
+    result.bindings = [];
+    result.customAttrs = [];
+    // Don't set customElement or allocate target for element
+    // Only controller has target in parent template
+  } else {
+    if (customElement) {
+      result.customElement = customElement;
+    }
+    if (needsTarget) {
+      result.targetIndex = ctx.allocateTarget();
+    }
   }
 
   if (node.selfClosed) {
@@ -762,7 +794,7 @@ function transformRepeatController(
     ctx.registerExpression(keyExprId, ins.loc ?? undefined);
   }
 
-  // Transform nested template
+  // Look up the LinkedTemplate for the nested template
   const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
   const template = nestedLinked
     ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
@@ -798,6 +830,7 @@ function transformIfController(
   const conditionExprId = primaryExprId(valueProp.from);
   ctx.registerExpression(conditionExprId, ins.loc ?? undefined);
 
+  // Look up the LinkedTemplate for the nested template
   const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
   const template = nestedLinked
     ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
@@ -831,6 +864,7 @@ function transformWithController(
   const valueExprId = primaryExprId(valueProp.from);
   ctx.registerExpression(valueExprId, ins.loc ?? undefined);
 
+  // Look up the LinkedTemplate for the nested template
   const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
   const template = nestedLinked
     ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
@@ -899,6 +933,7 @@ function transformPromiseController(
 
   // Handle then/catch branches if this is a branch controller
   if (ins.branch) {
+    // Look up the LinkedTemplate for the nested template
     const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
     const template = nestedLinked
       ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
@@ -925,6 +960,7 @@ function transformPortalController(
   frameId: FrameId,
   ctx: PlanningContext,
 ): PlanPortalController {
+  // Look up the LinkedTemplate for the nested template
   const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
   const template = nestedLinked
     ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
@@ -957,13 +993,21 @@ function transformNestedTemplate(
   currentFrame: FrameId,
   ctx: PlanningContext,
 ): PlanNode {
+  // Push a new target scope - nested templates use LOCAL indices starting from 0
+  ctx.pushTargetScope();
+
   // Build instruction map for nested template
   const instructionsByTarget = new Map<NodeId, LinkedInstruction[]>();
   for (const row of linked.rows) {
     instructionsByTarget.set(row.target, row.instructions);
   }
 
-  return transformNode(linked.dom, instructionsByTarget, currentFrame, ctx);
+  const result = transformNode(linked.dom, instructionsByTarget, currentFrame, ctx);
+
+  // Pop the target scope (nested template processing complete)
+  ctx.popTargetScope();
+
+  return result;
 }
 
 /* =============================================================================
@@ -1022,4 +1066,30 @@ function extractBindingNames(pattern: BindingIdentifierOrPattern): string[] {
     default:
       return [];
   }
+}
+
+/* =============================================================================
+ * Attribute Filtering Helpers
+ * ============================================================================= */
+
+/**
+ * Known binding command suffixes that indicate an attribute is a binding, not static.
+ * These should NOT be included in staticAttrs.
+ */
+const BINDING_COMMANDS = new Set([
+  "bind", "one-time", "to-view", "from-view", "two-way",
+  "trigger", "capture", "delegate",
+  "ref",
+  "for", // repeat.for
+]);
+
+/**
+ * Check if an attribute name is a binding attribute.
+ * Binding attributes have the form "name.command" where command is a known binding command.
+ */
+function isBindingAttribute(attrName: string): boolean {
+  const dotIndex = attrName.lastIndexOf(".");
+  if (dotIndex === -1) return false;
+  const command = attrName.slice(dotIndex + 1);
+  return BINDING_COMMANDS.has(command);
 }

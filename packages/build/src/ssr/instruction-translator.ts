@@ -49,6 +49,7 @@ import type {
   SerializedIteratorBinding,
   // SerializedAuxBinding - reserved for future use
   SerializedLetBinding,
+  NestedTemplateHtmlNode,
   ExprId,
   BindingMode,
   AnyBindingExpression,
@@ -82,14 +83,14 @@ export interface NestedDefinition {
  * @param serialized - The serialized instruction rows from AOT emit
  * @param expressions - Expression table from AOT emit
  * @param nestedTemplates - Nested template definitions (for controllers)
- * @param nestedHtml - HTML strings for nested templates
+ * @param nestedHtmlTree - Hierarchical HTML tree for nested templates
  * @returns Translated Aurelia instructions
  */
 export function translateInstructions(
   serialized: SerializedInstruction[][],
   expressions: SerializedExpression[],
   nestedTemplates: SerializedDefinition[],
-  nestedHtml: string[],
+  nestedHtmlTree: NestedTemplateHtmlNode[],
 ): {
   instructions: IInstruction[][];
   nestedDefs: NestedDefinition[];
@@ -101,18 +102,19 @@ export function translateInstructions(
   }
 
   // Translate nested templates first (they may be referenced by controllers)
+  // Match each nested template definition with its corresponding HTML from the tree
   const nestedDefs: NestedDefinition[] = [];
   for (let i = 0; i < nestedTemplates.length; i++) {
     const nested = nestedTemplates[i];
-    const html = nestedHtml[i] ?? "";
+    const htmlNode = nestedHtmlTree[i];
     const nestedResult = translateInstructions(
       nested?.instructions ?? [],
       expressions, // Share expression table
       nested?.nestedTemplates ?? [],
-      [], // Nested nested templates - should be empty for now
+      htmlNode?.nested ?? [], // Pass nested HTML tree for recursion
     );
     nestedDefs.push({
-      template: html,
+      template: htmlNode?.html ?? "",
       instructions: nestedResult.instructions,
       name: nested?.name ?? `nested-${i}`,
       needsCompile: false,

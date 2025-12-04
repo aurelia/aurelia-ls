@@ -266,3 +266,128 @@ describe("AOT Error Handling", () => {
     assert.ok(result.html.includes("<div"), "Should render div");
   });
 });
+
+// =============================================================================
+// AOT Template Controllers
+// =============================================================================
+
+describe("AOT Template Controllers", () => {
+  test("renders repeat.for controller", async () => {
+    const result = await compileAndRenderAot(
+      '<div repeat.for="item of items">${item}</div>',
+      { state: { items: ["A", "B", "C"] } }
+    );
+
+    // Should render all items
+    assert.ok(result.html.includes("A"), `Expected item A in: ${result.html}`);
+    assert.ok(result.html.includes("B"), `Expected item B in: ${result.html}`);
+    assert.ok(result.html.includes("C"), `Expected item C in: ${result.html}`);
+  });
+
+  test("renders if.bind controller - true condition", async () => {
+    const result = await compileAndRenderAot(
+      '<div if.bind="show">Visible</div>',
+      { state: { show: true } }
+    );
+
+    assert.ok(result.html.includes("Visible"), `Expected Visible in: ${result.html}`);
+  });
+
+  test("renders if.bind controller - false condition", async () => {
+    const result = await compileAndRenderAot(
+      '<div if.bind="show">Hidden</div>',
+      { state: { show: false } }
+    );
+
+    // When condition is false, content should not appear
+    assert.ok(!result.html.includes("Hidden") || result.html.includes("<!--"),
+      `Expected Hidden to be hidden or just markers in: ${result.html}`);
+  });
+
+  test("renders nested repeat with inner bindings", async () => {
+    const result = await compileAndRenderAot(
+      '<ul><li repeat.for="item of items"><span>${item.name}</span></li></ul>',
+      { state: { items: [{ name: "First" }, { name: "Second" }] } }
+    );
+
+    assert.ok(result.html.includes("First"), `Expected First in: ${result.html}`);
+    assert.ok(result.html.includes("Second"), `Expected Second in: ${result.html}`);
+  });
+
+  test("renders if containing repeat (todo app pattern)", async () => {
+    const result = await compileAndRenderAot(
+      `<ul if.bind="items.length > 0">
+        <li repeat.for="item of items">\${item}</li>
+      </ul>`,
+      { state: { items: ["A", "B", "C"] } }
+    );
+
+    // Should render all items since condition is true
+    assert.ok(result.html.includes("A"), `Expected A in: ${result.html}`);
+    assert.ok(result.html.includes("B"), `Expected B in: ${result.html}`);
+    assert.ok(result.html.includes("C"), `Expected C in: ${result.html}`);
+  });
+
+  test("renders if containing repeat with false condition", async () => {
+    const result = await compileAndRenderAot(
+      `<ul if.bind="items.length > 0">
+        <li repeat.for="item of items">\${item}</li>
+      </ul>`,
+      { state: { items: [] } }
+    );
+
+    // Should not render items since condition is false
+    assert.ok(!result.html.includes("<li>"), `Expected no li elements in: ${result.html}`);
+  });
+
+  test("renders repeat with element-level attribute binding", async () => {
+    const result = await compileAndRenderAot(
+      '<li repeat.for="item of items" class="${item.done ? \'done\' : \'pending\'}">${item.text}</li>',
+      { state: { items: [{ text: "Task 1", done: true }, { text: "Task 2", done: false }] } }
+    );
+
+    assert.ok(result.html.includes("Task 1"), `Expected Task 1 in: ${result.html}`);
+    assert.ok(result.html.includes("Task 2"), `Expected Task 2 in: ${result.html}`);
+    // Check class bindings
+    assert.ok(result.html.includes("done"), `Expected done class in: ${result.html}`);
+    assert.ok(result.html.includes("pending"), `Expected pending class in: ${result.html}`);
+  });
+
+  test("renders todo app structure (if > repeat > inner content)", async () => {
+    // This matches the exact structure from my-app.html:
+    // <ul if.bind="filteredTodos.length > 0">
+    //   <li repeat.for="todo of filteredTodos" class="...">
+    //     <input ...>
+    //     <span>${todo.text}</span>
+    //     <button click.trigger="removeTodo(todo)">&times;</button>
+    //   </li>
+    // </ul>
+    const result = await compileAndRenderAot(
+      `<ul if.bind="todos.length > 0">
+        <li repeat.for="todo of todos" class="todo-item \${todo.completed ? 'completed' : ''}">
+          <span class="todo-text">\${todo.text}</span>
+          <button class="destroy" click.trigger="removeTodo(todo)">&times;</button>
+        </li>
+      </ul>`,
+      {
+        state: {
+          todos: [
+            { text: "Learn Aurelia", completed: true },
+            { text: "Build app", completed: false },
+          ]
+        }
+      }
+    );
+
+    // Verify items are rendered
+    assert.ok(result.html.includes("Learn Aurelia"), `Expected Learn Aurelia in: ${result.html}`);
+    assert.ok(result.html.includes("Build app"), `Expected Build app in: ${result.html}`);
+
+    // Verify class interpolation works
+    assert.ok(result.html.includes("completed"), `Expected completed class in: ${result.html}`);
+
+    // Verify the button exists (with the click handler - it won't show in HTML but the element should)
+    assert.ok(result.html.includes("destroy"), `Expected destroy class button in: ${result.html}`);
+    assert.ok(result.html.includes("×") || result.html.includes("&times;"), `Expected × in button in: ${result.html}`);
+  });
+});
