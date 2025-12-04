@@ -134,11 +134,23 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
 
+  packages/resolution:
+    dependencies:
+      '@aurelia-ls/domain':
+        specifier: workspace:*
+        version: link:../domain
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
   packages/server:
     dependencies:
       '@aurelia-ls/domain':
         specifier: workspace:*
         version: link:../domain
+      '@aurelia-ls/resolution':
+        specifier: workspace:*
+        version: link:../resolution
       typescript:
         specifier: ^5.5.4
         version: 5.9.3

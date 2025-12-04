@@ -3,7 +3,7 @@ import { runDecoratorDiscovery } from "./decorator-discovery.js";
 import { runConventionDiscovery } from "./convention-discovery.js";
 import { runDiRegistryDiscovery } from "./di-registry-discovery.js";
 import type { DiscoveryResult, DiscoveredResource, ResourceRegistration } from "./types.js";
-import type { Logger } from "../../types.js";
+import type { Logger } from "../types.js";
 import type ts from "typescript";
 import type { ResourceCollections } from "@aurelia-ls/domain";
 

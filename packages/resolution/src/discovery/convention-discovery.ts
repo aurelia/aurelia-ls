@@ -1,6 +1,6 @@
 import { emptyDiscoveryResult } from "./shared.js";
 import type { DiscoveryResult } from "./types.js";
-import type { Logger } from "../../types.js";
+import type { Logger } from "../types.js";
 import type ts from "typescript";
 
 /**

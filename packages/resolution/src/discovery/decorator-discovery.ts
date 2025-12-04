@@ -11,7 +11,7 @@ import type {
   NameOnlyOptions,
   ResourceOptionParse,
 } from "./types.js";
-import type { Logger } from "../../types.js";
+import type { Logger } from "../types.js";
 import type { NormalizedPath, ResourceCollections } from "@aurelia-ls/domain";
 
 export function runDecoratorDiscovery(program: ts.Program, logger: Logger): DiscoveryResult {

@@ -21,6 +21,28 @@ export type { ExpressionParseContext, IExpressionParser } from "./compiler/index
 export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics } from "./compiler/index.js";
 export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections } from "./compiler/index.js";
 
+// Resource definitions (for resolution package and external tooling)
+export type {
+  ElementRes,
+  AttrRes,
+  Bindable,
+  ValueConverterSig,
+  BindingBehaviorSig,
+  Controllers,
+  RepeatController,
+  PromiseController,
+  SwitchController,
+  PortalController,
+  ScopeBehavior,
+  DomSchema,
+  DomElement,
+  DomProp,
+  EventSchema,
+  Naming,
+  TwoWayDefaults,
+  TypeRef,
+} from "./compiler/index.js";
+
 // Synthesis (Overlay)
 export {
   computeOverlayBaseName,

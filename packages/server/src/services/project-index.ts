@@ -6,9 +6,13 @@ import {
   type ResourceScopeId,
   type Semantics,
 } from "@aurelia-ls/domain";
-import { hashObject, normalizeCompilerOptions } from "./project-index/fingerprint/fingerprint.js";
-import { emptyDiscovery, runDiscovery } from "./project-index/discovery/index.js";
-import { planScopes } from "./project-index/scoping/scope-planner.js";
+import {
+  hashObject,
+  normalizeCompilerOptions,
+  emptyDiscovery,
+  runDiscovery,
+  planScopes,
+} from "@aurelia-ls/resolution";
 import type { Logger } from "./types.js";
 
 export interface TypeScriptProject {

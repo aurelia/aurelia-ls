@@ -58,7 +58,7 @@
     "test:40-typecheck:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/analysis/40-typecheck/*.js\" --include \"packages/domain/out/compiler/analysis/shared/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/40-typecheck node --test --test-reporter=spec packages/domain/test/40-typecheck/typecheck.test.mjs",
     "test:integration": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/integration/*.test.mjs",
     "test:integration:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/**/*.js\" --exclude \"**/*.test.*\" --exclude \"packages/**/test/**\" -r text -r html -r lcov -o coverage/integration node --test --test-reporter=spec packages/domain/test/integration/*.test.mjs",
-    "test:build-ssr": "pnpm -w build && node --test --test-reporter=spec packages/build/test/*.test.mjs",
+    "test:build-ssr": "pnpm -w build && node --conditions=development --test --test-reporter=spec packages/build/test/*.test.mjs",
     "dump:overlay": "pnpm -w build && node scripts/dump-overlays.mjs",
     "test:parsing": "pnpm -F @aurelia-ls/domain build && node --test --test-reporter=spec packages/domain/test/parsing/*.test.mjs",
     "test:parsing:cov": "pnpm -F @aurelia-ls/domain build && c8 --all --include \"packages/domain/out/compiler/parsing/**/*.js\" --exclude \"**/*.test.*\" -r text -r text-summary node --test packages/domain/test/parsing/*.test.mjs",
