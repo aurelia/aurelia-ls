@@ -77,6 +77,9 @@ export async function renderToString(
 
   // Create SSR context with recording capabilities
   const ssrContext = new SSRContext();
+  // Set the root template target count so nested views don't collide with root targets
+  // The instruction array length equals the number of targets in the root template
+  ssrContext.setRootTargetCount(definition.instructions.length);
 
   // Create DI container with platform and SSR context
   const container = DI.createContainer();
