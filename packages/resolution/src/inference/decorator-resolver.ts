@@ -77,7 +77,7 @@ function resolveClassDecorators(
       resolver: "decorator",
       containerless: meta.element.containerless || meta.containerless,
       boundary: true,
-      ...(meta.element.template ? { templatePath: meta.element.template } : {}),
+      ...(meta.element.template ? { inlineTemplate: meta.element.template } : {}),
     };
   }
 

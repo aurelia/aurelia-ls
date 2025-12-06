@@ -34,8 +34,10 @@ export interface ResolutionResult {
   candidates: readonly ResourceCandidate[];
   /** Registration intents for all candidates */
   intents: readonly RegistrationIntent[];
-  /** Template-to-component mappings for elements */
+  /** External template files (convention-based: foo.ts → foo.html) */
   templates: readonly TemplateInfo[];
+  /** Inline templates (string literals in decorators/static $au) */
+  inlineTemplates: readonly InlineTemplateInfo[];
   /** Diagnostics from resolution */
   diagnostics: readonly ResolutionDiagnostic[];
   /** Extracted facts (for debugging/tooling) */
@@ -43,12 +45,28 @@ export interface ResolutionResult {
 }
 
 /**
- * Template-to-component mapping for scope resolution.
+ * External template file mapping (convention-based discovery).
  */
 export interface TemplateInfo {
   /** Path to the .html template file */
   templatePath: NormalizedPath;
   /** Path to the .ts component file */
+  componentPath: NormalizedPath;
+  /** Scope ID for compilation ("root" or "local:...") */
+  scopeId: ResourceScopeId;
+  /** Component class name */
+  className: string;
+  /** Resource name (kebab-case) */
+  resourceName: string;
+}
+
+/**
+ * Inline template info (template content embedded in .ts file).
+ */
+export interface InlineTemplateInfo {
+  /** The inline template content (HTML string) */
+  content: string;
+  /** Path to the .ts component file containing the inline template */
   componentPath: NormalizedPath;
   /** Scope ID for compilation ("root" or "local:...") */
   scopeId: ResourceScopeId;
@@ -108,10 +126,10 @@ export function resolve(
 
   // Layer 5: Template Discovery
   log.info("[resolution] discovering templates...");
-  const templates = discoverTemplates(intents, program, resourceGraph);
+  const { templates, inlineTemplates } = discoverTemplates(intents, program, resourceGraph);
 
   log.info(
-    `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${unknownCount} unknown), ${templates.length} templates`,
+    `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${unknownCount} unknown), ${templates.length} external + ${inlineTemplates.length} inline templates`,
   );
 
   return {
@@ -119,6 +137,7 @@ export function resolve(
     candidates,
     intents,
     templates,
+    inlineTemplates,
     diagnostics: resolverDiags.map(toDiagnostic),
     facts,
   };
@@ -140,20 +159,25 @@ const nullLogger: Logger = {
   error: () => {},
 };
 
+interface DiscoveredTemplates {
+  templates: TemplateInfo[];
+  inlineTemplates: InlineTemplateInfo[];
+}
+
 /**
  * Discover templates for element resources.
  *
  * For each element:
- * 1. Use explicit templatePath from decorator/static $au if present
- * 2. Otherwise, apply convention: foo.ts → foo.html
- * 3. Check if the file exists in the program
+ * - If it has an inline template (string literal), add to inlineTemplates
+ * - Otherwise, apply convention (foo.ts → foo.html) and add to templates
  */
 function discoverTemplates(
   intents: readonly RegistrationIntent[],
   program: ts.Program,
   resourceGraph: ResourceGraph,
-): TemplateInfo[] {
+): DiscoveredTemplates {
   const templates: TemplateInfo[] = [];
+  const inlineTemplates: InlineTemplateInfo[] = [];
   const sourceFiles = new Set(program.getSourceFiles().map((sf) => normalizePathForId(sf.fileName)));
 
   for (const intent of intents) {
@@ -163,12 +187,24 @@ function discoverTemplates(
     if (resource.kind !== "element") continue;
 
     const componentPath = resource.source;
-    const templatePath = resolveTemplatePath(componentPath, resource.templatePath, sourceFiles);
+    const scopeId = computeScopeId(intent, resourceGraph);
+
+    // Check for inline template first
+    if (resource.inlineTemplate !== undefined) {
+      inlineTemplates.push({
+        content: resource.inlineTemplate,
+        componentPath,
+        scopeId,
+        className: resource.className,
+        resourceName: resource.name,
+      });
+      continue;
+    }
+
+    // No inline template - try convention-based discovery
+    const templatePath = resolveTemplatePath(componentPath, sourceFiles);
 
     if (!templatePath) continue;
-
-    // Determine scope ID
-    const scopeId = computeScopeId(intent, resourceGraph);
 
     templates.push({
       templatePath,
@@ -179,67 +215,36 @@ function discoverTemplates(
     });
   }
 
-  return templates;
+  return { templates, inlineTemplates };
 }
 
 /**
- * Resolve the template path for a component.
+ * Resolve the template path for a component using convention.
  *
- * Priority:
- * 1. Explicit templatePath from decorator/static $au (resolved relative to component)
- * 2. Convention: same name with .html extension
+ * Convention: foo.ts → foo.html (same directory).
  *
- * Note: Inline templates (template content, not paths) are NOT supported.
- * If the template starts with "<", it's inline content, not a path.
+ * This is called only when there's no inline template. For external templates,
+ * developers use:
+ *   import template from './foo.html';
+ *   @customElement({ template })
+ *
+ * Since we can't resolve identifier references statically, we use convention.
  */
 function resolveTemplatePath(
   componentPath: NormalizedPath,
-  explicitTemplate: string | undefined,
-  knownFiles: Set<NormalizedPath>,
+  _knownFiles: Set<NormalizedPath>,
 ): NormalizedPath | null {
+  // Convention: foo.ts → foo.html, foo.js → foo.html
   const dir = dirname(componentPath);
   const base = basename(componentPath);
-
-  if (explicitTemplate) {
-    // Skip inline templates (content starts with "<")
-    const trimmed = explicitTemplate.trim();
-    if (trimmed.startsWith("<")) {
-      // Inline template - not a file path, fall through to convention
-    } else {
-      // Explicit template path - resolve relative to component
-      const resolved = resolvePath(dir, explicitTemplate);
-      const normalized = normalizePathForId(resolved);
-      // We accept explicit paths even if they don't exist in the program
-      // (they might be virtual or loaded separately)
-      return normalized;
-    }
-  }
-
-  // Convention: foo.ts → foo.html, foo.js → foo.html
   const htmlName = base.replace(/\.(ts|js|tsx|jsx)$/, ".html");
+
   if (htmlName === base) {
     // No extension match, can't apply convention
     return null;
   }
 
-  const conventionPath = normalizePathForId(resolvePath(dir, htmlName));
-
-  // Only return if the file exists in the program's known files
-  // or if we can reasonably assume it exists (check both with and without normalization)
-  if (knownFiles.has(conventionPath)) {
-    return conventionPath;
-  }
-
-  // Also check without full normalization (for case-sensitive file systems)
-  const rawPath = resolvePath(dir, htmlName);
-  const rawNormalized = normalizePathForId(rawPath);
-  if (knownFiles.has(rawNormalized)) {
-    return rawNormalized;
-  }
-
-  // Convention file doesn't exist in program, but we'll still return it
-  // as templates are often not part of the TypeScript program
-  return conventionPath;
+  return normalizePathForId(resolvePath(dir, htmlName));
 }
 
 /**

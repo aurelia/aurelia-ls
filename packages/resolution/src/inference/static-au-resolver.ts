@@ -63,7 +63,7 @@ function resolveStaticAu(
       resolver: "static-au",
       boundary: true,
       ...(au.containerless !== undefined ? { containerless: au.containerless } : {}),
-      ...(au.template !== undefined ? { templatePath: au.template } : {}),
+      ...(au.template !== undefined ? { inlineTemplate: au.template } : {}),
     };
   }
 

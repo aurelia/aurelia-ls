@@ -155,9 +155,48 @@ describe("Full Pipeline: explicit-app", () => {
     assert.ok(productCardTemplate, "Should find product-card template");
     assert.strictEqual(productCardTemplate.scopeId, "root", "product-card is unknown/global scope");
 
-    // Find price-tag template (local scope)
+    // Components with INLINE templates should NOT appear in templates array
+    // (price-tag and stock-badge have template: `<template>...` in their decorators)
     const priceTagTemplate = result.templates.find(t => t.resourceName === "price-tag");
-    assert.ok(priceTagTemplate, "Should find price-tag template");
-    assert.ok(priceTagTemplate.scopeId.includes("local:"), "price-tag should be in local scope");
+    assert.strictEqual(priceTagTemplate, undefined, "price-tag has inline template, should not appear in templates");
+
+    const stockBadgeTemplate = result.templates.find(t => t.resourceName === "stock-badge");
+    assert.strictEqual(stockBadgeTemplate, undefined, "stock-badge has inline template, should not appear in templates");
+
+    const fancyButtonTemplate = result.templates.find(t => t.resourceName === "fancy-button");
+    assert.strictEqual(fancyButtonTemplate, undefined, "fancy-button has inline template, should not appear in templates");
+  });
+
+  it("collects inline templates separately", () => {
+    const program = createProgramFromApp(EXPLICIT_APP);
+    const result = resolve(program);
+
+    // Should have inlineTemplates array
+    assert.ok(result.inlineTemplates, "Should have inlineTemplates array");
+    assert.ok(result.inlineTemplates.length > 0, "Should discover inline templates");
+
+    console.log("\n=== INLINE TEMPLATES DISCOVERED ===");
+    for (const t of result.inlineTemplates) {
+      console.log(`${t.resourceName}: ${t.content.substring(0, 50)}... (scope: ${t.scopeId})`);
+    }
+    console.log("=== END INLINE TEMPLATES ===\n");
+
+    // Find price-tag inline template (local scope)
+    const priceTagInline = result.inlineTemplates.find(t => t.resourceName === "price-tag");
+    assert.ok(priceTagInline, "Should find price-tag inline template");
+    assert.ok(priceTagInline.content.includes("<span"), "price-tag content should be HTML");
+    assert.ok(priceTagInline.scopeId.includes("local:"), "price-tag should be in local scope");
+    assert.ok(priceTagInline.componentPath.endsWith("price-tag.ts"), "Component path should end with .ts");
+
+    // Find stock-badge inline template (local scope)
+    const stockBadgeInline = result.inlineTemplates.find(t => t.resourceName === "stock-badge");
+    assert.ok(stockBadgeInline, "Should find stock-badge inline template");
+    assert.ok(stockBadgeInline.content.includes("<span"), "stock-badge content should be HTML");
+
+    // Find fancy-button inline template (global scope via barrel)
+    const fancyButtonInline = result.inlineTemplates.find(t => t.resourceName === "fancy-button");
+    assert.ok(fancyButtonInline, "Should find fancy-button inline template");
+    assert.ok(fancyButtonInline.content.includes("<button"), "fancy-button content should be HTML");
+    assert.strictEqual(fancyButtonInline.scopeId, "root", "fancy-button should be in root scope (global)");
   });
 });

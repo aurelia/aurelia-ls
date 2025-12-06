@@ -27,7 +27,7 @@ export type {
 } from "@aurelia-ls/domain";
 
 // === Main entry point ===
-export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic, type TemplateInfo } from "./resolve.js";
+export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic, type TemplateInfo, type InlineTemplateInfo } from "./resolve.js";
 
 // === Shared types ===
 export type { Logger } from "./types.js";
