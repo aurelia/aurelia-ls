@@ -87,6 +87,9 @@ export function resolveControllerSem(
       return { res, spec: sem.resources.controllers.switch };
     case "portal":
       return { res, spec: sem.resources.controllers.portal };
+    case "else":
+      // Linking controller - linked to preceding 'if' at runtime via Else.link()
+      return { res, spec: { kind: "linking-controller", res: "else", linksTo: "if", scope: "reuse" } };
     default:
       pushDiag(diags, "AU1101", `Unknown controller '${res}'.`, span);
       // Fallback to 'with' shape to keep traversal alive
@@ -108,6 +111,9 @@ export function resolveControllerBindable(ctrl: ControllerSem, prop: string): Bi
       const b = ctrl.spec.props[prop];
       return b ?? { name: prop };
     }
+    case "else":
+      // else controller has no bindable props
+      return { name: prop };
     default:
       return unreachable(ctrl);
   }

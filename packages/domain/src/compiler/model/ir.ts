@@ -265,7 +265,7 @@ export interface HydrateAttributeIR {
 
 /* ---- Template controllers & branches ---- */
 
-export type TemplateControllerRes = 'repeat' | 'with' | 'if' | 'switch' | 'promise' | 'portal';
+export type TemplateControllerRes = 'repeat' | 'with' | 'if' | 'else' | 'switch' | 'promise' | 'portal';
 export type TemplateControllerAlias = 'then' | 'catch' | 'case' | 'default';
 
 export type ControllerBranchInfo =

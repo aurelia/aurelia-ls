@@ -409,5 +409,88 @@
         { "kind": "text", "code": "y" }
       ]
     }
+  },
+  {
+    "name": "LC-31 if/else sibling basic",
+    "markup": "<div if.bind=\"x\">true</div><div else>false</div>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" }
+      ]
+    }
+  },
+  {
+    "name": "LC-32 if/else on template elements",
+    "markup": "<template if.bind=\"x\">true</template><template else>false</template>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" }
+      ]
+    }
+  },
+  {
+    "name": "LC-33 if/else with bindings in both branches",
+    "markup": "<div if.bind=\"x\">${a}</div><div else>${b}</div>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" },
+        { "kind": "text", "code": "a" },
+        { "kind": "text", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LC-34 if/else with static content",
+    "markup": "<span if.bind=\"show\">visible</span><span else>hidden</span>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "show" }
+      ]
+    }
+  },
+  {
+    "name": "LC-35 if/else with attributes on else",
+    "markup": "<div if.bind=\"c\" class=\"a\">yes</div><div else class=\"b\">no</div>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "c" }
+      ]
+    }
+  },
+  {
+    "name": "LC-36 if/else nested - outer else inner if/else",
+    "markup": "<div if.bind=\"a\"><span if.bind=\"b\">ab</span><span else>a!b</span></div><div else>!a</div>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" },
+        { "name": "if" },
+        { "name": "else" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "a" },
+        { "kind": "controllerValue", "command": "bind", "code": "b" }
+      ]
+    }
   }
 ]

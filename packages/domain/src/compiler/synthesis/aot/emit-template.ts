@@ -233,11 +233,9 @@ function getControllerTemplates(ctrl: PlanController): PlanNode[] {
     case "repeat":
     case "with":
     case "portal":
-      return [ctrl.template];
     case "if":
-      const ifTemplates: PlanNode[] = [ctrl.template];
-      if (ctrl.elseTemplate) ifTemplates.push(ctrl.elseTemplate);
-      return ifTemplates;
+    case "else":
+      return [ctrl.template];
     case "switch":
       const switchTemplates: PlanNode[] = ctrl.cases.map(c => c.template);
       if (ctrl.defaultTemplate) switchTemplates.push(ctrl.defaultTemplate);

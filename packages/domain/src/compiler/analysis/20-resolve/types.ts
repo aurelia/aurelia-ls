@@ -27,6 +27,7 @@ import type {
   PromiseController,
   SwitchController,
   PortalController,
+  LinkingController,
   Bindable,
   TypeRef,
 } from "../../language/registry.js";
@@ -256,7 +257,7 @@ export interface IteratorAuxSpec {
  */
 export interface LinkedHydrateTemplateController extends BaseLinked {
   kind: "hydrateTemplateController";
-  res: "repeat" | "with" | "promise" | "if" | "switch" | "portal";
+  res: "repeat" | "with" | "promise" | "if" | "else" | "switch" | "portal";
   def: TemplateIR;
   controller: ControllerSem;
   props: (LinkedPropertyBinding | LinkedIteratorBinding)[];
@@ -299,5 +300,6 @@ export type ControllerSem =
   | { res: "with";    spec: SimpleController<"with"> }
   | { res: "promise"; spec: PromiseController }
   | { res: "if";      spec: SimpleController<"if"> }
+  | { res: "else";    spec: LinkingController<"else", "if"> }
   | { res: "switch";  spec: SwitchController }
   | { res: "portal";  spec: PortalController };

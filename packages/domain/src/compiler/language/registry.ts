@@ -106,6 +106,7 @@ export interface Controllers {
   if: SimpleController<"if">;
   switch: SwitchController;
   portal: PortalController; // evaluates in parent scope; content teleported
+  else: LinkingController<"else", "if">; // links to preceding if controller
 }
 
 /* ---- repeat (iterator) ----
@@ -180,6 +181,18 @@ export interface PortalController {
   res: "portal";
   scope: ScopeBehavior;                           // 'reuse'
   props: Record<string, Bindable>;                // { value } carries target/flag if authored
+}
+
+/* ---- Linking controller (else) ----
+ * - A linking controller attaches to a preceding controller (e.g., else → if).
+ * - Processed as a normal controller during lowering, then linked in a post-pass.
+ * - After linking, standalone `else` controllers are absorbed into their parent's `elseDef`.
+ */
+export interface LinkingController<R extends string, L extends string> {
+  kind: "linking-controller";
+  res: R;
+  linksTo: L;                                     // controller this links to
+  scope: ScopeBehavior;                           // inherits from parent controller
 }
 
 /* =======================
@@ -399,6 +412,13 @@ export const DEFAULT: Semantics = {
         res: "portal",
         scope: "reuse", // expressions inside portal evaluate in the *parent* scope
         props: { value: { name: "value", type: { kind: "ts", name: "unknown" }, mode: "default", doc: "Target/flag; interpreted at runtime" } },
+      },
+
+      else: {
+        kind: "linking-controller",
+        res: "else",
+        linksTo: "if",
+        scope: "reuse", // inherits from parent if controller
       },
     },
 

@@ -71,6 +71,7 @@ import type {
   PlanController,
   PlanRepeatController,
   PlanIfController,
+  PlanElseController,
   PlanWithController,
   PlanSwitchController,
   PlanPromiseController,
@@ -179,7 +180,14 @@ class PlanningContext {
 
   /** Look up the LinkedTemplate for a given DOM node (used for nested templates) */
   getLinkedTemplate(dom: TemplateNode): LinkedTemplate | undefined {
-    return this.domToLinked.get(dom);
+    // Try WeakMap lookup first (fast path)
+    let result = this.domToLinked.get(dom);
+    if (!result) {
+      // Fallback to linear search by object identity
+      // This handles cases where elseDef.dom references might not be in the WeakMap
+      result = this.linked.templates.find(t => t.dom === dom);
+    }
+    return result;
   }
 
   /** Allocate a hydration target index (local to current template scope) */
@@ -334,6 +342,11 @@ function transformNode(
     case "element":
       return transformElement(node, instructions, instructionsByTarget, currentFrame, ctx);
     case "template":
+      // If the template node has instructions (e.g., template controllers like if/else),
+      // treat it as an element with tag "template" rather than a transparent fragment
+      if (instructions.length > 0) {
+        return transformTemplateAsElement(node, instructions, instructionsByTarget, currentFrame, ctx);
+      }
       return transformFragment(node, instructionsByTarget, currentFrame, ctx);
     case "text":
       return transformText(node, instructions, ctx);
@@ -507,6 +520,102 @@ function transformFragment(
     nodeId: node.id,
     children,
   };
+}
+
+/**
+ * Transform a <template> element that has instructions (e.g., template controllers like if/else)
+ * as an element node with tag "template".
+ */
+function transformTemplateAsElement(
+  node: TemplateNode,
+  instructions: LinkedInstruction[],
+  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+  currentFrame: FrameId,
+  ctx: PlanningContext,
+): PlanElementNode {
+  const bindings: PlanBinding[] = [];
+  const staticAttrs: PlanStaticAttr[] = [];
+  const controllers: PlanController[] = [];
+  const customAttrs: PlanCustomAttr[] = [];
+
+  // Process instructions - primarily template controllers for <template> elements
+  for (const ins of instructions) {
+    switch (ins.kind) {
+      case "propertyBinding":
+        bindings.push(transformPropertyBinding(ins, ctx));
+        break;
+
+      case "attributeBinding":
+        bindings.push(transformAttributeBinding(ins, ctx));
+        break;
+
+      case "hydrateTemplateController":
+        controllers.push(transformController(ins, instructionsByTarget, currentFrame, ctx));
+        break;
+
+      case "hydrateAttribute":
+        customAttrs.push(transformHydrateAttribute(ins, ctx));
+        break;
+
+      case "setAttribute":
+        staticAttrs.push({ name: ins.to, value: ins.value });
+        break;
+
+      case "setClassAttribute":
+        staticAttrs.push({ name: "class", value: ins.value });
+        break;
+
+      case "setStyleAttribute":
+        staticAttrs.push({ name: "style", value: ins.value });
+        break;
+
+      // Other instruction types are uncommon on <template> elements
+      default:
+        break;
+    }
+  }
+
+  // Add static attrs from DOM node, but filter out binding attributes
+  for (const attr of node.attrs) {
+    if (isBindingAttribute(attr.name)) {
+      continue;
+    }
+    if (!staticAttrs.some(a => a.name === attr.name)) {
+      staticAttrs.push({ name: attr.name, value: attr.value });
+    }
+  }
+
+  // Transform children - but NOT if the element has controllers.
+  // When a <template> has template controllers, its children are part of the
+  // nested template and will be processed via transformNestedTemplate.
+  const children = controllers.length > 0
+    ? []
+    : node.children.map(child =>
+        transformNode(child, instructionsByTarget, currentFrame, ctx)
+      );
+
+  const result: PlanElementNode = {
+    kind: "element",
+    nodeId: node.id,
+    tag: "template",
+    staticAttrs,
+    bindings,
+    customAttrs,
+    controllers,
+    children,
+  };
+
+  // When element has template controllers, bindings go to nested template
+  if (controllers.length > 0) {
+    result.bindings = [];
+    result.customAttrs = [];
+  }
+
+  if (ctx.options.includeLocations && node.loc) {
+    result.loc = node.loc;
+  }
+
+  return result;
 }
 
 function transformText(
@@ -736,6 +845,8 @@ function transformController(
       return transformRepeatController(ins, instructionsByTarget, controllerFrame, ctx);
     case "if":
       return transformIfController(ins, instructionsByTarget, controllerFrame, ctx);
+    case "else":
+      return transformElseController(ins, instructionsByTarget, controllerFrame, ctx);
     case "with":
       return transformWithController(ins, instructionsByTarget, controllerFrame, ctx);
     case "switch":
@@ -844,7 +955,32 @@ function transformIfController(
     targetIndex: ctx.allocateTarget(),
   };
 
-  // TODO: Handle else template when we have it in the IR
+  if (ins.loc) result.loc = ins.loc;
+  return result;
+}
+
+/**
+ * Transform `else` controller.
+ * Else is linked to preceding if at runtime via Else.link() hook.
+ */
+function transformElseController(
+  ins: LinkedHydrateTemplateController,
+  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+  frameId: FrameId,
+  ctx: PlanningContext,
+): PlanElseController {
+  // Transform the nested template
+  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
+  const template = linkedDef
+    ? transformNestedTemplate(linkedDef, instructionsByTarget, frameId, ctx)
+    : createEmptyFragment();
+
+  const result: PlanElseController = {
+    kind: "else",
+    frameId,
+    template,
+    targetIndex: ctx.allocateTarget(),
+  };
 
   if (ins.loc) result.loc = ins.loc;
   return result;

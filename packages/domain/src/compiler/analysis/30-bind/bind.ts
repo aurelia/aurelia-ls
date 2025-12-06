@@ -253,9 +253,11 @@ function walkRows(
               break;
             }
             case "if":
+            case "else":
             case "switch":
             case "portal":
               // scope === 'reuse' → keep current frame; no overlay / locals.
+              // 'else' is a linking controller with no value - linked to preceding 'if' at runtime.
               break;
 
             default:

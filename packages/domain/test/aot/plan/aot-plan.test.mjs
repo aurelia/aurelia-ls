@@ -103,10 +103,6 @@ function walkNode(node, nodes, bindings, controllers) {
         if (ctrl.template) {
           walkNode(ctrl.template, nodes, bindings, controllers);
         }
-        // Special handling for if/else
-        if (ctrl.kind === "if" && ctrl.elseTemplate) {
-          walkNode(ctrl.elseTemplate, nodes, bindings, controllers);
-        }
         // Promise branches
         if (ctrl.kind === "promise") {
           if (ctrl.pendingTemplate) walkNode(ctrl.pendingTemplate, nodes, bindings, controllers);
@@ -181,7 +177,7 @@ function reduceController(ctrl) {
     case "repeat":
       return { ...base, locals: ctrl.locals, contextuals: ctrl.contextuals };
     case "if":
-      return { ...base, hasElse: !!ctrl.elseTemplate };
+    case "else":
     case "with":
       return base;
     case "switch":
@@ -258,7 +254,7 @@ function controllerKey(c) {
     parts.push(`locals:${c.locals.join(",")}`);
     parts.push(`ctx:${c.contextuals.join(",")}`);
   }
-  if (c.kind === "if") parts.push(`else:${c.hasElse}`);
+  // if and else are separate controllers now - no hasElse flag
   if (c.kind === "switch") parts.push(`cases:${c.caseCount}`, `default:${c.hasDefault}`);
   if (c.kind === "promise") {
     parts.push(`pending:${c.hasPending}`, `then:${c.hasThen}`, `catch:${c.hasCatch}`);

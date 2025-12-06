@@ -81,7 +81,9 @@ function reduceTemplate(t, out) {
           }
           break;
         case "hydrateTemplateController": {
-          out.controllers.push({ name: ins.res });
+          // if and else are separate controllers (linked at runtime via Else.link())
+          const ctrl = { name: ins.res };
+          out.controllers.push(ctrl);
           for (const p of ins.props ?? []) {
             if (p.type === "iteratorBinding") {
               out.expressions.push({ kind: "iterator" });

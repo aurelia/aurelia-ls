@@ -81,7 +81,7 @@ export function collectControllers(
 }
 
 type ControllerPrototype = {
-  res: "repeat" | "with" | "if" | "switch" | "promise" | "portal";
+  res: "repeat" | "with" | "if" | "switch" | "promise" | "portal" | "else";
   props: (PropertyBindingIR | IteratorBindingIR)[];
   alias?: "then" | "catch" | "case" | "default" | null;
 };
@@ -118,6 +118,23 @@ function buildBaseInstructionsForRightmost(
         res: "repeat",
         def,
         props: [iter],
+        alias: null,
+        branch: null,
+        containerless: false,
+        loc: toSpan(loc, table.source),
+      },
+    ];
+  }
+
+  // `else` is a linking controller with no value binding - just a marker attribute
+  if (kind === "else") {
+    const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
+    return [
+      {
+        type: "hydrateTemplateController",
+        res: "else",
+        def,
+        props: [],
         alias: null,
         branch: null,
         containerless: false,
@@ -243,6 +260,11 @@ function buildControllerPrototypes(
       loc: toSpan(loc, table.source),
     };
     return [{ res: "repeat", props: [iter] }];
+  }
+
+  // `else` is a linking controller with no value binding
+  if (kind === "else") {
+    return [{ res: "else", props: [] }];
   }
 
   const controller = kind;

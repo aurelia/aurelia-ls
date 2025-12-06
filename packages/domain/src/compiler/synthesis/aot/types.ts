@@ -340,6 +340,7 @@ export interface PlanCustomAttr {
 export type PlanController =
   | PlanRepeatController
   | PlanIfController
+  | PlanElseController
   | PlanWithController
   | PlanSwitchController
   | PlanPromiseController
@@ -389,9 +390,17 @@ export interface PlanIfController extends PlanControllerBase {
 
   /** True branch template */
   template: PlanNode;
+}
 
-  /** Else branch template (when using else.bind) */
-  elseTemplate?: PlanNode;
+/**
+ * Else controller (sibling to if controller).
+ * Linked at runtime via Else.link() hook.
+ */
+export interface PlanElseController extends PlanControllerBase {
+  kind: "else";
+
+  /** Else branch template */
+  template: PlanNode;
 }
 
 /**

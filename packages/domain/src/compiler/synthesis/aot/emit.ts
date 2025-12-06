@@ -313,12 +313,9 @@ class EmitContext {
   ): void {
     switch (ctrl.kind) {
       case "if":
-        if (ctrl.elseTemplate) {
-          const elseIndex = this.nestedTemplateIndex++;
-          nestedTemplates.push(
-            this.emitDefinition(ctrl.elseTemplate, `else_${elseIndex}`),
-          );
-        }
+      case "else":
+        // if and else are separate controllers, no additional branches to emit here
+        // else controller just has its own template which is handled by the main template emit
         break;
       case "switch":
         for (const caseBranch of ctrl.cases ?? []) {
@@ -425,6 +422,9 @@ class EmitContext {
             mode: "toView",
           } satisfies SerializedPropertyBinding);
         }
+        break;
+      case "else":
+        // else has no bindings - it links to preceding if at runtime via Else.link()
         break;
     }
 
