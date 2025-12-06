@@ -1,0 +1,23 @@
+{
+  "name": "child-component-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@aurelia/kernel": "workspace:*",
+    "@aurelia/runtime-html": "workspace:*",
+    "@aurelia/template-compiler": "workspace:*",
+    "aurelia": "workspace:*"
+  },
+  "devDependencies": {
+    "@aurelia/vite-plugin": "workspace:*",
+    "@aurelia-ls/build": "workspace:*",
+    "typescript": "^5.4.0",
+    "vite": "^6.0.0"
+  }
+}

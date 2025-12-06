@@ -53,6 +53,34 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  examples/child-component-app:
+    dependencies:
+      '@aurelia/kernel':
+        specifier: file:../../aurelia/packages/kernel
+        version: file:aurelia/packages/kernel
+      '@aurelia/runtime-html':
+        specifier: file:../../aurelia/packages/runtime-html
+        version: file:aurelia/packages/runtime-html
+      '@aurelia/template-compiler':
+        specifier: file:../../aurelia/packages/template-compiler
+        version: file:aurelia/packages/template-compiler
+      aurelia:
+        specifier: file:../../aurelia/packages/aurelia
+        version: file:aurelia/packages/aurelia
+    devDependencies:
+      '@aurelia-ls/build':
+        specifier: workspace:*
+        version: link:../../packages/build
+      '@aurelia/vite-plugin':
+        specifier: file:../../aurelia/packages-tooling/vite-plugin
+        version: file:aurelia/packages-tooling/vite-plugin(@types/node@22.19.1)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@22.19.1)
+
   examples/todo-app:
     dependencies:
       '@aurelia-ls/build':
@@ -83,6 +111,9 @@ importers:
       '@aurelia-ls/domain':
         specifier: workspace:*
         version: link:../domain
+      '@aurelia-ls/resolution':
+        specifier: workspace:*
+        version: link:../resolution
       '@aurelia/expression-parser':
         specifier: file:../../aurelia/packages/expression-parser
         version: file:aurelia/packages/expression-parser
@@ -110,6 +141,9 @@ importers:
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
     devDependencies:
       '@types/jsdom':
         specifier: ^21.1.7

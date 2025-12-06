@@ -1,0 +1,10 @@
+<div class="app">
+  <h1>${appTitle}</h1>
+  <p>Rendered at: ${timestamp}</p>
+
+  <!-- Child component with bindable -->
+  <greeting-card name.bind="userName"></greeting-card>
+
+  <!-- Another instance with different value -->
+  <greeting-card name="Aurelia"></greeting-card>
+</div>
