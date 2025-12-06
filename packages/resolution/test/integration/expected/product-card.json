@@ -1,0 +1,54 @@
+{
+  "targets": 4,
+  "expressions": 5,
+  "instructions": [
+    {
+      "kind": "text",
+      "target": 0,
+      "text": "${name}"
+    },
+    {
+      "kind": "element",
+      "target": 1,
+      "tag": "price-tag",
+      "bindings": [
+        {
+          "property": "amount",
+          "expr": "price",
+          "mode": "toView"
+        },
+        {
+          "property": "currency",
+          "value": "USD"
+        }
+      ],
+      "containerless": false
+    },
+    {
+      "kind": "element",
+      "target": 2,
+      "tag": "stock-badge",
+      "bindings": [
+        {
+          "property": "inStock",
+          "expr": "inStock",
+          "mode": "toView"
+        },
+        {
+          "property": "count",
+          "expr": "stockCount",
+          "mode": "toView"
+        }
+      ],
+      "containerless": false
+    },
+    {
+      "kind": "bind",
+      "target": 3,
+      "property": "disabled",
+      "expr": "!inStock",
+      "mode": "toView"
+    }
+  ],
+  "templates": []
+}

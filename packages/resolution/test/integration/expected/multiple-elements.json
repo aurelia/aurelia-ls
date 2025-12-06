@@ -1,0 +1,32 @@
+{
+  "targets": 2,
+  "expressions": 2,
+  "instructions": [
+    {
+      "kind": "element",
+      "target": 0,
+      "tag": "nav-bar",
+      "bindings": [],
+      "containerless": false
+    },
+    {
+      "kind": "element",
+      "target": 1,
+      "tag": "user-card",
+      "bindings": [
+        {
+          "property": "name",
+          "expr": "userName",
+          "mode": "toView"
+        },
+        {
+          "property": "avatar",
+          "expr": "avatarUrl",
+          "mode": "toView"
+        }
+      ],
+      "containerless": true
+    }
+  ],
+  "templates": []
+}
