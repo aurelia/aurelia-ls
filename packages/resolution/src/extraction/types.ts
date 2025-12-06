@@ -1,7 +1,7 @@
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath, BindingMode } from "@aurelia-ls/domain";
 
-/** Binding mode for bindable properties */
-export type BindingMode = "default" | "oneTime" | "toView" | "fromView" | "twoWay";
+// Re-export BindingMode for consumers of this module
+export type { BindingMode };
 
 /** Raw facts extracted from a single source file */
 export interface SourceFacts {

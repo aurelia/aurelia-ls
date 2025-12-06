@@ -128,4 +128,36 @@ describe("Full Pipeline: explicit-app", () => {
     assert.ok(priceTagIntent.scope?.includes("product-card"), "Should be scoped to product-card");
     assert.strictEqual(priceTagIntent.evidence[0].kind, "static-dependencies");
   });
+
+  it("discovers templates for element resources", () => {
+    const program = createProgramFromApp(EXPLICIT_APP);
+    const result = resolve(program);
+
+    // Should have templates array
+    assert.ok(result.templates, "Should have templates array");
+    assert.ok(result.templates.length > 0, "Should discover templates");
+
+    console.log("\n=== TEMPLATES DISCOVERED ===");
+    for (const t of result.templates) {
+      console.log(`${t.resourceName}: ${t.templatePath} (scope: ${t.scopeId})`);
+    }
+    console.log("=== END TEMPLATES ===\n");
+
+    // Find nav-bar template
+    const navBarTemplate = result.templates.find(t => t.resourceName === "nav-bar");
+    assert.ok(navBarTemplate, "Should find nav-bar template");
+    assert.ok(navBarTemplate.templatePath.endsWith("nav-bar.html"), "Template path should end with .html");
+    assert.ok(navBarTemplate.componentPath.endsWith("nav-bar.ts"), "Component path should end with .ts");
+    assert.strictEqual(navBarTemplate.scopeId, "root", "nav-bar should be in root scope");
+
+    // Find product-card template (local scope)
+    const productCardTemplate = result.templates.find(t => t.resourceName === "product-card");
+    assert.ok(productCardTemplate, "Should find product-card template");
+    assert.strictEqual(productCardTemplate.scopeId, "root", "product-card is unknown/global scope");
+
+    // Find price-tag template (local scope)
+    const priceTagTemplate = result.templates.find(t => t.resourceName === "price-tag");
+    assert.ok(priceTagTemplate, "Should find price-tag template");
+    assert.ok(priceTagTemplate.scopeId.includes("local:"), "price-tag should be in local scope");
+  });
 });

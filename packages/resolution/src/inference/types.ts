@@ -15,6 +15,8 @@ export interface ResourceCandidate {
   // Element-specific
   readonly containerless?: boolean;
   readonly boundary?: boolean;
+  /** Explicit template path from decorator or static $au (not resolved) */
+  readonly templatePath?: string;
 
   // Attribute-specific
   readonly isTemplateController?: boolean;

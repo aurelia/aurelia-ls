@@ -32,6 +32,7 @@ interface DecoratorMeta {
     aliases: string[];
     bindables: BindableDefFact[];
     containerless: boolean;
+    template?: string;
   };
   attribute?: {
     name?: string;
@@ -76,6 +77,7 @@ function resolveClassDecorators(
       resolver: "decorator",
       containerless: meta.element.containerless || meta.containerless,
       boundary: true,
+      ...(meta.element.template ? { templatePath: meta.element.template } : {}),
     };
   }
 
@@ -158,12 +160,17 @@ function collectDecoratorMeta(decorators: readonly DecoratorFact[]): DecoratorMe
       const parsed = parseResourceDecorator(dec);
       const existing = meta.element;
       const name = parsed.name ?? existing?.name;
+      const template = parsed.template ?? existing?.template;
       const base = {
         aliases: [...(existing?.aliases ?? []), ...parsed.aliases],
         bindables: [...(existing?.bindables ?? []), ...parsed.bindables],
         containerless: (existing?.containerless ?? false) || parsed.containerless,
       };
-      meta.element = name !== undefined ? { ...base, name } : base;
+      meta.element = {
+        ...base,
+        ...(name !== undefined ? { name } : {}),
+        ...(template !== undefined ? { template } : {}),
+      };
       continue;
     }
 
@@ -210,6 +217,7 @@ interface ParsedResourceDecorator {
   containerless: boolean;
   isTemplateController: boolean;
   noMultiBindings: boolean;
+  template?: string;
 }
 
 function parseResourceDecorator(dec: DecoratorFact): ParsedResourceDecorator {
@@ -259,6 +267,10 @@ function parseResourceDecorator(dec: DecoratorFact): ParsedResourceDecorator {
 
     if (props.noMultiBindings?.kind === "boolean") {
       result.noMultiBindings = props.noMultiBindings.value;
+    }
+
+    if (props.template?.kind === "string") {
+      result.template = props.template.value;
     }
   }
 
