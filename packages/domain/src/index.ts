@@ -18,7 +18,7 @@ export { getExpressionParser, rebaseExpressionSpans, DEFAULT_SYNTAX } from "./co
 export type { ExpressionParseContext, IExpressionParser } from "./compiler/index.js";
 
 // Language / Semantics
-export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope } from "./compiler/index.js";
+export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./compiler/index.js";
 export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources } from "./compiler/index.js";
 
 // Resource definitions (for resolution package and external tooling)

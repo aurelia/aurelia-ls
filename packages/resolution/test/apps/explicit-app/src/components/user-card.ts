@@ -20,5 +20,5 @@ export class UserCard {
   @bindable avatar: string = "";
 
   /** Two-way bindable */
-  @bindable({ mode: 2 /* twoWay */ }) selected: boolean = false;
+  @bindable({ mode: 6 /* twoWay */ }) selected: boolean = false;
 }

@@ -18,7 +18,7 @@ export class FancyButton {
     </template>`,
     bindables: [
       "label",
-      { name: "disabled", mode: 1 satisfies BindingMode /* fromView */ },
+      { name: "disabled", mode: 1 satisfies BindingMode /* oneTime */ },
       { name: "variant" },
     ],
     containerless: false,

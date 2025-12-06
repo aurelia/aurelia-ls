@@ -14,7 +14,7 @@ import template from "./data-grid.html";
   aliases: ["grid", "table-view"],
   bindables: [
     "items",
-    { name: "columns", mode: 2 /* twoWay */ },
+    { name: "columns", mode: 2 /* toView */ },
     { name: "pageSize", attribute: "page-size" },
   ],
   containerless: true,

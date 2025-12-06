@@ -134,7 +134,22 @@ function parseBindingModeValue(expr: ts.Expression | undefined): BindingMode | u
   if (ts.isStringLiteralLike(expr)) return toBindingMode(expr.text);
   if (ts.isPropertyAccessExpression(expr)) return toBindingMode(expr.name.text);
   if (ts.isIdentifier(expr)) return toBindingMode(expr.text);
+  // Handle numeric literals: BindingMode.toView = 2, BindingMode.twoWay = 6, etc.
+  if (ts.isNumericLiteral(expr)) return numericToBindingMode(Number(expr.text));
   return undefined;
+}
+
+function numericToBindingMode(value: number): BindingMode | undefined {
+  // Aurelia BindingMode values:
+  // default = 0, oneTime = 1, toView = 2, fromView = 4, twoWay = 6
+  switch (value) {
+    case 0: return "default";
+    case 1: return "oneTime";
+    case 2: return "toView";
+    case 4: return "fromView";
+    case 6: return "twoWay";
+    default: return undefined;
+  }
 }
 
 function toBindingMode(value: string): BindingMode | undefined {

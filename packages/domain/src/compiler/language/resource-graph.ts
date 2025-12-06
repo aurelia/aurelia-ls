@@ -70,6 +70,49 @@ export function materializeResourcesForScope(
 }
 
 /**
+ * Create semantics with resources materialized for a specific scope.
+ *
+ * This is the primary integration point between the resolution pipeline and
+ * the domain compiler. It takes base semantics (typically DEFAULT_SEMANTICS),
+ * a ResourceGraph from resolution, and an optional scope, then produces
+ * complete Semantics with properly merged resources.
+ *
+ * @param baseSem - Base semantics (built-in Aurelia resources)
+ * @param graph - ResourceGraph from resolution (contains project resources)
+ * @param scope - Scope to materialize (defaults to graph root)
+ * @returns Complete Semantics ready for compilation
+ *
+ * @example
+ * ```typescript
+ * // After resolution
+ * const { resourceGraph } = resolve(program);
+ *
+ * // Create scope-specific semantics for compilation
+ * const semantics = materializeSemanticsForScope(
+ *   DEFAULT_SEMANTICS,
+ *   resourceGraph,
+ *   localScopeId,
+ * );
+ *
+ * // Use with AOT compilation
+ * const result = compileWithAot(markup, { semantics });
+ * ```
+ */
+export function materializeSemanticsForScope(
+  baseSem: Semantics,
+  graph?: ResourceGraph | null,
+  scope?: ResourceScopeId | null,
+): Semantics {
+  const { resources } = materializeResourcesForScope(baseSem, graph, scope);
+  return {
+    ...baseSem,
+    resources,
+    resourceGraph: graph ?? null,
+    defaultScope: scope ?? null,
+  };
+}
+
+/**
  * Build a simple single-scope graph from the semantics' resources.
  * Useful for callers that want to standardize on a graph shape even when they
  * do not yet have project-driven scopes.
