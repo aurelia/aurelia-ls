@@ -43,6 +43,7 @@ import type {
   LinkedHydrateElement,
   LinkedHydrateAttribute,
   LinkedHydrateTemplateController,
+  LinkedHydrateLetElement,
   LinkedIteratorBinding,
 } from "../../analysis/index.js";
 
@@ -68,6 +69,8 @@ import type {
   PlanCustomElement,
   PlanCustomAttr,
   PlanStaticProp,
+  PlanLetElement,
+  PlanLetBinding,
   PlanController,
   PlanRepeatController,
   PlanIfController,
@@ -367,6 +370,7 @@ function transformElement(
   const controllers: PlanController[] = [];
   const customAttrs: PlanCustomAttr[] = [];
   let customElement: PlanCustomElement | undefined;
+  let letElement: PlanLetElement | undefined;
 
   // Determine if this node needs a target index
   let needsTarget = false;
@@ -431,7 +435,7 @@ function transformElement(
         break;
 
       case "hydrateLetElement":
-        // Let elements are handled at scope level, not as element bindings
+        letElement = transformLetElement(ins, ctx);
         needsTarget = true;
         break;
 
@@ -488,6 +492,9 @@ function transformElement(
   } else {
     if (customElement) {
       result.customElement = customElement;
+    }
+    if (letElement) {
+      result.letElement = letElement;
     }
     if (needsTarget) {
       result.targetIndex = ctx.allocateTarget();
@@ -824,6 +831,30 @@ function transformHydrateAttribute(ins: LinkedHydrateAttribute, ctx: PlanningCon
     alias: ins.alias ?? undefined,
     bindings,
     staticProps,
+  };
+}
+
+/* =============================================================================
+ * Let Element Transformation
+ * ============================================================================= */
+
+function transformLetElement(ins: LinkedHydrateLetElement, ctx: PlanningContext): PlanLetElement {
+  const bindings: PlanLetBinding[] = [];
+
+  for (const letBinding of ins.instructions) {
+    // Get expression ID from the binding source
+    const exprId = primaryExprId(letBinding.from);
+    ctx.registerExpression(exprId, letBinding.loc ?? undefined);
+
+    bindings.push({
+      to: letBinding.to,
+      exprId,
+    });
+  }
+
+  return {
+    bindings,
+    toBindingContext: ins.toBindingContext,
   };
 }
 

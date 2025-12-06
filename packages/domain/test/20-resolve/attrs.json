@@ -1,10 +1,10 @@
 [
   {
-    "name": "R-A-01 class interpolation -> className on <div>",
+    "name": "R-A-01 class interpolation stays as class on <div>",
     "markup": "<div class=\"a ${b} c\"></div>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
       ]
     }
   },
@@ -87,11 +87,11 @@
     }
   },
   {
-    "name": "R-A-10 attribute override: class.attr maps to className",
+    "name": "R-A-10 attribute override: class.attr stays as class",
     "markup": "<div class.attr=\"a + b\"></div>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
       ]
     }
   },
@@ -196,20 +196,20 @@
     }
   },
   {
-    "name": "R-A-17 .class override -> className (native)",
+    "name": "R-A-17 .class override -> class (native)",
     "markup": "<div d.class=\"expr\"></div>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
       ]
     }
   },
   {
-    "name": "R-A-18 class.attr (attribute override) normalized to className (native)",
+    "name": "R-A-18 class.attr (attribute override) stays as class (native)",
     "markup": "<div class.attr=\"a+b\"></div>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "class", "to": "className", "target": "native" }
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
       ]
     }
   },

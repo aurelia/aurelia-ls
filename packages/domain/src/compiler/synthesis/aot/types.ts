@@ -95,6 +95,9 @@ export interface PlanElementNode extends PlanNodeBase {
   /** Custom attributes applied to this element */
   customAttrs: PlanCustomAttr[];
 
+  /** Let element info (if this is a <let> element) */
+  letElement?: PlanLetElement;
+
   /** Template controllers wrapping this element (inside-out order) */
   controllers: PlanController[];
 
@@ -331,6 +334,33 @@ export interface PlanCustomAttr {
 
   /** Target index for this attribute */
   targetIndex?: number | undefined;
+}
+
+/* =============================================================================
+ * LET ELEMENTS
+ * ============================================================================= */
+
+/**
+ * Let element info (e.g., `<let foo.bind="bar"></let>`).
+ * Attached to PlanElementNode when the element is a <let> element.
+ */
+export interface PlanLetElement {
+  /** Let bindings within this element */
+  bindings: PlanLetBinding[];
+
+  /** Whether bindings go to bindingContext (vs. overrideContext) */
+  toBindingContext: boolean;
+}
+
+/**
+ * Individual let binding (e.g., `foo.bind="bar"`).
+ */
+export interface PlanLetBinding {
+  /** Target variable name */
+  to: string;
+
+  /** Value expression ID */
+  exprId: ExprId;
 }
 
 /* =============================================================================

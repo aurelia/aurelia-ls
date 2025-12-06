@@ -1,0 +1,107 @@
+[
+  {
+    "name": "AOT-LET-001: single let binding",
+    "markup": "<let foo.bind=\"bar\"></let>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateLetElement", "target": 0, "bindingCount": 1, "toBindingContext": false }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-LET-002: multiple let bindings",
+    "markup": "<let a.bind=\"x\" b.bind=\"y\" c.bind=\"z\"></let>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateLetElement", "target": 0, "bindingCount": 3, "toBindingContext": false }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-LET-003: let with to-binding-context",
+    "markup": "<let name.bind=\"computedName\" to-binding-context></let>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateLetElement", "target": 0, "bindingCount": 1, "toBindingContext": true }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-LET-004: multiple let elements",
+    "markup": "<let a.bind=\"1\"></let><let b.bind=\"2\"></let>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateLetElement", "target": 0, "bindingCount": 1, "toBindingContext": false },
+        { "type": "hydrateLetElement", "target": 1, "bindingCount": 1, "toBindingContext": false }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-LET-005: let inside repeat",
+    "markup": "<div repeat.for=\"item of items\"><let idx.bind=\"$index\"></let>${item}</div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-LET-006: let inside with",
+    "markup": "<div with.bind=\"user\"><let fullName.bind=\"first + ' ' + last\" to-binding-context></let>${fullName}</div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "with", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "with_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-LET-007: let inside if",
+    "markup": "<div if.bind=\"show\"><let msg.bind=\"greeting\"></let>${msg}</div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "if_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-LET-008: let with sibling element",
+    "markup": "<let x.bind=\"1\"></let><div class.bind=\"cls\">${x}</div>",
+    "expect": {
+      "targetCount": 3,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateLetElement", "target": 0, "bindingCount": 1, "toBindingContext": false },
+        { "type": "textBinding", "target": 1, "parts": 2, "exprs": 1 },
+        { "type": "propertyBinding", "target": 2, "to": "class", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  }
+]

@@ -25,6 +25,8 @@ import type {
   SerializedHydrateElement,
   SerializedHydrateAttribute,
   SerializedHydrateTemplateController,
+  SerializedHydrateLetElement,
+  SerializedLetBinding,
   SerializedExpression,
   AotMappingEntry,
   PlanNode,
@@ -33,6 +35,7 @@ import type {
   PlanBinding,
   PlanCustomElement,
   PlanCustomAttr,
+  PlanLetElement,
   PlanController,
 } from "./types.js";
 
@@ -153,6 +156,11 @@ class EmitContext {
       // Custom element hydration
       if (node.customElement) {
         row.push(this.emitHydrateElement(node.customElement));
+      }
+
+      // Let element hydration
+      if (node.letElement) {
+        row.push(this.emitHydrateLetElement(node.letElement));
       }
 
       // Custom attribute hydrations
@@ -280,6 +288,11 @@ class EmitContext {
       // Custom element hydration
       if (node.customElement) {
         row.push(this.emitHydrateElement(node.customElement));
+      }
+
+      // Let element hydration
+      if (node.letElement) {
+        row.push(this.emitHydrateLetElement(node.letElement));
       }
 
       // Custom attribute hydrations
@@ -560,6 +573,22 @@ class EmitContext {
       result.alias = ca.alias;
     }
     return result;
+  }
+
+  /**
+   * Emit hydrate instruction for a let element.
+   */
+  private emitHydrateLetElement(le: PlanLetElement): SerializedHydrateLetElement {
+    const bindings: SerializedLetBinding[] = le.bindings.map(b => ({
+      to: b.to,
+      exprId: b.exprId,
+    }));
+
+    return {
+      type: "hydrateLetElement",
+      bindings,
+      toBindingContext: le.toBindingContext,
+    };
   }
 
   /**

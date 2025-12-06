@@ -9,20 +9,20 @@
     }
   },
   {
-    "name": "R-P-02 class.bind normalizes to className (toView)",
+    "name": "R-P-02 class.bind stays as class (toView) - runtime uses ClassAttributeAccessor",
     "markup": "<div class.bind=\"c\"></div>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
+        { "kind": "prop", "to": "class", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
   {
-    "name": "R-P-03 colon shorthand :class -> className (toView)",
+    "name": "R-P-03 colon shorthand :class -> class (toView)",
     "markup": "<div :class=\"c\"></div>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "className", "target": "native", "effectiveMode": "toView" }
+        { "kind": "prop", "to": "class", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -402,7 +402,7 @@
     "markup": "<div class.bind=\"c\"></div>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "className", "target": "unknown", "effectiveMode": "toView" }
+        { "kind": "prop", "to": "class", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
         { "code": "AU1104" }

@@ -555,7 +555,8 @@ export const DEFAULT: Semantics = {
       div: {
         tag: "div",
         props: {
-          className:    { type: { kind: "ts", name: "string" } },
+          class:        { type: { kind: "ts", name: "string" } },  // runtime uses ClassAttributeAccessor
+          className:    { type: { kind: "ts", name: "string" } },  // DOM property alias
           // NOTE: `style` as a *property* is CSSStyleDeclaration; attribute is string → we bind both ways:
           // - `style="..."` → SetStyleAttribute / AttributeBinding (string)
           // - `style.prop="..."` → property binding (object); keep TS type for awareness
@@ -566,7 +567,7 @@ export const DEFAULT: Semantics = {
           scrollLeft:   { type: { kind: "ts", name: "number" } },  // twoWayDefaults.globalProps
         },
       },
-      span:     { tag: "span",     props: { textContent: { type: { kind: "ts", name: "string" } } } },
+      span:     { tag: "span",     props: { class: { type: { kind: "ts", name: "string" } }, textContent: { type: { kind: "ts", name: "string" } } } },
       form:     { tag: "form",     props: {} },
       button:   { tag: "button",   props: { disabled: { type: { kind: "ts", name: "boolean" }, mode: "toView" } } },
       template: { tag: "template", props: {} },
@@ -580,7 +581,7 @@ export const DEFAULT: Semantics = {
    */
   naming: {
     attrToPropGlobal: {
-      // Mirrors AttrMapper.useGlobalMapping
+      // Mirrors AttrMapper.useGlobalMapping - these are the runtime's actual mappings
       accesskey: "accessKey",
       contenteditable: "contentEditable",
       tabindex: "tabIndex",
@@ -589,14 +590,9 @@ export const DEFAULT: Semantics = {
       scrolltop: "scrollTop",
       scrollleft: "scrollLeft",
       readonly: "readOnly",
-      // Common HTML attributes we map globally
-      class: "className",
-      style: "style",
-      colspan: "colSpan",
-      rowspan: "rowSpan",
+      // Additional case-normalization for developer convenience
+      // Note: 'class' is NOT mapped here - runtime uses ClassAttributeAccessor
       outerhtml: "outerHTML",
-      maxlength: "maxLength",
-      minlength: "minLength",
     },
     perTag: {
       // Mirrors AttrMapper.useMapping
