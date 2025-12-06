@@ -28,6 +28,7 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext } from "./resolution.js";
+import { componentCache } from "./loader.js";
 import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
 
 /**
@@ -147,6 +148,52 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
       server.config.logger.info(
         "[aurelia-ssr] SSR middleware registered",
       );
+
+      // =================================================================
+      // HMR Cache Invalidation
+      // =================================================================
+      // When template or component files change, invalidate the component
+      // cache so they get re-compiled and re-patched on next request.
+      // This is critical because:
+      // 1. Vite's ssrLoadModule returns fresh classes when files change
+      // 2. Our cache holds the old class references with old patches
+      // 3. Without invalidation, we'd serve stale content after edits
+
+      server.watcher.on("change", (filePath) => {
+        // Only process component-related files
+        if (!filePath.endsWith(".html") && !filePath.endsWith(".ts")) {
+          return;
+        }
+
+        // Try to invalidate the component cache
+        const invalidated = componentCache.invalidate(filePath);
+        if (invalidated) {
+          server.config.logger.info(
+            `[aurelia-ssr] Cache invalidated: ${filePath}`,
+          );
+        }
+      });
+
+      // Also invalidate on module unlink/add
+      server.watcher.on("unlink", (filePath) => {
+        componentCache.invalidate(filePath);
+      });
+
+      // When Vite's SSR module is invalidated, also clear our cache
+      // This handles cases where Vite detects changes we might miss
+      const originalInvalidateModule = server.moduleGraph.invalidateModule.bind(server.moduleGraph);
+      server.moduleGraph.invalidateModule = (mod, seen, timestamp, isHmr) => {
+        // If this is an SSR module that we might have cached, invalidate it
+        if (mod.file) {
+          const invalidated = componentCache.invalidate(mod.file);
+          if (invalidated) {
+            server.config.logger.info(
+              `[aurelia-ssr] Cache invalidated via module graph: ${mod.file}`,
+            );
+          }
+        }
+        return originalInvalidateModule(mod, seen, timestamp, isHmr);
+      };
     },
   };
 }

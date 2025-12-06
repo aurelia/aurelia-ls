@@ -25,6 +25,14 @@
 // Main plugin export
 export { aureliaSSR } from "./plugin.js";
 
+// Component loading utilities
+export {
+  loadProjectComponents,
+  loadComponent,
+  type LoadedComponent,
+  type LoadProjectComponentsResult,
+} from "./loader.js";
+
 // Type exports
 export type {
   AureliaSSRPluginOptions,

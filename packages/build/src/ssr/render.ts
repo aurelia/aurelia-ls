@@ -6,7 +6,7 @@
  */
 
 import { DI, Registration } from "@aurelia/kernel";
-import { Aurelia, IPlatform, StandardConfiguration, ISSRContextToken, SSRContext } from "@aurelia/runtime-html";
+import { Aurelia, IPlatform, StandardConfiguration, ISSRContextToken, SSRContext, CustomElement } from "@aurelia/runtime-html";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { createServerPlatform, getDocument } from "./platform.js";
 import {
@@ -130,6 +130,192 @@ export async function renderToString(
 
   if (options.ssr) {
     // Use the runtime-recorded manifest instead of pre-generated one
+    const processed = processSSROutput(host, runtimeManifest, options.ssr);
+    result = {
+      html: processed.html,
+      manifest: processed.manifest,
+    };
+  } else {
+    result = {
+      html: host.innerHTML,
+      manifest: runtimeManifest,
+    };
+  }
+
+  // Cleanup
+  await au.stop(true);
+
+  return result;
+}
+
+/**
+ * Options for rendering with real component classes.
+ */
+export interface RenderWithComponentsOptions {
+  /**
+   * Child component classes to register in the container.
+   * These should already have their $au patched with AOT output.
+   */
+  childComponents?: ComponentClass[];
+
+  /**
+   * SSR processing options.
+   */
+  ssr?: SSRProcessOptions;
+}
+
+/**
+ * A component class with a static $au definition.
+ * Re-exported from patch.ts for convenience.
+ */
+export interface ComponentClass {
+  new (...args: unknown[]): object;
+  $au?: {
+    type?: string;
+    name?: string;
+    template?: unknown;
+    instructions?: unknown[][];
+    needsCompile?: boolean;
+    [key: string]: unknown;
+  };
+  readonly name: string;
+}
+
+/**
+ * Symbol to store original template string before converting to element.
+ * This allows us to re-create the element fresh for each render.
+ */
+const ORIGINAL_TEMPLATE = Symbol("aureliaOriginalTemplate");
+
+/**
+ * Ensure a component's $au.template is an HTMLTemplateElement.
+ * The Aurelia runtime expects this when needsCompile=false.
+ *
+ * IMPORTANT: We store the original string and always create a FRESH element
+ * for each render. This is necessary because:
+ * 1. Each render may use a different server document
+ * 2. The Aurelia runtime may modify the element during rendering
+ * 3. Reusing elements across renders causes target count mismatches
+ */
+function ensureTemplateElement(
+  Component: ComponentClass,
+  doc: Document,
+): void {
+  if (!Component.$au) return;
+
+  const template = Component.$au.template;
+  let templateString: string | undefined;
+
+  if (typeof template === "string") {
+    // First time - store the original string
+    templateString = template;
+    (Component as unknown as Record<symbol, unknown>)[ORIGINAL_TEMPLATE] = templateString;
+  } else {
+    // Element or other - retrieve stored string
+    templateString = (Component as unknown as Record<symbol, unknown>)[ORIGINAL_TEMPLATE] as string | undefined;
+  }
+
+  if (templateString) {
+    // Always create a FRESH template element from the stored string
+    const templateEl = doc.createElement("template");
+    templateEl.innerHTML = templateString;
+    Component.$au.template = templateEl;
+  }
+}
+
+/**
+ * Render using real component classes with child component support.
+ *
+ * This function is designed for SSR with real component classes loaded
+ * via Vite's ssrLoadModule. Unlike renderToString, it:
+ * - Uses real component classes (with getters, methods, constructor logic)
+ * - Registers child components in the container
+ * - Does NOT apply state (components use their default values)
+ *
+ * @param RootComponent - The root component class (should have $au patched)
+ * @param options - Render options
+ * @returns The rendered HTML and manifest
+ *
+ * @example
+ * ```typescript
+ * // Load and patch components
+ * const { MyApp } = await vite.ssrLoadModule('/src/my-app.ts');
+ * const { GreetingCard } = await vite.ssrLoadModule('/src/greeting-card.ts');
+ * patchComponentDefinition(MyApp, myAppAot);
+ * patchComponentDefinition(GreetingCard, greetingCardAot);
+ *
+ * // Render
+ * const result = await renderWithComponents(MyApp, {
+ *   childComponents: [GreetingCard],
+ * });
+ * ```
+ */
+export async function renderWithComponents(
+  RootComponent: ComponentClass,
+  options: RenderWithComponentsOptions = {},
+): Promise<RenderResult> {
+  // Create server platform
+  const platform = createServerPlatform();
+  const doc = getDocument(platform);
+
+  // Clear cached definitions for all components BEFORE rendering
+  // This is critical for SSR: the runtime caches definitions on the Type,
+  // and we need fresh definitions each render to match the patched $au
+  CustomElement.clearDefinition(RootComponent);
+  if (options.childComponents) {
+    for (const ChildComponent of options.childComponents) {
+      CustomElement.clearDefinition(ChildComponent);
+    }
+  }
+
+  // Convert string templates to HTMLTemplateElement for all components
+  // The Aurelia runtime expects template to be an element when needsCompile=false
+  ensureTemplateElement(RootComponent, doc);
+  if (options.childComponents) {
+    for (const ChildComponent of options.childComponents) {
+      ensureTemplateElement(ChildComponent, doc);
+    }
+  }
+
+  // Get root target count from $au definition
+  const rootInstructions = RootComponent.$au?.instructions;
+  const rootTargetCount = Array.isArray(rootInstructions) ? rootInstructions.length : 0;
+
+  // Create SSR context with recording capabilities
+  const ssrContext = new SSRContext();
+  ssrContext.setRootTargetCount(rootTargetCount);
+
+  // Create DI container with platform and SSR context
+  const container = DI.createContainer();
+  container.register(
+    StandardConfiguration,
+    Registration.instance(IPlatform, platform),
+    Registration.instance(ISSRContextToken, ssrContext),
+  );
+
+  // Register child components
+  if (options.childComponents) {
+    for (const ChildComponent of options.childComponents) {
+      container.register(ChildComponent);
+    }
+  }
+
+  // Create host element
+  const host = doc.createElement("div");
+  doc.body.appendChild(host);
+
+  // Create and start Aurelia with the real component class
+  const au = new Aurelia(container);
+  au.app({ host, component: RootComponent });
+  await au.start();
+
+  // Get manifest from SSR context (recorded during rendering)
+  const runtimeManifest = ssrContext.getManifest();
+
+  // Process SSR output if options provided
+  let result: RenderResult;
+
+  if (options.ssr) {
     const processed = processSSROutput(host, runtimeManifest, options.ssr);
     result = {
       html: processed.html,

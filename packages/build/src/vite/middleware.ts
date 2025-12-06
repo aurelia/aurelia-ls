@@ -3,15 +3,23 @@
  *
  * This middleware intercepts HTML requests and renders the Aurelia
  * application server-side using the AOT compilation pipeline.
+ *
+ * When resolution is configured (tsconfig provided), uses real component
+ * classes loaded via Vite's ssrLoadModule for full child component support.
+ *
+ * IMPORTANT: Components are loaded and patched ONCE by the loader (cached).
+ * The middleware only renders - it doesn't patch. This aligns with Aurelia
+ * runtime's definition caching behavior.
  */
 
 import type { Connect, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { resolve as resolvePath } from "node:path";
 import { compileAndRenderAot, type AotCompileResult } from "../aot.js";
+import { renderWithComponents } from "../ssr/render.js";
 import type { HydrationManifest } from "../ssr/ssr-processor.js";
 import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
+import { loadProjectComponents } from "./loader.js";
 
 /**
  * Create SSR middleware for Vite dev server.
@@ -64,48 +72,77 @@ export function createSSRMiddleware(
         resolutionReady = true;
       }
 
-      // Load template fresh (supports HMR-like behavior)
-      const template = await readFile(options.entry, "utf-8");
-
-      // Build URL object for state provider
-      const host = req.headers.host ?? "localhost";
-      const protocol = "http"; // Dev server is typically HTTP
-      const fullUrl = new URL(url, `${protocol}://${host}`);
-
-      // Get state from provider
-      const state = await options.state(fullUrl, req);
-
-      // Get resolution context for resource graph
+      // Get resolution context
       const resolution = options.resolution;
 
-      // Build compile options, conditionally including resolution data
-      const compileOptions: Parameters<typeof compileAndRenderAot>[1] = {
-        state,
-        name: "ssr-root",
-        templatePath: options.entry,
-        ssr: {
-          stripMarkers: options.stripMarkers,
-        },
-      };
+      // Build URL object for state provider (used for legacy flow)
+      const host = req.headers.host ?? "localhost";
+      const protocol = "http";
+      const fullUrl = new URL(url, `${protocol}://${host}`);
 
-      // Add resolution data if available
+      let html: string;
+      let renderMode: string;
+
       if (resolution) {
-        compileOptions.semantics = resolution.semantics;
-        compileOptions.resourceGraph = resolution.resourceGraph;
-        compileOptions.resourceScope = resolution.getScopeForTemplate(options.entry);
+        // NEW FLOW: Use real component classes with child component support
+        // Components are loaded and patched ONCE by the loader (cached)
+        const { root, children } = await loadProjectComponents(
+          server,
+          resolution,
+          options.entry,
+        );
+
+        if (!root) {
+          throw new Error(`[aurelia-ssr] Could not load root component from "${options.entry}"`);
+        }
+
+        // Render with real classes (already patched by loader)
+        const renderResult = await renderWithComponents(root.ComponentClass, {
+          childComponents: children.map((c) => c.ComponentClass),
+          ssr: {
+            stripMarkers: options.stripMarkers,
+          },
+        });
+
+        // For the new flow, we don't have state injection yet
+        // Components use their default values from the class
+        const emptyState = {};
+
+        html = injectIntoShell(
+          options.htmlShell,
+          renderResult.html,
+          emptyState,
+          root.aot,
+          renderResult.manifest,
+        );
+
+        renderMode = ` (real classes, ${children.length} children)`;
+      } else {
+        // LEGACY FLOW: Fake class with state injection (no child support)
+        const template = await readFile(options.entry, "utf-8");
+        const state = await options.state(fullUrl, req);
+
+        const compileOptions: Parameters<typeof compileAndRenderAot>[1] = {
+          state,
+          name: "ssr-root",
+          templatePath: options.entry,
+          ssr: {
+            stripMarkers: options.stripMarkers,
+          },
+        };
+
+        const result = await compileAndRenderAot(template, compileOptions);
+
+        html = injectIntoShell(
+          options.htmlShell,
+          result.html,
+          state,
+          result.aot,
+          result.manifest,
+        );
+
+        renderMode = "";
       }
-
-      // Render with AOT pipeline
-      const result = await compileAndRenderAot(template, compileOptions);
-
-      // Build full HTML response with serialized state, AOT definition, and manifest
-      const html = injectIntoShell(
-        options.htmlShell,
-        result.html,
-        state,
-        result.aot,
-        result.manifest,
-      );
 
       // Send response
       res.writeHead(200, {
@@ -115,8 +152,7 @@ export function createSSRMiddleware(
       res.end(html);
 
       // Log for debugging
-      const resolutionStatus = resolution ? " (with resolution)" : "";
-      server.config.logger.info(`[aurelia-ssr] Rendered ${url}${resolutionStatus}`, {
+      server.config.logger.info(`[aurelia-ssr] Rendered ${url}${renderMode}`, {
         timestamp: true,
       });
     } catch (error) {

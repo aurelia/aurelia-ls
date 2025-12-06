@@ -8,9 +8,12 @@
 export {
   renderToString,
   renderComponent,
+  renderWithComponents,
   type RenderOptions,
   type RenderResult,
+  type RenderWithComponentsOptions,
   type ComponentDefinition,
+  type ComponentClass as RenderComponentClass,
 } from "./render.js";
 
 export {
@@ -37,6 +40,15 @@ export {
   type SSRProcessOptions,
   type SSRProcessResult,
 } from "./ssr-processor.js";
+
+// Component definition patching (for SSR with real classes)
+export {
+  patchComponentDefinition,
+  hasComponentDefinition,
+  getComponentName,
+  type StaticAuDefinition,
+  type ComponentClass,
+} from "./patch.js";
 
 // Re-export manifest types from Aurelia runtime for convenience
 export type {
