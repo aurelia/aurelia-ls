@@ -244,5 +244,101 @@
         { "kind": "propCommand", "command": "bind", "code": "foo(" }
       ]
     }
+  },
+  {
+    "name": "LB-28 text interpolation with quotes surrounding (double)",
+    "markup": "<p>\"${name}\"</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-29 text interpolation with quotes surrounding (single)",
+    "markup": "<p>'${name}'</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-30 text interpolation with multiple exprs and quotes",
+    "markup": "<p>Name: \"${name}\" (${len} chars)</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" },
+        { "kind": "text", "code": "len" }
+      ]
+    }
+  },
+  {
+    "name": "LB-31 attribute interpolation with quotes surrounding",
+    "markup": "<div title=\"'${name}'\">",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "title", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-32 text interpolation with apostrophe (possessive)",
+    "markup": "<p>It's ${name}'s turn</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-33 text interpolation with backticks surrounding",
+    "markup": "<code>`${cmd}`</code>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "cmd" }
+      ]
+    }
+  },
+  {
+    "name": "LB-34 text interpolation with keyed access inside quotes",
+    "markup": "<p>\"${obj['key']}\"</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "obj['key']" }
+      ]
+    }
+  },
+  {
+    "name": "LB-35 backslash escapes interpolation (ECMAScript semantics)",
+    "markup": "<p>\\${x} has backslash</p>",
+    "expect": {}
+  },
+  {
+    "name": "LB-36 escaped interpolation with real interpolation",
+    "markup": "<p>\\${a} and ${b}</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-37 extra closing brace after interpolation",
+    "markup": "<p>${a}} trailing</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "a" }
+      ]
+    }
+  },
+  {
+    "name": "LB-38 template literal inside interpolation",
+    "markup": "<p>${`hello ${name}`}</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "`hello ${name}`" }
+      ]
+    }
   }
 ]

@@ -2031,29 +2031,26 @@ export function splitInterpolationText(text: string): InterpolationSplitResult |
   let i = 0;
   let depth = 0;
   let start = 0;
-  let str: '"' | "'" | "`" | null = null;
 
   const parts: string[] = [];
   const exprSpans: TextSpan[] = [];
 
+  // NOTE: We do NOT handle quotes in the outer loop.
+  // In HTML text content, quotes are literal characters, not JavaScript string delimiters.
+  // String handling is only needed inside ${...} expressions (handled in the inner loop).
+  //
+  // We DO handle backslash escaping: \$ escapes the dollar sign, preventing interpolation.
+  // This matches the runtime's parseInterpolation behavior (ECMAScript template literal semantics).
+
   while (i < text.length) {
     const ch = text[i];
 
-    if (str) {
-      if (ch === "\\") {
-        i += 2;
-        continue;
-      }
-      if (ch === str) {
-        str = null;
-      }
-      i++;
-      continue;
-    }
-
-    if (ch === '"' || ch === "'" || ch === "`") {
-      str = ch;
-      i++;
+    // Handle escape sequences: \$ prevents interpolation start
+    // This matches runtime's parseInterpolation (ECMAScript template literal semantics).
+    if (ch === "\\" && text[i + 1] === "$") {
+      // Skip past both the backslash and the $, so ${ is not detected as interpolation start.
+      // The escaped \$ becomes literal text in the output.
+      i += 2;
       continue;
     }
 

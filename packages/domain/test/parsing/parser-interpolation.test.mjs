@@ -73,6 +73,164 @@ describe("interpolation splitting", () => {
     assert.equal(exprText, " foo ? { y: 1 } : { y: 2 } ");
     assert.equal(split.exprSpans[0].start, 4);
   });
+
+  // ==========================================================================
+  // Quote-related edge cases (literal quotes in HTML text content)
+  // These tests ensure quotes OUTSIDE ${...} are treated as literal characters,
+  // not as JavaScript string delimiters.
+  // ==========================================================================
+
+  test("double quotes surrounding interpolation: \"${x}\"", () => {
+    const src = '"${x}"';
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ['"', '"']);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+  });
+
+  test("single quotes surrounding interpolation: '${x}'", () => {
+    const src = "'${x}'";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["'", "'"]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+  });
+
+  test("backticks surrounding interpolation: `${x}`", () => {
+    const src = "`${x}`";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["`", "`"]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+  });
+
+  test("multiple interpolations with quotes: \"${a}\" and '${b}'", () => {
+    const src = '"${a}" and \'${b}\'';
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ['"', '" and \'', "'"]);
+    assert.equal(split.exprSpans.length, 2);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "a");
+    assert.equal(src.slice(split.exprSpans[1].start, split.exprSpans[1].end), "b");
+  });
+
+  test("realistic pattern: Name: \"${name}\" (${len} chars)", () => {
+    const src = 'Name: "${name}" (${len} chars)';
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ['Name: "', '" (', ' chars)']);
+    assert.equal(split.exprSpans.length, 2);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "name");
+    assert.equal(src.slice(split.exprSpans[1].start, split.exprSpans[1].end), "len");
+  });
+
+  test("apostrophe after interpolation: It's ${name}'s turn", () => {
+    const src = "It's ${name}'s turn";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["It's ", "'s turn"]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "name");
+  });
+
+  test("quote inside expression (should still work): ${obj[\"key\"]}", () => {
+    const src = '${obj["key"]}';
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["", ""]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), 'obj["key"]');
+  });
+
+  test("quotes both outside and inside: \"${obj['k']}\"", () => {
+    const src = "\"${obj['k']}\"";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ['"', '"']);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "obj['k']");
+  });
+
+  test("unmatched quote before interpolation: say \"${msg}", () => {
+    const src = 'say "${msg}';
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ['say "', '']);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "msg");
+  });
+
+  test("unmatched quote after interpolation: ${msg}\" said", () => {
+    const src = '${msg}" said';
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ['', '" said']);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "msg");
+  });
+
+  // ==========================================================================
+  // Additional edge cases
+  // ==========================================================================
+
+  test("backslash escapes interpolation: \\${x} returns null", () => {
+    // ECMAScript template literal semantics: \$ escapes the dollar sign.
+    // The entire \${x} is treated as literal text, no interpolation detected.
+    const src = "\\${x}";
+    const split = splitInterpolationText(src);
+    assert.equal(split, null, "escaped interpolation should return null");
+  });
+
+  test("escaped interpolation with following real interpolation: \\${a} ${b}", () => {
+    const src = "\\${a} ${b}";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    // Only ${b} is parsed as interpolation; \${a} is escaped literal text
+    assert.deepEqual(split.parts, ["\\${a} ", ""]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "b");
+  });
+
+  test("whitespace inside expression: ${  name  }", () => {
+    const src = "${  name  }";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["", ""]);
+    assert.equal(split.exprSpans.length, 1);
+    // The expression text includes the whitespace
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "  name  ");
+  });
+
+  test("closing brace immediately after expression: ${a}}", () => {
+    // Extra closing brace is literal text
+    const src = "${a}}";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["", "}"]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "a");
+  });
+
+  test("template literal inside interpolation: ${`nested ${x}`}", () => {
+    const src = "${`nested ${x}`}";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["", ""]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "`nested ${x}`");
+  });
+
+  test("newlines in static text around interpolation", () => {
+    const src = "line1\n${x}\nline3";
+    const split = splitInterpolationText(src);
+    assert.ok(split, "expected splitInterpolationText to return a result");
+    assert.deepEqual(split.parts, ["line1\n", "\nline3"]);
+    assert.equal(split.exprSpans.length, 1);
+    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+  });
 });
 
 describe("LspExpressionParser / Interpolation AST", () => {
@@ -187,5 +345,55 @@ describe("LspExpressionParser / Interpolation AST", () => {
     assert.equal(ast.expressions[0].$kind, "BadExpression");
     assert.equal(ast.expressions[0].message, "Left-hand side is not assignable");
     assert.ok(ast.expressions[0].span.start >= 7);
+  });
+
+  // ==========================================================================
+  // Quote-related edge cases (literal quotes in HTML text content)
+  // These tests ensure full AST parsing works with quotes around interpolations.
+  // ==========================================================================
+
+  test("AST: double quotes surrounding interpolation", () => {
+    const src = '"${name}"';
+    const parser = new LspExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    assert.equal(ast.$kind, "Interpolation");
+    assert.deepEqual(ast.parts, ['"', '"']);
+    assert.equal(ast.expressions.length, 1);
+    assert.equal(ast.expressions[0].$kind, "AccessScope");
+    assert.equal(ast.expressions[0].name, "name");
+  });
+
+  test("AST: realistic pattern with quotes and multiple interpolations", () => {
+    const src = 'Name: "${name}" (${len} chars)';
+    const parser = new LspExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    assert.equal(ast.$kind, "Interpolation");
+    assert.deepEqual(ast.parts, ['Name: "', '" (', ' chars)']);
+    assert.equal(ast.expressions.length, 2);
+
+    const [nameExpr, lenExpr] = ast.expressions;
+    assert.equal(nameExpr.$kind, "AccessScope");
+    assert.equal(nameExpr.name, "name");
+    assert.equal(lenExpr.$kind, "AccessScope");
+    assert.equal(lenExpr.name, "len");
+
+    // Verify spans point to correct positions
+    assert.equal(src.slice(nameExpr.span.start, nameExpr.span.end), "name");
+    assert.equal(src.slice(lenExpr.span.start, lenExpr.span.end), "len");
+  });
+
+  test("AST: quotes outside and keyed access inside", () => {
+    const src = '"${obj["key"]}"';
+    const parser = new LspExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    assert.equal(ast.$kind, "Interpolation");
+    assert.deepEqual(ast.parts, ['"', '"']);
+    assert.equal(ast.expressions.length, 1);
+    assert.equal(ast.expressions[0].$kind, "AccessKeyed");
+    assert.equal(ast.expressions[0].object.name, "obj");
+    assert.equal(ast.expressions[0].key.value, "key");
   });
 });
