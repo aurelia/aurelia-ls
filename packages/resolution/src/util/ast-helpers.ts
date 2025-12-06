@@ -41,12 +41,39 @@ export function getProp(obj: ts.ObjectLiteralExpression, name: string): ts.Prope
 }
 
 /**
+ * Unwrap type assertions (e.g., `"value" as const` → `"value"`).
+ */
+function unwrapTypeAssertion(expr: ts.Expression): ts.Expression {
+  // Handle: "value" as const, "value" as SomeType
+  if (ts.isAsExpression(expr)) {
+    return unwrapTypeAssertion(expr.expression);
+  }
+  // Handle: <SomeType>"value"
+  if (ts.isTypeAssertionExpression(expr)) {
+    return unwrapTypeAssertion(expr.expression);
+  }
+  // Handle: ("value" as const) - parenthesized
+  if (ts.isParenthesizedExpression(expr)) {
+    return unwrapTypeAssertion(expr.expression);
+  }
+  // Handle: "value"! - non-null assertion
+  if (ts.isNonNullExpression(expr)) {
+    return unwrapTypeAssertion(expr.expression);
+  }
+  // Handle: "value" satisfies SomeType
+  if (ts.isSatisfiesExpression(expr)) {
+    return unwrapTypeAssertion(expr.expression);
+  }
+  return expr;
+}
+
+/**
  * Read a string property from an object literal.
  */
 export function readStringProp(obj: ts.ObjectLiteralExpression, name: string): string | undefined {
   const prop = getProp(obj, name);
   if (!prop) return undefined;
-  const init = prop.initializer;
+  const init = unwrapTypeAssertion(prop.initializer);
   return ts.isStringLiteralLike(init) ? init.text : undefined;
 }
 

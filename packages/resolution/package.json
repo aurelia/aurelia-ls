@@ -11,7 +11,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test": "node --test --test-reporter=spec test/**/*.test.mjs"
   },
   "dependencies": {
     "@aurelia-ls/domain": "workspace:*"
