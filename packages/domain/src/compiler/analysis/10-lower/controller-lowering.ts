@@ -318,13 +318,14 @@ function injectPromiseBranchesIntoDef(
 
   const isBranchMarker = (ins: InstructionIR) => {
     if (ins.type === "setAttribute") {
-      return ins.to === "then" || ins.to === "catch";
+      return ins.to === "then" || ins.to === "catch" || ins.to === "pending";
     }
     if (ins.type === "propertyBinding") {
-      return ins.to === "then" || ins.to === "catch";
+      return ins.to === "then" || ins.to === "catch" || ins.to === "pending";
     }
     if (ins.type === "attributeBinding") {
-      return ins.attr === "then" || ins.attr === "catch" || ins.to === "then" || ins.to === "catch";
+      return ins.attr === "then" || ins.attr === "catch" || ins.attr === "pending" ||
+             ins.to === "then" || ins.to === "catch" || ins.to === "pending";
     }
     return false;
   };
@@ -333,13 +334,14 @@ function injectPromiseBranchesIntoDef(
     if (!isElementNode(kid)) continue;
 
     const isTpl = kid.nodeName.toLowerCase() === "template";
-    let branchKind: "then" | "catch" | null = null;
+    let branchKind: "then" | "catch" | "pending" | null = null;
     let aliasVar: string | null = null;
     let branchAttrLoc: P5Loc | null | undefined = null;
 
     if (isTpl) {
       const thenAttr = findAttr(kid, "then");
       const catchAttr = findAttr(kid, "catch");
+      const pendingAttr = findAttr(kid, "pending");
       if (thenAttr) {
         branchKind = "then";
         aliasVar = (thenAttr.value?.length ? thenAttr.value : "then") ?? "then";
@@ -348,13 +350,19 @@ function injectPromiseBranchesIntoDef(
         branchKind = "catch";
         aliasVar = (catchAttr.value?.length ? catchAttr.value : "catch") ?? "catch";
         branchAttrLoc = (kid as P5Template).sourceCodeLocation;
+      } else if (pendingAttr) {
+        branchKind = "pending";
+        // pending does NOT create an alias - it has no value to pass
+        aliasVar = null;
+        branchAttrLoc = (kid as P5Template).sourceCodeLocation;
       }
     } else {
       for (const a of (kid as P5Element).attrs ?? []) {
         const parsed = attrParser.parse(a.name, a.value ?? "");
-        if (parsed.target === "then" || parsed.target === "catch") {
+        if (parsed.target === "then" || parsed.target === "catch" || parsed.target === "pending") {
           branchKind = parsed.target;
-          aliasVar = (a.value?.length ? a.value : branchKind) ?? branchKind;
+          // pending does NOT create an alias
+          aliasVar = branchKind === "pending" ? null : ((a.value?.length ? a.value : branchKind) ?? branchKind);
           branchAttrLoc = attrLoc(kid as P5Element, a.name);
           break;
         }
@@ -379,6 +387,11 @@ function injectPromiseBranchesIntoDef(
       row.instructions = row.instructions.filter((ins) => !isBranchMarker(ins));
     }
 
+    // Build branch info - pending has no local alias, then/catch do
+    const branch = branchKind === "pending"
+      ? { kind: "pending" as const }
+      : { kind: branchKind as "then" | "catch", local: aliasVar ?? branchKind };
+
     def.rows.push({
       target,
       instructions: [
@@ -387,8 +400,8 @@ function injectPromiseBranchesIntoDef(
           res: "promise",
           def: branchDef,
           props: [valueProp],
-          alias: branchKind,
-          branch: { kind: branchKind, local: aliasVar ?? branchKind },
+          alias: branchKind === "pending" ? null : branchKind, // pending is not an alias
+          branch,
           containerless: false,
           loc: toSpan(
             branchAttrLoc ??

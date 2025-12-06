@@ -287,16 +287,44 @@ const AT_IMPL: IAttributePattern<AtKeys> = {
 };
 
 /* -------------------------------------------------------------------------------------------------
+ * Promise patterns:
+ *   - 'promise.resolve'      e.g., "promise.resolve"     -> target: 'promise', command: 'bind'
+ *   - 'then'                 e.g., "then"                -> target: 'then', command: 'from-view'
+ *   - 'catch'                e.g., "catch"               -> target: 'catch', command: 'from-view'
+ *
+ * Why 'from-view': The branch controller (FulfilledTC/RejectedTC) passes the resolved/error
+ * value INTO the binding - it flows FROM the view (branch) TO the parent scope.
+ * ------------------------------------------------------------------------------------------------ */
+
+type PromiseKeys = 'promise.resolve' | 'then' | 'catch';
+
+const PROMISE_DEFS: AttributePatternDefinition<PromiseKeys>[] = [
+  { pattern: 'promise.resolve', symbols: '.' },
+  { pattern: 'then', symbols: '' },
+  { pattern: 'catch', symbols: '' },
+];
+
+const PROMISE_IMPL: IAttributePattern<PromiseKeys> = {
+  'promise.resolve': (rawName, rawValue) =>
+    new AttrSyntax(rawName, rawValue, 'promise', 'bind'),
+  'then': (rawName, rawValue) =>
+    new AttrSyntax(rawName, rawValue, 'then', 'from-view'),
+  'catch': (rawName, rawValue) =>
+    new AttrSyntax(rawName, rawValue, 'catch', 'from-view'),
+};
+
+/* -------------------------------------------------------------------------------------------------
  * Public helpers
  * ------------------------------------------------------------------------------------------------ */
 
 /** Registers all built-in patterns into an existing parser (fluent). */
 export function registerBuiltins(p: AttributeParser): AttributeParser {
-  p.registerPattern(DOT_DEFS,   DOT_IMPL);
-  p.registerPattern(REF_DEFS,   REF_IMPL);
-  p.registerPattern(EVENT_DEFS, EVENT_IMPL);
-  p.registerPattern(COLON_DEFS, COLON_IMPL);
-  p.registerPattern(AT_DEFS,    AT_IMPL);
+  p.registerPattern(DOT_DEFS,     DOT_IMPL);
+  p.registerPattern(REF_DEFS,     REF_IMPL);
+  p.registerPattern(EVENT_DEFS,   EVENT_IMPL);
+  p.registerPattern(COLON_DEFS,   COLON_IMPL);
+  p.registerPattern(AT_DEFS,      AT_IMPL);
+  p.registerPattern(PROMISE_DEFS, PROMISE_IMPL);
   return p;
 }
 

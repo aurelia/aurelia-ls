@@ -290,6 +290,7 @@ export interface LinkedHydrateTemplateController extends BaseLinked {
 export type ControllerBranch =
   | { kind: "then";    local: string | null }
   | { kind: "catch";   local: string | null }
+  | { kind: "pending" }                      // promise pending (no alias - shown while awaiting)
   | { kind: "case";    expr: ExprRef }       // expression on the <template case>
   | { kind: "default" };
 

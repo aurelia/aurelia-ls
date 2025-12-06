@@ -157,8 +157,8 @@ export interface PromiseController {
   res: "promise";
   scope: ScopeBehavior;                           // 'overlay'
   props: Record<string, Bindable>;                // { value }
-  branches: readonly ("then" | "catch")[];
-  branchAllowsAlias: boolean;                     // <template then="r">, <template catch="e">
+  branches: readonly ("then" | "catch" | "pending")[];
+  branchAllowsAlias: boolean;                     // applies to then/catch (pending has no alias)
 }
 
 /* ---- Switch controller ----
@@ -388,8 +388,8 @@ export const DEFAULT: Semantics = {
         res: "promise",
         scope: "overlay",
         props: { value: { name: "value", type: { kind: "ts", name: "Promise<unknown>" }, mode: "default", doc: "Promise to await" } },
-        branches: ["then", "catch"],
-        branchAllowsAlias: true,
+        branches: ["then", "catch", "pending"],
+        branchAllowsAlias: true, // applies to then/catch (pending has no alias)
       },
 
       if: {

@@ -269,8 +269,9 @@ export type TemplateControllerRes = 'repeat' | 'with' | 'if' | 'else' | 'switch'
 export type TemplateControllerAlias = 'then' | 'catch' | 'case' | 'default';
 
 export type ControllerBranchInfo =
-  | { kind: 'then';    local?: string | null } // promise then
-  | { kind: 'catch';   local?: string | null } // promise catch
+  | { kind: 'then';    local?: string | null } // promise then (receives resolved value)
+  | { kind: 'catch';   local?: string | null } // promise catch (receives error)
+  | { kind: 'pending' }                        // promise pending (no alias - shown while awaiting)
   | { kind: 'case';    expr: ExprRef }         // switch case with expression
   | { kind: 'default' };                       // switch default
 

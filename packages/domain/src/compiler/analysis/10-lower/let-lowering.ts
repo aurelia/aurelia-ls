@@ -31,12 +31,12 @@ function compileLet(
       continue;
     }
     const s = attrParser.parse(a.name, a.value ?? "");
-    if (
-      s.command === "bind" ||
-      s.command === "one-time" ||
-      s.command === "to-view" ||
-      s.command === "two-way"
-    ) {
+
+    // <let> supports binding mode commands (bind, one-time, to-view, two-way, from-view)
+    // but NOT event commands (trigger, capture) or ref commands
+    // Runtime throws AU0704 for unsupported commands
+    const validLetCommands = new Set(["bind", "one-time", "to-view", "two-way", "from-view"]);
+    if (validLetCommands.has(s.command ?? "")) {
       const loc = attrLoc(el, a.name);
       out.push({
         type: "letBinding",
@@ -47,16 +47,26 @@ function compileLet(
       continue;
     }
 
-    const raw = a.value ?? "";
-    if (raw.includes("${")) {
-      const loc = attrLoc(el, a.name);
-      out.push({
-        type: "letBinding",
-        to: s.target,
-        from: toInterpIR(raw, loc, table),
-        loc: toSpan(loc, table.source),
-      });
+    // Static value (no command) - only interpolations are processed
+    // Note: Plain static values like foo="bar" require PrimitiveLiteralExpression handling (not yet implemented)
+    if (s.command === null) {
+      const raw = a.value ?? "";
+      if (raw.includes("${")) {
+        const loc = attrLoc(el, a.name);
+        out.push({
+          type: "letBinding",
+          to: s.target,
+          from: toInterpIR(raw, loc, table),
+          loc: toSpan(loc, table.source),
+        });
+      }
+      // Plain static values without ${} are silently dropped for now
+      // TODO: Support static literal binding (foo="bar" -> foo = "bar" string literal)
+      continue;
     }
+
+    // Any other command (e.g., .one-time, .to-view, .trigger) is invalid - silently skip
+    // Runtime would throw AU0704 here
   }
   return { instructions: out, toBindingContext };
 }

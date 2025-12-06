@@ -489,6 +489,9 @@ function linkHydrateTemplateController(
       case "catch":
         branch = { kind: ins.branch.kind, local: ins.branch.local ?? null };
         break;
+      case "pending":
+        branch = { kind: "pending" };
+        break;
       case "case":
         branch = { kind: "case", expr: ins.branch.expr };
         break;
