@@ -261,6 +261,26 @@ export function isInterpolation(x: BindingSourceIR): x is InterpIR {
   return (x as InterpIR).kind === "interp";
 }
 
+// TODO: Add utility to extract binding behavior and value converter names from expression AST.
+// Used by 20-resolve for AU0101/AU0103 diagnostics.
+//
+// interface ExprResourceRef {
+//   kind: 'bindingBehavior' | 'valueConverter';
+//   name: string;
+//   span: SourceSpan;
+// }
+//
+// export function extractExprResources(table: readonly ExprTableEntry[]): ExprResourceRef[] {
+//   const refs: ExprResourceRef[] = [];
+//   for (const entry of table) {
+//     walkAst(entry.ast, refs, entry);
+//   }
+//   return refs;
+// }
+//
+// Walk AST nodes, matching $kind === 'BindingBehavior' and $kind === 'ValueConverter'.
+// Extract .name and .span for each. Note: expressions can be nested, so walk recursively.
+
 function firstFileFromSpans(spans: ReadonlyExprIdMap<SourceSpan>): SourceFileId | undefined {
   for (const span of spans.values()) {
     if (span?.file) return span.file;

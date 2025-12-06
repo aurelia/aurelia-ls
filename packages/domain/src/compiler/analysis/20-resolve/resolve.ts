@@ -107,6 +107,15 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
     diags,
   };
   const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
+
+  // TODO: Validate expression resources (AU01xx diagnostics)
+  // Walk ir.exprTable to extract binding behaviors and value converters from AST.
+  // Check each against ctx.lookup (registry + ResourceGraph).
+  // Emit AU0101 for unknown binding behaviors, AU0103 for unknown value converters.
+  // See: BindingBehaviorExpression.$kind === 'BindingBehavior' with .name
+  //      ValueConverterExpression.$kind === 'ValueConverter' with .name
+  // validateExpressionResources(ir.exprTable, ctx);
+
   return {
     version: "aurelia-linked@1",
     templates,

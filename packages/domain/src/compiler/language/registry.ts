@@ -428,7 +428,25 @@ export const DEFAULT: Semantics = {
     valueConverters: {
       identity: { name: "identity", in: { kind: "unknown" }, out: { kind: "unknown" } },
     },
-    bindingBehaviors: {},
+    bindingBehaviors: {
+      // Rate limiting behaviors
+      debounce:      { name: "debounce" },      // Delays updates until pause in changes
+      throttle:      { name: "throttle" },      // Limits update frequency
+
+      // Signal behavior
+      signal:        { name: "signal" },        // Re-evaluate binding when signal(s) fired
+
+      // Binding mode override behaviors
+      oneTime:       { name: "oneTime" },       // Override to one-time binding
+      toView:        { name: "toView" },        // Override to to-view binding
+      fromView:      { name: "fromView" },      // Override to from-view binding
+      twoWay:        { name: "twoWay" },        // Override to two-way binding
+
+      // Specialized behaviors
+      attr:          { name: "attr" },          // Force attribute binding (vs property)
+      self:          { name: "self" },          // Event only triggers if target === element
+      updateTrigger: { name: "updateTrigger" }, // Custom events to trigger updates
+    },
   },
 
   /* ---- DOM schema (HTML-only) ----
@@ -658,6 +676,11 @@ export interface SemanticsLookup {
 
   /** Whether the attribute should preserve authored casing (data-/aria-). */
   hasPreservedPrefix(attr: string): boolean;
+
+  // TODO: Add lookup methods for expression resources (AU0101/AU0103 diagnostics)
+  // bindingBehavior(name: string): BindingBehaviorSig | null;
+  // valueConverter(name: string): ValueConverterSig | null;
+  // These should check both built-in (sem.resources) and userland (ResourceGraph).
 }
 
 export interface SemanticsLookupOptions {

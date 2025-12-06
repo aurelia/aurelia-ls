@@ -37,8 +37,30 @@ import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
  * Diagnostics (Resolve-Host)
  * =========================== */
 
-/** AU11xx = Semantics/host-linker diagnostics. */
+/**
+ * Resolve-host diagnostic codes.
+ *
+ * Code ranges:
+ * - AU01xx: Expression-level resource errors (matches runtime AUR01xx)
+ * - AU08xx: Template structure errors (matches runtime AUR08xx)
+ * - AU11xx: Host semantics / linker errors (compiler-specific)
+ *
+ * See docs/errors.md for the full runtime error inventory.
+ */
 export type SemDiagCode =
+  // ─── Expression Resource Errors (AU01xx) ───────────────────────────────────
+  // These match runtime error codes for consistency.
+  // TODO: AU0101 - Binding behavior not found (walk exprTable, check against registry + ResourceGraph)
+  // TODO: AU0102 - Duplicate binding behavior (same behavior applied twice in expression)
+  // TODO: AU0103 - Value converter not found (walk exprTable, check against registry + ResourceGraph)
+
+  // ─── Template Structure Errors (AU08xx) ────────────────────────────────────
+  // TODO: AU0810 - [else] without preceding [if] (check sibling controller ordering)
+  // TODO: AU0813 - [then]/[catch]/[pending] without parent [promise] (validate branch context)
+  // TODO: AU0815 - [case]/[default-case] without parent [switch] (validate branch context)
+  // TODO: AU0816 - Multiple [default-case] in same switch (validate uniqueness)
+
+  // ─── Host Semantics Errors (AU11xx) ────────────────────────────────────────
   | "AU1101" // Unknown controller
   | "AU1102" // Unknown element/attribute resource (reserved; currently unused)
   | "AU1103" // Unknown event
