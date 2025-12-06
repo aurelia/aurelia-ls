@@ -158,9 +158,39 @@ function reduceInstruction(inst, targetIdx) {
 }
 
 // Compare emit intents
-function compareEmitIntent(actual, expected) {
-  const { missing: missingInstructions, extra: extraInstructions } =
-    diffByKey(actual.instructions ?? [], expected.instructions ?? [], instructionKey);
+function compareEmitIntent(actual, expected, orderSensitive = false) {
+  let missingInstructions = [];
+  let extraInstructions = [];
+  let orderMismatches = [];
+
+  if (orderSensitive) {
+    // Positional comparison for order-sensitive tests
+    const actualInsts = actual.instructions ?? [];
+    const expectedInsts = expected.instructions ?? [];
+
+    const maxLen = Math.max(actualInsts.length, expectedInsts.length);
+    for (let i = 0; i < maxLen; i++) {
+      const actualInst = actualInsts[i];
+      const expectedInst = expectedInsts[i];
+
+      if (!actualInst) {
+        missingInstructions.push(expectedInst);
+      } else if (!expectedInst) {
+        extraInstructions.push(actualInst);
+      } else if (instructionKey(actualInst) !== instructionKey(expectedInst)) {
+        orderMismatches.push({
+          position: i,
+          actual: actualInst,
+          expected: expectedInst,
+        });
+      }
+    }
+  } else {
+    // Set-based comparison for regular tests
+    const result = diffByKey(actual.instructions ?? [], expected.instructions ?? [], instructionKey);
+    missingInstructions = result.missing;
+    extraInstructions = result.extra;
+  }
 
   const { missing: missingNested, extra: extraNested } =
     diffByKey(actual.nested ?? [], expected.nested ?? [], (n) => n.name);
@@ -177,6 +207,7 @@ function compareEmitIntent(actual, expected) {
   return {
     missingInstructions,
     extraInstructions,
+    orderMismatches,
     missingNested,
     extraNested,
     countMismatches,
@@ -241,12 +272,15 @@ describe("AOT Emit (aot:emit)", () => {
         exprCount: v.expect?.exprCount,
       };
 
-      const diff = compareEmitIntent(actual, expected);
+      // Use order-sensitive comparison for tests that set the flag
+      const orderSensitive = v.orderSensitive === true;
+      const diff = compareEmitIntent(actual, expected, orderSensitive);
 
       // Check for any mismatches
       const anyMismatch =
         diff.missingInstructions.length > 0 ||
         diff.extraInstructions.length > 0 ||
+        (diff.orderMismatches?.length ?? 0) > 0 ||
         diff.missingNested.length > 0 ||
         diff.extraNested.length > 0 ||
         diff.countMismatches.length > 0;
@@ -270,6 +304,14 @@ describe("AOT Emit (aot:emit)", () => {
         fmtList("extra", diff.extraInstructions) +
         "\nSee failures.json for details."
       );
+
+      // Order mismatch assertion (for order-sensitive tests)
+      if (orderSensitive && diff.orderMismatches?.length > 0) {
+        const orderMsg = diff.orderMismatches.map((m) =>
+          `[${m.position}] expected ${instructionKey(m.expected)}, got ${instructionKey(m.actual)}`
+        ).join("\n  ");
+        assert.fail(`Instruction order mismatch:\n  ${orderMsg}`);
+      }
 
       assert.ok(
         diff.missingNested.length === 0 && diff.extraNested.length === 0,

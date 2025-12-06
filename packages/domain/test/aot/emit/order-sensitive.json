@@ -1,0 +1,157 @@
+[
+  {
+    "name": "AOT-ORD-001: INPUT checkbox - model must come before checked",
+    "markup": "<input type=\"checkbox\" checked.bind=\"isOn\" model.bind=\"item\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "model", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "checked", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-002: INPUT checkbox - value must come before checked",
+    "markup": "<input type=\"checkbox\" checked.bind=\"isOn\" value.bind=\"val\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" },
+        { "type": "propertyBinding", "target": 0, "to": "checked", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-003: INPUT checkbox - matcher must come before checked",
+    "markup": "<input type=\"checkbox\" checked.bind=\"isOn\" matcher.bind=\"fn\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "matcher", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "checked", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-004: INPUT radio - model must come before checked",
+    "markup": "<input type=\"radio\" checked.bind=\"selected\" model.bind=\"option\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "model", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "checked", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-005: INPUT radio - value must come before checked",
+    "markup": "<input type=\"radio\" checked.bind=\"selected\" value.bind=\"val\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" },
+        { "type": "propertyBinding", "target": 0, "to": "checked", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-006: SELECT with multiple attr - multiple must come before value",
+    "markup": "<select multiple value.bind=\"selections\" multiple.bind=\"isMulti\"></select>",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "multiple", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-007: SELECT without multiple attr - multiple binding must come before value",
+    "markup": "<select value.bind=\"sel\" multiple.bind=\"isMulti\"></select>",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "multiple", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-008: INPUT checkbox - already correct order preserved",
+    "markup": "<input type=\"checkbox\" model.bind=\"item\" checked.bind=\"isOn\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "model", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "checked", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-009: SELECT - already correct order preserved",
+    "markup": "<select multiple.bind=\"isMulti\" value.bind=\"sel\"></select>",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "multiple", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-010: INPUT text - no reordering needed (not order-sensitive)",
+    "markup": "<input type=\"text\" value.bind=\"name\" placeholder.bind=\"hint\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" },
+        { "type": "propertyBinding", "target": 0, "to": "placeholder", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-ORD-011: INPUT checkbox with three bindings - model before checked",
+    "markup": "<input type=\"checkbox\" checked.bind=\"isOn\" disabled.bind=\"isDisabled\" model.bind=\"item\">",
+    "orderSensitive": true,
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "model", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "disabled", "mode": "toView" },
+        { "type": "propertyBinding", "target": 0, "to": "checked", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  }
+]

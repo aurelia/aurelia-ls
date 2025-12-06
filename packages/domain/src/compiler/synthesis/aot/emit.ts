@@ -164,6 +164,11 @@ class EmitContext {
       for (const binding of node.bindings) {
         row.push(this.emitBinding(binding));
       }
+
+      // Reorder instructions for runtime correctness (checkbox/radio, select)
+      if (shouldReorderInstructions(node, row)) {
+        reorderInstructions(node, row);
+      }
     }
 
     // Recurse into children (unless wrapped by a controller that handles them)
@@ -285,6 +290,11 @@ class EmitContext {
       // Element bindings
       for (const binding of node.bindings) {
         row.push(this.emitBinding(binding));
+      }
+
+      // Reorder instructions for runtime correctness (checkbox/radio, select)
+      if (shouldReorderInstructions(node, row)) {
+        reorderInstructions(node, row);
       }
     }
 
@@ -604,4 +614,147 @@ function compactInstructions(
 ): SerializedInstruction[][] {
   // Filter out empty rows
   return instructions.filter(row => row.length > 0);
+}
+
+/* =============================================================================
+ * Instruction Reordering
+ * -----------------------------------------------------------------------------
+ * Aurelia requires certain bindings to be processed in a specific order:
+ *
+ * INPUT (checkbox/radio):
+ *   - model/value/matcher must come BEFORE checked
+ *   - Reason: CheckedObserver needs these set first to determine comparison strategy
+ *
+ * SELECT:
+ *   - multiple must come BEFORE value
+ *   - Reason: SelectValueObserver behavior depends on multiple being set first
+ *
+ * This matches the runtime's _shouldReorderAttrs() and _reorder() methods in
+ * template-compiler.ts
+ * ============================================================================= */
+
+/** Input types that require instruction reordering */
+const ORDER_SENSITIVE_INPUT_TYPES: Record<string, boolean> = {
+  checkbox: true,
+  radio: true,
+};
+
+/**
+ * Check if an element needs instruction reordering.
+ */
+function shouldReorderInstructions(
+  node: PlanElementNode,
+  instructions: SerializedInstruction[],
+): boolean {
+  const tag = node.tag.toUpperCase();
+
+  if (tag === "INPUT") {
+    // Check if type is checkbox or radio
+    const typeAttr = node.staticAttrs.find(a => a.name.toLowerCase() === "type");
+    const inputType = typeAttr?.value?.toLowerCase() ?? "";
+    return ORDER_SENSITIVE_INPUT_TYPES[inputType] === true;
+  }
+
+  if (tag === "SELECT") {
+    // Check if element has static multiple attribute OR a multiple binding
+    const hasStaticMultiple = node.staticAttrs.some(
+      a => a.name.toLowerCase() === "multiple"
+    );
+    if (hasStaticMultiple) return true;
+
+    // Check for multiple binding in instructions
+    return instructions.some(
+      i => i.type === "propertyBinding" && i.to === "multiple"
+    );
+  }
+
+  return false;
+}
+
+/**
+ * Reorder instructions for runtime correctness.
+ * Mutates the array in place.
+ */
+function reorderInstructions(
+  node: PlanElementNode,
+  instructions: SerializedInstruction[],
+): void {
+  const tag = node.tag.toUpperCase();
+
+  if (tag === "INPUT") {
+    reorderInputInstructions(instructions);
+  } else if (tag === "SELECT") {
+    reorderSelectInstructions(instructions);
+  }
+}
+
+/**
+ * Reorder INPUT checkbox/radio instructions.
+ * Ensures model/value/matcher comes before checked.
+ */
+function reorderInputInstructions(instructions: SerializedInstruction[]): void {
+  let modelOrValueOrMatcherIndex: number | undefined;
+  let checkedIndex: number | undefined;
+  let found = 0;
+
+  // Find indices of relevant bindings (stop early once both found)
+  for (let i = 0; i < instructions.length && found < 2; i++) {
+    const inst = instructions[i];
+    if (inst?.type !== "propertyBinding") continue;
+
+    const to = inst.to;
+    if (to === "model" || to === "value" || to === "matcher") {
+      modelOrValueOrMatcherIndex = i;
+      found++;
+    } else if (to === "checked") {
+      checkedIndex = i;
+      found++;
+    }
+  }
+
+  // Swap if checked comes before model/value/matcher
+  if (
+    checkedIndex !== undefined &&
+    modelOrValueOrMatcherIndex !== undefined &&
+    checkedIndex < modelOrValueOrMatcherIndex
+  ) {
+    const temp = instructions[modelOrValueOrMatcherIndex];
+    instructions[modelOrValueOrMatcherIndex] = instructions[checkedIndex]!;
+    instructions[checkedIndex] = temp!;
+  }
+}
+
+/**
+ * Reorder SELECT instructions.
+ * Ensures multiple comes before value.
+ */
+function reorderSelectInstructions(instructions: SerializedInstruction[]): void {
+  let multipleIndex: number | undefined;
+  let valueIndex: number | undefined;
+  let found = 0;
+
+  // Find indices of relevant bindings
+  for (let i = 0; i < instructions.length && found < 2; i++) {
+    const inst = instructions[i];
+    if (inst?.type !== "propertyBinding") continue;
+
+    if (inst.to === "multiple") {
+      multipleIndex = i;
+      found++;
+    } else if (inst.to === "value") {
+      valueIndex = i;
+      found++;
+    }
+  }
+
+  // Swap if value comes before multiple
+  if (
+    valueIndex !== undefined &&
+    multipleIndex !== undefined &&
+    valueIndex < multipleIndex
+  ) {
+    const temp = instructions[multipleIndex];
+    instructions[multipleIndex] = instructions[valueIndex]!;
+    instructions[valueIndex] = temp!;
+  }
 }
