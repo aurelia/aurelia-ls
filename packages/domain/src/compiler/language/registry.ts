@@ -63,6 +63,7 @@ export interface Bindable {
   name: string;           // canonical property name (camelCase)
   mode?: BindingMode;     // default binding mode (if defined by the resource)
   type?: TypeRef;         // static type hint for analysis/emit
+  primary?: boolean;      // true if this is the primary bindable (for single-value attribute syntax)
   doc?: string;           // human note; no runtime effect
 }
 
@@ -73,6 +74,11 @@ export interface ElementRes {
   bindables: Record<string, Bindable>;            // by prop name (camelCase)
   aliases?: string[];                             // additional names resolving to this resource
   containerless?: boolean;                        // element can be used containerless
+  /**
+   * Capture non-bindable attributes for passthrough (e.g., au-compose).
+   * - When true, non-bindable attrs are captured and available to the component.
+   */
+  capture?: boolean;
   /**
    * Component boundary: instances start a new binding-context boundary.
    * - Differs from template-controller 'overlay' (which is *not* a boundary).
@@ -311,25 +317,30 @@ export const DEFAULT: Semantics = {
         kind: "element",
         name: "au-compose",
         boundary: true,                            // component boundary (new $this root)
-        containerless: false,
+        containerless: true,                       // runtime: containerless: true
+        capture: true,                             // captures non-bindable attrs for passthrough
         bindables: {
-          subject:    { name: "subject",    type: { kind: "unknown" },            mode: "toView", doc: "Component or view to compose" },
-          view:       { name: "view",       type: { kind: "ts", name: "string" }, mode: "toView", doc: "View URL/template (optional)" },
-          viewModel:  { name: "viewModel",  type: { kind: "unknown" },            mode: "toView", doc: "View-model type/instance (optional)" },
-          model:      { name: "model",      type: { kind: "unknown" },            mode: "toView", doc: "Activation model payload (optional)" },
-          component:  { name: "component",  type: { kind: "unknown" },            mode: "toView", doc: "Alias for subject/component" },
+          template:      { name: "template",      type: { kind: "ts", name: "string | Promise<string>" }, mode: "toView",   doc: "Template string or URL to compose" },
+          component:     { name: "component",     type: { kind: "ts", name: "string | Constructable | object | Promise<string | Constructable | object>" }, mode: "toView", doc: "Component name, constructor, or instance" },
+          model:         { name: "model",         type: { kind: "unknown" },                              mode: "toView",   doc: "Model passed to component's activate() lifecycle" },
+          scopeBehavior: { name: "scopeBehavior", type: { kind: "ts", name: "'auto' | 'scoped'" },        mode: "toView",   doc: "Scope inheritance: 'auto' inherits parent, 'scoped' isolates" },
+          composing:     { name: "composing",     type: { kind: "ts", name: "Promise<void> | void" },     mode: "fromView", doc: "Promise resolving when composition completes" },
+          composition:   { name: "composition",   type: { kind: "ts", name: "ICompositionController | undefined" }, mode: "fromView", doc: "Active composition controller" },
+          tag:           { name: "tag",           type: { kind: "ts", name: "string | null | undefined" }, mode: "toView",   doc: "Host element tag name (null for containerless)" },
         },
       },
 
       // au-slot: projection target when shadow DOM isn't used (or as explicit slot point).
       // Not a boundary; expressions within projected content evaluate where authored.
+      // NOTE: `name` attribute is processed via processContent, NOT a bindable.
       "au-slot": {
         kind: "element",
         name: "au-slot",
         boundary: false,
-        containerless: false,
+        containerless: true,                       // runtime: containerless: true
         bindables: {
-          name: { name: "name", type: { kind: "ts", name: "string" }, mode: "toView", doc: "Named slot (default when absent)" },
+          expose:     { name: "expose",     type: { kind: "ts", name: "object | null" }, mode: "toView", doc: "Binding context exposed to slotted content via $host" },
+          slotchange: { name: "slotchange", type: { kind: "ts", name: "((name: string, nodes: readonly Node[]) => void) | null" }, mode: "toView", doc: "Callback when slot content changes" },
         },
       },
     },
@@ -411,7 +422,17 @@ export const DEFAULT: Semantics = {
         kind: "controller",
         res: "portal",
         scope: "reuse", // expressions inside portal evaluate in the *parent* scope
-        props: { value: { name: "value", type: { kind: "ts", name: "unknown" }, mode: "default", doc: "Target/flag; interpreted at runtime" } },
+        props: {
+          target:          { name: "target",          type: { kind: "ts", name: "string | Element | null | undefined" }, mode: "default", primary: true, doc: "Target element or CSS selector" },
+          position:        { name: "position",        type: { kind: "ts", name: "InsertPosition" },         mode: "toView",  doc: "Insert position: beforeend, afterbegin, beforebegin, afterend" },
+          renderContext:   { name: "renderContext",   type: { kind: "ts", name: "string | Element | null | undefined" }, mode: "toView",  doc: "Context element/selector for target query" },
+          strict:          { name: "strict",          type: { kind: "ts", name: "boolean" },                mode: "toView",  doc: "Throw error if target not found" },
+          activating:      { name: "activating",      type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked before activation" },
+          activated:       { name: "activated",       type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked after activation" },
+          deactivating:    { name: "deactivating",    type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked before deactivation" },
+          deactivated:     { name: "deactivated",     type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked after deactivation" },
+          callbackContext: { name: "callbackContext", type: { kind: "unknown" },                            mode: "toView",  doc: "Context object passed to lifecycle callbacks" },
+        },
       },
 
       else: {

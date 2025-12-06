@@ -88,7 +88,8 @@ function reduceTemplate(t, out) {
             if (p.type === "iteratorBinding") {
               out.expressions.push({ kind: "iterator" });
             } else if (p.type === "propertyBinding") {
-              const isControllerValue = p.to === "value";
+              // 'value' is the primary bindable for most controllers; 'target' for portal
+              const isControllerValue = p.to === "value" || (ins.res === "portal" && p.to === "target");
               out.expressions.push({
                 kind: isControllerValue ? "controllerValue" : "propCommand",
                 code: (p.from && p.from.kind !== "interp") ? p.from.code : undefined,

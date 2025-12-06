@@ -145,9 +145,11 @@ function buildBaseInstructionsForRightmost(
 
   const controller = kind;
   const exprText = raw.length === 0 ? controller : raw;
+  // Portal uses 'target' as primary bindable; others use 'value'
+  const propName = controller === "portal" ? "target" : "value";
   const valueProp: PropertyBindingIR = {
     type: "propertyBinding",
-    to: "value",
+    to: propName,
     from: toExprRef(exprText, loc, table, "IsProperty"),
     mode: "default",
     loc: toSpan(loc, table.source),
@@ -269,9 +271,11 @@ function buildControllerPrototypes(
 
   const controller = kind;
   const exprText = raw.length === 0 ? controller : raw;
+  // Portal uses 'target' as primary bindable; others use 'value'
+  const propName = controller === "portal" ? "target" : "value";
   const valueProp: PropertyBindingIR = {
     type: "propertyBinding",
-    to: "value",
+    to: propName,
     from: toExprRef(exprText, loc, table, "IsProperty"),
     mode: "default",
     loc: toSpan(loc, table.source),

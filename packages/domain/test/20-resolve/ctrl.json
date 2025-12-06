@@ -36,11 +36,11 @@
     }
   },
   {
-    "name": "R-C-05 portal.bind -> controller value (effectiveMode 'default')",
+    "name": "R-C-05 portal.bind -> controller target (effectiveMode 'default')",
     "markup": "<div portal.bind=\"t\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "portal", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },
@@ -72,11 +72,11 @@
     }
   },
   {
-    "name": "R-C-09 portal (value-less) -> controller.value stays default",
+    "name": "R-C-09 portal (value-less) -> controller.target stays default",
     "markup": "<div portal></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "portal", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "default" }
       ]
     }
   },

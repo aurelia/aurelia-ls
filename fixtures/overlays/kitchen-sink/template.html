@@ -3,7 +3,7 @@
     <input value.two-way="value" checked.bind="flag" matcher.bind="matcher" class.bind="inputClass">
     <button click.trigger="doIt()" class="btn ${btnClass}" ref="btn" aria-pressed.class="pressed">Action</button>
 
-    <au-compose subject.bind="comp" view-model.bind="vm" model.bind="payload" ...$bindables ref="cmp"></au-compose>
+    <au-compose component.bind="comp" template.bind="vm" model.bind="payload" ...$bindables ref="cmp"></au-compose>
 
     <section show.bind="isVisible" focus.from-view="isFocused" data-x="x" ...$attrs style="color: ${color}; font-weight: bold;" class="the-section">
       <span class="title" style.background="bg">${title}</span>

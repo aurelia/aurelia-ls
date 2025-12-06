@@ -96,11 +96,11 @@
     }
   },
   {
-    "name": "R-P-11 au-compose bindable: subject.bind resolves to bindable (toView)",
-    "markup": "<au-compose subject.bind=\"s\"></au-compose>",
+    "name": "R-P-11 au-compose bindable: component.bind resolves to bindable (toView)",
+    "markup": "<au-compose component.bind=\"c\"></au-compose>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "subject", "target": "bindable", "effectiveMode": "toView" }
+        { "kind": "prop", "to": "component", "target": "bindable", "effectiveMode": "toView" }
       ]
     }
   },
@@ -378,11 +378,11 @@
     }
   },
   {
-    "name": "R-P-40 au-slot bindable 'name.bind' resolves to bindable toView",
-    "markup": "<au-slot name.bind=\"n\"></au-slot>",
+    "name": "R-P-40 au-slot bindable 'expose.bind' resolves to bindable toView",
+    "markup": "<au-slot expose.bind=\"ctx\"></au-slot>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" }
+        { "kind": "prop", "to": "expose", "target": "bindable", "effectiveMode": "toView" }
       ]
     }
   },
@@ -529,20 +529,20 @@
     }
   },
   {
-    "name": "R-P-49 au-compose subject.bind resolves to bindable (toView)",
-    "markup": "<au-compose subject.bind=\"vm\"></au-compose>",
+    "name": "R-P-49 au-compose template.bind resolves to bindable (toView)",
+    "markup": "<au-compose template.bind=\"tpl\"></au-compose>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "subject", "target": "bindable", "effectiveMode": "toView" }
+        { "kind": "prop", "to": "template", "target": "bindable", "effectiveMode": "toView" }
       ]
     }
   },
   {
-    "name": "R-P-50 au-slot name.bind resolves to bindable (toView)",
-    "markup": "<au-slot name.bind=\"slotName\"></au-slot>",
+    "name": "R-P-50 au-slot slotchange.bind resolves to bindable (toView)",
+    "markup": "<au-slot slotchange.bind=\"handler\"></au-slot>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" }
+        { "kind": "prop", "to": "slotchange", "target": "bindable", "effectiveMode": "toView" }
       ]
     }
   },
