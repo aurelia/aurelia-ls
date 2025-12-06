@@ -8,24 +8,30 @@
 import type { Connect, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
+import { resolve as resolvePath } from "node:path";
 import { compileAndRenderAot, type AotCompileResult } from "../aot.js";
 import type { HydrationManifest } from "../ssr/ssr-processor.js";
-import type { ResolvedSSROptions } from "./types.js";
+import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
 
 /**
  * Create SSR middleware for Vite dev server.
  *
  * The middleware:
  * 1. Checks if the request should be SSR'd (matching include/exclude)
- * 2. Loads the entry template
- * 3. Calls the state provider
- * 4. Renders via AOT compilation
- * 5. Injects into HTML shell and responds
+ * 2. Waits for resolution (if configured) to get ResourceGraph
+ * 3. Loads the entry template
+ * 4. Calls the state provider
+ * 5. Renders via AOT compilation with project resources
+ * 6. Injects into HTML shell and responds
  */
 export function createSSRMiddleware(
   server: ViteDevServer,
   options: ResolvedSSROptions,
+  getResolutionPromise?: () => Promise<ResolutionContext | null> | null,
 ): Connect.NextHandleFunction {
+  // Track if resolution has been awaited
+  let resolutionReady = false;
+
   return async (
     req: IncomingMessage,
     res: ServerResponse,
@@ -49,6 +55,15 @@ export function createSSRMiddleware(
     }
 
     try {
+      // Wait for resolution to complete on first request
+      if (!resolutionReady && getResolutionPromise) {
+        const promise = getResolutionPromise();
+        if (promise) {
+          await promise;
+        }
+        resolutionReady = true;
+      }
+
       // Load template fresh (supports HMR-like behavior)
       const template = await readFile(options.entry, "utf-8");
 
@@ -60,14 +75,28 @@ export function createSSRMiddleware(
       // Get state from provider
       const state = await options.state(fullUrl, req);
 
-      // Render with AOT pipeline
-      const result = await compileAndRenderAot(template, {
+      // Get resolution context for resource graph
+      const resolution = options.resolution;
+
+      // Build compile options, conditionally including resolution data
+      const compileOptions: Parameters<typeof compileAndRenderAot>[1] = {
         state,
         name: "ssr-root",
+        templatePath: options.entry,
         ssr: {
           stripMarkers: options.stripMarkers,
         },
-      });
+      };
+
+      // Add resolution data if available
+      if (resolution) {
+        compileOptions.semantics = resolution.semantics;
+        compileOptions.resourceGraph = resolution.resourceGraph;
+        compileOptions.resourceScope = resolution.getScopeForTemplate(options.entry);
+      }
+
+      // Render with AOT pipeline
+      const result = await compileAndRenderAot(template, compileOptions);
 
       // Build full HTML response with serialized state, AOT definition, and manifest
       const html = injectIntoShell(
@@ -86,7 +115,8 @@ export function createSSRMiddleware(
       res.end(html);
 
       // Log for debugging
-      server.config.logger.info(`[aurelia-ssr] Rendered ${url}`, {
+      const resolutionStatus = resolution ? " (with resolution)" : "";
+      server.config.logger.info(`[aurelia-ssr] Rendered ${url}${resolutionStatus}`, {
         timestamp: true,
       });
     } catch (error) {

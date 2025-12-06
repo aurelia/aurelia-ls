@@ -18,15 +18,20 @@
     "build": "tsc -b"
   },
   "peerDependencies": {
-    "vite": "^5.0.0 || ^6.0.0"
+    "vite": "^5.0.0 || ^6.0.0",
+    "typescript": "^5.0.0"
   },
   "peerDependenciesMeta": {
     "vite": {
+      "optional": true
+    },
+    "typescript": {
       "optional": true
     }
   },
   "dependencies": {
     "@aurelia-ls/domain": "workspace:*",
+    "@aurelia-ls/resolution": "workspace:*",
     "@aurelia/kernel": "file:../../aurelia/packages/kernel",
     "@aurelia/metadata": "file:../../aurelia/packages/metadata",
     "@aurelia/platform": "file:../../aurelia/packages/platform",

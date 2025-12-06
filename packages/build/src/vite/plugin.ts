@@ -27,7 +27,8 @@ import type { Plugin, ResolvedConfig } from "vite";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { createSSRMiddleware } from "./middleware.js";
-import type { AureliaSSRPluginOptions, ResolvedSSROptions } from "./types.js";
+import { createResolutionContext } from "./resolution.js";
+import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
 
 /**
  * Default HTML shell for SSR output.
@@ -67,6 +68,8 @@ const DEFAULT_EXCLUDE = [
 export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
   let resolvedConfig: ResolvedConfig;
   let resolvedOptions: ResolvedSSROptions;
+  let resolutionContext: ResolutionContext | null = null;
+  let resolutionPromise: Promise<ResolutionContext | null> | null = null;
 
   return {
     name: "aurelia-ssr",
@@ -93,7 +96,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         );
       }
 
-      // Build resolved options with defaults
+      // Build resolved options with defaults (resolution context added later)
       resolvedOptions = {
         entry,
         state: options.state ?? (() => ({})),
@@ -101,11 +104,32 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         include: options.include ?? ["**"],
         exclude: options.exclude ?? DEFAULT_EXCLUDE,
         htmlShell: options.htmlShell ?? DEFAULT_HTML_SHELL,
+        resolution: null, // Will be set after async initialization
       };
 
       config.logger.info(
         `[aurelia-ssr] Configured with entry: ${entry}`,
       );
+
+      // Start resolution initialization if tsconfig provided
+      if (options.tsconfig) {
+        const tsconfigPath = resolve(config.root, options.tsconfig);
+        const logger = {
+          info: (msg: string) => config.logger.info(msg),
+          warn: (msg: string) => config.logger.warn(msg),
+          error: (msg: string) => config.logger.error(msg),
+        };
+
+        // Start async resolution (will complete before first request)
+        resolutionPromise = createResolutionContext(tsconfigPath, logger).then((ctx) => {
+          resolutionContext = ctx;
+          resolvedOptions.resolution = ctx;
+          if (ctx) {
+            config.logger.info("[aurelia-ssr] Resource resolution ready");
+          }
+          return ctx;
+        });
+      }
     },
 
     /**
@@ -115,8 +139,9 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
      */
     configureServer(server) {
       // Add middleware directly (before Vite's internal middleware)
+      // The middleware will wait for resolution if needed
       server.middlewares.use(
-        createSSRMiddleware(server, resolvedOptions),
+        createSSRMiddleware(server, resolvedOptions, () => resolutionPromise),
       );
 
       server.config.logger.info(

@@ -5,6 +5,8 @@
  */
 
 import type { IncomingMessage } from "node:http";
+import type { ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/domain";
+import type { ResolutionResult, TemplateInfo } from "@aurelia-ls/resolution";
 
 /**
  * State provider function for SSR.
@@ -39,6 +41,19 @@ export interface AureliaSSRPluginOptions {
    * @default './src/my-app.html'
    */
   entry?: string;
+
+  /**
+   * Path to tsconfig.json for TypeScript project.
+   * Required for resource resolution (discovering custom elements, etc.).
+   *
+   * When provided, the plugin will:
+   * - Parse the TypeScript project to discover Aurelia resources
+   * - Build a ResourceGraph for template compilation
+   * - Enable user-defined components in SSR output
+   *
+   * @example './tsconfig.json'
+   */
+  tsconfig?: string;
 
   /**
    * State provider function.
@@ -103,4 +118,23 @@ export interface ResolvedSSROptions {
   include: string[];
   exclude: string[];
   htmlShell: string;
+  /** Resolution context (when tsconfig is provided) */
+  resolution: ResolutionContext | null;
+}
+
+/**
+ * Resolution context containing discovered resources.
+ * Created when tsconfig is provided to the plugin.
+ */
+export interface ResolutionContext {
+  /** The full resolution result */
+  result: ResolutionResult;
+  /** Resource graph for compilation */
+  resourceGraph: ResourceGraph;
+  /** Merged semantics with discovered resources */
+  semantics: Semantics;
+  /** Template info for looking up component scope */
+  templates: Map<string, TemplateInfo>;
+  /** Lookup scope for a template path */
+  getScopeForTemplate(templatePath: string): ResourceScopeId;
 }

@@ -30,4 +30,5 @@ export type {
   AureliaSSRPluginOptions,
   StateProvider,
   ResolvedSSROptions,
+  ResolutionContext,
 } from "./types.js";
