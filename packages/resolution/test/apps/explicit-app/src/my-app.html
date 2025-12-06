@@ -1,0 +1,24 @@
+<template>
+  <h1>${message}</h1>
+
+  <!-- Global components -->
+  <nav-bar></nav-bar>
+  <user-card name="Alice" avatar="alice.png"></user-card>
+  <data-grid items.bind="items" columns.bind="columns"></data-grid>
+
+  <!-- Global attributes -->
+  <div tooltip="This is a tooltip">Hover me</div>
+  <p highlight="yellow">Highlighted text</p>
+
+  <!-- Value converters and binding behaviors -->
+  <span>${today | date}</span>
+  <span>${price | currency}</span>
+  <input value.bind="query & debounce:300">
+  <input value.bind="position & throttle:100">
+
+  <!-- static $au component -->
+  <fancy-button label="Click me"></fancy-button>
+
+  <!-- Local scope component (widgets) -->
+  <product-card></product-card>
+</template>
