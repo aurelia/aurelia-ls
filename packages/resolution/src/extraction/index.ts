@@ -17,4 +17,8 @@ export type {
   RegistrationArgFact,
   BindingMode,
   Position,
+  ImportFact,
+  ImportedName,
+  ExportFact,
+  ExportedName,
 } from "./types.js";

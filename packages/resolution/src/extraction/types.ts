@@ -8,6 +8,33 @@ export interface SourceFacts {
   readonly path: NormalizedPath;
   readonly classes: ClassFacts[];
   readonly registrationCalls: RegistrationCallFact[];
+  readonly imports: ImportFact[];
+  readonly exports: ExportFact[];
+}
+
+/** Import declaration fact */
+export type ImportFact =
+  | { readonly kind: "namespace"; readonly alias: string; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null }
+  | { readonly kind: "named"; readonly names: readonly ImportedName[]; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null }
+  | { readonly kind: "default"; readonly alias: string; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null };
+
+/** Imported name with optional alias */
+export interface ImportedName {
+  readonly name: string;
+  readonly alias: string | null;
+}
+
+/** Export declaration fact */
+export type ExportFact =
+  | { readonly kind: "reexport-all"; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null }
+  | { readonly kind: "reexport-named"; readonly names: readonly ExportedName[]; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null }
+  | { readonly kind: "named"; readonly names: readonly string[] }
+  | { readonly kind: "default"; readonly name: string | null };
+
+/** Exported name with optional alias */
+export interface ExportedName {
+  readonly name: string;
+  readonly alias: string | null;
 }
 
 /** Facts about a class declaration */
