@@ -20,6 +20,9 @@ import {
   type AotPlanModule,
   type AotCodeResult,
   type NestedTemplateHtmlNode,
+  type Semantics,
+  type ResourceGraph,
+  type ResourceScopeId,
 } from "@aurelia-ls/domain";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./ssr/instruction-translator.js";
@@ -36,6 +39,12 @@ export interface AotCompileOptions {
   templatePath?: string;
   /** Component name */
   name?: string;
+  /** Custom semantics (defaults to DEFAULT_SEMANTICS) */
+  semantics?: Semantics;
+  /** Resource graph for project-specific components */
+  resourceGraph?: ResourceGraph;
+  /** Scope to use for resource lookup (defaults to root) */
+  resourceScope?: ResourceScopeId | null;
 }
 
 export interface AotCompileResult {
@@ -88,6 +97,7 @@ export function compileWithAot(
 ): AotCompileResult {
   const templatePath = options.templatePath ?? "template.html";
   const name = options.name ?? "template";
+  const semantics = options.semantics ?? DEFAULT_SEMANTICS;
 
   // 1. Run domain compiler analysis pipeline
   const exprParser = getExpressionParser();
@@ -97,10 +107,15 @@ export function compileWithAot(
     exprParser,
     file: templatePath,
     name,
-    sem: DEFAULT_SEMANTICS,
+    sem: semantics,
   });
 
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+  // Build resolve options for resource graph support
+  const resolveOpts = options.resourceGraph
+    ? { graph: options.resourceGraph, scope: options.resourceScope ?? null }
+    : undefined;
+
+  const linked = resolveHost(ir, semantics, resolveOpts);
   const scoped = bindScopes(linked);
 
   // 2. Build AOT plan
@@ -149,6 +164,12 @@ export interface CompileAndRenderAotOptions {
   templatePath?: string;
   /** Component name */
   name?: string;
+  /** Custom semantics (defaults to DEFAULT_SEMANTICS) */
+  semantics?: Semantics;
+  /** Resource graph for project-specific components */
+  resourceGraph?: ResourceGraph;
+  /** Scope to use for resource lookup (defaults to root) */
+  resourceScope?: ResourceScopeId | null;
 
   /**
    * SSR post-processing options.
@@ -202,6 +223,15 @@ export async function compileAndRenderAot(
   };
   if (options.templatePath !== undefined) {
     aotOptions.templatePath = options.templatePath;
+  }
+  if (options.semantics !== undefined) {
+    aotOptions.semantics = options.semantics;
+  }
+  if (options.resourceGraph !== undefined) {
+    aotOptions.resourceGraph = options.resourceGraph;
+  }
+  if (options.resourceScope !== undefined) {
+    aotOptions.resourceScope = options.resourceScope;
   }
   const aot = compileWithAot(markup, aotOptions);
 

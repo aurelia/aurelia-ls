@@ -25,6 +25,9 @@ export {
   type AotCodeResult,
   type SerializedDefinition,
   type TemplateEmitResult,
+  type Semantics,
+  type ResourceGraph,
+  type ResourceScopeId,
 } from "@aurelia-ls/domain";
 
 // AOT compilation API
