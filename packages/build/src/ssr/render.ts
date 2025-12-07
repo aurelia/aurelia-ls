@@ -11,6 +11,7 @@ import type { IInstruction } from "@aurelia/template-compiler";
 import { createServerPlatform, getDocument } from "./platform.js";
 import {
   processSSROutput,
+  syncPropertiesForSSR,
   type HydrationManifest,
   type SSRProcessOptions,
 } from "./ssr-processor.js";
@@ -121,6 +122,10 @@ export async function renderToString(
   const au = new Aurelia(container);
   au.app({ host, component: Component });
   await au.start();
+
+  // Sync DOM properties to attributes for proper HTML serialization
+  // (e.g., checkbox.checked=true → <input checked>, input.value → value attr)
+  syncPropertiesForSSR(host);
 
   // Get manifest from SSR context (recorded during rendering)
   const runtimeManifest = ssrContext.getManifest();
@@ -309,6 +314,10 @@ export async function renderWithComponents(
   au.app({ host, component: RootComponent });
   await au.start();
 
+  // Sync DOM properties to attributes for proper HTML serialization
+  // (e.g., checkbox.checked=true → <input checked>, input.value → value attr)
+  syncPropertiesForSSR(host);
+
   // Get manifest from SSR context (recorded during rendering)
   const runtimeManifest = ssrContext.getManifest();
 
@@ -372,6 +381,10 @@ export async function renderComponent<T extends object>(
   const au = new Aurelia(container);
   au.app({ host, component: instance });
   await au.start();
+
+  // Sync DOM properties to attributes for proper HTML serialization
+  // (e.g., checkbox.checked=true → <input checked>, input.value → value attr)
+  syncPropertiesForSSR(host);
 
   // Get manifest from SSR context (recorded during rendering)
   const runtimeManifest = ssrContext.getManifest();
