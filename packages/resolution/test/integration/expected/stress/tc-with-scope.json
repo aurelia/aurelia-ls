@@ -120,6 +120,23 @@
             }
           ]
         }
+      ],
+      "templates": [
+        {
+          "name": "with_3",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "CEO: ${name}"
+            },
+            {
+              "kind": "text",
+              "target": 1,
+              "text": "Company: ${$parent.name}"
+            }
+          ]
+        }
       ]
     },
     {
@@ -147,6 +164,18 @@
           "target": 2,
           "text": "Total: $${total}"
         }
+      ],
+      "templates": [
+        {
+          "name": "repeat_5",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "${item.name}: $${item.price}"
+            }
+          ]
+        }
       ]
     },
     {
@@ -169,6 +198,12 @@
               "mode": "toView"
             }
           ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "if_7",
+          "instructions": []
         }
       ]
     }

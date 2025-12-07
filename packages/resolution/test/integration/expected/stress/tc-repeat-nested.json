@@ -111,6 +111,18 @@
             }
           ]
         }
+      ],
+      "templates": [
+        {
+          "name": "repeat_3",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "${cell}"
+            }
+          ]
+        }
       ]
     },
     {
@@ -135,6 +147,28 @@
           "name": "else",
           "template": 1,
           "bindings": []
+        }
+      ],
+      "templates": [
+        {
+          "name": "if_5",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "${item.label}"
+            }
+          ]
+        },
+        {
+          "name": "else_6",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "Hidden: ${item.label}"
+            }
+          ]
         }
       ]
     },
@@ -174,6 +208,37 @@
             {
               "iterator": "items",
               "expr": "b of a.level2"
+            }
+          ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "repeat_9",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "repeat",
+              "template": 0,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "c of b.level3"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "repeat_10",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${c}"
+                }
+              ]
             }
           ]
         }

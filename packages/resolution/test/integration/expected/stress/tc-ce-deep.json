@@ -314,6 +314,62 @@
           "template": 2,
           "bindings": []
         }
+      ],
+      "templates": [
+        {
+          "name": "case_8",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "item-card",
+              "bindings": [
+                {
+                  "property": "item",
+                  "expr": "cardItem",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "case_9",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "section-panel",
+              "bindings": [
+                {
+                  "property": "section",
+                  "expr": "panelSection",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "default_10",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "false",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        }
       ]
     },
     {
@@ -339,6 +395,44 @@
           "template": 1,
           "bindings": []
         }
+      ],
+      "templates": [
+        {
+          "name": "if_12",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "item-card",
+              "bindings": [
+                {
+                  "property": "item",
+                  "expr": "entry.item",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "else_13",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "entry.fallbackActive",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        }
       ]
     },
     {
@@ -353,6 +447,26 @@
             {
               "iterator": "items",
               "expr": "item of listItems"
+            }
+          ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "repeat_15",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "item.active",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
             }
           ]
         }
@@ -393,6 +507,44 @@
           "name": "else",
           "template": 1,
           "bindings": []
+        }
+      ],
+      "templates": [
+        {
+          "name": "if_17",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "true",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "else_18",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "false",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
         }
       ]
     },

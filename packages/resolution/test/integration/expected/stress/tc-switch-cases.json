@@ -105,6 +105,24 @@
           "template": 3,
           "bindings": []
         }
+      ],
+      "templates": [
+        {
+          "name": "case_1",
+          "instructions": []
+        },
+        {
+          "name": "case_2",
+          "instructions": []
+        },
+        {
+          "name": "case_3",
+          "instructions": []
+        },
+        {
+          "name": "default_4",
+          "instructions": []
+        }
       ]
     },
     {
@@ -156,6 +174,42 @@
           "template": 3,
           "bindings": []
         }
+      ],
+      "templates": [
+        {
+          "name": "case_6",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "Loading... ${progress}%"
+            }
+          ]
+        },
+        {
+          "name": "case_7",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "Success: ${result}"
+            }
+          ]
+        },
+        {
+          "name": "case_8",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "Error: ${errorMessage}"
+            }
+          ]
+        },
+        {
+          "name": "default_9",
+          "instructions": []
+        }
       ]
     },
     {
@@ -193,6 +247,70 @@
           "name": "default-case",
           "template": 2,
           "bindings": []
+        }
+      ],
+      "templates": [
+        {
+          "name": "case_11",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "repeat",
+              "template": 0,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "item of items"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "repeat_12",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${item}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "case_13",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "repeat",
+              "template": 0,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "item of items"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "repeat_14",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${item}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "default_15",
+          "instructions": []
         }
       ]
     },
@@ -263,6 +381,28 @@
               "mode": "toView"
             }
           ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "case_17",
+          "instructions": []
+        },
+        {
+          "name": "case_18",
+          "instructions": []
+        },
+        {
+          "name": "case_19",
+          "instructions": []
+        },
+        {
+          "name": "case_20",
+          "instructions": []
+        },
+        {
+          "name": "case_21",
+          "instructions": []
         }
       ]
     }

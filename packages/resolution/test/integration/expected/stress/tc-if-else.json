@@ -185,6 +185,16 @@
           "template": 1,
           "bindings": []
         }
+      ],
+      "templates": [
+        {
+          "name": "if_4",
+          "instructions": []
+        },
+        {
+          "name": "else_5",
+          "instructions": []
+        }
       ]
     },
     {

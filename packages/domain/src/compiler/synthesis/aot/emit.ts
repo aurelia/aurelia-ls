@@ -279,6 +279,42 @@ class EmitContext {
       }
     }
 
+    // Special handling for promise: emit pending/then/catch as instructions
+    // Each branch is a separate controller with its own template
+    if (ctrl.kind === "promise") {
+      let branchIndex = 0;
+      if (ctrl.pendingTemplate) {
+        const row: SerializedInstruction[] = [];
+        row.push({
+          type: "hydrateTemplateController",
+          resource: "pending",
+          templateIndex: branchIndex++,
+          instructions: [], // pending has no bindings
+        } satisfies SerializedHydrateTemplateController);
+        innerInstructions.push(row);
+      }
+      if (ctrl.thenTemplate) {
+        const row: SerializedInstruction[] = [];
+        row.push({
+          type: "hydrateTemplateController",
+          resource: "then",
+          templateIndex: branchIndex++,
+          instructions: [], // local variable is handled by the TC, not via binding
+        } satisfies SerializedHydrateTemplateController);
+        innerInstructions.push(row);
+      }
+      if (ctrl.catchTemplate) {
+        const row: SerializedInstruction[] = [];
+        row.push({
+          type: "hydrateTemplateController",
+          resource: "catch",
+          templateIndex: branchIndex++,
+          instructions: [], // local variable is handled by the TC, not via binding
+        } satisfies SerializedHydrateTemplateController);
+        innerInstructions.push(row);
+      }
+    }
+
     // Compact instructions to use local indices (remove empty rows)
     const compacted = compactInstructions(innerInstructions);
 
@@ -652,11 +688,11 @@ function getControllerMainTemplate(ctrl: PlanController): PlanNode | undefined {
     case "default-case":
       return ctrl.template;
     case "switch":
-      // Switch doesn't have a single main template
+      // Switch doesn't have a single main template - cases are child controllers
       return undefined;
     case "promise":
-      // Promise uses thenTemplate as the main template
-      return ctrl.thenTemplate;
+      // Promise doesn't have a single main template - branches are child controllers
+      return undefined;
   }
 }
 

@@ -1,6 +1,6 @@
 {
   "targets": 9,
-  "expressions": 33,
+  "expressions": 37,
   "instructions": [
     {
       "kind": "text",
@@ -109,10 +109,311 @@
           "template": 3,
           "bindings": []
         }
+      ],
+      "templates": [
+        {
+          "name": "case_1",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "repeat",
+              "template": 0,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "category of categories"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "repeat_2",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${category.name}"
+                },
+                {
+                  "kind": "controller",
+                  "target": 1,
+                  "name": "repeat",
+                  "template": 0,
+                  "bindings": [
+                    {
+                      "iterator": "items",
+                      "expr": "item of category.items"
+                    }
+                  ]
+                }
+              ],
+              "templates": [
+                {
+                  "name": "repeat_3",
+                  "instructions": [
+                    {
+                      "kind": "controller",
+                      "target": 0,
+                      "name": "if",
+                      "template": 0,
+                      "bindings": [
+                        {
+                          "property": "value",
+                          "expr": "item.featured",
+                          "mode": "toView"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "controller",
+                      "target": 1,
+                      "name": "else",
+                      "template": 1,
+                      "bindings": []
+                    }
+                  ],
+                  "templates": [
+                    {
+                      "name": "if_4",
+                      "instructions": [
+                        {
+                          "kind": "text",
+                          "target": 0,
+                          "text": "${item.title}"
+                        },
+                        {
+                          "kind": "text",
+                          "target": 1,
+                          "text": "${item.description}"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "else_5",
+                      "instructions": [
+                        {
+                          "kind": "text",
+                          "target": 0,
+                          "text": "${item.title}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "case_6",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "promise",
+              "template": 0,
+              "bindings": [
+                {
+                  "property": "value",
+                  "expr": "gridDataPromise",
+                  "mode": "toView"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "promise_7",
+              "instructions": [
+                {
+                  "kind": "controller",
+                  "target": 0,
+                  "name": "pending",
+                  "template": 0,
+                  "bindings": []
+                },
+                {
+                  "kind": "controller",
+                  "target": 1,
+                  "name": "then",
+                  "template": 1,
+                  "bindings": []
+                },
+                {
+                  "kind": "controller",
+                  "target": 2,
+                  "name": "catch",
+                  "template": 2,
+                  "bindings": []
+                }
+              ],
+              "templates": [
+                {
+                  "name": "pending_8",
+                  "instructions": []
+                },
+                {
+                  "name": "then_9",
+                  "instructions": [
+                    {
+                      "kind": "controller",
+                      "target": 0,
+                      "name": "repeat",
+                      "template": 0,
+                      "bindings": [
+                        {
+                          "iterator": "items",
+                          "expr": "cell of gridData.cells"
+                        }
+                      ]
+                    }
+                  ],
+                  "templates": [
+                    {
+                      "name": "repeat_10",
+                      "instructions": [
+                        {
+                          "kind": "text",
+                          "target": 0,
+                          "text": "\n            ${cell.value}\n          "
+                        },
+                        {
+                          "kind": "bind",
+                          "target": 1,
+                          "property": "class",
+                          "expr": "cell.class",
+                          "mode": "toView"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "catch_11",
+                  "instructions": [
+                    {
+                      "kind": "text",
+                      "target": 0,
+                      "text": "Grid load failed: ${error}"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "case_12",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "with",
+              "template": 0,
+              "bindings": [
+                {
+                  "property": "value",
+                  "expr": "selectedItem",
+                  "mode": "toView"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "with_13",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${name}"
+                },
+                {
+                  "kind": "controller",
+                  "target": 1,
+                  "name": "with",
+                  "template": 0,
+                  "bindings": [
+                    {
+                      "property": "value",
+                      "expr": "metadata",
+                      "mode": "toView"
+                    }
+                  ]
+                },
+                {
+                  "kind": "controller",
+                  "target": 2,
+                  "name": "if",
+                  "template": 1,
+                  "bindings": [
+                    {
+                      "property": "value",
+                      "expr": "hasComments",
+                      "mode": "toView"
+                    }
+                  ]
+                }
+              ],
+              "templates": [
+                {
+                  "name": "with_14",
+                  "instructions": [
+                    {
+                      "kind": "text",
+                      "target": 0,
+                      "text": "Created: ${createdAt}"
+                    },
+                    {
+                      "kind": "text",
+                      "target": 1,
+                      "text": "Author: ${author}"
+                    }
+                  ]
+                },
+                {
+                  "name": "if_15",
+                  "instructions": [
+                    {
+                      "kind": "controller",
+                      "target": 0,
+                      "name": "repeat",
+                      "template": 0,
+                      "bindings": [
+                        {
+                          "iterator": "items",
+                          "expr": "comment of comments"
+                        }
+                      ]
+                    }
+                  ],
+                  "templates": [
+                    {
+                      "name": "repeat_16",
+                      "instructions": [
+                        {
+                          "kind": "text",
+                          "target": 0,
+                          "text": "${comment.text} - ${comment.user}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "default_17",
+          "instructions": []
+        }
       ]
     },
     {
-      "name": "if_14",
+      "name": "if_18",
       "instructions": [
         {
           "kind": "controller",
@@ -127,10 +428,53 @@
             }
           ]
         }
+      ],
+      "templates": [
+        {
+          "name": "portal_19",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "${modalTitle}"
+            },
+            {
+              "kind": "controller",
+              "target": 1,
+              "name": "repeat",
+              "template": 0,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "option of modalOptions"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "repeat_20",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${option.label}"
+                },
+                {
+                  "kind": "event",
+                  "target": 1,
+                  "event": "click",
+                  "handler": "selectOption(option)",
+                  "capture": false
+                }
+              ]
+            }
+          ]
+        }
       ]
     },
     {
-      "name": "if_17",
+      "name": "if_21",
       "instructions": [
         {
           "kind": "text",
@@ -140,7 +484,7 @@
       ]
     },
     {
-      "name": "repeat_18",
+      "name": "repeat_22",
       "instructions": [
         {
           "kind": "text",

@@ -517,6 +517,9 @@ export interface PlanPromiseController extends PlanControllerBase {
   /** Pending template (shown while promise is pending) */
   pendingTemplate?: PlanNode | undefined;
 
+  /** Frame ID for pending branch */
+  pendingFrameId?: FrameId | undefined;
+
   /** Then template (shown when promise resolves) */
   thenTemplate?: PlanNode | undefined;
 

@@ -342,6 +342,16 @@
             }
           ]
         }
+      ],
+      "templates": [
+        {
+          "name": "case_15",
+          "instructions": []
+        },
+        {
+          "name": "case_16",
+          "instructions": []
+        }
       ]
     },
     {

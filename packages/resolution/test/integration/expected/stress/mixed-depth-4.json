@@ -49,6 +49,115 @@
             }
           ]
         }
+      ],
+      "templates": [
+        {
+          "name": "repeat_1",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "if",
+              "template": 0,
+              "bindings": [
+                {
+                  "property": "value",
+                  "expr": "group.title",
+                  "mode": "toView"
+                }
+              ]
+            },
+            {
+              "kind": "controller",
+              "target": 1,
+              "name": "repeat",
+              "template": 1,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "item of group.items"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "if_2",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${group.title}"
+                }
+              ]
+            },
+            {
+              "name": "repeat_3",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${item.label}"
+                },
+                {
+                  "kind": "controller",
+                  "target": 1,
+                  "name": "if",
+                  "template": 0,
+                  "bindings": [
+                    {
+                      "property": "value",
+                      "expr": "item.details",
+                      "mode": "toView"
+                    }
+                  ]
+                },
+                {
+                  "kind": "controller",
+                  "target": 2,
+                  "name": "else",
+                  "template": 1,
+                  "bindings": []
+                }
+              ],
+              "templates": [
+                {
+                  "name": "if_4",
+                  "instructions": [
+                    {
+                      "kind": "controller",
+                      "target": 0,
+                      "name": "repeat",
+                      "template": 0,
+                      "bindings": [
+                        {
+                          "iterator": "items",
+                          "expr": "detail of item.details"
+                        }
+                      ]
+                    }
+                  ],
+                  "templates": [
+                    {
+                      "name": "repeat_5",
+                      "instructions": [
+                        {
+                          "kind": "text",
+                          "target": 0,
+                          "text": "${detail}"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "else_6",
+                  "instructions": []
+                }
+              ]
+            }
+          ]
+        }
       ]
     },
     {
@@ -79,6 +188,80 @@
               "mode": "toView"
             }
           ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "case_8",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "repeat",
+              "template": 0,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "category of categories"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "repeat_9",
+              "instructions": [
+                {
+                  "kind": "controller",
+                  "target": 0,
+                  "name": "if",
+                  "template": 0,
+                  "bindings": [
+                    {
+                      "property": "value",
+                      "expr": "category.visible",
+                      "mode": "toView"
+                    }
+                  ]
+                }
+              ],
+              "templates": [
+                {
+                  "name": "if_10",
+                  "instructions": [
+                    {
+                      "kind": "controller",
+                      "target": 0,
+                      "name": "repeat",
+                      "template": 0,
+                      "bindings": [
+                        {
+                          "iterator": "items",
+                          "expr": "tag of category.tags"
+                        }
+                      ]
+                    }
+                  ],
+                  "templates": [
+                    {
+                      "name": "repeat_11",
+                      "instructions": [
+                        {
+                          "kind": "text",
+                          "target": 0,
+                          "text": "${tag}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "case_12",
+          "instructions": []
         }
       ]
     }

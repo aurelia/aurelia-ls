@@ -1174,7 +1174,7 @@ function transformSwitchController(
 
 function transformPromiseController(
   ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+  _instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
   frameId: FrameId,
   ctx: PlanningContext,
 ): PlanPromiseController {
@@ -1193,22 +1193,44 @@ function transformPromiseController(
     targetIndex: ctx.allocateTarget(),
   };
 
-  // Handle then/catch branches if this is a branch controller
-  if (ins.branch) {
-    // Look up the LinkedTemplate for the nested template
-    const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
-    const template = nestedLinked
-      ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
-      : createEmptyFragment();
+  // Look up the promise's definition template which contains branch controllers
+  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
+  if (linkedDef) {
+    // Build instruction map for nested template transformation
+    const defInstructionsByTarget = new Map<NodeId, LinkedInstruction[]>();
+    for (const row of linkedDef.rows) {
+      defInstructionsByTarget.set(row.target, row.instructions);
+    }
 
-    if (ins.branch.kind === "then") {
-      result.thenTemplate = template;
-      if (ins.branch.local) result.thenLocal = ins.branch.local;
-      result.thenFrameId = frameId;
-    } else if (ins.branch.kind === "catch") {
-      result.catchTemplate = template;
-      if (ins.branch.local) result.catchLocal = ins.branch.local;
-      result.catchFrameId = frameId;
+    // Find and transform each branch (pending/then/catch)
+    for (const row of linkedDef.rows) {
+      for (const childIns of row.instructions) {
+        if (childIns.kind === "hydrateTemplateController" && childIns.res === "promise" && childIns.branch) {
+          // Transform this branch's nested template directly
+          const branchLinked = ctx.getLinkedTemplate(childIns.def.dom);
+          const template = branchLinked
+            ? transformNestedTemplate(branchLinked, defInstructionsByTarget, frameId, ctx)
+            : createEmptyFragment();
+
+          // Store on the appropriate field based on branch kind
+          switch (childIns.branch.kind) {
+            case "pending":
+              result.pendingTemplate = template;
+              result.pendingFrameId = frameId;
+              break;
+            case "then":
+              result.thenTemplate = template;
+              if (childIns.branch.local) result.thenLocal = childIns.branch.local;
+              result.thenFrameId = frameId;
+              break;
+            case "catch":
+              result.catchTemplate = template;
+              if (childIns.branch.local) result.catchLocal = childIns.branch.local;
+              result.catchFrameId = frameId;
+              break;
+          }
+        }
+      }
     }
   }
 

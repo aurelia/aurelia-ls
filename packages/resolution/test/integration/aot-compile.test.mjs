@@ -145,11 +145,25 @@ function reduceEmitResult(result, exprCodeMap) {
     targets: definition.targetCount,
     expressions: expressions.length,
     instructions: flattenInstructions(definition.instructions, exprCodeMap),
-    templates: definition.nestedTemplates.map((t) => ({
-      name: t.name,
-      instructions: flattenInstructions(t.instructions, exprCodeMap),
-    })),
+    templates: reduceTemplates(definition.nestedTemplates, exprCodeMap),
   };
+}
+
+/**
+ * Recursively reduce nested templates to readable format.
+ */
+function reduceTemplates(templates, exprCodeMap) {
+  return templates.map((t, i) => {
+    const reduced = {
+      name: t.name || `template#${i}`,
+      instructions: flattenInstructions(t.instructions, exprCodeMap),
+    };
+    // Include nested templates if present
+    if (t.nestedTemplates && t.nestedTemplates.length > 0) {
+      reduced.templates = reduceTemplates(t.nestedTemplates, exprCodeMap);
+    }
+    return reduced;
+  });
 }
 
 /**
