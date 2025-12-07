@@ -449,9 +449,22 @@ function transformElement(
   }
 
   // Add static attrs from DOM node, but filter out binding attributes
+  // Collect bound attribute names (interpolation bindings use these attributes)
+  const boundAttrNames = new Set<string>();
+  for (const binding of bindings) {
+    if (binding.type === "attributeInterpolation") {
+      boundAttrNames.add(binding.to);
+    }
+  }
+
   for (const attr of node.attrs) {
     // Skip attributes that are binding commands (e.g., 'if.bind', 'repeat.for', 'value.bind')
     if (isBindingAttribute(attr.name)) {
+      continue;
+    }
+    // Skip attributes that have interpolation bindings - the binding's parts
+    // contain any static portions and the runtime will construct the full value
+    if (boundAttrNames.has(attr.name)) {
       continue;
     }
     // Check if we already have this attr from instructions

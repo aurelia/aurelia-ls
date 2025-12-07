@@ -187,48 +187,6 @@ export interface ComponentClass {
 }
 
 /**
- * Symbol to store original template string before converting to element.
- * This allows us to re-create the element fresh for each render.
- */
-const ORIGINAL_TEMPLATE = Symbol("aureliaOriginalTemplate");
-
-/**
- * Ensure a component's $au.template is an HTMLTemplateElement.
- * The Aurelia runtime expects this when needsCompile=false.
- *
- * IMPORTANT: We store the original string and always create a FRESH element
- * for each render. This is necessary because:
- * 1. Each render may use a different server document
- * 2. The Aurelia runtime may modify the element during rendering
- * 3. Reusing elements across renders causes target count mismatches
- */
-function ensureTemplateElement(
-  Component: ComponentClass,
-  doc: Document,
-): void {
-  if (!Component.$au) return;
-
-  const template = Component.$au.template;
-  let templateString: string | undefined;
-
-  if (typeof template === "string") {
-    // First time - store the original string
-    templateString = template;
-    (Component as unknown as Record<symbol, unknown>)[ORIGINAL_TEMPLATE] = templateString;
-  } else {
-    // Element or other - retrieve stored string
-    templateString = (Component as unknown as Record<symbol, unknown>)[ORIGINAL_TEMPLATE] as string | undefined;
-  }
-
-  if (templateString) {
-    // Always create a FRESH template element from the stored string
-    const templateEl = doc.createElement("template");
-    templateEl.innerHTML = templateString;
-    Component.$au.template = templateEl;
-  }
-}
-
-/**
  * Render using real component classes with child component support.
  *
  * This function is designed for SSR with real component classes loaded
@@ -273,14 +231,6 @@ export async function renderWithComponents(
     }
   }
 
-  // Convert string templates to HTMLTemplateElement for all components
-  // The Aurelia runtime expects template to be an element when needsCompile=false
-  ensureTemplateElement(RootComponent, doc);
-  if (options.childComponents) {
-    for (const ChildComponent of options.childComponents) {
-      ensureTemplateElement(ChildComponent, doc);
-    }
-  }
 
   // Get root target count from $au definition
   const rootInstructions = RootComponent.$au?.instructions;

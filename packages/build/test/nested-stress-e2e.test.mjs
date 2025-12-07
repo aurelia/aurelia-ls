@@ -385,8 +385,8 @@ describe("Nested Stress Test: Deep Component Hierarchy", () => {
       }
     }
 
-    // StatusBadge has 1 target (span with interpolation)
-    assert.equal(statusBadgeAot.instructions.length, 1, "StatusBadge should have 1 instruction row");
+    // StatusBadge has 2 targets: span (class interpolation) + text node (text interpolation)
+    assert.equal(statusBadgeAot.instructions.length, 2, "StatusBadge should have 2 instruction rows");
 
     // ItemCard has: span + if/else (template controller) = at least 2
     assert.ok(itemCardAot.instructions.length >= 2, "ItemCard should have at least 2 instruction rows");
