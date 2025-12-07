@@ -1,0 +1,147 @@
+{
+  "targets": 6,
+  "expressions": 13,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "portal",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "target",
+          "expr": "target",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "portal",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "target",
+          "expr": "targetSelector",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "portal",
+      "template": 2,
+      "bindings": [
+        {
+          "property": "target",
+          "expr": "modal-container",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "repeat",
+      "template": 3,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_9157baf7ac1c1580>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "portal",
+      "template": 4,
+      "bindings": [
+        {
+          "property": "target",
+          "expr": "shared-target",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 5,
+      "name": "portal",
+      "template": 5,
+      "bindings": [
+        {
+          "property": "target",
+          "expr": "shared-target",
+          "mode": "toView"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "portal_0",
+      "instructions": []
+    },
+    {
+      "name": "portal_1",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${content}"
+        }
+      ]
+    },
+    {
+      "name": "portal_2",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${modalTitle}"
+        },
+        {
+          "kind": "text",
+          "target": 1,
+          "text": "${modalContent}"
+        },
+        {
+          "kind": "event",
+          "target": 2,
+          "event": "click",
+          "handler": "close()",
+          "capture": false
+        }
+      ]
+    },
+    {
+      "name": "repeat_3",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "portal",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "target",
+              "expr": "notification-area",
+              "mode": "toView"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "portal_5",
+      "instructions": []
+    },
+    {
+      "name": "portal_6",
+      "instructions": []
+    }
+  ]
+}

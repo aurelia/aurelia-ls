@@ -1,0 +1,41 @@
+<div class="tc-promise">
+  <!-- All three branches: pending, then, catch -->
+  <template promise.resolve="dataPromise">
+    <span pending>Loading...</span>
+    <span then="data">${data}</span>
+    <span catch="err">Error: ${err.message}</span>
+  </template>
+
+  <!-- Promise with complex content in branches -->
+  <template promise.resolve="userPromise">
+    <div pending class="loading">
+      <span class="spinner"></span>
+      <span>Fetching user data...</span>
+    </div>
+    <div then="user" class="user-info">
+      <h3>${user.name}</h3>
+      <p>Email: ${user.email}</p>
+      <p>Role: ${user.role}</p>
+    </div>
+    <div catch="error" class="error">
+      <h3>Failed to load user</h3>
+      <p>${error.message}</p>
+      <button click.trigger="retry()">Retry</button>
+    </div>
+  </template>
+
+  <!-- Promise with only then/catch (no pending) -->
+  <template promise.resolve="quickPromise">
+    <span then="result">Result: ${result}</span>
+    <span catch="e">Failed: ${e}</span>
+  </template>
+
+  <!-- Nested promise in then branch -->
+  <template promise.resolve="outerPromise">
+    <div pending>Loading outer...</div>
+    <template then="outer" promise.resolve="outer.innerPromise">
+      <span pending>Loading inner...</span>
+      <span then="inner">${outer.name}: ${inner.value}</span>
+    </template>
+  </template>
+</div>

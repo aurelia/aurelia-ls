@@ -1,0 +1,59 @@
+{
+  "targets": 2,
+  "expressions": 11,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "repeat",
+      "template": 0,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_074c294084d61880>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "switch",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "mode",
+          "mode": "toView"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "repeat_0",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${section.name}"
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "repeat",
+          "template": 0,
+          "bindings": [
+            {
+              "iterator": "items",
+              "expr": "<expr:expr_e75da8c0583cb7e0>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "switch_7",
+      "instructions": []
+    }
+  ]
+}

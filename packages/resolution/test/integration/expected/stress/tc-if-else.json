@@ -1,0 +1,286 @@
+{
+  "targets": 14,
+  "expressions": 14,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "if",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showA",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "if",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "condition",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "else",
+      "template": 2,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "if",
+      "template": 3,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "outer",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "if",
+      "template": 4,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "hasValue",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 5,
+      "name": "else",
+      "template": 5,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 6,
+      "name": "if",
+      "template": 6,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "modeA",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 7,
+      "name": "else",
+      "template": 7,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 8,
+      "name": "if",
+      "template": 8,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "modeB",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 9,
+      "name": "else",
+      "template": 9,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 10,
+      "name": "if",
+      "template": 10,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showInline",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 11,
+      "name": "else",
+      "template": 11,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 12,
+      "name": "if",
+      "template": 12,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "isPrimary",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 13,
+      "name": "else",
+      "template": 13,
+      "bindings": []
+    }
+  ],
+  "templates": [
+    {
+      "name": "if_0",
+      "instructions": []
+    },
+    {
+      "name": "if_1",
+      "instructions": []
+    },
+    {
+      "name": "else_2",
+      "instructions": []
+    },
+    {
+      "name": "if_3",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "if",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "inner",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "else",
+          "template": 1,
+          "bindings": []
+        }
+      ]
+    },
+    {
+      "name": "if_6",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${value}"
+        },
+        {
+          "kind": "bind",
+          "target": 1,
+          "property": "class",
+          "expr": "valueClass",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "name": "else_7",
+      "instructions": []
+    },
+    {
+      "name": "if_8",
+      "instructions": []
+    },
+    {
+      "name": "else_9",
+      "instructions": []
+    },
+    {
+      "name": "if_10",
+      "instructions": []
+    },
+    {
+      "name": "else_11",
+      "instructions": []
+    },
+    {
+      "name": "if_12",
+      "instructions": []
+    },
+    {
+      "name": "else_13",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "status-badge",
+          "bindings": [
+            {
+              "property": "active",
+              "expr": "fallbackActive",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "if_14",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "status-badge",
+          "bindings": [
+            {
+              "property": "active",
+              "expr": "true",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "else_15",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "status-badge",
+          "bindings": [
+            {
+              "property": "active",
+              "expr": "false",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    }
+  ]
+}

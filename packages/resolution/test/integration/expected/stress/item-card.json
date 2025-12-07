@@ -1,0 +1,69 @@
+{
+  "targets": 3,
+  "expressions": 4,
+  "instructions": [
+    {
+      "kind": "text",
+      "target": 0,
+      "text": "${item.label}"
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "if",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "item.active",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "else",
+      "template": 1,
+      "bindings": []
+    }
+  ],
+  "templates": [
+    {
+      "name": "if_0",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "status-badge",
+          "bindings": [
+            {
+              "property": "active",
+              "expr": "true",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "else_1",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "status-badge",
+          "bindings": [
+            {
+              "property": "active",
+              "expr": "false",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "targets": 4,
+  "expressions": 4,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "switch",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "type",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "switch",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "status",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "switch",
+      "template": 2,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "view",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "switch",
+      "template": 3,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "size",
+          "mode": "toView"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "switch_0",
+      "instructions": []
+    },
+    {
+      "name": "switch_1",
+      "instructions": []
+    },
+    {
+      "name": "switch_2",
+      "instructions": []
+    },
+    {
+      "name": "switch_3",
+      "instructions": []
+    }
+  ]
+}

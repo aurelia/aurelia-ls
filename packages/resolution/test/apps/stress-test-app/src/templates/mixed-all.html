@@ -1,0 +1,77 @@
+<div class="mixed-all">
+  <h1>${title}</h1>
+
+  <!-- Complex combination: switch containing repeat with if/else -->
+  <template switch.bind="viewMode">
+    <!-- List view with filters -->
+    <div case="list" class="list-view">
+      <div repeat.for="category of categories">
+        <h3>${category.name}</h3>
+        <div repeat.for="item of category.items">
+          <div if.bind="item.featured" class="featured">
+            <strong>${item.title}</strong>
+            <span>${item.description}</span>
+          </div>
+          <div else class="normal">
+            <span>${item.title}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid view with promise loading -->
+    <div case="grid" class="grid-view">
+      <template promise.resolve="gridDataPromise">
+        <div pending class="loading">Loading grid...</div>
+        <div then="gridData" class="grid">
+          <div repeat.for="cell of gridData.cells" class.bind="cell.class">
+            ${cell.value}
+          </div>
+        </div>
+        <div catch="error">Grid load failed: ${error}</div>
+      </template>
+    </div>
+
+    <!-- Detail view with nested with -->
+    <div case="detail" class="detail-view">
+      <div with.bind="selectedItem">
+        <h2>${name}</h2>
+        <div with.bind="metadata">
+          <p>Created: ${createdAt}</p>
+          <p>Author: ${author}</p>
+        </div>
+        <div if.bind="hasComments">
+          <div repeat.for="comment of comments">
+            <p>${comment.text} - ${comment.user}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Default: simple message -->
+    <div default-case>
+      <p>Select a view mode</p>
+    </div>
+  </template>
+
+  <!-- Separate section with portal -->
+  <div if.bind="showPortal">
+    <div portal="modal-target">
+      <div class="modal">
+        <h3>${modalTitle}</h3>
+        <div repeat.for="option of modalOptions">
+          <button click.trigger="selectOption(option)">${option.label}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="modal-target"></div>
+
+  <!-- Footer with multiple bindings -->
+  <footer>
+    <span if.bind="showCopyright">${copyright}</span>
+    <span repeat.for="link of footerLinks">
+      <a href.bind="link.url">${link.text}</a>
+    </span>
+  </footer>
+</div>

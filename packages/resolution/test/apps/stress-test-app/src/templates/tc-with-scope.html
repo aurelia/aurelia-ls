@@ -1,0 +1,39 @@
+<div class="tc-with">
+  <!-- Simple with -->
+  <div with.bind="user">
+    <span>${name}</span>
+    <span>${email}</span>
+  </div>
+
+  <!-- With accessing outer scope -->
+  <div with.bind="item">
+    <span>${label}</span>
+    <span>Parent: ${$parent.parentName}</span>
+  </div>
+
+  <!-- Nested with -->
+  <div with.bind="company">
+    <h2>${name}</h2>
+    <div with.bind="ceo">
+      <span>CEO: ${name}</span>
+      <span>Company: ${$parent.name}</span>
+    </div>
+  </div>
+
+  <!-- With + repeat combination -->
+  <div with.bind="order">
+    <h3>Order #${id}</h3>
+    <div repeat.for="item of items">
+      <span>${item.name}: $${item.price}</span>
+    </div>
+    <p>Total: $${total}</p>
+  </div>
+
+  <!-- With + if combination -->
+  <div with.bind="profile">
+    <span>${username}</span>
+    <div if.bind="isVerified">
+      <span class="verified">Verified account</span>
+    </div>
+  </div>
+</div>

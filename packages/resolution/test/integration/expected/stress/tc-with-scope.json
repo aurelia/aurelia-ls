@@ -1,0 +1,176 @@
+{
+  "targets": 5,
+  "expressions": 20,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "with",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "user",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "with",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "item",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "with",
+      "template": 2,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "company",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "with",
+      "template": 3,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "order",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "with",
+      "template": 4,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "profile",
+          "mode": "toView"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "with_0",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${name}"
+        },
+        {
+          "kind": "text",
+          "target": 1,
+          "text": "${email}"
+        }
+      ]
+    },
+    {
+      "name": "with_1",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${label}"
+        },
+        {
+          "kind": "text",
+          "target": 1,
+          "text": "Parent: ${$parent.parentName}"
+        }
+      ]
+    },
+    {
+      "name": "with_2",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${name}"
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "with",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "ceo",
+              "mode": "toView"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "with_4",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "Order #${id}"
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "repeat",
+          "template": 0,
+          "bindings": [
+            {
+              "iterator": "items",
+              "expr": "<expr:expr_f5169dc0e67f5900>"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "target": 2,
+          "text": "Total: $${total}"
+        }
+      ]
+    },
+    {
+      "name": "with_6",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${username}"
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "if",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "isVerified",
+              "mode": "toView"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

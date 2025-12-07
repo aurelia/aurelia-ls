@@ -1,0 +1,339 @@
+{
+  "targets": 18,
+  "expressions": 23,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "if",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showA",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "if",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showB",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "if",
+      "template": 2,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showC",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "if",
+      "template": 3,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "hasHeader",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "else",
+      "template": 4,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 5,
+      "name": "if",
+      "template": 5,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "hasContent",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 6,
+      "name": "else",
+      "template": 6,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 7,
+      "name": "if",
+      "template": 7,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "hasFooter",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 8,
+      "name": "else",
+      "template": 8,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 9,
+      "name": "repeat",
+      "template": 9,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_9be6e640c1002ea0>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 10,
+      "name": "repeat",
+      "template": 10,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_bab3310010257680>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 11,
+      "name": "repeat",
+      "template": 11,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_ebfaa0c02f913c00>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 12,
+      "name": "if",
+      "template": 12,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showFirst",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 13,
+      "name": "repeat",
+      "template": 13,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_3512913854dda200>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 14,
+      "name": "switch",
+      "template": 14,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "type",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 15,
+      "name": "if",
+      "template": 15,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showLast",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 16,
+      "name": "repeat",
+      "template": 16,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_085c04401118eec0>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 17,
+      "name": "if",
+      "template": 17,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showMain",
+          "mode": "toView"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "if_0",
+      "instructions": []
+    },
+    {
+      "name": "if_1",
+      "instructions": []
+    },
+    {
+      "name": "if_2",
+      "instructions": []
+    },
+    {
+      "name": "if_3",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "Header: ${header}"
+        }
+      ]
+    },
+    {
+      "name": "else_4",
+      "instructions": []
+    },
+    {
+      "name": "if_5",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "Content: ${content}"
+        }
+      ]
+    },
+    {
+      "name": "else_6",
+      "instructions": []
+    },
+    {
+      "name": "if_7",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "Footer: ${footer}"
+        }
+      ]
+    },
+    {
+      "name": "else_8",
+      "instructions": []
+    },
+    {
+      "name": "repeat_9",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${item}"
+        }
+      ]
+    },
+    {
+      "name": "repeat_10",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${item}"
+        }
+      ]
+    },
+    {
+      "name": "repeat_11",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${item}"
+        }
+      ]
+    },
+    {
+      "name": "if_12",
+      "instructions": []
+    },
+    {
+      "name": "repeat_13",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${item}"
+        }
+      ]
+    },
+    {
+      "name": "switch_14",
+      "instructions": []
+    },
+    {
+      "name": "if_15",
+      "instructions": []
+    },
+    {
+      "name": "repeat_16",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${row}"
+        }
+      ]
+    },
+    {
+      "name": "if_17",
+      "instructions": []
+    }
+  ]
+}

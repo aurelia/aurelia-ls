@@ -1,0 +1,18 @@
+{
+  "targets": 2,
+  "expressions": 2,
+  "instructions": [
+    {
+      "kind": "text",
+      "target": 0,
+      "text": "${statusText}"
+    },
+    {
+      "kind": "interpolation",
+      "target": 1,
+      "attribute": "class",
+      "text": "${statusClass}"
+    }
+  ],
+  "templates": []
+}

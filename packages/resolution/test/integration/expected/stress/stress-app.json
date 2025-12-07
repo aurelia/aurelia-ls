@@ -1,0 +1,56 @@
+{
+  "targets": 3,
+  "expressions": 4,
+  "instructions": [
+    {
+      "kind": "text",
+      "target": 0,
+      "text": "${title}"
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "repeat",
+      "template": 0,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_f2481f80a3f7ad40>"
+        }
+      ]
+    },
+    {
+      "kind": "element",
+      "target": 2,
+      "tag": "footer-widget",
+      "bindings": [
+        {
+          "property": "text",
+          "expr": "footerText",
+          "mode": "toView"
+        }
+      ],
+      "containerless": false
+    }
+  ],
+  "templates": [
+    {
+      "name": "repeat_0",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "section-panel",
+          "bindings": [
+            {
+              "property": "section",
+              "expr": "section",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    }
+  ]
+}

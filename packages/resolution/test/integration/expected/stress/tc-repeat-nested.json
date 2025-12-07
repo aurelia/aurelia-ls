@@ -1,0 +1,183 @@
+{
+  "targets": 6,
+  "expressions": 20,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "repeat",
+      "template": 0,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_a5dc9d0053de1240>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "repeat",
+      "template": 1,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_e12dd00080590a00>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "repeat",
+      "template": 2,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_fa98e7c0c0a6b380>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "repeat",
+      "template": 3,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_5f2dc480fb57c160>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "repeat",
+      "template": 4,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_e3d065009e289d40>"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 5,
+      "name": "repeat",
+      "template": 5,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_f4bbc420a5039280>"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "repeat_0",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${item}"
+        }
+      ]
+    },
+    {
+      "name": "repeat_1",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${i}: ${item}"
+        }
+      ]
+    },
+    {
+      "name": "repeat_2",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "repeat",
+          "template": 0,
+          "bindings": [
+            {
+              "iterator": "items",
+              "expr": "<expr:expr_826ed580e302b9c0>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repeat_4",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "if",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "item.visible",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "else",
+          "template": 1,
+          "bindings": []
+        }
+      ]
+    },
+    {
+      "name": "repeat_7",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "\n    ${item.name}\n  "
+        },
+        {
+          "kind": "bind",
+          "target": 1,
+          "property": "class",
+          "expr": "item.class",
+          "mode": "toView"
+        },
+        {
+          "kind": "bind",
+          "target": 1,
+          "property": "dataId",
+          "expr": "item.id",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "name": "repeat_8",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "repeat",
+          "template": 0,
+          "bindings": [
+            {
+              "iterator": "items",
+              "expr": "<expr:expr_d0d98e00ff3d2e80>"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

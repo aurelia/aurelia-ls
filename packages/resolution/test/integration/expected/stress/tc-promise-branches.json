@@ -1,0 +1,76 @@
+{
+  "targets": 4,
+  "expressions": 4,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "promise",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "dataPromise",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "promise",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "userPromise",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "promise",
+      "template": 2,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "quickPromise",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "promise",
+      "template": 3,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "outerPromise",
+          "mode": "toView"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "promise_0",
+      "instructions": []
+    },
+    {
+      "name": "promise_1",
+      "instructions": []
+    },
+    {
+      "name": "promise_2",
+      "instructions": []
+    },
+    {
+      "name": "promise_3",
+      "instructions": []
+    }
+  ]
+}

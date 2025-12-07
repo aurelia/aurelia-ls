@@ -1,0 +1,113 @@
+{
+  "targets": 5,
+  "expressions": 13,
+  "instructions": [
+    {
+      "kind": "text",
+      "target": 0,
+      "text": "${title}"
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "switch",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "viewMode",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "if",
+      "template": 1,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showPortal",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "if",
+      "template": 2,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showCopyright",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "repeat",
+      "template": 3,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "<expr:expr_4347f4007dacf000>"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "switch_0",
+      "instructions": []
+    },
+    {
+      "name": "if_1",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "portal",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "target",
+              "expr": "modal-target",
+              "mode": "toView"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "if_4",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${copyright}"
+        }
+      ]
+    },
+    {
+      "name": "repeat_5",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${link.text}"
+        },
+        {
+          "kind": "bind",
+          "target": 1,
+          "property": "href",
+          "expr": "link.url",
+          "mode": "toView"
+        }
+      ]
+    }
+  ]
+}
