@@ -10,7 +10,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_a5dc9d0053de1240>"
+          "expr": "item of items"
         }
       ]
     },
@@ -22,7 +22,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_e12dd00080590a00>"
+          "expr": "item of items; index as i"
         }
       ]
     },
@@ -34,7 +34,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_fa98e7c0c0a6b380>"
+          "expr": "row of rows"
         }
       ]
     },
@@ -46,7 +46,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_5f2dc480fb57c160>"
+          "expr": "item of items"
         }
       ]
     },
@@ -58,7 +58,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_e3d065009e289d40>"
+          "expr": "item of items"
         }
       ]
     },
@@ -70,7 +70,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_f4bbc420a5039280>"
+          "expr": "a of level1"
         }
       ]
     }
@@ -107,7 +107,7 @@
           "bindings": [
             {
               "iterator": "items",
-              "expr": "<expr:expr_826ed580e302b9c0>"
+              "expr": "cell of row.cells"
             }
           ]
         }
@@ -173,7 +173,7 @@
           "bindings": [
             {
               "iterator": "items",
-              "expr": "<expr:expr_d0d98e00ff3d2e80>"
+              "expr": "b of a.level2"
             }
           ]
         }

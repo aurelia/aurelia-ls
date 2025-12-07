@@ -138,7 +138,7 @@
           "bindings": [
             {
               "iterator": "items",
-              "expr": "<expr:expr_f5169dc0e67f5900>"
+              "expr": "item of items"
             }
           ]
         },

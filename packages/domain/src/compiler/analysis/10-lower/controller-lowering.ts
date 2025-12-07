@@ -102,7 +102,7 @@ function buildBaseInstructionsForRightmost(
 
   if (kind === "repeat") {
     const forRef = table.add(raw, loc, "IsIterator");
-    const forOf = { astId: forRef.id, loc: toSpan(loc, table.source) };
+    const forOf = { astId: forRef.id, code: raw, loc: toSpan(loc, table.source) };
     const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, loc, table);
     const iter: IteratorBindingIR = {
       type: "iteratorBinding",
@@ -282,7 +282,7 @@ function buildControllerPrototypes(
 
   if (kind === "repeat") {
     const forRef = table.add(raw, loc, "IsIterator");
-    const forOf = { astId: forRef.id, loc: toSpan(loc, table.source) };
+    const forOf = { astId: forRef.id, code: raw, loc: toSpan(loc, table.source) };
     const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, loc, table);
     const iter: IteratorBindingIR = {
       type: "iteratorBinding",

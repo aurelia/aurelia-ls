@@ -54,7 +54,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_4347f4007dacf000>"
+          "expr": "link of footerLinks"
         }
       ]
     }

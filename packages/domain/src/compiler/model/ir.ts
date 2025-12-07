@@ -107,6 +107,8 @@ export interface ForOfIR {
    * the corresponding entry will be a BadExpression instead.
    */
   astId: ExprId;
+  /** Authored expression text for human-readable output (e.g., "item of items"). */
+  code: string;
   loc?: SourceSpan | null;
 }
 

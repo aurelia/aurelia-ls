@@ -10,7 +10,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_3ca46180eef66000>"
+          "expr": "item of items"
         }
       ]
     }

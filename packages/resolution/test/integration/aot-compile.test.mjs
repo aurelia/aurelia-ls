@@ -90,7 +90,6 @@ function buildExprCodeMap(ir) {
         for (const prop of ins.props || []) {
           collectFromInstruction(prop);
         }
-        if (ins.forOf) collectFromSource({ id: ins.forOf.astId, code: ins.forOf.code });
         break;
       case "hydrateLetElement":
         for (const lb of ins.instructions || []) {
@@ -98,7 +97,8 @@ function buildExprCodeMap(ir) {
         }
         break;
       case "iteratorBinding":
-        if (ins.from) map.set(ins.from.id, ins.from.code);
+        // ForOfIR has astId and code - map the expression ID to its authored text
+        if (ins.forOf) map.set(ins.forOf.astId, ins.forOf.code);
         break;
     }
   }

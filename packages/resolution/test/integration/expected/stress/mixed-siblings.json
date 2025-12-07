@@ -109,7 +109,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_9be6e640c1002ea0>"
+          "expr": "item of listA"
         }
       ]
     },
@@ -121,7 +121,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_bab3310010257680>"
+          "expr": "item of listB"
         }
       ]
     },
@@ -133,7 +133,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_ebfaa0c02f913c00>"
+          "expr": "item of listC"
         }
       ]
     },
@@ -158,7 +158,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_3512913854dda200>"
+          "expr": "item of items"
         }
       ]
     },
@@ -196,7 +196,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_085c04401118eec0>"
+          "expr": "row of rows"
         }
       ]
     },

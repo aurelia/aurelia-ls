@@ -23,7 +23,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_8d50ed00e4de5280>"
+          "expr": "s of sections"
         }
       ]
     },
@@ -55,7 +55,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_2f300140d7df1300>"
+          "expr": "sec of allSections"
         }
       ]
     },
@@ -100,7 +100,7 @@
       "bindings": [
         {
           "iterator": "items",
-          "expr": "<expr:expr_5f33e90065572ac0>"
+          "expr": "entry of entries"
         }
       ]
     },
@@ -352,7 +352,7 @@
           "bindings": [
             {
               "iterator": "items",
-              "expr": "<expr:expr_0e3006001e869780>"
+              "expr": "item of listItems"
             }
           ]
         }
