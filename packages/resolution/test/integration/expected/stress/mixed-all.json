@@ -1,6 +1,6 @@
 {
-  "targets": 5,
-  "expressions": 13,
+  "targets": 9,
+  "expressions": 33,
   "instructions": [
     {
       "kind": "text",
@@ -9,7 +9,7 @@
     },
     {
       "kind": "controller",
-      "target": 1,
+      "target": 5,
       "name": "switch",
       "template": 0,
       "bindings": [
@@ -22,7 +22,7 @@
     },
     {
       "kind": "controller",
-      "target": 2,
+      "target": 6,
       "name": "if",
       "template": 1,
       "bindings": [
@@ -35,7 +35,7 @@
     },
     {
       "kind": "controller",
-      "target": 3,
+      "target": 7,
       "name": "if",
       "template": 2,
       "bindings": [
@@ -48,7 +48,7 @@
     },
     {
       "kind": "controller",
-      "target": 4,
+      "target": 8,
       "name": "repeat",
       "template": 3,
       "bindings": [
@@ -62,10 +62,57 @@
   "templates": [
     {
       "name": "switch_0",
-      "instructions": []
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"list\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"grid\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "case",
+          "template": 2,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"detail\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 3,
+          "name": "default-case",
+          "template": 3,
+          "bindings": []
+        }
+      ]
     },
     {
-      "name": "if_1",
+      "name": "if_14",
       "instructions": [
         {
           "kind": "controller",
@@ -83,7 +130,7 @@
       ]
     },
     {
-      "name": "if_4",
+      "name": "if_17",
       "instructions": [
         {
           "kind": "text",
@@ -93,7 +140,7 @@
       ]
     },
     {
-      "name": "repeat_5",
+      "name": "repeat_18",
       "instructions": [
         {
           "kind": "text",

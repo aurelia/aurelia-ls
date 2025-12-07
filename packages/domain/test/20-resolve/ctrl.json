@@ -151,9 +151,7 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "switch", "to": "case", "target": "controller", "effectiveMode": "toView" }
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   }

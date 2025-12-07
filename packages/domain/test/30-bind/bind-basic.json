@@ -56,7 +56,7 @@
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "x", "frame": "root" },
-        { "kind": "expr", "code": "y", "frame": "root" },
+        { "kind": "expr", "code": "\"y\"", "frame": "root" },
         { "kind": "expr", "code": "z", "frame": "root" }
       ],
       "diags": []

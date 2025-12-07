@@ -262,6 +262,23 @@ class EmitContext {
     // Handle controller-specific nested templates (else, cases, etc.)
     this.emitControllerBranches(ctrl, innerNested);
 
+    // Special handling for switch: emit case/default-case as instructions
+    if (ctrl.kind === "switch") {
+      for (let i = 0; i < ctrl.cases.length; i++) {
+        const caseBranch = ctrl.cases[i]!;
+        // Each case gets a row with its hydrateTemplateController instruction
+        const row: SerializedInstruction[] = [];
+        const caseInstruction: SerializedHydrateTemplateController = {
+          type: "hydrateTemplateController",
+          resource: caseBranch.kind,
+          templateIndex: i, // Index into innerNested
+          instructions: this.emitControllerBindings(caseBranch),
+        };
+        row.push(caseInstruction);
+        innerInstructions.push(row);
+      }
+    }
+
     // Compact instructions to use local indices (remove empty rows)
     const compacted = compactInstructions(innerInstructions);
 
@@ -327,23 +344,20 @@ class EmitContext {
     switch (ctrl.kind) {
       case "if":
       case "else":
-        // if and else are separate controllers, no additional branches to emit here
-        // else controller just has its own template which is handled by the main template emit
+      case "case":
+      case "default-case":
+        // These are separate controllers, no additional branches to emit here
+        // Their templates are handled by the main template emit
         break;
       case "switch":
         for (const caseBranch of ctrl.cases ?? []) {
           if (caseBranch.template) {
-            const caseIndex = this.nestedTemplateIndex++;
+            const prefix = caseBranch.kind === "case" ? "case" : "default";
+            const branchIndex = this.nestedTemplateIndex++;
             nestedTemplates.push(
-              this.emitDefinition(caseBranch.template, `case_${caseIndex}`),
+              this.emitDefinition(caseBranch.template, `${prefix}_${branchIndex}`),
             );
           }
-        }
-        if (ctrl.defaultTemplate) {
-          const defaultIndex = this.nestedTemplateIndex++;
-          nestedTemplates.push(
-            this.emitDefinition(ctrl.defaultTemplate, `default_${defaultIndex}`),
-          );
         }
         break;
       case "promise":
@@ -438,6 +452,20 @@ class EmitContext {
         break;
       case "else":
         // else has no bindings - it links to preceding if at runtime via Else.link()
+        break;
+      case "case":
+        // case has a value binding for the case expression
+        if (ctrl.valueExprId) {
+          result.push({
+            type: "propertyBinding",
+            to: "value",
+            exprId: ctrl.valueExprId,
+            mode: "toView",
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+      case "default-case":
+        // default-case has no bindings - it links to switch at runtime via DefaultCase.link()
         break;
     }
 
@@ -619,6 +647,9 @@ function getControllerMainTemplate(ctrl: PlanController): PlanNode | undefined {
     case "with":
     case "portal":
     case "if":
+    case "else":
+    case "case":
+    case "default-case":
       return ctrl.template;
     case "switch":
       // Switch doesn't have a single main template

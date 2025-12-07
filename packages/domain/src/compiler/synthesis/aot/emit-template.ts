@@ -235,11 +235,12 @@ function getControllerTemplates(ctrl: PlanController): PlanNode[] {
     case "portal":
     case "if":
     case "else":
+    case "case":
+    case "default-case":
       return [ctrl.template];
     case "switch":
-      const switchTemplates: PlanNode[] = ctrl.cases.map(c => c.template);
-      if (ctrl.defaultTemplate) switchTemplates.push(ctrl.defaultTemplate);
-      return switchTemplates;
+      // cases array includes both case and default-case controllers
+      return ctrl.cases.map(c => c.template);
     case "promise":
       const promiseTemplates: PlanNode[] = [];
       if (ctrl.pendingTemplate) promiseTemplates.push(ctrl.pendingTemplate);

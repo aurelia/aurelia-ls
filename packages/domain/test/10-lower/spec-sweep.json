@@ -78,14 +78,14 @@
     "expect": {
       "controllers": [
         { "name": "switch" },
-        { "name": "switch" },
-        { "name": "switch" },
-        { "name": "switch" }
+        { "name": "case" },
+        { "name": "case" },
+        { "name": "default-case" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "mode" },
-        { "kind": "propCommand", "command": "bind", "code": "" },
-        { "kind": "propCommand", "command": "bind", "code": "mode" }
+        { "kind": "controllerValue", "command": "bind", "code": "\"\"" },
+        { "kind": "controllerValue", "command": "bind", "code": "\"mode\"" }
       ]
     }
   }

@@ -1,6 +1,6 @@
 {
-  "targets": 13,
-  "expressions": 27,
+  "targets": 16,
+  "expressions": 32,
   "instructions": [
     {
       "kind": "controller",
@@ -81,7 +81,7 @@
     },
     {
       "kind": "controller",
-      "target": 7,
+      "target": 10,
       "name": "switch",
       "template": 7,
       "bindings": [
@@ -94,7 +94,7 @@
     },
     {
       "kind": "controller",
-      "target": 8,
+      "target": 11,
       "name": "repeat",
       "template": 8,
       "bindings": [
@@ -106,7 +106,7 @@
     },
     {
       "kind": "controller",
-      "target": 9,
+      "target": 12,
       "name": "if",
       "template": 9,
       "bindings": [
@@ -119,7 +119,7 @@
     },
     {
       "kind": "controller",
-      "target": 10,
+      "target": 13,
       "name": "if",
       "template": 10,
       "bindings": [
@@ -132,7 +132,7 @@
     },
     {
       "kind": "controller",
-      "target": 11,
+      "target": 14,
       "name": "if",
       "template": 11,
       "bindings": [
@@ -145,7 +145,7 @@
     },
     {
       "kind": "controller",
-      "target": 12,
+      "target": 15,
       "name": "else",
       "template": 12,
       "bindings": []
@@ -280,10 +280,44 @@
     },
     {
       "name": "switch_7",
-      "instructions": []
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"card\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"panel\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "default-case",
+          "template": 2,
+          "bindings": []
+        }
+      ]
     },
     {
-      "name": "repeat_8",
+      "name": "repeat_11",
       "instructions": [
         {
           "kind": "controller",
@@ -308,7 +342,7 @@
       ]
     },
     {
-      "name": "if_11",
+      "name": "if_14",
       "instructions": [
         {
           "kind": "controller",
@@ -325,7 +359,7 @@
       ]
     },
     {
-      "name": "if_13",
+      "name": "if_16",
       "instructions": [
         {
           "kind": "element",
@@ -363,11 +397,11 @@
       ]
     },
     {
-      "name": "if_16",
+      "name": "if_19",
       "instructions": []
     },
     {
-      "name": "else_17",
+      "name": "else_20",
       "instructions": [
         {
           "kind": "element",

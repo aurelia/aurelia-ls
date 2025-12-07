@@ -90,6 +90,12 @@ export function resolveControllerSem(
     case "else":
       // Linking controller - linked to preceding 'if' at runtime via Else.link()
       return { res, spec: { kind: "linking-controller", res: "else", linksTo: "if", scope: "reuse" } };
+    case "case":
+      // Linking controller - linked to parent 'switch' at runtime via Case.link()
+      return { res, spec: { kind: "linking-controller", res: "case", linksTo: "switch", scope: "reuse" } };
+    case "default-case":
+      // Linking controller - linked to parent 'switch' at runtime via DefaultCase.link()
+      return { res, spec: { kind: "linking-controller", res: "default-case", linksTo: "switch", scope: "reuse" } };
     default:
       pushDiag(diags, "AU1101", `Unknown controller '${res}'.`, span);
       // Fallback to 'with' shape to keep traversal alive
@@ -113,6 +119,12 @@ export function resolveControllerBindable(ctrl: ControllerSem, prop: string): Bi
     }
     case "else":
       // else controller has no bindable props
+      return { name: prop };
+    case "case":
+      // case controller has 'value' bindable prop
+      return prop === "value" ? { name: "value" } : { name: prop };
+    case "default-case":
+      // default-case controller has no bindable props
       return { name: prop };
     default:
       return unreachable(ctrl);

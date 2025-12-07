@@ -77,6 +77,8 @@ import type {
   PlanElseController,
   PlanWithController,
   PlanSwitchController,
+  PlanCaseController,
+  PlanDefaultCaseController,
   PlanPromiseController,
   PlanPortalController,
   PlanExpression,
@@ -882,6 +884,10 @@ function transformController(
       return transformWithController(ins, instructionsByTarget, controllerFrame, ctx);
     case "switch":
       return transformSwitchController(ins, instructionsByTarget, controllerFrame, ctx);
+    case "case":
+      return transformCaseController(ins, instructionsByTarget, controllerFrame, ctx);
+    case "default-case":
+      return transformDefaultCaseController(ins, instructionsByTarget, controllerFrame, ctx);
     case "promise":
       return transformPromiseController(ins, instructionsByTarget, controllerFrame, ctx);
     case "portal":
@@ -1017,6 +1023,69 @@ function transformElseController(
   return result;
 }
 
+/**
+ * Transform `case` controller.
+ * Case is a child of switch, linked at runtime via Case.link() hook.
+ */
+function transformCaseController(
+  ins: LinkedHydrateTemplateController,
+  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+  frameId: FrameId,
+  ctx: PlanningContext,
+): PlanCaseController {
+  const valueProp = ins.props.find((p): p is LinkedPropertyBinding => p.kind === "propertyBinding");
+  if (!valueProp) {
+    throw new Error("case controller missing value binding");
+  }
+
+  const valueExprId = primaryExprId(valueProp.from);
+  ctx.registerExpression(valueExprId, ins.loc ?? undefined);
+
+  // Transform the nested template
+  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
+  const template = linkedDef
+    ? transformNestedTemplate(linkedDef, instructionsByTarget, frameId, ctx)
+    : createEmptyFragment();
+
+  const result: PlanCaseController = {
+    kind: "case",
+    frameId,
+    valueExprId,
+    template,
+    targetIndex: ctx.allocateTarget(),
+  };
+
+  if (ins.loc) result.loc = ins.loc;
+  return result;
+}
+
+/**
+ * Transform `default-case` controller.
+ * Default-case is a child of switch, linked at runtime via DefaultCase.link() hook.
+ */
+function transformDefaultCaseController(
+  ins: LinkedHydrateTemplateController,
+  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+  frameId: FrameId,
+  ctx: PlanningContext,
+): PlanDefaultCaseController {
+  // Transform the nested template
+  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
+  const template = linkedDef
+    ? transformNestedTemplate(linkedDef, instructionsByTarget, frameId, ctx)
+    : createEmptyFragment();
+
+  const result: PlanDefaultCaseController = {
+    kind: "default-case",
+    frameId,
+    template,
+    targetIndex: ctx.allocateTarget(),
+  };
+
+  if (ins.loc) result.loc = ins.loc;
+  return result;
+}
+
 function transformWithController(
   ins: LinkedHydrateTemplateController,
   instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
@@ -1063,13 +1132,39 @@ function transformSwitchController(
   const valueExprId = primaryExprId(valueProp.from);
   ctx.registerExpression(valueExprId, ins.loc ?? undefined);
 
-  // Note: Case branches are handled as separate template controllers in the IR
-  // This is a simplified implementation
+  // Look up the LinkedTemplate for switch's definition template
+  // This template contains the case/default-case controllers as children
+  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
+  const cases: (PlanCaseController | PlanDefaultCaseController)[] = [];
+
+  if (linkedDef) {
+    // Build instruction map for the switch's definition template
+    const defInstructionsByTarget = new Map<NodeId, LinkedInstruction[]>();
+    for (const row of linkedDef.rows) {
+      defInstructionsByTarget.set(row.target, row.instructions);
+    }
+
+    // Process each row to find case/default-case controllers
+    for (const row of linkedDef.rows) {
+      for (const childIns of row.instructions) {
+        if (childIns.kind === "hydrateTemplateController") {
+          if (childIns.res === "case") {
+            const caseCtrl = transformCaseController(childIns, defInstructionsByTarget, frameId, ctx);
+            cases.push(caseCtrl);
+          } else if (childIns.res === "default-case") {
+            const defaultCaseCtrl = transformDefaultCaseController(childIns, defInstructionsByTarget, frameId, ctx);
+            cases.push(defaultCaseCtrl);
+          }
+        }
+      }
+    }
+  }
+
   const result: PlanSwitchController = {
     kind: "switch",
     frameId,
     valueExprId,
-    cases: [],
+    cases,
     targetIndex: ctx.allocateTarget(),
   };
 

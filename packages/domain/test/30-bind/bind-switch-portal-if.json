@@ -24,9 +24,9 @@
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "x", "frame": "root" },
-        { "kind": "expr", "code": "1", "frame": "root" },
+        { "kind": "expr", "code": "\"1\"", "frame": "root" },
         { "kind": "expr", "code": "a", "frame": "root" },
-        { "kind": "expr", "code": "y", "frame": "root" },
+        { "kind": "expr", "code": "\"y\"", "frame": "root" },
         { "kind": "expr", "code": "b", "frame": "root" }
       ],
       "diags": []

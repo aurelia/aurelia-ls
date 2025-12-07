@@ -81,7 +81,7 @@ export function collectControllers(
 }
 
 type ControllerPrototype = {
-  res: "repeat" | "with" | "if" | "switch" | "promise" | "portal" | "else";
+  res: "repeat" | "with" | "if" | "switch" | "promise" | "portal" | "else" | "case" | "default-case";
   props: (PropertyBindingIR | IteratorBindingIR)[];
   alias?: "then" | "catch" | "case" | "default" | null;
 };
@@ -143,6 +143,52 @@ function buildBaseInstructionsForRightmost(
     ];
   }
 
+  // `case` has a value binding for the case expression
+  // case="foo" means literal "foo", case.bind="foo" means expression foo
+  if (kind === "case") {
+    const { s } = rightmost;
+    const isBinding = s.command === "bind";
+    const valueProp: PropertyBindingIR = {
+      type: "propertyBinding",
+      to: "value",
+      from: isBinding
+        ? toExprRef(raw, loc, table, "IsProperty")
+        : toExprRef(JSON.stringify(raw), loc, table, "IsProperty"), // Literal as quoted string
+      mode: "default",
+      loc: toSpan(loc, table.source),
+    };
+    const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
+    return [
+      {
+        type: "hydrateTemplateController",
+        res: "case",
+        def,
+        props: [valueProp],
+        alias: null,
+        branch: null,
+        containerless: false,
+        loc: toSpan(loc, table.source),
+      },
+    ];
+  }
+
+  // `default-case` is a linking controller with no value binding
+  if (kind === "default-case") {
+    const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
+    return [
+      {
+        type: "hydrateTemplateController",
+        res: "default-case",
+        def,
+        props: [],
+        alias: null,
+        branch: null,
+        containerless: false,
+        loc: toSpan(loc, table.source),
+      },
+    ];
+  }
+
   const controller = kind;
   const exprText = raw.length === 0 ? controller : raw;
   // Portal uses 'target' as primary bindable; others use 'value'
@@ -190,25 +236,9 @@ function buildBaseInstructionsForRightmost(
   }
 
   if (controller === "switch") {
-    const { def, idMap } = templateOfElementChildrenWithMap(
-      el,
-      attrParser,
-      table,
-      nestedTemplates,
-      sem,
-      collectRows
-    );
-    injectSwitchBranchesIntoDef(
-      el,
-      def,
-      idMap,
-      attrParser,
-      table,
-      nestedTemplates,
-      sem,
-      valueProp,
-      collectRows
-    );
+    // Switch's children (case/default-case) are processed as standalone controllers
+    // via collectControllers, similar to how else works for if
+    const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
     return [
       {
         type: "hydrateTemplateController",
@@ -267,6 +297,24 @@ function buildControllerPrototypes(
   // `else` is a linking controller with no value binding
   if (kind === "else") {
     return [{ res: "else", props: [] }];
+  }
+
+  // `case` has a value binding (the case expression)
+  if (kind === "case") {
+    const raw = a.value ?? "";
+    const valueProp: PropertyBindingIR = {
+      type: "propertyBinding",
+      to: "value",
+      from: toExprRef(raw, loc, table, "IsProperty"),
+      mode: "default",
+      loc: toSpan(loc, table.source),
+    };
+    return [{ res: "case", props: [valueProp] }];
+  }
+
+  // `default-case` is like else - no value binding
+  if (kind === "default-case") {
+    return [{ res: "default-case", props: [] }];
   }
 
   const controller = kind;

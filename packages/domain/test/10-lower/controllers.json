@@ -115,11 +115,13 @@
     "markup": "<div switch.bind=\"x\"><template case=\"1\"><span>${a}</span></template><template default-case><span>${b}</span></template></div>",
     "expect": {
       "controllers": [
-        { "name": "switch" }
+        { "name": "switch" },
+        { "name": "case" },
+        { "name": "default-case" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "x" },
-        { "kind": "propCommand", "command": "bind", "code": "1" },
+        { "kind": "controllerValue", "command": "bind", "code": "\"1\"" },
         { "kind": "text", "code": "a" },
         { "kind": "text", "code": "b" }
       ]
@@ -130,7 +132,8 @@
     "markup": "<div switch><template default-case><span>${a}</span></template></div>",
     "expect": {
       "controllers": [
-        { "name": "switch" }
+        { "name": "switch" },
+        { "name": "default-case" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "switch" },
@@ -262,11 +265,12 @@
     "markup": "<div switch.bind=\"x\"><template case=\"y\"><b>${z}</b></template></div>",
     "expect": {
       "controllers": [
-        { "name": "switch" }
+        { "name": "switch" },
+        { "name": "case" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "x" },
-        { "kind": "propCommand", "command": "bind", "code": "y" },
+        { "kind": "controllerValue", "command": "bind", "code": "\"y\"" },
         { "kind": "text", "code": "z" }
       ]
     }
@@ -346,12 +350,12 @@
     "expect": {
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "val" },
-        { "kind": "propCommand", "command": "bind", "code": "1" }
+        { "kind": "controllerValue", "command": "bind", "code": "\"1\"" }
       ],
       "controllers": [
         { "name": "switch" },
-        { "name": "switch" },
-        { "name": "switch" }
+        { "name": "case" },
+        { "name": "default-case" }
       ]
     }
   },
@@ -400,12 +404,13 @@
     "markup": "<div switch.bind=\"x\"><template case.bind=\"y\" title=\"t ${y}\"><b>${y}</b></template></div>",
     "expect": {
       "controllers": [
-        { "name": "switch" }
+        { "name": "switch" },
+        { "name": "case" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "x" },
+        { "kind": "controllerValue", "command": "bind", "code": "y" },
         { "kind": "attrInterpolation", "on": "title", "code": "y" },
-        { "kind": "propCommand", "command": "bind", "code": "y" },
         { "kind": "text", "code": "y" }
       ]
     }

@@ -255,9 +255,12 @@ function walkRows(
             case "if":
             case "else":
             case "switch":
+            case "case":
+            case "default-case":
             case "portal":
               // scope === 'reuse' → keep current frame; no overlay / locals.
               // 'else' is a linking controller with no value - linked to preceding 'if' at runtime.
+              // 'case' and 'default-case' are children of switch, linked at runtime.
               break;
 
             default:

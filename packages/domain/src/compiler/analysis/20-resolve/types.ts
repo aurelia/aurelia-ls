@@ -279,7 +279,7 @@ export interface IteratorAuxSpec {
  */
 export interface LinkedHydrateTemplateController extends BaseLinked {
   kind: "hydrateTemplateController";
-  res: "repeat" | "with" | "promise" | "if" | "else" | "switch" | "portal";
+  res: "repeat" | "with" | "promise" | "if" | "else" | "switch" | "portal" | "case" | "default-case";
   def: TemplateIR;
   controller: ControllerSem;
   props: (LinkedPropertyBinding | LinkedIteratorBinding)[];
@@ -325,4 +325,6 @@ export type ControllerSem =
   | { res: "if";      spec: SimpleController<"if"> }
   | { res: "else";    spec: LinkingController<"else", "if"> }
   | { res: "switch";  spec: SwitchController }
+  | { res: "case";    spec: LinkingController<"case", "switch"> }
+  | { res: "default-case"; spec: LinkingController<"default-case", "switch"> }
   | { res: "portal";  spec: PortalController };

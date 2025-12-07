@@ -373,6 +373,8 @@ export type PlanController =
   | PlanElseController
   | PlanWithController
   | PlanSwitchController
+  | PlanCaseController
+  | PlanDefaultCaseController
   | PlanPromiseController
   | PlanPortalController;
 
@@ -456,18 +458,13 @@ export interface PlanSwitchController extends PlanControllerBase {
   /** Switch value expression ID */
   valueExprId: ExprId;
 
-  /** Case branches */
-  cases: PlanCaseBranch[];
-
-  /** Default branch template */
-  defaultTemplate?: PlanNode;
-
-  /** Default branch frame ID (if introduces scope) */
-  defaultFrameId?: FrameId;
+  /** Case and default-case controller children */
+  cases: (PlanCaseController | PlanDefaultCaseController)[];
 }
 
 /**
  * Case branch within a switch controller.
+ * @deprecated Use PlanCaseController instead - case/default-case are standalone controllers
  */
 export interface PlanCaseBranch {
   /** Case value expression ID */
@@ -481,6 +478,31 @@ export interface PlanCaseBranch {
 
   /** Source location */
   loc?: SourceSpan;
+}
+
+/**
+ * Case controller (child of switch, e.g., `case="value"`).
+ * Standalone template controller, similar to else for if.
+ */
+export interface PlanCaseController extends PlanControllerBase {
+  kind: "case";
+
+  /** Case value expression ID */
+  valueExprId: ExprId;
+
+  /** Case template (content inside the case) */
+  template: PlanNode;
+}
+
+/**
+ * Default-case controller (child of switch, e.g., `default-case`).
+ * Standalone template controller, similar to else for if.
+ */
+export interface PlanDefaultCaseController extends PlanControllerBase {
+  kind: "default-case";
+
+  /** Default case template (content inside the default case) */
+  template: PlanNode;
 }
 
 /**

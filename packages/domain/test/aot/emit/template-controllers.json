@@ -87,13 +87,19 @@
     "name": "AOT-TC-007: switch.bind with case",
     "markup": "<template switch.bind=\"status\"><span case=\"active\">Active</span><span case=\"inactive\">Inactive</span></template>",
     "expect": {
-      "targetCount": 1,
-      "exprCount": 1,
+      "targetCount": 3,
+      "exprCount": 3,
       "instructions": [
-        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+        { "type": "hydrateTemplateController", "target": 2, "resource": "switch", "templateIndex": 0, "propCount": 1 }
       ],
       "nested": [
-        { "name": "switch_0" }
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+          ]
+        }
       ]
     }
   },
@@ -101,13 +107,19 @@
     "name": "AOT-TC-008: switch.bind with default-case",
     "markup": "<template switch.bind=\"type\"><span case=\"a\">A</span><span default-case>Default</span></template>",
     "expect": {
-      "targetCount": 1,
-      "exprCount": 1,
+      "targetCount": 3,
+      "exprCount": 2,
       "instructions": [
-        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+        { "type": "hydrateTemplateController", "target": 2, "resource": "switch", "templateIndex": 0, "propCount": 1 }
       ],
       "nested": [
-        { "name": "switch_0" }
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "default-case", "templateIndex": 1, "propCount": 0 }
+          ]
+        }
       ]
     }
   },

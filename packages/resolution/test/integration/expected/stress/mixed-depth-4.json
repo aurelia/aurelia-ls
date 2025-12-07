@@ -1,6 +1,6 @@
 {
-  "targets": 2,
-  "expressions": 11,
+  "targets": 4,
+  "expressions": 17,
   "instructions": [
     {
       "kind": "controller",
@@ -16,7 +16,7 @@
     },
     {
       "kind": "controller",
-      "target": 1,
+      "target": 3,
       "name": "switch",
       "template": 1,
       "bindings": [
@@ -53,7 +53,34 @@
     },
     {
       "name": "switch_7",
-      "instructions": []
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"expanded\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"collapsed\"",
+              "mode": "toView"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -46,7 +46,7 @@ export interface TemplateExpressionInfo {
 }
 
 export interface TemplateControllerInfo {
-  kind: "repeat" | "with" | "if" | "else" | "switch" | "promise" | "portal";
+  kind: "repeat" | "with" | "if" | "else" | "switch" | "case" | "default-case" | "promise" | "portal";
   span: SourceSpan;
 }
 

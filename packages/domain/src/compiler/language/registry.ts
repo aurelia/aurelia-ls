@@ -113,6 +113,31 @@ export interface Controllers {
   switch: SwitchController;
   portal: PortalController; // evaluates in parent scope; content teleported
   else: LinkingController<"else", "if">; // links to preceding if controller
+  case: CaseController; // switch branch with value
+  "default-case": DefaultCaseController; // switch default branch
+}
+
+/* ---- Case controller ----
+ * Branch of switch; matches against switch value.
+ * - Can have single value or array of values (fall-through).
+ */
+export interface CaseController {
+  kind: "controller";
+  res: "case";
+  scope: "reuse"; // evaluates in same scope as switch
+  props: Record<string, Bindable>; // { value, fallThrough }
+  linksTo: "switch";
+}
+
+/* ---- Default-case controller ----
+ * Default branch of switch; activates when no case matches.
+ */
+export interface DefaultCaseController {
+  kind: "controller";
+  res: "default-case";
+  scope: "reuse"; // evaluates in same scope as switch
+  props: Record<string, Bindable>; // { fallThrough }
+  linksTo: "switch";
 }
 
 /* ---- repeat (iterator) ----
@@ -440,6 +465,27 @@ export const DEFAULT: Semantics = {
         res: "else",
         linksTo: "if",
         scope: "reuse", // inherits from parent if controller
+      },
+
+      case: {
+        kind: "controller",
+        res: "case",
+        scope: "reuse", // evaluates in same scope as switch
+        props: {
+          value: { name: "value", type: { kind: "unknown" }, mode: "default", primary: true, doc: "Case value to match" },
+          fallThrough: { name: "fallThrough", type: { kind: "ts", name: "boolean" }, mode: "toView", doc: "Continue to next case" },
+        },
+        linksTo: "switch",
+      },
+
+      "default-case": {
+        kind: "controller",
+        res: "default-case",
+        scope: "reuse", // evaluates in same scope as switch
+        props: {
+          fallThrough: { name: "fallThrough", type: { kind: "ts", name: "boolean" }, mode: "toView", doc: "Continue to next case" },
+        },
+        linksTo: "switch",
       },
     },
 

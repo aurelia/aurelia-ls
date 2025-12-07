@@ -1,10 +1,10 @@
 {
-  "targets": 4,
-  "expressions": 4,
+  "targets": 20,
+  "expressions": 24,
   "instructions": [
     {
       "kind": "controller",
-      "target": 0,
+      "target": 4,
       "name": "switch",
       "template": 0,
       "bindings": [
@@ -17,7 +17,7 @@
     },
     {
       "kind": "controller",
-      "target": 1,
+      "target": 9,
       "name": "switch",
       "template": 1,
       "bindings": [
@@ -30,7 +30,7 @@
     },
     {
       "kind": "controller",
-      "target": 2,
+      "target": 13,
       "name": "switch",
       "template": 2,
       "bindings": [
@@ -43,7 +43,7 @@
     },
     {
       "kind": "controller",
-      "target": 3,
+      "target": 19,
       "name": "switch",
       "template": 3,
       "bindings": [
@@ -58,19 +58,213 @@
   "templates": [
     {
       "name": "switch_0",
-      "instructions": []
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"a\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"b\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "case",
+          "template": 2,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"c\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 3,
+          "name": "default-case",
+          "template": 3,
+          "bindings": []
+        }
+      ]
     },
     {
-      "name": "switch_1",
-      "instructions": []
+      "name": "switch_5",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"loading\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"success\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "case",
+          "template": 2,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"error\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 3,
+          "name": "default-case",
+          "template": 3,
+          "bindings": []
+        }
+      ]
     },
     {
-      "name": "switch_2",
-      "instructions": []
+      "name": "switch_10",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"list\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"grid\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "default-case",
+          "template": 2,
+          "bindings": []
+        }
+      ]
     },
     {
-      "name": "switch_3",
-      "instructions": []
+      "name": "switch_16",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"xs\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"sm\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "case",
+          "template": 2,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"md\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 3,
+          "name": "case",
+          "template": 3,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"lg\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 4,
+          "name": "case",
+          "template": 4,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"xl\"",
+              "mode": "toView"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

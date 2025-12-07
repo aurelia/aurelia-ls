@@ -1,6 +1,6 @@
 {
-  "targets": 18,
-  "expressions": 23,
+  "targets": 20,
+  "expressions": 25,
   "instructions": [
     {
       "kind": "controller",
@@ -164,7 +164,7 @@
     },
     {
       "kind": "controller",
-      "target": 14,
+      "target": 16,
       "name": "switch",
       "template": 14,
       "bindings": [
@@ -177,7 +177,7 @@
     },
     {
       "kind": "controller",
-      "target": 15,
+      "target": 17,
       "name": "if",
       "template": 15,
       "bindings": [
@@ -190,7 +190,7 @@
     },
     {
       "kind": "controller",
-      "target": 16,
+      "target": 18,
       "name": "repeat",
       "template": 16,
       "bindings": [
@@ -202,7 +202,7 @@
     },
     {
       "kind": "controller",
-      "target": 17,
+      "target": 19,
       "name": "if",
       "template": 17,
       "bindings": [
@@ -315,14 +315,41 @@
     },
     {
       "name": "switch_14",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"x\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"y\"",
+              "mode": "toView"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "if_17",
       "instructions": []
     },
     {
-      "name": "if_15",
-      "instructions": []
-    },
-    {
-      "name": "repeat_16",
+      "name": "repeat_18",
       "instructions": [
         {
           "kind": "text",
@@ -332,7 +359,7 @@
       ]
     },
     {
-      "name": "if_17",
+      "name": "if_19",
       "instructions": []
     }
   ]
