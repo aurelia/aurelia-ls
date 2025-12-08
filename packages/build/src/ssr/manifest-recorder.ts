@@ -1,5 +1,5 @@
 /**
- * Hydration Manifest Recorder
+ * SSR Manifest Recorder
  *
  * Records the controller tree structure after SSR render completes.
  * The manifest mirrors the controller tree exactly, enabling hydration
@@ -8,8 +8,8 @@
  * Key design decisions:
  * - Tree-shaped manifest (no global indices)
  * - Single `children` array preserves controller order
- * - Discriminator: 'type' in child → TC entry, otherwise → CE/view scope
- * - `if` includes `value` to identify which branch was rendered
+ * - Discriminator: 'type' in child → TC entry, otherwise → scope
+ * - `nodeCount` present for containerless scopes (TC views, containerless CEs)
  * - `else` included as placeholder to maintain order alignment
  */
 
@@ -26,88 +26,37 @@ import type {
   Portal,
 } from '@aurelia/runtime-html';
 
-// =============================================================================
-// MANIFEST TYPES
-//
-// The manifest structure mirrors the controller tree:
-//
-//   IHydrationManifest {
-//     root: string                      // Root CE name
-//     manifest: IHydrationScopeManifest // Root scope
-//   }
-//
-//   IHydrationScopeManifest {
-//     name?: string                     // CE name (only for CE scopes, not view scopes)
-//     children: IHydrationChild[]       // TCs and CEs in controller tree order
-//   }
-//
-//   IHydrationChild = ITCEntry | IHydrationScopeManifest
-//     - TC entries have `type` and `views`
-//     - CE scopes have `name` and `children`
-//     - View scopes (inside TC views) have only `children`
-//
-//   ITCEntry {
-//     type: string                      // 'repeat' | 'if' | 'else' | 'with' | ...
-//     value?: boolean                   // Only for 'if' - which branch rendered
-//     views: IViewEntry[]               // Rendered views (empty if condition false)
-//   }
-//
-//   IViewEntry {
-//     nodeCount: number                 // Top-level DOM nodes in this view
-//     scope: IHydrationScopeManifest    // Nested content (view scope)
-//   }
-//
-// Discriminator: 'type' in child → TC entry, otherwise → scope
-// =============================================================================
+// Import manifest types from runtime
+import type {
+  ISSRManifest,
+  ISSRScope,
+  ISSRTemplateController,
+} from '@aurelia/runtime-html';
 
-export interface IHydrationManifest {
-  root: string;
-  manifest: IHydrationScopeManifest;
-}
+// Re-export types and type guards for convenience
+export type {
+  ISSRManifest,
+  ISSRScope,
+  ISSRScopeChild,
+  ISSRTemplateController,
+} from '@aurelia/runtime-html';
 
-export interface IHydrationScopeManifest {
-  name?: string;
-  children: IHydrationChild[];
-}
-
-export type IHydrationChild = ITCEntry | IHydrationScopeManifest;
-
-export interface ITCEntry {
-  type: string;
-  value?: boolean;
-  views: IViewEntry[];
-}
-
-export interface IViewEntry {
-  nodeCount: number;
-  scope: IHydrationScopeManifest;
-}
-
-/**
- * Type guard: check if a child is a TC entry (has 'type' property)
- */
-export function isTCEntry(child: IHydrationChild): child is ITCEntry {
-  return 'type' in child;
-}
-
-/**
- * Type guard: check if a child is a scope (CE or view scope)
- */
-export function isScopeManifest(child: IHydrationChild): child is IHydrationScopeManifest {
-  return !('type' in child);
-}
+export {
+  isSSRTemplateController,
+  isSSRScope,
+} from '@aurelia/runtime-html';
 
 // =============================================================================
 // MANIFEST RECORDING
 // =============================================================================
 
 /**
- * Record the hydration manifest from the root controller.
+ * Record the SSR manifest from the root controller.
  * Call this after `await au.start()` completes.
  *
  * @param rootController - The root custom element controller (au.root.controller)
  */
-export function recordManifest(rootController: ICustomElementController): IHydrationManifest {
+export function recordManifest(rootController: ICustomElementController): ISSRManifest {
   const rootScope = buildScopeManifest(rootController);
   return {
     root: rootController.definition.name,
@@ -120,14 +69,20 @@ export function recordManifest(rootController: ICustomElementController): IHydra
  * Both CEs and synthetic views have the same structure - a `children` array
  * containing TCs and CEs in the same order as ctrl.children.
  */
-function buildScopeManifest(ctrl: IHydratedController): IHydrationScopeManifest {
-  const scope: IHydrationScopeManifest = {
+function buildScopeManifest(ctrl: IHydratedController, isContainerless: boolean = false): ISSRScope {
+  const scope: ISSRScope = {
     children: [],
   };
 
   // Add name for CE scopes (not for synthetic/view scopes)
   if (ctrl.vmKind === 'customElement') {
     scope.name = ctrl.definition.name;
+    // TODO: Check if CE is containerless and set nodeCount if so
+  }
+
+  // Add nodeCount for containerless scopes (TC views)
+  if (isContainerless) {
+    scope.nodeCount = countViewNodes(ctrl as ISyntheticView);
   }
 
   // Process children in order - they can be TCs (customAttribute) or CEs (customElement)
@@ -156,7 +111,7 @@ function buildScopeManifest(ctrl: IHydratedController): IHydrationScopeManifest 
  * Build manifest for a CE.
  * Returns null for special CEs we skip (au-compose, au-slot).
  */
-function buildCEManifest(ctrl: ICustomElementController): IHydrationScopeManifest | null {
+function buildCEManifest(ctrl: ICustomElementController): ISSRScope | null {
   const name = ctrl.definition.name;
 
   // Skip special CEs - they render dynamically on the client
@@ -171,7 +126,7 @@ function buildCEManifest(ctrl: ICustomElementController): IHydrationScopeManifes
  * Build a TC entry with its type and rendered views.
  * Returns null for TCs we skip (portal).
  */
-function buildTCEntry(ctrl: ICustomAttributeController): ITCEntry | null {
+function buildTCEntry(ctrl: ICustomAttributeController): ISSRTemplateController | null {
   const type = ctrl.definition.name;
 
   switch (type) {
@@ -180,11 +135,11 @@ function buildTCEntry(ctrl: ICustomAttributeController): ITCEntry | null {
       // vm.view is the currently active view (could be if-branch OR else-branch)
       // vm.value tells us which branch: true = if-branch, false = else-branch
       const view = vm.view;
-      const views: IViewEntry[] = [];
+      const views: ISSRScope[] = [];
       if (view) {
-        views.push(buildViewEntry(view));
+        views.push(buildViewScope(view));
       }
-      return { type, value: !!vm.value, views };
+      return { type, state: { value: !!vm.value }, views };
     }
 
     case 'else': {
@@ -196,7 +151,7 @@ function buildTCEntry(ctrl: ICustomAttributeController): ITCEntry | null {
     case 'repeat': {
       const vm = ctrl.viewModel as Repeat;
       // vm.views is the array of rendered views (one per item)
-      const views = vm.views.map(view => buildViewEntry(view));
+      const views = vm.views.map(view => buildViewScope(view));
       return { type, views };
     }
 
@@ -204,9 +159,9 @@ function buildTCEntry(ctrl: ICustomAttributeController): ITCEntry | null {
       const vm = ctrl.viewModel as With;
       // with always has exactly one view (if the value is truthy)
       const view = vm.view;
-      const views: IViewEntry[] = [];
+      const views: ISSRScope[] = [];
       if (view) {
-        views.push(buildViewEntry(view));
+        views.push(buildViewScope(view));
       }
       return { type, views };
     }
@@ -249,12 +204,10 @@ function buildTCEntry(ctrl: ICustomAttributeController): ITCEntry | null {
 }
 
 /**
- * Build a view entry for a synthetic controller (TC's rendered view).
+ * Build a scope for a TC's rendered view (always containerless).
  */
-function buildViewEntry(ctrl: ISyntheticView): IViewEntry {
-  const nodeCount = countViewNodes(ctrl);
-  const scope = buildScopeManifest(ctrl);
-  return { nodeCount, scope };
+function buildViewScope(ctrl: ISyntheticView): ISSRScope {
+  return buildScopeManifest(ctrl, true);
 }
 
 /**

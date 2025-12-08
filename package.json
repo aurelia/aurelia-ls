@@ -9,21 +9,21 @@
   },
   "pnpm": {
     "overrides": {
-      "aurelia": "file:aurelia/packages/aurelia",
-      "@aurelia/kernel": "file:aurelia/packages/kernel",
-      "@aurelia/metadata": "file:aurelia/packages/metadata",
-      "@aurelia/platform": "file:aurelia/packages/platform",
-      "@aurelia/platform-browser": "file:aurelia/packages/platform-browser",
-      "@aurelia/runtime": "file:aurelia/packages/runtime",
-      "@aurelia/runtime-html": "file:aurelia/packages/runtime-html",
-      "@aurelia/expression-parser": "file:aurelia/packages/expression-parser",
-      "@aurelia/template-compiler": "file:aurelia/packages/template-compiler",
-      "@aurelia/fetch-client": "file:aurelia/packages/fetch-client",
-      "@aurelia/router": "file:aurelia/packages/router",
-      "@aurelia/route-recognizer": "file:aurelia/packages/route-recognizer",
-      "@aurelia/testing": "file:aurelia/packages/testing",
-      "@aurelia/vite-plugin": "file:aurelia/packages-tooling/vite-plugin",
-      "@aurelia/plugin-conventions": "file:aurelia/packages-tooling/plugin-conventions"
+      "aurelia": "link:aurelia/packages/aurelia",
+      "@aurelia/kernel": "link:aurelia/packages/kernel",
+      "@aurelia/metadata": "link:aurelia/packages/metadata",
+      "@aurelia/platform": "link:aurelia/packages/platform",
+      "@aurelia/platform-browser": "link:aurelia/packages/platform-browser",
+      "@aurelia/runtime": "link:aurelia/packages/runtime",
+      "@aurelia/runtime-html": "link:aurelia/packages/runtime-html",
+      "@aurelia/expression-parser": "link:aurelia/packages/expression-parser",
+      "@aurelia/template-compiler": "link:aurelia/packages/template-compiler",
+      "@aurelia/fetch-client": "link:aurelia/packages/fetch-client",
+      "@aurelia/router": "link:aurelia/packages/router",
+      "@aurelia/route-recognizer": "link:aurelia/packages/route-recognizer",
+      "@aurelia/testing": "link:aurelia/packages/testing",
+      "@aurelia/vite-plugin": "link:aurelia/packages-tooling/vite-plugin",
+      "@aurelia/plugin-conventions": "link:aurelia/packages-tooling/plugin-conventions"
     }
   },
   "scripts": {
