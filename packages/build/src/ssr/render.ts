@@ -25,24 +25,9 @@ import {
   type HydrationManifest,
   type SSRProcessOptions,
 } from "./ssr-processor.js";
-
-/**
- * A component class with a static $au definition.
- */
-export interface ComponentClass {
-  new (...args: unknown[]): object;
-  $au?: {
-    type?: string;
-    name?: string;
-    template?: unknown;
-    instructions?: unknown[][];
-    needsCompile?: boolean;
-    dependencies?: unknown[];
-    bindables?: unknown;
-    [key: string]: unknown;
-  };
-  readonly name: string;
-}
+import type { ComponentClass } from "./patch.js";
+import type { ICustomElementController } from "@aurelia/runtime-html";
+export type { ComponentClass };
 
 /**
  * Options for SSR rendering.
@@ -58,6 +43,13 @@ export interface RenderOptions {
    * SSR processing options (marker stripping, manifest delivery).
    */
   ssr?: SSRProcessOptions;
+
+  /**
+   * Callback invoked before Aurelia stops, giving access to the root controller
+   * and host element while the controller tree is still active.
+   * Useful for post-render analysis like manifest recording.
+   */
+  beforeStop?: (rootController: ICustomElementController, host: Element) => void;
 }
 
 /**
@@ -123,10 +115,10 @@ export async function render(
   // Clear cached definitions for all components BEFORE rendering.
   // The runtime caches definitions on the Type, and we need fresh
   // definitions each render to match the patched $au.
-  CustomElement.clearDefinition(RootComponent);
+  (CustomElement as any).clearDefinition(RootComponent);
   if (options.childComponents) {
     for (const ChildComponent of options.childComponents) {
-      CustomElement.clearDefinition(ChildComponent);
+      (CustomElement as any).clearDefinition(ChildComponent);
     }
   }
 
@@ -136,7 +128,6 @@ export async function render(
 
   // Create SSR context with recording capabilities
   const ssrContext = new SSRContext();
-  ssrContext.setRootTargetCount(rootTargetCount);
 
   // Create DI container
   const container = DI.createContainer();
@@ -166,6 +157,13 @@ export async function render(
 
   // Get manifest from SSR context (recorded during rendering)
   const runtimeManifest = ssrContext.getManifest();
+
+  // Call beforeStop callback if provided (for post-render analysis)
+  if (options.beforeStop) {
+    // The root's controller is available via the _controller property
+    const rootController = (au.root as unknown as { controller: ICustomElementController }).controller;
+    options.beforeStop(rootController, host);
+  }
 
   // Process output
   let result: RenderResult;

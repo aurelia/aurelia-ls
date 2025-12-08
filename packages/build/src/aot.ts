@@ -208,9 +208,26 @@ export interface CompileAndRenderAotResult {
  * ```
  */
 export async function compileAndRenderAot(
-  Component: ComponentClass,
+  ComponentOrMarkup: ComponentClass | string,
   options: CompileAndRenderAotOptions = {},
 ): Promise<CompileAndRenderAotResult> {
+  let Component: ComponentClass;
+
+  if (typeof ComponentOrMarkup === "string") {
+    // Generate component from markup
+    const template = ComponentOrMarkup;
+    const name = options.name ?? "generated-app";
+    Component = class GeneratedApp {
+      static $au = {
+        type: "custom-element",
+        name,
+        template,
+      };
+    } as unknown as ComponentClass;
+  } else {
+    Component = ComponentOrMarkup;
+  }
+
   // Get template from component
   const template = Component.$au?.template;
   if (typeof template !== "string") {

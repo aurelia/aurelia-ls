@@ -34,11 +34,9 @@ export {
 // SSR Post-Processing (clean HTML output)
 export {
   processSSROutput,
-  computeElementPaths,
-  computePath,
+
   stripAuHidAttributes,
   embedManifest,
-  resolvePath,
   syncPropertiesForSSR,
   type HydrationManifest,
   type SSRProcessOptions,
@@ -56,6 +54,6 @@ export {
 
 // Re-export manifest types from Aurelia runtime for convenience
 export type {
-  IControllerManifest as ControllerManifest,
-  IViewManifest as ViewManifest,
+  IControllerManifest,
+  IHydrationManifest,
 } from "@aurelia/runtime-html";

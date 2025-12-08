@@ -38,7 +38,7 @@ import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { JSDOM } from "jsdom";
-import { DI, Registration } from "@aurelia/kernel";
+import { DI, Registration, LoggerConfiguration, LogLevel, ConsoleSink } from "@aurelia/kernel";
 import {
   Aurelia,
   IPlatform,
@@ -106,7 +106,7 @@ class InfoTag {
   static $au = {
     type: "custom-element",
     name: "info-tag",
-    containerless: true,
+    // containerless: true,  // DISABLED for SSR testing
     bindables: {
       count: { mode: 2 },
     },
@@ -252,7 +252,7 @@ function createStressTestSemantics() {
           kind: "element",
           name: "info-tag",
           boundary: true,
-          containerless: true,
+          containerless: false,  // DISABLED for SSR testing
           bindables: {
             count: { name: "count", mode: "toView" },
           },
@@ -712,7 +712,7 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
         template: infoTagAot.template,
         instructions: infoTagAot.instructions,
         needsCompile: false,
-        containerless: true,
+        // containerless: true,  // DISABLED for SSR testing
         bindables: { count: { mode: 2 } },
       };
     };
@@ -759,7 +759,9 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
     const container = DI.createContainer();
     container.register(
       StandardConfiguration,
-      Registration.instance(IPlatform, ctx.platform)
+      Registration.instance(IPlatform, ctx.platform),
+      // Enable trace-level logging to see hydration debug info
+      LoggerConfiguration.create({ level: LogLevel.trace, sinks: [ConsoleSink] }),
     );
     container.register(ClientStatusBadge, ClientItemCard, ClientInfoTag, ClientSectionPanel, ClientFooterWidget);
 
@@ -771,6 +773,15 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
 
     let appRoot;
     try {
+      console.log("\n=== PRE-HYDRATION DEBUG ===");
+      console.log("Manifest targetCount:", ssrResult.manifest.targetCount);
+      console.log("Manifest controllers:", Object.keys(ssrResult.manifest.controllers || {}));
+      console.log("Manifest children keys:", Object.keys(ssrResult.manifest.children || {}));
+      for (const [key, child] of Object.entries(ssrResult.manifest.children || {})) {
+        console.log(`  child[${key}]: targetCount=${child.targetCount}, controllers=${Object.keys(child.controllers || {})}, children=${Object.keys(child.children || {})}`);
+      }
+      console.log("=== END PRE-HYDRATION DEBUG ===\n");
+
       appRoot = await au.hydrate({
         host,
         component: ClientStressApp,
@@ -779,8 +790,10 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
       });
       console.log("Hydration completed successfully");
     } catch (err) {
-      console.log("Hydration error:", err.message);
-      console.log("Stack:", err.stack);
+      console.error("\n=== HYDRATION ERROR ===");
+      console.error("Error message:", err.message);
+      console.error("Error stack:", err.stack);
+      console.error("=== END HYDRATION ERROR ===\n");
       throw err;
     }
 

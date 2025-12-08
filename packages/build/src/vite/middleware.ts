@@ -14,8 +14,7 @@
 
 import type { Connect, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readFile } from "node:fs/promises";
-import { compileAndRenderAot, type AotCompileResult } from "../aot.js";
+import type { AotCompileResult } from "../aot.js";
 import { renderWithComponents } from "../ssr/render.js";
 import type { HydrationManifest } from "../ssr/ssr-processor.js";
 import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
@@ -118,30 +117,9 @@ export function createSSRMiddleware(
 
         renderMode = ` (real classes, ${children.length} children)`;
       } else {
-        // LEGACY FLOW: Fake class with state injection (no child support)
-        const template = await readFile(options.entry, "utf-8");
-        const state = await options.state(fullUrl, req);
-
-        const compileOptions: Parameters<typeof compileAndRenderAot>[1] = {
-          state,
-          name: "ssr-root",
-          templatePath: options.entry,
-          ssr: {
-            stripMarkers: options.stripMarkers,
-          },
-        };
-
-        const result = await compileAndRenderAot(template, compileOptions);
-
-        html = injectIntoShell(
-          options.htmlShell,
-          result.html,
-          state,
-          result.aot,
-          result.manifest,
+        throw new Error(
+          `[aurelia-ssr] Resolution is required. Configure the 'resolution' option in your Vite plugin.`
         );
-
-        renderMode = "";
       }
 
       // Send response
