@@ -34,9 +34,9 @@ function countTCsOfType(scope, type) {
   for (const child of scope.children ?? []) {
     if (isSSRTemplateController(child)) {
       if (child.type === type) count++;
-      // Also count inside TC views
+      // Views are scopes directly, not { scope: ISSRScope }
       for (const view of child.views ?? []) {
-        count += countTCsOfType(view.scope, type);
+        count += countTCsOfType(view, type);
       }
     } else if (isSSRScope(child)) {
       // CE scope - recurse into it
@@ -52,7 +52,7 @@ function countAllTCs(scope) {
     if (isSSRTemplateController(child)) {
       count++;
       for (const view of child.views ?? []) {
-        count += countAllTCs(view.scope);
+        count += countAllTCs(view);
       }
     } else if (isSSRScope(child)) {
       count += countAllTCs(child);
@@ -66,7 +66,7 @@ function countCEs(scope) {
   for (const child of scope.children ?? []) {
     if (isSSRTemplateController(child)) {
       for (const view of child.views ?? []) {
-        count += countCEs(view.scope);
+        count += countCEs(view);
       }
     } else if (isSSRScope(child)) {
       count++; // This is a CE
@@ -206,11 +206,13 @@ describe("Tree-shaped Manifest Recorder", () => {
       const values = [];
       for (const child of scope.children ?? []) {
         if (isSSRTemplateController(child)) {
-          if (child.type === "if" && child.value !== undefined) {
-            values.push(child.value);
+          // state.value is the if condition result
+          if (child.type === "if" && child.state?.value !== undefined) {
+            values.push(child.state.value);
           }
+          // Views are scopes directly
           for (const view of child.views ?? []) {
-            values.push(...collectIfValues(view.scope));
+            values.push(...collectIfValues(view));
           }
         } else if (isSSRScope(child)) {
           values.push(...collectIfValues(child));

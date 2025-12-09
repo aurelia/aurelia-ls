@@ -4,16 +4,39 @@
  * These tests verify the full AOT SSR pipeline:
  * 1. Compile template with domain compiler AOT
  * 2. Translate instructions to Aurelia format
- * 3. SSR render to HTML with state
+ * 3. SSR render to HTML
  * 4. Verify output correctness
  *
- * Uses `compileAndRenderAot` which combines compileWithAot + renderToString.
+ * Components define their own state naturally via class properties.
+ * Uses `compileAndRenderAot` which combines compileWithAot + render.
  */
 
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { compileAndRenderAot, compileWithAot } from "../out/index.js";
+
+// =============================================================================
+// Helper: Create a test component class with given state and template
+// =============================================================================
+
+/**
+ * Creates a component class with the specified state and template.
+ * This is the correct pattern - components define their own state naturally.
+ */
+function createComponent(name, template, state = {}) {
+  const ComponentClass = class {
+    constructor() {
+      Object.assign(this, state);
+    }
+  };
+  ComponentClass.$au = {
+    type: "custom-element",
+    name,
+    template,
+  };
+  return ComponentClass;
+}
 
 // =============================================================================
 // Basic AOT Compilation Tests
@@ -70,58 +93,60 @@ describe("AOT Compilation", () => {
 
 describe("AOT SSR: Basic Rendering", () => {
   test("renders text interpolation", async () => {
-    const result = await compileAndRenderAot(
-      "<div>${message}</div>",
-      { state: { message: "Hello AOT" } }
-    );
+    const TestApp = createComponent("test-app", "<div>${message}</div>", {
+      message: "Hello AOT",
+    });
 
+    const result = await compileAndRenderAot(TestApp);
     assert.ok(result.html.includes("Hello AOT"), "Should render interpolated value");
   });
 
   test("renders multiple interpolations", async () => {
-    const result = await compileAndRenderAot(
-      "<div>${first} ${last}</div>",
-      { state: { first: "John", last: "Doe" } }
-    );
+    const TestApp = createComponent("test-app", "<div>${first} ${last}</div>", {
+      first: "John",
+      last: "Doe",
+    });
 
+    const result = await compileAndRenderAot(TestApp);
     assert.ok(result.html.includes("John"), "Should render first name");
     assert.ok(result.html.includes("Doe"), "Should render last name");
   });
 
   test("renders nested property access", async () => {
-    const result = await compileAndRenderAot(
-      "<span>${user.name}</span>",
-      { state: { user: { name: "Alice" } } }
-    );
+    const TestApp = createComponent("test-app", "<span>${user.name}</span>", {
+      user: { name: "Alice" },
+    });
 
+    const result = await compileAndRenderAot(TestApp);
     assert.ok(result.html.includes("Alice"), "Should render nested property");
   });
 
   test("renders expression in text", async () => {
-    const result = await compileAndRenderAot(
-      "<span>${count + 1}</span>",
-      { state: { count: 5 } }
-    );
+    const TestApp = createComponent("test-app", "<span>${count + 1}</span>", {
+      count: 5,
+    });
 
+    const result = await compileAndRenderAot(TestApp);
     assert.ok(result.html.includes("6"), "Should evaluate expression");
   });
 
   test("renders ternary expression", async () => {
-    const result = await compileAndRenderAot(
-      "<span>${active ? 'Yes' : 'No'}</span>",
-      { state: { active: true } }
-    );
+    const TestApp = createComponent("test-app", "<span>${active ? 'Yes' : 'No'}</span>", {
+      active: true,
+    });
 
+    const result = await compileAndRenderAot(TestApp);
     assert.ok(result.html.includes("Yes"), "Should evaluate ternary");
   });
 });
 
 describe("AOT SSR: Property Bindings", () => {
   test("renders value.bind on input", async () => {
-    const result = await compileAndRenderAot(
-      '<input value.bind="name">',
-      { state: { name: "test-value" } }
-    );
+    const TestApp = createComponent("test-app", '<input value.bind="name">', {
+      name: "test-value",
+    });
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Property binding may set value attribute or property
     // Just verify the input element is rendered
@@ -134,10 +159,11 @@ describe("AOT SSR: Property Bindings", () => {
   });
 
   test("renders checked.bind on checkbox", async () => {
-    const result = await compileAndRenderAot(
-      '<input type="checkbox" checked.bind="isChecked">',
-      { state: { isChecked: true } }
-    );
+    const TestApp = createComponent("test-app", '<input type="checkbox" checked.bind="isChecked">', {
+      isChecked: true,
+    });
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Checkbox with checked=true should have checked attribute
     assert.ok(
@@ -149,10 +175,13 @@ describe("AOT SSR: Property Bindings", () => {
 
 describe("AOT SSR: Static Content", () => {
   test("renders static HTML structure", async () => {
-    const result = await compileAndRenderAot(
+    const TestApp = createComponent(
+      "test-app",
       '<div class="wrapper"><span class="label">Hello</span></div>',
-      { state: {} }
+      {}
     );
+
+    const result = await compileAndRenderAot(TestApp);
 
     assert.ok(result.html.includes('class="wrapper"'), "Should have wrapper class");
     assert.ok(result.html.includes('class="label"'), "Should have label class");
@@ -160,10 +189,11 @@ describe("AOT SSR: Static Content", () => {
   });
 
   test("renders mixed static and dynamic content", async () => {
-    const result = await compileAndRenderAot(
-      '<div class="greeting">Hello, ${name}!</div>',
-      { state: { name: "World" } }
-    );
+    const TestApp = createComponent("test-app", '<div class="greeting">Hello, ${name}!</div>', {
+      name: "World",
+    });
+
+    const result = await compileAndRenderAot(TestApp);
 
     assert.ok(result.html.includes('class="greeting"'), "Should have static class");
     assert.ok(result.html.includes("Hello,"), "Should have static text");
@@ -201,66 +231,26 @@ describe("AOT Compilation: Result Structure", () => {
 });
 
 // =============================================================================
-// Comparison with JIT Rendering
-// =============================================================================
-
-describe("AOT vs JIT Parity", () => {
-  test("simple interpolation produces same visible output", async () => {
-    // Import JIT compile function
-    const { compileAndRender } = await import("../out/index.js");
-
-    const markup = "<div>${message}</div>";
-    const state = { message: "Hello" };
-
-    const jitResult = await compileAndRender(markup, { state });
-    const aotResult = await compileAndRenderAot(markup, { state });
-
-    // Both should contain the message
-    assert.ok(jitResult.html.includes("Hello"), "JIT should render message");
-    assert.ok(aotResult.html.includes("Hello"), "AOT should render message");
-
-    // The visible content should be the same (ignoring hydration markers)
-    const normalizeHtml = (html) => {
-      // Remove hydration markers and normalize whitespace
-      return html
-        .replace(/au-hid="[^"]*"/g, "")
-        .replace(/<!--au:[^-]*-->/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-    };
-
-    // Note: There may be slight differences in marker placement
-    // but the visible content should match
-    const jitContent = normalizeHtml(jitResult.html);
-    const aotContent = normalizeHtml(aotResult.html);
-
-    // Both should contain the div with Hello
-    assert.ok(jitContent.includes("Hello"), "JIT normalized should have Hello");
-    assert.ok(aotContent.includes("Hello"), "AOT normalized should have Hello");
-  });
-});
-
-// =============================================================================
 // Error Handling
 // =============================================================================
 
 describe("AOT Error Handling", () => {
   test("handles undefined state property gracefully", async () => {
     // Access to undefined should not throw, just render undefined/empty
-    const result = await compileAndRenderAot(
-      "<div>${missing}</div>",
-      { state: {} }
-    );
+    const TestApp = createComponent("test-app", "<div>${missing}</div>", {});
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Should render without crashing
     assert.ok(result.html.includes("<div"), "Should render div");
   });
 
   test("handles null state value", async () => {
-    const result = await compileAndRenderAot(
-      "<div>${value}</div>",
-      { state: { value: null } }
-    );
+    const TestApp = createComponent("test-app", "<div>${value}</div>", {
+      value: null,
+    });
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Should render without crashing
     assert.ok(result.html.includes("<div"), "Should render div");
@@ -273,10 +263,13 @@ describe("AOT Error Handling", () => {
 
 describe("AOT Template Controllers", () => {
   test("renders repeat.for controller", async () => {
-    const result = await compileAndRenderAot(
+    const TestApp = createComponent(
+      "test-app",
       '<div repeat.for="item of items">${item}</div>',
-      { state: { items: ["A", "B", "C"] } }
+      { items: ["A", "B", "C"] }
     );
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Should render all items
     assert.ok(result.html.includes("A"), `Expected item A in: ${result.html}`);
@@ -285,19 +278,20 @@ describe("AOT Template Controllers", () => {
   });
 
   test("renders if.bind controller - true condition", async () => {
-    const result = await compileAndRenderAot(
-      '<div if.bind="show">Visible</div>',
-      { state: { show: true } }
-    );
+    const TestApp = createComponent("test-app", '<div if.bind="show">Visible</div>', {
+      show: true,
+    });
 
+    const result = await compileAndRenderAot(TestApp);
     assert.ok(result.html.includes("Visible"), `Expected Visible in: ${result.html}`);
   });
 
   test("renders if.bind controller - false condition", async () => {
-    const result = await compileAndRenderAot(
-      '<div if.bind="show">Hidden</div>',
-      { state: { show: false } }
-    );
+    const TestApp = createComponent("test-app", '<div if.bind="show">Hidden</div>', {
+      show: false,
+    });
+
+    const result = await compileAndRenderAot(TestApp);
 
     // When condition is false, content should not appear
     assert.ok(!result.html.includes("Hidden") || result.html.includes("<!--"),
@@ -305,22 +299,28 @@ describe("AOT Template Controllers", () => {
   });
 
   test("renders nested repeat with inner bindings", async () => {
-    const result = await compileAndRenderAot(
+    const TestApp = createComponent(
+      "test-app",
       '<ul><li repeat.for="item of items"><span>${item.name}</span></li></ul>',
-      { state: { items: [{ name: "First" }, { name: "Second" }] } }
+      { items: [{ name: "First" }, { name: "Second" }] }
     );
+
+    const result = await compileAndRenderAot(TestApp);
 
     assert.ok(result.html.includes("First"), `Expected First in: ${result.html}`);
     assert.ok(result.html.includes("Second"), `Expected Second in: ${result.html}`);
   });
 
   test("renders if containing repeat (todo app pattern)", async () => {
-    const result = await compileAndRenderAot(
+    const TestApp = createComponent(
+      "test-app",
       `<ul if.bind="items.length > 0">
         <li repeat.for="item of items">\${item}</li>
       </ul>`,
-      { state: { items: ["A", "B", "C"] } }
+      { items: ["A", "B", "C"] }
     );
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Should render all items since condition is true
     assert.ok(result.html.includes("A"), `Expected A in: ${result.html}`);
@@ -329,22 +329,28 @@ describe("AOT Template Controllers", () => {
   });
 
   test("renders if containing repeat with false condition", async () => {
-    const result = await compileAndRenderAot(
+    const TestApp = createComponent(
+      "test-app",
       `<ul if.bind="items.length > 0">
         <li repeat.for="item of items">\${item}</li>
       </ul>`,
-      { state: { items: [] } }
+      { items: [] }
     );
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Should not render items since condition is false
     assert.ok(!result.html.includes("<li>"), `Expected no li elements in: ${result.html}`);
   });
 
   test("renders repeat with element-level attribute binding", async () => {
-    const result = await compileAndRenderAot(
+    const TestApp = createComponent(
+      "test-app",
       '<li repeat.for="item of items" class="${item.done ? \'done\' : \'pending\'}">${item.text}</li>',
-      { state: { items: [{ text: "Task 1", done: true }, { text: "Task 2", done: false }] } }
+      { items: [{ text: "Task 1", done: true }, { text: "Task 2", done: false }] }
     );
+
+    const result = await compileAndRenderAot(TestApp);
 
     assert.ok(result.html.includes("Task 1"), `Expected Task 1 in: ${result.html}`);
     assert.ok(result.html.includes("Task 2"), `Expected Task 2 in: ${result.html}`);
@@ -362,7 +368,8 @@ describe("AOT Template Controllers", () => {
     //     <button click.trigger="removeTodo(todo)">&times;</button>
     //   </li>
     // </ul>
-    const result = await compileAndRenderAot(
+    const TestApp = createComponent(
+      "test-app",
       `<ul if.bind="todos.length > 0">
         <li repeat.for="todo of todos" class="todo-item \${todo.completed ? 'completed' : ''}">
           <span class="todo-text">\${todo.text}</span>
@@ -370,14 +377,19 @@ describe("AOT Template Controllers", () => {
         </li>
       </ul>`,
       {
-        state: {
-          todos: [
-            { text: "Learn Aurelia", completed: true },
-            { text: "Build app", completed: false },
-          ]
-        }
+        todos: [
+          { text: "Learn Aurelia", completed: true },
+          { text: "Build app", completed: false },
+        ],
       }
     );
+    // Add the method that the template references
+    TestApp.prototype.removeTodo = function(todo) {
+      const index = this.todos.indexOf(todo);
+      if (index > -1) this.todos.splice(index, 1);
+    };
+
+    const result = await compileAndRenderAot(TestApp);
 
     // Verify items are rendered
     assert.ok(result.html.includes("Learn Aurelia"), `Expected Learn Aurelia in: ${result.html}`);

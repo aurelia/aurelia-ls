@@ -18,7 +18,29 @@ import { JSDOM } from "jsdom";
 import { DI, Registration } from "@aurelia/kernel";
 import { Aurelia, IPlatform, StandardConfiguration, CustomElement } from "@aurelia/runtime-html";
 import { BrowserPlatform } from "@aurelia/platform-browser";
-import { compileAndRender } from "../out/index.js";
+import { compileAndRenderAot } from "../out/index.js";
+
+// =============================================================================
+// Helper: Create a test component class with given state and template
+// =============================================================================
+
+/**
+ * Creates a component class with the specified state and template.
+ * This is the correct pattern - components define their own state naturally.
+ */
+function createComponent(name, template, state = {}) {
+  const ComponentClass = class {
+    constructor() {
+      Object.assign(this, state);
+    }
+  };
+  ComponentClass.$au = {
+    type: "custom-element",
+    name,
+    template,
+  };
+  return ComponentClass;
+}
 
 // =============================================================================
 // Test Infrastructure
@@ -163,7 +185,8 @@ describe("E2E: SSR Output", () => {
       remainingCount: 1,
     };
 
-    const result = await compileAndRender(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const result = await compileAndRenderAot(TestApp);
 
     // Verify structure
     assert.ok(result.html.includes("todo-app"), "Should have todo-app div");
@@ -197,7 +220,8 @@ describe("E2E: SSR Output", () => {
       ],
     };
 
-    const result = await compileAndRender(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const result = await compileAndRenderAot(TestApp);
 
     assert.ok(result.html.includes("Fruits"), "Should have Fruits group");
     assert.ok(result.html.includes("Veggies"), "Should have Veggies group");
@@ -213,7 +237,8 @@ describe("E2E: SSR Output", () => {
       <div class="empty" if.bind="items.length === 0">No items</div>
     `;
 
-    const result = await compileAndRender(template, { state: { items: [] } });
+    const TestApp = createComponent("test-app", template, { items: [] });
+    const result = await compileAndRenderAot(TestApp);
 
     assert.ok(result.html.includes("No items"), "Should show empty message");
     assert.ok(!result.html.includes("<li>"), "Should not have list items");

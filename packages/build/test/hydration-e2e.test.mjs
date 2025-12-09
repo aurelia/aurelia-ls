@@ -26,6 +26,28 @@ import { BrowserPlatform } from "@aurelia/platform-browser";
 import { compileAndRenderAot, compileWithAot } from "../out/index.js";
 
 // =============================================================================
+// Helper: Create a test component class with given state and template
+// =============================================================================
+
+/**
+ * Creates a component class with the specified state and template.
+ * This is the correct pattern - components define their own state naturally.
+ */
+function createComponent(name, template, state = {}) {
+  const ComponentClass = class {
+    constructor() {
+      Object.assign(this, state);
+    }
+  };
+  ComponentClass.$au = {
+    type: "custom-element",
+    name,
+    template,
+  };
+  return ComponentClass;
+}
+
+// =============================================================================
 // Test Infrastructure
 // =============================================================================
 
@@ -322,7 +344,8 @@ describe("Hydration E2E: Simple Repeat", () => {
 
   test("Step 2: SSR renders with correct manifest", async () => {
     const { template, state, expectedCount, selector } = FIXTURES.simpleRepeat;
-    const result = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const result = await compileAndRenderAot(TestApp);
 
     console.log("SSR HTML:", result.html);
     console.log("SSR Manifest:", JSON.stringify(result.manifest, null, 2));
@@ -333,7 +356,7 @@ describe("Hydration E2E: Simple Repeat", () => {
 
     assert.equal(count, expectedCount, `SSR should render ${expectedCount} items`);
     assert.ok(result.manifest, "Should have manifest");
-    assert.ok(result.manifest.controllers, "Manifest should have controllers");
+    assert.ok(result.manifest.manifest, "Manifest should have manifest tree");
   });
 
   test("Step 3: Client hydration - DOM is adopted, not duplicated", async () => {
@@ -343,7 +366,8 @@ describe("Hydration E2E: Simple Repeat", () => {
     const aot = compileWithAot(template, { name: "test" });
 
     // Step 2b: SSR render
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const ssrResult = await compileAndRenderAot(TestApp);
 
     console.log("\n=== HYDRATION TEST ===");
     console.log("SSR HTML:", ssrResult.html);
@@ -385,7 +409,8 @@ describe("Hydration E2E: Simple Repeat", () => {
     const { template, state, selector } = FIXTURES.simpleRepeat;
 
     const aot = compileWithAot(template, { name: "test" });
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const ssrResult = await compileAndRenderAot(TestApp);
 
     const client = await hydrateSSR(
       ssrResult.html,
@@ -432,7 +457,8 @@ describe("Hydration E2E: If Containing Repeat (Double Render Bug)", () => {
     console.log("AOT Template:", aot.template);
 
     // Step 2: SSR
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const ssrResult = await compileAndRenderAot(TestApp);
     console.log("SSR HTML:", ssrResult.html);
     console.log("SSR Manifest:", JSON.stringify(ssrResult.manifest, null, 2));
 
@@ -485,7 +511,8 @@ describe("Hydration E2E: If Containing Repeat (Double Render Bug)", () => {
     const { template, state, selector } = FIXTURES.ifContainingRepeat;
 
     const aot = compileWithAot(template, { name: "test" });
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const ssrResult = await compileAndRenderAot(TestApp);
 
     const client = await hydrateSSR(
       ssrResult.html,
@@ -522,7 +549,8 @@ describe("Hydration E2E: Todo App Pattern", () => {
     const aot = compileWithAot(template, { name: "todo-app" });
 
     // Step 2: SSR
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TodoApp = createComponent("todo-app", template, state);
+    const ssrResult = await compileAndRenderAot(TodoApp);
     console.log("SSR HTML:", ssrResult.html);
     console.log("SSR Manifest:", JSON.stringify(ssrResult.manifest, null, 2));
 
@@ -577,7 +605,8 @@ describe("Hydration E2E: Todo App Pattern", () => {
     const { template, state, selector } = FIXTURES.todoApp;
 
     const aot = compileWithAot(template, { name: "todo-app" });
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TodoApp = createComponent("todo-app", template, state);
+    const ssrResult = await compileAndRenderAot(TodoApp);
 
     const client = await hydrateSSR(
       ssrResult.html,
@@ -626,7 +655,8 @@ describe("Hydration E2E: Real Todo App (examples/todo-app)", () => {
     console.log("AOT Template:", aot.template);
 
     // Step 2: SSR (uses full state including computed properties)
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const MyApp = createComponent("my-app", template, state);
+    const ssrResult = await compileAndRenderAot(MyApp);
     console.log("SSR HTML:", ssrResult.html);
     console.log("SSR Manifest:", JSON.stringify(ssrResult.manifest, null, 2));
 
@@ -704,7 +734,8 @@ describe("Hydration E2E: Real Todo App (examples/todo-app)", () => {
     const { template, state, clientState, selector } = FIXTURES.realTodoApp;
 
     const aot = compileWithAot(template, { name: "my-app" });
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const MyApp = createComponent("my-app", template, state);
+    const ssrResult = await compileAndRenderAot(MyApp);
 
     class RealTodoApp {
       get activeTodos() {
@@ -769,7 +800,8 @@ describe("Diagnostic: Verify Manifest has _targets set", () => {
     const { template, state } = FIXTURES.simpleRepeat;
 
     const aot = compileWithAot(template, { name: "test" });
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const ssrResult = await compileAndRenderAot(TestApp);
 
     // Set up hydration context
     const ctx = createHydrationContext(ssrResult.html, state, ssrResult.manifest, {
@@ -803,7 +835,7 @@ describe("Diagnostic: Verify Manifest has _targets set", () => {
 
     // Verify manifest before hydration
     console.log("Manifest before hydration:", JSON.stringify(ssrResult.manifest, null, 2));
-    assert.ok(ssrResult.manifest.controllers, "Manifest should have controllers");
+    assert.ok(ssrResult.manifest.manifest, "Manifest should have manifest tree");
 
     const appRoot = await au.hydrate({
       host,
@@ -848,7 +880,8 @@ describe("Diagnostic: Trace Hydration Process", () => {
 
     // Step 2
     console.log("\n--- STEP 2: SSR RENDERING ---");
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const ssrResult = await compileAndRenderAot(TestApp);
     console.log("HTML:", ssrResult.html);
     console.log("Manifest:", JSON.stringify(ssrResult.manifest, null, 2));
 
@@ -943,7 +976,8 @@ describe("Diagnostic: Container Hierarchy", () => {
     const { template, state } = FIXTURES.simpleRepeat;
 
     const aot = compileWithAot(template, { name: "test" });
-    const ssrResult = await compileAndRenderAot(template, { state });
+    const TestApp = createComponent("test-app", template, state);
+    const ssrResult = await compileAndRenderAot(TestApp);
 
     const ctx = createHydrationContext(ssrResult.html, state, ssrResult.manifest, {
       template: aot.template,
