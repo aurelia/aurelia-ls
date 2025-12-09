@@ -1,31 +1,30 @@
 import Aurelia from 'aurelia';
-import { MyApp } from './my-app';
+import { MyAppCustomElement } from './my-app';
 
 // Type declarations for SSR hydration data
 declare global {
   interface Window {
-    __SSR_STATE__?: Record<string, unknown>;
     __AU_DEF__?: {
       template: string; // Template HTML with markers
       instructions: unknown[][];
       nestedDefs: unknown[];
       targetCount: number;
     };
-    __AU_MANIFEST__?: {
-      targetCount: number;
-      controllers: Record<number, unknown>;
+    __AU_SSR_SCOPE__?: {
+      name?: string;
+      nodeCount?: number;
+      children: unknown[];
     };
   }
 }
 
-const ssrState = window.__SSR_STATE__;
 const ssrDef = window.__AU_DEF__;
-const ssrManifest = window.__AU_MANIFEST__;
+const ssrScope = window.__AU_SSR_SCOPE__;
 
-if (ssrState && ssrDef) {
+if (ssrDef && ssrScope) {
   // SSR mode: hydrate with AOT definition
   // Create component class with pre-compiled definition to skip runtime compilation
-  class HydrateApp extends MyApp {
+  class HydrateApp extends MyAppCustomElement {
     static $au = {
       type: 'custom-element' as const,
       name: 'my-app',
@@ -41,13 +40,12 @@ if (ssrState && ssrDef) {
       .hydrate({
         host,
         component: HydrateApp,
-        state: ssrState,
-        manifest: ssrManifest,
+        ssrScope: ssrScope as any,
       });
   }
 } else {
   // Normal mode: create new app
   Aurelia
-    .app(MyApp)
+    .app(MyAppCustomElement)
     .start();
 }

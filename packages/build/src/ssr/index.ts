@@ -34,14 +34,23 @@ export {
 // SSR Post-Processing (clean HTML output)
 export {
   processSSROutput,
-
   stripAuHidAttributes,
-  embedManifest,
   syncPropertiesForSSR,
-  type HydrationManifest,
   type SSRProcessOptions,
   type SSRProcessResult,
 } from "./ssr-processor.js";
+
+// Manifest recording (tree-based SSR manifest) - re-exported from runtime
+export {
+  recordManifest,
+  debugControllerTree,
+  isSSRTemplateController,
+  isSSRScope,
+  type ISSRManifest,
+  type ISSRScope,
+  type ISSRScopeChild,
+  type ISSRTemplateController,
+} from "@aurelia/runtime-html";
 
 // Component definition patching (for SSR with real classes)
 export {
@@ -51,9 +60,3 @@ export {
   type StaticAuDefinition,
   type ComponentClass as PatchComponentClass,
 } from "./patch.js";
-
-// Re-export manifest types from Aurelia runtime for convenience
-export type {
-  IControllerManifest,
-  IHydrationManifest,
-} from "@aurelia/runtime-html";

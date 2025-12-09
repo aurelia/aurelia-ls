@@ -16,7 +16,7 @@ import type { Connect, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AotCompileResult } from "../aot.js";
 import { renderWithComponents } from "../ssr/render.js";
-import type { HydrationManifest } from "../ssr/ssr-processor.js";
+import type { ISSRManifest } from "@aurelia/runtime-html";
 import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
 import { loadProjectComponents } from "./loader.js";
 
@@ -103,14 +103,9 @@ export function createSSRMiddleware(
           },
         });
 
-        // For the new flow, we don't have state injection yet
-        // Components use their default values from the class
-        const emptyState = {};
-
         html = injectIntoShell(
           options.htmlShell,
           renderResult.html,
-          emptyState,
           root.aot,
           renderResult.manifest,
         );
@@ -206,14 +201,13 @@ function hasFileExtension(url: string): boolean {
 }
 
 /**
- * Inject SSR content, state, AOT definition, and manifest into HTML shell.
+ * Inject SSR content, AOT definition, and manifest into HTML shell.
  */
 function injectIntoShell(
   shell: string,
   content: string,
-  state: Record<string, unknown>,
   aot: AotCompileResult,
-  manifest?: HydrationManifest,
+  manifest: ISSRManifest,
 ): string {
   let html = shell;
 
@@ -225,11 +219,9 @@ function injectIntoShell(
     html = html.replace("</body>", `${content}</body>`);
   }
 
-  // Inject serialized state, AOT definition, and manifest for client hydration
+  // Inject serialized AOT definition and manifest for client hydration
   const stateMarker = "<!--ssr-state-->";
   if (html.includes(stateMarker)) {
-    const serializedState = serializeState(state);
-
     // Serialize AOT definition for client hydration
     // Instructions are data-only objects, can be serialized directly
     const aotDef = JSON.stringify({
@@ -239,17 +231,11 @@ function injectIntoShell(
       targetCount: aot.targetCount,
     });
 
-    // Build script with all hydration data
-    let script = `<script>
-window.__SSR_STATE__=${serializedState};
-window.__AU_DEF__=${aotDef};`;
-
-    if (manifest) {
-      script += `
-window.__AU_MANIFEST__=${JSON.stringify(manifest)};`;
-    }
-
-    script += `
+    // Build script with hydration data
+    // Note: ssrScope is the tree-based manifest that mirrors the controller tree
+    const script = `<script>
+window.__AU_DEF__=${aotDef};
+window.__AU_SSR_SCOPE__=${JSON.stringify(manifest.manifest)};
 </script>`;
 
     html = html.replace(stateMarker, script);
@@ -258,23 +244,3 @@ window.__AU_MANIFEST__=${JSON.stringify(manifest)};`;
   return html;
 }
 
-/**
- * Serialize state to JSON, stripping non-serializable values (functions, getters).
- */
-function serializeState(state: Record<string, unknown>): string {
-  // Get only own enumerable properties that are not functions
-  const serializable: Record<string, unknown> = {};
-
-  for (const key of Object.keys(state)) {
-    const descriptor = Object.getOwnPropertyDescriptor(state, key);
-    // Skip getters and functions
-    if (descriptor?.get !== undefined) continue;
-
-    const value = state[key];
-    if (typeof value === "function") continue;
-
-    serializable[key] = value;
-  }
-
-  return JSON.stringify(serializable);
-}

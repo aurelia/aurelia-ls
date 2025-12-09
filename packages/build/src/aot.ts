@@ -25,7 +25,8 @@ import {
 } from "@aurelia-ls/domain";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./ssr/instruction-translator.js";
-import type { HydrationManifest, SSRProcessOptions } from "./ssr/ssr-processor.js";
+import type { SSRProcessOptions } from "./ssr/ssr-processor.js";
+import type { ISSRManifest } from "@aurelia/runtime-html";
 import { render, type ComponentClass, type RenderOptions } from "./ssr/render.js";
 import { patchComponentDefinition } from "./ssr/patch.js";
 
@@ -173,8 +174,8 @@ export interface CompileAndRenderAotResult {
   html: string;
   /** AOT compilation result (for debugging) */
   aot: AotCompileResult;
-  /** Hydration manifest */
-  manifest: HydrationManifest;
+  /** Tree-based SSR manifest */
+  manifest: ISSRManifest;
 }
 
 /**

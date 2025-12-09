@@ -1,22 +1,11 @@
 /**
  * SSR Post-Render Processor
  *
- * Handles SSR output processing including marker stripping and manifest delivery.
+ * Handles SSR output processing including marker stripping.
+ * Manifest recording is handled by @aurelia/runtime-html (recordManifest).
  */
-
-import { type IHydrationManifest } from "@aurelia/runtime-html";
 
 /* global Element, HTMLCollection */
-
-/* =============================================================================
- * Re-exported Types from Aurelia Runtime
- * ============================================================================= */
-
-/**
- * Hydration manifest with optional element paths.
- * Re-exported from @aurelia/runtime-html for convenience.
- */
-export type HydrationManifest = IHydrationManifest;
 
 /* =============================================================================
  * Build Package Options & Types
@@ -27,27 +16,10 @@ export type HydrationManifest = IHydrationManifest;
  */
 export interface SSRProcessOptions {
   /**
-   * Strip `au-hid` attributes and use path-based element identification.
-   * When true, `elementPaths` will be added to the manifest.
+   * Strip `au-hid` attributes from the output HTML.
    * Default: false
    */
   stripMarkers?: boolean;
-
-  /**
-   * How to deliver the hydration manifest to the client.
-   * - 'embedded': Insert as <script type="application/json" id="__AU_MANIFEST__">
-   * - 'separate': Return manifest separately (caller handles delivery)
-   * - 'both': Embed in HTML AND return separately
-   * Default: 'separate'
-   */
-  manifestDelivery?: "embedded" | "separate" | "both";
-
-  /**
-   * ID for the embedded manifest script tag.
-   * Only used when manifestDelivery is 'embedded' or 'both'.
-   * Default: '__AU_MANIFEST__'
-   */
-  manifestScriptId?: string;
 }
 
 /**
@@ -56,9 +28,6 @@ export interface SSRProcessOptions {
 export interface SSRProcessResult {
   /** HTML output (clean if stripMarkers=true) */
   html: string;
-
-  /** Hydration manifest (with elementPaths if stripMarkers=true) */
-  manifest: HydrationManifest;
 }
 
 /* =============================================================================
@@ -66,64 +35,30 @@ export interface SSRProcessResult {
  * ============================================================================= */
 
 /**
- * Process SSR output to optionally strip markers and compute element paths.
+ * Process SSR output to optionally strip markers.
  *
  * @param host - The host element containing rendered content
- * @param manifest - The initial hydration manifest from rendering
  * @param options - Processing options
- * @returns Processed HTML and augmented manifest
+ * @returns Processed HTML
  *
  * @example
  * ```typescript
  * // After Aurelia renders...
- * const result = processSSROutput(host, initialManifest, {
- *   stripMarkers: true,
- *   manifestDelivery: 'embedded',
- * });
- *
+ * const result = processSSROutput(host, { stripMarkers: true });
  * // result.html is clean (no au-hid attributes)
- * // result.manifest includes elementPaths for client hydration
  * ```
  */
 export function processSSROutput(
   host: Element,
-  manifest: HydrationManifest,
   options: SSRProcessOptions = {},
 ): SSRProcessResult {
-  const {
-    stripMarkers = false,
-    manifestDelivery = "separate",
-    manifestScriptId = "__AU_MANIFEST__",
-  } = options;
-
-  let resultHtml: string;
-  let resultManifest: HydrationManifest;
+  const { stripMarkers = false } = options;
 
   if (stripMarkers) {
-    // Strip au-hid attributes
     stripAuHidAttributes(host);
-    resultHtml = host.innerHTML;
-    // Spread manifest
-    resultManifest = {
-      ...manifest
-    };
-  } else {
-    // No processing - just extract HTML
-    resultHtml = host.innerHTML;
-    resultManifest = { ...manifest };
   }
 
-  // Handle manifest embedding (our additional feature)
-  if (manifestDelivery === "embedded" || manifestDelivery === "both") {
-    embedManifest(host, resultManifest, manifestScriptId);
-    // Re-extract HTML after embedding
-    resultHtml = host.innerHTML;
-  }
-
-  return {
-    html: resultHtml,
-    manifest: resultManifest,
-  };
+  return { html: host.innerHTML };
 }
 
 
@@ -143,44 +78,6 @@ export function stripAuHidAttributes(root: Element): void {
     el.removeAttribute("au-hid");
   }
 }
-
-/* =============================================================================
- * Manifest Embedding
- * ============================================================================= */
-
-/**
- * Embed the hydration manifest as a script tag within the host element.
- *
- * The manifest is serialized as JSON in a script tag with type="application/json".
- * This is a common pattern for delivering structured data alongside SSR HTML.
- *
- * @param host - The host element to embed manifest in
- * @param manifest - The hydration manifest to embed
- * @param scriptId - ID for the script tag
- */
-export function embedManifest(
-  host: Element,
-  manifest: HydrationManifest,
-  scriptId: string,
-): void {
-  const doc = host.ownerDocument;
-  if (!doc) return;
-
-  // Check if manifest script already exists
-  const existing = host.querySelector(`#${scriptId}`);
-  if (existing) {
-    existing.textContent = JSON.stringify(manifest);
-    return;
-  }
-
-  // Create and append manifest script
-  const script = doc.createElement("script");
-  script.type = "application/json";
-  script.id = scriptId;
-  script.textContent = JSON.stringify(manifest);
-  host.appendChild(script);
-}
-
 
 
 /* =============================================================================

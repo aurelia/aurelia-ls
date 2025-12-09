@@ -785,8 +785,7 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
       appRoot = await au.hydrate({
         host,
         component: ClientStressApp,
-        state: ssrState,
-        manifest: ssrResult.manifest,
+        ssrScope: ssrResult.manifest.manifest, // Pass the inner ISSRScope, not the full ISSRManifest
       });
       console.log("Hydration completed successfully");
     } catch (err) {

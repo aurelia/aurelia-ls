@@ -21,9 +21,9 @@ import { BrowserPlatform } from "@aurelia/platform-browser";
 import {
   recordManifest,
   debugControllerTree,
-  isTCEntry,
-  isScopeManifest,
-} from "../out/ssr/manifest-recorder.js";
+  isSSRTemplateController,
+  isSSRScope,
+} from "@aurelia/runtime-html";
 
 // =============================================================================
 // HELPER: Count TCs of a given type in the manifest tree
@@ -32,13 +32,13 @@ import {
 function countTCsOfType(scope, type) {
   let count = 0;
   for (const child of scope.children ?? []) {
-    if (isTCEntry(child)) {
+    if (isSSRTemplateController(child)) {
       if (child.type === type) count++;
       // Also count inside TC views
       for (const view of child.views ?? []) {
         count += countTCsOfType(view.scope, type);
       }
-    } else if (isScopeManifest(child)) {
+    } else if (isSSRScope(child)) {
       // CE scope - recurse into it
       count += countTCsOfType(child, type);
     }
@@ -49,12 +49,12 @@ function countTCsOfType(scope, type) {
 function countAllTCs(scope) {
   let count = 0;
   for (const child of scope.children ?? []) {
-    if (isTCEntry(child)) {
+    if (isSSRTemplateController(child)) {
       count++;
       for (const view of child.views ?? []) {
         count += countAllTCs(view.scope);
       }
-    } else if (isScopeManifest(child)) {
+    } else if (isSSRScope(child)) {
       count += countAllTCs(child);
     }
   }
@@ -64,11 +64,11 @@ function countAllTCs(scope) {
 function countCEs(scope) {
   let count = 0;
   for (const child of scope.children ?? []) {
-    if (isTCEntry(child)) {
+    if (isSSRTemplateController(child)) {
       for (const view of child.views ?? []) {
         count += countCEs(view.scope);
       }
-    } else if (isScopeManifest(child)) {
+    } else if (isSSRScope(child)) {
       count++; // This is a CE
       count += countCEs(child); // Recurse
     }
@@ -205,14 +205,14 @@ describe("Tree-shaped Manifest Recorder", () => {
     function collectIfValues(scope) {
       const values = [];
       for (const child of scope.children ?? []) {
-        if (isTCEntry(child)) {
+        if (isSSRTemplateController(child)) {
           if (child.type === "if" && child.value !== undefined) {
             values.push(child.value);
           }
           for (const view of child.views ?? []) {
             values.push(...collectIfValues(view.scope));
           }
-        } else if (isScopeManifest(child)) {
+        } else if (isSSRScope(child)) {
           values.push(...collectIfValues(child));
         }
       }
@@ -243,12 +243,12 @@ describe("Tree-shaped Manifest Recorder", () => {
     const ceScope = { name: "my-ce", children: [] };
     const viewScope = { children: [] };
 
-    assert.ok(isTCEntry(tcEntry), "Should identify TC entry");
-    assert.ok(!isTCEntry(ceScope), "Should not identify CE scope as TC");
-    assert.ok(!isTCEntry(viewScope), "Should not identify view scope as TC");
+    assert.ok(isSSRTemplateController(tcEntry), "Should identify TC entry");
+    assert.ok(!isSSRTemplateController(ceScope), "Should not identify CE scope as TC");
+    assert.ok(!isSSRTemplateController(viewScope), "Should not identify view scope as TC");
 
-    assert.ok(isScopeManifest(ceScope), "Should identify CE scope");
-    assert.ok(isScopeManifest(viewScope), "Should identify view scope");
-    assert.ok(!isScopeManifest(tcEntry), "Should not identify TC entry as scope");
+    assert.ok(isSSRScope(ceScope), "Should identify CE scope");
+    assert.ok(isSSRScope(viewScope), "Should identify view scope");
+    assert.ok(!isSSRScope(tcEntry), "Should not identify TC entry as scope");
   });
 });

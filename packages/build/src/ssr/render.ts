@@ -14,19 +14,19 @@ import {
   Aurelia,
   IPlatform,
   StandardConfiguration,
-  ISSRContextToken,
-  SSRContext,
+  ISSRContext,
   CustomElement,
+  recordManifest,
+  type ICustomElementController,
+  type ISSRManifest,
 } from "@aurelia/runtime-html";
 import { createServerPlatform, getDocument } from "./platform.js";
 import {
   processSSROutput,
   syncPropertiesForSSR,
-  type HydrationManifest,
   type SSRProcessOptions,
 } from "./ssr-processor.js";
 import type { ComponentClass } from "./patch.js";
-import type { ICustomElementController } from "@aurelia/runtime-html";
 export type { ComponentClass };
 
 /**
@@ -59,8 +59,8 @@ export interface RenderResult {
   /** Rendered HTML (clean if ssr.stripMarkers=true) */
   html: string;
 
-  /** Hydration manifest for client-side hydration */
-  manifest: HydrationManifest;
+  /** Tree-based SSR manifest for client-side hydration */
+  manifest: ISSRManifest;
 }
 
 /**
@@ -122,19 +122,12 @@ export async function render(
     }
   }
 
-  // Get root target count from $au definition for SSR context
-  const rootInstructions = RootComponent.$au?.instructions;
-  const rootTargetCount = Array.isArray(rootInstructions) ? rootInstructions.length : 0;
-
-  // Create SSR context with recording capabilities
-  const ssrContext = new SSRContext();
-
   // Create DI container
   const container = DI.createContainer();
   container.register(
     StandardConfiguration,
     Registration.instance(IPlatform, platform),
-    Registration.instance(ISSRContextToken, ssrContext),
+    Registration.instance(ISSRContext, { preserveMarkers: true }),
   );
 
   // Register child components
@@ -155,29 +148,30 @@ export async function render(
   // Sync DOM properties to attributes for proper HTML serialization
   syncPropertiesForSSR(host);
 
-  // Get manifest from SSR context (recorded during rendering)
-  const runtimeManifest = ssrContext.getManifest();
+  // Get the root controller for manifest recording
+  const rootController = (au.root as unknown as { controller: ICustomElementController }).controller;
+
+  // Record tree-based manifest from controller tree
+  const manifest = recordManifest(rootController);
 
   // Call beforeStop callback if provided (for post-render analysis)
   if (options.beforeStop) {
-    // The root's controller is available via the _controller property
-    const rootController = (au.root as unknown as { controller: ICustomElementController }).controller;
     options.beforeStop(rootController, host);
   }
 
   // Process output
-  let result: RenderResult;
+  let html: string;
   if (options.ssr) {
-    const processed = processSSROutput(host, runtimeManifest, options.ssr);
-    result = { html: processed.html, manifest: processed.manifest };
+    const processed = processSSROutput(host, options.ssr);
+    html = processed.html;
   } else {
-    result = { html: host.innerHTML, manifest: runtimeManifest };
+    html = host.innerHTML;
   }
 
   // Cleanup
   await au.stop(true);
 
-  return result;
+  return { html, manifest };
 }
 
 // Re-export for backwards compatibility during transition

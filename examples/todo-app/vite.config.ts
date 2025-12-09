@@ -36,35 +36,9 @@ export default defineConfig({
     }),
     aureliaSSR({
       entry: './src/my-app.html',
-      stripMarkers: false, // Keep markers for client hydration (path-based hydration not yet complete)
+      tsconfig: './tsconfig.json', // Required for resource resolution
+      stripMarkers: false, // Keep markers for client hydration
       htmlShell: ssrShell,
-      state: () => ({
-        title: 'Todo App (SSR)',
-        newTodoText: '',
-        filter: 'all',
-        todos: [
-          { id: 1, text: 'Learn Aurelia', completed: true },
-          { id: 2, text: 'Build awesome app', completed: false },
-          { id: 3, text: 'Deploy to production', completed: false },
-          { id: 4, text: 'Server-side rendered!', completed: false },
-        ],
-        get activeTodos() {
-          return this.todos.filter((t: { completed: boolean }) => !t.completed).length;
-        },
-        get completedTodos() {
-          return this.todos.filter((t: { completed: boolean }) => t.completed).length;
-        },
-        get filteredTodos() {
-          switch (this.filter) {
-            case 'active':
-              return this.todos.filter((t: { completed: boolean }) => !t.completed);
-            case 'completed':
-              return this.todos.filter((t: { completed: boolean }) => t.completed);
-            default:
-              return this.todos;
-          }
-        },
-      }),
     }),
   ],
 });

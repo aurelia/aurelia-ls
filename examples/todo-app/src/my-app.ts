@@ -4,7 +4,7 @@ export interface Todo {
   completed: boolean;
 }
 
-export class MyApp {
+export class MyAppCustomElement {
   public title = 'Todo App';
   public newTodoText = '';
   public filter: 'all' | 'active' | 'completed' = 'all';
