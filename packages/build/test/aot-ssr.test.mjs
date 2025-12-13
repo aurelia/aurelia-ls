@@ -402,4 +402,59 @@ describe("AOT Template Controllers", () => {
     assert.ok(result.html.includes("destroy"), `Expected destroy class button in: ${result.html}`);
     assert.ok(result.html.includes("×") || result.html.includes("&times;"), `Expected × in button in: ${result.html}`);
   });
+
+  test("compiles repeat.for with key.bind auxiliary binding", async () => {
+    // key.bind enables efficient diffing by specifying unique identifier per item
+    // Use compileWithAot to inspect the raw compilation output
+    const compileResult = compileWithAot(
+      '<li repeat.for="item of items; key.bind: item.id">${item.name}</li>',
+      { name: "test-comp" }
+    );
+
+    // Verify the aux binding was emitted in the raw code result
+    const codeResult = compileResult.raw.codeResult;
+    const def = codeResult.definition;
+
+    // Find the iteratorBinding instruction
+    const htcInst = def.instructions.flat().find(i => i.type === "hydrateTemplateController");
+    assert.ok(htcInst, "Should have hydrateTemplateController instruction");
+
+    // The iteratorBinding should be in the HTC's instructions
+    const iteratorInst = htcInst.instructions.find(i => i.type === "iteratorBinding");
+    assert.ok(iteratorInst, "Should have iteratorBinding instruction");
+    assert.ok(iteratorInst.aux, "iteratorBinding should have aux array");
+    assert.equal(iteratorInst.aux.length, 1, "Should have 1 aux binding (key)");
+    assert.equal(iteratorInst.aux[0].name, "key", "Aux binding should be 'key'");
+    assert.ok(iteratorInst.aux[0].exprId, "Key aux should have exprId");
+
+    // Verify the expression exists in the expression table
+    const keyExpr = codeResult.expressions.find(e => e.id === iteratorInst.aux[0].exprId);
+    assert.ok(keyExpr, "Key expression should exist in expression table");
+    assert.equal(keyExpr.ast.$kind, "AccessMember", "Key expression should be AccessMember (item.id)");
+
+    // Also verify rendering works
+    const TestApp = createComponent(
+      "test-app",
+      '<li repeat.for="item of items; key.bind: item.id">${item.name}</li>',
+      { items: [{ id: 1, name: "First" }, { id: 2, name: "Second" }] }
+    );
+    const renderResult = await compileAndRenderAot(TestApp);
+    assert.ok(renderResult.html.includes("First"), `Expected First in: ${renderResult.html}`);
+    assert.ok(renderResult.html.includes("Second"), `Expected Second in: ${renderResult.html}`);
+  });
+
+  test("compiles repeat.for with static key", async () => {
+    // Static key (no .bind) uses the property name directly
+    const TestApp = createComponent(
+      "test-app",
+      '<li repeat.for="item of items; key: id">${item.name}</li>',
+      { items: [{ id: 1, name: "First" }, { id: 2, name: "Second" }] }
+    );
+
+    const result = await compileAndRenderAot(TestApp);
+
+    // Should render correctly
+    assert.ok(result.html.includes("First"), `Expected First in: ${result.html}`);
+    assert.ok(result.html.includes("Second"), `Expected Second in: ${result.html}`);
+  });
 });

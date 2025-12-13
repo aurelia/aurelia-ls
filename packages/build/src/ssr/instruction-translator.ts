@@ -318,7 +318,7 @@ function translateIteratorBinding(
       const expr = getExpr(ctx.exprMap, aux.exprId);
       // For now, just use the expression as-is - runtime will handle it
       props.push(new MultiAttrInstruction(
-        serializeExpr(expr),
+        expr as IsBindingBehavior,
         aux.name,
         "bind", // default command
       ));
@@ -363,19 +363,3 @@ function translateBindingMode(mode: BindingMode): typeof AuBindingMode[keyof typ
   }
 }
 
-/**
- * Serialize an expression to string for MultiAttrInstruction.
- * This is a fallback for aux bindings - ideally we'd pass the AST directly.
- */
-function serializeExpr(expr: AnyBindingExpression): string {
-  // Simple serialization - for basic cases
-  if (expr.$kind === "AccessScope") {
-    return (expr as { name: string }).name;
-  }
-  if (expr.$kind === "AccessMember") {
-    const member = expr as { object: AnyBindingExpression; name: string };
-    return `${serializeExpr(member.object)}.${member.name}`;
-  }
-  // Fallback - return a placeholder
-  return "value";
-}

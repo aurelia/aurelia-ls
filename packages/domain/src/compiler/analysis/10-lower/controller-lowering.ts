@@ -342,14 +342,27 @@ function toRepeatTailIR(
 ): MultiAttrIR[] | null {
   const tail = parseRepeatTailProps(raw, loc, table);
   if (!tail) return null;
-  return tail.map((p) => ({
-    type: "multiAttr",
-    to: p.to,
-    command: null,
-    from: p.from,
-    value: p.value,
-    loc: toSpan(loc, table.source),
-  }));
+  return tail.map((p) => {
+    // Handle key.bind syntax: split "key.bind" into to="key", command="bind"
+    const dotIdx = p.to.lastIndexOf(".");
+    let to = p.to;
+    let command: string | null = null;
+    if (dotIdx > 0) {
+      const suffix = p.to.slice(dotIdx + 1);
+      if (suffix === "bind" || suffix === "one-time" || suffix === "to-view" || suffix === "from-view" || suffix === "two-way") {
+        to = p.to.slice(0, dotIdx);
+        command = suffix;
+      }
+    }
+    return {
+      type: "multiAttr",
+      to,
+      command,
+      from: p.from,
+      value: p.value,
+      loc: toSpan(loc, table.source),
+    };
+  });
 }
 
 function injectPromiseBranchesIntoDef(

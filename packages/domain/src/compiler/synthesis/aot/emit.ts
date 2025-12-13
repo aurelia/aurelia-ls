@@ -457,16 +457,22 @@ class EmitContext {
     const result: SerializedInstruction[] = [];
 
     switch (ctrl.kind) {
-      case "repeat":
+      case "repeat": {
         // repeat uses an iteratorBinding with ForOfStatement
         if (ctrl.iteratorExprId) {
-          result.push({
+          const iteratorBinding: SerializedIteratorBinding = {
             type: "iteratorBinding",
             to: "items",
             exprId: ctrl.iteratorExprId,
-          } satisfies SerializedIteratorBinding);
+          };
+          // Include key expression for efficient diffing
+          if (ctrl.keyExprId) {
+            iteratorBinding.aux = [{ name: "key", exprId: ctrl.keyExprId }];
+          }
+          result.push(iteratorBinding);
         }
         break;
+      }
       case "if":
         if (ctrl.conditionExprId) {
           result.push({

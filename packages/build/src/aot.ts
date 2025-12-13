@@ -22,6 +22,7 @@ import {
   type Semantics,
   type ResourceGraph,
   type ResourceScopeId,
+  type NestedTemplateHtmlNode,
 } from "@aurelia-ls/domain";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./ssr/instruction-translator.js";
@@ -69,10 +70,12 @@ export interface AotCompileResult {
   nestedDefs: NestedDefinition[];
   /** Target count for validation */
   targetCount: number;
-  /** Raw AOT output (for debugging/inspection) */
+  /** Raw AOT output (for SSR serialization and debugging) */
   raw: {
     plan: AotPlanModule;
     codeResult: AotCodeResult;
+    /** Nested template HTML tree (matches structure of codeResult.definition.nestedTemplates) */
+    nestedHtmlTree: NestedTemplateHtmlNode[];
   };
 }
 
@@ -161,6 +164,7 @@ export function compileWithAot(
     raw: {
       plan,
       codeResult,
+      nestedHtmlTree,
     },
   };
 }

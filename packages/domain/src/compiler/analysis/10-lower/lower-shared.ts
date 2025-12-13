@@ -154,12 +154,21 @@ export function parseRepeatTailProps(
   if (semi < 0) return null;
   const tail = raw.slice(semi + 1).trim();
   if (!tail) return null;
-  const m = /^([^:]+):\s*(.+)$/.exec(tail);
-  if (!m) return null;
-  const to = m[1]!.trim();
-  const val = m[2]!.trim();
-  const from = toExprRef(val, loc, table, "IsProperty");
-  return [{ to, from, value: val }];
+
+  // Split on semicolons to handle multiple options: "key.bind: key; bogus: nope"
+  const results: { to: string; from: ExprRef; value: string }[] = [];
+  const parts = tail.split(";").map(s => s.trim()).filter(Boolean);
+
+  for (const part of parts) {
+    const m = /^([^:]+):\s*(.+)$/.exec(part);
+    if (!m) continue;
+    const to = m[1]!.trim();
+    const val = m[2]!.trim();
+    const from = toExprRef(val, loc, table, "IsProperty");
+    results.push({ to, from, value: val });
+  }
+
+  return results.length > 0 ? results : null;
 }
 
 export function toSpan(loc: P5Loc | null, source: SourceFile): SourceSpan | null {

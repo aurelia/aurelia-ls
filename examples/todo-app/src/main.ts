@@ -1,15 +1,10 @@
-import Aurelia from 'aurelia';
+import Aurelia, { hydrateSSRDefinition, type ISSRDefinition } from 'aurelia';
 import { MyAppCustomElement } from './my-app';
 
 // Type declarations for SSR hydration data
 declare global {
   interface Window {
-    __AU_DEF__?: {
-      template: string; // Template HTML with markers
-      instructions: unknown[][];
-      nestedDefs: unknown[];
-      targetCount: number;
-    };
+    __AU_DEF__?: ISSRDefinition;
     __AU_SSR_SCOPE__?: {
       name?: string;
       nodeCount?: number;
@@ -23,13 +18,16 @@ const ssrScope = window.__AU_SSR_SCOPE__;
 
 if (ssrDef && ssrScope) {
   // SSR mode: hydrate with AOT definition
+  // Convert expression table format to Aurelia's instruction format
+  const hydratedDef = hydrateSSRDefinition(ssrDef);
+
   // Create component class with pre-compiled definition to skip runtime compilation
   class HydrateApp extends MyAppCustomElement {
     static $au = {
       type: 'custom-element' as const,
       name: 'my-app',
-      template: ssrDef.template, // Template with markers for target collection
-      instructions: ssrDef.instructions,
+      template: hydratedDef.template,
+      instructions: hydratedDef.instructions,
       needsCompile: false, // Critical: skip runtime compilation
     };
   }
