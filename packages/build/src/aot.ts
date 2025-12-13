@@ -45,6 +45,19 @@ export interface AotCompileOptions {
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
   resourceScope?: ResourceScopeId | null;
+  /**
+   * Strip source location spans from expression ASTs.
+   * Reduces output size for production builds.
+   * @default true
+   */
+  stripSpans?: boolean;
+  /**
+   * Deduplicate identical expressions.
+   * When enabled, expressions with the same AST content share a single entry
+   * in the expression table, reducing output size.
+   * @default true
+   */
+  deduplicateExpressions?: boolean;
 }
 
 export interface AotCompileResult {
@@ -122,7 +135,9 @@ export function compileWithAot(
   });
 
   // 3. Emit serialized instructions
-  const codeResult = emitAotCode(plan, { name });
+  const stripSpans = options.stripSpans ?? true; // Default to stripping for smaller output
+  const deduplicateExpressions = options.deduplicateExpressions ?? true; // Default to deduplication
+  const codeResult = emitAotCode(plan, { name, stripSpans, deduplicateExpressions });
 
   // 4. Emit template HTML with markers
   const templateResult = emitTemplate(plan);

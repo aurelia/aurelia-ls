@@ -38,6 +38,7 @@ import type {
   PlanLetElement,
   PlanController,
 } from "./types.js";
+import type { ExprId } from "../../model/index.js";
 
 /* =============================================================================
  * Public API
@@ -46,6 +47,20 @@ import type {
 export interface AotEmitOptions {
   /** Template name (for the definition) */
   name?: string;
+
+  /**
+   * Strip source location spans from expression ASTs.
+   * Reduces output size significantly for production builds.
+   * @default false
+   */
+  stripSpans?: boolean;
+
+  /**
+   * Deduplicate identical expressions.
+   * Reduces output size by sharing ASTs when the same expression appears multiple times.
+   * @default false
+   */
+  deduplicateExpressions?: boolean;
 }
 
 /**
@@ -56,11 +71,27 @@ export function emitAotCode(
   options: AotEmitOptions = {},
 ): AotCodeResult {
   const ctx = new EmitContext(plan, options);
-  const definition = ctx.emitDefinition(plan.root, options.name ?? "template");
+  let definition = ctx.emitDefinition(plan.root, options.name ?? "template");
+  let expressions = ctx.getExpressions();
+
+  // Apply expression deduplication if requested
+  if (options.deduplicateExpressions) {
+    const { dedupedExpressions, exprIdRemap } = deduplicateExpressionTable(
+      expressions,
+      options.stripSpans ?? false,
+    );
+
+    // Remap ExprIds in the definition
+    if (exprIdRemap.size > 0) {
+      definition = remapDefinitionExprIds(definition, exprIdRemap);
+    }
+
+    expressions = dedupedExpressions;
+  }
 
   return {
     definition,
-    expressions: ctx.getExpressions(),
+    expressions,
     mapping: ctx.getMapping(),
   };
 }
@@ -83,7 +114,7 @@ class EmitContext {
   getExpressions(): SerializedExpression[] {
     return this.plan.expressions.map((e) => ({
       id: e.id,
-      ast: e.ast,
+      ast: this.options.stripSpans ? stripSpansFromAst(e.ast) : e.ast,
     }));
   }
 
@@ -852,5 +883,186 @@ function reorderSelectInstructions(instructions: SerializedInstruction[]): void 
     const temp = instructions[multipleIndex];
     instructions[multipleIndex] = instructions[valueIndex]!;
     instructions[valueIndex] = temp!;
+  }
+}
+
+/* =============================================================================
+ * AST Cleanup
+ * -----------------------------------------------------------------------------
+ * Utilities for reducing AST size by removing fields not needed at runtime.
+ * ============================================================================= */
+
+/**
+ * Strip `span` fields from an AST to reduce serialized size.
+ *
+ * Source location spans are useful for diagnostics and source mapping during
+ * compilation, but are not needed by the runtime for expression evaluation.
+ * Stripping them can significantly reduce bundle size.
+ */
+function stripSpansFromAst<T>(ast: T): T {
+  if (ast === null || ast === undefined) {
+    return ast;
+  }
+
+  if (Array.isArray(ast)) {
+    return ast.map(stripSpansFromAst) as T;
+  }
+
+  if (typeof ast !== "object") {
+    return ast;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const key in ast) {
+    if (key === "span") {
+      // Skip span fields
+      continue;
+    }
+    const value = (ast as Record<string, unknown>)[key];
+    result[key] = stripSpansFromAst(value);
+  }
+  return result as T;
+}
+
+/* =============================================================================
+ * Expression Deduplication
+ * -----------------------------------------------------------------------------
+ * Identifies and eliminates duplicate expressions by content hashing.
+ * ============================================================================= */
+
+/**
+ * Deduplicate expressions by content, returning unique expressions and a remap table.
+ */
+function deduplicateExpressionTable(
+  expressions: SerializedExpression[],
+  alreadyStripped: boolean,
+): { dedupedExpressions: SerializedExpression[]; exprIdRemap: Map<ExprId, ExprId> } {
+  const hashToCanonical = new Map<string, SerializedExpression>();
+  const exprIdRemap = new Map<ExprId, ExprId>();
+  const dedupedExpressions: SerializedExpression[] = [];
+
+  for (const expr of expressions) {
+    // Hash the AST (stripping spans if not already done)
+    const astForHash = alreadyStripped ? expr.ast : stripSpansFromAst(expr.ast);
+    const hash = hashAst(astForHash);
+
+    const existing = hashToCanonical.get(hash);
+    if (existing) {
+      // Duplicate found - map this ExprId to the canonical one
+      exprIdRemap.set(expr.id, existing.id);
+    } else {
+      // New unique expression - becomes the canonical version
+      hashToCanonical.set(hash, expr);
+      dedupedExpressions.push(expr);
+    }
+  }
+
+  return { dedupedExpressions, exprIdRemap };
+}
+
+/**
+ * Create a stable hash of an AST for deduplication.
+ * Uses JSON.stringify with sorted keys for deterministic output.
+ */
+function hashAst(ast: unknown): string {
+  return JSON.stringify(ast, sortedReplacer);
+}
+
+/**
+ * JSON replacer that sorts object keys for deterministic hashing.
+ */
+function sortedReplacer(_key: string, value: unknown): unknown {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return Object.keys(value)
+      .sort()
+      .reduce<Record<string, unknown>>((sorted, key) => {
+        sorted[key] = (value as Record<string, unknown>)[key];
+        return sorted;
+      }, {});
+  }
+  return value;
+}
+
+/**
+ * Remap ExprIds in a serialized definition tree.
+ */
+function remapDefinitionExprIds(
+  definition: SerializedDefinition,
+  remap: Map<ExprId, ExprId>,
+): SerializedDefinition {
+  return {
+    ...definition,
+    instructions: definition.instructions.map(row =>
+      row.map(inst => remapInstructionExprIds(inst, remap))
+    ),
+    nestedTemplates: definition.nestedTemplates.map(nested =>
+      remapDefinitionExprIds(nested, remap)
+    ),
+  };
+}
+
+/**
+ * Remap ExprIds in a single instruction.
+ */
+function remapInstructionExprIds(
+  inst: SerializedInstruction,
+  remap: Map<ExprId, ExprId>,
+): SerializedInstruction {
+  const remapId = (id: ExprId): ExprId => remap.get(id) ?? id;
+
+  switch (inst.type) {
+    case "propertyBinding":
+      return { ...inst, exprId: remapId(inst.exprId) };
+
+    case "interpolation":
+      return { ...inst, exprIds: inst.exprIds.map(remapId) };
+
+    case "textBinding":
+      return { ...inst, exprIds: inst.exprIds.map(remapId) };
+
+    case "listenerBinding":
+      return { ...inst, exprId: remapId(inst.exprId) };
+
+    case "iteratorBinding":
+      return {
+        ...inst,
+        exprId: remapId(inst.exprId),
+        aux: inst.aux?.map(a => ({ ...a, exprId: remapId(a.exprId) })),
+      };
+
+    case "refBinding":
+      return { ...inst, exprId: remapId(inst.exprId) };
+
+    case "hydrateElement":
+      return {
+        ...inst,
+        instructions: inst.instructions.map(i => remapInstructionExprIds(i, remap)),
+      };
+
+    case "hydrateAttribute":
+      return {
+        ...inst,
+        instructions: inst.instructions.map(i => remapInstructionExprIds(i, remap)),
+      };
+
+    case "hydrateTemplateController":
+      return {
+        ...inst,
+        instructions: inst.instructions.map(i => remapInstructionExprIds(i, remap)),
+      };
+
+    case "hydrateLetElement":
+      return {
+        ...inst,
+        bindings: inst.bindings.map(b => ({ ...b, exprId: remapId(b.exprId) })),
+      };
+
+    case "setProperty":
+    case "setAttribute":
+      // These don't have ExprIds
+      return inst;
+
+    default:
+      return inst;
   }
 }
