@@ -16,10 +16,10 @@ import {
   StandardConfiguration,
   ISSRContext,
   CustomElement,
-  recordManifest,
   type ICustomElementController,
   type ISSRManifest,
 } from "@aurelia/runtime-html";
+import { recordManifest } from "./manifest-recorder.js";
 import { createServerPlatform, getDocument } from "./platform.js";
 import {
   processSSROutput,

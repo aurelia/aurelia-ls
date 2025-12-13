@@ -40,10 +40,14 @@ export {
   type SSRProcessResult,
 } from "./ssr-processor.js";
 
-// Manifest recording (tree-based SSR manifest) - re-exported from runtime
+// Manifest recording (tree-based SSR manifest)
+// Functions live here (cross-package awareness), types come from runtime (hydration needs them)
 export {
   recordManifest,
   debugControllerTree,
+} from "./manifest-recorder.js";
+
+export {
   isSSRTemplateController,
   isSSRScope,
   type ISSRManifest,

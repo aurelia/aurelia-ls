@@ -18,9 +18,14 @@ import {
 } from "@aurelia/runtime-html";
 import { BrowserPlatform } from "@aurelia/platform-browser";
 
+// Functions from build package (local implementation)
 import {
   recordManifest,
   debugControllerTree,
+} from "../out/ssr/manifest-recorder.js";
+
+// Types and type guards from runtime (needed for hydration)
+import {
   isSSRTemplateController,
   isSSRScope,
 } from "@aurelia/runtime-html";

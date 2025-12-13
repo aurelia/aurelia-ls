@@ -121,11 +121,12 @@ async function hydrateSSR(ssrHtml, ssrState, ssrManifest, aotResult, ComponentCl
   const au = new Aurelia(container);
 
   // This is the critical hydration call - returns AppRoot directly
+  // ssrManifest is ISSRManifest = { root, manifest: ISSRScope }
+  // IHydrateConfig expects ssrScope: ISSRScope (the inner scope)
   const appRoot = await au.hydrate({
     host,
     component: HydrateComponent,
-    state: ssrState,
-    manifest: ssrManifest,
+    ssrScope: ssrManifest.manifest,
   });
 
   return {
@@ -840,8 +841,7 @@ describe("Diagnostic: Verify Manifest has _targets set", () => {
     const appRoot = await au.hydrate({
       host,
       component: HydrateComponent,
-      state,
-      manifest: ssrResult.manifest,
+      ssrScope: ssrResult.manifest.manifest,
     });
 
     // Verify manifest after hydration has _targets
@@ -930,8 +930,7 @@ describe("Diagnostic: Trace Hydration Process", () => {
       const appRoot = await au.hydrate({
         host,
         component: HydrateComponent,
-        state,
-        manifest: ssrResult.manifest,
+        ssrScope: ssrResult.manifest.manifest,
       });
 
       console.log("\n--- STEP 5: POST-HYDRATION DOM ---");
@@ -1015,8 +1014,7 @@ describe("Diagnostic: Container Hierarchy", () => {
     const appRoot = await au.hydrate({
       host,
       component: HydrateComponent,
-      state,
-      manifest: ssrResult.manifest,
+      ssrScope: ssrResult.manifest.manifest,
     });
 
     console.log("\nAfter Aurelia.hydrate():");

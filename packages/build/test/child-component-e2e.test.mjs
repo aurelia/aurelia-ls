@@ -786,8 +786,7 @@ describe("Child Component SSR E2E: Server→Client Hydration (REAL BUG)", () => 
       appRoot = await au.hydrate({
         host,
         component: ClientMyApp,
-        state: ssrState,
-        manifest: ssrResult.manifest,
+        ssrScope: ssrResult.manifest.manifest,
       });
       console.log("Hydration completed successfully");
     } catch (err) {
