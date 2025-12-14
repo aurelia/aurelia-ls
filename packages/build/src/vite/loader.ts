@@ -83,7 +83,7 @@ class ComponentCache {
 
     // Patch $au if not already patched
     if (!this.patched.has(key)) {
-      patchComponentDefinition(loaded.ComponentClass, loaded.aot);
+      patchComponentDefinition(loaded.ComponentClass, loaded.aot, { name: loaded.name });
       this.patched.add(key);
     }
 

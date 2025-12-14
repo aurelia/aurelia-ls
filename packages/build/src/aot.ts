@@ -29,7 +29,7 @@ import { translateInstructions, type NestedDefinition } from "./ssr/instruction-
 import type { SSRProcessOptions } from "./ssr/ssr-processor.js";
 import type { ISSRManifest } from "@aurelia/runtime-html";
 import { render, type ComponentClass, type RenderOptions } from "./ssr/render.js";
-import { patchComponentDefinition } from "./ssr/patch.js";
+import { patchComponentDefinition, getComponentName } from "./ssr/patch.js";
 
 /* =============================================================================
  * Public API
@@ -257,9 +257,12 @@ export async function compileAndRenderAot(
     );
   }
 
+  // Determine component name (kebab-case element name)
+  const componentName = Component.$au?.name ?? options.name ?? getComponentName(Component);
+
   // Compile with AOT
   const aot = compileWithAot(template, {
-    name: Component.$au?.name ?? options.name ?? Component.name,
+    name: componentName,
     templatePath: options.templatePath,
     semantics: options.semantics,
     resourceGraph: options.resourceGraph,
@@ -267,7 +270,7 @@ export async function compileAndRenderAot(
   });
 
   // Patch the component with compiled definition
-  patchComponentDefinition(Component, aot);
+  patchComponentDefinition(Component, aot, { name: componentName });
 
   // Render
   const renderOptions: RenderOptions = {};

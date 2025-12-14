@@ -1,0 +1,25 @@
+{
+  "name": "router-app",
+  "description": "Aurelia 2 Router SSR example",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "aurelia": "*",
+    "@aurelia/kernel": "*",
+    "@aurelia/router": "*",
+    "@aurelia-ls/build": "workspace:*"
+  },
+  "devDependencies": {
+    "@aurelia/vite-plugin": "*",
+    "@types/node": "^22.10.2",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

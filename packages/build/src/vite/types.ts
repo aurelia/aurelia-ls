@@ -8,6 +8,7 @@ import type { IncomingMessage } from "node:http";
 import type { IContainer } from "@aurelia/kernel";
 import type { ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/domain";
 import type { ResolutionResult, TemplateInfo } from "@aurelia-ls/resolution";
+import type { SSRRequestContext } from "../ssr/render.js";
 
 /**
  * State provider function for SSR.
@@ -122,14 +123,18 @@ export interface AureliaSSRPluginOptions {
    * register whatever your client app registers that isn't already handled.
    * This API will likely evolve.
    *
+   * @param container - The DI container to register services into
+   * @param request - Request context (URL, baseHref) for URL-aware services like router
+   *
    * @example
    * ```typescript
-   * register: (container) => {
-   *   container.register(RouterConfiguration);
+   * register: (container, req) => {
+   *   const locationManager = new ServerLocationManager(req.url, req.baseHref);
+   *   container.register(Registration.instance(ILocationManager, locationManager));
    * }
    * ```
    */
-  register?: (container: IContainer) => void;
+  register?: (container: IContainer, request: SSRRequestContext) => void;
 }
 
 /**
@@ -148,7 +153,7 @@ export interface ResolvedSSROptions {
   /** Base href for routing */
   baseHref: string;
   /** DI registration hook */
-  register?: (container: IContainer) => void;
+  register?: (container: IContainer, request: SSRRequestContext) => void;
 }
 
 /**

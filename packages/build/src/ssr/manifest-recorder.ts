@@ -33,29 +33,12 @@ import type {
   Portal,
 } from "@aurelia/runtime-html";
 
-// Router types for viewport handling
-import type { ViewportAgent } from "@aurelia/router";
-
 /**
- * Internal interface for accessing ViewportCustomElement internals.
- * The build package has cross-package awareness and can access these.
+ * Interface for ViewportCustomElement's public API.
+ * The router exposes currentController for accessing the routed component.
  */
-interface IViewportInternal {
-  readonly _agent: ViewportAgent;
-}
-
-/**
- * Internal interface for accessing ViewportAgent internals.
- */
-interface IViewportAgentInternal {
-  readonly _curCA: IComponentAgentInternal | null;
-}
-
-/**
- * Internal interface for accessing ComponentAgent internals.
- */
-interface IComponentAgentInternal {
-  readonly _controller: ICustomElementController;
+interface IViewportPublicAPI {
+  readonly currentController: ICustomElementController | null;
 }
 
 /**
@@ -116,18 +99,16 @@ function buildCEManifest(ctrl: ICustomElementController): ISSRScope | null {
  *
  * Viewports are like template controllers - they manage child content through
  * their own mechanism (ViewportAgent) rather than the standard children array.
+ * The router exposes currentController as a public getter for this purpose.
  */
 function buildViewportManifest(ctrl: ICustomElementController): ISSRScope {
   const scope: ISSRScope = { name: "au-viewport", children: [] };
 
-  // Access the viewport's internal agent to find the routed component
-  const viewport = ctrl.viewModel as IViewportInternal;
-  const agent = viewport._agent as unknown as IViewportAgentInternal;
-  const componentAgent = agent?._curCA;
+  // Use the public API to get the routed component's controller
+  const viewport = ctrl.viewModel as IViewportPublicAPI;
+  const routedController = viewport.currentController;
 
-  if (componentAgent != null) {
-    // Get the routed component's controller and build its manifest
-    const routedController = componentAgent._controller;
+  if (routedController != null) {
     const routedScope = buildScopeManifest(routedController);
     scope.children.push(routedScope);
   }
@@ -224,12 +205,11 @@ export function debugControllerTree(rootController: ICustomElementController): s
 
         // Special handling for router viewport
         if (name === "au-viewport") {
-          const viewport = ctrl.viewModel as IViewportInternal;
-          const agent = viewport._agent as unknown as IViewportAgentInternal;
-          const componentAgent = agent?._curCA;
-          if (componentAgent != null) {
+          const viewport = ctrl.viewModel as IViewportPublicAPI;
+          const routedController = viewport.currentController;
+          if (routedController != null) {
             lines.push(`${pad}  [routed component]`);
-            visit(componentAgent._controller, indent + 2);
+            visit(routedController, indent + 2);
           } else {
             lines.push(`${pad}  (no routed component)`);
           }

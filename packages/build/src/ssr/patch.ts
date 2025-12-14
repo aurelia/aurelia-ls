@@ -41,38 +41,62 @@ export interface ComponentClass {
 }
 
 /**
+ * Options for patching a component definition.
+ */
+export interface PatchOptions {
+  /**
+   * The component name (kebab-case element name).
+   * When provided, this overrides any existing name to ensure consistency.
+   * If not provided, falls back to existing $au.name or derived from class name.
+   */
+  name?: string;
+}
+
+/**
  * Patch a component class's $au definition with AOT-compiled output.
  *
  * This function:
- * 1. Preserves existing metadata (name, bindables, containerless, etc.)
- * 2. Replaces template with AOT-compiled template HTML
- * 3. Replaces instructions with AOT-compiled instructions
- * 4. Sets needsCompile to false (already compiled)
+ * 1. Sets the component name from options (for consistent naming)
+ * 2. Preserves existing metadata (bindables, containerless, etc.)
+ * 3. Replaces template with AOT-compiled template HTML
+ * 4. Replaces instructions with AOT-compiled instructions
+ * 5. Sets needsCompile to false (already compiled)
  *
  * The class is mutated in place - its $au property is modified.
  *
  * @param ComponentClass - The component class to patch
  * @param aot - The AOT compilation result
+ * @param options - Optional patch options. When name is provided, it overrides existing name.
  *
  * @example
  * ```typescript
  * const { MyApp } = await vite.ssrLoadModule('/src/my-app.ts');
  * const aot = compileWithAot(templateHtml, { semantics, resourceGraph });
- * patchComponentDefinition(MyApp, aot);
- * // MyApp.$au now has pre-compiled template and instructions
+ * // Vite SSR: pass name explicitly to ensure correct element name
+ * patchComponentDefinition(MyApp, aot, { name: 'my-app' });
+ *
+ * // Tests with $au.name already defined: options can be omitted
+ * patchComponentDefinition(TestComponent, aot);
  * ```
  */
 export function patchComponentDefinition(
   ComponentClass: ComponentClass,
   aot: AotCompileResult,
+  options: PatchOptions = {},
 ): void {
   const existing = ComponentClass.$au ?? {};
+
+  // Determine component name with fallback chain:
+  // 1. Explicitly provided name (for Vite SSR where decorators may not run)
+  // 2. Existing $au.name (for tests with pre-defined $au)
+  // 3. Derived from class name (last resort)
+  const name = options.name ?? existing.name ?? getComponentName(ComponentClass);
 
   // Build patched definition, preserving existing metadata
   const patched: StaticAuDefinition = {
     // Required fields
     type: "custom-element",
-    name: existing.name ?? ComponentClass.name ?? "unknown",
+    name,
 
     // AOT-compiled output (replaces existing)
     template: aot.template,

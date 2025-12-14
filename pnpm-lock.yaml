@@ -81,6 +81,37 @@ importers:
         specifier: ^6.0.0
         version: 6.4.1(@types/node@22.19.1)
 
+  examples/router-app:
+    dependencies:
+      '@aurelia-ls/build':
+        specifier: workspace:*
+        version: link:../../packages/build
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
+      '@aurelia/router':
+        specifier: link:../../aurelia/packages/router
+        version: link:../../aurelia/packages/router
+      aurelia:
+        specifier: link:../../aurelia/packages/aurelia
+        version: link:../../aurelia/packages/aurelia
+    devDependencies:
+      '@aurelia/vite-plugin':
+        specifier: link:../../aurelia/packages-tooling/vite-plugin
+        version: link:../../aurelia/packages-tooling/vite-plugin
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.1
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.3
+        version: 6.4.1(@types/node@22.19.1)
+
   examples/todo-app:
     dependencies:
       '@aurelia-ls/build':

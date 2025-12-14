@@ -65,15 +65,18 @@ export interface RenderOptions {
    * that isn't already handled. This API will likely evolve as we better understand
    * the registration lifecycle across client/server boundaries.
    *
+   * @param container - The DI container to register services into
+   * @param request - Request context (URL, baseHref) for URL-aware services like router
+   *
    * @example
    * ```typescript
-   * register: (container) => {
-   *   // Mirror relevant parts of your client main.ts
-   *   container.register(RouterConfiguration);
+   * register: (container, req) => {
+   *   const locationManager = new ServerLocationManager(req.url, req.baseHref);
+   *   container.register(Registration.instance(ILocationManager, locationManager));
    * }
    * ```
    */
-  register?: (container: IContainer) => void;
+  register?: (container: IContainer, request: SSRRequestContext) => void;
 
   /**
    * Callback invoked before Aurelia stops, giving access to the root controller
@@ -163,7 +166,8 @@ export async function render(
 
   // Call custom registration hook (for router, etc.)
   if (options.register) {
-    options.register(container);
+    const requestContext: SSRRequestContext = options.request ?? { url: "/", baseHref: "/" };
+    options.register(container, requestContext);
   }
 
   // Register child components
