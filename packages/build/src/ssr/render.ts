@@ -9,7 +9,7 @@
  * properties naturally, and parent-child communication happens via bindables.
  */
 
-import { DI, Registration } from "@aurelia/kernel";
+import { DI, Registration, type IContainer } from "@aurelia/kernel";
 import {
   Aurelia,
   IPlatform,
@@ -20,7 +20,7 @@ import {
   type ISSRManifest,
 } from "@aurelia/runtime-html";
 import { recordManifest } from "./manifest-recorder.js";
-import { createServerPlatform, getDocument } from "./platform.js";
+import { createServerPlatform, getDocument, type SSRRequestContext } from "./platform.js";
 import {
   processSSROutput,
   syncPropertiesForSSR,
@@ -28,6 +28,7 @@ import {
 } from "./ssr-processor.js";
 import type { ComponentClass } from "./patch.js";
 export type { ComponentClass };
+export type { SSRRequestContext };
 
 /**
  * Options for SSR rendering.
@@ -43,6 +44,36 @@ export interface RenderOptions {
    * SSR processing options (marker stripping, manifest delivery).
    */
   ssr?: SSRProcessOptions;
+
+  /**
+   * Request context for URL-aware rendering (routing).
+   * When provided, the platform's location will reflect the request URL.
+   */
+  request?: SSRRequestContext;
+
+  /**
+   * Hook to register DI services before rendering.
+   *
+   * **Note:** This is a naive first-pass API. In a real app, the client's `main.ts`
+   * registers things on `Aurelia.register()` - router config, custom elements,
+   * value converters, etc. Ideally, SSR would mirror that automatically, but the
+   * boundaries aren't clean: some registrations are discovered via resolution,
+   * some come from `$au.dependencies`, some need server-specific substitutions
+   * (e.g., `ServerLocationManager` for `BrowserLocationManager`).
+   *
+   * For now, use this hook to manually register whatever your client app registers
+   * that isn't already handled. This API will likely evolve as we better understand
+   * the registration lifecycle across client/server boundaries.
+   *
+   * @example
+   * ```typescript
+   * register: (container) => {
+   *   // Mirror relevant parts of your client main.ts
+   *   container.register(RouterConfiguration);
+   * }
+   * ```
+   */
+  register?: (container: IContainer) => void;
 
   /**
    * Callback invoked before Aurelia stops, giving access to the root controller
@@ -109,16 +140,16 @@ export async function render(
   RootComponent: ComponentClass,
   options: RenderOptions = {},
 ): Promise<RenderResult> {
-  const platform = createServerPlatform();
+  const platform = createServerPlatform({ request: options.request });
   const doc = getDocument(platform);
 
   // Clear cached definitions for all components BEFORE rendering.
   // The runtime caches definitions on the Type, and we need fresh
   // definitions each render to match the patched $au.
-  (CustomElement as any).clearDefinition(RootComponent);
+  CustomElement.clearDefinition(RootComponent);
   if (options.childComponents) {
     for (const ChildComponent of options.childComponents) {
-      (CustomElement as any).clearDefinition(ChildComponent);
+      CustomElement.clearDefinition(ChildComponent);
     }
   }
 
@@ -129,6 +160,11 @@ export async function render(
     Registration.instance(IPlatform, platform),
     Registration.instance(ISSRContext, { preserveMarkers: true }),
   );
+
+  // Call custom registration hook (for router, etc.)
+  if (options.register) {
+    options.register(container);
+  }
 
   // Register child components
   if (options.childComponents) {

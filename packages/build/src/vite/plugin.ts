@@ -106,6 +106,8 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         exclude: options.exclude ?? DEFAULT_EXCLUDE,
         htmlShell: options.htmlShell ?? DEFAULT_HTML_SHELL,
         resolution: null, // Will be set after async initialization
+        baseHref: options.baseHref ?? "/",
+        register: options.register,
       };
 
       config.logger.info(

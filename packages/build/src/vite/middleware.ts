@@ -96,11 +96,17 @@ export function createSSRMiddleware(
         }
 
         // Render with real classes (already patched by loader)
+        // Pass request context for URL-aware rendering (routing)
         const renderResult = await renderWithComponents(root.ComponentClass, {
           childComponents: children.map((c) => c.ComponentClass),
           ssr: {
             stripMarkers: options.stripMarkers,
           },
+          request: {
+            url,
+            baseHref: options.baseHref,
+          },
+          register: options.register,
         });
 
         html = injectIntoShell(

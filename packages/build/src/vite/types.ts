@@ -5,6 +5,7 @@
  */
 
 import type { IncomingMessage } from "node:http";
+import type { IContainer } from "@aurelia/kernel";
 import type { ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/domain";
 import type { ResolutionResult, TemplateInfo } from "@aurelia-ls/resolution";
 
@@ -105,6 +106,30 @@ export interface AureliaSSRPluginOptions {
    * ```
    */
   htmlShell?: string;
+
+  /**
+   * Base href for routing (defaults to '/').
+   * Used by the router for link generation.
+   */
+  baseHref?: string;
+
+  /**
+   * Hook to register DI services before rendering.
+   *
+   * **Note:** This is a naive first-pass API. In a real app, the client's `main.ts`
+   * registers things on `Aurelia.register()`. Ideally, SSR would mirror that
+   * automatically, but the boundaries aren't clean. For now, use this to manually
+   * register whatever your client app registers that isn't already handled.
+   * This API will likely evolve.
+   *
+   * @example
+   * ```typescript
+   * register: (container) => {
+   *   container.register(RouterConfiguration);
+   * }
+   * ```
+   */
+  register?: (container: IContainer) => void;
 }
 
 /**
@@ -120,6 +145,10 @@ export interface ResolvedSSROptions {
   htmlShell: string;
   /** Resolution context (when tsconfig is provided) */
   resolution: ResolutionContext | null;
+  /** Base href for routing */
+  baseHref: string;
+  /** DI registration hook */
+  register?: (container: IContainer) => void;
 }
 
 /**
