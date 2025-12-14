@@ -33,6 +33,31 @@ import type {
   Portal,
 } from "@aurelia/runtime-html";
 
+// Router types for viewport handling
+import type { ViewportAgent } from "@aurelia/router";
+
+/**
+ * Internal interface for accessing ViewportCustomElement internals.
+ * The build package has cross-package awareness and can access these.
+ */
+interface IViewportInternal {
+  readonly _agent: ViewportAgent;
+}
+
+/**
+ * Internal interface for accessing ViewportAgent internals.
+ */
+interface IViewportAgentInternal {
+  readonly _curCA: IComponentAgentInternal | null;
+}
+
+/**
+ * Internal interface for accessing ComponentAgent internals.
+ */
+interface IComponentAgentInternal {
+  readonly _controller: ICustomElementController;
+}
+
 /**
  * Record the SSR manifest from the root controller after rendering completes.
  *
@@ -77,9 +102,37 @@ function buildCEManifest(ctrl: ICustomElementController): ISSRScope | null {
   const name = ctrl.definition.name;
   // Skip special elements that don't have manifest entries
   if (name === "au-compose" || name === "au-slot") return null;
-  // TODO: Add router viewport handling here when router support is added
-  // if (name === 'au-viewport') { ... }
+
+  // Router viewport: access routed component through ViewportAgent
+  if (name === "au-viewport") {
+    return buildViewportManifest(ctrl);
+  }
+
   return buildScopeManifest(ctrl);
+}
+
+/**
+ * Build manifest entry for a router viewport.
+ *
+ * Viewports are like template controllers - they manage child content through
+ * their own mechanism (ViewportAgent) rather than the standard children array.
+ */
+function buildViewportManifest(ctrl: ICustomElementController): ISSRScope {
+  const scope: ISSRScope = { name: "au-viewport", children: [] };
+
+  // Access the viewport's internal agent to find the routed component
+  const viewport = ctrl.viewModel as IViewportInternal;
+  const agent = viewport._agent as unknown as IViewportAgentInternal;
+  const componentAgent = agent?._curCA;
+
+  if (componentAgent != null) {
+    // Get the routed component's controller and build its manifest
+    const routedController = componentAgent._controller;
+    const routedScope = buildScopeManifest(routedController);
+    scope.children.push(routedScope);
+  }
+
+  return scope;
 }
 
 function buildTCEntry(ctrl: ICustomAttributeController): ISSRTemplateController | null {
@@ -166,7 +219,23 @@ export function debugControllerTree(rootController: ICustomElementController): s
 
     switch (ctrl.vmKind) {
       case "customElement": {
-        lines.push(`${pad}CE: ${ctrl.definition.name}`);
+        const name = ctrl.definition.name;
+        lines.push(`${pad}CE: ${name}`);
+
+        // Special handling for router viewport
+        if (name === "au-viewport") {
+          const viewport = ctrl.viewModel as IViewportInternal;
+          const agent = viewport._agent as unknown as IViewportAgentInternal;
+          const componentAgent = agent?._curCA;
+          if (componentAgent != null) {
+            lines.push(`${pad}  [routed component]`);
+            visit(componentAgent._controller, indent + 2);
+          } else {
+            lines.push(`${pad}  (no routed component)`);
+          }
+          break;
+        }
+
         const children = ctrl.children ?? [];
         for (const child of children) {
           visit(child, indent + 1);
