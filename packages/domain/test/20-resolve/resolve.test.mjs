@@ -326,6 +326,13 @@ function pushBindingItem(items, p) {
         target: mapTarget(p.target),
       });
       break;
+    case "setProperty":
+      items.push({
+        kind: "setProp",
+        to: p.to,
+        value: p.value,
+      });
+      break;
     case "iteratorBinding":
       items.push({ kind: "iterator", res: "repeat", to: p.to });
       break;

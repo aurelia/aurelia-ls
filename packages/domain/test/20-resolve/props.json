@@ -621,7 +621,10 @@
     },
     "markup": "<x-panel title=\"Hello\" other=\"y\"></x-panel>",
     "expect": {
-      "items": []
+      "items": [
+        { "kind": "setProp", "to": "title", "value": "Hello" },
+        { "kind": "setProp", "to": "other", "value": "y" }
+      ]
     }
   }
 ]

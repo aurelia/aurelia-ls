@@ -85,6 +85,12 @@ export interface ElementRes {
    * - ScopeGraph should treat element VMs as a new `$this` root; `$parent` escapes upward.
    */
   boundary?: boolean;
+  /**
+   * Source package for optional resources (enables targeted diagnostics).
+   * - Omitted for core runtime resources.
+   * - Present for optional packages: "@aurelia/router", "@aurelia/i18n", etc.
+   */
+  package?: string;
 }
 
 /** Custom attribute resource (optionally a template controller). */
@@ -96,6 +102,12 @@ export interface AttrRes {
   primary?: string | null;                        // primary bindable for single-value usage
   aliases?: string[];                             // name aliases
   noMultiBindings?: boolean;                      // disallow 'p1: a; p2.bind: b' when true
+  /**
+   * Source package for optional resources (enables targeted diagnostics).
+   * - Omitted for core runtime resources.
+   * - Present for optional packages: "@aurelia/router", "@aurelia/i18n", etc.
+   */
+  package?: string;
 }
 
 /** Scope behavior for template controllers. */
@@ -368,6 +380,22 @@ export const DEFAULT: Semantics = {
           slotchange: { name: "slotchange", type: { kind: "ts", name: "((name: string, nodes: readonly Node[]) => void) | null" }, mode: "toView", doc: "Callback when slot content changes" },
         },
       },
+
+      /* ---- Router resources (@aurelia/router) ----
+       * Static definitions for LSP intelligence before package is imported.
+       */
+      "au-viewport": {
+        kind: "element",
+        name: "au-viewport",
+        boundary: true,                            // viewport hosts routed components (boundary)
+        package: "@aurelia/router",
+        bindables: {
+          name:     { name: "name",     type: { kind: "ts", name: "string" }, mode: "toView", doc: "Viewport name for targeted routing (default: 'default')" },
+          usedBy:   { name: "usedBy",   type: { kind: "ts", name: "string" }, mode: "toView", doc: "Comma-separated list of components that can be loaded" },
+          default:  { name: "default",  type: { kind: "ts", name: "string" }, mode: "toView", doc: "Default component to load when no route matches" },
+          fallback: { name: "fallback", type: { kind: "ts", name: "string | Constructable | ((instruction: IViewportInstruction, node: RouteNode, context: IRouteContext) => Routeable | null)" }, mode: "toView", doc: "Component or function for unrecognized routes" },
+        },
+      },
     },
 
     /* ---- Custom attributes ----
@@ -390,6 +418,39 @@ export const DEFAULT: Semantics = {
           value: { name: "value", mode: "toView", type: { kind: "ts", name: "boolean" } }
         },
         aliases: ["hide"]
+      },
+
+      /* ---- Router attributes (@aurelia/router) ----
+       * Static definitions for LSP intelligence before package is imported.
+       */
+
+      // load: Declarative navigation instruction (alternative to href for router-aware links).
+      load: {
+        kind: "attribute",
+        name: "load",
+        isTemplateController: false,
+        package: "@aurelia/router",
+        primary: "route",
+        bindables: {
+          route:     { name: "route",     type: { kind: "unknown" },                  mode: "toView",   primary: true, doc: "Route path, component name, or navigation instruction" },
+          params:    { name: "params",    type: { kind: "ts", name: "Params" },       mode: "toView",   doc: "Route parameters object" },
+          attribute: { name: "attribute", type: { kind: "ts", name: "string" },       mode: "toView",   doc: "Target attribute to set (default: 'href')" },
+          active:    { name: "active",    type: { kind: "ts", name: "boolean" },      mode: "fromView", doc: "Reflects whether the route is currently active" },
+          context:   { name: "context",   type: { kind: "ts", name: "IRouteContext" }, mode: "toView",   doc: "Route context for relative navigation" },
+        },
+      },
+
+      // href: Router-aware href handling for anchor elements.
+      // IMPORTANT: noMultiBindings prevents URLs like "https://..." from being parsed as multi-binding syntax.
+      href: {
+        kind: "attribute",
+        name: "href",
+        isTemplateController: false,
+        package: "@aurelia/router",
+        noMultiBindings: true,
+        bindables: {
+          value: { name: "value", type: { kind: "unknown" }, mode: "toView", primary: true, doc: "Route path or URL" },
+        },
       },
     },
 
