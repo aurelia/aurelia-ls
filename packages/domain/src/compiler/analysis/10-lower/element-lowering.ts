@@ -1,5 +1,5 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { Semantics } from "../../language/registry.js";
+import type { AttrRes, Semantics } from "../../language/registry.js";
 import type {
   ElementBindableIR,
   HydrateAttributeIR,
@@ -19,6 +19,120 @@ import {
   toSpan,
 } from "./lower-shared.js";
 import { resolveAttrDef, resolveElementDef } from "./resource-utils.js";
+
+// Character codes for multi-binding parsing
+const Char_Backslash = 0x5C;  // \
+const Char_Colon = 0x3A;      // :
+const Char_Semicolon = 0x3B;  // ;
+const Char_Dollar = 0x24;     // $
+const Char_OpenBrace = 0x7B;  // {
+const Char_Space = 0x20;      // space
+
+/**
+ * Detects if a value contains multi-binding syntax (prop: value; prop2.bind: expr).
+ * Returns true if a colon is found before any interpolation marker (${).
+ * Respects backslash escaping.
+ */
+function hasInlineBindings(value: string): boolean {
+  const len = value.length;
+  for (let i = 0; i < len; i++) {
+    const ch = value.charCodeAt(i);
+    if (ch === Char_Backslash) {
+      i++; // Skip escaped character
+    } else if (ch === Char_Colon) {
+      return true; // Found colon before any interpolation
+    } else if (ch === Char_Dollar && value.charCodeAt(i + 1) === Char_OpenBrace) {
+      return false; // Found ${ before colon, it's interpolation
+    }
+  }
+  return false;
+}
+
+/**
+ * Parses multi-binding syntax: "prop1: value1; prop2.bind: expr; prop3: ${interp}"
+ * Returns an array of ElementBindableIR instructions.
+ */
+function parseMultiBindings(
+  raw: string,
+  attrDef: AttrRes,
+  attrParser: AttributeParser,
+  loc: P5Loc,
+  table: ExprTable
+): ElementBindableIR[] {
+  const props: ElementBindableIR[] = [];
+  const len = raw.length;
+  let start = 0;
+
+  for (let i = 0; i < len; i++) {
+    const ch = raw.charCodeAt(i);
+
+    if (ch === Char_Backslash) {
+      i++; // Skip escaped character
+    } else if (ch === Char_Colon) {
+      // Extract property name (possibly with command, e.g., "prop.bind")
+      const propPart = raw.slice(start, i).trim();
+
+      // Skip whitespace after colon
+      while (++i < len && raw.charCodeAt(i) <= Char_Space);
+      const valueStart = i;
+
+      // Scan for semicolon or end of string
+      for (; i < len; i++) {
+        const ch2 = raw.charCodeAt(i);
+        if (ch2 === Char_Backslash) {
+          i++; // Skip escaped character
+        } else if (ch2 === Char_Semicolon) {
+          break;
+        }
+      }
+
+      const valuePart = raw.slice(valueStart, i).trim();
+
+      // Parse the property name to extract any binding command
+      const parsed = attrParser.parse(propPart, valuePart);
+      const bindableName = camelCase(parsed.target);
+      const bindable = attrDef.bindables[bindableName];
+
+      if (bindable) {
+        const to = bindable.name;
+        if (parsed.command) {
+          // Has binding command (e.g., prop.bind, prop.two-way)
+          props.push({
+            type: "propertyBinding",
+            to,
+            from: toBindingSource(valuePart, loc, table, "IsProperty"),
+            mode: toMode(parsed.command, propPart),
+            loc: toSpan(loc, table.source),
+          });
+        } else if (valuePart.includes("${")) {
+          // Has interpolation
+          props.push({
+            type: "attributeBinding",
+            attr: propPart,
+            to,
+            from: toInterpIR(valuePart, loc, table),
+            loc: toSpan(loc, table.source),
+          });
+        } else if (valuePart.length > 0) {
+          // Literal value (skip empty values)
+          props.push({
+            type: "setProperty",
+            to,
+            value: valuePart,
+            loc: toSpan(loc, table.source),
+          } as SetPropertyIR);
+        }
+      }
+      // Note: Unknown bindables are silently ignored here; diagnostics are handled in resolve phase
+
+      // Skip whitespace after semicolon
+      while (i < len && raw.charCodeAt(i + 1) <= Char_Space) i++;
+      start = i + 1;
+    }
+  }
+
+  return props;
+}
 
 export interface ElementLoweringResult {
   instructions: InstructionIR[];
@@ -148,14 +262,27 @@ export function lowerElementAttributes(
 
     const attrDef = resolveAttrDef(s.target, sem);
     if (attrDef && !attrDef.isTemplateController) {
-      const targetBindableName =
-        attrDef.bindables[camelCase(s.target)]
-          ? camelCase(s.target)
-          : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
-      const props: ElementBindableIR[] = [];
-      if (targetBindableName) {
-        lowerBindable(props, targetBindableName, a.name, raw, loc, s.command);
+      // Check for multi-binding syntax: attr="prop1: val; prop2.bind: expr"
+      // Multi-binding requires: no noMultiBindings flag, no command on the attr, and colon before interpolation
+      const isMultiBinding =
+        attrDef.noMultiBindings !== true &&
+        s.command === null &&
+        hasInlineBindings(raw);
+
+      let props: ElementBindableIR[];
+      if (isMultiBinding) {
+        props = parseMultiBindings(raw, attrDef, attrParser, loc, table);
+      } else {
+        props = [];
+        const targetBindableName =
+          attrDef.bindables[camelCase(s.target)]
+            ? camelCase(s.target)
+            : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
+        if (targetBindableName) {
+          lowerBindable(props, targetBindableName, a.name, raw, loc, s.command);
+        }
       }
+
       hydrateAttributes.push({
         type: "hydrateAttribute",
         res: attrDef.name,
