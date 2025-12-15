@@ -2,41 +2,45 @@
  * AOT CONSTANTS
  * -----------------------------------------------------------------------------
  * Runtime-specific constants for Aurelia instruction serialization.
- * These match the instruction type codes used by @aurelia/runtime-html.
+ * These MUST match exactly with @aurelia/template-compiler's InstructionType.
  *
  * Transform package imports these to emit correct instruction type codes.
+ * Reference: aurelia/packages/template-compiler/src/instructions.ts
  * ============================================================================= */
 
 /**
- * Aurelia runtime instruction type codes.
+ * Aurelia instruction type codes.
  *
- * These are the short string codes that Aurelia's runtime expects for
- * hydration instructions. Each maps to a renderer in the runtime.
- *
- * Reference: @aurelia/runtime-html InstructionType enum
+ * These map to the InstructionType enum in @aurelia/template-compiler.
+ * The runtime renderer dispatches to the correct handler based on these codes.
  */
 export const INSTRUCTION_TYPE = {
-  // Text and property bindings
-  textBinding: "ha",
-  propertyBinding: "rg",
-  interpolation: "rh",
-  iteratorBinding: "rk",
-
-  // Listener bindings
-  listenerBinding: "rb",
-
-  // Ref bindings
-  refBinding: "rj",
-
-  // Static setters
-  setProperty: "hp",
-  setAttribute: "hs",
-
-  // Hydration instructions
-  hydrateElement: "re",
-  hydrateAttribute: "ra",
+  // Renderer instructions (r-prefixed) - handled by render()
+  hydrateElement: "ra",
+  hydrateAttribute: "rb",
   hydrateTemplateController: "rc",
-  hydrateLetElement: "ri",
+  hydrateLetElement: "rd",
+  setProperty: "re",
+  interpolation: "rf",
+  propertyBinding: "rg",
+  letBinding: "ri",
+  refBinding: "rj",
+  iteratorBinding: "rk",
+  multiAttr: "rl",
+
+  // HTML-specific instructions (h-prefixed)
+  textBinding: "ha",
+  listenerBinding: "hb",
+  attributeBinding: "hc",
+  stylePropertyBinding: "hd",
+  setAttribute: "he",
+  setClassAttribute: "hf",
+  setStyleAttribute: "hg",
+
+  // Spread instructions
+  spreadTransferedBinding: "hs",
+  spreadElementProp: "hp",
+  spreadValueBinding: "svb",
 } as const;
 
 /**

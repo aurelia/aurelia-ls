@@ -5,15 +5,19 @@
  * This enables SSR with actual component logic (getters, methods, etc.)
  * instead of fake classes with injected state.
  *
- * IMPORTANT: Components are loaded and patched ONCE per module load, not per request.
- * This aligns with how Aurelia's runtime caches definitions on the class object.
- * HMR invalidation clears the cache to allow re-patching on template/class changes.
+ * NOTE: Component classes are transformed by the Vite plugin's transform hook
+ * which injects the AOT-compiled $au definition directly into the source.
+ * This loader no longer needs to patch classes - they already have $au set.
+ * However, it still compiles templates to get the serialized hydration data
+ * that's injected into the HTML for client-side hydration.
+ *
+ * HMR invalidation clears the cache to allow re-loading on template/class changes.
  */
 
 import type { ViteDevServer } from "vite";
 import { readFile } from "node:fs/promises";
 import type { ResolutionContext } from "./types.js";
-import { patchComponentDefinition, type ComponentClass } from "../ssr/patch.js";
+import type { ComponentClass } from "../ssr/patch.js";
 import { compileWithAot, type AotCompileResult } from "../aot.js";
 
 /**
@@ -51,21 +55,20 @@ export interface LoadProjectComponentsResult {
 // =============================================================================
 
 /**
- * Cache for loaded and patched components.
+ * Cache for loaded components.
  *
  * Components are cached after first load to ensure:
- * 1. AOT compilation happens once per template
- * 2. $au patching happens once per class
- * 3. Aligns with Aurelia runtime's definition caching
+ * 1. AOT compilation happens once per template (for hydration data)
+ * 2. Class loading happens once per module
+ *
+ * NOTE: Classes are no longer patched here - the Vite transform hook
+ * injects $au directly into the source at compile time.
  *
  * The cache is invalidated on HMR when template or class files change.
  */
 class ComponentCache {
   /** Cached components keyed by template path (normalized) */
   private cache = new Map<string, LoadedComponent>();
-
-  /** Track which template paths have been patched */
-  private patched = new Set<string>();
 
   /**
    * Get a cached component, or null if not cached.
@@ -75,18 +78,11 @@ class ComponentCache {
   }
 
   /**
-   * Cache a component and patch its $au definition.
-   * Patching happens exactly once per component.
+   * Cache a loaded component.
+   * Classes already have $au injected via the transform hook.
    */
   set(loaded: LoadedComponent): void {
     const key = normalizePath(loaded.templatePath);
-
-    // Patch $au if not already patched
-    if (!this.patched.has(key)) {
-      patchComponentDefinition(loaded.ComponentClass, loaded.aot, { name: loaded.name });
-      this.patched.add(key);
-    }
-
     this.cache.set(key, loaded);
   }
 
@@ -100,9 +96,8 @@ class ComponentCache {
   /**
    * Invalidate a specific component (called on HMR).
    *
-   * Note: We clear the cache entry but the class object may still exist
-   * in Vite's module cache. On next load, Vite will return a fresh class
-   * (if the module was invalidated) or the same class (if only the template changed).
+   * Note: We clear the cache entry. On next load, Vite will return a fresh
+   * class with the updated $au definition from the transform hook.
    */
   invalidate(path: string): boolean {
     const normalized = normalizePath(path);
@@ -117,7 +112,6 @@ class ComponentCache {
         normalizePath(component.componentPath) === normalized
       ) {
         this.cache.delete(key);
-        this.patched.delete(key);
         invalidated = true;
       }
     }
@@ -130,7 +124,6 @@ class ComponentCache {
    */
   clear(): void {
     this.cache.clear();
-    this.patched.clear();
   }
 
   /**
@@ -159,11 +152,12 @@ export const componentCache = new ComponentCache();
  *
  * This function:
  * 1. Checks the cache for already-loaded components
- * 2. For cache misses: reads template, compiles AOT, loads class, patches $au
- * 3. Returns all components ready for rendering (already patched)
+ * 2. For cache misses: reads template, compiles AOT for hydration data, loads class
+ * 3. Returns all components ready for rendering
  *
- * IMPORTANT: Components are patched ONCE when first loaded, not per request.
- * This aligns with Aurelia runtime's definition caching behavior.
+ * NOTE: Classes already have $au injected via the Vite transform hook.
+ * The AOT compilation here is for the hydration data that gets serialized
+ * to the client, not for patching classes.
  *
  * @param vite - The Vite dev server instance
  * @param resolution - The resolution context with discovered resources
@@ -249,7 +243,7 @@ export async function loadProjectComponents(
         className: templateInfo.className,
       };
 
-      // Cache and patch (patching happens inside set())
+      // Cache the loaded component (class already has $au from transform hook)
       componentCache.set(loaded);
 
       components.set(templateInfo.resourceName, loaded);
@@ -354,7 +348,7 @@ export async function loadComponent(
       className: templateInfo.className,
     };
 
-    // Cache and patch
+    // Cache the loaded component
     componentCache.set(loaded);
 
     return loaded;

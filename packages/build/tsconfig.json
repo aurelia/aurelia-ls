@@ -6,6 +6,8 @@
   },
   "include": ["src/**/*"],
   "references": [
-    { "path": "../domain" }
+    { "path": "../domain" },
+    { "path": "../resolution" },
+    { "path": "../transform" }
   ]
 }

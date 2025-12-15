@@ -16,17 +16,16 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "watch": "tsc -p tsconfig.json --watch",
-    "test": "node --test out/test/**/*.test.js",
+    "build": "tsc -b",
+    "build:test": "tsc -b tsconfig.test.json",
+    "test": "tsc -b tsconfig.test.json && node --test out/test/**/*.test.js",
     "clean": "rm -rf out"
   },
   "dependencies": {
     "@aurelia-ls/domain": "workspace:*",
-    "@aurelia-ls/resolution": "workspace:*",
-    "typescript": "^5.0.0"
+    "@aurelia-ls/resolution": "workspace:*"
   },
-  "devDependencies": {
-    "typescript": "^5.7.2"
+  "peerDependencies": {
+    "typescript": "^5.0.0"
   }
 }

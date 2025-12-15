@@ -12,7 +12,7 @@ import {
   detectDeclarationForm,
   isConventionName,
   deriveResourceName,
-} from "../src/ts/analyze.js";
+} from "@aurelia-ls/transform";
 import { loadFixture, fixtures } from "./fixtures/index.js";
 
 describe("findClasses", () => {

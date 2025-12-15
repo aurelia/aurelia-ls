@@ -44,6 +44,7 @@ export function transform(options: TransformOptions): TransformResult {
     aot,
     resource,
     template,
+    nestedHtmlTree = [],
     indent = "  ",
     removeDecorators = true,
     includeComments = true,
@@ -74,6 +75,7 @@ export function transform(options: TransformOptions): TransformResult {
     className: resource.className,
     type: resourceType as "custom-element" | "custom-attribute",
     template,
+    nestedHtmlTree,
     indent,
     includeComments,
   });

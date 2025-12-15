@@ -25,10 +25,13 @@
 
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/domain";
+import { transform, type ResourceDefinition } from "@aurelia-ls/transform";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext } from "./resolution.js";
 import { componentCache } from "./loader.js";
+import { compileWithAot } from "../aot.js";
 import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
 
 /**
@@ -132,6 +135,113 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
           }
           return ctx;
         });
+      }
+    },
+
+    /**
+     * Transform TypeScript files to inject AOT-compiled $au definitions.
+     *
+     * This hook intercepts component source files and:
+     * 1. Reads the associated HTML template (if any)
+     * 2. Compiles the template with the AOT compiler
+     * 3. Transforms the source to inject the static $au definition
+     *
+     * This replaces the previous runtime patching approach - components
+     * now have their $au definitions compiled directly into the source.
+     */
+    async transform(code, id) {
+      // Only process TypeScript files
+      if (!id.endsWith(".ts") && !id.endsWith(".tsx")) {
+        return null;
+      }
+
+      // Skip files that clearly aren't components
+      if (id.includes("/node_modules/") || id.includes("/.vite/")) {
+        return null;
+      }
+
+      // Wait for resolution context if not yet ready
+      if (resolutionPromise && !resolutionContext) {
+        resolutionContext = await resolutionPromise;
+        resolvedOptions.resolution = resolutionContext;
+      }
+
+      // No resolution context - can't determine component templates
+      if (!resolutionContext) {
+        return null;
+      }
+
+      // Normalize path for lookup
+      const normalizedPath = normalizePathForId(id);
+
+      // Find matching template info
+      const templateInfo = resolutionContext.result.templates.find(
+        (t) => t.componentPath === normalizedPath,
+      );
+
+      // Not an Aurelia component with external template
+      if (!templateInfo) {
+        return null;
+      }
+
+      try {
+        // Read the template HTML
+        const templateHtml = readFileSync(templateInfo.templatePath, "utf-8");
+
+        // Compile with AOT
+        const aot = compileWithAot(templateHtml, {
+          templatePath: templateInfo.templatePath,
+          name: templateInfo.resourceName,
+          semantics: resolutionContext.semantics,
+          resourceGraph: resolutionContext.resourceGraph,
+          resourceScope: templateInfo.scopeId,
+        });
+
+        // Build resource definition for transform
+        // Convention is the most common form for external template components
+        const resource: ResourceDefinition = {
+          kind: "custom-element",
+          name: templateInfo.resourceName,
+          className: templateInfo.className,
+          bindables: [], // TODO: Get bindables from resolution
+          declarationForm: "convention",
+        };
+
+        // Transform the source to inject $au
+        const result = transform({
+          source: code,
+          filePath: id,
+          aot: aot.raw.codeResult,
+          resource,
+          template: aot.template,
+          nestedHtmlTree: aot.raw.nestedHtmlTree,
+          removeDecorators: true,
+          includeComments: true,
+        });
+
+        resolvedConfig.logger.info(
+          `[aurelia-ssr] Transformed: ${templateInfo.className} (${result.meta.expressionCount} expressions, ${result.meta.instructionRowCount} targets)`,
+        );
+
+        // Log any warnings
+        for (const warning of result.warnings) {
+          resolvedConfig.logger.warn(
+            `[aurelia-ssr] ${warning.message}`,
+          );
+        }
+
+        return {
+          code: result.code,
+          // TODO: Add source map support when transform package implements it
+          map: null,
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        resolvedConfig.logger.error(
+          `[aurelia-ssr] Transform failed for ${templateInfo.className}: ${errorMessage}`,
+        );
+        // Return original code on error to allow fallback to runtime behavior
+        return null;
       }
     },
 

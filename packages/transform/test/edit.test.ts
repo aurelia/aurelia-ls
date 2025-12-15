@@ -14,7 +14,7 @@ import {
   del,
   deleteWithWhitespace,
   validateEdits,
-} from "../src/ts/edit.js";
+} from "@aurelia-ls/transform";
 
 describe("applySingleEdit", () => {
   describe("replace", () => {

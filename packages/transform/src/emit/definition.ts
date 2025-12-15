@@ -28,6 +28,7 @@ import {
   type SerializedIteratorBinding,
   type ExprId,
   type BindingMode,
+  type NestedTemplateHtmlNode,
 } from "@aurelia-ls/domain";
 import { formatValue, escapeString, indent as indentText } from "./format.js";
 import { getExpressionRef, buildExpressionIndexMap } from "./expression-table.js";
@@ -48,6 +49,9 @@ export interface DefinitionEmitOptions {
 
   /** Expression table for reference resolution */
   expressions: SerializedExpression[];
+
+  /** Nested template HTML tree (for template controllers) */
+  nestedHtmlTree?: NestedTemplateHtmlNode[];
 
   /** Indentation string */
   indent?: string;
@@ -79,13 +83,23 @@ export function emitDefinition(
   definition: SerializedDefinition,
   options: DefinitionEmitOptions
 ): DefinitionEmitResult {
-  const { prefix, template, type, expressions, indent = "  " } = options;
+  const { prefix, template, type, expressions, nestedHtmlTree = [], indent = "  " } = options;
 
   const exprIndexMap = buildExpressionIndexMap(expressions);
   const nestedDefinitions: string[] = [];
 
-  // Emit nested templates first (depth-first)
-  emitNestedTemplates(definition, prefix, exprIndexMap, indent, nestedDefinitions, 0);
+  // Build a flat map of all nested definitions for variable name lookup
+  // This assigns unique indices to all nested templates in tree order
+  const defVarMap = new Map<SerializedDefinition, string>();
+  buildNestedDefMap(definition, prefix, defVarMap);
+
+  // Build a map from nested definition to its HTML content
+  // This matches the hierarchical structure of nestedTemplates and nestedHtmlTree
+  const defHtmlMap = new Map<SerializedDefinition, string>();
+  buildNestedHtmlMap(definition.nestedTemplates, nestedHtmlTree, defHtmlMap);
+
+  // Emit nested templates (depth-first, leaves first)
+  emitNestedTemplates(definition, prefix, exprIndexMap, indent, nestedDefinitions, defVarMap, defHtmlMap);
 
   // Emit main definition
   const mainDefinition = emitMainDefinition(
@@ -94,10 +108,49 @@ export function emitDefinition(
     template,
     type,
     exprIndexMap,
-    indent
+    indent,
+    defVarMap
   );
 
   return { nestedDefinitions, mainDefinition };
+}
+
+/**
+ * Build a map from SerializedDefinition to its HTML content.
+ * This matches the hierarchical structure: nestedTemplates[i] → nestedHtmlTree[i].html
+ */
+function buildNestedHtmlMap(
+  nestedTemplates: SerializedDefinition[],
+  nestedHtmlTree: NestedTemplateHtmlNode[],
+  map: Map<SerializedDefinition, string>
+): void {
+  for (let i = 0; i < nestedTemplates.length; i++) {
+    const def = nestedTemplates[i];
+    const htmlNode = nestedHtmlTree[i];
+    if (def && htmlNode) {
+      map.set(def, htmlNode.html);
+      // Recurse into nested definitions
+      buildNestedHtmlMap(def.nestedTemplates, htmlNode.nested, map);
+    }
+  }
+}
+
+/**
+ * Build a map of all nested definitions to their unique variable names.
+ * Uses a flat counter to ensure uniqueness across the entire tree.
+ */
+function buildNestedDefMap(
+  definition: SerializedDefinition,
+  prefix: string,
+  map: Map<SerializedDefinition, string>,
+  counter: { value: number } = { value: 0 }
+): void {
+  for (const nested of definition.nestedTemplates) {
+    // Assign unique variable name
+    map.set(nested, `${prefix}__def_${counter.value++}`);
+    // Recurse into nested's nested templates
+    buildNestedDefMap(nested, prefix, map, counter);
+  }
 }
 
 /* =============================================================================
@@ -110,17 +163,24 @@ function emitNestedTemplates(
   exprIndexMap: Map<ExprId, number>,
   indent: string,
   output: string[],
-  depth: number
+  defVarMap: Map<SerializedDefinition, string>,
+  defHtmlMap: Map<SerializedDefinition, string>
 ): void {
-  for (let i = 0; i < definition.nestedTemplates.length; i++) {
-    const nested = definition.nestedTemplates[i]!;
-    const nestedPrefix = `${prefix}__def${depth}_${i}`;
+  for (const nested of definition.nestedTemplates) {
+    // Recurse into nested's nested templates first (depth-first, leaves first)
+    emitNestedTemplates(nested, prefix, exprIndexMap, indent, output, defVarMap, defHtmlMap);
 
-    // Recurse into nested's nested templates
-    emitNestedTemplates(nested, prefix, exprIndexMap, indent, output, depth + 1);
+    // Get the unique variable name from the map
+    const nestedVarName = defVarMap.get(nested);
+    if (!nestedVarName) {
+      throw new Error("Missing variable name for nested definition");
+    }
+
+    // Get the HTML content for this nested definition
+    const nestedHtml = defHtmlMap.get(nested) ?? "";
 
     // Emit this nested definition
-    const nestedSrc = emitNestedDefinition(nested, nestedPrefix, prefix, exprIndexMap, indent);
+    const nestedSrc = emitNestedDefinition(nested, nestedVarName, nestedHtml, prefix, exprIndexMap, indent, defVarMap);
     output.push(nestedSrc);
   }
 }
@@ -128,22 +188,28 @@ function emitNestedTemplates(
 function emitNestedDefinition(
   definition: SerializedDefinition,
   varName: string,
+  templateHtml: string,
   exprPrefix: string,
   exprIndexMap: Map<ExprId, number>,
-  indent: string
+  indent: string,
+  defVarMap: Map<SerializedDefinition, string>
 ): string {
   const lines: string[] = [];
   lines.push(`const ${varName} = {`);
   lines.push(`${indent}name: "${escapeString(definition.name)}",`);
   lines.push(`${indent}type: "custom-element",`);
 
-  // Nested templates don't have their own template string - they use the instruction's inline template
-  // But they do have instructions
+  // Include the template HTML for this nested definition
+  // This is required for the runtime to locate hydration targets
+  lines.push(`${indent}template: "${escapeString(templateHtml)}",`);
+
   const instructionsStr = emitInstructions(
     definition.instructions,
+    definition,
     exprPrefix,
     exprIndexMap,
-    indent
+    indent,
+    defVarMap
   );
   lines.push(`${indent}instructions: ${instructionsStr},`);
   lines.push(`${indent}needsCompile: false,`);
@@ -162,7 +228,8 @@ function emitMainDefinition(
   template: string,
   type: "custom-element" | "custom-attribute",
   exprIndexMap: Map<ExprId, number>,
-  indent: string
+  indent: string,
+  defVarMap: Map<SerializedDefinition, string>
 ): string {
   const lines: string[] = [];
   lines.push(`const ${prefix}_$au = {`);
@@ -172,9 +239,11 @@ function emitMainDefinition(
 
   const instructionsStr = emitInstructions(
     definition.instructions,
+    definition,
     prefix,
     exprIndexMap,
-    indent
+    indent,
+    defVarMap
   );
   lines.push(`${indent}instructions: ${instructionsStr},`);
   lines.push(`${indent}needsCompile: false,`);
@@ -187,21 +256,36 @@ function emitMainDefinition(
  * INSTRUCTIONS
  * ============================================================================= */
 
+/** Context for instruction emission - tracks which definition we're emitting for */
+interface InstructionEmitContext {
+  /** The definition containing these instructions (needed for template controller lookup) */
+  definition: SerializedDefinition;
+  /** Map from definition objects to their unique variable names */
+  defVarMap: Map<SerializedDefinition, string>;
+  /** Expression prefix for resolving expression references */
+  exprPrefix: string;
+  /** Expression index map for resolving expression IDs */
+  exprIndexMap: Map<ExprId, number>;
+}
+
 function emitInstructions(
   instructions: SerializedInstruction[][],
-  prefix: string,
+  definition: SerializedDefinition,
+  exprPrefix: string,
   exprIndexMap: Map<ExprId, number>,
-  indent: string
+  indent: string,
+  defVarMap: Map<SerializedDefinition, string>
 ): string {
   if (instructions.length === 0) {
     return "[]";
   }
 
+  const ctx: InstructionEmitContext = { definition, defVarMap, exprPrefix, exprIndexMap };
   const lines: string[] = ["["];
 
   for (let targetIdx = 0; targetIdx < instructions.length; targetIdx++) {
     const row = instructions[targetIdx]!;
-    const rowStr = emitInstructionRow(row, prefix, exprIndexMap, indent + indent);
+    const rowStr = emitInstructionRow(row, ctx, indent + indent);
     lines.push(`${indent}/* target ${targetIdx} */ ${rowStr},`);
   }
 
@@ -211,15 +295,14 @@ function emitInstructions(
 
 function emitInstructionRow(
   row: SerializedInstruction[],
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>,
+  ctx: InstructionEmitContext,
   indent: string
 ): string {
   if (row.length === 0) {
     return "[]";
   }
 
-  const items = row.map(instr => emitInstruction(instr, prefix, exprIndexMap, indent));
+  const items = row.map(instr => emitInstruction(instr, ctx, indent));
 
   const firstItem = items[0];
   if (items.length === 1 && firstItem && firstItem.indexOf("\n") === -1 && firstItem.length < 80) {
@@ -231,26 +314,25 @@ function emitInstructionRow(
 
 function emitInstruction(
   instr: SerializedInstruction,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>,
+  ctx: InstructionEmitContext,
   indent: string
 ): string {
   // Map serialized instruction to runtime format
   switch (instr.type) {
     case "textBinding":
-      return emitTextBinding(instr, prefix, exprIndexMap);
+      return emitTextBinding(instr, ctx);
 
     case "propertyBinding":
-      return emitPropertyBinding(instr, prefix, exprIndexMap);
+      return emitPropertyBinding(instr, ctx);
 
     case "interpolation":
-      return emitInterpolation(instr, prefix, exprIndexMap);
+      return emitInterpolation(instr, ctx);
 
     case "listenerBinding":
-      return emitListenerBinding(instr, prefix, exprIndexMap);
+      return emitListenerBinding(instr, ctx);
 
     case "refBinding":
-      return emitRefBinding(instr, prefix, exprIndexMap);
+      return emitRefBinding(instr, ctx);
 
     case "setProperty":
       return emitSetProperty(instr);
@@ -259,19 +341,19 @@ function emitInstruction(
       return emitSetAttribute(instr);
 
     case "hydrateElement":
-      return emitHydrateElement(instr, prefix, exprIndexMap, indent);
+      return emitHydrateElement(instr, ctx, indent);
 
     case "hydrateAttribute":
-      return emitHydrateAttribute(instr, prefix, exprIndexMap, indent);
+      return emitHydrateAttribute(instr, ctx, indent);
 
     case "hydrateTemplateController":
-      return emitHydrateTemplateController(instr, prefix, exprIndexMap, indent);
+      return emitHydrateTemplateController(instr, ctx, indent);
 
     case "hydrateLetElement":
-      return emitHydrateLetElement(instr, prefix, exprIndexMap);
+      return emitHydrateLetElement(instr, ctx);
 
     case "iteratorBinding":
-      return emitIteratorBinding(instr, prefix, exprIndexMap);
+      return emitIteratorBinding(instr, ctx);
 
     default:
       // Fallback: emit as-is
@@ -285,38 +367,34 @@ function emitInstruction(
 
 function emitTextBinding(
   instr: SerializedTextBinding,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>
+  ctx: InstructionEmitContext
 ): string {
-  const exprs = instr.exprIds.map(id => resolveExprRef(prefix, id, exprIndexMap));
+  const exprs = instr.exprIds.map(id => resolveExprRef(ctx.exprPrefix, id, ctx.exprIndexMap));
   return `{ type: "${INSTRUCTION_TYPE.textBinding}", from: ${emitInterpolationObject(instr.parts, exprs)} }`;
 }
 
 function emitPropertyBinding(
   instr: SerializedPropertyBinding,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>
+  ctx: InstructionEmitContext
 ): string {
-  const exprRef = resolveExprRef(prefix, instr.exprId, exprIndexMap);
+  const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
   const modeCode = getBindingModeCode(instr.mode);
   return `{ type: "${INSTRUCTION_TYPE.propertyBinding}", from: ${exprRef}, to: "${instr.to}", mode: ${modeCode} }`;
 }
 
 function emitInterpolation(
   instr: SerializedInterpolation,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>
+  ctx: InstructionEmitContext
 ): string {
-  const exprs = instr.exprIds.map(id => resolveExprRef(prefix, id, exprIndexMap));
+  const exprs = instr.exprIds.map(id => resolveExprRef(ctx.exprPrefix, id, ctx.exprIndexMap));
   return `{ type: "${INSTRUCTION_TYPE.interpolation}", to: "${instr.to}", from: ${emitInterpolationObject(instr.parts, exprs)} }`;
 }
 
 function emitListenerBinding(
   instr: SerializedListenerBinding,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>
+  ctx: InstructionEmitContext
 ): string {
-  const exprRef = resolveExprRef(prefix, instr.exprId, exprIndexMap);
+  const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
   let str = `{ type: "${INSTRUCTION_TYPE.listenerBinding}", from: ${exprRef}, to: "${instr.to}", capture: ${instr.capture}`;
   if (instr.modifier) {
     str += `, modifier: "${instr.modifier}"`;
@@ -327,10 +405,9 @@ function emitListenerBinding(
 
 function emitRefBinding(
   instr: SerializedRefBinding,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>
+  ctx: InstructionEmitContext
 ): string {
-  const exprRef = resolveExprRef(prefix, instr.exprId, exprIndexMap);
+  const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
   return `{ type: "${INSTRUCTION_TYPE.refBinding}", from: ${exprRef}, to: "${instr.to}" }`;
 }
 
@@ -350,11 +427,10 @@ function emitSetAttribute(
 
 function emitHydrateElement(
   instr: SerializedHydrateElement,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>,
+  ctx: InstructionEmitContext,
   indent: string
 ): string {
-  const props = emitNestedInstructions(instr.instructions, prefix, exprIndexMap, indent);
+  const props = emitNestedInstructions(instr.instructions, ctx, indent);
   let str = `{ type: "${INSTRUCTION_TYPE.hydrateElement}", res: "${instr.resource}", props: ${props}`;
   if (instr.containerless) {
     str += ", containerless: true";
@@ -365,11 +441,10 @@ function emitHydrateElement(
 
 function emitHydrateAttribute(
   instr: SerializedHydrateAttribute,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>,
+  ctx: InstructionEmitContext,
   indent: string
 ): string {
-  const props = emitNestedInstructions(instr.instructions, prefix, exprIndexMap, indent);
+  const props = emitNestedInstructions(instr.instructions, ctx, indent);
   let str = `{ type: "${INSTRUCTION_TYPE.hydrateAttribute}", res: "${instr.resource}", props: ${props}`;
   if (instr.alias) {
     str += `, alias: "${instr.alias}"`;
@@ -380,22 +455,28 @@ function emitHydrateAttribute(
 
 function emitHydrateTemplateController(
   instr: SerializedHydrateTemplateController,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>,
+  ctx: InstructionEmitContext,
   indent: string
 ): string {
-  const defVar = `${prefix}__def0_${instr.templateIndex}`;
-  const props = emitNestedInstructions(instr.instructions, prefix, exprIndexMap, indent);
+  // Look up the nested definition by its index in the current definition's nestedTemplates
+  const nestedDef = ctx.definition.nestedTemplates[instr.templateIndex];
+  if (!nestedDef) {
+    throw new Error(`Nested template at index ${instr.templateIndex} not found`);
+  }
+  const defVar = ctx.defVarMap.get(nestedDef);
+  if (!defVar) {
+    throw new Error(`No variable name found for nested definition at index ${instr.templateIndex}`);
+  }
+  const props = emitNestedInstructions(instr.instructions, ctx, indent);
   return `{ type: "${INSTRUCTION_TYPE.hydrateTemplateController}", def: ${defVar}, res: "${instr.resource}", props: ${props} }`;
 }
 
 function emitHydrateLetElement(
   instr: SerializedHydrateLetElement,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>
+  ctx: InstructionEmitContext
 ): string {
   const bindings = instr.bindings.map(b => {
-    const exprRef = resolveExprRef(prefix, b.exprId, exprIndexMap);
+    const exprRef = resolveExprRef(ctx.exprPrefix, b.exprId, ctx.exprIndexMap);
     return `{ to: "${b.to}", from: ${exprRef} }`;
   });
   return `{ type: "${INSTRUCTION_TYPE.hydrateLetElement}", bindings: [${bindings.join(", ")}], toBindingContext: ${instr.toBindingContext} }`;
@@ -403,10 +484,9 @@ function emitHydrateLetElement(
 
 function emitIteratorBinding(
   instr: SerializedIteratorBinding,
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>
+  ctx: InstructionEmitContext
 ): string {
-  const exprRef = resolveExprRef(prefix, instr.exprId, exprIndexMap);
+  const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
   return `{ forOf: ${exprRef}, to: "${instr.to}", props: [], type: "${INSTRUCTION_TYPE.iteratorBinding}" }`;
 }
 
@@ -424,14 +504,13 @@ function resolveExprRef(prefix: string, exprId: ExprId, exprIndexMap: Map<ExprId
 
 function emitNestedInstructions(
   instructions: SerializedInstruction[],
-  prefix: string,
-  exprIndexMap: Map<ExprId, number>,
+  ctx: InstructionEmitContext,
   indent: string
 ): string {
   if (instructions.length === 0) {
     return "[]";
   }
-  const items = instructions.map(i => emitInstruction(i, prefix, exprIndexMap, indent));
+  const items = instructions.map(i => emitInstruction(i, ctx, indent));
   return `[${items.join(", ")}]`;
 }
 

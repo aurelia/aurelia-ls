@@ -11,12 +11,10 @@ import {
   emitExpressionTable,
   hasEmittableContent,
   generateAuAssignment,
-} from "../src/emit/index.js";
-import {
   escapeString,
   toIdentifierPrefix,
   formatValue,
-} from "../src/emit/format.js";
+} from "@aurelia-ls/transform";
 import type { AotCodeResult, SerializedExpression, SerializedDefinition, ExprId, AnyBindingExpression } from "@aurelia-ls/domain";
 
 // Helper to create mock expressions

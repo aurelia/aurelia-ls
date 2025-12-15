@@ -60,6 +60,9 @@ export {
   emitDefinition,
   hasEmittableContent,
   generateAuAssignment,
+  escapeString,
+  toIdentifierPrefix,
+  formatValue,
 } from "./emit/index.js";
 export type {
   EmitStaticAuOptions,

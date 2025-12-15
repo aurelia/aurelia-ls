@@ -4,7 +4,7 @@
  * Core types for the transformation pipeline.
  */
 
-import type { AotCodeResult } from "@aurelia-ls/domain";
+import type { AotCodeResult, NestedTemplateHtmlNode } from "@aurelia-ls/domain";
 import type { ResourceDefinition } from "../model/types.js";
 import type { TypedSourceEdit } from "../ts/types.js";
 
@@ -30,6 +30,9 @@ export interface TransformOptions {
 
   /** Template HTML (from emitTemplate or provided separately) */
   template: string;
+
+  /** Nested template HTML tree (for template controllers) */
+  nestedHtmlTree?: NestedTemplateHtmlNode[];
 
   /** Indentation string (default: "  ") */
   indent?: string;

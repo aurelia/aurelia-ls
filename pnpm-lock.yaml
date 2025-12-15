@@ -145,6 +145,9 @@ importers:
       '@aurelia-ls/resolution':
         specifier: workspace:*
         version: link:../resolution
+      '@aurelia-ls/transform':
+        specifier: workspace:*
+        version: link:../transform
       '@aurelia/expression-parser':
         specifier: link:../../aurelia/packages/expression-parser
         version: link:../../aurelia/packages/expression-parser

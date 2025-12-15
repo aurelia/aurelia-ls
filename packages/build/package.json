@@ -33,6 +33,7 @@
   "dependencies": {
     "@aurelia-ls/domain": "workspace:*",
     "@aurelia-ls/resolution": "workspace:*",
+    "@aurelia-ls/transform": "workspace:*",
     "@aurelia/kernel": "file:../../aurelia/packages/kernel",
     "@aurelia/metadata": "file:../../aurelia/packages/metadata",
     "@aurelia/platform": "file:../../aurelia/packages/platform",

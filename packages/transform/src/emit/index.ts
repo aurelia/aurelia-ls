@@ -5,7 +5,7 @@
  * This is pure string generation - no TypeScript AST involved.
  */
 
-import type { AotCodeResult, SerializedDefinition, SerializedExpression } from "@aurelia-ls/domain";
+import type { AotCodeResult, SerializedDefinition, SerializedExpression, NestedTemplateHtmlNode } from "@aurelia-ls/domain";
 import { emitExpressionTable } from "./expression-table.js";
 import { emitDefinition } from "./definition.js";
 import { toIdentifierPrefix } from "./format.js";
@@ -30,6 +30,9 @@ export interface EmitStaticAuOptions {
 
   /** Template HTML string (from emitTemplate or provided separately) */
   template: string;
+
+  /** Nested template HTML tree (for template controllers) */
+  nestedHtmlTree?: NestedTemplateHtmlNode[];
 
   /** Indentation string */
   indent?: string;
@@ -82,7 +85,7 @@ export function emitStaticAu(
   aot: AotCodeResult,
   options: EmitStaticAuOptions
 ): EmitStaticAuResult {
-  const { name, className, type, template, indent = "  ", includeComments = true } = options;
+  const { name, className, type, template, nestedHtmlTree = [], indent = "  ", includeComments = true } = options;
 
   // Generate identifier prefix from class name
   const prefix = toIdentifierPrefix(className);
@@ -101,6 +104,7 @@ export function emitStaticAu(
     template,
     type,
     expressions: aot.expressions,
+    nestedHtmlTree,
     indent,
   });
 

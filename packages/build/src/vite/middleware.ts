@@ -7,9 +7,8 @@
  * When resolution is configured (tsconfig provided), uses real component
  * classes loaded via Vite's ssrLoadModule for full child component support.
  *
- * IMPORTANT: Components are loaded and patched ONCE by the loader (cached).
- * The middleware only renders - it doesn't patch. This aligns with Aurelia
- * runtime's definition caching behavior.
+ * NOTE: Component classes have their $au definitions injected by the Vite
+ * transform hook at compile time - no runtime patching needed.
  */
 
 import type { Connect, ViteDevServer } from "vite";
@@ -95,7 +94,7 @@ export function createSSRMiddleware(
           throw new Error(`[aurelia-ssr] Could not load root component from "${options.entry}"`);
         }
 
-        // Render with real classes (already patched by loader)
+        // Render with real classes (classes have $au from transform hook)
         // Pass request context for URL-aware rendering (routing)
         const renderResult = await renderWithComponents(root.ComponentClass, {
           childComponents: children.map((c) => c.ComponentClass),
