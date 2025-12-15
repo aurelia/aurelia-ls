@@ -232,6 +232,18 @@ importers:
         specifier: ^3.0.8
         version: 3.1.0
 
+  packages/transform:
+    dependencies:
+      '@aurelia-ls/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@aurelia-ls/resolution':
+        specifier: workspace:*
+        version: link:../resolution
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
 packages:
 
   '@asamuzakjp/css-color@3.2.0':

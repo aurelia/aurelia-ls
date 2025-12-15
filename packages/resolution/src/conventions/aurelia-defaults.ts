@@ -1,6 +1,33 @@
 import type { ConventionConfig, SuffixConfig, FilePatternConfig } from "./types.js";
 
 /**
+ * Aurelia resource decorator names.
+ *
+ * These are the decorators that explicitly declare a class as an Aurelia resource.
+ * Used by transform package to detect declaration forms and by resolution to
+ * identify decorated resources.
+ */
+export const DECORATOR_NAMES = {
+  customElement: "customElement",
+  customAttribute: "customAttribute",
+  templateController: "templateController",
+  valueConverter: "valueConverter",
+  bindingBehavior: "bindingBehavior",
+  bindable: "bindable",
+} as const;
+
+/**
+ * List of all resource decorator names (excludes bindable which is a property decorator).
+ */
+export const RESOURCE_DECORATOR_NAMES = [
+  DECORATOR_NAMES.customElement,
+  DECORATOR_NAMES.customAttribute,
+  DECORATOR_NAMES.templateController,
+  DECORATOR_NAMES.valueConverter,
+  DECORATOR_NAMES.bindingBehavior,
+] as const;
+
+/**
  * Default Aurelia class name suffix patterns.
  *
  * Based on @aurelia/plugin-conventions.

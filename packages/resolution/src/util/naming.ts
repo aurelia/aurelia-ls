@@ -3,10 +3,19 @@ import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/domain";
 /**
  * Convert a string to kebab-case.
  * "MyCustomElement" → "my-custom-element"
+ * "XMLParser" → "xml-parser"
  */
 export function toKebabCase(value: string): string {
-  const normalized = value.replace(/[\s_]+/g, "-").replace(/([a-z0-9])([A-Z])/g, "$1-$2");
-  return normalized.replace(/-+/g, "-").toLowerCase();
+  return value
+    // Replace spaces and underscores with hyphens
+    .replace(/[\s_]+/g, "-")
+    // Insert hyphen between lowercase and uppercase: "myApp" → "my-App"
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    // Insert hyphen between consecutive capitals and the start of a word: "XMLParser" → "XML-Parser"
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    // Collapse multiple hyphens
+    .replace(/-+/g, "-")
+    .toLowerCase();
 }
 
 /**

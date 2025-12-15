@@ -69,7 +69,11 @@ export {
   emitTemplate,
   collectNestedTemplateHtml,
   collectNestedTemplateHtmlTree,
+  // Constants for transform package
+  INSTRUCTION_TYPE,
+  BINDING_MODE,
 } from "./compiler/index.js";
+export type { InstructionTypeCode, BindingModeValue } from "./compiler/index.js";
 export type {
   TemplateEmitResult,
   TemplateEmitOptions,

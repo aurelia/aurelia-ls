@@ -59,8 +59,13 @@ export { buildResourceGraph } from "./scope/index.js";
 // === Conventions ===
 export type { ConventionConfig, SuffixConfig, FilePatternConfig } from "./conventions/index.js";
 export {
+  // Decorator names (used by transform package)
+  DECORATOR_NAMES,
+  RESOURCE_DECORATOR_NAMES,
+  // Suffix patterns
   DEFAULT_CONVENTION_CONFIG,
   DEFAULT_SUFFIXES,
+  // Functions
   getResourceTypeFromClassName,
   stripResourceSuffix,
 } from "./conventions/index.js";

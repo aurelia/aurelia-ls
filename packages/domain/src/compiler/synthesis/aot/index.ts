@@ -93,3 +93,13 @@ export {
   collectNestedTemplateHtml,
   collectNestedTemplateHtmlTree,
 } from "./emit-template.js";
+
+// -----------------------------------------------------------------------------
+// Constants (for transform package)
+// -----------------------------------------------------------------------------
+export {
+  INSTRUCTION_TYPE,
+  BINDING_MODE,
+  type InstructionTypeCode,
+  type BindingModeValue,
+} from "./constants.js";
