@@ -1,0 +1,91 @@
+{
+  "name": "Edge cases and special patterns",
+  "cases": [
+    {
+      "name": "no routes defined",
+      "source": "export class SimpleComponent {}",
+      "expected": null
+    },
+    {
+      "name": "getRouteConfig method (dynamic)",
+      "source": "export class DynamicApp {\n  getRouteConfig() {\n    return { routes: [] };\n  }\n}",
+      "expected": {
+        "isDynamic": true,
+        "method": "getRouteConfig"
+      }
+    },
+    {
+      "name": "async getRouteConfig method",
+      "source": "export class AsyncApp {\n  async getRouteConfig() {\n    const routes = await fetchRoutes();\n    return { routes };\n  }\n}",
+      "expected": {
+        "isDynamic": true,
+        "method": "getRouteConfig"
+      }
+    },
+    {
+      "name": "both decorator and static property (decorator wins)",
+      "source": "@route({ path: 'decorator-path' })\nexport class Both {\n  static routes = [{ path: 'static-path', component: X }];\n}",
+      "expected": {
+        "path": "decorator-path",
+        "routes": [],
+        "definitionType": "decorator"
+      },
+      "note": "Decorator takes precedence over static property"
+    },
+    {
+      "name": "empty routes array",
+      "source": "@route({ routes: [] })\nexport class EmptyRoutes {}",
+      "expected": {
+        "routes": [],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "route with only redirectTo",
+      "source": "@route({ path: 'legacy', redirectTo: '/new' })\nexport class Legacy {}",
+      "expected": {
+        "path": "legacy",
+        "redirectTo": "/new",
+        "routes": [],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "inline component definition",
+      "source": "@route({\n  routes: [\n    {\n      path: 'inline',\n      component: { name: 'inline-page', template: '<p>Inline</p>' }\n    }\n  ]\n})\nexport class App {}",
+      "expected": {
+        "routes": [
+          {
+            "path": "inline",
+            "component": { "kind": "inline", "name": "inline-page" }
+          }
+        ],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "wildcard catch-all route",
+      "source": "@route({\n  routes: [\n    { path: '*', component: NotFound }\n  ]\n})\nexport class App {}",
+      "expected": {
+        "routes": [
+          {
+            "path": "*",
+            "component": { "kind": "class", "className": "NotFound" }
+          }
+        ],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "optional parameter",
+      "source": "@route(':id?')\nexport class OptionalParam {}",
+      "expected": {
+        "path": ":id?",
+        "routes": [],
+        "definitionType": "decorator",
+        "params": ["id"]
+      },
+      "note": "Optional params still extracted, runtime handles optionality"
+    }
+  ]
+}

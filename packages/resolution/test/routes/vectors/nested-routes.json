@@ -1,0 +1,115 @@
+{
+  "name": "Nested route configurations",
+  "cases": [
+    {
+      "name": "routes with class references",
+      "source": "import { Home } from './home';\nimport { About } from './about';\n\n@route({\n  routes: [\n    { path: '', component: Home },\n    { path: 'about', component: About }\n  ]\n})\nexport class App {}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "class", "className": "Home" }
+          },
+          {
+            "path": "about",
+            "component": { "kind": "class", "className": "About" }
+          }
+        ],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "routes with string references",
+      "source": "@route({\n  routes: [\n    { path: '', component: 'home' },\n    { path: 'about', component: 'about' }\n  ]\n})\nexport class App {}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "string", "name": "home" }
+          },
+          {
+            "path": "about",
+            "component": { "kind": "string", "name": "about" }
+          }
+        ],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "routes with dynamic imports",
+      "source": "@route({\n  routes: [\n    { path: 'lazy', component: import('./pages/lazy') }\n  ]\n})\nexport class App {}",
+      "expected": {
+        "routes": [
+          {
+            "path": "lazy",
+            "component": { "kind": "import", "importPath": "./pages/lazy" }
+          }
+        ],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "routes with titles and ids",
+      "source": "@route({\n  routes: [\n    { path: '', component: Home, title: 'Home', id: 'home' },\n    { path: 'about', component: About, title: 'About', id: 'about' }\n  ]\n})\nexport class App {}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "class", "className": "Home" },
+            "title": "Home",
+            "id": "home"
+          },
+          {
+            "path": "about",
+            "component": { "kind": "class", "className": "About" },
+            "title": "About",
+            "id": "about"
+          }
+        ],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "deeply nested routes",
+      "source": "@route({\n  path: 'admin',\n  routes: [\n    {\n      path: 'users',\n      component: Users,\n      routes: [\n        { path: '', component: UserList },\n        { path: ':id', component: UserDetail }\n      ]\n    }\n  ]\n})\nexport class Admin {}",
+      "expected": {
+        "path": "admin",
+        "routes": [
+          {
+            "path": "users",
+            "component": { "kind": "class", "className": "Users" },
+            "routes": [
+              {
+                "path": "",
+                "component": { "kind": "class", "className": "UserList" }
+              },
+              {
+                "path": ":id",
+                "component": { "kind": "class", "className": "UserDetail" }
+              }
+            ]
+          }
+        ],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "routes with fallback",
+      "source": "import { NotFound } from './not-found';\n\n@route({\n  routes: [\n    { path: '', component: Home },\n    { path: 'about', component: About }\n  ],\n  fallback: NotFound\n})\nexport class App {}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "class", "className": "Home" }
+          },
+          {
+            "path": "about",
+            "component": { "kind": "class", "className": "About" }
+          }
+        ],
+        "fallback": { "kind": "class", "className": "NotFound" },
+        "definitionType": "decorator"
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "name": "Static routes property pattern",
+  "cases": [
+    {
+      "name": "basic static routes",
+      "source": "export class App {\n  static routes = [\n    { path: '', component: Home },\n    { path: 'about', component: About }\n  ];\n}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "class", "className": "Home" }
+          },
+          {
+            "path": "about",
+            "component": { "kind": "class", "className": "About" }
+          }
+        ],
+        "definitionType": "static-property"
+      }
+    },
+    {
+      "name": "static routes with string components",
+      "source": "export class App {\n  static routes = [\n    { path: '', component: 'home' },\n    { path: 'about', component: 'about' }\n  ];\n}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "string", "name": "home" }
+          },
+          {
+            "path": "about",
+            "component": { "kind": "string", "name": "about" }
+          }
+        ],
+        "definitionType": "static-property"
+      }
+    },
+    {
+      "name": "static routes with dynamic imports",
+      "source": "export class App {\n  static routes = [\n    { path: 'lazy', component: import('./lazy') }\n  ];\n}",
+      "expected": {
+        "routes": [
+          {
+            "path": "lazy",
+            "component": { "kind": "import", "importPath": "./lazy" }
+          }
+        ],
+        "definitionType": "static-property"
+      }
+    },
+    {
+      "name": "static routes with full config",
+      "source": "export class App {\n  static routes = [\n    { path: '', component: Home, title: 'Home', id: 'home-route' },\n    { path: 'products/:id', component: ProductDetail, title: 'Product' }\n  ];\n}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "class", "className": "Home" },
+            "title": "Home",
+            "id": "home-route"
+          },
+          {
+            "path": "products/:id",
+            "component": { "kind": "class", "className": "ProductDetail" },
+            "title": "Product"
+          }
+        ],
+        "definitionType": "static-property"
+      }
+    },
+    {
+      "name": "readonly static routes",
+      "source": "export class App {\n  static readonly routes = [\n    { path: '', component: Home }\n  ] as const;\n}",
+      "expected": {
+        "routes": [
+          {
+            "path": "",
+            "component": { "kind": "class", "className": "Home" }
+          }
+        ],
+        "definitionType": "static-property"
+      }
+    }
+  ]
+}
