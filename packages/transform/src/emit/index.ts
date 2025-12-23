@@ -34,6 +34,12 @@ export interface EmitStaticAuOptions {
   /** Nested template HTML tree (for template controllers) */
   nestedHtmlTree?: NestedTemplateHtmlNode[];
 
+  /**
+   * Dependencies to include in the definition.
+   * These are emitted as-is (identifier references or expressions).
+   */
+  dependencies?: string[];
+
   /** Indentation string */
   indent?: string;
 
@@ -85,7 +91,7 @@ export function emitStaticAu(
   aot: AotCodeResult,
   options: EmitStaticAuOptions
 ): EmitStaticAuResult {
-  const { name, className, type, template, nestedHtmlTree = [], indent = "  ", includeComments = true } = options;
+  const { name, className, type, template, nestedHtmlTree = [], dependencies = [], indent = "  ", includeComments = true } = options;
 
   // Generate identifier prefix from class name
   const prefix = toIdentifierPrefix(className);
@@ -105,6 +111,7 @@ export function emitStaticAu(
     type,
     expressions: aot.expressions,
     nestedHtmlTree,
+    dependencies,
     indent,
   });
 

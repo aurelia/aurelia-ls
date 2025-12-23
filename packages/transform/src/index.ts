@@ -77,6 +77,8 @@ export {
   detectDeclarationForm,
   isConventionName,
   deriveResourceName,
+  extractDependencies,
+  extractDecoratorConfig,
 } from "./ts/index.js";
 export type {
   ClassInfo,
@@ -88,6 +90,8 @@ export type {
   InjectionStrategy,
   InjectionPoint,
   DetectedDeclarationForm,
+  ExtractedDependency,
+  ExtractedDecoratorConfig,
 } from "./ts/index.js";
 
 // Edit utilities (for advanced use)

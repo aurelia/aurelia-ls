@@ -53,6 +53,12 @@ export interface DefinitionEmitOptions {
   /** Nested template HTML tree (for template controllers) */
   nestedHtmlTree?: NestedTemplateHtmlNode[];
 
+  /**
+   * Dependencies to include in the definition.
+   * These are emitted as-is (identifier references or expressions).
+   */
+  dependencies?: string[];
+
   /** Indentation string */
   indent?: string;
 }
@@ -83,7 +89,7 @@ export function emitDefinition(
   definition: SerializedDefinition,
   options: DefinitionEmitOptions
 ): DefinitionEmitResult {
-  const { prefix, template, type, expressions, nestedHtmlTree = [], indent = "  " } = options;
+  const { prefix, template, type, expressions, nestedHtmlTree = [], dependencies = [], indent = "  " } = options;
 
   const exprIndexMap = buildExpressionIndexMap(expressions);
   const nestedDefinitions: string[] = [];
@@ -109,7 +115,8 @@ export function emitDefinition(
     type,
     exprIndexMap,
     indent,
-    defVarMap
+    defVarMap,
+    dependencies
   );
 
   return { nestedDefinitions, mainDefinition };
@@ -229,7 +236,8 @@ function emitMainDefinition(
   type: "custom-element" | "custom-attribute",
   exprIndexMap: Map<ExprId, number>,
   indent: string,
-  defVarMap: Map<SerializedDefinition, string>
+  defVarMap: Map<SerializedDefinition, string>,
+  dependencies: string[]
 ): string {
   const lines: string[] = [];
   lines.push(`const ${prefix}_$au = {`);
@@ -246,6 +254,12 @@ function emitMainDefinition(
     defVarMap
   );
   lines.push(`${indent}instructions: ${instructionsStr},`);
+
+  // Emit dependencies if present
+  if (dependencies.length > 0) {
+    lines.push(`${indent}dependencies: [${dependencies.join(", ")}],`);
+  }
+
   lines.push(`${indent}needsCompile: false,`);
   lines.push("};");
 

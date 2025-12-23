@@ -171,6 +171,42 @@ describe("emitStaticAu", () => {
     assert.ok(result.nestedDefinitions.length > 0);
     assert.ok(result.combined.includes("__def"));
   });
+
+  it("includes dependencies in definition", () => {
+    const aot: AotCodeResult = {
+      expressions: [],
+      definition: mockDef("parent"),
+      mapping: [],
+    };
+
+    const result = emitStaticAu(aot, {
+      name: "parent",
+      className: "Parent",
+      type: "custom-element",
+      template: "<child-a></child-a>",
+      dependencies: ["ChildA", "ChildB"],
+    });
+
+    assert.ok(result.mainDefinition.includes("dependencies: [ChildA, ChildB]"));
+  });
+
+  it("omits dependencies when empty", () => {
+    const aot: AotCodeResult = {
+      expressions: [],
+      definition: mockDef("simple"),
+      mapping: [],
+    };
+
+    const result = emitStaticAu(aot, {
+      name: "simple",
+      className: "Simple",
+      type: "custom-element",
+      template: "<div>Hello</div>",
+      dependencies: [],
+    });
+
+    assert.ok(!result.mainDefinition.includes("dependencies"));
+  });
 });
 
 describe("hasEmittableContent", () => {

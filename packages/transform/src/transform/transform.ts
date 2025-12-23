@@ -10,6 +10,7 @@ import { emitStaticAu } from "../emit/index.js";
 import { findClassByName, detectDeclarationForm } from "../ts/analyze.js";
 import { applyEdits, validateEdits } from "../ts/edit.js";
 import { generateInjectionEdits } from "../ts/inject.js";
+import { extractDependencies } from "../ts/extract.js";
 import type {
   TransformOptions,
   TransformResult,
@@ -69,6 +70,17 @@ export function transform(options: TransformOptions): TransformResult {
   // Determine resource type for emit
   const resourceType = getResourceType(resource);
 
+  // Extract dependencies from decorator config
+  const extractedDeps = extractDependencies(source, classInfo);
+  const dependencies = extractedDeps.map(dep => {
+    if (dep.type === "identifier") {
+      return dep.name;
+    } else {
+      // Dynamic expressions are emitted as-is
+      return dep.expression;
+    }
+  });
+
   // Emit the AOT artifacts
   const emitResult = emitStaticAu(aot, {
     name: resource.name,
@@ -76,6 +88,7 @@ export function transform(options: TransformOptions): TransformResult {
     type: resourceType as "custom-element" | "custom-attribute",
     template,
     nestedHtmlTree,
+    dependencies,
     indent,
     includeComments,
   });
