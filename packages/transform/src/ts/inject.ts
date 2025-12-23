@@ -17,7 +17,7 @@ import type {
   TypedSourceEdit,
 } from "./types.js";
 import { detectDeclarationForm } from "./analyze.js";
-import { replace, insert, del, deleteWithWhitespace } from "./edit.js";
+import { replace, insert, del, extendSpanWithWhitespace } from "./edit.js";
 
 /* =============================================================================
  * PUBLIC API
@@ -123,12 +123,15 @@ export function generateInjectionEdits(
     case "replace-decorator": {
       const { decoratorSpan } = injectionPoint.strategy;
 
-      // Insert artifact code before class (accounting for decorator position)
-      const insertPos = Math.min(decoratorSpan.start, classInfo.start);
-      edits.push(insert(insertPos, artifactCode + "\n\n"));
+      // Extend decorator span to include surrounding whitespace
+      // This ensures clean removal of the decorator line
+      const extendedSpan = extendSpanWithWhitespace(source, decoratorSpan);
 
-      // Remove decorator
-      edits.push(deleteWithWhitespace(source, decoratorSpan));
+      // Use a single REPLACE operation to atomically:
+      // 1. Remove the decorator (and its whitespace)
+      // 2. Insert the artifact code in its place
+      // This avoids position conflicts that occur with separate insert + delete
+      edits.push(replace(extendedSpan, artifactCode + "\n\n"));
 
       // Add static $au inside class body
       const staticAuCode = `  static $au = ${definitionVar};\n`;

@@ -1,0 +1,11 @@
+{
+  "name": "aot-build-demo",
+  "description": "Demonstrates AOT source transformation",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "demo": "node demo.mjs"
+  }
+}

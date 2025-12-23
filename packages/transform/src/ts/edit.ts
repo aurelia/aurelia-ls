@@ -76,12 +76,13 @@ export function del(span: Span): TypedSourceEdit {
 }
 
 /**
- * Create a delete edit for a span that may include surrounding whitespace.
+ * Extend a span to include surrounding whitespace.
+ * Useful for cleanly removing decorators or other constructs.
+ *
+ * - Extends backward to eat leading spaces/tabs (stops at newline)
+ * - Extends forward to eat trailing spaces/tabs and one newline
  */
-export function deleteWithWhitespace(
-  source: string,
-  span: Span
-): TypedSourceEdit {
+export function extendSpanWithWhitespace(source: string, span: Span): Span {
   let start = span.start;
   let end = span.end;
 
@@ -98,7 +99,17 @@ export function deleteWithWhitespace(
     start--;
   }
 
-  return { type: "delete", span: { start, end } };
+  return { start, end };
+}
+
+/**
+ * Create a delete edit for a span that may include surrounding whitespace.
+ */
+export function deleteWithWhitespace(
+  source: string,
+  span: Span
+): TypedSourceEdit {
+  return { type: "delete", span: extendSpanWithWhitespace(source, span) };
 }
 
 /* =============================================================================
