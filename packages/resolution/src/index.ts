@@ -84,3 +84,23 @@ export {
 
 // === Fingerprint ===
 export { hashObject, stableStringify, normalizeCompilerOptions } from "./fingerprint/index.js";
+
+// === Routes (SSG route discovery) ===
+export {
+  extractRouteConfig,
+  extractFromDecorator,
+  extractFromStaticProperty,
+  extractComponentRef,
+  extractPathParams,
+  hasGetRouteConfigMethod,
+} from "./routes/index.js";
+export type {
+  ExtractedRouteConfig,
+  ExtractedChildRoute,
+  ComponentRef,
+  RouteTree,
+  RouteNode,
+  RouteSource,
+  ParameterizedRoute,
+  DynamicRouteComponent,
+} from "./routes/index.js";
