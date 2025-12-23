@@ -12,7 +12,15 @@
   "dependencies": {
     "aurelia": "*",
     "@aurelia/kernel": "*",
+    "@aurelia/metadata": "*",
+    "@aurelia/platform": "*",
+    "@aurelia/platform-browser": "*",
+    "@aurelia/runtime": "*",
+    "@aurelia/runtime-html": "*",
+    "@aurelia/expression-parser": "*",
+    "@aurelia/template-compiler": "*",
     "@aurelia/router": "*",
+    "@aurelia/route-recognizer": "*",
     "@aurelia-ls/build": "workspace:*"
   },
   "devDependencies": {

@@ -86,12 +86,36 @@ importers:
       '@aurelia-ls/build':
         specifier: workspace:*
         version: link:../../packages/build
+      '@aurelia/expression-parser':
+        specifier: link:../../aurelia/packages/expression-parser
+        version: link:../../aurelia/packages/expression-parser
       '@aurelia/kernel':
         specifier: link:../../aurelia/packages/kernel
         version: link:../../aurelia/packages/kernel
+      '@aurelia/metadata':
+        specifier: link:../../aurelia/packages/metadata
+        version: link:../../aurelia/packages/metadata
+      '@aurelia/platform':
+        specifier: link:../../aurelia/packages/platform
+        version: link:../../aurelia/packages/platform
+      '@aurelia/platform-browser':
+        specifier: link:../../aurelia/packages/platform-browser
+        version: link:../../aurelia/packages/platform-browser
+      '@aurelia/route-recognizer':
+        specifier: link:../../aurelia/packages/route-recognizer
+        version: link:../../aurelia/packages/route-recognizer
       '@aurelia/router':
         specifier: link:../../aurelia/packages/router
         version: link:../../aurelia/packages/router
+      '@aurelia/runtime':
+        specifier: link:../../aurelia/packages/runtime
+        version: link:../../aurelia/packages/runtime
+      '@aurelia/runtime-html':
+        specifier: link:../../aurelia/packages/runtime-html
+        version: link:../../aurelia/packages/runtime-html
+      '@aurelia/template-compiler':
+        specifier: link:../../aurelia/packages/template-compiler
+        version: link:../../aurelia/packages/template-compiler
       aurelia:
         specifier: link:../../aurelia/packages/aurelia
         version: link:../../aurelia/packages/aurelia
@@ -117,6 +141,30 @@ importers:
       '@aurelia-ls/build':
         specifier: workspace:*
         version: link:../../packages/build
+      '@aurelia/expression-parser':
+        specifier: link:../../aurelia/packages/expression-parser
+        version: link:../../aurelia/packages/expression-parser
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
+      '@aurelia/metadata':
+        specifier: link:../../aurelia/packages/metadata
+        version: link:../../aurelia/packages/metadata
+      '@aurelia/platform':
+        specifier: link:../../aurelia/packages/platform
+        version: link:../../aurelia/packages/platform
+      '@aurelia/platform-browser':
+        specifier: link:../../aurelia/packages/platform-browser
+        version: link:../../aurelia/packages/platform-browser
+      '@aurelia/runtime':
+        specifier: link:../../aurelia/packages/runtime
+        version: link:../../aurelia/packages/runtime
+      '@aurelia/runtime-html':
+        specifier: link:../../aurelia/packages/runtime-html
+        version: link:../../aurelia/packages/runtime-html
+      '@aurelia/template-compiler':
+        specifier: link:../../aurelia/packages/template-compiler
+        version: link:../../aurelia/packages/template-compiler
       aurelia:
         specifier: link:../../aurelia/packages/aurelia
         version: link:../../aurelia/packages/aurelia
