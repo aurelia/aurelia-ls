@@ -98,8 +98,8 @@
       "exprCount": 3,
       "instructions": [
         { "type": "hydrateLetElement", "target": 0, "bindingCount": 1, "toBindingContext": false },
-        { "type": "textBinding", "target": 1, "parts": 2, "exprs": 1 },
-        { "type": "propertyBinding", "target": 2, "to": "class", "mode": "toView" }
+        { "type": "propertyBinding", "target": 1, "to": "class", "mode": "toView" },
+        { "type": "textBinding", "target": 2, "parts": 2, "exprs": 1 }
       ],
       "nested": []
     }

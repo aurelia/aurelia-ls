@@ -139,15 +139,15 @@
           "name": "portal_4",
           "instructions": [
             {
-              "kind": "text",
-              "target": 0,
-              "text": "\n        ${notification.message}\n      "
-            },
-            {
               "kind": "interpolation",
-              "target": 1,
+              "target": 0,
               "attribute": "class",
               "text": "notification ${notification.type}"
+            },
+            {
+              "kind": "text",
+              "target": 1,
+              "text": "\n        ${notification.message}\n      "
             }
           ]
         }

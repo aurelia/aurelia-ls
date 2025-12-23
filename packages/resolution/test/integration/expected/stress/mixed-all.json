@@ -275,16 +275,16 @@
                       "name": "repeat_10",
                       "instructions": [
                         {
-                          "kind": "text",
-                          "target": 0,
-                          "text": "\n            ${cell.value}\n          "
-                        },
-                        {
                           "kind": "bind",
-                          "target": 1,
+                          "target": 0,
                           "property": "class",
                           "expr": "cell.class",
                           "mode": "toView"
+                        },
+                        {
+                          "kind": "text",
+                          "target": 1,
+                          "text": "\n            ${cell.value}\n          "
                         }
                       ]
                     }
@@ -456,16 +456,16 @@
               "name": "repeat_20",
               "instructions": [
                 {
-                  "kind": "text",
-                  "target": 0,
-                  "text": "${option.label}"
-                },
-                {
                   "kind": "event",
-                  "target": 1,
+                  "target": 0,
                   "event": "click",
                   "handler": "selectOption(option)",
                   "capture": false
+                },
+                {
+                  "kind": "text",
+                  "target": 1,
+                  "text": "${option.label}"
                 }
               ]
             }
@@ -487,16 +487,22 @@
       "name": "repeat_22",
       "instructions": [
         {
-          "kind": "text",
+          "kind": "attribute",
           "target": 0,
-          "text": "${link.text}"
+          "name": "href",
+          "alias": null,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "link.url",
+              "mode": "toView"
+            }
+          ]
         },
         {
-          "kind": "bind",
+          "kind": "text",
           "target": 1,
-          "property": "href",
-          "expr": "link.url",
-          "mode": "toView"
+          "text": "${link.text}"
         }
       ]
     }

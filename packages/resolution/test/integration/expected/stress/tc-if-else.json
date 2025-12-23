@@ -201,16 +201,16 @@
       "name": "if_6",
       "instructions": [
         {
-          "kind": "text",
-          "target": 0,
-          "text": "${value}"
-        },
-        {
           "kind": "bind",
-          "target": 1,
+          "target": 0,
           "property": "class",
           "expr": "valueClass",
           "mode": "toView"
+        },
+        {
+          "kind": "text",
+          "target": 1,
+          "text": "${value}"
         }
       ]
     },

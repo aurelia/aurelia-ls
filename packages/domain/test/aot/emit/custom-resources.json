@@ -99,8 +99,8 @@
       "targetCount": 2,
       "exprCount": 2,
       "instructions": [
-        { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 },
-        { "type": "hydrateElement", "target": 1, "resource": "my-card", "propCount": 1, "containerless": false }
+        { "type": "hydrateElement", "target": 0, "resource": "my-card", "propCount": 1, "containerless": false },
+        { "type": "textBinding", "target": 1, "parts": 2, "exprs": 1 }
       ],
       "nested": []
     }

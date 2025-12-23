@@ -473,16 +473,7 @@ function transformElement(
     }
   }
 
-  // Transform children - but NOT if the element has controllers.
-  // When an element has template controllers, its children are part of the
-  // nested template (ins.def) and will be processed via transformNestedTemplate.
-  // Processing them here would cause duplication.
-  const children = controllers.length > 0
-    ? []
-    : node.children.map(child =>
-        transformNode(child, instructionsByTarget, currentFrame, ctx)
-      );
-
+  // Build the result node
   const result: PlanElementNode = {
     kind: "element",
     nodeId: node.id,
@@ -491,7 +482,7 @@ function transformElement(
     bindings,
     customAttrs,
     controllers,
-    children,
+    children: [], // filled below
   };
 
   // When element has template controllers, the element itself does NOT get a target
@@ -511,9 +502,22 @@ function transformElement(
     if (letElement) {
       result.letElement = letElement;
     }
+    // IMPORTANT: Allocate element's targetIndex BEFORE processing children.
+    // This ensures targetIndex values match document order (element before its children),
+    // which matches the marker order in emit-template.ts.
     if (needsTarget) {
       result.targetIndex = ctx.allocateTarget();
     }
+  }
+
+  // Transform children - but NOT if the element has controllers.
+  // When an element has template controllers, its children are part of the
+  // nested template (ins.def) and will be processed via transformNestedTemplate.
+  // Processing them here would cause duplication.
+  if (controllers.length === 0) {
+    result.children = node.children.map(child =>
+      transformNode(child, instructionsByTarget, currentFrame, ctx)
+    );
   }
 
   if (node.selfClosed) {

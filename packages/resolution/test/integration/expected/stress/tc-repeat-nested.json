@@ -176,23 +176,23 @@
       "name": "repeat_7",
       "instructions": [
         {
-          "kind": "text",
-          "target": 0,
-          "text": "\n    ${item.name}\n  "
-        },
-        {
           "kind": "bind",
-          "target": 1,
+          "target": 0,
           "property": "class",
           "expr": "item.class",
           "mode": "toView"
         },
         {
           "kind": "bind",
-          "target": 1,
+          "target": 0,
           "property": "dataId",
           "expr": "item.id",
           "mode": "toView"
+        },
+        {
+          "kind": "text",
+          "target": 1,
+          "text": "\n    ${item.name}\n  "
         }
       ]
     },
