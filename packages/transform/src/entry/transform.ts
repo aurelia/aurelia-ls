@@ -105,7 +105,13 @@ export function transformEntryPoint(
   }
 
   // Sort edits by position (descending) to apply from end to start
-  edits.sort((a, b) => b.span.start - a.span.start);
+  // For edits at same start, process larger ranges (replacements) before smaller (insertions)
+  edits.sort((a, b) => {
+    if (b.span.start !== a.span.start) {
+      return b.span.start - a.span.start;
+    }
+    return b.span.end - a.span.end;
+  });
 
   // Apply edits
   let transformed = source;

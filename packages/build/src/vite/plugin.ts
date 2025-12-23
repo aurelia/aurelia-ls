@@ -26,13 +26,19 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/domain";
-import { transform, type ResourceDefinition } from "@aurelia-ls/transform";
+import { normalizePathForId } from "@aurelia-ls/domain";
+import {
+  transform,
+  transformEntryPoint,
+  analyzeEntryPoint,
+  type ResourceDefinition,
+} from "@aurelia-ls/transform";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext } from "./resolution.js";
 import { componentCache } from "./loader.js";
 import { compileWithAot } from "../aot.js";
 import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
+import type { TemplateInfo } from "@aurelia-ls/resolution";
 
 /**
  * Default HTML shell for SSR output.
@@ -62,6 +68,139 @@ const DEFAULT_EXCLUDE = [
   "/__vite_ping",
   "/node_modules/**",
 ];
+
+/**
+ * Transform a component file to inject $au definition.
+ */
+function transformComponent(
+  code: string,
+  id: string,
+  templateInfo: TemplateInfo,
+  resolutionContext: ResolutionContext,
+  config: ResolvedConfig,
+): { code: string; map: null } | null {
+  try {
+    // Read the template HTML
+    const templateHtml = readFileSync(templateInfo.templatePath, "utf-8");
+
+    // Compile with AOT
+    const aot = compileWithAot(templateHtml, {
+      templatePath: templateInfo.templatePath,
+      name: templateInfo.resourceName,
+      semantics: resolutionContext.semantics,
+      resourceGraph: resolutionContext.resourceGraph,
+      resourceScope: templateInfo.scopeId,
+    });
+
+    // Build resource definition for transform
+    // Convention is the most common form for external template components
+    const resource: ResourceDefinition = {
+      kind: "custom-element",
+      name: templateInfo.resourceName,
+      className: templateInfo.className,
+      bindables: [], // TODO: Get bindables from resolution
+      declarationForm: "convention",
+    };
+
+    // Transform the source to inject $au
+    const result = transform({
+      source: code,
+      filePath: id,
+      aot: aot.raw.codeResult,
+      resource,
+      template: aot.template,
+      nestedHtmlTree: aot.raw.nestedHtmlTree,
+      removeDecorators: true,
+      includeComments: true,
+    });
+
+    config.logger.info(
+      `[aurelia-ssr] Transformed: ${templateInfo.className} (${result.meta.expressionCount} expressions, ${result.meta.instructionRowCount} targets)`,
+    );
+
+    // Log any warnings
+    for (const warning of result.warnings) {
+      config.logger.warn(
+        `[aurelia-ssr] ${warning.message}`,
+      );
+    }
+
+    return {
+      code: result.code,
+      // TODO: Add source map support when transform package implements it
+      map: null,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    config.logger.error(
+      `[aurelia-ssr] Transform failed for ${templateInfo.className}: ${errorMessage}`,
+    );
+    // Return original code on error to allow fallback to runtime behavior
+    return null;
+  }
+}
+
+/**
+ * Transform an entry point file to use AotConfiguration for tree-shaking.
+ */
+function transformEntryPointIfNeeded(
+  code: string,
+  id: string,
+  config: ResolvedConfig,
+): { code: string; map: null } | null {
+  // Quick check: does this file contain Aurelia imports?
+  if (!code.includes("aurelia") && !code.includes("@aurelia/")) {
+    return null;
+  }
+
+  try {
+    // Analyze the entry point
+    const analysis = analyzeEntryPoint(code);
+
+    // Only transform if StandardConfiguration is detected
+    if (!analysis.hasStandardConfiguration) {
+      return null;
+    }
+
+    // Transform the entry point
+    const result = transformEntryPoint({
+      source: code,
+      filePath: id,
+    });
+
+    if (result.transformed) {
+      config.logger.info(
+        `[aurelia-ssr] Entry point transformed: ${id} (${analysis.preservedRegistrations.length} registrations preserved)`,
+      );
+
+      // Log any warnings
+      for (const warning of result.warnings) {
+        config.logger.warn(
+          `[aurelia-ssr] ${warning}`,
+        );
+      }
+
+      return {
+        code: result.code,
+        map: null,
+      };
+    }
+
+    if (result.skipReason) {
+      config.logger.info(
+        `[aurelia-ssr] Entry point not transformed: ${result.skipReason}`,
+      );
+    }
+
+    return null;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    config.logger.error(
+      `[aurelia-ssr] Entry point transform failed for ${id}: ${errorMessage}`,
+    );
+    return null;
+  }
+}
 
 /**
  * Create the Aurelia SSR Vite plugin.
@@ -146,6 +285,9 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
      * 2. Compiles the template with the AOT compiler
      * 3. Transforms the source to inject the static $au definition
      *
+     * It also handles entry point files (main.ts) to replace StandardConfiguration
+     * with AotConfiguration for tree-shaking.
+     *
      * This replaces the previous runtime patching approach - components
      * now have their $au definitions compiled directly into the source.
      */
@@ -179,70 +321,18 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         (t) => t.componentPath === normalizedPath,
       );
 
-      // Not an Aurelia component with external template
-      if (!templateInfo) {
-        return null;
+      // If this is an Aurelia component with external template, transform it
+      if (templateInfo) {
+        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig);
       }
 
-      try {
-        // Read the template HTML
-        const templateHtml = readFileSync(templateInfo.templatePath, "utf-8");
-
-        // Compile with AOT
-        const aot = compileWithAot(templateHtml, {
-          templatePath: templateInfo.templatePath,
-          name: templateInfo.resourceName,
-          semantics: resolutionContext.semantics,
-          resourceGraph: resolutionContext.resourceGraph,
-          resourceScope: templateInfo.scopeId,
-        });
-
-        // Build resource definition for transform
-        // Convention is the most common form for external template components
-        const resource: ResourceDefinition = {
-          kind: "custom-element",
-          name: templateInfo.resourceName,
-          className: templateInfo.className,
-          bindables: [], // TODO: Get bindables from resolution
-          declarationForm: "convention",
-        };
-
-        // Transform the source to inject $au
-        const result = transform({
-          source: code,
-          filePath: id,
-          aot: aot.raw.codeResult,
-          resource,
-          template: aot.template,
-          nestedHtmlTree: aot.raw.nestedHtmlTree,
-          removeDecorators: true,
-          includeComments: true,
-        });
-
-        resolvedConfig.logger.info(
-          `[aurelia-ssr] Transformed: ${templateInfo.className} (${result.meta.expressionCount} expressions, ${result.meta.instructionRowCount} targets)`,
-        );
-
-        // Log any warnings
-        for (const warning of result.warnings) {
-          resolvedConfig.logger.warn(
-            `[aurelia-ssr] ${warning.message}`,
-          );
-        }
-
-        return {
-          code: result.code,
-          // TODO: Add source map support when transform package implements it
-          map: null,
-        };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        resolvedConfig.logger.error(
-          `[aurelia-ssr] Transform failed for ${templateInfo.className}: ${errorMessage}`,
-        );
-        // Return original code on error to allow fallback to runtime behavior
-        return null;
+      // Check if this is an entry point file (contains Aurelia initialization)
+      // Only transform entry points in production builds for tree-shaking
+      if (resolvedConfig.command === "build") {
+        return transformEntryPointIfNeeded(code, id, resolvedConfig);
       }
+
+      return null;
     },
 
     /**
