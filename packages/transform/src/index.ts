@@ -120,3 +120,33 @@ export type {
   InjectResult,
   ImportCleanupResult,
 } from "./ts/index.js";
+
+// Entry point transformation (for AOT builds)
+export {
+  analyzeEntryPoint,
+  shouldTransformEntryPoint,
+  buildAotConfiguration,
+  generateImportStatements,
+  generateInitialization,
+  generateEntryPointCode,
+  transformEntryPoint,
+  transformSimpleEntryPoint,
+  KNOWN_CONFIGURATIONS,
+  isKnownConfiguration,
+} from "./entry/index.js";
+export type {
+  EntryPointAnalysis,
+  ConfigLocation,
+  PreservedRegistration,
+  ImportAnalysis,
+  AureliaImport,
+  ImportSpecifier,
+  InitChain,
+  ChainMethod,
+  ConfigBuildOptions,
+  ConfigBuildResult,
+  RequiredImport,
+  EntryTransformOptions,
+  EntryTransformResult,
+  KnownConfiguration,
+} from "./entry/index.js";
