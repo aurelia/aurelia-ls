@@ -9,7 +9,7 @@ import type { ResourceDefinition } from "../model/types.js";
 import { emitStaticAu } from "../emit/index.js";
 import { findClassByName, detectDeclarationForm } from "../ts/analyze.js";
 import { applyEdits, validateEdits } from "../ts/edit.js";
-import { generateInjectionEdits } from "../ts/inject.js";
+import { generateInjectionEdits, generateImportCleanupEdits } from "../ts/inject.js";
 import { extractDependencies, extractBindables } from "../ts/extract.js";
 import type {
   TransformOptions,
@@ -103,6 +103,7 @@ export function transform(options: TransformOptions): TransformResult {
     artifactCode: emitResult.combined,
     definitionVar: emitResult.definitionVar,
     removeDecorator: removeDecorators,
+    removeBindableDecorators: removeDecorators,
   });
 
   // Add injection warnings
@@ -114,8 +115,52 @@ export function transform(options: TransformOptions): TransformResult {
     });
   }
 
+  // Build list of import specifiers to remove based on what decorators were removed
+  const unusedImports: string[] = [];
+
+  // Check if a class decorator was removed (e.g., @customElement)
+  const removedDecoratorWarning = injectionResult.warnings.find(w =>
+    w.includes("Removed @") && w.includes("decorator")
+  );
+  if (removedDecoratorWarning) {
+    // Extract decorator name from warning message
+    const match = removedDecoratorWarning.match(/Removed @(\w+)/);
+    if (match?.[1]) {
+      unusedImports.push(match[1]);
+    }
+  }
+
+  // Check if @bindable decorators were removed
+  const bindableRemovalWarning = injectionResult.warnings.find(w =>
+    w.includes("@bindable decorator")
+  );
+  if (bindableRemovalWarning) {
+    unusedImports.push("bindable");
+
+    // If any bindables used BindingMode, that import is also now unused
+    const usedBindingMode = bindables.some(b => b.mode !== undefined);
+    if (usedBindingMode) {
+      unusedImports.push("BindingMode");
+    }
+  }
+
+  // Generate import cleanup edits
+  const importCleanupResult = generateImportCleanupEdits(source, unusedImports);
+
+  // Combine all edits
+  const allEdits = [...injectionResult.edits, ...importCleanupResult.edits];
+
+  // Add import cleanup warnings
+  if (importCleanupResult.removedSpecifiers.length > 0) {
+    warnings.push({
+      code: "TRANSFORM_INFO",
+      message: `Removed unused imports: ${importCleanupResult.removedSpecifiers.join(", ")}`,
+      file: filePath,
+    });
+  }
+
   // Validate edits don't conflict
-  if (!validateEdits(injectionResult.edits)) {
+  if (!validateEdits(allEdits)) {
     throw new TransformError(
       "Generated edits have overlapping spans",
       TransformErrorCode.EDIT_CONFLICT,
@@ -124,7 +169,7 @@ export function transform(options: TransformOptions): TransformResult {
   }
 
   // Apply edits to source
-  const transformedCode = applyEdits(source, injectionResult.edits);
+  const transformedCode = applyEdits(source, allEdits);
 
   // Build metadata
   const meta: TransformMeta = {
@@ -142,7 +187,7 @@ export function transform(options: TransformOptions): TransformResult {
   // Build result
   const result: TransformResult = {
     code: transformedCode,
-    edits: injectionResult.edits,
+    edits: allEdits,
     warnings,
     meta,
   };

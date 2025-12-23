@@ -113,8 +113,10 @@ export {
   analyzeInjectionPoint,
   findRemovableDecorators,
   needsTransformation,
+  generateImportCleanupEdits,
 } from "./ts/index.js";
 export type {
   InjectOptions,
   InjectResult,
+  ImportCleanupResult,
 } from "./ts/index.js";

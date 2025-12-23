@@ -307,3 +307,160 @@ function extendSpanTrailingOnly(source: string, span: Span): Span {
 
   return { start: span.start, end };
 }
+
+/* =============================================================================
+ * IMPORT CLEANUP
+ * ============================================================================= */
+
+export interface ImportCleanupResult {
+  /** Edits to remove unused import specifiers */
+  edits: TypedSourceEdit[];
+
+  /** Import specifiers that were removed */
+  removedSpecifiers: string[];
+}
+
+/**
+ * Generate edits to remove import specifiers that become unused after transformation.
+ *
+ * @param source - The source code
+ * @param unusedSpecifiers - Names of specifiers to remove (e.g., ["bindable", "customElement"])
+ */
+export function generateImportCleanupEdits(
+  source: string,
+  unusedSpecifiers: string[]
+): ImportCleanupResult {
+  if (unusedSpecifiers.length === 0) {
+    return { edits: [], removedSpecifiers: [] };
+  }
+
+  const edits: TypedSourceEdit[] = [];
+  const removedSpecifiers: string[] = [];
+
+  const sourceFile = ts.createSourceFile(
+    "source.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+
+  // Process all import declarations
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+
+    // Only process imports from aurelia packages
+    const moduleSpecifier = statement.moduleSpecifier;
+    if (!ts.isStringLiteral(moduleSpecifier)) continue;
+
+    const moduleName = moduleSpecifier.text;
+    if (!moduleName.startsWith("aurelia") && !moduleName.startsWith("@aurelia/")) {
+      continue;
+    }
+
+    const importClause = statement.importClause;
+    if (!importClause) continue;
+
+    const namedBindings = importClause.namedBindings;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+
+    // Find specifiers to remove from this import
+    const specifiersToRemove: ts.ImportSpecifier[] = [];
+    const specifiersToKeep: ts.ImportSpecifier[] = [];
+
+    for (const specifier of namedBindings.elements) {
+      const name = specifier.name.text;
+      if (unusedSpecifiers.includes(name)) {
+        specifiersToRemove.push(specifier);
+        removedSpecifiers.push(name);
+      } else {
+        specifiersToKeep.push(specifier);
+      }
+    }
+
+    if (specifiersToRemove.length === 0) continue;
+
+    if (specifiersToKeep.length === 0) {
+      // Remove entire import declaration
+      const importSpan = extendImportSpan(source, {
+        start: statement.getStart(sourceFile),
+        end: statement.getEnd(),
+      });
+      edits.push(del(importSpan));
+    } else {
+      // Remove specific specifiers
+      for (const specifier of specifiersToRemove) {
+        const specifierSpan = getImportSpecifierSpan(
+          source,
+          sourceFile,
+          specifier,
+          namedBindings.elements
+        );
+        edits.push(del(specifierSpan));
+      }
+    }
+  }
+
+  return { edits, removedSpecifiers };
+}
+
+/**
+ * Extend import span to include the full line (including newline).
+ */
+function extendImportSpan(source: string, span: Span): Span {
+  let end = span.end;
+
+  // Extend to include trailing whitespace and newline
+  while (end < source.length && (source[end] === " " || source[end] === "\t")) {
+    end++;
+  }
+  if (end < source.length && source[end] === "\n") {
+    end++;
+  }
+
+  return { start: span.start, end };
+}
+
+/**
+ * Get the span for an import specifier, including comma handling.
+ */
+function getImportSpecifierSpan(
+  source: string,
+  sourceFile: ts.SourceFile,
+  specifier: ts.ImportSpecifier,
+  allElements: ts.NodeArray<ts.ImportSpecifier>
+): Span {
+  const specifierIndex = allElements.indexOf(specifier);
+  const isLast = specifierIndex === allElements.length - 1;
+  const isFirst = specifierIndex === 0;
+
+  let start = specifier.getStart(sourceFile);
+  let end = specifier.getEnd();
+
+  if (isLast && !isFirst) {
+    // Last specifier (but not only): remove preceding comma and whitespace
+    // Find the comma before this specifier
+    let commaPos = start - 1;
+    while (commaPos >= 0 && (source[commaPos] === " " || source[commaPos] === "\t" || source[commaPos] === "\n")) {
+      commaPos--;
+    }
+    if (commaPos >= 0 && source[commaPos] === ",") {
+      start = commaPos;
+    }
+  } else if (!isLast) {
+    // Not the last specifier: remove trailing comma and whitespace
+    let commaPos = end;
+    while (commaPos < source.length && (source[commaPos] === " " || source[commaPos] === "\t")) {
+      commaPos++;
+    }
+    if (commaPos < source.length && source[commaPos] === ",") {
+      end = commaPos + 1;
+      // Also skip whitespace after comma
+      while (end < source.length && (source[end] === " " || source[end] === "\t")) {
+        end++;
+      }
+    }
+  }
+
+  return { start, end };
+}
