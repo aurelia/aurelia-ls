@@ -4,12 +4,12 @@
  * Consumes: AotPlanModule (from plan stage)
  * Produces: HTML string with hydration markers matching Aurelia's format
  *
- * Marker formats (matching Aurelia runtime expectations):
- * - Element targets: au-hid="N" attribute
- * - Non-element targets: <!--au:N--> comment
- * - Template controllers: <!--au:N--><!--au-start--><!--au-end--> structure
+ * Marker format (matching Aurelia runtime expectations):
+ * - All targets: <au-m></au-m> element placed BEFORE the target node
+ * - Template controllers: <au-m></au-m><!--au-start--><!--au-end--> structure
+ * - Indexing is implicit via document order (markers[i] = instructions[i])
  *
- * The runtime's _collectTargets() in dom.ts expects these exact formats.
+ * The runtime's _collectTargets() uses querySelectorAll('au-m').
  * ============================================================================= */
 
 import type {
@@ -291,7 +291,7 @@ function emitNode(node: PlanNode, ctx: TemplateEmitContext): string {
  * Emit an element node.
  *
  * If the element has template controllers, they wrap the element with markers.
- * Otherwise, emit the element directly with au-hid if it has bindings.
+ * Otherwise, emit the element directly (with <au-m> marker if it has bindings).
  */
 function emitElement(node: PlanElementNode, ctx: TemplateEmitContext): string {
   // If element has template controllers, emit them (outermost first)
@@ -337,7 +337,7 @@ function emitElementWithControllers(
  * Emit the content inside a controller (the element and its children).
  */
 function emitElementContent(node: PlanElementNode, ctx: TemplateEmitContext): string {
-  // Emit the element itself (may have au-hid if it has bindings)
+  // Emit the element itself
   const tag = node.tag;
   const attrs = buildAttributes(node, ctx);
 
@@ -354,31 +354,34 @@ function emitElementContent(node: PlanElementNode, ctx: TemplateEmitContext): st
 
 /**
  * Emit a standard element (no template controllers).
+ * If the element is a binding target, emit <au-m></au-m> before it.
  */
 function emitStandardElement(node: PlanElementNode, ctx: TemplateEmitContext): string {
   const tag = node.tag;
   const attrs = buildAttributes(node, ctx);
   const children = node.children.map(child => emitNode(child, ctx)).join("");
 
-  // Self-closing elements (void elements)
+  // Build the element HTML
+  let elementHtml: string;
   if (isVoidElement(tag)) {
-    return `<${tag}${attrs}>`;
+    elementHtml = `<${tag}${attrs}>`;
+  } else {
+    elementHtml = `<${tag}${attrs}>${children}</${tag}>`;
   }
 
-  return `<${tag}${attrs}>${children}</${tag}>`;
+  // If this element is a target, prepend marker
+  if (node.targetIndex !== undefined) {
+    return `<au-m></au-m>${elementHtml}`;
+  }
+
+  return elementHtml;
 }
 
 /**
  * Build attribute string for an element.
- * Includes au-hid if element has a target index.
  */
 function buildAttributes(node: PlanElementNode, _ctx: TemplateEmitContext): string {
   const parts: string[] = [];
-
-  // Add au-hid if this is a target (uses LOCAL index from plan)
-  if (node.targetIndex !== undefined) {
-    parts.push(`au-hid="${node.targetIndex}"`);
-  }
 
   // Add static attributes
   for (const attr of node.staticAttrs) {
@@ -403,16 +406,14 @@ function emitAttribute(attr: PlanStaticAttr): string {
 /**
  * Emit a template controller wrapper.
  *
- * Format: <!--au:N--><!--au-start-->...content...<!--au-end-->
+ * Format: <au-m></au-m><!--au-start-->...content...<!--au-end-->
  */
 function emitControllerWrapper(
   ctrl: PlanController,
   content: string,
   _ctx: TemplateEmitContext,
 ): string {
-  // Uses LOCAL index from plan
-  const targetIndex = ctrl.targetIndex ?? 0;
-  return `<!--au:${targetIndex}--><!--au-start-->${content}<!--au-end-->`;
+  return `<au-m></au-m><!--au-start-->${content}<!--au-end-->`;
 }
 
 /**
@@ -431,13 +432,10 @@ function emitText(node: PlanTextNode, _ctx: TemplateEmitContext): string {
     return escapeHtml(node.content ?? "");
   }
 
-  // Text interpolation - emit only the marker followed by a space
+  // Text interpolation - emit marker followed by a space (the text node target)
   // The runtime will evaluate the full interpolation (parts + expressions)
-  // and replace the marker + text node with the result.
-  // The space is required because the runtime expects a nextSibling text node.
-  // Uses LOCAL index from plan
-  const targetIndex = node.targetIndex ?? 0;
-  return `<!--au:${targetIndex}--> `;
+  // and replace the marker's nextSibling text node with the result.
+  return `<au-m></au-m> `;
 }
 
 /**

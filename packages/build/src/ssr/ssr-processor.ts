@@ -16,7 +16,7 @@
  */
 export interface SSRProcessOptions {
   /**
-   * Strip `au-hid` attributes from the output HTML.
+   * Strip `<au-m>` marker elements from the output HTML.
    * Default: false
    */
   stripMarkers?: boolean;
@@ -45,7 +45,7 @@ export interface SSRProcessResult {
  * ```typescript
  * // After Aurelia renders...
  * const result = processSSROutput(host, { stripMarkers: true });
- * // result.html is clean (no au-hid attributes)
+ * // result.html is clean (no <au-m> markers)
  * ```
  */
 export function processSSROutput(
@@ -55,7 +55,7 @@ export function processSSROutput(
   const { stripMarkers = false } = options;
 
   if (stripMarkers) {
-    stripAuHidAttributes(host);
+    stripAuMarkers(host);
   }
 
   return { html: host.innerHTML };
@@ -68,14 +68,14 @@ export function processSSROutput(
  * ============================================================================= */
 
 /**
- * Remove all `au-hid` attributes from elements within root.
+ * Remove all `<au-m>` marker elements from within root.
  *
  * @param root - The root element to process
  */
-export function stripAuHidAttributes(root: Element): void {
-  const auHidElements = root.querySelectorAll("[au-hid]");
-  for (const el of auHidElements) {
-    el.removeAttribute("au-hid");
+export function stripAuMarkers(root: Element): void {
+  const markers = root.querySelectorAll("au-m");
+  for (const el of markers) {
+    el.remove();
   }
 }
 

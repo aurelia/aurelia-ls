@@ -48,10 +48,8 @@ describe("AOT Compilation", () => {
       name: "test-comp",
     });
 
-    // Text interpolation uses comment markers <!--au:N--> not au-hid attribute
-    // Verify template has some form of marker
-    const hasMarker = result.template.includes("au-hid=") || result.template.includes("<!--au:");
-    assert.ok(hasMarker, "Should have hydration marker (au-hid or <!--au:-->)");
+    // All targets use <au-m></au-m> marker elements
+    assert.ok(result.template.includes("<au-m></au-m>"), "Should have <au-m> hydration marker");
 
     // Verify instructions were generated
     assert.ok(result.instructions.length > 0, "Should have instructions");
@@ -65,7 +63,7 @@ describe("AOT Compilation", () => {
       name: "test-comp",
     });
 
-    assert.ok(result.template.includes("au-hid="), "Should have hydration marker on input");
+    assert.ok(result.template.includes("<au-m></au-m>"), "Should have <au-m> hydration marker");
     assert.ok(result.instructions.length > 0, "Should have binding instructions");
   });
 

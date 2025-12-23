@@ -66,8 +66,8 @@ export interface AureliaSSRPluginOptions {
   state?: StateProvider;
 
   /**
-   * Strip `au-hid` hydration markers from output.
-   * When true, produces clean HTML without Aurelia-specific attributes.
+   * Strip `<au-m>` hydration markers from output.
+   * When true, produces clean HTML without Aurelia-specific elements.
    *
    * @default false
    */

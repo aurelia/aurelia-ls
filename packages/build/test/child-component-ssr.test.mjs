@@ -442,16 +442,13 @@ describe("Diagnostic: AUR0757 Target Count Mismatch", () => {
     console.log("Target count:", childAot.targetCount);
     console.log("Full instructions:", JSON.stringify(childAot.instructions, null, 2));
 
-    // Count markers in template
-    const auHidMatches = childAot.template.match(/au-hid="(\d+)"/g) ?? [];
-    const auCommentMatches = childAot.template.match(/<!--au:(\d+)-->/g) ?? [];
+    // Count markers in template (all targets use <au-m></au-m>)
+    const auMarkerMatches = childAot.template.match(/<au-m><\/au-m>/g) ?? [];
     console.log("\nMarkers in template:");
-    console.log("  au-hid attributes:", auHidMatches);
-    console.log("  <!--au:N--> comments:", auCommentMatches);
-    console.log("  Total markers:", auHidMatches.length + auCommentMatches.length);
+    console.log("  <au-m> markers:", auMarkerMatches.length);
 
     // Check the critical condition that causes AUR0757
-    const markersCount = auHidMatches.length + auCommentMatches.length;
+    const markersCount = auMarkerMatches.length;
     const instructionsLength = childAot.instructions.length;
 
     console.log("\n--- CRITICAL CHECK ---");

@@ -142,9 +142,13 @@ function buildTCEntry(ctrl: ICustomAttributeController): ISSRTemplateController 
     }
 
     case "switch": {
-      const _vm = ctrl.viewModel as Switch;
-      // TODO: implement switch/case manifest recording
-      return { type, views: [] };
+      const vm = ctrl.viewModel as Switch;
+      const activeCases = (vm as unknown as { activeCases: { view?: ISyntheticView }[] }).activeCases;
+      const views: ISSRScope[] = [];
+      for (const c of activeCases) {
+        if (c.view) views.push(buildViewScope(c.view));
+      }
+      return { type, views };
     }
 
     case "promise": {

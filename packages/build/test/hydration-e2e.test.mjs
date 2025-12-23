@@ -886,8 +886,8 @@ describe("Diagnostic: Trace Hydration Process", () => {
     console.log("Manifest:", JSON.stringify(ssrResult.manifest, null, 2));
 
     // Count markers
-    const markerMatches = ssrResult.html.match(/<!--au:\d+-->/g) || [];
-    console.log("Markers in HTML:", markerMatches);
+    const markerMatches = ssrResult.html.match(/<au-m><\/au-m>/g) || [];
+    console.log("Markers in HTML:", markerMatches.length);
 
     // Step 3
     console.log("\n--- STEP 3: PRE-HYDRATION DOM ---");

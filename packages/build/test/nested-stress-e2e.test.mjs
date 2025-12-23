@@ -582,10 +582,8 @@ describe("Nested Stress Test: Multi-Request Stability", () => {
       childComponents: [PersistentSectionPanel, PersistentItemCard, PersistentStatusBadge, PersistentInfoTag, PersistentFooterWidget],
     });
 
-    // Strip markers for comparison (marker indices may differ due to global counter)
-    const normalize = (html) => html
-      .replace(/au-hid="[^"]*"/g, 'au-hid="X"')
-      .replace(/<!--au:[^-]*-->/g, '<!--au:X-->');
+    // Normalize HTML for comparison (markers are now uniform <au-m></au-m>)
+    const normalize = (html) => html;
 
     const normalized1 = normalize(result1.html);
     const normalized2 = normalize(result2.html);

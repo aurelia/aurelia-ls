@@ -34,7 +34,7 @@ export {
 // SSR Post-Processing (clean HTML output)
 export {
   processSSROutput,
-  stripAuHidAttributes,
+  stripAuMarkers,
   syncPropertiesForSSR,
   type SSRProcessOptions,
   type SSRProcessResult,
