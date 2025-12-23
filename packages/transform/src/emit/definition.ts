@@ -59,6 +59,17 @@ export interface DefinitionEmitOptions {
    */
   dependencies?: string[];
 
+  /**
+   * Bindables to include in the definition.
+   * Each bindable has a name and optional mode, primary, attribute.
+   */
+  bindables?: Array<{
+    name: string;
+    mode?: number;
+    primary?: boolean;
+    attribute?: string;
+  }>;
+
   /** Indentation string */
   indent?: string;
 }
@@ -89,7 +100,7 @@ export function emitDefinition(
   definition: SerializedDefinition,
   options: DefinitionEmitOptions
 ): DefinitionEmitResult {
-  const { prefix, template, type, expressions, nestedHtmlTree = [], dependencies = [], indent = "  " } = options;
+  const { prefix, template, type, expressions, nestedHtmlTree = [], dependencies = [], bindables = [], indent = "  " } = options;
 
   const exprIndexMap = buildExpressionIndexMap(expressions);
   const nestedDefinitions: string[] = [];
@@ -116,7 +127,8 @@ export function emitDefinition(
     exprIndexMap,
     indent,
     defVarMap,
-    dependencies
+    dependencies,
+    bindables
   );
 
   return { nestedDefinitions, mainDefinition };
@@ -237,7 +249,8 @@ function emitMainDefinition(
   exprIndexMap: Map<ExprId, number>,
   indent: string,
   defVarMap: Map<SerializedDefinition, string>,
-  dependencies: string[]
+  dependencies: string[],
+  bindables: DefinitionEmitOptions["bindables"]
 ): string {
   const lines: string[] = [];
   lines.push(`const ${prefix}_$au = {`);
@@ -260,10 +273,51 @@ function emitMainDefinition(
     lines.push(`${indent}dependencies: [${dependencies.join(", ")}],`);
   }
 
+  // Emit bindables if present
+  if (bindables && bindables.length > 0) {
+    const bindablesStr = emitBindables(bindables, indent);
+    lines.push(`${indent}bindables: ${bindablesStr},`);
+  }
+
   lines.push(`${indent}needsCompile: false,`);
   lines.push("};");
 
   return lines.join("\n");
+}
+
+/**
+ * Emit bindables object.
+ * Format: { propName: { mode: 2 }, ... }
+ */
+function emitBindables(
+  bindables: NonNullable<DefinitionEmitOptions["bindables"]>,
+  indent: string
+): string {
+  const entries: string[] = [];
+
+  for (const b of bindables) {
+    const props: string[] = [];
+
+    // Only emit non-default values
+    if (b.mode !== undefined) {
+      props.push(`mode: ${b.mode}`);
+    }
+    if (b.primary === true) {
+      props.push(`primary: true`);
+    }
+    if (b.attribute !== undefined) {
+      props.push(`attribute: "${escapeString(b.attribute)}"`);
+    }
+
+    if (props.length > 0) {
+      entries.push(`${b.name}: { ${props.join(", ")} }`);
+    } else {
+      // Simple form: just the name with empty object
+      entries.push(`${b.name}: {}`);
+    }
+  }
+
+  return `{ ${entries.join(", ")} }`;
 }
 
 /* =============================================================================

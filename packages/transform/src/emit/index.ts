@@ -40,6 +40,16 @@ export interface EmitStaticAuOptions {
    */
   dependencies?: string[];
 
+  /**
+   * Bindables to include in the definition.
+   */
+  bindables?: Array<{
+    name: string;
+    mode?: number;
+    primary?: boolean;
+    attribute?: string;
+  }>;
+
   /** Indentation string */
   indent?: string;
 
@@ -91,7 +101,7 @@ export function emitStaticAu(
   aot: AotCodeResult,
   options: EmitStaticAuOptions
 ): EmitStaticAuResult {
-  const { name, className, type, template, nestedHtmlTree = [], dependencies = [], indent = "  ", includeComments = true } = options;
+  const { name, className, type, template, nestedHtmlTree = [], dependencies = [], bindables = [], indent = "  ", includeComments = true } = options;
 
   // Generate identifier prefix from class name
   const prefix = toIdentifierPrefix(className);
@@ -112,6 +122,7 @@ export function emitStaticAu(
     expressions: aot.expressions,
     nestedHtmlTree,
     dependencies,
+    bindables,
     indent,
   });
 

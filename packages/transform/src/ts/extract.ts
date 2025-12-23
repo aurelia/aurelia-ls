@@ -56,6 +56,24 @@ export interface ExtractedDecoratorConfig {
   containerless?: boolean;
 }
 
+/**
+ * Extracted bindable definition.
+ * Maps to runtime BindableDefinition format.
+ */
+export interface ExtractedBindable {
+  /** Property name */
+  name: string;
+
+  /** Binding mode (default=0, oneTime=1, toView=2, fromView=4, twoWay=6) */
+  mode?: number;
+
+  /** Whether this is the primary bindable */
+  primary?: boolean;
+
+  /** Attribute name override (defaults to kebab-case of property name) */
+  attribute?: string;
+}
+
 /* =============================================================================
  * PUBLIC API
  * ============================================================================= */
@@ -124,6 +142,67 @@ export function extractDecoratorConfig(
   return null; // Placeholder
 }
 
+/**
+ * Binding mode values matching runtime BindingMode enum.
+ */
+const BINDING_MODE = {
+  default: 0,
+  oneTime: 1,
+  toView: 2,
+  fromView: 4,
+  twoWay: 6,
+} as const;
+
+/**
+ * Extract bindables from @bindable property decorators.
+ *
+ * Handles:
+ * - `@bindable prop` → { name: "prop" }
+ * - `@bindable({ mode: BindingMode.twoWay }) prop` → { name: "prop", mode: 6 }
+ * - `@bindable({ primary: true }) prop` → { name: "prop", primary: true }
+ *
+ * @param source - TypeScript source code
+ * @param classInfo - Class information from analyze.ts
+ * @returns Array of extracted bindable definitions
+ */
+export function extractBindables(
+  source: string,
+  classInfo: ClassInfo
+): ExtractedBindable[] {
+  const bindables: ExtractedBindable[] = [];
+
+  // Parse source to get the AST
+  const sourceFile = ts.createSourceFile(
+    "source.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+
+  // Find the class declaration
+  const classNode = findClassNode(sourceFile, classInfo.name);
+  if (!classNode) {
+    return [];
+  }
+
+  // Iterate through class members to find @bindable decorated properties
+  for (const member of classNode.members) {
+    if (!ts.isPropertyDeclaration(member)) continue;
+    if (!member.name || !ts.isIdentifier(member.name)) continue;
+
+    const propertyName = member.name.text;
+    const bindableDecorator = findBindableDecorator(member);
+
+    if (bindableDecorator) {
+      const bindable = extractBindableFromDecorator(propertyName, bindableDecorator, source);
+      bindables.push(bindable);
+    }
+  }
+
+  return bindables;
+}
+
 /* =============================================================================
  * INTERNAL HELPERS
  * ============================================================================= */
@@ -133,6 +212,143 @@ export function extractDecoratorConfig(
  */
 function findCustomElementDecorator(classInfo: ClassInfo): DecoratorInfo | null {
   return classInfo.decorators.find(d => d.name === "customElement") ?? null;
+}
+
+/**
+ * Find a class declaration by name in the source file.
+ */
+function findClassNode(sourceFile: ts.SourceFile, className: string): ts.ClassDeclaration | null {
+  let result: ts.ClassDeclaration | null = null;
+
+  function visit(node: ts.Node): void {
+    if (ts.isClassDeclaration(node) && node.name?.text === className) {
+      result = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  ts.forEachChild(sourceFile, visit);
+  return result;
+}
+
+/**
+ * Find @bindable decorator on a property declaration.
+ */
+function findBindableDecorator(member: ts.PropertyDeclaration): ts.Decorator | null {
+  if (!ts.canHaveDecorators(member)) {
+    return null;
+  }
+
+  const decorators = ts.getDecorators(member);
+  if (!decorators) {
+    return null;
+  }
+
+  for (const decorator of decorators) {
+    const expr = decorator.expression;
+
+    // @bindable (no call)
+    if (ts.isIdentifier(expr) && expr.text === "bindable") {
+      return decorator;
+    }
+
+    // @bindable() or @bindable({...})
+    if (ts.isCallExpression(expr)) {
+      const callee = expr.expression;
+      if (ts.isIdentifier(callee) && callee.text === "bindable") {
+        return decorator;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract bindable configuration from a @bindable decorator.
+ */
+function extractBindableFromDecorator(
+  propertyName: string,
+  decorator: ts.Decorator,
+  source: string
+): ExtractedBindable {
+  const bindable: ExtractedBindable = { name: propertyName };
+  const expr = decorator.expression;
+
+  // @bindable (no config)
+  if (ts.isIdentifier(expr)) {
+    return bindable;
+  }
+
+  // @bindable() or @bindable({...})
+  if (!ts.isCallExpression(expr) || expr.arguments.length === 0) {
+    return bindable;
+  }
+
+  const arg = expr.arguments[0];
+  if (!arg || !ts.isObjectLiteralExpression(arg)) {
+    return bindable;
+  }
+
+  // Extract configuration from object literal
+  for (const prop of arg.properties) {
+    if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) {
+      continue;
+    }
+
+    const propName = prop.name.text;
+    const value = prop.initializer;
+
+    switch (propName) {
+      case "mode":
+        bindable.mode = extractBindingModeValue(value);
+        break;
+      case "primary":
+        if (value.kind === ts.SyntaxKind.TrueKeyword) {
+          bindable.primary = true;
+        } else if (value.kind === ts.SyntaxKind.FalseKeyword) {
+          bindable.primary = false;
+        }
+        break;
+      case "attribute":
+        if (ts.isStringLiteral(value)) {
+          bindable.attribute = value.text;
+        }
+        break;
+    }
+  }
+
+  return bindable;
+}
+
+/**
+ * Extract numeric binding mode value from an expression.
+ * Handles: BindingMode.twoWay, twoWay (imported), 6 (numeric literal)
+ */
+function extractBindingModeValue(expr: ts.Expression): number | undefined {
+  // Numeric literal: 6
+  if (ts.isNumericLiteral(expr)) {
+    return parseInt(expr.text, 10);
+  }
+
+  // Property access: BindingMode.twoWay
+  if (ts.isPropertyAccessExpression(expr) && ts.isIdentifier(expr.name)) {
+    const modeName = expr.name.text as keyof typeof BINDING_MODE;
+    if (modeName in BINDING_MODE) {
+      return BINDING_MODE[modeName];
+    }
+  }
+
+  // Identifier: twoWay (imported directly)
+  if (ts.isIdentifier(expr)) {
+    const modeName = expr.text as keyof typeof BINDING_MODE;
+    if (modeName in BINDING_MODE) {
+      return BINDING_MODE[modeName];
+    }
+  }
+
+  return undefined;
 }
 
 /**

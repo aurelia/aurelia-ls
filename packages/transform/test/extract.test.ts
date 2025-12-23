@@ -15,6 +15,7 @@ import assert from "node:assert";
 import {
   extractDependencies,
   extractDecoratorConfig,
+  extractBindables,
   findClassByName,
 } from "@aurelia-ls/transform";
 
@@ -187,16 +188,147 @@ describe("extractDecoratorConfig", () => {
 });
 
 /* =============================================================================
- * FUTURE: BINDABLE EXTRACTION
- * These tests are placeholders for Phase A step A2
+ * BINDABLE EXTRACTION
  * ============================================================================= */
 
 describe("extractBindables", () => {
-  todo("extracts @bindable property decorators");
-  todo("extracts @bindable with mode option");
-  todo("extracts @bindable with primary option");
+  it("extracts simple @bindable property decorator", () => {
+    const source = `
+      import { bindable } from "aurelia";
+
+      export class Greeting {
+        @bindable name: string = "World";
+      }
+    `;
+
+    const classInfo = findClassByName(source, "Greeting")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.strictEqual(bindables.length, 1);
+    assert.strictEqual(bindables[0]!.name, "name");
+    assert.strictEqual(bindables[0]!.mode, undefined);
+    assert.strictEqual(bindables[0]!.primary, undefined);
+  });
+
+  it("extracts @bindable with mode option", () => {
+    const source = `
+      import { bindable, BindingMode } from "aurelia";
+
+      export class MyComponent {
+        @bindable({ mode: BindingMode.twoWay }) value: string;
+      }
+    `;
+
+    const classInfo = findClassByName(source, "MyComponent")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.strictEqual(bindables.length, 1);
+    assert.strictEqual(bindables[0]!.name, "value");
+    assert.strictEqual(bindables[0]!.mode, 6); // twoWay = 6
+  });
+
+  it("extracts @bindable with mode as direct import", () => {
+    const source = `
+      import { bindable, twoWay } from "aurelia";
+
+      export class MyComponent {
+        @bindable({ mode: twoWay }) value: string;
+      }
+    `;
+
+    const classInfo = findClassByName(source, "MyComponent")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.strictEqual(bindables.length, 1);
+    assert.strictEqual(bindables[0]!.mode, 6);
+  });
+
+  it("extracts @bindable with primary option", () => {
+    const source = `
+      import { bindable } from "aurelia";
+
+      export class MyComponent {
+        @bindable({ primary: true }) value: string;
+      }
+    `;
+
+    const classInfo = findClassByName(source, "MyComponent")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.strictEqual(bindables.length, 1);
+    assert.strictEqual(bindables[0]!.name, "value");
+    assert.strictEqual(bindables[0]!.primary, true);
+  });
+
+  it("extracts @bindable with attribute option", () => {
+    const source = `
+      import { bindable } from "aurelia";
+
+      export class MyComponent {
+        @bindable({ attribute: "my-value" }) myValue: string;
+      }
+    `;
+
+    const classInfo = findClassByName(source, "MyComponent")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.strictEqual(bindables.length, 1);
+    assert.strictEqual(bindables[0]!.name, "myValue");
+    assert.strictEqual(bindables[0]!.attribute, "my-value");
+  });
+
+  it("extracts multiple bindables", () => {
+    const source = `
+      import { bindable, BindingMode } from "aurelia";
+
+      export class FormInput {
+        @bindable label: string;
+        @bindable({ mode: BindingMode.twoWay }) value: string;
+        @bindable({ primary: true }) type: string = "text";
+      }
+    `;
+
+    const classInfo = findClassByName(source, "FormInput")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.strictEqual(bindables.length, 3);
+    assert.strictEqual(bindables[0]!.name, "label");
+    assert.strictEqual(bindables[1]!.name, "value");
+    assert.strictEqual(bindables[1]!.mode, 6);
+    assert.strictEqual(bindables[2]!.name, "type");
+    assert.strictEqual(bindables[2]!.primary, true);
+  });
+
+  it("returns empty array when no bindables", () => {
+    const source = `
+      export class PlainClass {
+        name: string = "World";
+      }
+    `;
+
+    const classInfo = findClassByName(source, "PlainClass")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.deepStrictEqual(bindables, []);
+  });
+
+  it("handles @bindable() with empty parens", () => {
+    const source = `
+      import { bindable } from "aurelia";
+
+      export class MyComponent {
+        @bindable() value: string;
+      }
+    `;
+
+    const classInfo = findClassByName(source, "MyComponent")!;
+    const bindables = extractBindables(source, classInfo);
+
+    assert.strictEqual(bindables.length, 1);
+    assert.strictEqual(bindables[0]!.name, "value");
+  });
+
   todo("extracts bindables from decorator config");
-  todo("handles mixed decorator and config bindables");
 });
 
 /* =============================================================================

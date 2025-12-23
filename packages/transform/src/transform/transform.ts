@@ -10,7 +10,7 @@ import { emitStaticAu } from "../emit/index.js";
 import { findClassByName, detectDeclarationForm } from "../ts/analyze.js";
 import { applyEdits, validateEdits } from "../ts/edit.js";
 import { generateInjectionEdits } from "../ts/inject.js";
-import { extractDependencies } from "../ts/extract.js";
+import { extractDependencies, extractBindables } from "../ts/extract.js";
 import type {
   TransformOptions,
   TransformResult,
@@ -81,6 +81,9 @@ export function transform(options: TransformOptions): TransformResult {
     }
   });
 
+  // Extract bindables from @bindable property decorators
+  const bindables = extractBindables(source, classInfo);
+
   // Emit the AOT artifacts
   const emitResult = emitStaticAu(aot, {
     name: resource.name,
@@ -89,6 +92,7 @@ export function transform(options: TransformOptions): TransformResult {
     template,
     nestedHtmlTree,
     dependencies,
+    bindables,
     indent,
     includeComments,
   });

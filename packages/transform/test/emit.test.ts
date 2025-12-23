@@ -207,6 +207,65 @@ describe("emitStaticAu", () => {
 
     assert.ok(!result.mainDefinition.includes("dependencies"));
   });
+
+  it("includes bindables in definition", () => {
+    const aot: AotCodeResult = {
+      expressions: [],
+      definition: mockDef("form-input"),
+      mapping: [],
+    };
+
+    const result = emitStaticAu(aot, {
+      name: "form-input",
+      className: "FormInput",
+      type: "custom-element",
+      template: "<input>",
+      bindables: [
+        { name: "value", mode: 6 },
+        { name: "label" },
+      ],
+    });
+
+    assert.ok(result.mainDefinition.includes("bindables:"));
+    assert.ok(result.mainDefinition.includes("value: { mode: 6 }"));
+    assert.ok(result.mainDefinition.includes("label: {}"));
+  });
+
+  it("includes bindable with primary option", () => {
+    const aot: AotCodeResult = {
+      expressions: [],
+      definition: mockDef("my-comp"),
+      mapping: [],
+    };
+
+    const result = emitStaticAu(aot, {
+      name: "my-comp",
+      className: "MyComp",
+      type: "custom-element",
+      template: "<div></div>",
+      bindables: [{ name: "value", primary: true }],
+    });
+
+    assert.ok(result.mainDefinition.includes("value: { primary: true }"));
+  });
+
+  it("omits bindables when empty", () => {
+    const aot: AotCodeResult = {
+      expressions: [],
+      definition: mockDef("simple"),
+      mapping: [],
+    };
+
+    const result = emitStaticAu(aot, {
+      name: "simple",
+      className: "Simple",
+      type: "custom-element",
+      template: "<div>Hello</div>",
+      bindables: [],
+    });
+
+    assert.ok(!result.mainDefinition.includes("bindables"));
+  });
 });
 
 describe("hasEmittableContent", () => {

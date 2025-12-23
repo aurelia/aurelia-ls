@@ -79,6 +79,7 @@ export {
   deriveResourceName,
   extractDependencies,
   extractDecoratorConfig,
+  extractBindables,
 } from "./ts/index.js";
 export type {
   ClassInfo,
@@ -92,6 +93,7 @@ export type {
   DetectedDeclarationForm,
   ExtractedDependency,
   ExtractedDecoratorConfig,
+  ExtractedBindable,
 } from "./ts/index.js";
 
 // Edit utilities (for advanced use)
