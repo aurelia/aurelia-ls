@@ -8,6 +8,7 @@
  * See docs/transform-package-design.md.
  */
 
+import ts from "typescript";
 import { RESOURCE_DECORATOR_NAMES } from "@aurelia-ls/resolution";
 import type {
   ClassInfo,
@@ -15,6 +16,7 @@ import type {
   InjectionPoint,
   InjectionStrategy,
   TypedSourceEdit,
+  Span,
 } from "./types.js";
 import { detectDeclarationForm } from "./analyze.js";
 import { replace, insert, del, extendSpanWithWhitespace } from "./edit.js";
@@ -35,6 +37,9 @@ export interface InjectOptions {
 
   /** Whether to remove existing decorator */
   removeDecorator?: boolean;
+
+  /** Whether to remove @bindable property decorators */
+  removeBindableDecorators?: boolean;
 
   /** Whether to preserve template import */
   preserveTemplateImport?: boolean;
@@ -99,7 +104,7 @@ export function generateInjectionEdits(
   classInfo: ClassInfo,
   options: InjectOptions
 ): InjectResult {
-  const { className, artifactCode, definitionVar, removeDecorator = true } = options;
+  const { className, artifactCode, definitionVar, removeDecorator = true, removeBindableDecorators = true } = options;
 
   const injectionPoint = analyzeInjectionPoint(classInfo, { removeDecorator });
   const edits: TypedSourceEdit[] = [];
@@ -169,6 +174,20 @@ export function generateInjectionEdits(
     }
   }
 
+  // Remove @bindable property decorators if requested
+  if (removeBindableDecorators) {
+    const bindableSpans = findBindableDecoratorSpans(source, classInfo.name);
+    for (const span of bindableSpans) {
+      // For property decorators, only extend trailing whitespace (not leading)
+      // to preserve line indentation
+      const extendedSpan = extendSpanTrailingOnly(source, span);
+      edits.push(del(extendedSpan));
+    }
+    if (bindableSpans.length > 0) {
+      warnings.push(`Removed ${bindableSpans.length} @bindable decorator(s)`);
+    }
+  }
+
   return {
     edits,
     warnings,
@@ -201,4 +220,90 @@ export function needsTransformation(classInfo: ClassInfo): boolean {
   }
 
   return false;
+}
+
+/* =============================================================================
+ * INTERNAL HELPERS
+ * ============================================================================= */
+
+/**
+ * Find all @bindable decorator spans on class properties.
+ * Returns spans that can be used to delete the decorators.
+ */
+function findBindableDecoratorSpans(source: string, className: string): Span[] {
+  const spans: Span[] = [];
+
+  // Parse source to get the AST
+  const sourceFile = ts.createSourceFile(
+    "source.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+
+  // Find the class declaration and collect bindable decorator spans
+  function visit(node: ts.Node): void {
+    if (ts.isClassDeclaration(node) && node.name?.text === className) {
+      // Found the class, iterate through its members
+      for (const member of node.members) {
+        if (!ts.isPropertyDeclaration(member)) continue;
+        if (!ts.canHaveDecorators(member)) continue;
+
+        const decorators = ts.getDecorators(member);
+        if (!decorators) continue;
+
+        for (const decorator of decorators) {
+          if (isBindableDecorator(decorator)) {
+            spans.push({
+              start: decorator.getStart(sourceFile),
+              end: decorator.getEnd(),
+            });
+          }
+        }
+      }
+      return; // No need to recurse into the class
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  ts.forEachChild(sourceFile, visit);
+  return spans;
+}
+
+/**
+ * Check if a decorator is @bindable.
+ */
+function isBindableDecorator(decorator: ts.Decorator): boolean {
+  const expr = decorator.expression;
+
+  // @bindable (no call)
+  if (ts.isIdentifier(expr) && expr.text === "bindable") {
+    return true;
+  }
+
+  // @bindable() or @bindable({...})
+  if (ts.isCallExpression(expr)) {
+    const callee = expr.expression;
+    if (ts.isIdentifier(callee) && callee.text === "bindable") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Extend a span to include only trailing whitespace.
+ * Used for property decorators where we want to preserve leading indentation.
+ */
+function extendSpanTrailingOnly(source: string, span: Span): Span {
+  let end = span.end;
+
+  // Extend to include trailing whitespace only (spaces and tabs, not newlines)
+  while (end < source.length && (source[end] === " " || source[end] === "\t")) {
+    end++;
+  }
+
+  return { start: span.start, end };
 }

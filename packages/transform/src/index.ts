@@ -106,3 +106,15 @@ export {
   deleteWithWhitespace,
   validateEdits,
 } from "./ts/index.js";
+
+// Injection utilities (for advanced use)
+export {
+  generateInjectionEdits,
+  analyzeInjectionPoint,
+  findRemovableDecorators,
+  needsTransformation,
+} from "./ts/index.js";
+export type {
+  InjectOptions,
+  InjectResult,
+} from "./ts/index.js";
