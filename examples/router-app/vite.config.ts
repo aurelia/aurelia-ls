@@ -15,6 +15,9 @@ import {
   RouteContext,
 } from '@aurelia/router';
 
+// Check if this is an SSR build
+const isSSRBuild = process.argv.includes('--ssr');
+
 // HTML shell for SSR with hydration support
 const ssrShell = `<!DOCTYPE html>
 <html>
@@ -53,13 +56,21 @@ export default defineConfig({
     aureliaPlugin({
       useDev: true,
     }),
-    aureliaSSR({
+    // Only use aureliaSSR for dev mode (not builds - SSG runs separately)
+    !isSSRBuild && aureliaSSR({
       entry: './src/my-app.html',
       tsconfig: './tsconfig.json',
       stripMarkers: false,
       htmlShell: ssrShell,
       baseHref: '/',
-      // Register router for SSR
+      // SSR entry point for production builds
+      ssrEntry: './src/entry-server.ts',
+      // SSG is run separately via scripts/generate-static.mjs
+      // to avoid Vite build-html plugin conflicts
+      ssg: {
+        enabled: false,
+      },
+      // Register router for SSR (dev mode)
       register: (container: IContainer, req) => {
         const url = req?.url ?? '/';
         const locationManager = new ServerLocationManager(url, '/');

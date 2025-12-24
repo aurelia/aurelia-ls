@@ -443,11 +443,17 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
 
     /**
      * Generate static pages after build completes.
-     * Only runs when SSG is enabled and in production build.
+     * Only runs when SSG is enabled and in production client build.
      */
     async closeBundle() {
       // Only run SSG in production builds
       if (resolvedConfig.command !== "build") {
+        return;
+      }
+
+      // Skip SSG during SSR builds (only run during client builds)
+      // SSR builds have build.ssr set to truthy value
+      if (resolvedConfig.build.ssr) {
         return;
       }
 

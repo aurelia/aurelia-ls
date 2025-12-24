@@ -128,6 +128,9 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.1
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
