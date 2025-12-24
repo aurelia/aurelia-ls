@@ -24,7 +24,7 @@
  */
 
 import type { Plugin, ResolvedConfig } from "vite";
-import { resolve, join } from "node:path";
+import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { normalizePathForId } from "@aurelia-ls/domain";
 import {
@@ -41,6 +41,12 @@ import { generateStaticSite, type SSGResult } from "../ssg/index.js";
 import { isSSRHandler, type SSRHandler } from "../ssr/handler.js";
 import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
 import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
+
+/**
+ * Virtual file suffix for Aurelia templates in production builds.
+ * We use this instead of .html to avoid conflicts with vite:build-html.
+ */
+const VIRTUAL_TEMPLATE_SUFFIX = ".$aurelia-template.js";
 
 /**
  * Default HTML shell for SSR output.
@@ -205,19 +211,91 @@ function transformEntryPointIfNeeded(
 }
 
 /**
+ * Regex to match .html imports in TypeScript/JavaScript code.
+ * Captures the quote style, import path, and ensures it ends with .html
+ */
+const HTML_IMPORT_REGEX = /(from\s+|import\s+)(['"])([^'"]+\.html)\2/g;
+
+/**
  * Create the Aurelia SSR Vite plugin.
  *
  * @param options - Plugin configuration options
- * @returns Vite plugin
+ * @returns Array of Vite plugins (pre for import rewriting, post for SSR)
  */
-export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
+export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
   let resolvedConfig: ResolvedConfig;
   let resolvedOptions: ResolvedSSROptions;
   let resolutionContext: ResolutionContext | null = null;
   let resolutionPromise: Promise<ResolutionContext | null> | null = null;
   let routeTree: RouteTree | null = null;
 
-  return {
+  /**
+   * Pre-plugin: Rewrites .html imports to virtual files in production builds.
+   * This must run BEFORE vite:build-html to avoid HTML parsing conflicts.
+   */
+  const prePlugin: Plugin = {
+    name: "aurelia-ssr-pre",
+    enforce: "pre",
+
+    configResolved(config) {
+      // Share config with main plugin
+      resolvedConfig = config;
+    },
+
+    /**
+     * Rewrite .html imports to virtual template files in production.
+     * This prevents vite:build-html from trying to parse template files.
+     */
+    transform(code, id) {
+      // Only active in production builds
+      if (resolvedConfig.command !== "build") {
+        return null;
+      }
+
+      // Only process TypeScript/JavaScript files
+      if (!id.endsWith(".ts") && !id.endsWith(".tsx") && !id.endsWith(".js") && !id.endsWith(".jsx")) {
+        return null;
+      }
+
+      // Skip node_modules
+      if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
+        return null;
+      }
+
+      // Quick check: does this file have .html imports?
+      if (!code.includes(".html")) {
+        return null;
+      }
+
+      // Rewrite .html imports to virtual template files
+      const rewritten = code.replace(HTML_IMPORT_REGEX, (match, prefix, quote, importPath) => {
+        // Don't rewrite if it's not an Aurelia template (e.g., could be some other HTML)
+        // Skip node_modules imports
+        if (importPath.includes("node_modules")) {
+          return match;
+        }
+
+        // Rewrite to virtual file suffix
+        const virtualPath = importPath.slice(0, -5) + VIRTUAL_TEMPLATE_SUFFIX;
+        return `${prefix}${quote}${virtualPath}${quote}`;
+      });
+
+      if (rewritten !== code) {
+        resolvedConfig.logger.info(`[aurelia-ssr] Rewrote HTML imports in: ${id}`);
+        return {
+          code: rewritten,
+          map: null,
+        };
+      }
+
+      return null;
+    },
+  };
+
+  /**
+   * Main SSR plugin: Handles template loading, AOT transform, middleware, and SSG.
+   */
+  const mainPlugin: Plugin = {
     name: "aurelia-ssr",
 
     // Run after other plugins (like @aurelia/vite-plugin)
@@ -317,6 +395,80 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
           }
           return ctx;
         });
+      }
+    },
+
+    /**
+     * Resolve virtual template files in production builds.
+     *
+     * We use virtual files (.$aurelia-template.js) instead of .html to avoid
+     * conflicts with vite:build-html. This follows the same pattern as
+     * @aurelia/vite-plugin which uses .$au.ts virtual files.
+     */
+    resolveId(id, importer) {
+      // Only handle our virtual template files
+      if (!id.endsWith(VIRTUAL_TEMPLATE_SUFFIX)) {
+        return null;
+      }
+
+      // Only active in production builds
+      if (resolvedConfig.command !== "build") {
+        return null;
+      }
+
+      // Resolve to absolute path
+      // Handle both relative and absolute paths
+      if (id.startsWith("/") || id.startsWith("\\")) {
+        // Absolute from root - resolve from config root
+        return resolve(resolvedConfig.root, id.slice(1));
+      }
+
+      if (importer) {
+        // Relative import - resolve from importer's directory
+        return resolve(dirname(importer), id);
+      }
+
+      return id;
+    },
+
+    /**
+     * Load virtual template files in production builds.
+     *
+     * Converts the HTML template to a JavaScript module that exports
+     * the template string as default. This avoids conflicts with
+     * vite:build-html which only processes .html files.
+     */
+    load(id) {
+      // Only handle our virtual template files
+      if (!id.endsWith(VIRTUAL_TEMPLATE_SUFFIX)) {
+        return null;
+      }
+
+      // Only active in production builds
+      if (resolvedConfig.command !== "build") {
+        return null;
+      }
+
+      // Get the actual HTML file path
+      const htmlPath = id.slice(0, -VIRTUAL_TEMPLATE_SUFFIX.length) + ".html";
+
+      try {
+        // Read the HTML template
+        const html = readFileSync(htmlPath, "utf-8");
+
+        // Transform to a JavaScript module that exports the template
+        const code = `export default ${JSON.stringify(html)};`;
+
+        resolvedConfig.logger.info(`[aurelia-ssr] Loaded template: ${htmlPath}`);
+
+        return {
+          code,
+          map: null,
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        resolvedConfig.logger.error(`[aurelia-ssr] Failed to load template ${htmlPath}: ${errorMessage}`);
+        return null;
       }
     },
 
@@ -571,4 +723,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
       }
     },
   };
+
+  // Return both plugins
+  return [prePlugin, mainPlugin];
 }

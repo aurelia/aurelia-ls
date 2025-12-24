@@ -15,8 +15,13 @@ import {
   RouteContext,
 } from '@aurelia/router';
 
-// Check if this is an SSR build
-const isSSRBuild = process.argv.includes('--ssr');
+/**
+ * Vite configuration for Aurelia Router SSR example.
+ *
+ * Both dev and production builds work with Vite. The aureliaSSR plugin
+ * handles .html template imports via virtual files to avoid conflicts
+ * with vite:build-html.
+ */
 
 // HTML shell for SSR with hydration support
 const ssrShell = `<!DOCTYPE html>
@@ -53,11 +58,12 @@ export default defineConfig({
     conditions: ['development'],
   },
   plugins: [
-    aureliaPlugin({
+    // Use standard aurelia plugin only for dev mode
+    // For production, aureliaSSR handles all transforms with AOT
+    process.env.NODE_ENV !== 'production' && aureliaPlugin({
       useDev: true,
     }),
-    // Only use aureliaSSR for dev mode (not builds - SSG runs separately)
-    !isSSRBuild && aureliaSSR({
+    aureliaSSR({
       entry: './src/my-app.html',
       tsconfig: './tsconfig.json',
       stripMarkers: false,
@@ -65,8 +71,7 @@ export default defineConfig({
       baseHref: '/',
       // SSR entry point for production builds
       ssrEntry: './src/entry-server.ts',
-      // SSG is run separately via scripts/generate-static.mjs
-      // to avoid Vite build-html plugin conflicts
+      // SSG can be enabled here, or run via scripts/generate-static.mjs
       ssg: {
         enabled: false,
       },
