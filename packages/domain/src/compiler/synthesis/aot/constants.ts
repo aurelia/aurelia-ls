@@ -11,36 +11,44 @@
 /**
  * Aurelia instruction type codes.
  *
- * These map to the InstructionType enum in @aurelia/template-compiler.
+ * These map to the itXxx constants in @aurelia/template-compiler.
  * The runtime renderer dispatches to the correct handler based on these codes.
+ *
+ * Numeric ranges:
+ *   0-9:    Hydration instructions
+ *   10-29:  Property/binding instructions
+ *   30-49:  DOM binding instructions
+ *   50-59:  Spread instructions
  */
 export const INSTRUCTION_TYPE = {
-  // Renderer instructions (r-prefixed) - handled by render()
-  hydrateElement: "ra",
-  hydrateAttribute: "rb",
-  hydrateTemplateController: "rc",
-  hydrateLetElement: "rd",
-  setProperty: "re",
-  interpolation: "rf",
-  propertyBinding: "rg",
-  letBinding: "ri",
-  refBinding: "rj",
-  iteratorBinding: "rk",
-  multiAttr: "rl",
+  // Hydration instructions (0-9)
+  hydrateElement: 0,
+  hydrateAttribute: 1,
+  hydrateTemplateController: 2,
+  hydrateLetElement: 3,
 
-  // HTML-specific instructions (h-prefixed)
-  textBinding: "ha",
-  listenerBinding: "hb",
-  attributeBinding: "hc",
-  stylePropertyBinding: "hd",
-  setAttribute: "he",
-  setClassAttribute: "hf",
-  setStyleAttribute: "hg",
+  // Property/binding instructions (10-29)
+  setProperty: 10,
+  interpolation: 11,
+  propertyBinding: 12,
+  letBinding: 13,
+  refBinding: 14,
+  iteratorBinding: 15,
+  multiAttr: 16,
 
-  // Spread instructions
-  spreadTransferedBinding: "hs",
-  spreadElementProp: "hp",
-  spreadValueBinding: "svb",
+  // DOM binding instructions (30-49)
+  textBinding: 30,
+  listenerBinding: 31,
+  attributeBinding: 32,
+  stylePropertyBinding: 33,
+  setAttribute: 34,
+  setClassAttribute: 35,
+  setStyleAttribute: 36,
+
+  // Spread instructions (50-59)
+  spreadTransferedBinding: 50,
+  spreadElementProp: 51,
+  spreadValueBinding: 52,
 } as const;
 
 /**

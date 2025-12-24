@@ -10,7 +10,6 @@
 
 import {
   INSTRUCTION_TYPE,
-  BINDING_MODE,
   type SerializedDefinition,
   type SerializedInstruction,
   type SerializedExpression,
@@ -27,7 +26,7 @@ import {
   type SerializedHydrateLetElement,
   type SerializedIteratorBinding,
   type ExprId,
-  type BindingMode,
+  type BindingModeValue,
   type NestedTemplateHtmlNode,
 } from "@aurelia-ls/domain";
 import { formatValue, escapeString, indent as indentText } from "./format.js";
@@ -387,40 +386,40 @@ function emitInstruction(
 ): string {
   // Map serialized instruction to runtime format
   switch (instr.type) {
-    case "textBinding":
+    case INSTRUCTION_TYPE.textBinding:
       return emitTextBinding(instr, ctx);
 
-    case "propertyBinding":
+    case INSTRUCTION_TYPE.propertyBinding:
       return emitPropertyBinding(instr, ctx);
 
-    case "interpolation":
+    case INSTRUCTION_TYPE.interpolation:
       return emitInterpolation(instr, ctx);
 
-    case "listenerBinding":
+    case INSTRUCTION_TYPE.listenerBinding:
       return emitListenerBinding(instr, ctx);
 
-    case "refBinding":
+    case INSTRUCTION_TYPE.refBinding:
       return emitRefBinding(instr, ctx);
 
-    case "setProperty":
+    case INSTRUCTION_TYPE.setProperty:
       return emitSetProperty(instr);
 
-    case "setAttribute":
+    case INSTRUCTION_TYPE.setAttribute:
       return emitSetAttribute(instr);
 
-    case "hydrateElement":
+    case INSTRUCTION_TYPE.hydrateElement:
       return emitHydrateElement(instr, ctx, indent);
 
-    case "hydrateAttribute":
+    case INSTRUCTION_TYPE.hydrateAttribute:
       return emitHydrateAttribute(instr, ctx, indent);
 
-    case "hydrateTemplateController":
+    case INSTRUCTION_TYPE.hydrateTemplateController:
       return emitHydrateTemplateController(instr, ctx, indent);
 
-    case "hydrateLetElement":
+    case INSTRUCTION_TYPE.hydrateLetElement:
       return emitHydrateLetElement(instr, ctx);
 
-    case "iteratorBinding":
+    case INSTRUCTION_TYPE.iteratorBinding:
       return emitIteratorBinding(instr, ctx);
 
     default:
@@ -438,7 +437,7 @@ function emitTextBinding(
   ctx: InstructionEmitContext
 ): string {
   const exprs = instr.exprIds.map(id => resolveExprRef(ctx.exprPrefix, id, ctx.exprIndexMap));
-  return `{ type: "${INSTRUCTION_TYPE.textBinding}", from: ${emitInterpolationObject(instr.parts, exprs)} }`;
+  return `{ type: ${INSTRUCTION_TYPE.textBinding}, from: ${emitInterpolationObject(instr.parts, exprs)} }`;
 }
 
 function emitPropertyBinding(
@@ -447,7 +446,7 @@ function emitPropertyBinding(
 ): string {
   const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
   const modeCode = getBindingModeCode(instr.mode);
-  return `{ type: "${INSTRUCTION_TYPE.propertyBinding}", from: ${exprRef}, to: "${instr.to}", mode: ${modeCode} }`;
+  return `{ type: ${INSTRUCTION_TYPE.propertyBinding}, from: ${exprRef}, to: "${instr.to}", mode: ${modeCode} }`;
 }
 
 function emitInterpolation(
@@ -455,7 +454,7 @@ function emitInterpolation(
   ctx: InstructionEmitContext
 ): string {
   const exprs = instr.exprIds.map(id => resolveExprRef(ctx.exprPrefix, id, ctx.exprIndexMap));
-  return `{ type: "${INSTRUCTION_TYPE.interpolation}", to: "${instr.to}", from: ${emitInterpolationObject(instr.parts, exprs)} }`;
+  return `{ type: ${INSTRUCTION_TYPE.interpolation}, to: "${instr.to}", from: ${emitInterpolationObject(instr.parts, exprs)} }`;
 }
 
 function emitListenerBinding(
@@ -463,7 +462,7 @@ function emitListenerBinding(
   ctx: InstructionEmitContext
 ): string {
   const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
-  let str = `{ type: "${INSTRUCTION_TYPE.listenerBinding}", from: ${exprRef}, to: "${instr.to}", capture: ${instr.capture}`;
+  let str = `{ type: ${INSTRUCTION_TYPE.listenerBinding}, from: ${exprRef}, to: "${instr.to}", capture: ${instr.capture}`;
   if (instr.modifier) {
     str += `, modifier: "${instr.modifier}"`;
   }
@@ -476,21 +475,21 @@ function emitRefBinding(
   ctx: InstructionEmitContext
 ): string {
   const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
-  return `{ type: "${INSTRUCTION_TYPE.refBinding}", from: ${exprRef}, to: "${instr.to}" }`;
+  return `{ type: ${INSTRUCTION_TYPE.refBinding}, from: ${exprRef}, to: "${instr.to}" }`;
 }
 
 function emitSetProperty(
   instr: SerializedSetProperty
 ): string {
   const valueStr = formatValue(instr.value, "  ", "");
-  return `{ type: "${INSTRUCTION_TYPE.setProperty}", value: ${valueStr}, to: "${instr.to}" }`;
+  return `{ type: ${INSTRUCTION_TYPE.setProperty}, value: ${valueStr}, to: "${instr.to}" }`;
 }
 
 function emitSetAttribute(
   instr: SerializedSetAttribute
 ): string {
   const valueStr = instr.value === null ? "null" : `"${escapeString(instr.value)}"`;
-  return `{ type: "${INSTRUCTION_TYPE.setAttribute}", value: ${valueStr}, to: "${instr.to}" }`;
+  return `{ type: ${INSTRUCTION_TYPE.setAttribute}, value: ${valueStr}, to: "${instr.to}" }`;
 }
 
 function emitHydrateElement(
@@ -499,7 +498,7 @@ function emitHydrateElement(
   indent: string
 ): string {
   const props = emitNestedInstructions(instr.instructions, ctx, indent);
-  let str = `{ type: "${INSTRUCTION_TYPE.hydrateElement}", res: "${instr.resource}", props: ${props}`;
+  let str = `{ type: ${INSTRUCTION_TYPE.hydrateElement}, res: "${instr.resource}", props: ${props}`;
   if (instr.containerless) {
     str += ", containerless: true";
   }
@@ -513,7 +512,7 @@ function emitHydrateAttribute(
   indent: string
 ): string {
   const props = emitNestedInstructions(instr.instructions, ctx, indent);
-  let str = `{ type: "${INSTRUCTION_TYPE.hydrateAttribute}", res: "${instr.resource}", props: ${props}`;
+  let str = `{ type: ${INSTRUCTION_TYPE.hydrateAttribute}, res: "${instr.resource}", props: ${props}`;
   if (instr.alias) {
     str += `, alias: "${instr.alias}"`;
   }
@@ -536,7 +535,7 @@ function emitHydrateTemplateController(
     throw new Error(`No variable name found for nested definition at index ${instr.templateIndex}`);
   }
   const props = emitNestedInstructions(instr.instructions, ctx, indent);
-  return `{ type: "${INSTRUCTION_TYPE.hydrateTemplateController}", def: ${defVar}, res: "${instr.resource}", props: ${props} }`;
+  return `{ type: ${INSTRUCTION_TYPE.hydrateTemplateController}, def: ${defVar}, res: "${instr.resource}", props: ${props} }`;
 }
 
 function emitHydrateLetElement(
@@ -547,7 +546,7 @@ function emitHydrateLetElement(
     const exprRef = resolveExprRef(ctx.exprPrefix, b.exprId, ctx.exprIndexMap);
     return `{ to: "${b.to}", from: ${exprRef} }`;
   });
-  return `{ type: "${INSTRUCTION_TYPE.hydrateLetElement}", bindings: [${bindings.join(", ")}], toBindingContext: ${instr.toBindingContext} }`;
+  return `{ type: ${INSTRUCTION_TYPE.hydrateLetElement}, bindings: [${bindings.join(", ")}], toBindingContext: ${instr.toBindingContext} }`;
 }
 
 function emitIteratorBinding(
@@ -555,7 +554,7 @@ function emitIteratorBinding(
   ctx: InstructionEmitContext
 ): string {
   const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
-  return `{ forOf: ${exprRef}, to: "${instr.to}", props: [], type: "${INSTRUCTION_TYPE.iteratorBinding}" }`;
+  return `{ forOf: ${exprRef}, to: "${instr.to}", props: [], type: ${INSTRUCTION_TYPE.iteratorBinding} }`;
 }
 
 /* =============================================================================
@@ -591,15 +590,9 @@ function emitInterpolationObject(parts: string[], exprRefs: string[]): string {
 }
 
 /**
- * Convert binding mode to runtime numeric code.
- * Uses domain's authoritative BINDING_MODE constants.
+ * Convert binding mode value to string for code emission.
+ * Mode is already numeric (BindingModeValue), just convert to string.
  */
-function getBindingModeCode(mode: BindingMode): string {
-  switch (mode) {
-    case "oneTime": return String(BINDING_MODE.oneTime);
-    case "toView": return String(BINDING_MODE.toView);
-    case "fromView": return String(BINDING_MODE.fromView);
-    case "twoWay": return String(BINDING_MODE.twoWay);
-    default: return String(BINDING_MODE.toView); // default to toView
-  }
+function getBindingModeCode(mode: BindingModeValue): string {
+  return String(mode);
 }

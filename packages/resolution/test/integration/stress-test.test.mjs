@@ -29,6 +29,8 @@ import {
   emitAotCode,
   DEFAULT_SYNTAX,
   getExpressionParser,
+  INSTRUCTION_TYPE,
+  BINDING_MODE,
 } from "@aurelia-ls/domain";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -154,20 +156,37 @@ function flattenInstructions(rows, exprCodeMap) {
   return result;
 }
 
+// Map numeric instruction type to string name for switch statements
+const TYPE_NAMES = Object.fromEntries(
+  Object.entries(INSTRUCTION_TYPE).map(([k, v]) => [v, k])
+);
+function getTypeName(type) {
+  return TYPE_NAMES[type] ?? String(type);
+}
+
+// Map numeric binding mode to string name
+const MODE_NAMES = Object.fromEntries(
+  Object.entries(BINDING_MODE).map(([k, v]) => [v, k])
+);
+function getModeName(mode) {
+  return MODE_NAMES[mode] ?? String(mode);
+}
+
 /**
  * Reduce an instruction to human-readable format.
  */
 function reduceInstruction(inst, targetIdx, exprCodeMap) {
   const getExpr = (id) => exprCodeMap.get(id) || `<expr:${id}>`;
+  const typeName = getTypeName(inst.type);
 
-  switch (inst.type) {
+  switch (typeName) {
     case "propertyBinding":
       return {
         kind: "bind",
         target: targetIdx,
         property: inst.to,
         expr: getExpr(inst.exprId),
-        mode: inst.mode,
+        mode: getModeName(inst.mode),
       };
 
     case "interpolation":
@@ -263,7 +282,7 @@ function reduceInstruction(inst, targetIdx, exprCodeMap) {
       };
 
     default:
-      return { kind: inst.type, target: targetIdx };
+      return { kind: typeName, target: targetIdx };
   }
 }
 
@@ -272,13 +291,14 @@ function reduceInstruction(inst, targetIdx, exprCodeMap) {
  */
 function reduceNestedBinding(inst, exprCodeMap) {
   const getExpr = (id) => exprCodeMap.get(id) || `<expr:${id}>`;
+  const typeName = getTypeName(inst.type);
 
-  switch (inst.type) {
+  switch (typeName) {
     case "propertyBinding":
       return {
         property: inst.to,
         expr: getExpr(inst.exprId),
-        mode: inst.mode,
+        mode: getModeName(inst.mode),
       };
 
     case "setProperty":
@@ -294,7 +314,7 @@ function reduceNestedBinding(inst, exprCodeMap) {
       };
 
     default:
-      return { type: inst.type };
+      return { type: typeName };
   }
 }
 

@@ -15,6 +15,7 @@ import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { compileAndRenderAot, compileWithAot } from "../out/index.js";
+import { INSTRUCTION_TYPE } from "@aurelia-ls/domain";
 
 // =============================================================================
 // Helper: Create a test component class with given state and template
@@ -414,11 +415,11 @@ describe("AOT Template Controllers", () => {
     const def = codeResult.definition;
 
     // Find the iteratorBinding instruction
-    const htcInst = def.instructions.flat().find(i => i.type === "hydrateTemplateController");
+    const htcInst = def.instructions.flat().find(i => i.type === INSTRUCTION_TYPE.hydrateTemplateController);
     assert.ok(htcInst, "Should have hydrateTemplateController instruction");
 
     // The iteratorBinding should be in the HTC's instructions
-    const iteratorInst = htcInst.instructions.find(i => i.type === "iteratorBinding");
+    const iteratorInst = htcInst.instructions.find(i => i.type === INSTRUCTION_TYPE.iteratorBinding);
     assert.ok(iteratorInst, "Should have iteratorBinding instruction");
     assert.ok(iteratorInst.aux, "iteratorBinding should have aux array");
     assert.equal(iteratorInst.aux.length, 1, "Should have 1 aux binding (key)");

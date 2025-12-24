@@ -668,8 +668,11 @@ export interface SerializedDefinition {
   targetCount: number;
 }
 
+import { INSTRUCTION_TYPE, BINDING_MODE, type BindingModeValue } from "./constants.js";
+
 /**
- * Serialized instruction (abstract format with readable type strings).
+ * Serialized instruction using numeric type codes.
+ * These match Aurelia's runtime instruction types (itXxx constants).
  */
 export type SerializedInstruction =
   | SerializedPropertyBinding
@@ -686,27 +689,27 @@ export type SerializedInstruction =
   | SerializedHydrateLetElement;
 
 export interface SerializedPropertyBinding {
-  type: "propertyBinding";
+  type: typeof INSTRUCTION_TYPE.propertyBinding;
   to: string;
   exprId: ExprId;
-  mode: BindingMode;
+  mode: BindingModeValue;
 }
 
 export interface SerializedInterpolation {
-  type: "interpolation";
+  type: typeof INSTRUCTION_TYPE.interpolation;
   to: string;
   parts: string[];
   exprIds: ExprId[];
 }
 
 export interface SerializedTextBinding {
-  type: "textBinding";
+  type: typeof INSTRUCTION_TYPE.textBinding;
   parts: string[];
   exprIds: ExprId[];
 }
 
 export interface SerializedListenerBinding {
-  type: "listenerBinding";
+  type: typeof INSTRUCTION_TYPE.listenerBinding;
   to: string;
   exprId: ExprId;
   capture: boolean;
@@ -714,7 +717,7 @@ export interface SerializedListenerBinding {
 }
 
 export interface SerializedIteratorBinding {
-  type: "iteratorBinding";
+  type: typeof INSTRUCTION_TYPE.iteratorBinding;
   to: string;
   exprId: ExprId;
   aux?: SerializedAuxBinding[];
@@ -726,46 +729,46 @@ export interface SerializedAuxBinding {
 }
 
 export interface SerializedRefBinding {
-  type: "refBinding";
+  type: typeof INSTRUCTION_TYPE.refBinding;
   to: string;
   exprId: ExprId;
 }
 
 export interface SerializedSetProperty {
-  type: "setProperty";
+  type: typeof INSTRUCTION_TYPE.setProperty;
   to: string;
   value: JsonValue;
 }
 
 export interface SerializedSetAttribute {
-  type: "setAttribute";
+  type: typeof INSTRUCTION_TYPE.setAttribute;
   to: string;
   value: string | null;
 }
 
 export interface SerializedHydrateElement {
-  type: "hydrateElement";
+  type: typeof INSTRUCTION_TYPE.hydrateElement;
   resource: string;
   instructions: SerializedInstruction[];
   containerless?: boolean;
 }
 
 export interface SerializedHydrateAttribute {
-  type: "hydrateAttribute";
+  type: typeof INSTRUCTION_TYPE.hydrateAttribute;
   resource: string;
   alias?: string;
   instructions: SerializedInstruction[];
 }
 
 export interface SerializedHydrateTemplateController {
-  type: "hydrateTemplateController";
+  type: typeof INSTRUCTION_TYPE.hydrateTemplateController;
   resource: string;
   templateIndex: number;
   instructions: SerializedInstruction[];
 }
 
 export interface SerializedHydrateLetElement {
-  type: "hydrateLetElement";
+  type: typeof INSTRUCTION_TYPE.hydrateLetElement;
   bindings: SerializedLetBinding[];
   toBindingContext: boolean;
 }

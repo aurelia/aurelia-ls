@@ -26,6 +26,8 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT as SEM_DEFAULT,
+  INSTRUCTION_TYPE,
+  BINDING_MODE,
 } from "../../../out/compiler/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -86,6 +88,24 @@ function reduceEmitIntent(result) {
   };
 }
 
+// Map numeric instruction type to string name for readable fingerprints
+const TYPE_NAMES = Object.fromEntries(
+  Object.entries(INSTRUCTION_TYPE).map(([k, v]) => [v, k])
+);
+
+function getTypeName(type) {
+  return TYPE_NAMES[type] ?? String(type);
+}
+
+// Map numeric binding mode to string name for readable fingerprints
+const MODE_NAMES = Object.fromEntries(
+  Object.entries(BINDING_MODE).map(([k, v]) => [v, k])
+);
+
+function getModeName(mode) {
+  return MODE_NAMES[mode] ?? String(mode);
+}
+
 // Flatten 2D instruction array to array of instruction summaries
 function flattenInstructions(rows) {
   const result = [];
@@ -99,12 +119,14 @@ function flattenInstructions(rows) {
 }
 
 // Reduce instruction to testable summary
+// Uses string type names for fingerprinting (readable in failures.json)
 function reduceInstruction(inst, targetIdx) {
-  const base = { type: inst.type, target: targetIdx };
+  const typeName = getTypeName(inst.type);
+  const base = { type: typeName, target: targetIdx };
 
-  switch (inst.type) {
+  switch (typeName) {
     case "propertyBinding":
-      return { ...base, to: inst.to, mode: inst.mode };
+      return { ...base, to: inst.to, mode: getModeName(inst.mode) };
 
     case "interpolation":
       return { ...base, to: inst.to, parts: inst.parts.length, exprs: inst.exprIds.length };
@@ -215,12 +237,15 @@ function compareEmitIntent(actual, expected, orderSensitive = false) {
 }
 
 // Generate unique key for an instruction
+// Handles both numeric types (from actual output) and string types (from JSON expected)
 function instructionKey(inst) {
-  const parts = [inst.type, `t${inst.target}`];
+  const typeName = getTypeName(inst.type);
+  const parts = [typeName, `t${inst.target}`];
 
-  switch (inst.type) {
+  // Use typeName for switch since JSON expected data has string types
+  switch (typeName) {
     case "propertyBinding":
-      parts.push(inst.to, inst.mode);
+      parts.push(inst.to, getModeName(inst.mode));
       break;
     case "interpolation":
       parts.push(inst.to, `${inst.parts}p${inst.exprs}e`);

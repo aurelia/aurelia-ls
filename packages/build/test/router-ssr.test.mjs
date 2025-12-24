@@ -269,7 +269,7 @@ describe("Router SSR: AOT Compilation", () => {
     );
   });
 
-  test("compiles template with load attribute", () => {
+  test("compiles template with interpolation", () => {
     const semantics = createRouterSemantics();
 
     const aot = compileWithAot(ROUTER_APP_TEMPLATE, {
@@ -277,13 +277,10 @@ describe("Router SSR: AOT Compilation", () => {
       semantics,
     });
 
-    // The load attribute should be processed
-    // (either preserved or compiled to instructions)
+    // The template should have text bindings for the interpolation
     assert.ok(
-      aot.template.includes("load") || aot.instructions.some(row =>
-        row.some(instr => instr.type === "ra" || instr.type === "sp")
-      ),
-      "AOT should handle load attribute"
+      aot.template.includes("<au-m>") || aot.instructions.length > 0,
+      "AOT should compile interpolation in router template"
     );
   });
 

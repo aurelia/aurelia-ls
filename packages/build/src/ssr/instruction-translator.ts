@@ -6,24 +6,35 @@
  */
 
 import {
-  PropertyBindingInstruction,
-  TextBindingInstruction,
-  InterpolationInstruction,
-  ListenerBindingInstruction,
-  RefBindingInstruction,
-  SetPropertyInstruction,
-  SetAttributeInstruction,
-  HydrateElementInstruction,
-  HydrateAttributeInstruction,
-  HydrateTemplateController,
-  HydrateLetElementInstruction,
-  LetBindingInstruction,
-  IteratorBindingInstruction,
-  MultiAttrInstruction,
+  type PropertyBindingInstruction,
+  type TextBindingInstruction,
+  type InterpolationInstruction,
+  type ListenerBindingInstruction,
+  type RefBindingInstruction,
+  type SetPropertyInstruction,
+  type SetAttributeInstruction,
+  type HydrateElementInstruction,
+  type HydrateAttributeInstruction,
+  type HydrateTemplateController,
+  type HydrateLetElementInstruction,
+  type LetBindingInstruction,
+  type IteratorBindingInstruction,
+  type MultiAttrInstruction,
   type IInstruction,
-} from "@aurelia/template-compiler";
-import {
-  BindingMode as AuBindingMode,
+  itPropertyBinding,
+  itTextBinding,
+  itInterpolation,
+  itListenerBinding,
+  itRefBinding,
+  itSetProperty,
+  itSetAttribute,
+  itHydrateElement,
+  itHydrateAttribute,
+  itHydrateTemplateController,
+  itHydrateLetElement,
+  itLetBinding,
+  itIteratorBinding,
+  itMultiAttr,
 } from "@aurelia/template-compiler";
 import {
   createInterpolation,
@@ -31,28 +42,28 @@ import {
   type ForOfStatement,
   type Interpolation,
 } from "@aurelia/expression-parser";
-import type {
-  SerializedDefinition,
-  SerializedInstruction,
-  SerializedExpression,
-  SerializedPropertyBinding,
-  SerializedTextBinding,
-  SerializedInterpolation,
-  SerializedListenerBinding,
-  SerializedRefBinding,
-  SerializedSetProperty,
-  SerializedSetAttribute,
-  SerializedHydrateElement,
-  SerializedHydrateAttribute,
-  SerializedHydrateTemplateController,
-  SerializedHydrateLetElement,
-  SerializedIteratorBinding,
+import {
+  INSTRUCTION_TYPE,
+  type SerializedDefinition,
+  type SerializedInstruction,
+  type SerializedExpression,
+  type SerializedPropertyBinding,
+  type SerializedTextBinding,
+  type SerializedInterpolation,
+  type SerializedListenerBinding,
+  type SerializedRefBinding,
+  type SerializedSetProperty,
+  type SerializedSetAttribute,
+  type SerializedHydrateElement,
+  type SerializedHydrateAttribute,
+  type SerializedHydrateTemplateController,
+  type SerializedHydrateLetElement,
+  type SerializedIteratorBinding,
   // SerializedAuxBinding - reserved for future use
-  SerializedLetBinding,
-  NestedTemplateHtmlNode,
-  ExprId,
-  BindingMode,
-  AnyBindingExpression,
+  type SerializedLetBinding,
+  type NestedTemplateHtmlNode,
+  type ExprId,
+  type AnyBindingExpression,
 } from "@aurelia-ls/domain";
 
 /* =============================================================================
@@ -141,29 +152,29 @@ function translateInstruction(
   ctx: TranslationContext,
 ): IInstruction {
   switch (ins.type) {
-    case "propertyBinding":
+    case INSTRUCTION_TYPE.propertyBinding:
       return translatePropertyBinding(ins, ctx);
-    case "textBinding":
+    case INSTRUCTION_TYPE.textBinding:
       return translateTextBinding(ins, ctx);
-    case "interpolation":
+    case INSTRUCTION_TYPE.interpolation:
       return translateInterpolation(ins, ctx);
-    case "listenerBinding":
+    case INSTRUCTION_TYPE.listenerBinding:
       return translateListenerBinding(ins, ctx);
-    case "refBinding":
+    case INSTRUCTION_TYPE.refBinding:
       return translateRefBinding(ins, ctx);
-    case "setProperty":
+    case INSTRUCTION_TYPE.setProperty:
       return translateSetProperty(ins);
-    case "setAttribute":
+    case INSTRUCTION_TYPE.setAttribute:
       return translateSetAttribute(ins);
-    case "hydrateElement":
+    case INSTRUCTION_TYPE.hydrateElement:
       return translateHydrateElement(ins, ctx);
-    case "hydrateAttribute":
+    case INSTRUCTION_TYPE.hydrateAttribute:
       return translateHydrateAttribute(ins, ctx);
-    case "hydrateTemplateController":
+    case INSTRUCTION_TYPE.hydrateTemplateController:
       return translateHydrateTemplateController(ins, ctx);
-    case "hydrateLetElement":
+    case INSTRUCTION_TYPE.hydrateLetElement:
       return translateHydrateLetElement(ins, ctx);
-    case "iteratorBinding":
+    case INSTRUCTION_TYPE.iteratorBinding:
       return translateIteratorBinding(ins, ctx);
     default:
       throw new Error(`Unknown instruction type: ${(ins as SerializedInstruction).type}`);
@@ -175,8 +186,13 @@ function translatePropertyBinding(
   ctx: TranslationContext,
 ): PropertyBindingInstruction {
   const expr = getExpr(ctx.exprMap, ins.exprId) as IsBindingBehavior;
-  const mode = translateBindingMode(ins.mode);
-  return new PropertyBindingInstruction(expr, ins.to, mode);
+  // Mode is already numeric, matching Aurelia's BindingMode values
+  return {
+    type: itPropertyBinding,
+    from: expr,
+    to: ins.to,
+    mode: ins.mode,
+  } as PropertyBindingInstruction;
 }
 
 function translateTextBinding(
@@ -187,7 +203,10 @@ function translateTextBinding(
   const expressions = ins.exprIds.map((id: ExprId) => getExpr(ctx.exprMap, id) as IsBindingBehavior);
   const interpolation = createInterpolation(ins.parts, expressions);
   // TextBindingInstruction type says string|IsBindingBehavior but runtime handles Interpolation
-  return new TextBindingInstruction(interpolation as unknown as IsBindingBehavior);
+  return {
+    type: itTextBinding,
+    from: interpolation as unknown as IsBindingBehavior,
+  } as TextBindingInstruction;
 }
 
 function translateInterpolation(
@@ -196,7 +215,11 @@ function translateInterpolation(
 ): InterpolationInstruction {
   const expressions = ins.exprIds.map((id: ExprId) => getExpr(ctx.exprMap, id) as IsBindingBehavior);
   const interpolation = createInterpolation(ins.parts, expressions);
-  return new InterpolationInstruction(interpolation, ins.to);
+  return {
+    type: itInterpolation,
+    from: interpolation,
+    to: ins.to,
+  } as InterpolationInstruction;
 }
 
 function translateListenerBinding(
@@ -204,12 +227,13 @@ function translateListenerBinding(
   ctx: TranslationContext,
 ): ListenerBindingInstruction {
   const expr = getExpr(ctx.exprMap, ins.exprId) as IsBindingBehavior;
-  return new ListenerBindingInstruction(
-    expr,
-    ins.to,
-    ins.capture,
-    ins.modifier ?? null,
-  );
+  return {
+    type: itListenerBinding,
+    from: expr,
+    to: ins.to,
+    capture: ins.capture,
+    modifier: ins.modifier ?? null,
+  } as ListenerBindingInstruction;
 }
 
 function translateRefBinding(
@@ -217,20 +241,32 @@ function translateRefBinding(
   ctx: TranslationContext,
 ): RefBindingInstruction {
   const expr = getExpr(ctx.exprMap, ins.exprId) as IsBindingBehavior;
-  return new RefBindingInstruction(expr, ins.to);
+  return {
+    type: itRefBinding,
+    from: expr,
+    to: ins.to,
+  } as RefBindingInstruction;
 }
 
 function translateSetProperty(
   ins: SerializedSetProperty,
 ): SetPropertyInstruction {
-  return new SetPropertyInstruction(ins.value, ins.to);
+  return {
+    type: itSetProperty,
+    value: ins.value,
+    to: ins.to,
+  } as SetPropertyInstruction;
 }
 
 function translateSetAttribute(
   ins: SerializedSetAttribute,
 ): SetAttributeInstruction {
   // SetAttributeInstruction expects string value
-  return new SetAttributeInstruction(ins.value ?? "", ins.to);
+  return {
+    type: itSetAttribute,
+    value: ins.value ?? "",
+    to: ins.to,
+  } as SetAttributeInstruction;
 }
 
 function translateHydrateElement(
@@ -240,14 +276,15 @@ function translateHydrateElement(
   // Translate nested instructions
   const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, ctx));
 
-  return new HydrateElementInstruction(
-    ins.resource,
+  return {
+    type: itHydrateElement,
+    res: ins.resource,
     props,
-    null, // projections - not yet supported
-    ins.containerless ?? false,
-    undefined, // captures
-    {}, // data
-  );
+    projections: null,
+    containerless: ins.containerless ?? false,
+    captures: void 0,
+    data: {},
+  } as HydrateElementInstruction;
 }
 
 function translateHydrateAttribute(
@@ -255,11 +292,12 @@ function translateHydrateAttribute(
   ctx: TranslationContext,
 ): HydrateAttributeInstruction {
   const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, ctx));
-  return new HydrateAttributeInstruction(
-    ins.resource,
-    ins.alias,
+  return {
+    type: itHydrateAttribute,
+    res: ins.resource,
+    alias: ins.alias,
     props,
-  );
+  } as HydrateAttributeInstruction;
 }
 
 function translateHydrateTemplateController(
@@ -284,12 +322,13 @@ function translateHydrateTemplateController(
     needsCompile: false,
   };
 
-  return new HydrateTemplateController(
+  return {
+    type: itHydrateTemplateController,
     def,
-    ins.resource,
-    undefined, // alias
+    res: ins.resource,
+    alias: void 0,
     props,
-  );
+  } as HydrateTemplateController;
 }
 
 function translateHydrateLetElement(
@@ -298,9 +337,17 @@ function translateHydrateLetElement(
 ): HydrateLetElementInstruction {
   const bindings = ins.bindings.map((b: SerializedLetBinding) => {
     const expr = getExpr(ctx.exprMap, b.exprId) as IsBindingBehavior | Interpolation;
-    return new LetBindingInstruction(expr, b.to);
+    return {
+      type: itLetBinding,
+      from: expr,
+      to: b.to,
+    } as LetBindingInstruction;
   });
-  return new HydrateLetElementInstruction(bindings, ins.toBindingContext);
+  return {
+    type: itHydrateLetElement,
+    instructions: bindings,
+    toBindingContext: ins.toBindingContext,
+  } as HydrateLetElementInstruction;
 }
 
 function translateIteratorBinding(
@@ -317,15 +364,21 @@ function translateIteratorBinding(
       // The value is the expression string, command is the binding type
       const expr = getExpr(ctx.exprMap, aux.exprId);
       // For now, just use the expression as-is - runtime will handle it
-      props.push(new MultiAttrInstruction(
-        expr as IsBindingBehavior,
-        aux.name,
-        "bind", // default command
-      ));
+      props.push({
+        type: itMultiAttr,
+        value: expr as IsBindingBehavior,
+        to: aux.name,
+        command: "bind",
+      } as MultiAttrInstruction);
     }
   }
 
-  return new IteratorBindingInstruction(forOf, ins.to, props);
+  return {
+    type: itIteratorBinding,
+    forOf,
+    to: ins.to,
+    props,
+  } as IteratorBindingInstruction;
 }
 
 /* =============================================================================
@@ -343,23 +396,5 @@ function getExpr(
   return expr;
 }
 
-/**
- * Translate domain compiler binding mode to Aurelia binding mode.
- */
-function translateBindingMode(mode: BindingMode): typeof AuBindingMode[keyof typeof AuBindingMode] {
-  switch (mode) {
-    case "default":
-      return AuBindingMode.default;
-    case "oneTime":
-      return AuBindingMode.oneTime;
-    case "toView":
-      return AuBindingMode.toView;
-    case "fromView":
-      return AuBindingMode.fromView;
-    case "twoWay":
-      return AuBindingMode.twoWay;
-    default:
-      return AuBindingMode.default;
-  }
-}
+// translateBindingMode is no longer needed - modes are now numeric and match Aurelia's values directly
 

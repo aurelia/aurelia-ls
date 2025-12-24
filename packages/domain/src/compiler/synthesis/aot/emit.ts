@@ -38,7 +38,8 @@ import type {
   PlanLetElement,
   PlanController,
 } from "./types.js";
-import type { ExprId } from "../../model/index.js";
+import { INSTRUCTION_TYPE, BINDING_MODE, type BindingModeValue } from "./constants.js";
+import type { ExprId, BindingMode } from "../../model/index.js";
 
 /* =============================================================================
  * Public API
@@ -228,7 +229,7 @@ class EmitContext {
     if (node.interpolation && node.targetIndex !== undefined) {
       const row = this.getOrCreateRow(instructions, node.targetIndex);
       row.push({
-        type: "textBinding",
+        type: INSTRUCTION_TYPE.textBinding,
         parts: node.interpolation.parts,
         exprIds: node.interpolation.exprIds,
       } satisfies SerializedTextBinding);
@@ -255,7 +256,7 @@ class EmitContext {
 
     // Create the hydrate instruction for this controller
     const hydrateCtrl: SerializedHydrateTemplateController = {
-      type: "hydrateTemplateController",
+      type: INSTRUCTION_TYPE.hydrateTemplateController,
       resource: ctrl.kind,
       templateIndex,
       instructions: this.emitControllerBindings(ctrl),
@@ -300,7 +301,7 @@ class EmitContext {
         // Each case gets a row with its hydrateTemplateController instruction
         const row: SerializedInstruction[] = [];
         const caseInstruction: SerializedHydrateTemplateController = {
-          type: "hydrateTemplateController",
+          type: INSTRUCTION_TYPE.hydrateTemplateController,
           resource: caseBranch.kind,
           templateIndex: i, // Index into innerNested
           instructions: this.emitControllerBindings(caseBranch),
@@ -317,7 +318,7 @@ class EmitContext {
       if (ctrl.pendingTemplate) {
         const row: SerializedInstruction[] = [];
         row.push({
-          type: "hydrateTemplateController",
+          type: INSTRUCTION_TYPE.hydrateTemplateController,
           resource: "pending",
           templateIndex: branchIndex++,
           instructions: [], // pending has no bindings
@@ -327,7 +328,7 @@ class EmitContext {
       if (ctrl.thenTemplate) {
         const row: SerializedInstruction[] = [];
         row.push({
-          type: "hydrateTemplateController",
+          type: INSTRUCTION_TYPE.hydrateTemplateController,
           resource: "then",
           templateIndex: branchIndex++,
           instructions: [], // local variable is handled by the TC, not via binding
@@ -337,7 +338,7 @@ class EmitContext {
       if (ctrl.catchTemplate) {
         const row: SerializedInstruction[] = [];
         row.push({
-          type: "hydrateTemplateController",
+          type: INSTRUCTION_TYPE.hydrateTemplateController,
           resource: "catch",
           templateIndex: branchIndex++,
           instructions: [], // local variable is handled by the TC, not via binding
@@ -461,7 +462,7 @@ class EmitContext {
         // repeat uses an iteratorBinding with ForOfStatement
         if (ctrl.iteratorExprId) {
           const iteratorBinding: SerializedIteratorBinding = {
-            type: "iteratorBinding",
+            type: INSTRUCTION_TYPE.iteratorBinding,
             to: "items",
             exprId: ctrl.iteratorExprId,
           };
@@ -476,50 +477,50 @@ class EmitContext {
       case "if":
         if (ctrl.conditionExprId) {
           result.push({
-            type: "propertyBinding",
+            type: INSTRUCTION_TYPE.propertyBinding,
             to: "value",
             exprId: ctrl.conditionExprId,
-            mode: "toView",
+            mode: BINDING_MODE.toView,
           } satisfies SerializedPropertyBinding);
         }
         break;
       case "with":
         if (ctrl.valueExprId) {
           result.push({
-            type: "propertyBinding",
+            type: INSTRUCTION_TYPE.propertyBinding,
             to: "value",
             exprId: ctrl.valueExprId,
-            mode: "toView",
+            mode: BINDING_MODE.toView,
           } satisfies SerializedPropertyBinding);
         }
         break;
       case "switch":
         if (ctrl.valueExprId) {
           result.push({
-            type: "propertyBinding",
+            type: INSTRUCTION_TYPE.propertyBinding,
             to: "value",
             exprId: ctrl.valueExprId,
-            mode: "toView",
+            mode: BINDING_MODE.toView,
           } satisfies SerializedPropertyBinding);
         }
         break;
       case "promise":
         if (ctrl.valueExprId) {
           result.push({
-            type: "propertyBinding",
+            type: INSTRUCTION_TYPE.propertyBinding,
             to: "value",
             exprId: ctrl.valueExprId,
-            mode: "toView",
+            mode: BINDING_MODE.toView,
           } satisfies SerializedPropertyBinding);
         }
         break;
       case "portal":
         if (ctrl.targetExprId) {
           result.push({
-            type: "propertyBinding",
+            type: INSTRUCTION_TYPE.propertyBinding,
             to: "target",
             exprId: ctrl.targetExprId,
-            mode: "toView",
+            mode: BINDING_MODE.toView,
           } satisfies SerializedPropertyBinding);
         }
         break;
@@ -530,10 +531,10 @@ class EmitContext {
         // case has a value binding for the case expression
         if (ctrl.valueExprId) {
           result.push({
-            type: "propertyBinding",
+            type: INSTRUCTION_TYPE.propertyBinding,
             to: "value",
             exprId: ctrl.valueExprId,
-            mode: "toView",
+            mode: BINDING_MODE.toView,
           } satisfies SerializedPropertyBinding);
         }
         break;
@@ -552,23 +553,23 @@ class EmitContext {
     switch (binding.type) {
       case "propertyBinding":
         return {
-          type: "propertyBinding",
+          type: INSTRUCTION_TYPE.propertyBinding,
           to: binding.to,
           exprId: binding.exprId,
-          mode: binding.mode,
+          mode: toBindingModeValue(binding.mode),
         } satisfies SerializedPropertyBinding;
 
       case "attributeBinding":
         return {
-          type: "propertyBinding",
+          type: INSTRUCTION_TYPE.propertyBinding,
           to: binding.to,
           exprId: binding.exprId,
-          mode: "toView",
+          mode: BINDING_MODE.toView,
         } satisfies SerializedPropertyBinding;
 
       case "attributeInterpolation":
         return {
-          type: "interpolation",
+          type: INSTRUCTION_TYPE.interpolation,
           to: binding.to,
           parts: binding.parts,
           exprIds: binding.exprIds,
@@ -576,15 +577,15 @@ class EmitContext {
 
       case "styleBinding":
         return {
-          type: "propertyBinding",
+          type: INSTRUCTION_TYPE.propertyBinding,
           to: `style.${binding.property}`,
           exprId: binding.exprId,
-          mode: "toView",
+          mode: BINDING_MODE.toView,
         } satisfies SerializedPropertyBinding;
 
       case "listenerBinding": {
         const listener: SerializedListenerBinding = {
-          type: "listenerBinding",
+          type: INSTRUCTION_TYPE.listenerBinding,
           to: binding.event,
           exprId: binding.exprId,
           capture: binding.capture,
@@ -597,7 +598,7 @@ class EmitContext {
 
       case "refBinding":
         return {
-          type: "refBinding",
+          type: INSTRUCTION_TYPE.refBinding,
           to: binding.to,
           exprId: binding.exprId,
         } satisfies SerializedRefBinding;
@@ -613,24 +614,24 @@ class EmitContext {
     // Emit bindings
     for (const binding of ce.bindings) {
       instructions.push({
-        type: "propertyBinding",
+        type: INSTRUCTION_TYPE.propertyBinding,
         to: binding.to,
         exprId: binding.exprId,
-        mode: binding.mode,
+        mode: toBindingModeValue(binding.mode),
       } satisfies SerializedPropertyBinding);
     }
 
     // Emit static props
     for (const prop of ce.staticProps) {
       instructions.push({
-        type: "setProperty",
+        type: INSTRUCTION_TYPE.setProperty,
         to: prop.name,
         value: prop.value,
       } satisfies SerializedSetProperty);
     }
 
     const result: SerializedHydrateElement = {
-      type: "hydrateElement",
+      type: INSTRUCTION_TYPE.hydrateElement,
       resource: ce.resource,
       instructions,
     };
@@ -649,24 +650,24 @@ class EmitContext {
     // Emit bindings
     for (const binding of ca.bindings) {
       instructions.push({
-        type: "propertyBinding",
+        type: INSTRUCTION_TYPE.propertyBinding,
         to: binding.to,
         exprId: binding.exprId,
-        mode: binding.mode,
+        mode: toBindingModeValue(binding.mode),
       } satisfies SerializedPropertyBinding);
     }
 
     // Emit static props
     for (const prop of ca.staticProps) {
       instructions.push({
-        type: "setProperty",
+        type: INSTRUCTION_TYPE.setProperty,
         to: prop.name,
         value: prop.value,
       } satisfies SerializedSetProperty);
     }
 
     const result: SerializedHydrateAttribute = {
-      type: "hydrateAttribute",
+      type: INSTRUCTION_TYPE.hydrateAttribute,
       resource: ca.resource,
       instructions,
     };
@@ -686,7 +687,7 @@ class EmitContext {
     }));
 
     return {
-      type: "hydrateLetElement",
+      type: INSTRUCTION_TYPE.hydrateLetElement,
       bindings,
       toBindingContext: le.toBindingContext,
     };
@@ -709,6 +710,19 @@ class EmitContext {
 /* =============================================================================
  * Helper Functions
  * ============================================================================= */
+
+/**
+ * Convert a string BindingMode to a numeric BindingModeValue.
+ */
+function toBindingModeValue(mode: BindingMode): BindingModeValue {
+  switch (mode) {
+    case "default": return BINDING_MODE.default;
+    case "oneTime": return BINDING_MODE.oneTime;
+    case "toView": return BINDING_MODE.toView;
+    case "fromView": return BINDING_MODE.fromView;
+    case "twoWay": return BINDING_MODE.twoWay;
+  }
+}
 
 /**
  * Get the main template from a controller.
@@ -797,7 +811,7 @@ function shouldReorderInstructions(
 
     // Check for multiple binding in instructions
     return instructions.some(
-      i => i.type === "propertyBinding" && i.to === "multiple"
+      i => i.type === INSTRUCTION_TYPE.propertyBinding && i.to === "multiple"
     );
   }
 
@@ -833,7 +847,7 @@ function reorderInputInstructions(instructions: SerializedInstruction[]): void {
   // Find indices of relevant bindings (stop early once both found)
   for (let i = 0; i < instructions.length && found < 2; i++) {
     const inst = instructions[i];
-    if (inst?.type !== "propertyBinding") continue;
+    if (inst?.type !== INSTRUCTION_TYPE.propertyBinding) continue;
 
     const to = inst.to;
     if (to === "model" || to === "value" || to === "matcher") {
@@ -869,7 +883,7 @@ function reorderSelectInstructions(instructions: SerializedInstruction[]): void 
   // Find indices of relevant bindings
   for (let i = 0; i < instructions.length && found < 2; i++) {
     const inst = instructions[i];
-    if (inst?.type !== "propertyBinding") continue;
+    if (inst?.type !== INSTRUCTION_TYPE.propertyBinding) continue;
 
     if (inst.to === "multiple") {
       multipleIndex = i;
@@ -1017,54 +1031,54 @@ function remapInstructionExprIds(
   const remapId = (id: ExprId): ExprId => remap.get(id) ?? id;
 
   switch (inst.type) {
-    case "propertyBinding":
+    case INSTRUCTION_TYPE.propertyBinding:
       return { ...inst, exprId: remapId(inst.exprId) };
 
-    case "interpolation":
+    case INSTRUCTION_TYPE.interpolation:
       return { ...inst, exprIds: inst.exprIds.map(remapId) };
 
-    case "textBinding":
+    case INSTRUCTION_TYPE.textBinding:
       return { ...inst, exprIds: inst.exprIds.map(remapId) };
 
-    case "listenerBinding":
+    case INSTRUCTION_TYPE.listenerBinding:
       return { ...inst, exprId: remapId(inst.exprId) };
 
-    case "iteratorBinding":
+    case INSTRUCTION_TYPE.iteratorBinding:
       return {
         ...inst,
         exprId: remapId(inst.exprId),
         aux: inst.aux?.map(a => ({ ...a, exprId: remapId(a.exprId) })),
       };
 
-    case "refBinding":
+    case INSTRUCTION_TYPE.refBinding:
       return { ...inst, exprId: remapId(inst.exprId) };
 
-    case "hydrateElement":
+    case INSTRUCTION_TYPE.hydrateElement:
       return {
         ...inst,
         instructions: inst.instructions.map(i => remapInstructionExprIds(i, remap)),
       };
 
-    case "hydrateAttribute":
+    case INSTRUCTION_TYPE.hydrateAttribute:
       return {
         ...inst,
         instructions: inst.instructions.map(i => remapInstructionExprIds(i, remap)),
       };
 
-    case "hydrateTemplateController":
+    case INSTRUCTION_TYPE.hydrateTemplateController:
       return {
         ...inst,
         instructions: inst.instructions.map(i => remapInstructionExprIds(i, remap)),
       };
 
-    case "hydrateLetElement":
+    case INSTRUCTION_TYPE.hydrateLetElement:
       return {
         ...inst,
         bindings: inst.bindings.map(b => ({ ...b, exprId: remapId(b.exprId) })),
       };
 
-    case "setProperty":
-    case "setAttribute":
+    case INSTRUCTION_TYPE.setProperty:
+    case INSTRUCTION_TYPE.setAttribute:
       // These don't have ExprIds
       return inst;
 
