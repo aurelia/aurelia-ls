@@ -12,7 +12,25 @@ node demo.mjs
 
 # Also emit output files to dist/
 node demo.mjs --emit
+
+# Multi-component demo (with resource resolution)
+node demo-multi.mjs           # Show multi-file transformation
+node demo-multi.mjs --emit    # Write bundle to dist/
 ```
+
+## Multi-Component Demo
+
+The `demo-multi.mjs` script demonstrates the full AOT pipeline with resource resolution:
+
+1. **TypeScript Program**: Creates a program from `src/` containing multiple components
+2. **Resolution**: Discovers all Aurelia resources (custom elements, value converters)
+3. **Compilation**: Compiles each template with the linked ResourceGraph
+4. **Transformation**: Transforms each source file with its AOT artifacts
+
+The `src/` folder contains:
+- `app.ts` + `app.html` - Root component that uses child resources
+- `greeting.ts` + `greeting.html` - Child custom element
+- `upper.ts` - Value converter
 
 ## Output Files (with --emit)
 
@@ -67,7 +85,7 @@ const myComponent__e = [
 const myComponent__def_0 = {
   name: "repeat_0",
   type: "custom-element",
-  template: "<li><au-m></au-m> </li>",
+  template: "<li><!--au--> </li>",
   instructions: [[{ type: "ha", from: {...} }]],
   needsCompile: false,
 };
@@ -75,7 +93,7 @@ const myComponent__def_0 = {
 const myComponent_$au = {
   type: "custom-element",
   name: "my-component",
-  template: "<div class=\"container\">...<au-m>...</au-m>...</div>",
+  template: "<div class=\"container\">...<!--au-->...</div>",
   instructions: [[...], [...]],
   needsCompile: false,
 };
@@ -97,7 +115,7 @@ Template definitions for template controllers like `repeat.for`. Each repeat ite
 
 ### Main Definition (`myComponent_$au`)
 The component's runtime definition with:
-- Compiled template HTML with `<au-m>` hydration markers
+- Compiled template HTML with `<!--au-->` hydration markers
 - `<!--au-start-->` / `<!--au-end-->` comment markers for template controllers
 - Instructions referencing the expression table
 - `needsCompile: false` flag (skips runtime compilation)
