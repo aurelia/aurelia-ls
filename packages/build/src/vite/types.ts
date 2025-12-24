@@ -122,6 +122,18 @@ export interface AureliaSSRPluginOptions {
   ssg?: SSGOptions;
 
   /**
+   * SSR entry point for production builds.
+   * Path to the file that exports an SSR handler (created with createSSRHandler).
+   *
+   * When specified, the plugin will:
+   * 1. Build the SSR entry point for Node.js
+   * 2. Use it for SSG generation (if enabled)
+   *
+   * @example './src/entry-server.ts'
+   */
+  ssrEntry?: string;
+
+  /**
    * Hook to register DI services before rendering.
    *
    * **Note:** This is a naive first-pass API. In a real app, the client's `main.ts`
@@ -165,6 +177,8 @@ export interface ResolvedSSROptions {
   ssg: ResolvedSSGOptions;
   /** Discovered route tree (when ssg.enabled and tsconfig provided) */
   routeTree: RouteTree | null;
+  /** SSR entry point path (resolved, or null if not configured) */
+  ssrEntry: string | null;
 }
 
 /**

@@ -38,6 +38,7 @@ import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
 import { compileWithAot } from "../aot.js";
 import { generateStaticSite, type SSGResult } from "../ssg/index.js";
+import { isSSRHandler, type SSRHandler } from "../ssr/handler.js";
 import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
 import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 
@@ -253,6 +254,11 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         onAfterRender: ssgOptions.onAfterRender,
       };
 
+      // Resolve SSR entry point path
+      const ssrEntry = options.ssrEntry
+        ? resolve(config.root, options.ssrEntry)
+        : null;
+
       // Build resolved options with defaults (resolution context added later)
       resolvedOptions = {
         entry,
@@ -266,11 +272,16 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         register: options.register,
         ssg: resolvedSSG,
         routeTree: null, // Will be set after route discovery
+        ssrEntry,
       };
 
       config.logger.info(
         `[aurelia-ssr] Configured with entry: ${entry}`,
       );
+
+      if (ssrEntry) {
+        config.logger.info(`[aurelia-ssr] SSR entry point: ${ssrEntry}`);
+      }
 
       if (resolvedSSG.enabled) {
         config.logger.info("[aurelia-ssr] SSG enabled");
@@ -467,20 +478,59 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         resolvedOptions.ssg.outDir,
       );
 
-      // Create render function that uses SSR pipeline
+      // Try to load SSR handler from built output
+      let ssrHandler: SSRHandler | null = null;
+
+      if (resolvedOptions.ssrEntry) {
+        try {
+          // The SSR entry should be built to dist/server/entry-server.js
+          // We use the same output dir structure as the client build
+          const serverOutDir = join(resolvedConfig.build.outDir, "..", "server");
+          const entryBasename = resolvedOptions.ssrEntry.split(/[\\/]/).pop()!.replace(/\.ts$/, ".js");
+          const handlerPath = join(serverOutDir, entryBasename);
+
+          resolvedConfig.logger.info(`[aurelia-ssr] Loading SSR handler from: ${handlerPath}`);
+
+          // Dynamic import the handler
+          const handlerModule = await import(/* @vite-ignore */ `file://${handlerPath.replace(/\\/g, "/")}`);
+          const exportedHandler = handlerModule.default ?? handlerModule;
+
+          if (isSSRHandler(exportedHandler)) {
+            ssrHandler = exportedHandler;
+            resolvedConfig.logger.info("[aurelia-ssr] SSR handler loaded successfully");
+          } else {
+            resolvedConfig.logger.warn(
+              "[aurelia-ssr] SSR entry point does not export a valid SSR handler. " +
+              "Ensure you export the result of createSSRHandler().",
+            );
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          resolvedConfig.logger.warn(
+            `[aurelia-ssr] Could not load SSR handler: ${errorMessage}. ` +
+            "SSG will use placeholder rendering. " +
+            "Ensure the SSR entry point is built before SSG runs.",
+          );
+        }
+      }
+
+      // Create render function
       const render = async (route: string, _props?: Record<string, unknown>): Promise<string> => {
-        // TODO: Implement SSG rendering
-        // This requires creating a new Vite server or reusing the build
-        // For now, return a placeholder
+        if (ssrHandler) {
+          const result = await ssrHandler.render(route);
+          return result.html;
+        }
+
+        // Fallback: placeholder when no handler available
         resolvedConfig.logger.warn(
-          `[aurelia-ssr] SSG render not yet implemented for: ${route}`,
+          `[aurelia-ssr] No SSR handler available, using placeholder for: ${route}`,
         );
-        return `<!-- SSG placeholder for ${route} -->`;
+        return `<!-- SSG placeholder for ${route} - configure ssrEntry for actual rendering -->`;
       };
 
       // Create static paths resolver
+      // TODO: Implement getStaticPaths resolution by loading component classes
       const resolveStaticPaths = async (): Promise<string[]> => {
-        // TODO: Implement getStaticPaths resolution
         return [];
       };
 

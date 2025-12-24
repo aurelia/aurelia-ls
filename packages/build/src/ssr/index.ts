@@ -64,3 +64,13 @@ export {
   type StaticAuDefinition,
   type ComponentClass as PatchComponentClass,
 } from "./patch.js";
+
+// SSR Handler (production SSR entry point)
+export {
+  createSSRHandler,
+  isSSRHandler,
+  type SSRHandler,
+  type SSRHandlerConfig,
+  type SSRRenderOptions,
+  type SSRResult,
+} from "./handler.js";

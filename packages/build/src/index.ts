@@ -10,8 +10,18 @@
  * state injection - parent-child communication happens via bindables.
  */
 
-// SSR
+// SSR Core
 export * from "./ssr/index.js";
+
+// SSR Handler (production entry point)
+export {
+  createSSRHandler,
+  isSSRHandler,
+  type SSRHandler,
+  type SSRHandlerConfig,
+  type SSRRenderOptions,
+  type SSRResult,
+} from "./ssr/handler.js";
 
 // Re-export compile functions from domain for convenience
 export {
