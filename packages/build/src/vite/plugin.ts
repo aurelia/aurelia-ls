@@ -24,7 +24,7 @@
  */
 
 import type { Plugin, ResolvedConfig } from "vite";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { normalizePathForId } from "@aurelia-ls/domain";
 import {
@@ -34,11 +34,12 @@ import {
   type ResourceDefinition,
 } from "@aurelia-ls/transform";
 import { createSSRMiddleware } from "./middleware.js";
-import { createResolutionContext } from "./resolution.js";
+import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
 import { compileWithAot } from "../aot.js";
+import { generateStaticSite, type SSGResult } from "../ssg/index.js";
 import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
-import type { TemplateInfo } from "@aurelia-ls/resolution";
+import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 
 /**
  * Default HTML shell for SSR output.
@@ -213,6 +214,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
   let resolvedOptions: ResolvedSSROptions;
   let resolutionContext: ResolutionContext | null = null;
   let resolutionPromise: Promise<ResolutionContext | null> | null = null;
+  let routeTree: RouteTree | null = null;
 
   return {
     name: "aurelia-ssr",
@@ -239,6 +241,18 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         );
       }
 
+      // Resolve SSG options
+      const ssgOptions = options.ssg ?? {};
+      const resolvedSSG = {
+        enabled: ssgOptions.enabled ?? false,
+        entryPoints: ssgOptions.entryPoints ?? [],
+        outDir: ssgOptions.outDir ?? ".",
+        fallback: ssgOptions.fallback ?? "404.html",
+        additionalRoutes: ssgOptions.additionalRoutes,
+        onBeforeRender: ssgOptions.onBeforeRender,
+        onAfterRender: ssgOptions.onAfterRender,
+      };
+
       // Build resolved options with defaults (resolution context added later)
       resolvedOptions = {
         entry,
@@ -250,11 +264,17 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         resolution: null, // Will be set after async initialization
         baseHref: options.baseHref ?? "/",
         register: options.register,
+        ssg: resolvedSSG,
+        routeTree: null, // Will be set after route discovery
       };
 
       config.logger.info(
         `[aurelia-ssr] Configured with entry: ${entry}`,
       );
+
+      if (resolvedSSG.enabled) {
+        config.logger.info("[aurelia-ssr] SSG enabled");
+      }
 
       // Start resolution initialization if tsconfig provided
       if (options.tsconfig) {
@@ -271,6 +291,18 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
           resolvedOptions.resolution = ctx;
           if (ctx) {
             config.logger.info("[aurelia-ssr] Resource resolution ready");
+
+            // Discover routes if SSG is enabled
+            if (resolvedSSG.enabled) {
+              routeTree = discoverRoutes(tsconfigPath, resolvedSSG.entryPoints, logger);
+              resolvedOptions.routeTree = routeTree;
+              if (routeTree) {
+                config.logger.info(
+                  `[aurelia-ssr] Route discovery: ${routeTree.allStaticPaths.length} static, ` +
+                  `${routeTree.parameterizedRoutes.length} parameterized`,
+                );
+              }
+            }
           }
           return ctx;
         });
@@ -396,6 +428,91 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin {
         }
         return originalInvalidateModule(mod, seen, timestamp, isHmr);
       };
+    },
+
+    /**
+     * Generate static pages after build completes.
+     * Only runs when SSG is enabled and in production build.
+     */
+    async closeBundle() {
+      // Only run SSG in production builds
+      if (resolvedConfig.command !== "build") {
+        return;
+      }
+
+      // Check if SSG is enabled
+      if (!resolvedOptions.ssg.enabled) {
+        return;
+      }
+
+      // Ensure resolution completed
+      if (resolutionPromise) {
+        await resolutionPromise;
+      }
+
+      // Check we have route tree
+      if (!routeTree) {
+        resolvedConfig.logger.warn(
+          "[aurelia-ssr] SSG enabled but no routes discovered. " +
+          "Ensure tsconfig is configured and route components are found.",
+        );
+        return;
+      }
+
+      resolvedConfig.logger.info("[aurelia-ssr] Starting SSG...");
+
+      // Calculate output directory
+      const outDir = join(
+        resolvedConfig.build.outDir,
+        resolvedOptions.ssg.outDir,
+      );
+
+      // Create render function that uses SSR pipeline
+      const render = async (route: string, _props?: Record<string, unknown>): Promise<string> => {
+        // TODO: Implement SSG rendering
+        // This requires creating a new Vite server or reusing the build
+        // For now, return a placeholder
+        resolvedConfig.logger.warn(
+          `[aurelia-ssr] SSG render not yet implemented for: ${route}`,
+        );
+        return `<!-- SSG placeholder for ${route} -->`;
+      };
+
+      // Create static paths resolver
+      const resolveStaticPaths = async (): Promise<string[]> => {
+        // TODO: Implement getStaticPaths resolution
+        return [];
+      };
+
+      // Generate static site
+      const result: SSGResult = await generateStaticSite(
+        routeTree,
+        resolvedOptions.ssg,
+        outDir,
+        render,
+        resolveStaticPaths,
+      );
+
+      // Log results
+      resolvedConfig.logger.info(
+        `[aurelia-ssr] SSG complete: ${result.pages.size} pages generated`,
+      );
+
+      if (result.errors.length > 0) {
+        for (const error of result.errors) {
+          resolvedConfig.logger.error(
+            `[aurelia-ssr] SSG error for ${error.route}: ${error.error.message}`,
+          );
+        }
+      }
+
+      if (result.expandedRoutes.length > 0) {
+        for (const expanded of result.expandedRoutes) {
+          resolvedConfig.logger.info(
+            `[aurelia-ssr] Expanded ${expanded.parameterizedRoute.fullPath} → ${expanded.staticPaths.length} pages`,
+          );
+        }
+      }
     },
   };
 }

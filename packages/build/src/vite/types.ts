@@ -7,8 +7,9 @@
 import type { IncomingMessage } from "node:http";
 import type { IContainer } from "@aurelia/kernel";
 import type { ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/domain";
-import type { ResolutionResult, TemplateInfo } from "@aurelia-ls/resolution";
+import type { ResolutionResult, TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "../ssr/render.js";
+import type { SSGOptions, ResolvedSSGOptions } from "../ssg/index.js";
 
 /**
  * State provider function for SSR.
@@ -115,6 +116,12 @@ export interface AureliaSSRPluginOptions {
   baseHref?: string;
 
   /**
+   * Static Site Generation options.
+   * When enabled, generates static HTML pages for all discovered routes.
+   */
+  ssg?: SSGOptions;
+
+  /**
    * Hook to register DI services before rendering.
    *
    * **Note:** This is a naive first-pass API. In a real app, the client's `main.ts`
@@ -154,6 +161,10 @@ export interface ResolvedSSROptions {
   baseHref: string;
   /** DI registration hook */
   register?: (container: IContainer, request: SSRRequestContext) => void;
+  /** SSG options */
+  ssg: ResolvedSSGOptions;
+  /** Discovered route tree (when ssg.enabled and tsconfig provided) */
+  routeTree: RouteTree | null;
 }
 
 /**

@@ -7,8 +7,9 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
+import ts from "typescript";
 import { DEFAULT_SEMANTICS, normalizePathForId, type BindingMode, type ResourceScopeId, type Semantics, type Bindable } from "@aurelia-ls/domain";
-import { resolve, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RegistrationIntent } from "@aurelia-ls/resolution";
+import { resolve, buildRouteTree, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RegistrationIntent, type RouteTree } from "@aurelia-ls/resolution";
 import type { ResolutionContext } from "./types.js";
 
 /**
@@ -188,4 +189,57 @@ function mergeSemantics(base: Semantics, candidates: readonly ResourceCandidate[
     },
     resourceGraph: null, // Resource graph is passed separately
   };
+}
+
+/**
+ * Discover routes from a TypeScript project.
+ *
+ * Uses the route discovery module to build a route tree from the project.
+ *
+ * @param tsconfigPath - Absolute path to tsconfig.json
+ * @param entryPoints - Entry point class names for route discovery
+ * @param logger - Logger for output
+ * @returns Route tree or null if discovery fails
+ */
+export function discoverRoutes(
+  tsconfigPath: string,
+  entryPoints: string[],
+  logger: Logger,
+): RouteTree | null {
+  try {
+    // Validate tsconfig exists
+    if (!existsSync(tsconfigPath)) {
+      logger.error(`[aurelia-ssr] tsconfig not found: ${tsconfigPath}`);
+      return null;
+    }
+
+    // Parse tsconfig
+    const configFile = ts.readConfigFile(tsconfigPath, (path) => readFileSync(path, "utf-8"));
+    if (configFile.error) {
+      logger.error(`[aurelia-ssr] Failed to parse tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`);
+      return null;
+    }
+
+    const basePath = dirname(tsconfigPath);
+    const parsedConfig = ts.parseJsonConfigFileContent(configFile.config, ts.sys, basePath);
+
+    // Create TypeScript program
+    const program = ts.createProgram(parsedConfig.fileNames, parsedConfig.options);
+
+    // Build route tree
+    const routeTree = buildRouteTree(program, {
+      entryPoints: entryPoints.length > 0 ? entryPoints : undefined,
+    });
+
+    logger.info(
+      `[aurelia-ssr] Route discovery complete: ${routeTree.entryPoints.length} entry points, ` +
+      `${routeTree.roots.length} root routes`,
+    );
+
+    return routeTree;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(`[aurelia-ssr] Route discovery failed: ${errorMessage}`);
+    return null;
+  }
 }

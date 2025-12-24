@@ -40,3 +40,12 @@ export type {
   ResolvedSSROptions,
   ResolutionContext,
 } from "./types.js";
+
+// SSG exports
+export type {
+  SSGOptions,
+  ResolvedSSGOptions,
+  SSGResult,
+  SSGError,
+  ExpandedRoute,
+} from "../ssg/index.js";
