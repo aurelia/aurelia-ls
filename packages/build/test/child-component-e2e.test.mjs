@@ -363,7 +363,7 @@ describe("Child Component SSR E2E: Full App Structure", () => {
 
     // Strip hydration markers for structural comparison
     const htmlWithoutMarkers = result.html
-      .replace(/<au-m><\/au-m>/g, "")
+      .replace(/<!--au-->/g, "")
       .replace(/\s+/g, " ")
       .trim();
 

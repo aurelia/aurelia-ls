@@ -279,7 +279,7 @@ describe("Router SSR: AOT Compilation", () => {
 
     // The template should have text bindings for the interpolation
     assert.ok(
-      aot.template.includes("<au-m>") || aot.instructions.length > 0,
+      aot.template.includes("<!--au-->") || aot.instructions.length > 0,
       "AOT should compile interpolation in router template"
     );
   });

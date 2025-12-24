@@ -16,7 +16,7 @@
  */
 export interface SSRProcessOptions {
   /**
-   * Strip `<au-m>` marker elements from the output HTML.
+   * Strip `<!--au-->` marker comments from the output HTML.
    * Default: false
    */
   stripMarkers?: boolean;
@@ -45,7 +45,7 @@ export interface SSRProcessResult {
  * ```typescript
  * // After Aurelia renders...
  * const result = processSSROutput(host, { stripMarkers: true });
- * // result.html is clean (no <au-m> markers)
+ * // result.html is clean (no <!--au--> markers)
  * ```
  */
 export function processSSROutput(
@@ -68,14 +68,23 @@ export function processSSROutput(
  * ============================================================================= */
 
 /**
- * Remove all `<au-m>` marker elements from within root.
+ * Remove all `<!--au-->` marker comments from within root.
+ * Uses native TreeWalker with SHOW_COMMENT filter for optimal performance.
  *
  * @param root - The root element to process
  */
 export function stripAuMarkers(root: Element): void {
-  const markers = root.querySelectorAll("au-m");
-  for (const el of markers) {
-    el.remove();
+  const markers: Comment[] = [];
+  // NodeFilter.SHOW_COMMENT = 128
+  const walker = root.ownerDocument!.createTreeWalker(root, 128);
+  let node: Comment | null;
+  while ((node = walker.nextNode() as Comment | null) !== null) {
+    if (node.textContent === "au") {
+      markers.push(node);
+    }
+  }
+  for (const marker of markers) {
+    marker.remove();
   }
 }
 

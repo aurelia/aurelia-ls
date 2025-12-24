@@ -5,11 +5,11 @@
  * Produces: HTML string with hydration markers matching Aurelia's format
  *
  * Marker format (matching Aurelia runtime expectations):
- * - All targets: <au-m></au-m> element placed BEFORE the target node
- * - Template controllers: <au-m></au-m><!--au-start--><!--au-end--> structure
+ * - All targets: <!--au--> comment placed BEFORE the target node
+ * - Template controllers: <!--au--><!--au-start--><!--au-end--> structure
  * - Indexing is implicit via document order (markers[i] = instructions[i])
  *
- * The runtime's _collectTargets() uses querySelectorAll('au-m').
+ * The runtime collects markers by walking the DOM for comments with text 'au'.
  * ============================================================================= */
 
 import type {
@@ -291,7 +291,7 @@ function emitNode(node: PlanNode, ctx: TemplateEmitContext): string {
  * Emit an element node.
  *
  * If the element has template controllers, they wrap the element with markers.
- * Otherwise, emit the element directly (with <au-m> marker if it has bindings).
+ * Otherwise, emit the element directly (with <!--au--> marker if it has bindings).
  */
 function emitElement(node: PlanElementNode, ctx: TemplateEmitContext): string {
   // If element has template controllers, emit them (outermost first)
@@ -354,7 +354,7 @@ function emitElementContent(node: PlanElementNode, ctx: TemplateEmitContext): st
 
 /**
  * Emit a standard element (no template controllers).
- * If the element is a binding target, emit <au-m></au-m> before it.
+ * If the element is a binding target, emit <!--au--> before it.
  */
 function emitStandardElement(node: PlanElementNode, ctx: TemplateEmitContext): string {
   const tag = node.tag;
@@ -371,7 +371,7 @@ function emitStandardElement(node: PlanElementNode, ctx: TemplateEmitContext): s
 
   // If this element is a target, prepend marker
   if (node.targetIndex !== undefined) {
-    return `<au-m></au-m>${elementHtml}`;
+    return `<!--au-->${elementHtml}`;
   }
 
   return elementHtml;
@@ -406,14 +406,14 @@ function emitAttribute(attr: PlanStaticAttr): string {
 /**
  * Emit a template controller wrapper.
  *
- * Format: <au-m></au-m><!--au-start-->...content...<!--au-end-->
+ * Format: <!--au--><!--au-start-->...content...<!--au-end-->
  */
 function emitControllerWrapper(
   ctrl: PlanController,
   content: string,
   _ctx: TemplateEmitContext,
 ): string {
-  return `<au-m></au-m><!--au-start-->${content}<!--au-end-->`;
+  return `<!--au--><!--au-start-->${content}<!--au-end-->`;
 }
 
 /**
@@ -435,7 +435,7 @@ function emitText(node: PlanTextNode, _ctx: TemplateEmitContext): string {
   // Text interpolation - emit marker followed by a space (the text node target)
   // The runtime will evaluate the full interpolation (parts + expressions)
   // and replace the marker's nextSibling text node with the result.
-  return `<au-m></au-m> `;
+  return `<!--au--> `;
 }
 
 /**

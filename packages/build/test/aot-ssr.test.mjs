@@ -49,8 +49,8 @@ describe("AOT Compilation", () => {
       name: "test-comp",
     });
 
-    // All targets use <au-m></au-m> marker elements
-    assert.ok(result.template.includes("<au-m></au-m>"), "Should have <au-m> hydration marker");
+    // All targets use <!--au--> marker comments
+    assert.ok(result.template.includes("<!--au-->"), "Should have <!--au--> hydration marker");
 
     // Verify instructions were generated
     assert.ok(result.instructions.length > 0, "Should have instructions");
@@ -64,7 +64,7 @@ describe("AOT Compilation", () => {
       name: "test-comp",
     });
 
-    assert.ok(result.template.includes("<au-m></au-m>"), "Should have <au-m> hydration marker");
+    assert.ok(result.template.includes("<!--au-->"), "Should have <!--au--> hydration marker");
     assert.ok(result.instructions.length > 0, "Should have binding instructions");
   });
 

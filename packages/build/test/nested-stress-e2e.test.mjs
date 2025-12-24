@@ -582,7 +582,7 @@ describe("Nested Stress Test: Multi-Request Stability", () => {
       childComponents: [PersistentSectionPanel, PersistentItemCard, PersistentStatusBadge, PersistentInfoTag, PersistentFooterWidget],
     });
 
-    // Normalize HTML for comparison (markers are now uniform <au-m></au-m>)
+    // Normalize HTML for comparison (markers are now uniform <!--au-->)
     const normalize = (html) => html;
 
     const normalized1 = normalize(result1.html);
