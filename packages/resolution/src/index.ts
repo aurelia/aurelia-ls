@@ -93,6 +93,7 @@ export {
   extractComponentRef,
   extractPathParams,
   hasGetRouteConfigMethod,
+  buildRouteTree,
 } from "./routes/index.js";
 export type {
   ExtractedRouteConfig,
@@ -103,4 +104,5 @@ export type {
   RouteSource,
   ParameterizedRoute,
   DynamicRouteComponent,
+  RouteTreeOptions,
 } from "./routes/index.js";

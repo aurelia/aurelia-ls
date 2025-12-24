@@ -17,3 +17,8 @@ export {
   extractPathParams,
   hasGetRouteConfigMethod,
 } from "./extract.js";
+
+export {
+  buildRouteTree,
+  type RouteTreeOptions,
+} from "./tree-builder.js";

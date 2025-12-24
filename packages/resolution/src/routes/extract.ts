@@ -225,7 +225,7 @@ function extractChildRoute(obj: ts.ObjectLiteralExpression): ExtractedChildRoute
     ...(component ? { component } : {}),
     ...(id ? { id } : {}),
     ...(title ? { title } : {}),
-    ...(redirectTo ? { redirectTo } : {}),
+    ...(redirectTo !== undefined ? { redirectTo } : {}),
     ...(viewport ? { viewport } : {}),
     ...(children && children.length > 0 ? { children } : {}),
     ...(data ? { data } : {}),
