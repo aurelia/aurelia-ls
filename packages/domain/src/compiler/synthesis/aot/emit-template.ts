@@ -169,13 +169,14 @@ function collectNestedFromNodeTree(
   switch (node.kind) {
     case "element":
       return collectNestedFromElementTree(node, ctx);
-    case "fragment":
+    case "fragment": {
       // Collect from all children and flatten
       const results: NestedTemplateHtmlNode[] = [];
       for (const child of node.children) {
         results.push(...collectNestedFromNodeTree(child, ctx));
       }
       return results;
+    }
     default:
       return [];
   }
@@ -241,12 +242,13 @@ function getControllerTemplates(ctrl: PlanController): PlanNode[] {
     case "switch":
       // cases array includes both case and default-case controllers
       return ctrl.cases.map(c => c.template);
-    case "promise":
+    case "promise": {
       const promiseTemplates: PlanNode[] = [];
       if (ctrl.pendingTemplate) promiseTemplates.push(ctrl.pendingTemplate);
       if (ctrl.thenTemplate) promiseTemplates.push(ctrl.thenTemplate);
       if (ctrl.catchTemplate) promiseTemplates.push(ctrl.catchTemplate);
       return promiseTemplates;
+    }
   }
 }
 
@@ -331,25 +333,6 @@ function emitElementWithControllers(
   }
 
   return content;
-}
-
-/**
- * Emit the content inside a controller (the element and its children).
- */
-function emitElementContent(node: PlanElementNode, ctx: TemplateEmitContext): string {
-  // Emit the element itself
-  const tag = node.tag;
-  const attrs = buildAttributes(node, ctx);
-
-  // Children
-  const children = node.children.map(child => emitNode(child, ctx)).join("");
-
-  // Self-closing elements (void elements)
-  if (isVoidElement(tag)) {
-    return `<${tag}${attrs}>`;
-  }
-
-  return `<${tag}${attrs}>${children}</${tag}>`;
 }
 
 /**

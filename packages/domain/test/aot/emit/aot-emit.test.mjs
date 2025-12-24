@@ -183,7 +183,7 @@ function reduceInstruction(inst, targetIdx) {
 function compareEmitIntent(actual, expected, orderSensitive = false) {
   let missingInstructions = [];
   let extraInstructions = [];
-  let orderMismatches = [];
+  const orderMismatches = [];
 
   if (orderSensitive) {
     // Positional comparison for order-sensitive tests

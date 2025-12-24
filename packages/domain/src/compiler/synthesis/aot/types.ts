@@ -668,7 +668,8 @@ export interface SerializedDefinition {
   targetCount: number;
 }
 
-import { INSTRUCTION_TYPE, BINDING_MODE, type BindingModeValue } from "./constants.js";
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- INSTRUCTION_TYPE used in typeof
+import { INSTRUCTION_TYPE, type BindingModeValue } from "./constants.js";
 
 /**
  * Serialized instruction using numeric type codes.

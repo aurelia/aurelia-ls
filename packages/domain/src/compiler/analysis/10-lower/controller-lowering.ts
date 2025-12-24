@@ -455,7 +455,7 @@ function injectPromiseBranchesIntoDef(
     // Build branch info - pending has no local alias, then/catch do
     const branch = branchKind === "pending"
       ? { kind: "pending" as const }
-      : { kind: branchKind as "then" | "catch", local: aliasVar ?? branchKind };
+      : { kind: branchKind, local: aliasVar ?? branchKind };
 
     def.rows.push({
       target,
@@ -476,124 +476,6 @@ function injectPromiseBranchesIntoDef(
         },
       ],
     });
-  }
-}
-
-function injectSwitchBranchesIntoDef(
-  el: P5Element,
-  def: TemplateIR,
-  idMap: WeakMap<P5Node, NodeId>,
-  attrParser: AttributeParser,
-  table: ExprTable,
-  nestedTemplates: TemplateIR[],
-  sem: Semantics,
-  valueProp: PropertyBindingIR,
-  collectRows: RowCollector
-): void {
-  const kids =
-    el.nodeName.toLowerCase() === "template"
-      ? (el as P5Template).content.childNodes ?? []
-      : el.childNodes ?? [];
-
-  for (const kid of kids) {
-    if (!isElementNode(kid) || kid.nodeName.toLowerCase() !== "template") continue;
-
-    let caseExpr: string | null = null;
-    let isDefault = false;
-
-    for (const a of (kid as P5Element).attrs ?? []) {
-      const s = attrParser.parse(a.name, a.value ?? "");
-      if (s.target === "case") {
-        caseExpr = (a.value ?? "").length ? a.value : s.command ? a.value ?? "" : s.rawValue;
-      } else if (a.name === "default-case") {
-        isDefault = true;
-      }
-    }
-
-    const target = idMap.get(kid as P5Node);
-    if (!target) continue;
-
-    const row = def.rows.find((r) => r.target === target);
-    if (row) {
-      row.instructions = row.instructions.filter((ins) => {
-        if (ins.type === "setAttribute") return ins.to !== "default-case" && ins.to !== "case";
-        if (ins.type === "propertyBinding") return ins.to !== "case";
-        return true;
-      });
-    }
-
-    if (caseExpr !== null) {
-      const branchDef = templateOfTemplateContent(
-        kid as P5Template,
-        attrParser,
-        table,
-        nestedTemplates,
-        sem,
-        collectRows
-      );
-      const caseProp: PropertyBindingIR = {
-        type: "propertyBinding",
-        to: "case",
-        from: toExprRef(
-          caseExpr,
-          (kid as P5Template).sourceCodeLocation,
-          table,
-          "IsProperty"
-        ),
-        mode: "default",
-        loc: toSpan((kid as P5Template).sourceCodeLocation, table.source),
-      };
-      def.rows.push({
-        target,
-        instructions: [
-          {
-            type: "hydrateTemplateController",
-            res: "switch",
-            def: branchDef,
-            props: [valueProp, caseProp],
-            alias: "case",
-            branch: {
-              kind: "case",
-              expr: toExprRef(
-                caseExpr,
-                (kid as P5Template).sourceCodeLocation,
-                table,
-                "IsProperty"
-              ),
-            },
-            containerless: false,
-            loc: toSpan((kid as P5Template).sourceCodeLocation, table.source),
-          },
-        ],
-      });
-      continue;
-    }
-
-    if (isDefault) {
-      const branchDef = templateOfTemplateContent(
-        kid as P5Template,
-        attrParser,
-        table,
-        nestedTemplates,
-        sem,
-        collectRows
-      );
-      def.rows.push({
-        target,
-        instructions: [
-          {
-            type: "hydrateTemplateController",
-            res: "switch",
-            def: branchDef,
-            props: [valueProp],
-            alias: "default",
-            branch: { kind: "default" },
-            containerless: false,
-            loc: toSpan((kid as P5Template).sourceCodeLocation, table.source),
-          },
-        ],
-      });
-    }
   }
 }
 
