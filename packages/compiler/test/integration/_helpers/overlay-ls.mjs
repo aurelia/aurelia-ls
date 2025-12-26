@@ -123,12 +123,12 @@ export async function compileFromEntry({
   exprParser,
   attrParser,
 }) {
-  const domainIndexUrl = new URL("../../../out/index.js", import.meta.url);
+  const compilerIndexUrl = new URL("../../../out/index.js", import.meta.url);
   const {
     DefaultTemplateProgram,
     DefaultTemplateBuildService,
     canonicalDocumentUri,
-  } = await import(domainIndexUrl.href);
+  } = await import(compilerIndexUrl.href);
 
   const vm = {
     // Crucial: refer to the class in the same file, not a synthetic type alias.

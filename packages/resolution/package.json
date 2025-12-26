@@ -16,7 +16,7 @@
     "test:routes": "tsx --test --test-reporter=spec test/routes/**/*.test.ts"
   },
   "dependencies": {
-    "@aurelia-ls/domain": "workspace:*"
+    "@aurelia-ls/compiler": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

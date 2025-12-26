@@ -1,10 +1,10 @@
-import { getExpressionParser, DEFAULT_SYNTAX } from "./packages/domain/out/index.js";
-import { lowerDocument } from "./packages/domain/out/compiler/phases/10-lower/lower.js";
-import { resolveHost } from "./packages/domain/out/compiler/phases/20-resolve-host/resolve.js";
-import { bindScopes } from "./packages/domain/out/compiler/phases/30-bind/bind.js";
-import { planSsr } from "./packages/domain/out/compiler/phases/50-plan/ssr/plan.js";
-import { emitSsr } from "./packages/domain/out/compiler/phases/60-emit/ssr/emit.js";
-import { DEFAULT as SEM_DEFAULT } from "./packages/domain/out/compiler/language/registry.js";
+import { getExpressionParser, DEFAULT_SYNTAX } from "./packages/compiler/out/index.js";
+import { lowerDocument } from "./packages/compiler/out/compiler/phases/10-lower/lower.js";
+import { resolveHost } from "./packages/compiler/out/compiler/phases/20-resolve-host/resolve.js";
+import { bindScopes } from "./packages/compiler/out/compiler/phases/30-bind/bind.js";
+import { planSsr } from "./packages/compiler/out/compiler/phases/50-plan/ssr/plan.js";
+import { emitSsr } from "./packages/compiler/out/compiler/phases/60-emit/ssr/emit.js";
+import { DEFAULT as SEM_DEFAULT } from "./packages/compiler/out/compiler/language/registry.js";
 
 const markup = '<div>${message}</div>';
 const ir = lowerDocument(markup, {

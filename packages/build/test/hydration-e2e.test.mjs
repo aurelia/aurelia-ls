@@ -2,7 +2,7 @@
  * Hydration E2E Tests
  *
  * Full end-to-end tests covering:
- * 1. AOT compilation (domain compiler)
+ * 1. AOT compilation
  * 2. SSR rendering with manifest recording
  * 3. Client-side hydration using Aurelia.hydrate()
  * 4. DOM adoption verification (no double render)

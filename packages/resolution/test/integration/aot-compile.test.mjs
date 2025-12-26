@@ -2,7 +2,7 @@
  * Resolution + AOT Compilation Integration Tests
  *
  * Tests that resolution produces correct ResourceGraph and Semantics
- * that the domain compiler can use for AOT compilation.
+ * that the AOT compiler can use for AOT compilation.
  *
  * Test structure:
  * 1. Template Compilation (data-driven) - verify compiled instructions match expected
@@ -32,7 +32,7 @@ import {
   getExpressionParser,
   INSTRUCTION_TYPE,
   BINDING_MODE,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");
@@ -479,7 +479,7 @@ function createProgramFromApp(appPath) {
 }
 
 /**
- * Compile a template using the domain compiler AOT pipeline.
+ * Compile a template using the AOT compiler AOT pipeline.
  */
 function compileTemplate(markup, options = {}) {
   const templatePath = options.templatePath ?? "template.html";

@@ -12,7 +12,7 @@ import {
   type AttrRes,
   type ValueConverterSig,
   type BindingBehaviorSig,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import type { RegistrationIntent } from "../registration/types.js";
 import type { ResourceCandidate, BindableSpec } from "../inference/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";

@@ -8,7 +8,7 @@ import {
   type ResourceGraph,
   type ResourceScopeId,
   type Semantics,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import { hashObject, normalizeCompilerOptions, resolve, type ResourceCandidate } from "@aurelia-ls/resolution";
 import type { Logger } from "./types.js";
 

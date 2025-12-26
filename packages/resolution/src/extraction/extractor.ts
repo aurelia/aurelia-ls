@@ -1,5 +1,5 @@
 import ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";

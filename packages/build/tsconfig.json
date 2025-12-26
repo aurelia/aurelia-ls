@@ -6,7 +6,7 @@
   },
   "include": ["src/**/*"],
   "references": [
-    { "path": "../domain" },
+    { "path": "../compiler" },
     { "path": "../resolution" },
     { "path": "../transform" }
   ]

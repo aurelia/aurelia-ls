@@ -22,7 +22,7 @@
     "clean": "rm -rf out"
   },
   "dependencies": {
-    "@aurelia-ls/domain": "workspace:*",
+    "@aurelia-ls/compiler": "workspace:*",
     "@aurelia-ls/resolution": "workspace:*"
   },
   "peerDependencies": {

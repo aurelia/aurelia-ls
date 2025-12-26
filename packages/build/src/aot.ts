@@ -2,7 +2,7 @@
  * AOT Compilation API
  *
  * Provides high-level functions for ahead-of-time compilation of Aurelia templates.
- * This integrates the domain compiler with the instruction translator to produce
+ * This integrates the AOT compiler with the instruction translator to produce
  * output that can be rendered directly by the Aurelia runtime.
  */
 
@@ -23,7 +23,7 @@ import {
   type ResourceGraph,
   type ResourceScopeId,
   type NestedTemplateHtmlNode,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./ssr/instruction-translator.js";
 import type { SSRProcessOptions } from "./ssr/ssr-processor.js";
@@ -80,7 +80,7 @@ export interface AotCompileResult {
 }
 
 /**
- * Compile a template using the domain compiler AOT pipeline.
+ * Compile a template using the AOT compiler AOT pipeline.
  *
  * This runs the full compilation pipeline:
  * 1. Parse and lower (10-lower)
@@ -113,7 +113,7 @@ export function compileWithAot(
   const name = options.name ?? "template";
   const semantics = options.semantics ?? DEFAULT_SEMANTICS;
 
-  // 1. Run domain compiler analysis pipeline
+  // 1. Run AOT compiler analysis pipeline
   const exprParser = getExpressionParser();
 
   const ir = lowerDocument(markup, {

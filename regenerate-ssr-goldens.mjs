@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 import {
   DefaultTemplateBuildService,
   DefaultTemplateProgram,
-} from "./packages/domain/out/program/index.js";
-import { DEFAULT_SYNTAX, getExpressionParser } from "./packages/domain/out/index.js";
+} from "./packages/compiler/out/program/index.js";
+import { DEFAULT_SYNTAX, getExpressionParser } from "./packages/compiler/out/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

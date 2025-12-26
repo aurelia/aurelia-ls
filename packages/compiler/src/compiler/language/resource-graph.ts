@@ -73,7 +73,7 @@ export function materializeResourcesForScope(
  * Create semantics with resources materialized for a specific scope.
  *
  * This is the primary integration point between the resolution pipeline and
- * the domain compiler. It takes base semantics (typically DEFAULT_SEMANTICS),
+ * the AOT compiler. It takes base semantics (typically DEFAULT_SEMANTICS),
  * a ResourceGraph from resolution, and an optional scope, then produces
  * complete Semantics with properly merged resources.
  *

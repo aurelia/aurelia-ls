@@ -1,5 +1,5 @@
 import ts from "typescript";
-import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/domain";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
 
 export class PathUtils {
   constructor(private readonly caseSensitive: boolean) {}

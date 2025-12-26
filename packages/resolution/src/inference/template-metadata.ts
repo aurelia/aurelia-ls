@@ -1,4 +1,4 @@
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { BindableSpec } from "./types.js";
 
 /**
@@ -58,7 +58,7 @@ export function extractTemplateMetadata(_templatePath: NormalizedPath): Template
   // Options for parsing:
   // - Use a simple regex-based approach for these specific tags
   // - Use a proper HTML parser (adds dependency)
-  // - Leverage the domain compiler's HTML parsing (if available)
+  // - Leverage the AOT compiler's HTML parsing (if available)
 
   return null;
 }

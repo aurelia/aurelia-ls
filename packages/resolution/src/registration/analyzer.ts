@@ -1,5 +1,5 @@
 import type ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { SourceFacts, ImportFact, ExportFact } from "../extraction/types.js";
 import type { ResourceCandidate } from "../inference/types.js";
 import type { RegistrationIntent, RegistrationEvidence, ImportGraph } from "./types.js";

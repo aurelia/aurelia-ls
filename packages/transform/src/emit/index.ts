@@ -5,7 +5,7 @@
  * This is pure string generation - no TypeScript AST involved.
  */
 
-import type { AotCodeResult, SerializedDefinition, SerializedExpression, NestedTemplateHtmlNode } from "@aurelia-ls/domain";
+import type { AotCodeResult, SerializedDefinition, SerializedExpression, NestedTemplateHtmlNode } from "@aurelia-ls/compiler";
 import { emitExpressionTable } from "./expression-table.js";
 import { emitDefinition } from "./definition.js";
 import { toIdentifierPrefix } from "./format.js";

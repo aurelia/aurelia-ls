@@ -12,7 +12,7 @@ import {
   type TsTextEdit,
   type TsCodeAction,
   type TypeScriptServices,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import type { TsService } from "./ts-service.js";
 import type { PathUtils } from "./paths.js";
 

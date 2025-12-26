@@ -1,7 +1,7 @@
 /**
  * Instruction Translator
  *
- * Translates domain compiler's SerializedInstruction to Aurelia's IInstruction.
+ * Translates AOT compiler's SerializedInstruction to Aurelia's IInstruction.
  * This bridges the gap between AOT compilation output and the Aurelia runtime.
  */
 
@@ -64,7 +64,7 @@ import {
   type NestedTemplateHtmlNode,
   type ExprId,
   type AnyBindingExpression,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 
 /* =============================================================================
  * Public API

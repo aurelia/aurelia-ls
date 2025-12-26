@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { Logger } from "./types.js";
 import type { OverlayFs } from "./overlay-fs.js";
 import type { PathUtils } from "./paths.js";

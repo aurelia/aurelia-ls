@@ -35,20 +35,20 @@ jobs:
         run: pnpm install
 
       - name: Lint
-        run: pnpm lint:domain
+        run: pnpm lint:compiler
 
       - name: Test with coverage
         run: |
           set -o pipefail
           pnpm -w build
           mkdir -p coverage/typecheck
-          pnpm exec c8 --all --include "packages/domain/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -r json-summary -o coverage/typecheck node --test --test-reporter=spec | tee coverage/typecheck/coverage.log
+          pnpm exec c8 --all --include "packages/compiler/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -r json-summary -o coverage/typecheck node --test --test-reporter=spec | tee coverage/typecheck/coverage.log
 
       - name: Coverage summary (job)
         if: always()
         run: |
           {
-            echo "## Coverage (domain suite)";
+            echo "## Coverage (compiler suite)";
             echo "";
             if [ -f coverage/typecheck/coverage.log ]; then
               grep -A20 "All files" coverage/typecheck/coverage.log || cat coverage/typecheck/coverage.log;
@@ -82,7 +82,7 @@ jobs:
             const fmt = (entry) =>
               entry.total === 0 ? 'n/a' : `${entry.pct.toFixed(2)}% (${entry.covered}/${entry.total})`;
 
-            const header = '## Coverage (domain suite)';
+            const header = '## Coverage (compiler suite)';
             const body = [
               header,
               '',

@@ -23,7 +23,7 @@ export {
   type SSRResult,
 } from "./ssr/handler.js";
 
-// Re-export compile functions from domain for convenience
+// Re-export compile functions from compiler for convenience
 export {
   lowerDocument,
   resolveHost,
@@ -41,7 +41,7 @@ export {
   type Semantics,
   type ResourceGraph,
   type ResourceScopeId,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 
 // AOT compilation API
 export {

@@ -5,7 +5,7 @@
  * into a unified representation for transformation.
  */
 
-import type { AotCodeResult, SerializedDefinition, SerializedExpression } from "@aurelia-ls/domain";
+import type { AotCodeResult, SerializedDefinition, SerializedExpression } from "@aurelia-ls/compiler";
 
 /* =============================================================================
  * RESOURCE TYPES
@@ -171,7 +171,7 @@ export interface TransformInput {
   /** File path (for error messages and source maps) */
   filePath: string;
 
-  /** AOT compilation result from domain compiler */
+  /** AOT compilation result from AOT compiler */
   aot: AotCodeResult;
 
   /** Resource definition (from resolution or inferred) */

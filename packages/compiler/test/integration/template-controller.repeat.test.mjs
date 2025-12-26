@@ -1,8 +1,8 @@
 import test, { describe, it } from "node:test";
 import { compileFromEntry, assertSuccess, prop } from "./_helpers/overlay-ls.mjs";
 
-const domainIndexUrl = new URL("../../out/index.js", import.meta.url);
-const { PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX } = await import(domainIndexUrl.href);
+const compilerIndexUrl = new URL("../../out/index.js", import.meta.url);
+const { PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX } = await import(compilerIndexUrl.href);
 
 const exprParser = getExpressionParser();
 const attrParser = DEFAULT_SYNTAX;

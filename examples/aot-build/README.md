@@ -53,7 +53,7 @@ The `src/` folder contains:
 
 ## What Happens During Transformation
 
-1. **Template Compilation**: The HTML template is compiled by the domain compiler
+1. **Template Compilation**: The HTML template is compiled by the AOT compiler
 2. **Expression Parsing**: Binding expressions like `${message}` are pre-parsed into ASTs
 3. **Instruction Generation**: Hydration instructions are generated for each binding target
 4. **Decorator Removal**: The `@customElement` decorator is removed (no longer needed)
@@ -146,5 +146,5 @@ cat dist/artifacts.json | jq '.definition.instructions'
 ## Related
 
 - `packages/transform/` - The transform package source
-- `packages/domain/` - The domain compiler that produces AOT artifacts
+- `packages/compiler/` - The AOT compiler that produces AOT artifacts
 - `packages/build/` - Vite plugin that runs this transformation automatically

@@ -1,6 +1,6 @@
 import type ts from "typescript";
-import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId } from "@aurelia-ls/domain";
-import { normalizePathForId } from "@aurelia-ls/domain";
+import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId } from "@aurelia-ls/compiler";
+import { normalizePathForId } from "@aurelia-ls/compiler";
 import type { SourceFacts } from "./extraction/types.js";
 import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
 import type { RegistrationIntent } from "./registration/types.js";

@@ -5,7 +5,7 @@
     "outDir": "out"
   },
   "references": [
-    { "path": "../domain" },
+    { "path": "../compiler" },
     { "path": "../resolution" }
   ],
   "include": ["src"]

@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { AureliaProjectIndex } from "../../out/services/project-index.js";
-import { DEFAULT_SEMANTICS, buildResourceGraphFromSemantics } from "../../../domain/out/index.js";
+import { DEFAULT_SEMANTICS, buildResourceGraphFromSemantics } from "../../../compiler/out/index.js";
 
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 

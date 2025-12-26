@@ -1,4 +1,4 @@
-import type { NormalizedPath, BindingMode } from "@aurelia-ls/domain";
+import type { NormalizedPath, BindingMode } from "@aurelia-ls/compiler";
 
 // Re-export BindingMode for consumers of this module
 export type { BindingMode };

@@ -1,4 +1,4 @@
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 
 /**
  * Route configuration extracted from a single class.

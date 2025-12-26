@@ -1,5 +1,5 @@
 {
-  "name": "@aurelia-ls/domain",
+  "name": "@aurelia-ls/compiler",
   "version": "0.0.1",
   "type": "module",
   "main": "./out/index.js",

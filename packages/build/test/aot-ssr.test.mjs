@@ -2,7 +2,7 @@
  * AOT SSR E2E Tests
  *
  * These tests verify the full AOT SSR pipeline:
- * 1. Compile template with domain compiler AOT
+ * 1. Compile template with AOT compiler
  * 2. Translate instructions to Aurelia format
  * 3. SSR render to HTML
  * 4. Verify output correctness
@@ -15,7 +15,7 @@ import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { compileAndRenderAot, compileWithAot } from "../out/index.js";
-import { INSTRUCTION_TYPE } from "@aurelia-ls/domain";
+import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler";
 
 // =============================================================================
 // Helper: Create a test component class with given state and template

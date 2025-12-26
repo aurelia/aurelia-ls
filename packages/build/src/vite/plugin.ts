@@ -26,7 +26,7 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { normalizePathForId } from "@aurelia-ls/domain";
+import { normalizePathForId } from "@aurelia-ls/compiler";
 import {
   transform,
   transformEntryPoint,

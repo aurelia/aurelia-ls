@@ -1,4 +1,4 @@
-// Domain package public API
+// Compiler package public API
 //
 // This barrel exports the main compilation, parsing, language, and program APIs.
 // Import from here rather than deep paths for stability.

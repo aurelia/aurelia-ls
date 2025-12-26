@@ -4,7 +4,7 @@
  * Orchestrates the transformation of TypeScript source with AOT artifacts.
  */
 
-import type { AotCodeResult } from "@aurelia-ls/domain";
+import type { AotCodeResult } from "@aurelia-ls/compiler";
 import type { ResourceDefinition } from "../model/types.js";
 import { emitStaticAu } from "../emit/index.js";
 import { findClassByName, detectDeclarationForm } from "../ts/analyze.js";

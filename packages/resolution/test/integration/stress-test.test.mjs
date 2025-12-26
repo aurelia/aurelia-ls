@@ -1,7 +1,7 @@
 /**
- * Stress Test: Domain Compiler Kitchen Sink Verification
+ * Stress Test: AOT Compiler Kitchen Sink Verification
  *
- * Tests the domain compiler with deeply nested, complex template combinations:
+ * Tests the AOT compiler with deeply nested, complex template combinations:
  * - 4+ level component hierarchy
  * - All template controller types (if/else, repeat, switch, promise, with, portal)
  * - Sibling patterns
@@ -31,7 +31,7 @@ import {
   getExpressionParser,
   INSTRUCTION_TYPE,
   BINDING_MODE,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STRESS_APP = path.resolve(__dirname, "../apps/stress-test-app");
@@ -605,7 +605,7 @@ const ALL_VECTORS = [...COMPONENT_VECTORS, ...TC_VECTORS, ...MIXED_VECTORS];
 // Test Suite
 // =============================================================================
 
-describe("Stress Test: Domain Compiler Kitchen Sink", () => {
+describe("Stress Test: AOT Compiler Kitchen Sink", () => {
   let program;
   let resolutionResult;
 

@@ -1,4 +1,4 @@
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { ResourceCandidate } from "../inference/types.js";
 
 /**

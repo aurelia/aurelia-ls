@@ -1,4 +1,4 @@
-import type { NormalizedPath } from "@aurelia-ls/domain";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { SourceFacts, ClassFacts, DecoratorFact, BindableMemberFact, BindableDefFact, BindingMode } from "../extraction/types.js";
 import type { ResourceCandidate, BindableSpec, ResolverResult, ResolverDiagnostic } from "./types.js";
 import {

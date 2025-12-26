@@ -192,9 +192,9 @@ importers:
 
   packages/build:
     dependencies:
-      '@aurelia-ls/domain':
+      '@aurelia-ls/compiler':
         specifier: workspace:*
-        version: link:../domain
+        version: link:../compiler
       '@aurelia-ls/resolution':
         specifier: workspace:*
         version: link:../resolution
@@ -252,7 +252,7 @@ importers:
         specifier: ^1.90.0
         version: 1.106.1
 
-  packages/domain:
+  packages/compiler:
     dependencies:
       parse5:
         specifier: ^8.0.0
@@ -260,9 +260,9 @@ importers:
 
   packages/resolution:
     dependencies:
-      '@aurelia-ls/domain':
+      '@aurelia-ls/compiler':
         specifier: workspace:*
-        version: link:../domain
+        version: link:../compiler
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -273,9 +273,9 @@ importers:
 
   packages/server:
     dependencies:
-      '@aurelia-ls/domain':
+      '@aurelia-ls/compiler':
         specifier: workspace:*
-        version: link:../domain
+        version: link:../compiler
       '@aurelia-ls/resolution':
         specifier: workspace:*
         version: link:../resolution
@@ -294,9 +294,9 @@ importers:
 
   packages/transform:
     dependencies:
-      '@aurelia-ls/domain':
+      '@aurelia-ls/compiler':
         specifier: workspace:*
-        version: link:../domain
+        version: link:../compiler
       '@aurelia-ls/resolution':
         specifier: workspace:*
         version: link:../resolution

@@ -5,7 +5,7 @@
  * Expression tables allow sharing AST objects across instructions.
  */
 
-import type { SerializedExpression, ExprId } from "@aurelia-ls/domain";
+import type { SerializedExpression, ExprId } from "@aurelia-ls/compiler";
 import { formatAst, toIdentifierPrefix } from "./format.js";
 
 /* =============================================================================

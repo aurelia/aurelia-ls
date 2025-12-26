@@ -115,7 +115,7 @@ function resolveClassByConvention(
       return {
         kind: "element",
         name: resourceName,
-        source: source as import("@aurelia-ls/domain").NormalizedPath,
+        source: source as import("@aurelia-ls/compiler").NormalizedPath,
         className: cls.name,
         aliases: [],
         bindables,
@@ -128,7 +128,7 @@ function resolveClassByConvention(
       return {
         kind: "attribute",
         name: resourceName,
-        source: source as import("@aurelia-ls/domain").NormalizedPath,
+        source: source as import("@aurelia-ls/compiler").NormalizedPath,
         className: cls.name,
         aliases: [],
         bindables,
@@ -142,7 +142,7 @@ function resolveClassByConvention(
       return {
         kind: "valueConverter",
         name: resourceName,
-        source: source as import("@aurelia-ls/domain").NormalizedPath,
+        source: source as import("@aurelia-ls/compiler").NormalizedPath,
         className: cls.name,
         aliases: [],
         bindables: [],
@@ -154,7 +154,7 @@ function resolveClassByConvention(
       return {
         kind: "bindingBehavior",
         name: resourceName,
-        source: source as import("@aurelia-ls/domain").NormalizedPath,
+        source: source as import("@aurelia-ls/compiler").NormalizedPath,
         className: cls.name,
         aliases: [],
         bindables: [],

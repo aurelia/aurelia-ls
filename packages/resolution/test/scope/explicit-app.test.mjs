@@ -7,8 +7,8 @@ import { extractAllFacts } from "../../out/extraction/index.js";
 import { createResolverPipeline } from "../../out/inference/index.js";
 import { createRegistrationAnalyzer } from "../../out/registration/index.js";
 import { buildResourceGraph } from "../../out/scope/index.js";
-import { materializeResourcesForScope } from "@aurelia-ls/domain";
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/domain";
+import { materializeResourcesForScope } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");

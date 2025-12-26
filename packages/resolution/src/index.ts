@@ -1,7 +1,7 @@
 // Resolution package public API
 //
 // This package discovers Aurelia resources in a project and builds a ResourceGraph
-// that the domain compiler uses for template compilation.
+// that the AOT compiler uses for template compilation.
 //
 // Architecture:
 // - Extraction (Layer 1): AST → SourceFacts
@@ -11,7 +11,7 @@
 //
 // See docs/resolution-architecture.md for details.
 
-// === Re-export domain types for convenience ===
+// === Re-export compiler types for convenience ===
 export type {
   ResourceGraph,
   ResourceScope,
@@ -24,7 +24,7 @@ export type {
   BindingBehaviorSig,
   Semantics,
   NormalizedPath,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 
 // === Main entry point ===
 export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic, type TemplateInfo, type InlineTemplateInfo } from "./resolve.js";

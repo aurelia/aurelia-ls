@@ -4,7 +4,7 @@ import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolve } from "../../out/resolve.js";
-import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/domain";
+import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");

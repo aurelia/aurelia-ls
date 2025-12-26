@@ -1,4 +1,4 @@
-import { diagnosticSpan, normalizeSpan, type CompilerDiagnostic, type SourceSpan } from "@aurelia-ls/domain";
+import { diagnosticSpan, normalizeSpan, type CompilerDiagnostic, type SourceSpan } from "@aurelia-ls/compiler";
 import type { Range } from "vscode-languageserver/node.js";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 

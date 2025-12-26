@@ -4,7 +4,7 @@
  * Generates JavaScript source for static $au definitions.
  * Handles the main component definition and nested templates.
  *
- * Instruction codes and binding modes are imported from domain
+ * Instruction codes and binding modes are imported from compiler
  * to avoid duplication. See docs/transform-package-design.md.
  */
 
@@ -28,7 +28,7 @@ import {
   type ExprId,
   type BindingModeValue,
   type NestedTemplateHtmlNode,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import { formatValue, escapeString, indent as indentText } from "./format.js";
 import { getExpressionRef, buildExpressionIndexMap } from "./expression-table.js";
 

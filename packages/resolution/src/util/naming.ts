@@ -1,4 +1,4 @@
-import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/domain";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
 
 /**
  * Convert a string to kebab-case.
@@ -70,7 +70,7 @@ export function canonicalAliases(values: readonly string[]): string[] {
 
 /**
  * Canonicalize a file path to a NormalizedPath.
- * Delegates to domain's normalizePathForId for consistent path handling.
+ * Delegates to compiler's normalizePathForId for consistent path handling.
  */
 export function canonicalPath(fileName: string): NormalizedPath {
   return normalizePathForId(fileName);

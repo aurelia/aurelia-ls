@@ -5,7 +5,7 @@
   "main": "./out/main.js",
   "types": "./out/main.d.ts",
   "dependencies": {
-    "@aurelia-ls/domain": "workspace:*",
+    "@aurelia-ls/compiler": "workspace:*",
     "@aurelia-ls/resolution": "workspace:*",
     "typescript": "^5.5.4",
     "vscode-languageserver": "^9.0.1",

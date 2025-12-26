@@ -6,7 +6,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { IContainer } from "@aurelia/kernel";
-import type { ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/domain";
+import type { ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/compiler";
 import type { ResolutionResult, TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "../ssr/render.js";
 import type { SSGOptions, ResolvedSSGOptions } from "../ssg/index.js";

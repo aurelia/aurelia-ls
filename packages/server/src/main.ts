@@ -41,7 +41,7 @@ import {
   type TextEdit as TemplateTextEdit,
   type TextRange as TemplateTextRange,
   type HoverInfo,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import { createPathUtils } from "./services/paths.js";
 import { OverlayFs } from "./services/overlay-fs.js";
 import { TsService } from "./services/ts-service.js";

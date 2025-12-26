@@ -15,7 +15,7 @@ import {
   toIdentifierPrefix,
   formatValue,
 } from "@aurelia-ls/transform";
-import type { AotCodeResult, SerializedExpression, SerializedDefinition, ExprId, AnyBindingExpression } from "@aurelia-ls/domain";
+import type { AotCodeResult, SerializedExpression, SerializedDefinition, ExprId, AnyBindingExpression } from "@aurelia-ls/compiler";
 
 // Helper to create mock expressions
 function mockExpr(id: string, kind: string, name: string): SerializedExpression {
