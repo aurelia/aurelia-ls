@@ -4,7 +4,7 @@ import type { IrModule, TemplateIR, InstructionRow, TemplateNode } from "../../m
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { Semantics } from "../../language/registry.js";
 import { DEFAULT as DEFAULT_SEMANTICS } from "../../language/registry.js";
-import type { IExpressionParser } from "../../parsing/lsp-expression-parser.js";
+import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
 import { ExprTable, DomIdAllocator } from "./lower-shared.js";

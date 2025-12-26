@@ -10,8 +10,8 @@ import type {
   SourceSpan,
   BadExpression,
 } from "../../model/ir.js";
-import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/lsp-expression-parser.js";
-import { extractInterpolationSegments } from "../../parsing/lsp-expression-parser.js";
+import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/expression-parser.js";
+import { extractInterpolationSegments } from "../../parsing/expression-parser.js";
 import { deterministicStringId } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";

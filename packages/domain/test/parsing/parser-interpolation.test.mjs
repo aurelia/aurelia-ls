@@ -1,7 +1,7 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { LspExpressionParser, splitInterpolationText, toSourceFileId } from "../../out/compiler/index.js";
+import { ExpressionParser, splitInterpolationText, toSourceFileId } from "../../out/compiler/index.js";
 
 /**
  * Helper: strip span information recursively from an AST node.
@@ -233,10 +233,10 @@ describe("interpolation splitting", () => {
   });
 });
 
-describe("LspExpressionParser / Interpolation AST", () => {
+describe("ExpressionParser / Interpolation AST", () => {
   test("Hello ${name}", () => {
     const src = "Hello ${name}";
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");
@@ -257,7 +257,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("rebases spans when parse context includes file + baseSpan", () => {
     const src = "Hello ${name}";
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const file = toSourceFileId("template.html");
     const baseSpan = { start: 50, end: 50 + src.length, file };
 
@@ -275,7 +275,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("multiple interpolations: ${a} and ${b}", () => {
     const src = "${a} and ${b}";
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");
@@ -294,7 +294,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("complex expression with ternary: ${cond ? 'a' : b}", () => {
     const src = "Value: ${cond ? 'a' : b}";
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");
@@ -319,7 +319,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("no interpolation markers yields parts[0] only", () => {
     const src = "no interpolation here";
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");
@@ -330,7 +330,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("unterminated ${ in text yields plain parts", () => {
     const src = "Hello ${name";
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");
@@ -340,7 +340,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("invalid inner expression becomes BadExpression", () => {
     const src = "Hello ${1 =}";
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
     assert.equal(ast.expressions[0].$kind, "BadExpression");
     assert.equal(ast.expressions[0].message, "Left-hand side is not assignable");
@@ -354,7 +354,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("AST: double quotes surrounding interpolation", () => {
     const src = '"${name}"';
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");
@@ -366,7 +366,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("AST: realistic pattern with quotes and multiple interpolations", () => {
     const src = 'Name: "${name}" (${len} chars)';
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");
@@ -386,7 +386,7 @@ describe("LspExpressionParser / Interpolation AST", () => {
 
   test("AST: quotes outside and keyed access inside", () => {
     const src = '"${obj["key"]}"';
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
     assert.equal(ast.$kind, "Interpolation");

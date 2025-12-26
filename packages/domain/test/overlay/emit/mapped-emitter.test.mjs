@@ -1,7 +1,7 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { LspExpressionParser, emitMappedExpression } from "../../../out/compiler/index.js";
+import { ExpressionParser, emitMappedExpression } from "../../../out/compiler/index.js";
 
 describe("Overlay mapped emitter", () => {
   const cases = [
@@ -154,7 +154,7 @@ describe("Overlay mapped emitter", () => {
 });
 
 function parse(src, type) {
-  const parser = new LspExpressionParser();
+  const parser = new ExpressionParser();
   const ast = parser.parse(src, type);
   if (!ast) throw new Error(`failed to parse expression: ${src}`);
   return ast;

@@ -1,7 +1,7 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { LspExpressionParser, toSourceFileId } from "../../out/compiler/index.js";
+import { ExpressionParser, toSourceFileId } from "../../out/compiler/index.js";
 
 /**
  * Helper: strip span information recursively from an AST node.
@@ -27,7 +27,7 @@ function stripSpans(value) {
  * that they produce identical ASTs (ignoring spans). Returns the IsProperty AST.
  */
 function parseInBothModes(source) {
-  const parser = new LspExpressionParser();
+  const parser = new ExpressionParser();
   const propAst = parser.parse(source, "IsProperty");
   const fnAst = parser.parse(source, "IsFunction");
 
@@ -40,7 +40,7 @@ function parseInBothModes(source) {
   return propAst;
 }
 
-describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
+describe("expression-parser / core (IsProperty & IsFunction)", () => {
   //
   // Identifiers / scope hops
   //
@@ -856,7 +856,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("BadExpression carries parse provenance when rebased", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const file = toSourceFileId("component.html");
     const baseSpan = { start: 10, end: 14, file };
     const ast = parser.parse("foo(", "IsProperty", { baseSpan });
@@ -869,7 +869,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("baseSpan rebases assignment spans without double offset", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const src = "a=b";
     const file = toSourceFileId("span.html");
     const baseSpan = { start: 100, end: 100 + src.length, file };
@@ -891,7 +891,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("baseSpan rebases binary, conditional, and unary spans", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const file = toSourceFileId("rebased.html");
 
     const binSrc = "a+b";
@@ -931,7 +931,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("iterator binding defaults preserve rebased spans", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const src = "[a=foo] of items";
     const file = toSourceFileId("repeat.html");
     const baseSpan = { start: 400, end: 400 + src.length, file };
@@ -958,7 +958,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("bad nested segment in interpolation returns BadExpression", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse("hello ${foo(}", "Interpolation");
     assert.equal(ast.expressions[0].$kind, "BadExpression");
     assert.equal(ast.expressions[0].message, "Expected ',' or ')' in argument list");
@@ -1059,13 +1059,13 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("parse with unknown expression type yields BadExpression", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse("foo", "None");
     assert.equal(ast.$kind, "BadExpression");
   });
 
   test("empty expression yields BadExpression", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse("", "IsProperty");
     assert.equal(ast.$kind, "BadExpression");
     assert.deepEqual(ast.span, { start: 0, end: 0 });
@@ -1331,7 +1331,7 @@ describe("lsp-expression-parser / core (IsProperty & IsFunction)", () => {
   });
 
   test("IsCustom parsing returns a Custom expression", () => {
-    const parser = new LspExpressionParser();
+    const parser = new ExpressionParser();
     const ast = parser.parse("raw content", "IsCustom");
     assert.equal(ast.$kind, "Custom");
     assert.equal(ast.value, "raw content");
