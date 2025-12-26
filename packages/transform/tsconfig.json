@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "out"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../compiler" },
+    { "path": "../resolution" }
+  ]
+}

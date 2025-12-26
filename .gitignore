@@ -19,3 +19,12 @@ Thumbs.db
 coverage/
 
 .aurelia-cache
+
+# Example outputs
+examples/*-output.html
+examples/*/dist/
+examples/**/aot-output.js
+examples/**/aot-source.js
+
+# Dev scripts (local inspection tools)
+scripts/inspect-aot.mjs

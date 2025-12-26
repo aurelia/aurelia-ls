@@ -1,0 +1,7 @@
+<div class="section-panel">
+  <h2>${section.name}</h2>
+  <div class="items">
+    <item-card repeat.for="item of section.items" item.bind="item"></item-card>
+  </div>
+  <info-tag count.bind="section.items.length"></info-tag>
+</div>

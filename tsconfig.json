@@ -1,8 +1,11 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/domain" },
+    { "path": "packages/compiler" },
+    { "path": "packages/resolution" },
     { "path": "packages/server" },
-    { "path": "packages/client" }
+    { "path": "packages/client" },
+    { "path": "packages/build" },
+    { "path": "packages/transform" }
   ]
 }

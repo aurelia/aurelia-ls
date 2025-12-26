@@ -1,0 +1,574 @@
+{
+  "targets": 16,
+  "expressions": 32,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "if",
+      "template": 0,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showBadge",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "repeat",
+      "template": 1,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "s of sections"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "if",
+      "template": 2,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showItems",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "else",
+      "template": 3,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "repeat",
+      "template": 4,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "sec of allSections"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 5,
+      "name": "if",
+      "template": 5,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "deepTest",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 6,
+      "name": "else",
+      "template": 6,
+      "bindings": []
+    },
+    {
+      "kind": "controller",
+      "target": 10,
+      "name": "switch",
+      "template": 7,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "displayMode",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 11,
+      "name": "repeat",
+      "template": 8,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "entry of entries"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 12,
+      "name": "if",
+      "template": 9,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "showList",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 13,
+      "name": "if",
+      "template": 10,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "outerCondition",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 14,
+      "name": "if",
+      "template": 11,
+      "bindings": [
+        {
+          "property": "value",
+          "expr": "primaryMode",
+          "mode": "toView"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 15,
+      "name": "else",
+      "template": 12,
+      "bindings": []
+    }
+  ],
+  "templates": [
+    {
+      "name": "if_0",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "status-badge",
+          "bindings": [
+            {
+              "property": "active",
+              "expr": "isActive",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "repeat_1",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "section-panel",
+          "bindings": [
+            {
+              "property": "section",
+              "expr": "s",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "if_2",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "item-card",
+          "bindings": [
+            {
+              "property": "item",
+              "expr": "mainItem",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "else_3",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "footer-widget",
+          "bindings": [
+            {
+              "property": "text",
+              "expr": "fallbackText",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "repeat_4",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "section-panel",
+          "bindings": [
+            {
+              "property": "section",
+              "expr": "sec",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "if_5",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "item-card",
+          "bindings": [
+            {
+              "property": "item",
+              "expr": "testItem",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "else_6",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "item-card",
+          "bindings": [
+            {
+              "property": "item",
+              "expr": "fallbackItem",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    },
+    {
+      "name": "switch_7",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "case",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"card\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "case",
+          "template": 1,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "\"panel\"",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "default-case",
+          "template": 2,
+          "bindings": []
+        }
+      ],
+      "templates": [
+        {
+          "name": "case_8",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "item-card",
+              "bindings": [
+                {
+                  "property": "item",
+                  "expr": "cardItem",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "case_9",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "section-panel",
+              "bindings": [
+                {
+                  "property": "section",
+                  "expr": "panelSection",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "default_10",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "false",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repeat_11",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "if",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "entry.hasCard",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "else",
+          "template": 1,
+          "bindings": []
+        }
+      ],
+      "templates": [
+        {
+          "name": "if_12",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "item-card",
+              "bindings": [
+                {
+                  "property": "item",
+                  "expr": "entry.item",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "else_13",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "entry.fallbackActive",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "if_14",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "repeat",
+          "template": 0,
+          "bindings": [
+            {
+              "iterator": "items",
+              "expr": "item of listItems"
+            }
+          ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "repeat_15",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "item.active",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "if_16",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "item-card",
+          "bindings": [
+            {
+              "property": "item",
+              "expr": "outerItem",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "if",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "innerCondition",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 2,
+          "name": "else",
+          "template": 1,
+          "bindings": []
+        }
+      ],
+      "templates": [
+        {
+          "name": "if_17",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "true",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        },
+        {
+          "name": "else_18",
+          "instructions": [
+            {
+              "kind": "element",
+              "target": 0,
+              "tag": "status-badge",
+              "bindings": [
+                {
+                  "property": "active",
+                  "expr": "false",
+                  "mode": "toView"
+                }
+              ],
+              "containerless": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "if_19",
+      "instructions": []
+    },
+    {
+      "name": "else_20",
+      "instructions": [
+        {
+          "kind": "element",
+          "target": 0,
+          "tag": "item-card",
+          "bindings": [
+            {
+              "property": "item",
+              "expr": "secondaryItem",
+              "mode": "toView"
+            }
+          ],
+          "containerless": false
+        }
+      ]
+    }
+  ]
+}

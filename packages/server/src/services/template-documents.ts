@@ -4,7 +4,7 @@ import {
   type DocumentSnapshot,
   type DocumentUri,
   type TemplateProgram,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 
 /**

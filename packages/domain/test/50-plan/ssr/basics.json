@@ -1,7 +1,0 @@
-[
-  {
-    "name": "SSR-B-01 text interpolation produces HID and text binding",
-    "markup": "<div>${msg}</div>",
-    "expect": { "hids": 1, "textBindings": 1, "bindingKinds": [], "controllers": [] }
-  }
-]

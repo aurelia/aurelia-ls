@@ -1,0 +1,292 @@
+[
+  {
+    "name": "AOT-CE-001: custom element with bindable",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-widget": {
+            "kind": "element",
+            "name": "my-widget",
+            "boundary": true,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<my-widget value.bind=\"data\"></my-widget>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "my-widget", "propCount": 1, "containerless": false }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CE-002: custom element containerless",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-inline": {
+            "kind": "element",
+            "name": "my-inline",
+            "boundary": true,
+            "containerless": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-inline></my-inline>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 0,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "my-inline", "propCount": 0, "containerless": true }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CE-003: custom element with multiple bindables",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "data-grid": {
+            "kind": "element",
+            "name": "data-grid",
+            "boundary": true,
+            "bindables": {
+              "items": { "name": "items", "mode": "toView" },
+              "pageSize": { "name": "pageSize", "mode": "toView" },
+              "selected": { "name": "selected", "mode": "twoWay" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<data-grid items.bind=\"rows\" page-size.bind=\"size\" selected.bind=\"sel\"></data-grid>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "data-grid", "propCount": 3, "containerless": false }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CE-004: custom element with child content",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-card": {
+            "kind": "element",
+            "name": "my-card",
+            "boundary": true,
+            "bindables": {
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<my-card title.bind=\"heading\"><p>${body}</p></my-card>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "my-card", "propCount": 1, "containerless": false },
+        { "type": "textBinding", "target": 1, "parts": 2, "exprs": 1 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CA-001: custom attribute with primary bindable",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "tooltip": {
+            "kind": "attribute",
+            "name": "tooltip",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div tooltip.bind=\"message\"></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateAttribute", "target": 0, "resource": "tooltip", "alias": null, "propCount": 1 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CA-002: custom attribute with alias",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "highlight": {
+            "kind": "attribute",
+            "name": "highlight",
+            "isTemplateController": false,
+            "bindables": {
+              "color": { "name": "color", "mode": "toView" }
+            },
+            "primary": "color",
+            "aliases": ["hl"]
+          }
+        }
+      }
+    },
+    "markup": "<span hl.bind=\"activeColor\"></span>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateAttribute", "target": 0, "resource": "highlight", "alias": "hl", "propCount": 1 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CA-003: multiple custom attributes on element",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "tooltip": {
+            "kind": "attribute",
+            "name": "tooltip",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          },
+          "highlight": {
+            "kind": "attribute",
+            "name": "highlight",
+            "isTemplateController": false,
+            "bindables": {
+              "color": { "name": "color", "mode": "toView" }
+            },
+            "primary": "color"
+          }
+        }
+      }
+    },
+    "markup": "<div tooltip.bind=\"tip\" highlight.bind=\"color\"></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateAttribute", "target": 0, "resource": "tooltip", "alias": null, "propCount": 1 },
+        { "type": "hydrateAttribute", "target": 0, "resource": "highlight", "alias": null, "propCount": 1 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CA-004: custom attribute on custom element",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-button": {
+            "kind": "element",
+            "name": "my-button",
+            "boundary": true,
+            "bindables": {
+              "label": { "name": "label", "mode": "toView" }
+            }
+          }
+        },
+        "attributes": {
+          "tooltip": {
+            "kind": "attribute",
+            "name": "tooltip",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<my-button label.bind=\"text\" tooltip.bind=\"help\"></my-button>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "my-button", "propCount": 1, "containerless": false },
+        { "type": "hydrateAttribute", "target": 0, "resource": "tooltip", "alias": null, "propCount": 1 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-CE-005: custom element in repeat",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "list-item": {
+            "kind": "element",
+            "name": "list-item",
+            "boundary": true,
+            "bindables": {
+              "item": { "name": "item", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<list-item repeat.for=\"x of items\" item.bind=\"x\"></list-item>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-CE-006: custom element with static attribute",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "user-badge": {
+            "kind": "element",
+            "name": "user-badge",
+            "boundary": true,
+            "bindables": {
+              "name": { "name": "name", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<user-badge name=\"Guest\"></user-badge>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 0,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "user-badge", "propCount": 1, "containerless": false }
+      ],
+      "nested": []
+    }
+  }
+]

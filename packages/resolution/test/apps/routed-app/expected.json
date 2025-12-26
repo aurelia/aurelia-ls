@@ -1,0 +1,94 @@
+{
+  "$schema": "Route tree expected output for routed-app test fixture",
+
+  "entryPoints": ["App"],
+
+  "roots": [
+    {
+      "path": "",
+      "fullPath": "/",
+      "component": { "kind": "class", "className": "HomeComponent" },
+      "title": "Home",
+      "children": []
+    },
+    {
+      "path": ["about", "about-us"],
+      "fullPath": "/about",
+      "component": { "kind": "class", "className": "AboutComponent" },
+      "title": "About Us",
+      "children": []
+    },
+    {
+      "path": "products",
+      "fullPath": "/products",
+      "component": { "kind": "class", "className": "ProductsComponent" },
+      "children": [
+        {
+          "path": "",
+          "fullPath": "/products",
+          "component": { "kind": "class", "className": "ProductListComponent" },
+          "children": []
+        },
+        {
+          "path": ":id",
+          "fullPath": "/products/:id",
+          "component": { "kind": "class", "className": "ProductDetailComponent" },
+          "children": [],
+          "params": ["id"]
+        }
+      ]
+    },
+    {
+      "path": "blog",
+      "fullPath": "/blog",
+      "component": { "kind": "class", "className": "BlogComponent" },
+      "children": [
+        {
+          "path": "",
+          "fullPath": "/blog",
+          "component": { "kind": "class", "className": "BlogListComponent" },
+          "title": "Blog",
+          "children": []
+        },
+        {
+          "path": ":slug",
+          "fullPath": "/blog/:slug",
+          "component": { "kind": "class", "className": "BlogPostComponent" },
+          "title": "Blog Post",
+          "children": [],
+          "params": ["slug"]
+        }
+      ]
+    },
+    {
+      "path": "old-home",
+      "fullPath": "/old-home",
+      "redirectTo": "",
+      "children": []
+    }
+  ],
+
+  "parameterizedRoutes": [
+    {
+      "fullPath": "/products/:id",
+      "params": ["id"],
+      "hasStaticPaths": true
+    },
+    {
+      "fullPath": "/blog/:slug",
+      "params": ["slug"],
+      "hasStaticPaths": true
+    }
+  ],
+
+  "allStaticPaths": [
+    "/",
+    "/about",
+    "/about-us",
+    "/products",
+    "/blog",
+    "/old-home"
+  ],
+
+  "dynamicComponents": []
+}

@@ -1,0 +1,240 @@
+[
+  {
+    "name": "AOT-TC-001: repeat.for basic array",
+    "markup": "<div repeat.for=\"item of items\">${item}</div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-002: repeat.for with index",
+    "markup": "<li repeat.for=\"item of items; index as i\">${i}: ${item}</li>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-003: repeat.for with destructuring",
+    "markup": "<div repeat.for=\"[key, value] of entries\">${key}: ${value}</div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-004: repeat.for numeric range",
+    "markup": "<span repeat.for=\"n of 5\">${n}</span>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-005: with.bind basic",
+    "markup": "<div with.bind=\"user\">${name}</div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "with", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "with_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-006: with.bind nested bindings",
+    "markup": "<div with.bind=\"profile\"><span class.bind=\"cls\">${bio}</span></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "with", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "with_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-007: switch.bind with case",
+    "markup": "<template switch.bind=\"status\"><span case=\"active\">Active</span><span case=\"inactive\">Inactive</span></template>",
+    "expect": {
+      "targetCount": 3,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 2, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-008: switch.bind with default-case",
+    "markup": "<template switch.bind=\"type\"><span case=\"a\">A</span><span default-case>Default</span></template>",
+    "expect": {
+      "targetCount": 3,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 2, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "default-case", "templateIndex": 1, "propCount": 0 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-009: promise.bind basic",
+    "markup": "<template promise.bind=\"fetchData\"><span>content</span></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "promise_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-010: portal.bind basic",
+    "markup": "<template portal.bind=\"target\"><p>Teleported content</p></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "portal", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "portal_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-013: nested repeat in if",
+    "markup": "<div if.bind=\"show\"><span repeat.for=\"x of items\">${x}</span></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "if_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-014: if inside repeat",
+    "markup": "<div repeat.for=\"item of items\"><span if.bind=\"item.active\">${item.name}</span></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-015: repeat with multiple bindings on host",
+    "markup": "<li repeat.for=\"item of items\" class.bind=\"item.cls\" title.bind=\"item.title\">${item.text}</li>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 4,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-016: double nested template controllers",
+    "markup": "<div if.bind=\"a\"><div if.bind=\"b\"><span>${c}</span></div></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "if_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-017: repeat with event listener",
+    "markup": "<button repeat.for=\"btn of buttons\" click.trigger=\"handleClick(btn)\">${btn.label}</button>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "repeat_0" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-011: if/else with repeat in both branches",
+    "markup": "<div if.bind=\"useA\"><span repeat.for=\"x of a\">${x}</span></div><div else><span repeat.for=\"y of b\">${y}</span></div>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 5,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 },
+        { "type": "hydrateTemplateController", "target": 1, "resource": "else", "templateIndex": 1, "propCount": 0 }
+      ],
+      "nested": [
+        { "name": "if_0" },
+        { "name": "else_2" }
+      ]
+    }
+  }
+]

@@ -1,0 +1,80 @@
+[
+  {
+    "name": "AOT-ELSE-001: if/else basic siblings",
+    "markup": "<div if.bind=\"x\">yes</div><div else>no</div>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 },
+        { "type": "hydrateTemplateController", "target": 1, "resource": "else", "templateIndex": 1, "propCount": 0 }
+      ],
+      "nested": [
+        { "name": "if_0" },
+        { "name": "else_1" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-ELSE-002: if/else on template elements",
+    "markup": "<template if.bind=\"x\"><b>yes</b></template><template else><i>no</i></template>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 },
+        { "type": "hydrateTemplateController", "target": 1, "resource": "else", "templateIndex": 1, "propCount": 0 }
+      ],
+      "nested": [
+        { "name": "if_0" },
+        { "name": "else_1" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-ELSE-003: if/else with interpolations in both branches",
+    "markup": "<span if.bind=\"c\">${a}</span><span else>${b}</span>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 },
+        { "type": "hydrateTemplateController", "target": 1, "resource": "else", "templateIndex": 1, "propCount": 0 }
+      ],
+      "nested": [
+        { "name": "if_0" },
+        { "name": "else_1" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-ELSE-004: if/else with binding on else branch",
+    "markup": "<div if.bind=\"x\">static</div><div else title.bind=\"t\">dynamic</div>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 },
+        { "type": "hydrateTemplateController", "target": 1, "resource": "else", "templateIndex": 1, "propCount": 0 }
+      ],
+      "nested": [
+        { "name": "if_0" },
+        { "name": "else_1" }
+      ]
+    }
+  },
+  {
+    "name": "AOT-ELSE-005: if without else (control - no else template)",
+    "markup": "<div if.bind=\"x\">only if</div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        { "name": "if_0" }
+      ]
+    }
+  }
+]

@@ -1,0 +1,40 @@
+<div class="mixed-depth-4">
+  <!-- Level 1: Root with repeat -->
+  <div repeat.for="section of sections" class="section">
+    <h2>${section.name}</h2>
+
+    <!-- Level 2: Nested repeat with if -->
+    <div repeat.for="group of section.groups" class="group">
+      <h3 if.bind="group.title">${group.title}</h3>
+
+      <!-- Level 3: Another nested repeat -->
+      <div repeat.for="item of group.items" class="item">
+        <span>${item.label}</span>
+
+        <!-- Level 4: Conditional with nested content -->
+        <template if.bind="item.details">
+          <div class="details">
+            <span repeat.for="detail of item.details">${detail}</span>
+          </div>
+        </template>
+        <template else>
+          <span class="no-details">No details available</span>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alternative 4-level: switch > repeat > if > repeat -->
+  <template switch.bind="mode">
+    <div case="expanded">
+      <div repeat.for="category of categories">
+        <div if.bind="category.visible">
+          <span repeat.for="tag of category.tags">${tag}</span>
+        </div>
+      </div>
+    </div>
+    <div case="collapsed">
+      <span>Collapsed view</span>
+    </div>
+  </template>
+</div>

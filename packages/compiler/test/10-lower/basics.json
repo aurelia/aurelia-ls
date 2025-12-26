@@ -1,0 +1,344 @@
+[
+  {
+    "name": "LB-01 text interpolation",
+    "markup": "<div>${a}</div>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "a" }
+      ]
+    }
+  },
+  {
+    "name": "LB-02 data-* mix (.bind + interpolation)",
+    "markup": "<div data-a=\"b\" data-b.bind=\"1\" data-c=\"${hey}\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "1" },
+        { "kind": "attrInterpolation", "on": "data-c", "code": "hey" }
+      ]
+    }
+  },
+  {
+    "name": "LB-03 class command + interpolation",
+    "markup": "<div d.class=\"a\" class=\"a ${b} c\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "a" },
+        { "kind": "attrInterpolation", "on": "class", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-04 style command + interpolation",
+    "markup": "<div bg.style=\"a\" style=\"a ${b} c\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "a" },
+        { "kind": "attrInterpolation", "on": "style", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-05 ref expression",
+    "markup": "<div ref=el>",
+    "expect": {
+      "expressions": [
+        { "kind": "ref", "on": "element", "code": "el" }
+      ]
+    }
+  },
+  {
+    "name": "LB-06 event trigger",
+    "markup": "<el foo.trigger=\"1\">",
+    "expect": {
+      "expressions": [
+        { "kind": "event", "on": "foo", "command": "trigger", "code": "1" }
+      ]
+    }
+  },
+  {
+    "name": "LB-07 binding modes",
+    "markup": "<el p1.bind=\"x\" p2.one-time=\"y\" p3.to-view=\"z\" p4.from-view=\"w\" p5.two-way=\"v\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "x" },
+        { "kind": "propCommand", "command": "one-time", "code": "y" },
+        { "kind": "propCommand", "command": "to-view", "code": "z" },
+        { "kind": "propCommand", "command": "from-view", "code": "w" },
+        { "kind": "propCommand", "command": "two-way", "code": "v" }
+      ]
+    }
+  },
+  {
+    "name": "LB-08 custom attribute with interpolation",
+    "markup": "<div my-attr=\"${attr}\">",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "my-attr", "code": "attr" }
+      ]
+    }
+  },
+  {
+    "name": "LB-09 custom attribute .bind",
+    "markup": "<div my-attr.bind=\"v\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "v" }
+      ]
+    }
+  },
+  {
+    "name": "LB-10 CA on <template>",
+    "markup": "<template my-attr.bind=\"v\"></template>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "v" }
+      ]
+    }
+  },
+  {
+    "name": "LB-11 colon shorthand (to-view)",
+    "markup": "<div :title=\"a\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "to-view", "code": "a" }
+      ]
+    }
+  },
+  {
+    "name": "LB-12 @click trigger",
+    "markup": "<button @click=\"go()\">",
+    "expect": {
+      "expressions": [
+        { "kind": "event", "on": "click", "command": "trigger", "code": "go()" }
+      ]
+    }
+  },
+  {
+    "name": "LB-13 click.capture",
+    "markup": "<button click.capture=\"do()\">",
+    "expect": {
+      "expressions": [
+        { "kind": "event", "on": "click", "command": "capture", "code": "do()" }
+      ]
+    }
+  },
+  {
+    "name": "LB-14 view-model.ref",
+    "markup": "<my-el view-model.ref=\"vm\">",
+    "expect": {
+      "expressions": [
+        { "kind": "ref", "on": "component", "code": "vm" }
+      ]
+    }
+  },
+  {
+    "name": "LB-15 .attr override",
+    "markup": "<div title.attr=\"a + b\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "a + b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-16 text interpolation with multiple ${}",
+    "markup": "<div>pre ${x} mid ${y} post</div>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "x" },
+        { "kind": "text", "code": "y" }
+      ]
+    }
+  },
+  {
+    "name": "LB-17 attribute interpolation with multiple ${}",
+    "markup": "<div title=\"pre ${x} mid ${y} post\">",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "title", "code": "x" },
+        { "kind": "attrInterpolation", "on": "title", "code": "y" }
+      ]
+    }
+  },
+  {
+    "name": "LB-18 interpolation with nested braces and quotes",
+    "markup": "<div>${a ? {b: c} : \"}\"}</div>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "a ? {b: c} : \"}\"" }
+      ]
+    }
+  },
+  {
+    "name": "LB-19 attribute interpolation data-* preserved (extra)",
+    "markup": "<div data-info=\"a ${b} c\">",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "data-info", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-20 class.attr override + class interpolation combo",
+    "markup": "<div title.attr=\"x\" class=\"a ${b} c\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "x" },
+        { "kind": "attrInterpolation", "on": "class", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-21 @click with modifier (:once)",
+    "markup": "<button @click:once=\"go()\">",
+    "expect": {
+      "expressions": [
+        { "kind": "event", "on": "click", "command": "trigger", "code": "go()" }
+      ]
+    }
+  },
+  {
+    "name": "LB-22 two text nodes",
+    "markup": "<div>${a}</div><div>${b}</div>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "a" },
+        { "kind": "text", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-23 attribute interpolation aria-* preserved",
+    "markup": "<div aria-label=\"Hi ${name}\">",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "aria-label", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-24 binding behavior and converter on property",
+    "markup": "<div textcontent.bind=\"item | upper & throttle:250\">",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "item | upper & throttle:250" }
+      ]
+    }
+  },
+  {
+    "name": "LB-25 extra comment node",
+    "markup": "<!-- hi -->",
+    "expect": {}
+  },
+  {
+    "name": "LB-26 plain class and style literals",
+    "markup": "<div class=\"foo bar\" style=\"color:red\" title=\"hi\"></div>",
+    "expect": {}
+  },
+  {
+    "name": "LB-27 invalid expression captured as BadExpression",
+    "markup": "<div title.bind=\"foo(\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "foo(" }
+      ]
+    }
+  },
+  {
+    "name": "LB-28 text interpolation with quotes surrounding (double)",
+    "markup": "<p>\"${name}\"</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-29 text interpolation with quotes surrounding (single)",
+    "markup": "<p>'${name}'</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-30 text interpolation with multiple exprs and quotes",
+    "markup": "<p>Name: \"${name}\" (${len} chars)</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" },
+        { "kind": "text", "code": "len" }
+      ]
+    }
+  },
+  {
+    "name": "LB-31 attribute interpolation with quotes surrounding",
+    "markup": "<div title=\"'${name}'\">",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "title", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-32 text interpolation with apostrophe (possessive)",
+    "markup": "<p>It's ${name}'s turn</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "name" }
+      ]
+    }
+  },
+  {
+    "name": "LB-33 text interpolation with backticks surrounding",
+    "markup": "<code>`${cmd}`</code>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "cmd" }
+      ]
+    }
+  },
+  {
+    "name": "LB-34 text interpolation with keyed access inside quotes",
+    "markup": "<p>\"${obj['key']}\"</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "obj['key']" }
+      ]
+    }
+  },
+  {
+    "name": "LB-35 backslash escapes interpolation (ECMAScript semantics)",
+    "markup": "<p>\\${x} has backslash</p>",
+    "expect": {}
+  },
+  {
+    "name": "LB-36 escaped interpolation with real interpolation",
+    "markup": "<p>\\${a} and ${b}</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "b" }
+      ]
+    }
+  },
+  {
+    "name": "LB-37 extra closing brace after interpolation",
+    "markup": "<p>${a}} trailing</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "a" }
+      ]
+    }
+  },
+  {
+    "name": "LB-38 template literal inside interpolation",
+    "markup": "<p>${`hello ${name}`}</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "`hello ${name}`" }
+      ]
+    }
+  }
+]

@@ -11,16 +11,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const domainMod = await import(pathToFileURL(path.resolve(
+const compilerMod = await import(pathToFileURL(path.resolve(
   process.cwd(),
-  "packages/domain/out/index.js"
+  "packages/compiler/out/index.js"
 )).href);
 const programMod = await import(pathToFileURL(path.resolve(
   process.cwd(),
-  "packages/domain/out/program/index.js"
+  "packages/compiler/out/program/index.js"
 )).href);
 
-const { DEFAULT_SYNTAX, getExpressionParser } = domainMod;
+const { DEFAULT_SYNTAX, getExpressionParser } = compilerMod;
 const {
   DefaultTemplateProgram,
   DefaultTemplateBuildService,

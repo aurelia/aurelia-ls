@@ -71,7 +71,6 @@ test("activate wires language client, commands, and notifications", async () => 
     "aurelia.showOverlay",
     "aurelia.showOverlayMapping",
     "aurelia.showTemplateInfo",
-    "aurelia.showSsrPreview",
     "aurelia.dumpState",
   ]) {
     assert.ok(recorded.registeredCommands.includes(command), `${command} should be registered`);

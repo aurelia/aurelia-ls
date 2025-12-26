@@ -1,0 +1,146 @@
+[
+  {
+    "name": "RP-C-001 if controller basic",
+    "markup": "<div if.bind=\"isVisible\">Content</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "content": "Content" }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "if", "frameId": 0 }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-C-004 if/else basic",
+    "markup": "<div if.bind=\"x\">yes</div><div else>no</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "content": "yes" },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "content": "no" }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "if", "frameId": 0 },
+        { "kind": "else", "frameId": 0 }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-C-005 if/else with interpolations in both branches",
+    "markup": "<span if.bind=\"c\">${a}</span><span else>${b}</span>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "if", "frameId": 0 },
+        { "kind": "else", "frameId": 0 }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-C-006 if/else on template elements",
+    "markup": "<template if.bind=\"x\"><b>yes</b></template><template else><i>no</i></template>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "template", "hasTarget": false },
+        { "kind": "element", "tag": "b", "hasTarget": false },
+        { "kind": "text", "content": "yes" },
+        { "kind": "element", "tag": "template", "hasTarget": false },
+        { "kind": "element", "tag": "i", "hasTarget": false },
+        { "kind": "text", "content": "no" }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "if", "frameId": 0 },
+        { "kind": "else", "frameId": 0 }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-C-002 repeat basic",
+    "markup": "<div repeat.for=\"item of items\">${item}</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "repeat", "frameId": 1, "locals": ["item"], "contextuals": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] }
+      ],
+      "expressions": [
+        { "kind": "ForOfStatement", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 1 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
+        { "frameId": 1, "parentFrameId": 0, "kind": "repeat", "locals": ["iterator:item"], "overrideContext": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] }
+      ]
+    }
+  },
+  {
+    "name": "RP-C-003 with controller",
+    "markup": "<div with.bind=\"person\">${name}</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "bindings": [],
+      "controllers": [
+        { "kind": "with", "frameId": 1 }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 1 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
+        { "frameId": 1, "parentFrameId": 0, "kind": "with", "locals": [], "overrideContext": [] }
+      ]
+    }
+  }
+]

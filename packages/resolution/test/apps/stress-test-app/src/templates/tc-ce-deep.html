@@ -1,0 +1,83 @@
+<div class="tc-ce-deep">
+  <!-- Pattern 1: if > CE > (CE's template has its own instructions) -->
+  <template if.bind="showBadge">
+    <status-badge active.bind="isActive"></status-badge>
+  </template>
+
+  <!-- Pattern 2: repeat > CE with bindings -->
+  <section-panel repeat.for="s of sections" section.bind="s"></section-panel>
+
+  <!-- Pattern 3: if > CE > where CE template contains TC > CE -->
+  <!-- item-card has if/else > status-badge inside -->
+  <template if.bind="showItems">
+    <item-card item.bind="mainItem"></item-card>
+  </template>
+  <template else>
+    <footer-widget text.bind="fallbackText"></footer-widget>
+  </template>
+
+  <!-- Pattern 4: repeat > CE > (that CE has repeat > CE inside) -->
+  <!-- section-panel has repeat > item-card inside -->
+  <div repeat.for="sec of allSections">
+    <section-panel section.bind="sec"></section-panel>
+  </div>
+
+  <!-- Pattern 5: Explicit 4-level: if > CE > (CE's TC) > CE -->
+  <!-- When item-card renders, it has if/else > status-badge -->
+  <div if.bind="deepTest">
+    <item-card item.bind="testItem"></item-card>
+  </div>
+  <div else>
+    <item-card item.bind="fallbackItem"></item-card>
+  </div>
+
+  <!-- Pattern 6: switch > CE > (CE's internal TCs) -->
+  <template switch.bind="displayMode">
+    <div case="card">
+      <item-card item.bind="cardItem"></item-card>
+    </div>
+    <div case="panel">
+      <section-panel section.bind="panelSection"></section-panel>
+    </div>
+    <div default-case>
+      <status-badge active.bind="false"></status-badge>
+    </div>
+  </template>
+
+  <!-- Pattern 7: repeat > if > CE -->
+  <div repeat.for="entry of entries">
+    <template if.bind="entry.hasCard">
+      <item-card item.bind="entry.item"></item-card>
+    </template>
+    <template else>
+      <status-badge active.bind="entry.fallbackActive"></status-badge>
+    </template>
+  </div>
+
+  <!-- Pattern 8: Triple nesting - if > repeat > CE -->
+  <template if.bind="showList">
+    <div repeat.for="item of listItems">
+      <status-badge active.bind="item.active"></status-badge>
+    </div>
+  </template>
+
+  <!-- Pattern 9: Nested TCs both containing CEs -->
+  <div if.bind="outerCondition">
+    <item-card item.bind="outerItem"></item-card>
+    <div if.bind="innerCondition">
+      <status-badge active.bind="true"></status-badge>
+    </div>
+    <div else>
+      <status-badge active.bind="false"></status-badge>
+    </div>
+  </div>
+
+  <!-- Pattern 10: else > CE where CE has else > CE inside -->
+  <!-- This is the critical deep pattern: else > item-card > (item-card's else > status-badge) -->
+  <div if.bind="primaryMode">
+    <span>Primary content</span>
+  </div>
+  <div else>
+    <item-card item.bind="secondaryItem"></item-card>
+  </div>
+</div>

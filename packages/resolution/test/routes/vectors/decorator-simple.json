@@ -1,0 +1,61 @@
+{
+  "name": "Simple @route decorator patterns",
+  "cases": [
+    {
+      "name": "string path",
+      "source": "@route('products')\nexport class Products {}",
+      "expected": {
+        "path": "products",
+        "routes": [],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "empty string path (root)",
+      "source": "@route('')\nexport class Home {}",
+      "expected": {
+        "path": "",
+        "routes": [],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "path with parameter",
+      "source": "@route(':id')\nexport class Detail {}",
+      "expected": {
+        "path": ":id",
+        "routes": [],
+        "definitionType": "decorator",
+        "params": ["id"]
+      }
+    },
+    {
+      "name": "path with multiple parameters",
+      "source": "@route(':category/:id')\nexport class Item {}",
+      "expected": {
+        "path": ":category/:id",
+        "routes": [],
+        "definitionType": "decorator",
+        "params": ["category", "id"]
+      }
+    },
+    {
+      "name": "path aliases (array)",
+      "source": "@route(['about', 'about-us'])\nexport class About {}",
+      "expected": {
+        "path": ["about", "about-us"],
+        "routes": [],
+        "definitionType": "decorator"
+      }
+    },
+    {
+      "name": "path aliases with empty (root alias)",
+      "source": "@route(['', 'home', 'index'])\nexport class Home {}",
+      "expected": {
+        "path": ["", "home", "index"],
+        "routes": [],
+        "definitionType": "decorator"
+      }
+    }
+  ]
+}

@@ -15,7 +15,7 @@ import {
   type TemplateLanguageDiagnostics,
   type TemplateProgram,
   type TemplateProgramOptions,
-} from "@aurelia-ls/domain";
+} from "@aurelia-ls/compiler";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { TemplateDocumentStore } from "./template-documents.js";
 

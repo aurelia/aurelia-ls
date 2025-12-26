@@ -1,0 +1,207 @@
+[
+  {
+    "name": "RP-B-001 simple text interpolation",
+    "markup": "<div>${message}</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "bindings": [],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-002 multi-part text interpolation",
+    "markup": "<div>Hello ${firstName} ${lastName}!</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 3, "exprs": 2, "hasTarget": true }
+      ],
+      "bindings": [],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-003 property binding with bind on input",
+    "markup": "<input value.bind=\"name\">",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "input", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "propertyBinding", "to": "value", "mode": "twoWay" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-004 property binding with bind on div (toView default)",
+    "markup": "<div textcontent.bind=\"text\"></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "propertyBinding", "to": "textContent", "mode": "toView" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-005 property binding two-way",
+    "markup": "<input value.two-way=\"name\">",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "input", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "propertyBinding", "to": "value", "mode": "twoWay" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-006 attribute binding",
+    "markup": "<div data-id.attr=\"id\"></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "attributeBinding", "to": "data-id" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-007 event listener trigger",
+    "markup": "<button click.trigger=\"handleClick()\"></button>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "button", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "listenerBinding", "event": "click", "capture": false }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "CallScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-008 event listener capture",
+    "markup": "<div click.capture=\"handleClick()\"></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "listenerBinding", "event": "click", "capture": true }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "CallScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-009 ref binding",
+    "markup": "<div ref=\"myDiv\"></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "refBinding", "to": "element" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-010 static text (no binding)",
+    "markup": "<div>Hello World</div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "text", "content": "Hello World" }
+      ],
+      "bindings": [],
+      "controllers": [],
+      "expressions": [],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-B-011 attribute interpolation",
+    "markup": "<div title=\"Hello ${name}!\"></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true }
+      ],
+      "bindings": [
+        { "type": "attributeInterpolation", "to": "title", "parts": 2 }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "name": "@aurelia-ls/resolution",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test --test-reporter=spec test/**/*.test.mjs",
+    "test:routes": "tsx --test --test-reporter=spec test/routes/**/*.test.ts"
+  },
+  "dependencies": {
+    "@aurelia-ls/compiler": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

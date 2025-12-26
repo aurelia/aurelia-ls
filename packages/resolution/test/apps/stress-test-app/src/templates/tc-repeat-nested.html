@@ -1,0 +1,30 @@
+<div class="tc-repeat">
+  <!-- Simple repeat -->
+  <span repeat.for="item of items">${item}</span>
+
+  <!-- Repeat with index -->
+  <li repeat.for="item of items; index as i">${i}: ${item}</li>
+
+  <!-- Nested repeat -->
+  <div repeat.for="row of rows">
+    <span repeat.for="cell of row.cells">${cell}</span>
+  </div>
+
+  <!-- Repeat with if inside -->
+  <div repeat.for="item of items">
+    <span if.bind="item.visible">${item.label}</span>
+    <span else class="hidden">Hidden: ${item.label}</span>
+  </div>
+
+  <!-- Repeat + bindings on the repeated element -->
+  <div repeat.for="item of items" class.bind="item.class" data-id.bind="item.id">
+    ${item.name}
+  </div>
+
+  <!-- Triple nested repeat (stress test) -->
+  <div repeat.for="a of level1">
+    <div repeat.for="b of a.level2">
+      <span repeat.for="c of b.level3">${c}</span>
+    </div>
+  </div>
+</div>

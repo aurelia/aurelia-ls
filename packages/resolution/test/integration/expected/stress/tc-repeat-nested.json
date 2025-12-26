@@ -1,0 +1,248 @@
+{
+  "targets": 6,
+  "expressions": 20,
+  "instructions": [
+    {
+      "kind": "controller",
+      "target": 0,
+      "name": "repeat",
+      "template": 0,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "item of items"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 1,
+      "name": "repeat",
+      "template": 1,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "item of items; index as i"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 2,
+      "name": "repeat",
+      "template": 2,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "row of rows"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 3,
+      "name": "repeat",
+      "template": 3,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "item of items"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 4,
+      "name": "repeat",
+      "template": 4,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "item of items"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "target": 5,
+      "name": "repeat",
+      "template": 5,
+      "bindings": [
+        {
+          "iterator": "items",
+          "expr": "a of level1"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "name": "repeat_0",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${item}"
+        }
+      ]
+    },
+    {
+      "name": "repeat_1",
+      "instructions": [
+        {
+          "kind": "text",
+          "target": 0,
+          "text": "${i}: ${item}"
+        }
+      ]
+    },
+    {
+      "name": "repeat_2",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "repeat",
+          "template": 0,
+          "bindings": [
+            {
+              "iterator": "items",
+              "expr": "cell of row.cells"
+            }
+          ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "repeat_3",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "${cell}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repeat_4",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "if",
+          "template": 0,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "item.visible",
+              "mode": "toView"
+            }
+          ]
+        },
+        {
+          "kind": "controller",
+          "target": 1,
+          "name": "else",
+          "template": 1,
+          "bindings": []
+        }
+      ],
+      "templates": [
+        {
+          "name": "if_5",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "${item.label}"
+            }
+          ]
+        },
+        {
+          "name": "else_6",
+          "instructions": [
+            {
+              "kind": "text",
+              "target": 0,
+              "text": "Hidden: ${item.label}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repeat_7",
+      "instructions": [
+        {
+          "kind": "bind",
+          "target": 0,
+          "property": "class",
+          "expr": "item.class",
+          "mode": "toView"
+        },
+        {
+          "kind": "bind",
+          "target": 0,
+          "property": "dataId",
+          "expr": "item.id",
+          "mode": "toView"
+        },
+        {
+          "kind": "text",
+          "target": 1,
+          "text": "\n    ${item.name}\n  "
+        }
+      ]
+    },
+    {
+      "name": "repeat_8",
+      "instructions": [
+        {
+          "kind": "controller",
+          "target": 0,
+          "name": "repeat",
+          "template": 0,
+          "bindings": [
+            {
+              "iterator": "items",
+              "expr": "b of a.level2"
+            }
+          ]
+        }
+      ],
+      "templates": [
+        {
+          "name": "repeat_9",
+          "instructions": [
+            {
+              "kind": "controller",
+              "target": 0,
+              "name": "repeat",
+              "template": 0,
+              "bindings": [
+                {
+                  "iterator": "items",
+                  "expr": "c of b.level3"
+                }
+              ]
+            }
+          ],
+          "templates": [
+            {
+              "name": "repeat_10",
+              "instructions": [
+                {
+                  "kind": "text",
+                  "target": 0,
+                  "text": "${c}"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

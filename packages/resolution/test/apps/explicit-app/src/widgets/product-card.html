@@ -1,0 +1,11 @@
+<template>
+  <article class="product-card">
+    <h3>${name}</h3>
+
+    <!-- Local-only components - not available outside this template -->
+    <price-tag amount.bind="price" currency="USD"></price-tag>
+    <stock-badge in-stock.bind="inStock" count.bind="stockCount"></stock-badge>
+
+    <button disabled.bind="!inStock">Add to Cart</button>
+  </article>
+</template>

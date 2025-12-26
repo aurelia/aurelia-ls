@@ -1,0 +1,158 @@
+[
+  {
+    "name": "R-C-01 with.bind -> controller value (effectiveMode 'default')",
+    "markup": "<div with.bind=\"ctx\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-02 if.bind -> controller value (effectiveMode 'default')",
+    "markup": "<div if.bind=\"cond\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-03 promise.bind -> controller value (effectiveMode 'default')",
+    "markup": "<div promise.bind=\"p\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-04 switch.bind -> controller value (effectiveMode 'default')",
+    "markup": "<div switch.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-05 portal.bind -> controller target (effectiveMode 'default')",
+    "markup": "<div portal.bind=\"t\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-06 repeat.for header normalized to iteratorProp 'items'",
+    "markup": "<ul repeat.for=\"i of items\"></ul>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-07 with (value-less) -> controller.value stays default",
+    "markup": "<div with></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-08 if (value-less) -> controller.value stays default",
+    "markup": "<div if></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-09 portal (value-less) -> controller.target stays default",
+    "markup": "<div portal></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-10 promise (value-less) -> controller.value stays default",
+    "markup": "<div promise></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-11 switch (value-less) -> controller.value stays default",
+    "markup": "<div switch></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-12 repeat.for header only -> iterator to 'items'",
+    "markup": "<ol repeat.for=\"x of xs\"></ol>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-13 unknown property inside value-less controller still yields AU1104 (nested)",
+    "markup": "<div if foo.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-14 unknown property on nested controller host produces AU1104 (controller present)",
+    "markup": "<div with.bind=\"ctx\" foo.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-15 repeat tail options (key + unknown) -> AU1106",
+    "markup": "<div repeat.for=\"item of items; key.bind: key; bogus.bind: nope\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ],
+      "diags": [
+        { "code": "AU1106" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-16 switch case.bind and default-case branches",
+    "markup": "<div switch.bind=\"mode\"><template case.bind=\"when\"><b>hit</b></template><template default-case><i>default</i></template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" }
+      ]
+    }
+  }
+]

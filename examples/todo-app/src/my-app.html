@@ -1,0 +1,60 @@
+<div class="todo-app">
+  <header class="header">
+    <h1>${title}</h1>
+    <p class="subtitle">${todos.length} total items</p>
+  </header>
+
+  <section class="input-section">
+    <form submit.trigger="addTodo()">
+      <input
+        type="text"
+        class="new-todo"
+        placeholder="What needs to be done?"
+        value.bind="newTodoText"
+      >
+      <button type="submit" class="add-btn">Add</button>
+    </form>
+  </section>
+
+  <section class="filters">
+    <button
+      class="filter-btn ${filter === 'all' ? 'active' : ''}"
+      click.trigger="setFilter('all')"
+    >All (${todos.length})</button>
+    <button
+      class="filter-btn ${filter === 'active' ? 'active' : ''}"
+      click.trigger="setFilter('active')"
+    >Active (${activeTodos})</button>
+    <button
+      class="filter-btn ${filter === 'completed' ? 'active' : ''}"
+      click.trigger="setFilter('completed')"
+    >Completed (${completedTodos})</button>
+  </section>
+
+  <ul class="todo-list" if.bind="filteredTodos.length > 0">
+    <li repeat.for="todo of filteredTodos" class="todo-item ${todo.completed ? 'completed' : ''}">
+      <input
+        type="checkbox"
+        class="toggle"
+        checked.bind="todo.completed"
+        change.trigger="toggleTodo(todo)"
+      >
+      <span class="todo-text">${todo.text}</span>
+      <button class="destroy" click.trigger="removeTodo(todo)">&times;</button>
+    </li>
+  </ul>
+
+  <div class="empty-state" if.bind="filteredTodos.length === 0">
+    <p if.bind="todos.length === 0">No todos yet. Add one above!</p>
+    <p if.bind="todos.length > 0">No ${filter} todos.</p>
+  </div>
+
+  <footer class="footer" if.bind="todos.length > 0">
+    <span class="todo-count">${activeTodos} item${activeTodos === 1 ? '' : 's'} left</span>
+    <button
+      class="clear-completed"
+      click.trigger="clearCompleted()"
+      if.bind="completedTodos > 0"
+    >Clear completed (${completedTodos})</button>
+  </footer>
+</div>

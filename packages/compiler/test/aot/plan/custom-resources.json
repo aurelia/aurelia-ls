@@ -1,0 +1,142 @@
+[
+  {
+    "name": "RP-CE-001 custom element with bindable property",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-widget": {
+            "kind": "element",
+            "name": "my-widget",
+            "boundary": true,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<my-widget value.bind=\"data\"></my-widget>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "my-widget", "hasTarget": true, "customElement": "my-widget" }
+      ],
+      "bindings": [
+        { "type": "propertyBinding", "to": "value", "mode": "toView", "context": "customElement" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-CE-002 custom element containerless",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-inline": {
+            "kind": "element",
+            "name": "my-inline",
+            "boundary": true,
+            "containerless": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-inline></my-inline>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "my-inline", "hasTarget": true, "customElement": "my-inline" }
+      ],
+      "bindings": [],
+      "controllers": [],
+      "expressions": [],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-CA-001 custom attribute with binding",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "tooltip": {
+            "kind": "attribute",
+            "name": "tooltip",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div tooltip.bind=\"message\"></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true, "customAttrs": ["tooltip"] }
+      ],
+      "bindings": [
+        { "type": "propertyBinding", "to": "value", "mode": "toView", "context": "customAttr:tooltip" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-CA-002 multiple custom attributes on element",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "tooltip": {
+            "kind": "attribute",
+            "name": "tooltip",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          },
+          "highlight": {
+            "kind": "attribute",
+            "name": "highlight",
+            "isTemplateController": false,
+            "bindables": {
+              "color": { "name": "color", "mode": "toView" }
+            },
+            "primary": "color"
+          }
+        }
+      }
+    },
+    "markup": "<div tooltip.bind=\"tip\" highlight.bind=\"activeColor\"></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": true, "customAttrs": ["tooltip", "highlight"] }
+      ],
+      "bindings": [
+        { "type": "propertyBinding", "to": "value", "mode": "toView", "context": "customAttr:tooltip" },
+        { "type": "propertyBinding", "to": "color", "mode": "toView", "context": "customAttr:highlight" }
+      ],
+      "controllers": [],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  }
+]

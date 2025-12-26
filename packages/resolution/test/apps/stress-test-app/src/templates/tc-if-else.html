@@ -1,0 +1,41 @@
+<div class="tc-if-else">
+  <!-- Simple if -->
+  <span if.bind="showA">Visible A</span>
+
+  <!-- if/else pair -->
+  <div if.bind="condition">Truthy branch</div>
+  <div else>Falsy branch</div>
+
+  <!-- Nested if inside if -->
+  <div if.bind="outer">
+    <span if.bind="inner">Both true</span>
+    <span else>Outer true, inner false</span>
+  </div>
+
+  <!-- if/else with bindings -->
+  <span if.bind="hasValue" class.bind="valueClass">${value}</span>
+  <span else class="fallback">No value</span>
+
+  <!-- Multiple sequential if/else pairs -->
+  <div if.bind="modeA">Mode A content</div>
+  <div else>Not mode A</div>
+  <div if.bind="modeB">Mode B content</div>
+  <div else>Not mode B</div>
+
+  <!-- Custom element inside else wrapper (critical pattern) -->
+  <div if.bind="showInline">
+    <span>Inline content</span>
+  </div>
+  <div else>
+    <status-badge active.bind="fallbackActive"></status-badge>
+  </div>
+
+  <!-- Custom element in both if and else wrappers -->
+  <div if.bind="isPrimary">
+    <status-badge active.bind="true"></status-badge>
+  </div>
+  <div else>
+    <status-badge active.bind="false"></status-badge>
+    <span>Fallback text</span>
+  </div>
+</div>

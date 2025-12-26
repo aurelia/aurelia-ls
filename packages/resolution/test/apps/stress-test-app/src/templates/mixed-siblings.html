@@ -1,0 +1,43 @@
+<div class="mixed-siblings">
+  <!-- Multiple if controllers at same level -->
+  <span if.bind="showA">A</span>
+  <span if.bind="showB">B</span>
+  <span if.bind="showC">C</span>
+
+  <!-- Multiple if/else pairs at same level -->
+  <div if.bind="hasHeader">Header: ${header}</div>
+  <div else>No header</div>
+
+  <div if.bind="hasContent">Content: ${content}</div>
+  <div else>No content</div>
+
+  <div if.bind="hasFooter">Footer: ${footer}</div>
+  <div else>No footer</div>
+
+  <!-- Multiple repeat controllers at same level -->
+  <ul>
+    <li repeat.for="item of listA" class="list-a">${item}</li>
+  </ul>
+  <ul>
+    <li repeat.for="item of listB" class="list-b">${item}</li>
+  </ul>
+  <ul>
+    <li repeat.for="item of listC" class="list-c">${item}</li>
+  </ul>
+
+  <!-- Mixed template controllers as siblings -->
+  <div if.bind="showFirst">First section</div>
+  <div repeat.for="item of items">${item}</div>
+  <template switch.bind="type">
+    <span case="x">X</span>
+    <span case="y">Y</span>
+  </template>
+  <div if.bind="showLast">Last section</div>
+
+  <!-- Static elements between template controllers -->
+  <header>Static header</header>
+  <div repeat.for="row of rows">${row}</div>
+  <nav>Static navigation</nav>
+  <div if.bind="showMain">Main content</div>
+  <footer>Static footer</footer>
+</div>

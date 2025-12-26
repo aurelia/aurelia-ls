@@ -1,0 +1,34 @@
+<div class="tc-portal">
+  <!-- Basic portal targeting element -->
+  <div portal="target">
+    <span>Portaled content</span>
+  </div>
+  <div id="target"></div>
+
+  <!-- Portal with dynamic target -->
+  <div portal.bind="targetSelector">
+    <span>${content}</span>
+  </div>
+
+  <!-- Portal with complex content -->
+  <div portal="modal-container">
+    <div class="modal">
+      <h2>${modalTitle}</h2>
+      <p>${modalContent}</p>
+      <button click.trigger="close()">Close</button>
+    </div>
+  </div>
+
+  <!-- Portal inside repeat -->
+  <div repeat.for="notification of notifications">
+    <div portal="notification-area">
+      <div class="notification ${notification.type}">
+        ${notification.message}
+      </div>
+    </div>
+  </div>
+
+  <!-- Multiple portals to same target -->
+  <div portal="shared-target">First portaled</div>
+  <div portal="shared-target">Second portaled</div>
+</div>

@@ -1,0 +1,94 @@
+[
+  {
+    "name": "R-R-01 au-viewport name.bind resolves to bindable",
+    "markup": "<au-viewport name.bind=\"vpName\"></au-viewport>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-02 au-viewport default literal becomes setProp",
+    "markup": "<au-viewport default=\"home\"></au-viewport>",
+    "expect": {
+      "items": [
+        { "kind": "setProp", "to": "default", "value": "home" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-03 au-viewport multiple bindables",
+    "markup": "<au-viewport name.bind=\"n\" default.bind=\"d\" fallback.bind=\"f\"></au-viewport>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "name", "target": "bindable", "effectiveMode": "toView" },
+        { "kind": "prop", "to": "default", "target": "bindable", "effectiveMode": "toView" },
+        { "kind": "prop", "to": "fallback", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-04 load attribute primary bindable (route)",
+    "markup": "<a load=\"home\"></a>",
+    "expect": {
+      "items": [
+        { "kind": "setProp", "to": "route", "value": "home" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-05 load.bind resolves to route bindable",
+    "markup": "<a load.bind=\"currentRoute\"></a>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "route", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-06 load with interpolation binds to route",
+    "markup": "<a load=\"products/${id}\"></a>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "load", "to": "route", "target": "bindable" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-07 href URL literal not parsed as multi-binding",
+    "markup": "<a href=\"https://example.com\">Link</a>",
+    "expect": {
+      "items": [
+        { "kind": "setProp", "to": "value", "value": "https://example.com" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-08 href.bind resolves to value bindable",
+    "markup": "<a href.bind=\"linkUrl\"></a>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-09 href with colon in path not multi-binding",
+    "markup": "<a href=\"mailto:test@example.com\">Email</a>",
+    "expect": {
+      "items": [
+        { "kind": "setProp", "to": "value", "value": "mailto:test@example.com" }
+      ]
+    }
+  },
+  {
+    "name": "R-R-10 href with port number not multi-binding",
+    "markup": "<a href=\"http://localhost:8080/path\">Dev</a>",
+    "expect": {
+      "items": [
+        { "kind": "setProp", "to": "value", "value": "http://localhost:8080/path" }
+      ]
+    }
+  }
+]

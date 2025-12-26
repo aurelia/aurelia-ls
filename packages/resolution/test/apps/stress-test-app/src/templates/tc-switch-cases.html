@@ -1,0 +1,41 @@
+<div class="tc-switch">
+  <!-- Basic switch with case and default -->
+  <template switch.bind="type">
+    <span case="a">Type A</span>
+    <span case="b">Type B</span>
+    <span case="c">Type C</span>
+    <span default-case>Unknown type</span>
+  </template>
+
+  <!-- Switch with expressions in content -->
+  <template switch.bind="status">
+    <div case="loading">Loading... ${progress}%</div>
+    <div case="success">Success: ${result}</div>
+    <div case="error">Error: ${errorMessage}</div>
+    <div default-case>Idle</div>
+  </template>
+
+  <!-- Switch with nested content -->
+  <template switch.bind="view">
+    <div case="list">
+      <ul>
+        <li repeat.for="item of items">${item}</li>
+      </ul>
+    </div>
+    <div case="grid">
+      <div class="grid">
+        <div repeat.for="item of items" class="cell">${item}</div>
+      </div>
+    </div>
+    <div default-case>No view selected</div>
+  </template>
+
+  <!-- Multiple case values (fall-through) -->
+  <template switch.bind="size">
+    <span case="xs">Extra Small</span>
+    <span case="sm">Small</span>
+    <span case="md">Medium</span>
+    <span case="lg">Large</span>
+    <span case="xl">Extra Large</span>
+  </template>
+</div>

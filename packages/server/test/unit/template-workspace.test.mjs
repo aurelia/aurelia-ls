@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { TemplateWorkspace } from "../../out/services/template-workspace.js";
-import { canonicalDocumentUri } from "../../../domain/out/program/index.js";
+import { canonicalDocumentUri } from "../../../compiler/out/program/index.js";
 
 function createWorkspace(programOverrides = {}, options = {}) {
   return new TemplateWorkspace({

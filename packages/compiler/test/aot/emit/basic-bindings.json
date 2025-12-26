@@ -1,0 +1,185 @@
+[
+  {
+    "name": "AOT-E-001: Text interpolation",
+    "markup": "${message}",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-002: Text interpolation with multiple expressions",
+    "markup": "Hello ${first} ${last}!",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "textBinding", "target": 0, "parts": 3, "exprs": 2 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-003: Property binding with .bind",
+    "markup": "<input value.bind=\"name\">",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-004: Property binding with .one-way",
+    "markup": "<div textContent.one-way=\"text\"></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "textContent", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-005: Property binding with .two-way",
+    "markup": "<input value.two-way=\"name\">",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-006: Property binding with .from-view",
+    "markup": "<input value.from-view=\"name\">",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "fromView" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-007: Property binding with .to-view",
+    "markup": "<div textContent.to-view=\"text\"></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "textContent", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-008: Event listener with .trigger",
+    "markup": "<button click.trigger=\"handleClick()\"></button>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "listenerBinding", "target": 0, "to": "click", "capture": false }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-009: Event listener with .capture",
+    "markup": "<div click.capture=\"handleClick()\"></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "listenerBinding", "target": 0, "to": "click", "capture": true }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-010: Multiple bindings on one element",
+    "markup": "<input value.bind=\"name\" placeholder.bind=\"hint\">",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" },
+        { "type": "propertyBinding", "target": 0, "to": "placeholder", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-011: Attribute interpolation",
+    "markup": "<div title=\"Hello ${name}!\"></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "interpolation", "target": 0, "to": "title", "parts": 2, "exprs": 1 }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-012: Multiple elements with bindings",
+    "markup": "<div a.bind=\"x\"></div><span b.bind=\"y\"></span>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "a", "mode": "toView" },
+        { "type": "propertyBinding", "target": 1, "to": "b", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-013: Mixed text interpolation and element binding",
+    "markup": "${greeting}<div name.bind=\"user\"></div>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 },
+        { "type": "propertyBinding", "target": 1, "to": "name", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-014: Ref binding",
+    "markup": "<input ref=\"myInput\">",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "refBinding", "target": 0, "to": "element" }
+      ],
+      "nested": []
+    }
+  },
+  {
+    "name": "AOT-E-015: Style binding (color.style syntax)",
+    "markup": "<div color.style=\"textColor\"></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "style.color", "mode": "toView" }
+      ],
+      "nested": []
+    }
+  }
+]

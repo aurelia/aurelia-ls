@@ -1,0 +1,261 @@
+import type ts from "typescript";
+import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId } from "@aurelia-ls/compiler";
+import { normalizePathForId } from "@aurelia-ls/compiler";
+import type { SourceFacts } from "./extraction/types.js";
+import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
+import type { RegistrationIntent } from "./registration/types.js";
+import type { ConventionConfig } from "./conventions/types.js";
+import type { Logger } from "./types.js";
+import { extractAllFacts } from "./extraction/extractor.js";
+import { createResolverPipeline } from "./inference/resolver-pipeline.js";
+import { createRegistrationAnalyzer } from "./registration/analyzer.js";
+import { buildResourceGraph } from "./scope/builder.js";
+import { dirname, resolve as resolvePath, basename } from "node:path";
+
+/**
+ * Configuration for resolution.
+ */
+export interface ResolutionConfig {
+  /** Convention configuration for inference */
+  conventions?: ConventionConfig;
+  /** Base semantics to build upon */
+  baseSemantics?: Semantics;
+  /** Default scope for resources */
+  defaultScope?: ResourceScopeId | null;
+}
+
+/**
+ * Result of running resolution.
+ */
+export interface ResolutionResult {
+  /** The constructed resource graph */
+  resourceGraph: ResourceGraph;
+  /** All resource candidates identified */
+  candidates: readonly ResourceCandidate[];
+  /** Registration intents for all candidates */
+  intents: readonly RegistrationIntent[];
+  /** External template files (convention-based: foo.ts → foo.html) */
+  templates: readonly TemplateInfo[];
+  /** Inline templates (string literals in decorators/static $au) */
+  inlineTemplates: readonly InlineTemplateInfo[];
+  /** Diagnostics from resolution */
+  diagnostics: readonly ResolutionDiagnostic[];
+  /** Extracted facts (for debugging/tooling) */
+  facts: Map<NormalizedPath, SourceFacts>;
+}
+
+/**
+ * External template file mapping (convention-based discovery).
+ */
+export interface TemplateInfo {
+  /** Path to the .html template file */
+  templatePath: NormalizedPath;
+  /** Path to the .ts component file */
+  componentPath: NormalizedPath;
+  /** Scope ID for compilation ("root" or "local:...") */
+  scopeId: ResourceScopeId;
+  /** Component class name */
+  className: string;
+  /** Resource name (kebab-case) */
+  resourceName: string;
+}
+
+/**
+ * Inline template info (template content embedded in .ts file).
+ */
+export interface InlineTemplateInfo {
+  /** The inline template content (HTML string) */
+  content: string;
+  /** Path to the .ts component file containing the inline template */
+  componentPath: NormalizedPath;
+  /** Scope ID for compilation ("root" or "local:...") */
+  scopeId: ResourceScopeId;
+  /** Component class name */
+  className: string;
+  /** Resource name (kebab-case) */
+  resourceName: string;
+}
+
+/**
+ * Diagnostic from resolution.
+ */
+export interface ResolutionDiagnostic {
+  code: string;
+  message: string;
+  source?: NormalizedPath;
+  severity: "error" | "warning" | "info";
+}
+
+/**
+ * Main entry point: run the full resolution pipeline.
+ *
+ * Pipeline:
+ * 1. Extraction: AST → SourceFacts
+ * 2. Inference: SourceFacts → ResourceCandidate[]
+ * 3. Registration Analysis: ResourceCandidate[] → RegistrationIntent[]
+ * 4. Scope Construction: RegistrationIntent[] → ResourceGraph
+ */
+export function resolve(
+  program: ts.Program,
+  config?: ResolutionConfig,
+  logger?: Logger,
+): ResolutionResult {
+  const log = logger ?? nullLogger;
+
+  // Layer 1: Extraction
+  log.info("[resolution] extracting facts...");
+  const facts = extractAllFacts(program);
+
+  // Layer 2: Inference
+  log.info("[resolution] resolving candidates...");
+  const pipeline = createResolverPipeline(config?.conventions);
+  const { candidates, diagnostics: resolverDiags } = pipeline.resolve(facts);
+
+  // Layer 3: Registration Analysis
+  log.info("[resolution] analyzing registration...");
+  const analyzer = createRegistrationAnalyzer();
+  const intents = analyzer.analyze(candidates, facts, program);
+
+  // Layer 4: Scope Construction
+  log.info("[resolution] building resource graph...");
+  const resourceGraph = buildResourceGraph(intents, config?.baseSemantics, config?.defaultScope);
+
+  const globalCount = intents.filter((i) => i.kind === "global").length;
+  const localCount = intents.filter((i) => i.kind === "local").length;
+  const unknownCount = intents.filter((i) => i.kind === "unknown").length;
+
+  // Layer 5: Template Discovery
+  log.info("[resolution] discovering templates...");
+  const { templates, inlineTemplates } = discoverTemplates(intents, program, resourceGraph);
+
+  log.info(
+    `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${unknownCount} unknown), ${templates.length} external + ${inlineTemplates.length} inline templates`,
+  );
+
+  return {
+    resourceGraph,
+    candidates,
+    intents,
+    templates,
+    inlineTemplates,
+    diagnostics: resolverDiags.map(toDiagnostic),
+    facts,
+  };
+}
+
+function toDiagnostic(d: ResolverDiagnostic): ResolutionDiagnostic {
+  return {
+    code: d.code,
+    message: d.message,
+    source: d.source,
+    severity: d.severity,
+  };
+}
+
+const nullLogger: Logger = {
+  log: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
+interface DiscoveredTemplates {
+  templates: TemplateInfo[];
+  inlineTemplates: InlineTemplateInfo[];
+}
+
+/**
+ * Discover templates for element resources.
+ *
+ * For each element:
+ * - If it has an inline template (string literal), add to inlineTemplates
+ * - Otherwise, apply convention (foo.ts → foo.html) and add to templates
+ */
+function discoverTemplates(
+  intents: readonly RegistrationIntent[],
+  program: ts.Program,
+  resourceGraph: ResourceGraph,
+): DiscoveredTemplates {
+  const templates: TemplateInfo[] = [];
+  const inlineTemplates: InlineTemplateInfo[] = [];
+  const sourceFiles = new Set(program.getSourceFiles().map((sf) => normalizePathForId(sf.fileName)));
+
+  for (const intent of intents) {
+    const { resource } = intent;
+
+    // Only elements have templates
+    if (resource.kind !== "element") continue;
+
+    const componentPath = resource.source;
+    const scopeId = computeScopeId(intent, resourceGraph);
+
+    // Check for inline template first
+    if (resource.inlineTemplate !== undefined) {
+      inlineTemplates.push({
+        content: resource.inlineTemplate,
+        componentPath,
+        scopeId,
+        className: resource.className,
+        resourceName: resource.name,
+      });
+      continue;
+    }
+
+    // No inline template - try convention-based discovery
+    const templatePath = resolveTemplatePath(componentPath, sourceFiles);
+
+    if (!templatePath) continue;
+
+    templates.push({
+      templatePath,
+      componentPath,
+      scopeId,
+      className: resource.className,
+      resourceName: resource.name,
+    });
+  }
+
+  return { templates, inlineTemplates };
+}
+
+/**
+ * Resolve the template path for a component using convention.
+ *
+ * Convention: foo.ts → foo.html (same directory).
+ *
+ * This is called only when there's no inline template. For external templates,
+ * developers use:
+ *   import template from './foo.html';
+ *   @customElement({ template })
+ *
+ * Since we can't resolve identifier references statically, we use convention.
+ */
+function resolveTemplatePath(
+  componentPath: NormalizedPath,
+  _knownFiles: Set<NormalizedPath>,
+): NormalizedPath | null {
+  // Convention: foo.ts → foo.html, foo.js → foo.html
+  const dir = dirname(componentPath);
+  const base = basename(componentPath);
+  const htmlName = base.replace(/\.(ts|js|tsx|jsx)$/, ".html");
+
+  if (htmlName === base) {
+    // No extension match, can't apply convention
+    return null;
+  }
+
+  return normalizePathForId(resolvePath(dir, htmlName));
+}
+
+/**
+ * Compute the scope ID for a resource based on its registration intent.
+ */
+function computeScopeId(intent: RegistrationIntent, resourceGraph: ResourceGraph): ResourceScopeId {
+  if (intent.kind === "local" && intent.scope) {
+    // Local scope: "local:{componentPath}"
+    return `local:${intent.scope}` as ResourceScopeId;
+  }
+
+  // Global or unknown: use root scope
+  return resourceGraph.root;
+}
