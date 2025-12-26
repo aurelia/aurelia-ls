@@ -18,7 +18,7 @@
  *                            emitStaticAu({ ..., dependencies })
  * ```
  *
- * See docs/aot-build-requirements.md Phase A for full requirements.
+ * See docs/transform-architecture.md for full architecture.
  */
 
 import ts from "typescript";
@@ -129,8 +129,7 @@ export function extractDependencies(
 /**
  * Extract full decorator configuration.
  *
- * TODO: Implement this function
- * See: docs/aot-build-requirements.md Phase A
+ * TODO: Implement full config extraction
  */
 export function extractDecoratorConfig(
   source: string,

@@ -7,7 +7,7 @@
  * Run: npm test -- --test-name-pattern "extract"
  *
  * See: docs/aot-build-requirements.md Phase A
- * See: docs/aot-testing-strategy.md
+ * See: docs/testing.md (Known Gaps > Transform Package)
  */
 
 import { describe, it, todo } from "node:test";
