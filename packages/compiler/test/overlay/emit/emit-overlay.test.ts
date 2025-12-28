@@ -2,7 +2,27 @@ import { runVectorTests, getDirname, lowerOpts } from "../../_helpers/vector-run
 
 import { lowerDocument, resolveHost, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
 
-runVectorTests({
+// --- Types ---
+
+interface EmitExpect {
+  mapping?: number;
+  textIncludes?: string[];
+}
+
+interface EmitIntent {
+  mappingCount: number;
+  textIncludes: string[];
+  text: string;
+}
+
+interface EmitDiff {
+  missingMapping: string[];
+  extraMapping: string[];
+  missingTextIncludes: string[];
+  extraTextIncludes: string[];
+}
+
+runVectorTests<EmitExpect, EmitIntent, EmitDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Emit Overlay (60)",
   execute: (v, ctx) => {
@@ -23,7 +43,12 @@ runVectorTests({
 
 // --- Helpers ---
 
-function mockVm() {
+interface VmReflection {
+  getRootVmTypeExpr(): string;
+  getSyntheticPrefix(): string;
+}
+
+function mockVm(): VmReflection {
   return {
     getRootVmTypeExpr() {
       return "RootVm";
@@ -36,7 +61,12 @@ function mockVm() {
 
 // --- Intent Reduction ---
 
-function reduceEmitIntent(emit, expectHints) {
+interface EmitOutput {
+  mapping: unknown[];
+  text: string;
+}
+
+function reduceEmitIntent(emit: EmitOutput, expectHints: EmitExpect | undefined): EmitIntent {
   return {
     mappingCount: emit.mapping.length,
     textIncludes: (expectHints?.textIncludes ?? []).filter((snippet) => emit.text.includes(snippet)),
@@ -46,11 +76,11 @@ function reduceEmitIntent(emit, expectHints) {
 
 // --- Intent Comparison ---
 
-function compareEmitIntent(actual, expected) {
-  const missingMapping = [];
-  const extraMapping = [];
-  const missingTextIncludes = [];
-  const extraTextIncludes = [];
+function compareEmitIntent(actual: EmitIntent, expected: EmitExpect): EmitDiff {
+  const missingMapping: string[] = [];
+  const extraMapping: string[] = [];
+  const missingTextIncludes: string[] = [];
+  const extraTextIncludes: string[] = [];
 
   // Check mapping count if specified
   if (expected.mapping != null && actual.mappingCount !== expected.mapping) {

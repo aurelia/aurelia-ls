@@ -1,9 +1,51 @@
-import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../_helpers/vector-runner.js";
+import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr, type TestVector, type CompilerContext } from "../_helpers/vector-runner.js";
 import { diffByKey } from "../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes, typecheck } from "@aurelia-ls/compiler";
 
-runVectorTests({
+// --- Types ---
+
+interface TypeEntry {
+  code: string;
+  type: string;
+}
+
+interface DiagEntry {
+  code: string;
+  expr?: string;
+  expected?: string;
+  actual?: string;
+}
+
+interface DiagExpectInput {
+  code?: string;
+  expr?: string;
+  expected?: string;
+  actual?: string;
+}
+
+interface TypecheckExpect {
+  expected?: TypeEntry[];
+  inferred?: TypeEntry[];
+  diags?: (DiagExpectInput | string)[];
+}
+
+interface TypecheckIntent {
+  expected: TypeEntry[];
+  inferred: TypeEntry[];
+  diags: DiagEntry[];
+}
+
+interface TypecheckDiff {
+  missingExpected: string[];
+  extraExpected: string[];
+  missingInferred: string[];
+  extraInferred: string[];
+  missingDiags: string[];
+  extraDiags: string[];
+}
+
+runVectorTests<TypecheckExpect, TypecheckIntent, TypecheckDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Typecheck (40)",
   execute: (v, ctx) => {
@@ -34,11 +76,27 @@ runVectorTests({
 
 // --- Intent Reduction ---
 
-function reduceTypecheckIntent({ ir, tc }) {
+interface TypecheckResult {
+  expectedByExpr?: Map<string, string>;
+  inferredByExpr?: Map<string, string>;
+  diags?: Array<{
+    code: string;
+    exprId?: string;
+    expected?: string;
+    actual?: string;
+  }>;
+}
+
+interface ReduceInput {
+  ir: Parameters<typeof indexExprCodeFromIr>[0];
+  tc: TypecheckResult;
+}
+
+function reduceTypecheckIntent({ ir, tc }: ReduceInput): TypecheckIntent {
   const codeIndex = indexExprCodeFromIr(ir);
   const expected = mapEntries(tc.expectedByExpr, codeIndex);
   const inferred = mapEntries(tc.inferredByExpr, codeIndex);
-  const diags = (tc.diags ?? []).map((d) => ({
+  const diags: DiagEntry[] = (tc.diags ?? []).map((d) => ({
     code: d.code,
     expr: d.exprId ? (codeIndex.get(d.exprId) ?? `(expr:${d.exprId})`) : undefined,
     expected: d.expected,
@@ -47,8 +105,8 @@ function reduceTypecheckIntent({ ir, tc }) {
   return { expected, inferred, diags };
 }
 
-function mapEntries(mapLike, codeIndex) {
-  const out = [];
+function mapEntries(mapLike: Map<string, string> | undefined, codeIndex: Map<string, string>): TypeEntry[] {
+  const out: TypeEntry[] = [];
   if (!mapLike || typeof mapLike.entries !== "function") return out;
   for (const [id, type] of mapLike.entries()) {
     out.push({ code: codeIndex.get(id) ?? `(expr:${id})`, type });
@@ -58,13 +116,13 @@ function mapEntries(mapLike, codeIndex) {
 
 // --- Intent Comparison ---
 
-function compareTypecheckIntent(actual, expected) {
+function compareTypecheckIntent(actual: TypecheckIntent, expected: TypecheckIntent): TypecheckDiff {
   const { missing: missingExpected, extra: extraExpected } =
-    diffByKey(actual.expected, expected.expected, (e) => `${e.code ?? ""}|${e.type ?? ""}`);
+    diffByKey(actual.expected, expected.expected, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
   const { missing: missingInferred, extra: extraInferred } =
-    diffByKey(actual.inferred, expected.inferred, (e) => `${e.code ?? ""}|${e.type ?? ""}`);
+    diffByKey(actual.inferred, expected.inferred, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
   const { missing: missingDiags, extra: extraDiags } =
-    diffByKey(actual.diags, expected.diags, (d) => `${d.code ?? ""}|${d.expr ?? ""}|${d.expected ?? ""}|${d.actual ?? ""}`);
+    diffByKey(actual.diags, expected.diags, (d: DiagEntry) => `${d.code ?? ""}|${d.expr ?? ""}|${d.expected ?? ""}|${d.actual ?? ""}`);
 
   return { missingExpected, extraExpected, missingInferred, extraInferred, missingDiags, extraDiags };
 }

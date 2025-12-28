@@ -62,7 +62,9 @@ interface LowerDiff {
   extraAttributes: string[];
 }
 
-runVectorTests<LowerIntent, LowerDiff>({
+type LowerExpect = Partial<LowerIntent>;
+
+runVectorTests<LowerExpect, LowerIntent, LowerDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Lower (10)",
   execute: (v: TestVector, ctx: CompilerContext) =>

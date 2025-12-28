@@ -14,9 +14,46 @@ import {
 
 const dirname = getDirname(import.meta.url);
 
+// --- Types ---
+
+interface ResolveItem {
+  kind: string;
+  to?: string;
+  attr?: string;
+  on?: string;
+  res?: string;
+  target?: string;
+  effectiveMode?: string;
+  type?: string;
+  capture?: boolean;
+  modifier?: string;
+  value?: unknown;
+}
+
+interface DiagExpect {
+  code?: string;
+}
+
+interface ResolveExpect {
+  items?: ResolveItem[];
+  diags?: (DiagExpect | string)[];
+}
+
+interface ResolveIntent {
+  items: ResolveItem[];
+  diags: string[];
+}
+
+interface ResolveDiff {
+  missingItems: string[];
+  extraItems: string[];
+  missingDiags: string[];
+  extraDiags: string[];
+}
+
 // --- Vector Tests ---
 
-runVectorTests({
+runVectorTests<ResolveExpect, ResolveIntent, ResolveDiff>({
   dirname,
   suiteName: "Resolve (20)",
   execute: (v, ctx) => {
@@ -181,12 +218,38 @@ describe("Resolve (20) - Resource Graph", () => {
 
 // --- Intent Reduction ---
 
-function reduceLinkedIntent(linked) {
-  const items = [];
+interface LinkedModule {
+  templates?: LinkedTemplate[];
+  diags?: Array<{ code: string }>;
+}
+
+interface LinkedTemplate {
+  rows?: Array<{
+    instructions?: LinkedInstruction[];
+  }>;
+}
+
+interface LinkedInstruction {
+  kind: string;
+  to?: string;
+  attr?: string;
+  res?: string;
+  target?: { kind: string };
+  effectiveMode?: string;
+  eventType?: { kind: string; name?: string };
+  capture?: boolean;
+  modifier?: string;
+  value?: unknown;
+  props?: LinkedInstruction[];
+  def?: LinkedTemplate;
+}
+
+function reduceLinkedIntent(linked: LinkedModule): ResolveIntent {
+  const items: ResolveItem[] = [];
   const diags = (linked.diags ?? []).map((d) => d.code);
 
-  const visited = new Set();
-  const visit = (template) => {
+  const visited = new Set<LinkedTemplate>();
+  const visit = (template: LinkedTemplate): void => {
     if (!template || visited.has(template)) return;
     visited.add(template);
     visitTemplate(template, items, visit);
@@ -199,7 +262,11 @@ function reduceLinkedIntent(linked) {
   return { items, diags };
 }
 
-function visitTemplate(template, items, visit) {
+function visitTemplate(
+  template: LinkedTemplate,
+  items: ResolveItem[],
+  visit: (t: LinkedTemplate) => void
+): void {
   for (const row of template.rows ?? []) {
     for (const ins of row.instructions ?? []) {
       switch (ins.kind) {
@@ -283,7 +350,7 @@ function visitTemplate(template, items, visit) {
   }
 }
 
-function mapTarget(target) {
+function mapTarget(target: { kind: string } | undefined): string {
   if (!target) return "unknown";
   switch (target.kind) {
     case "element.nativeProp": return "native";
@@ -297,7 +364,7 @@ function mapTarget(target) {
   }
 }
 
-function pushBindingItem(items, p) {
+function pushBindingItem(items: ResolveItem[], p: LinkedInstruction): void {
   switch (p.kind) {
     case "propertyBinding":
       items.push({
@@ -339,9 +406,9 @@ function pushBindingItem(items, p) {
 
 // --- Intent Comparison ---
 
-function compareResolveIntent(actual, expected) {
-  const toCountMap = (list, keyFn) => {
-    const map = new Map();
+function compareResolveIntent(actual: ResolveIntent, expected: ResolveExpect): ResolveDiff {
+  const toCountMap = <T>(list: T[] | undefined, keyFn: (item: T) => string): Map<string, number> => {
+    const map = new Map<string, number>();
     for (const item of list ?? []) {
       const k = keyFn(item);
       map.set(k, (map.get(k) ?? 0) + 1);
@@ -352,14 +419,15 @@ function compareResolveIntent(actual, expected) {
     items: toCountMap(actual.items, (e) => JSON.stringify(e)),
     diags: toCountMap(actual.diags, (e) => e),
   };
+  const normalizeDiag = (d: DiagExpect | string): string => typeof d === "string" ? d : d.code ?? "";
   const e = {
-    items: toCountMap(expected.items ?? [], (e) => JSON.stringify(e)),
-    diags: toCountMap((expected.diags ?? []).map((d) => d.code ?? d), (e) => e),
+    items: toCountMap(expected.items ?? [], (item) => JSON.stringify(item)),
+    diags: toCountMap((expected.diags ?? []).map(normalizeDiag), (x) => x),
   };
 
-  const diffCounts = (actualMap, expectedMap) => {
-    const missing = [];
-    const extra = [];
+  const diffCounts = (actualMap: Map<string, number>, expectedMap: Map<string, number>): { missing: string[]; extra: string[] } => {
+    const missing: string[] = [];
+    const extra: string[] = [];
     const keys = new Set([...actualMap.keys(), ...expectedMap.keys()]);
     for (const k of keys) {
       const aCount = actualMap.get(k) ?? 0;

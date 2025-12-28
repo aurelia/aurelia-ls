@@ -3,7 +3,91 @@ import { diffByKey } from "../../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes, planAot } from "@aurelia-ls/compiler";
 
-runVectorTests({
+// --- Types ---
+
+interface NodeIntent {
+  kind: string;
+  tag?: string;
+  hasTarget?: boolean;
+  staticAttrs?: string[];
+  customElement?: string;
+  customAttrs?: string[];
+  content?: string;
+  interpolation?: boolean;
+  parts?: number;
+  exprs?: number;
+}
+
+interface BindingIntent {
+  type: string;
+  to?: string;
+  mode?: string;
+  parts?: number;
+  property?: string;
+  event?: string;
+  capture?: boolean;
+  context?: string;
+}
+
+interface ControllerIntent {
+  kind: string;
+  frameId: number;
+  locals?: string[];
+  contextuals?: string[];
+  caseCount?: number;
+  hasDefault?: boolean;
+  hasPending?: boolean;
+  hasThen?: boolean;
+  hasCatch?: boolean;
+  thenLocal?: string;
+  catchLocal?: string;
+  hasTargetExpr?: boolean;
+  targetSelector?: string;
+}
+
+interface ExpressionIntent {
+  kind: string;
+  frameId: number;
+}
+
+interface ScopeIntent {
+  frameId: number;
+  parentFrameId: number | null;
+  kind: string;
+  locals: string[];
+  overrideContext: string[];
+}
+
+interface AotPlanExpect {
+  nodes?: NodeIntent[];
+  bindings?: BindingIntent[];
+  controllers?: ControllerIntent[];
+  expressions?: ExpressionIntent[];
+  scopes?: ScopeIntent[];
+}
+
+interface AotPlanIntent {
+  nodes: NodeIntent[];
+  bindings: BindingIntent[];
+  controllers: ControllerIntent[];
+  expressions: ExpressionIntent[];
+  scopes: ScopeIntent[];
+}
+
+interface AotPlanDiff {
+  missingNodes: string[];
+  extraNodes: string[];
+  missingBindings: string[];
+  extraBindings: string[];
+  missingControllers: string[];
+  extraControllers: string[];
+  missingExpressions: string[];
+  extraExpressions: string[];
+  missingScopes: string[];
+  extraScopes: string[];
+}
+
+runVectorTests<AotPlanExpect, AotPlanIntent, AotPlanDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "AOT Plan (aot:plan)",
   execute: (v, ctx) => {
@@ -26,12 +110,66 @@ runVectorTests({
 
 // --- Intent Reduction ---
 
-function reducePlanIntent(plan) {
-  const nodes = [];
-  const bindings = [];
-  const controllers = [];
-  const expressions = [];
-  const scopes = [];
+// Plan shapes (loose typing - just enough for the test)
+interface AotPlan {
+  root: AotNode;
+  expressions: Array<{ ast: { $kind: string }; frameId: number }>;
+  scopes: Array<{
+    frameId: number;
+    parentFrameId: number | null;
+    kind: string;
+    locals: Array<{ source: string; name: string }>;
+    overrideContext: string[];
+  }>;
+}
+
+interface AotNode {
+  kind: string;
+  tag?: string;
+  targetIndex?: number;
+  content?: string;
+  staticAttrs?: Array<{ name: string; value?: string }>;
+  customElement?: { resource: string; bindings: AotBinding[] };
+  customAttrs?: Array<{ resource: string; bindings: AotBinding[] }>;
+  bindings?: AotBinding[];
+  controllers?: AotController[];
+  children?: AotNode[];
+  interpolation?: { parts: unknown[]; exprIds: unknown[] };
+}
+
+interface AotBinding {
+  type: string;
+  to?: string;
+  mode?: string;
+  parts?: unknown[];
+  property?: string;
+  event?: string;
+  capture?: boolean;
+}
+
+interface AotController {
+  kind: string;
+  frameId: number;
+  template?: AotNode;
+  locals?: string[];
+  contextuals?: string[];
+  cases?: Array<{ template?: AotNode }>;
+  defaultTemplate?: AotNode;
+  pendingTemplate?: AotNode;
+  thenTemplate?: AotNode;
+  catchTemplate?: AotNode;
+  thenLocal?: string;
+  catchLocal?: string;
+  targetExprId?: string;
+  targetSelector?: string;
+}
+
+function reducePlanIntent(plan: AotPlan): AotPlanIntent {
+  const nodes: NodeIntent[] = [];
+  const bindings: BindingIntent[] = [];
+  const controllers: ControllerIntent[] = [];
+  const expressions: ExpressionIntent[] = [];
+  const scopes: ScopeIntent[] = [];
 
   // Reduce expressions - normalize kind by removing "Expression" suffix for comparison
   for (const expr of plan.expressions) {
@@ -58,7 +196,12 @@ function reducePlanIntent(plan) {
   return { nodes, bindings, controllers, expressions, scopes };
 }
 
-function walkNode(node, nodes, bindings, controllers) {
+function walkNode(
+  node: AotNode,
+  nodes: NodeIntent[],
+  bindings: BindingIntent[],
+  controllers: ControllerIntent[]
+): void {
   switch (node.kind) {
     case "element": {
       const nodeIntent = {
@@ -152,14 +295,14 @@ function walkNode(node, nodes, bindings, controllers) {
   }
 }
 
-function reduceBinding(b) {
+function reduceBinding(b: AotBinding): BindingIntent {
   switch (b.type) {
     case "propertyBinding":
       return { type: "propertyBinding", to: b.to, mode: b.mode };
     case "attributeBinding":
       return { type: "attributeBinding", to: b.to };
     case "attributeInterpolation":
-      return { type: "attributeInterpolation", to: b.to, parts: b.parts.length };
+      return { type: "attributeInterpolation", to: b.to, parts: b.parts?.length };
     case "styleBinding":
       return { type: "styleBinding", property: b.property };
     case "listenerBinding":
@@ -171,7 +314,7 @@ function reduceBinding(b) {
   }
 }
 
-function reduceController(ctrl) {
+function reduceController(ctrl: AotController): ControllerIntent {
   const base = { kind: ctrl.kind, frameId: ctrl.frameId };
   switch (ctrl.kind) {
     case "repeat":
@@ -200,7 +343,7 @@ function reduceController(ctrl) {
 
 // --- Intent Comparison ---
 
-function compareAotPlanIntent(actual, expected) {
+function compareAotPlanIntent(actual: AotPlanIntent, expected: AotPlanExpect): AotPlanDiff {
   const { missing: missingNodes, extra: extraNodes } =
     diffByKey(actual.nodes, expected.nodes, nodeKey);
   const { missing: missingBindings, extra: extraBindings } =
@@ -221,7 +364,7 @@ function compareAotPlanIntent(actual, expected) {
   };
 }
 
-function nodeKey(n) {
+function nodeKey(n: NodeIntent): string {
   if (n.kind === "element") {
     const parts = [n.kind, n.tag, n.hasTarget ? "T" : ""];
     if (n.customElement) parts.push(`ce:${n.customElement}`);
@@ -234,7 +377,7 @@ function nodeKey(n) {
   return `${n.kind}|${n.content ?? ""}`;
 }
 
-function bindingKey(b) {
+function bindingKey(b: BindingIntent): string {
   const context = b.context ? `@${b.context}` : "";
   switch (b.type) {
     case "propertyBinding":
@@ -248,11 +391,11 @@ function bindingKey(b) {
   }
 }
 
-function controllerKey(c) {
+function controllerKey(c: ControllerIntent): string {
   const parts = [c.kind, `frame:${c.frameId}`];
   if (c.kind === "repeat") {
-    parts.push(`locals:${c.locals.join(",")}`);
-    parts.push(`ctx:${c.contextuals.join(",")}`);
+    parts.push(`locals:${(c.locals ?? []).join(",")}`);
+    parts.push(`ctx:${(c.contextuals ?? []).join(",")}`);
   }
   // if and else are separate controllers now - no hasElse flag
   if (c.kind === "switch") parts.push(`cases:${c.caseCount}`, `default:${c.hasDefault}`);
@@ -262,10 +405,10 @@ function controllerKey(c) {
   return parts.join("|");
 }
 
-function exprKey(e) {
+function exprKey(e: ExpressionIntent): string {
   return `${e.kind}:frame${e.frameId}`;
 }
 
-function scopeKey(s) {
+function scopeKey(s: ScopeIntent): string {
   return `${s.frameId}:${s.kind}:parent=${s.parentFrameId}:locals=${s.locals.join(",")}:oc=${s.overrideContext.join(",")}`;
 }

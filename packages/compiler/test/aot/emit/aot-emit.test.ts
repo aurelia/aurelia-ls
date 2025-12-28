@@ -31,8 +31,73 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// --- Types ---
+
+interface TestVector {
+  name: string;
+  markup: string;
+  file?: string;
+  semOverrides?: Record<string, unknown>;
+  expect?: {
+    instructions?: InstructionIntent[];
+    nested?: NestedIntent[];
+    targetCount?: number;
+    exprCount?: number;
+  };
+  orderSensitive?: boolean;
+}
+
+interface CompilerContext {
+  sem: typeof SEM_DEFAULT;
+  exprParser: ReturnType<typeof getExpressionParser>;
+  attrParser: typeof DEFAULT_SYNTAX;
+}
+
+interface InstructionIntent {
+  type: string;
+  target: number;
+  to?: string;
+  mode?: string;
+  parts?: number;
+  exprs?: number;
+  capture?: boolean;
+  value?: unknown;
+  resource?: string;
+  propCount?: number;
+  containerless?: boolean;
+  alias?: string;
+  templateIndex?: number;
+  bindingCount?: number;
+  toBindingContext?: boolean;
+}
+
+interface NestedIntent {
+  name: string;
+  instructions: InstructionIntent[];
+}
+
+interface EmitIntent {
+  instructions: InstructionIntent[];
+  nested: NestedIntent[];
+  targetCount: number;
+  exprCount: number;
+}
+
+interface EmitDiff {
+  missingInstructions: InstructionIntent[] | string[];
+  extraInstructions: InstructionIntent[] | string[];
+  orderMismatches: Array<{
+    position: number;
+    actual: InstructionIntent;
+    expected: InstructionIntent;
+  }>;
+  missingNested: string[];
+  extraNested: string[];
+  countMismatches: string[];
+}
+
 // Load test vectors
-function loadVectors() {
+function loadVectors(): TestVector[] {
   const vectorFiles = fs.readdirSync(__dirname)
     .filter((f) => f.endsWith(".json") && f !== "failures.json")
     .sort();
@@ -44,7 +109,7 @@ function loadVectors() {
 }
 
 // Create compiler context
-function createCompilerContext(vector) {
+function createCompilerContext(vector: TestVector): CompilerContext {
   const sem = vector.semOverrides
     ? deepMergeSemantics(SEM_DEFAULT, vector.semOverrides)
     : SEM_DEFAULT;
@@ -57,7 +122,7 @@ function createCompilerContext(vector) {
 }
 
 // Run full pipeline: markup → emit
-function runPipeline(markup, ctx) {
+function runPipeline(markup: string, ctx: CompilerContext): unknown {
   const ir = lowerDocument(markup, {
     attrParser: ctx.attrParser,
     exprParser: ctx.exprParser,
@@ -73,7 +138,16 @@ function runPipeline(markup, ctx) {
 }
 
 // Reduce emit result to testable intent
-function reduceEmitIntent(result) {
+interface EmitResult {
+  definition: {
+    instructions: unknown[][];
+    nestedTemplates: Array<{ name: string; instructions: unknown[][] }>;
+    targetCount: number;
+  };
+  expressions: unknown[];
+}
+
+function reduceEmitIntent(result: EmitResult): EmitIntent {
   const { definition, expressions } = result;
 
   return {
@@ -92,21 +166,21 @@ const TYPE_NAMES = Object.fromEntries(
   Object.entries(INSTRUCTION_TYPE).map(([k, v]) => [v, k])
 );
 
-function getTypeName(type) {
-  return TYPE_NAMES[type] ?? String(type);
+function getTypeName(type: unknown): string {
+  return TYPE_NAMES[type as number] ?? String(type);
 }
 
 // Map numeric binding mode to string name for readable fingerprints
-const MODE_NAMES = Object.fromEntries(
+const MODE_NAMES: Record<number, string> = Object.fromEntries(
   Object.entries(BINDING_MODE).map(([k, v]) => [v, k])
 );
 
-function getModeName(mode) {
-  return MODE_NAMES[mode] ?? String(mode);
+function getModeName(mode: unknown): string {
+  return MODE_NAMES[mode as number] ?? String(mode);
 }
 
 // Flatten 2D instruction array to array of instruction summaries
-function flattenInstructions(rows) {
+function flattenInstructions(rows: unknown[][]): InstructionIntent[] {
   const result = [];
   for (let targetIdx = 0; targetIdx < rows.length; targetIdx++) {
     const row = rows[targetIdx];

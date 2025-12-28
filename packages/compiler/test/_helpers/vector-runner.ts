@@ -31,12 +31,18 @@ import {
   DEFAULT_SEMANTICS as SEM_DEFAULT,
 } from "@aurelia-ls/compiler";
 
-export interface TestVector {
+/**
+ * Base test vector structure. TExpect allows stage-specific typing of the expect field.
+ */
+export interface TestVector<TExpect = unknown> {
   name: string;
   markup: string;
-  expect?: unknown;
+  expect?: TExpect;
   file?: string;
   semOverrides?: Record<string, unknown>;
+  /** Additional stage-specific properties */
+  rootVmType?: string;
+  syntheticPrefix?: string;
   [key: string]: unknown;
 }
 
@@ -46,20 +52,26 @@ export interface CompilerContext {
   attrParser: typeof DEFAULT_SYNTAX;
 }
 
-export interface VectorTestConfig<TIntent, TDiff> {
+/**
+ * Configuration for vector-based tests.
+ * - TExpect: shape of the "expect" field in vectors (e.g., { expressions: [...] })
+ * - TIntent: shape of the computed result from execute()
+ * - TDiff: shape of the diff result from compare()
+ */
+export interface VectorTestConfig<TExpect, TIntent, TDiff> {
   dirname: string;
   suiteName: string;
-  execute: (vector: TestVector, ctx: CompilerContext) => TIntent;
-  compare: (actual: TIntent, expected: unknown) => TDiff;
+  execute: (vector: TestVector<TExpect>, ctx: CompilerContext) => TIntent;
+  compare: (actual: TIntent, expected: TExpect) => TDiff;
   categories: string[];
-  normalizeExpect?: (expect: unknown) => unknown;
+  normalizeExpect?: (expect: TExpect | undefined) => TExpect;
   beforeAll?: () => void;
 }
 
 /**
  * Load test vectors from JSON files in a directory.
  */
-export function loadVectors(dirname: string): TestVector[] {
+export function loadVectors<TExpect = unknown>(dirname: string): TestVector<TExpect>[] {
   const vectorFiles = fs
     .readdirSync(dirname)
     .filter((f) => f.endsWith(".json") && f !== "failures.json")
@@ -67,7 +79,7 @@ export function loadVectors(dirname: string): TestVector[] {
 
   return vectorFiles.flatMap((file) => {
     const full = path.join(dirname, file);
-    const vectors = JSON.parse(fs.readFileSync(full, "utf8")) as TestVector[];
+    const vectors = JSON.parse(fs.readFileSync(full, "utf8")) as TestVector<TExpect>[];
     return vectors.map((v) => ({ ...v, file }));
   });
 }
@@ -110,8 +122,8 @@ export function lowerOpts(ctx: CompilerContext) {
 /**
  * Run vector-based tests with configurable execution, comparison, and categories.
  */
-export function runVectorTests<TIntent, TDiff extends Record<string, unknown>>(
-  config: VectorTestConfig<TIntent, TDiff>
+export function runVectorTests<TExpect, TIntent, TDiff>(
+  config: VectorTestConfig<TExpect, TIntent, TDiff>
 ): void {
   const {
     dirname,
@@ -119,11 +131,11 @@ export function runVectorTests<TIntent, TDiff extends Record<string, unknown>>(
     execute,
     compare,
     categories,
-    normalizeExpect = (e) => e ?? {},
+    normalizeExpect = (e) => e as TExpect,
     beforeAll: beforeAllFn,
   } = config;
 
-  const vectors = loadVectors(dirname);
+  const vectors = loadVectors<TExpect>(dirname);
   const { recordFailure, attachWriter } = createFailureRecorder(
     dirname,
     "failures.json"
@@ -151,14 +163,15 @@ export function runVectorTests<TIntent, TDiff extends Record<string, unknown>>(
         > = {};
         let anyMismatch = false;
 
+        const diffRecord = diff as Record<string, unknown>;
         for (const cat of categories) {
           const missing =
-            (diff[`missing${capitalize(cat)}`] as string[] | undefined) ??
-            (diff[`missing_${cat}`] as string[] | undefined) ??
+            (diffRecord[`missing${capitalize(cat)}`] as string[] | undefined) ??
+            (diffRecord[`missing_${cat}`] as string[] | undefined) ??
             [];
           const extra =
-            (diff[`extra${capitalize(cat)}`] as string[] | undefined) ??
-            (diff[`extra_${cat}`] as string[] | undefined) ??
+            (diffRecord[`extra${capitalize(cat)}`] as string[] | undefined) ??
+            (diffRecord[`extra_${cat}`] as string[] | undefined) ??
             [];
 
           if (missing.length || extra.length) {
@@ -182,12 +195,12 @@ export function runVectorTests<TIntent, TDiff extends Record<string, unknown>>(
         // Assert each category
         for (const cat of categories) {
           const missing =
-            (diff[`missing${capitalize(cat)}`] as string[] | undefined) ??
-            (diff[`missing_${cat}`] as string[] | undefined) ??
+            (diffRecord[`missing${capitalize(cat)}`] as string[] | undefined) ??
+            (diffRecord[`missing_${cat}`] as string[] | undefined) ??
             [];
           const extra =
-            (diff[`extra${capitalize(cat)}`] as string[] | undefined) ??
-            (diff[`extra_${cat}`] as string[] | undefined) ??
+            (diffRecord[`extra${capitalize(cat)}`] as string[] | undefined) ??
+            (diffRecord[`extra_${cat}`] as string[] | undefined) ??
             [];
 
           expect(

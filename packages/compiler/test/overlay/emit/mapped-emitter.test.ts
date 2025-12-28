@@ -2,8 +2,31 @@ import { test, describe, expect } from "vitest";
 
 import { ExpressionParser, emitMappedExpression } from "@aurelia-ls/compiler";
 
+// --- Types ---
+
+interface ExpectSegment {
+  path: string;
+}
+
+interface BadExpressionAst {
+  $kind: "BadExpression";
+  span: { start: number; end: number };
+  text: string;
+  message: string;
+  origin: null;
+}
+
+interface TestCase {
+  name: string;
+  src?: string;
+  type?: string;
+  ast?: BadExpressionAst;
+  expectSegments?: ExpectSegment[];
+  expectCode?: string;
+}
+
 describe("Overlay mapped emitter", () => {
-  const cases = [
+  const cases: TestCase[] = [
     {
       name: "simple member",
       src: "foo.bar",
@@ -152,7 +175,7 @@ describe("Overlay mapped emitter", () => {
   }
 });
 
-function parse(src, type) {
+function parse(src: string, type: string): unknown {
   const parser = new ExpressionParser();
   const ast = parser.parse(src, type);
   if (!ast) throw new Error(`failed to parse expression: ${src}`);

@@ -2,7 +2,58 @@ import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../_
 
 import { lowerDocument, resolveHost, bindScopes } from "@aurelia-ls/compiler";
 
-runVectorTests({
+// --- Types ---
+
+interface FrameIntent {
+  label: string;
+  parent: string | null;
+  kind: string;
+  overlay: string | null;
+  origin: string | null;
+}
+
+interface LocalIntent {
+  frame: string;
+  kind: string;
+  name: string;
+}
+
+interface ExprIntent {
+  kind: string;
+  frame: string;
+  code?: string;
+}
+
+interface DiagIntent {
+  code: string;
+}
+
+interface BindExpect {
+  frames?: FrameIntent[];
+  locals?: LocalIntent[];
+  exprs?: ExprIntent[];
+  diags?: DiagIntent[];
+}
+
+interface BindIntent {
+  frames: FrameIntent[];
+  locals: LocalIntent[];
+  exprs: ExprIntent[];
+  diags: DiagIntent[];
+}
+
+interface BindDiff {
+  missingFrames: string[];
+  extraFrames: string[];
+  missingLocals: string[];
+  extraLocals: string[];
+  missingExprs: string[];
+  extraExprs: string[];
+  missingDiags: string[];
+  extraDiags: string[];
+}
+
+runVectorTests<BindExpect, BindIntent, BindDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Bind (30)",
   execute: (v, ctx) => {
@@ -23,6 +74,43 @@ runVectorTests({
 
 // --- Intent Reduction ---
 
+// --- IR/Scope Types for reduceScopeToBindIntent ---
+
+interface ScopeFrame {
+  id: number;
+  parent: number | null;
+  kind: string;
+  overlay?: { kind: string } | null;
+  origin?: { kind: string } | null;
+  symbols?: Array<{ kind: string; name: string }>;
+}
+
+interface ScopeTemplate {
+  frames: ScopeFrame[];
+  exprToFrame: Map<string, number>;
+}
+
+interface ScopeModule {
+  templates?: ScopeTemplate[];
+  diags?: Array<{ code: string }>;
+}
+
+interface IrExprEntry {
+  id: string;
+  expressionType?: string;
+}
+
+interface IrDocument {
+  templates?: unknown[];
+  exprTable?: IrExprEntry[];
+}
+
+interface ReduceInput {
+  ir: IrDocument;
+  linked: unknown;
+  scope: ScopeModule;
+}
+
 /**
  * Reduce ScopeModule + original IR into a compact set-like intent:
  * - frames:   [{ label, parent, kind, overlay, origin }]
@@ -37,8 +125,8 @@ runVectorTests({
  *     globally per overlay appearance order (not per kind)
  * - "forOfHeader" uses exprTable.expressionType === "IsIterator"
  */
-export function reduceScopeToBindIntent({ ir, linked, scope }) {
-  const out = { frames: [], locals: [], exprs: [], diags: [] };
+export function reduceScopeToBindIntent({ ir, linked, scope }: ReduceInput): BindIntent {
+  const out: BindIntent = { frames: [], locals: [], exprs: [], diags: [] };
   const st = scope?.templates?.[0];
   if (!st) return out;
 
@@ -89,8 +177,8 @@ export function reduceScopeToBindIntent({ ir, linked, scope }) {
 }
 
 /** Build human-readable labels for frames (global overlay counter). */
-function labelFrames(frames) {
-  const labels = [];
+function labelFrames(frames: ScopeFrame[]): string[] {
+  const labels: string[] = [];
   let overlayCounter = 0;
   for (const f of frames) {
     if (f.parent == null) {
@@ -122,17 +210,17 @@ function labelFrames(frames) {
  *  - exprs : kind|frame|code
  *  - diags : code
  */
-export function compareBindIntent(actual, expected) {
-  const kFrame = (f) => [
+export function compareBindIntent(actual: BindIntent, expected: BindExpect): BindDiff {
+  const kFrame = (f: FrameIntent): string => [
     f.label ?? "", f.parent ?? "",
     f.kind ?? "", f.overlay ?? "", f.origin ?? ""
   ].join("|");
 
-  const kLocal = (l) => [l.frame ?? "", l.kind ?? "", l.name ?? ""].join("|");
+  const kLocal = (l: LocalIntent): string => [l.frame ?? "", l.kind ?? "", l.name ?? ""].join("|");
 
-  const kExpr  = (e) => [e.kind ?? "", e.frame ?? "", e.code ?? ""].join("|");
+  const kExpr = (e: ExprIntent): string => [e.kind ?? "", e.frame ?? "", e.code ?? ""].join("|");
 
-  const setOf = (arr, key) => new Set((arr ?? []).map(key));
+  const setOf = <T>(arr: T[] | undefined, key: (item: T) => string): Set<string> => new Set((arr ?? []).map(key));
 
   const aF = setOf(actual.frames, kFrame);
   const eF = setOf(expected.frames, kFrame);
@@ -143,10 +231,10 @@ export function compareBindIntent(actual, expected) {
   const aE = setOf(actual.exprs,  kExpr);
   const eE = setOf(expected.exprs, kExpr);
 
-  const aD = setOf(actual.diags, d => d.code);
-  const eD = setOf(expected.diags, d => d.code);
+  const aD = setOf(actual.diags, (d: DiagIntent) => d.code);
+  const eD = setOf(expected.diags, (d: DiagIntent) => d.code);
 
-  const diff = (A, E) => ({
+  const diff = (A: Set<string>, E: Set<string>): { missing: string[]; extra: string[] } => ({
     missing: [...E].filter(x => !A.has(x)),
     extra:   [...A].filter(x => !E.has(x)),
   });

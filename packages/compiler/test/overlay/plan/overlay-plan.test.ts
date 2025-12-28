@@ -3,7 +3,38 @@ import { diffByKey } from "../../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes, planOverlay } from "@aurelia-ls/compiler";
 
-runVectorTests({
+// --- Types ---
+
+interface FrameEntry {
+  label: string;
+  typeName: string;
+  typeExpr: string;
+}
+
+interface LambdaEntry {
+  frame: string;
+  lambda: string;
+  expr: string;
+}
+
+interface PlanExpect {
+  frames?: FrameEntry[];
+  lambdas?: LambdaEntry[];
+}
+
+interface PlanIntent {
+  frames: FrameEntry[];
+  lambdas: LambdaEntry[];
+}
+
+interface PlanDiff {
+  missingFrames: string[];
+  extraFrames: string[];
+  missingLambdas: string[];
+  extraLambdas: string[];
+}
+
+runVectorTests<PlanExpect, PlanIntent, PlanDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Plan Overlay (50)",
   execute: (v, ctx) => {
@@ -24,7 +55,12 @@ runVectorTests({
 
 // --- Helpers ---
 
-function createVmReflection(rootType, syntheticPrefix) {
+interface VmReflection {
+  getRootVmTypeExpr(): string;
+  getSyntheticPrefix(): string;
+}
+
+function createVmReflection(rootType: string, syntheticPrefix: string): VmReflection {
   return {
     getRootVmTypeExpr() {
       return rootType;
@@ -37,17 +73,55 @@ function createVmReflection(rootType, syntheticPrefix) {
 
 // --- Intent Reduction ---
 
-function reducePlanIntent({ ir, scope, pl }) {
+interface ScopeFrame {
+  id: number;
+  parent: number | null;
+  kind: string;
+  overlay?: { kind: string } | null;
+  origin?: { kind: string } | null;
+}
+
+interface ScopeTemplate {
+  frames?: ScopeFrame[];
+}
+
+interface ScopeModule {
+  templates?: ScopeTemplate[];
+}
+
+interface PlanFrame {
+  frame: number;
+  typeName: string;
+  typeExpr: string;
+  lambdas?: Array<{ lambda: string; exprId: string }>;
+}
+
+interface PlanTemplate {
+  vmType?: { alias?: string; typeExpr?: string };
+  frames?: PlanFrame[];
+}
+
+interface PlanModule {
+  templates?: PlanTemplate[];
+}
+
+interface ReducePlanInput {
+  ir: Parameters<typeof indexExprCodeFromIr>[0];
+  scope: ScopeModule;
+  pl: PlanModule;
+}
+
+function reducePlanIntent({ ir, scope, pl }: ReducePlanInput): PlanIntent {
   const codeIndex = indexExprCodeFromIr(ir);
   const labels = labelFrames(scope.templates?.[0]);
-  const frames = [];
-  const lambdas = [];
+  const frames: FrameEntry[] = [];
+  const lambdas: LambdaEntry[] = [];
 
   const tpl = pl.templates?.[0];
   if (tpl) {
     const alias = tpl.vmType?.alias;
     const aliasType = tpl.vmType?.typeExpr;
-    const normalizeTypeExpr = (expr) => {
+    const normalizeTypeExpr = (expr: string): string => {
       if (!alias || !aliasType) return expr;
       return expr.split(alias).join(aliasType);
     };
@@ -67,9 +141,9 @@ function reducePlanIntent({ ir, scope, pl }) {
   return { frames, lambdas };
 }
 
-function labelFrames(scopeTemplate) {
+function labelFrames(scopeTemplate: ScopeTemplate | undefined): string[] {
   if (!scopeTemplate) return [];
-  const labels = [];
+  const labels: string[] = [];
   let overlayCounter = 0;
   for (const f of scopeTemplate.frames ?? []) {
     if (f.parent == null) {
@@ -92,10 +166,10 @@ function labelFrames(scopeTemplate) {
 
 // --- Intent Comparison ---
 
-function comparePlanIntent(actual, expected) {
+function comparePlanIntent(actual: PlanIntent, expected: PlanExpect): PlanDiff {
   const { missing: missingFrames, extra: extraFrames } =
-    diffByKey(actual.frames, expected.frames, (f) => `${f.label ?? ""}|${f.typeName ?? ""}|${f.typeExpr ?? ""}`);
+    diffByKey(actual.frames, expected.frames, (f: FrameEntry) => `${f.label ?? ""}|${f.typeName ?? ""}|${f.typeExpr ?? ""}`);
   const { missing: missingLambdas, extra: extraLambdas } =
-    diffByKey(actual.lambdas, expected.lambdas, (l) => `${l.frame ?? ""}|${l.lambda ?? ""}|${l.expr ?? ""}`);
+    diffByKey(actual.lambdas, expected.lambdas, (l: LambdaEntry) => `${l.frame ?? ""}|${l.lambda ?? ""}|${l.expr ?? ""}`);
   return { missingFrames, extraFrames, missingLambdas, extraLambdas };
 }
