@@ -19,10 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
           run_install: false
 
       - uses: actions/setup-node@v4
@@ -33,6 +35,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
 
       - name: Lint
         run: pnpm lint:compiler
