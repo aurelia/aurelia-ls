@@ -1,8 +1,9 @@
 import { test, expect } from "vitest";
-import { activate, deactivate } from "../out/extension.js";
+import { activate, deactivate, type ActivationServices } from "../out/extension.js";
 import { VirtualDocProvider } from "../out/virtual-docs.js";
 import { ClientLogger } from "../out/log.js";
-import { createVscodeApi } from "./helpers/vscode-stub.mjs";
+import type { VscodeApi } from "../out/vscode-api.js";
+import { createVscodeApi, stubExtensionContext } from "./helpers/vscode-stub.js";
 
 class StubStatusService {
   overlays = [];
@@ -54,15 +55,16 @@ class StubAureliaLanguageClient {
 }
 
 test("activate wires language client, commands, and notifications", async () => {
-  const { vscode, recorded } = createVscodeApi();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
   const lsp = new StubLspClient();
   const languageClient = new StubAureliaLanguageClient(lsp);
   const status = new StubStatusService();
   const virtualDocs = new VirtualDocProvider(vscode);
   const logger = new ClientLogger("test", vscode);
-  const context = { extensionUri: vscode.Uri.parse("file:///ext"), subscriptions: [] };
+  const context = stubExtensionContext(stubVscode);
 
-  await activate(context, { vscode, languageClient, status, virtualDocs, logger });
+  await activate(context, { vscode, languageClient, status, virtualDocs, logger } as unknown as ActivationServices);
 
   expect(languageClient.startCalls, "language client should be started").toBe(1);
   expect(recorded.contentProviders.some((p) => p.scheme === "aurelia-overlay"), "virtual doc provider registered").toBe(true);

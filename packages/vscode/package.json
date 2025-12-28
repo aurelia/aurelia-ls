@@ -40,7 +40,9 @@
     "vscode:prepublish": "npm run bundle",
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
-    "bundle:minify": "node esbuild.mjs --minify"
+    "bundle:minify": "node esbuild.mjs --minify",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

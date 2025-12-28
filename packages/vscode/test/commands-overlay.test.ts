@@ -1,8 +1,10 @@
 import { test, expect } from "vitest";
+import type { LanguageClient } from "vscode-languageclient/node.js";
 import { registerCommands } from "../out/commands.js";
 import { VirtualDocProvider } from "../out/virtual-docs.js";
 import { ClientLogger } from "../out/log.js";
-import { createVscodeApi } from "./helpers/vscode-stub.mjs";
+import type { VscodeApi } from "../out/vscode-api.js";
+import { createVscodeApi, stubExtensionContext, type StubVscodeApi } from "./helpers/vscode-stub.js";
 
 class StubLanguageClient {
   #responders;
@@ -24,7 +26,7 @@ class StubLanguageClient {
   }
 }
 
-function setActiveEditor(vscode, uri) {
+function setActiveEditor(vscode: StubVscodeApi, uri: { toString(): string }) {
   vscode.window.activeTextEditor = {
     document: { uri, toString: () => uri.toString() },
     selection: { active: { line: 0, character: 0 } },
@@ -32,7 +34,8 @@ function setActiveEditor(vscode, uri) {
 }
 
 test("showOverlay opens an overlay virtual document beside the active editor", async () => {
-  const { vscode, recorded } = createVscodeApi();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
   const overlayPath = "/workspace/component.overlay.ts";
   const overlayText = "export const value = 1;";
   const client = new StubLanguageClient({
@@ -46,24 +49,25 @@ test("showOverlay opens an overlay virtual document beside the active editor", a
   });
   const virtualDocs = new VirtualDocProvider(vscode);
   const logger = new ClientLogger("test", vscode);
-  const context = { subscriptions: [] };
-  const activeUri = vscode.Uri.parse("file:///component.html");
-  setActiveEditor(vscode, activeUri);
+  const context = stubExtensionContext(stubVscode);
+  const activeUri = stubVscode.Uri.parse("file:///component.html");
+  setActiveEditor(stubVscode, activeUri);
 
-  vscode.workspace.registerTextDocumentContentProvider(VirtualDocProvider.scheme, virtualDocs);
-  registerCommands(context, client, virtualDocs, logger, vscode);
+  stubVscode.workspace.registerTextDocumentContentProvider(VirtualDocProvider.scheme, virtualDocs);
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
   await recorded.commandHandlers.get("aurelia.showOverlay")();
 
   expect(client.calls[0]?.method, "overlay request should be sent").toBe("aurelia/getOverlay");
   const opened = recorded.openedDocuments.at(-1);
   expect(opened?.uri.toString().startsWith("aurelia-overlay:"), "virtual document should use overlay scheme").toBe(true);
-  expect(virtualDocs.provideTextDocumentContent(opened.uri), "virtual document should contain overlay text").toBe(overlayText);
-  const shown = recorded.shownDocuments.at(-1);
-  expect(shown?.opts?.viewColumn, "overlay should open beside the template").toBe(vscode.ViewColumn.Beside);
+  expect(virtualDocs.provideTextDocumentContent(opened!.uri as unknown as import("vscode").Uri), "virtual document should contain overlay text").toBe(overlayText);
+  const shown = recorded.shownDocuments.at(-1) as { opts?: { viewColumn?: number } };
+  expect(shown?.opts?.viewColumn, "overlay should open beside the template").toBe(stubVscode.ViewColumn.Beside);
 });
 
 test("showOverlayMapping renders mapping entries and avoids overlay fallback when mapping is present", async () => {
-  const { vscode, recorded } = createVscodeApi();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
   const mappingEntries = [
     { exprId: "1", overlaySpan: { start: 5, end: 10 }, htmlSpan: { start: 2, end: 7 } },
   ];
@@ -73,10 +77,10 @@ test("showOverlayMapping renders mapping entries and avoids overlay fallback whe
   });
   const virtualDocs = new VirtualDocProvider(vscode);
   const logger = new ClientLogger("test", vscode);
-  const context = { subscriptions: [] };
-  setActiveEditor(vscode, vscode.Uri.parse("file:///component.html"));
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
 
-  registerCommands(context, client, virtualDocs, logger, vscode);
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
   await recorded.commandHandlers.get("aurelia.showOverlayMapping")();
 
   const mappingCall = client.calls.find((c) => c.method === "aurelia/getMapping");
@@ -89,7 +93,8 @@ test("showOverlayMapping renders mapping entries and avoids overlay fallback whe
 });
 
 test("showOverlayMapping falls back to overlay call sites when mapping entries are empty", async () => {
-  const { vscode, recorded } = createVscodeApi();
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
   const overlayPath = "/workspace/component.overlay.ts";
   const client = new StubLanguageClient({
     "aurelia/getMapping": { overlayPath, mapping: { entries: [] } },
@@ -103,10 +108,10 @@ test("showOverlayMapping falls back to overlay call sites when mapping entries a
   });
   const virtualDocs = new VirtualDocProvider(vscode);
   const logger = new ClientLogger("test", vscode);
-  const context = { subscriptions: [] };
-  setActiveEditor(vscode, vscode.Uri.parse("file:///component.html"));
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
 
-  registerCommands(context, client, virtualDocs, logger, vscode);
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
   await recorded.commandHandlers.get("aurelia.showOverlayMapping")();
 
   const overlayCall = client.calls.find((c) => c.method === "aurelia/getOverlay");
