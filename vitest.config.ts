@@ -9,7 +9,7 @@ export default defineConfig({
       provider: "v8",
       include: ["packages/*/out/**/*.js"],
       exclude: ["**/*.test.*", "**/test/**"],
-      reporter: ["text", "html", "lcov"],
+      reporter: ["text", "html", "lcov", "json-summary"],
     },
     // For build package tests that need development conditions
     alias: {

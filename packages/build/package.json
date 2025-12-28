@@ -15,8 +15,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b",
-    "test": "node --test test/*.test.mjs"
+    "build": "tsc -b"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0",

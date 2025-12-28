@@ -117,11 +117,4 @@ module.exports = [
       "@typescript-eslint/no-unsafe-return": "warn",
     },
   },
-  {
-    files: ["**/*.test.mjs", "**/*.test.js", "packages/**/test/**/*.mjs"],
-    rules: {
-      "no-unused-vars": "off",
-      "@typescript-eslint/no-unused-vars": "off",
-    },
-  },
 ];

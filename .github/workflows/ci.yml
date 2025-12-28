@@ -83,31 +83,14 @@ jobs:
         run: pnpm lint:compiler
 
       - name: Test with coverage
-        run: |
-          set -o pipefail
-          pnpm -w build
-          mkdir -p coverage/typecheck
-          pnpm exec c8 --all --include "packages/compiler/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -r json-summary -o coverage/typecheck node --test --test-reporter=spec packages/*/test/**/*.test.mjs | tee coverage/typecheck/coverage.log
-
-      - name: Coverage summary (job)
-        if: always()
-        run: |
-          {
-            echo "## Coverage (compiler suite)";
-            echo "";
-            if [ -f coverage/typecheck/coverage.log ]; then
-              grep -A20 "All files" coverage/typecheck/coverage.log || cat coverage/typecheck/coverage.log;
-            else
-              echo "**Coverage log not found.**";
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: pnpm test:cov
 
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-typecheck
-          path: coverage/typecheck
+          name: coverage
+          path: coverage
           if-no-files-found: ignore
 
       - name: Comment coverage on PR
@@ -117,7 +100,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const summaryPath = 'coverage/typecheck/coverage-summary.json';
+            const summaryPath = 'coverage/coverage-summary.json';
             if (!fs.existsSync(summaryPath)) {
               core.info('coverage-summary.json not found; skipping comment.');
               return;
@@ -127,7 +110,7 @@ jobs:
             const fmt = (entry) =>
               entry.total === 0 ? 'n/a' : `${entry.pct.toFixed(2)}% (${entry.covered}/${entry.total})`;
 
-            const header = '## Coverage (compiler suite)';
+            const header = '## Test Coverage';
             const body = [
               header,
               '',
