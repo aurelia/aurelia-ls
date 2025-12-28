@@ -2,11 +2,11 @@
   "name": "aurelia-2",
   "displayName": "Aurelia 2",
   "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "AureliaEffect",
   "icon": "images/logo.png",
   "type": "module",
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.cjs",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -40,7 +40,9 @@
     "vscode:prepublish": "npm run bundle",
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
-    "bundle:minify": "node esbuild.mjs --minify"
+    "bundle:minify": "node esbuild.mjs --minify",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

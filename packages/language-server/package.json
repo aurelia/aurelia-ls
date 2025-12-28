@@ -10,6 +10,10 @@
     "type": "git",
     "url": "https://github.com/aurelia/aurelia-ls"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
+  },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*",
     "@aurelia-ls/resolution": "workspace:*",

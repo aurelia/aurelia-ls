@@ -3,14 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   StreamMessageReader,
   StreamMessageWriter,
   createMessageConnection,
   type MessageConnection,
 } from "vscode-languageserver/node.js";
-import { URI } from "vscode-uri";
 
 const serverEntry = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -56,7 +55,7 @@ export async function initialize(
   getStderr: () => string,
   workspaceRoot: string,
 ) {
-  const rootUri = URI.file(workspaceRoot).toString();
+  const rootUri = pathToFileURL(workspaceRoot).toString();
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`initialize timeout; stderr=${getStderr()}`)), 5000);
     const onExit = (code: number | null, signal: string | null) => {
@@ -213,5 +212,6 @@ export function waitForExit(child: ChildProcess, timeoutMs = 2000): Promise<void
 export function fileUri(root: string, relPath: string): string {
   const normalized = path.join(root, relPath);
   expect(path.isAbsolute(normalized)).toBe(true);
-  return URI.file(normalized).toString();
+  // Use Node's pathToFileURL for consistent URI format (doesn't encode colons)
+  return pathToFileURL(normalized).toString();
 }

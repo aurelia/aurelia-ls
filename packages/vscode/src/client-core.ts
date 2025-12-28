@@ -23,8 +23,8 @@ async function resolveServerModule(context: ExtensionContext, logger: ClientLogg
     logger.warn(`[client] override set but not found: ${override}`);
   }
   const candidates = [
-    // Bundled (production)
-    vscode.Uri.joinPath(context.extensionUri, "dist", "server", "main.js").fsPath,
+    // Bundled (production) - .cjs to avoid ESM/CJS conflict
+    vscode.Uri.joinPath(context.extensionUri, "dist", "server", "main.cjs").fsPath,
     // Development (unbundled)
     vscode.Uri.joinPath(context.extensionUri, "..", "language-server", "out", "main.js").fsPath,
   ];

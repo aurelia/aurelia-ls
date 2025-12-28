@@ -5,15 +5,15 @@ This guide covers setting up the project and running the demos.
 ## Prerequisites
 
 - Node.js 20+
-- pnpm (recommended) or npm
+- npm (or pnpm)
 
 ## Installation
 
 ```bash
 git clone https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
-pnpm install
-pnpm run build
+npm install
+npm run build
 ```
 
 The build compiles all packages using TypeScript project references.
@@ -26,8 +26,8 @@ A simple todo application demonstrating server-side rendering with client hydrat
 
 ```bash
 cd examples/todo-app
-pnpm install
-pnpm start
+npm install
+npm start
 ```
 
 Open http://localhost:5173. The page is server-rendered—view source to see the pre-rendered HTML. The client hydrates without re-rendering, preserving the server output.
@@ -38,8 +38,8 @@ Demonstrates SSR with the Aurelia router:
 
 ```bash
 cd examples/router-app
-pnpm install
-pnpm start
+npm install
+npm start
 ```
 
 Navigate between routes. Each page is server-rendered with the correct content.
@@ -59,20 +59,28 @@ This prints the before/after of source transformation, showing how decorators be
 
 ```bash
 # All tests
-pnpm test
+npm test
 
 # Specific package
-pnpm run test:compiler
-pnpm run test:resolution
-pnpm run test:build
+npm run test:compiler
+npm run test:resolution
+npm run test:build
 ```
 
 ## VS Code Extension
 
-The language server powers IDE features. To test locally:
+The extension is published on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2). To install:
+
+```
+ext install AureliaEffect.aurelia-2
+```
+
+### Developing the Extension Locally
+
+To test local changes to the extension:
 
 1. Open the project in VS Code
-2. Run `pnpm run build` to compile the packages
+2. Run `npm run build` to compile the packages
 3. Press F5 (or use Run → Start Debugging)
 4. Select "Run Extension (with Hello World workspace)"
 5. A new VS Code window opens with the extension loaded

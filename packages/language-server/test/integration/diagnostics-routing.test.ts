@@ -13,6 +13,7 @@ import {
   waitForDiagnostics,
   waitForExit,
 } from "./helpers/lsp-harness.js";
+import type { LspDiagnostic, LspLocation } from "../helpers/test-factories.js";
 
 test("maps TypeScript diagnostics back to template spans", async () => {
   const fixture = createFixture({
@@ -41,7 +42,7 @@ test("maps TypeScript diagnostics back to template spans", async () => {
     await initialize(connection, child, getStderr, fixture);
     await openDocument(connection, diagUri, "html", fs.readFileSync(path.join(fixture, "component.html"), "utf8"));
 
-    const diagnostics = await waitForDiagnostics(connection, child, () => getStderr(), diagUri, 5000);
+    const diagnostics = (await waitForDiagnostics(connection, child, () => getStderr(), diagUri, 5000)) as LspDiagnostic[];
     const tsDiag = diagnostics.find((d) => d.source === "typescript") ?? diagnostics[0];
     expect(tsDiag, "should receive at least one diagnostic").toBeTruthy();
     expect(tsDiag.range.start.line).toBe(0);
@@ -86,13 +87,13 @@ test("routes definitions to the view-model via provenance", async () => {
     await waitForDiagnostics(connection, child, () => getStderr(), defsUri, 5000);
 
     const position = { line: 0, character: 13 }; // inside "existing"
-    const definitions = await connection.sendRequest("textDocument/definition", {
+    const definitions = (await connection.sendRequest("textDocument/definition", {
       textDocument: { uri: defsUri },
       position,
-    });
+    })) as LspLocation[];
 
     expect(Array.isArray(definitions), "definition response should be an array").toBe(true);
-    const vmDef = definitions.find?.((def) => def.uri === vmUri);
+    const vmDef = definitions.find((def) => def.uri === vmUri);
     if (vmDef) {
       expect(vmDef.range.start.line).toBe(1);
       expect(vmDef.range.start.character).toBe(2);

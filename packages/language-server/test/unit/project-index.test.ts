@@ -3,11 +3,11 @@ import path from "node:path";
 import ts from "typescript";
 
 import { AureliaProjectIndex } from "../../out/services/project-index.js";
-import { DEFAULT_SEMANTICS, buildResourceGraphFromSemantics } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, buildResourceGraphFromSemantics, type ResourceScopeId } from "@aurelia-ls/compiler";
 
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 
-function createTsProject(source = "export class Example {}", compilerOptions = {}) {
+function createTsProject(source: string | Record<string, string> = "export class Example {}", compilerOptions = {}) {
   const normalizeName = (fileName) => {
     const normalized = path.normalize(fileName);
     return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
@@ -171,7 +171,7 @@ test("discovers Aurelia resources from decorators and bindable members", () => {
 });
 
 test("maps discoveries into the default resource scope when a graph is provided", () => {
-  const featureScope = "feature-scope";
+  const featureScope = "feature-scope" as ResourceScopeId;
   const baseGraph = buildResourceGraphFromSemantics(DEFAULT_SEMANTICS);
   baseGraph.scopes[featureScope] = { id: featureScope, parent: baseGraph.root, label: "feature", resources: {} };
   const baseSemantics = { ...DEFAULT_SEMANTICS, resourceGraph: baseGraph, defaultScope: featureScope };

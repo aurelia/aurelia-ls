@@ -6,9 +6,24 @@ Ahead-of-time template compilation for Aurelia 2, powering both IDE tooling and 
 
 This project provides an **AOT (ahead-of-time) compiler** for Aurelia 2 templates that serves two purposes:
 
-1. **IDE Support** — Powers the Aurelia VS Code extension (coming soon) with completions, diagnostics, go-to-definition, and type checking inside `.html` templates.
+1. **IDE Support** — Powers the [Aurelia 2 VS Code extension](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2) with diagnostics, completions, hover, go-to-definition, and type checking inside `.html` templates.
 
 2. **SSR & Hydration** — Compiles templates at build time for server-side rendering, with manifest-based hydration that reconnects the client without re-rendering.
+
+## VS Code Extension
+
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2):
+
+```
+ext install AureliaEffect.aurelia-2
+```
+
+Features:
+- **Diagnostics** — Type errors in bindings, unknown elements and attributes
+- **Completions** — Custom elements, bindable properties, expressions
+- **Hover** — Type information for expressions
+- **Go to Definition** — Navigate from template to component class
+- **Find References** — Locate usages across templates
 
 ## Quick Demo
 
@@ -16,13 +31,13 @@ This project provides an **AOT (ahead-of-time) compiler** for Aurelia 2 template
 # Clone and install
 git clone https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
-pnpm install
-pnpm run build
+npm install
+npm run build
 
 # Run the SSR demo
 cd examples/todo-app
-pnpm install
-pnpm start
+npm install
+npm start
 # Open http://localhost:5173
 ```
 
@@ -36,8 +51,8 @@ The demo shows server-rendered HTML with client hydration. View source to see th
 | `@aurelia-ls/resolution` | Resource discovery from TypeScript sources |
 | `@aurelia-ls/transform` | Injects compiled artifacts into source files |
 | `@aurelia-ls/build` | SSR runtime and Vite plugin |
-| `@aurelia-ls/server` | Language Server Protocol implementation |
-| `@aurelia-ls/client` | VS Code extension |
+| `@aurelia-ls/language-server` | Language Server Protocol implementation |
+| `aurelia-2` | VS Code extension ([marketplace](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2)) |
 
 ## Documentation
 
@@ -46,9 +61,14 @@ The demo shows server-rendered HTML with client hydration. View source to see th
 
 ## Status
 
-The AOT compiler and SSR system are functional. The VS Code extension provides basic IDE features. This is pre-release software under active development.
+| Component | Status |
+|-----------|--------|
+| AOT Compiler | Functional |
+| SSR/Hydration | Working in demos |
+| Vite Plugin | Dev mode working |
+| VS Code Extension | Published |
 
-> **Note**: Documentation will be expanded after the initial release is published.
+This is pre-release software under active development. See [CHANGELOG](./CHANGELOG.md) for updates.
 
 ## License
 
