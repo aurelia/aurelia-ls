@@ -1,20 +1,18 @@
 # Changelog
 
-## 0.1.0 — Initial Release
+## 0.2.0
 
-Language support for Aurelia 2 templates.
+- Fixed server startup issue
+- Fixed URI encoding in document synchronization
+- Improved error handling in LSP request handlers
+- Reduced unnecessary recompilation with better change detection
 
-**Features:**
+## 0.1.0
+
+Initial release with support for:
 
 - Type-aware diagnostics for binding expressions
 - Unknown element and attribute detection
-- Hover information with types and documentation
+- Hover information with types
 - Go-to-definition for component properties
 - Find references across templates
-- Basic rename support
-- TypeScript error integration
-
-**Known Limitations:**
-
-- Element and attribute name completions not yet available
-- Some refactorings may not work for template-specific constructs
