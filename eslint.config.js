@@ -8,6 +8,7 @@ module.exports = [
     ignores: [
       "**/node_modules/**",
       "packages/**/out/**",
+      "packages/**/test/**",
       "coverage/**",
       "dist/**",
       "fixtures/**",
@@ -102,19 +103,6 @@ module.exports = [
       // TODO: re-enable if template literal churn is worth enforcing; disabled to reduce noise.
       "prefer-template": "off",
       eqeqeq: ["error", "smart"],
-    },
-  },
-  {
-    files: ["**/*.test.ts", "**/*.test.tsx", "**/__tests__/**/*.ts", "**/__tests__/**/*.tsx"],
-    plugins: {
-      "@typescript-eslint": tseslint,
-    },
-    rules: {
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unsafe-assignment": "warn",
-      "@typescript-eslint/no-unsafe-call": "warn",
-      "@typescript-eslint/no-unsafe-member-access": "warn",
-      "@typescript-eslint/no-unsafe-return": "warn",
     },
   },
 ];
