@@ -1,5 +1,4 @@
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { runVectorTests, getDirname, lowerOpts } from "../_helpers/vector-runner.js";
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
@@ -103,16 +102,13 @@ describe("Resolve (20) - Resource Graph", () => {
       .map((p) => ({ to: p.to, target: p.target }))
       .sort((a, b) => a.to.localeCompare(b.to));
 
-    assert.deepEqual(propTargets, [
+    expect(propTargets).toEqual([
       { to: "bar", target: "unknown" }, // parent scope resource should NOT be visible
       { to: "baz", target: "bindable" }, // local scope
       { to: "foo", target: "bindable" }, // root scope
     ]);
 
-    assert.ok(
-      intent.diags.includes("AU1104"),
-      "Unknown host/prop from parent scope should surface AU1104",
-    );
+    expect(intent.diags, "Unknown host/prop from parent scope should surface AU1104").toContain("AU1104");
   });
 
   test("resource graph: local overrides root when names conflict", () => {
@@ -175,11 +171,11 @@ describe("Resolve (20) - Resource Graph", () => {
       .sort((a, b) => a.to.localeCompare(b.to));
 
     // local bindable wins; root bindable absent -> AU1104
-    assert.deepEqual(propTargets, [
+    expect(propTargets).toEqual([
       { to: "fromLocal", target: "bindable" },
       { to: "fromRoot", target: "unknown" },
     ]);
-    assert.ok(intent.diags.includes("AU1104"), "Root bindable should be hidden by local override");
+    expect(intent.diags, "Root bindable should be hidden by local override").toContain("AU1104");
   });
 });
 

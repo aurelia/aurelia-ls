@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 
 import { InMemorySourceStore } from "../../out/index.js";
 
@@ -8,17 +7,17 @@ test("InMemorySourceStore auto-increments versions and overwrites snapshots", ()
   const uri = "/app/example.html";
 
   const first = store.set(uri, "<template>one</template>");
-  assert.equal(first.version, 1);
+  expect(first.version).toBe(1);
 
   const second = store.set(uri, "<template>two</template>");
-  assert.equal(second.version, 2);
-  assert.equal(store.get(uri)?.text, "<template>two</template>");
+  expect(second.version).toBe(2);
+  expect(store.get(uri)?.text).toBe("<template>two</template>");
 
   const explicit = store.set(uri, "<template>ten</template>", 10);
-  assert.equal(explicit.version, 10);
+  expect(explicit.version).toBe(10);
 
   const implicit = store.set(uri, "<template>eleven</template>");
-  assert.equal(implicit.version, 11);
+  expect(implicit.version).toBe(11);
 });
 
 test("InMemorySourceStore enumerates and deletes snapshots", () => {
@@ -28,14 +27,14 @@ test("InMemorySourceStore enumerates and deletes snapshots", () => {
   for (const uri of uris) store.set(uri, `<template>${uri}</template>`);
 
   const snapshots = Array.from(store.all());
-  assert.equal(snapshots.length, uris.length);
-  assert.ok(snapshots.some((snap) => snap.uri === "/b.html"));
+  expect(snapshots.length).toBe(uris.length);
+  expect(snapshots.some((snap) => snap.uri === "/b.html")).toBeTruthy();
 
   store.delete("/b.html");
-  assert.equal(store.get("/b.html"), null);
-  assert.equal(Array.from(store.all()).length, uris.length - 1);
+  expect(store.get("/b.html")).toBeNull();
+  expect(Array.from(store.all()).length).toBe(uris.length - 1);
 
   store.delete("/a.html");
   store.delete("/c.html");
-  assert.equal(Array.from(store.all()).length, 0);
+  expect(Array.from(store.all()).length).toBe(0);
 });

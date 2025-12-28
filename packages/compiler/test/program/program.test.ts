@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 
 import { DefaultTemplateProgram } from "../../out/index.js";
 
@@ -14,21 +13,21 @@ test("cache stats track hits and invalidation", () => {
   program.getOverlay(uri);
   let stats = program.getCacheStats(uri);
   let doc = stats.documents[0];
-  assert.equal(doc.compilation?.programCacheHit, false);
-  assert.equal(doc.compilation?.stageReuse?.seeded.length, 0);
-  assert.ok((doc.provenance.overlayEdges ?? 0) > 0);
+  expect(doc.compilation?.programCacheHit).toBe(false);
+  expect(doc.compilation?.stageReuse?.seeded.length).toBe(0);
+  expect((doc.provenance.overlayEdges ?? 0) > 0).toBeTruthy();
 
   // Second call should hit the program-level cache.
   program.getOverlay(uri);
   stats = program.getCacheStats(uri);
   doc = stats.documents[0];
-  assert.equal(doc.compilation?.programCacheHit, true);
+  expect(doc.compilation?.programCacheHit).toBe(true);
 
   // Invalidation keeps the snapshot but drops caches and provenance.
   program.invalidateTemplate(uri);
   const cleared = program.getCacheStats(uri).documents[0];
-  assert.equal(cleared.compilation, undefined);
-  assert.equal(cleared.provenance.totalEdges, 0);
+  expect(cleared.compilation).toBeUndefined();
+  expect(cleared.provenance.totalEdges).toBe(0);
 });
 
 test("bulk builds cover all sources and overlays seed core stages", () => {
@@ -43,17 +42,17 @@ test("bulk builds cover all sources and overlays seed core stages", () => {
   }
 
   const overlays = program.buildAllOverlays();
-  assert.equal(overlays.size, templates.length);
+  expect(overlays.size).toBe(templates.length);
 
   for (const tpl of templates) {
     const doc = program.getCacheStats(tpl.uri).documents[0];
-    assert.ok(doc.compilation?.programCacheHit === false);
+    expect(doc.compilation?.programCacheHit === false).toBeTruthy();
   }
 
   program.invalidateAll();
   const totals = program.getCacheStats().totals;
-  assert.equal(totals.compilation, 0);
-  assert.equal(totals.provenanceEdges, 0);
+  expect(totals.compilation).toBe(0);
+  expect(totals.provenanceEdges).toBe(0);
 });
 
 test("closeTemplate purges sources, caches, and provenance", () => {
@@ -66,13 +65,13 @@ test("closeTemplate purges sources, caches, and provenance", () => {
 
   const stats = program.getCacheStats(uri);
   const doc = stats.documents[0];
-  assert.equal(stats.totals.sources, 0);
-  assert.equal(stats.totals.compilation, 0);
-  assert.equal(stats.totals.provenanceEdges, 0);
-  assert.equal(doc.compilation, undefined);
-  assert.equal(doc.core, undefined);
-  assert.equal(doc.provenance.totalEdges, 0);
-  assert.throws(() => program.getOverlay(uri), /no snapshot/);
+  expect(stats.totals.sources).toBe(0);
+  expect(stats.totals.compilation).toBe(0);
+  expect(stats.totals.provenanceEdges).toBe(0);
+  expect(doc.compilation).toBeUndefined();
+  expect(doc.core).toBeUndefined();
+  expect(doc.provenance.totalEdges).toBe(0);
+  expect(() => program.getOverlay(uri)).toThrow(/no snapshot/);
 });
 
 test("invalidateAll keeps sources but forces recomputation", () => {
@@ -84,19 +83,19 @@ test("invalidateAll keeps sources but forces recomputation", () => {
   program.getOverlay(uri);
   program.getOverlay(uri);
   let doc = program.getCacheStats(uri).documents[0];
-  assert.equal(doc.compilation?.programCacheHit, true);
-  assert.ok((doc.provenance.overlayEdges ?? 0) > 0);
+  expect(doc.compilation?.programCacheHit).toBe(true);
+  expect((doc.provenance.overlayEdges ?? 0) > 0).toBeTruthy();
 
   program.invalidateAll();
   doc = program.getCacheStats(uri).documents[0];
-  assert.equal(doc.version, 1);
-  assert.equal(doc.compilation, undefined);
-  assert.equal(doc.provenance.totalEdges, 0);
+  expect(doc.version).toBe(1);
+  expect(doc.compilation).toBeUndefined();
+  expect(doc.provenance.totalEdges).toBe(0);
 
   program.getOverlay(uri);
   doc = program.getCacheStats(uri).documents[0];
-  assert.equal(doc.compilation?.programCacheHit, false);
-  assert.ok((doc.provenance.overlayEdges ?? 0) > 0);
+  expect(doc.compilation?.programCacheHit).toBe(false);
+  expect((doc.provenance.overlayEdges ?? 0) > 0).toBeTruthy();
 });
 
 test("cache stats totals reflect multi-document builds", () => {
@@ -113,10 +112,10 @@ test("cache stats totals reflect multi-document builds", () => {
   program.buildAllOverlays();
 
   const totals = program.getCacheStats().totals;
-  assert.equal(totals.sources, templates.length);
-  assert.equal(totals.compilation, templates.length);
-  assert.equal(totals.core, templates.length);
-  assert.ok(totals.provenanceEdges > 0);
+  expect(totals.sources).toBe(templates.length);
+  expect(totals.compilation).toBe(templates.length);
+  expect(totals.core).toBe(templates.length);
+  expect(totals.provenanceEdges > 0).toBeTruthy();
 });
 
 test("telemetry hooks capture cache/materialization/provenance data", () => {
@@ -143,20 +142,20 @@ test("telemetry hooks capture cache/materialization/provenance data", () => {
   program.getOverlay(uri);
 
   const overlayCaches = cacheEvents.filter((evt) => evt.kind === "overlay");
-  assert.equal(overlayCaches.length, 2);
-  assert.equal(overlayCaches[0]?.programCacheHit, false);
-  assert.equal(overlayCaches[1]?.programCacheHit, true);
-  assert.ok((overlayCaches[0]?.stageReuse.computed.length ?? 0) > 0);
+  expect(overlayCaches.length).toBe(2);
+  expect(overlayCaches[0]?.programCacheHit).toBe(false);
+  expect(overlayCaches[1]?.programCacheHit).toBe(true);
+  expect((overlayCaches[0]?.stageReuse.computed.length ?? 0) > 0).toBeTruthy();
 
   const overlayMaterialization = materializationEvents.filter((evt) => evt.kind === "overlay");
-  assert.equal(overlayMaterialization.length, 2);
-  assert.equal(overlayMaterialization[1]?.programCacheHit, true);
-  assert.ok(overlayMaterialization.every((evt) => evt.durationMs >= 0));
+  expect(overlayMaterialization.length).toBe(2);
+  expect(overlayMaterialization[1]?.programCacheHit).toBe(true);
+  expect(overlayMaterialization.every((evt) => evt.durationMs >= 0)).toBeTruthy();
 
-  assert.ok(provenanceEvents.length >= 1);
+  expect(provenanceEvents.length >= 1).toBeTruthy();
   const last = provenanceEvents.at(-1);
-  assert.equal(last?.templateUri, uri);
-  assert.ok((last?.overlayEdges ?? 0) > 0);
+  expect(last?.templateUri).toBe(uri);
+  expect((last?.overlayEdges ?? 0) > 0).toBeTruthy();
 });
 
 function createVmReflection() {

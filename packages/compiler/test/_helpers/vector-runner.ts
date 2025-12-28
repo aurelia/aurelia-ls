@@ -17,8 +17,7 @@
  *   });
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -191,13 +190,13 @@ export function runVectorTests<TIntent, TDiff extends Record<string, unknown>>(
             (diff[`extra_${cat}`] as string[] | undefined) ??
             [];
 
-          assert.ok(
+          expect(
             !missing.length && !extra.length,
             `${suiteName.split(" ")[0]} ${cat.toUpperCase()} mismatch.` +
               fmtList(`missing_${cat}`, missing) +
               fmtList(`extra_${cat}`, extra) +
               "\nSee failures.json for full snapshot."
-          );
+          ).toBe(true);
         }
       });
     }

@@ -1,5 +1,4 @@
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { Scanner, TokenType } from "../../out/compiler/index.js";
 
@@ -31,7 +30,7 @@ describe("expression-scanner", () => {
     const tokens = scanAll(src);
     const types = tokens.map((t) => t.type);
 
-    assert.deepEqual(types, [
+    expect(types).toEqual([
       TokenType.Identifier,          // foo
       TokenType.KeywordNew,          // new
       TokenType.KeywordTypeof,       // typeof
@@ -51,16 +50,16 @@ describe("expression-scanner", () => {
     ]);
 
     // Check spans by slicing back into the original string
-    assert.equal(textOf(src, tokens[0]), "foo");
-    assert.equal(textOf(src, tokens[1]), "new");
-    assert.equal(textOf(src, tokens[2]), "typeof");
-    assert.equal(textOf(src, tokens[3]), "void");
-    assert.equal(textOf(src, tokens[4]), "instanceof");
-    assert.equal(textOf(src, tokens[8]), "$this");
-    assert.equal(textOf(src, tokens[9]), "$parent");
-    assert.equal(textOf(src, tokens[10]), "true");
-    assert.equal(textOf(src, tokens[11]), "false");
-    assert.equal(textOf(src, tokens[14]), "bar");
+    expect(textOf(src, tokens[0])).toBe("foo");
+    expect(textOf(src, tokens[1])).toBe("new");
+    expect(textOf(src, tokens[2])).toBe("typeof");
+    expect(textOf(src, tokens[3])).toBe("void");
+    expect(textOf(src, tokens[4])).toBe("instanceof");
+    expect(textOf(src, tokens[8])).toBe("$this");
+    expect(textOf(src, tokens[9])).toBe("$parent");
+    expect(textOf(src, tokens[10])).toBe("true");
+    expect(textOf(src, tokens[11])).toBe("false");
+    expect(textOf(src, tokens[14])).toBe("bar");
   });
 
   test("numeric literals (ints, decimals, leading dot)", () => {
@@ -68,7 +67,7 @@ describe("expression-scanner", () => {
     const tokens = scanAll(src);
     const types = tokens.map((t) => t.type);
 
-    assert.deepEqual(types, [
+    expect(types).toEqual([
       TokenType.NumericLiteral,
       TokenType.NumericLiteral,
       TokenType.NumericLiteral,
@@ -80,18 +79,18 @@ describe("expression-scanner", () => {
     ]);
 
     // Spans match the original source text
-    assert.equal(textOf(src, tokens[0]), "0");
-    assert.equal(textOf(src, tokens[1]), "42");
-    assert.equal(textOf(src, tokens[2]), "3.14");
-    assert.equal(textOf(src, tokens[3]), ".5");
-    assert.equal(textOf(src, tokens[4]), "10e2");
-    assert.equal(textOf(src, tokens[5]), ".5e1");
-    assert.equal(textOf(src, tokens[6]), "2e-3");
+    expect(textOf(src, tokens[0])).toBe("0");
+    expect(textOf(src, tokens[1])).toBe("42");
+    expect(textOf(src, tokens[2])).toBe("3.14");
+    expect(textOf(src, tokens[3])).toBe(".5");
+    expect(textOf(src, tokens[4])).toBe("10e2");
+    expect(textOf(src, tokens[5])).toBe(".5e1");
+    expect(textOf(src, tokens[6])).toBe("2e-3");
 
     // And values are decoded numerically
-    assert.equal(tokens[2].value, 3.14);
-    assert.equal(tokens[3].value, 0.5);
-    assert.equal(tokens[4].value, 10e2);
+    expect(tokens[2].value).toBe(3.14);
+    expect(tokens[3].value).toBe(0.5);
+    expect(tokens[4].value).toBe(10e2);
   });
 
   test("string literals, escapes, and unterminated strings", () => {
@@ -114,39 +113,39 @@ describe("expression-scanner", () => {
     const types = tokens.map((t) => t.type);
 
     const stringCount = 13;
-    assert.equal(types.length, stringCount + 1);
-    for (let i = 0; i < stringCount; i++) assert.equal(types[i], TokenType.StringLiteral);
-    assert.equal(types[stringCount], TokenType.EOF);
+    expect(types.length).toBe(stringCount + 1);
+    for (let i = 0; i < stringCount; i++) expect(types[i]).toBe(TokenType.StringLiteral);
+    expect(types[stringCount]).toBe(TokenType.EOF);
 
     // Spans -> raw text (including quotes) for a couple of tokens
-    assert.equal(textOf(src, tokens[0]), s1);
-    assert.equal(textOf(src, tokens[1]), s2);
-    assert.equal(textOf(src, tokens[2]), s3);
-    assert.equal(textOf(src, tokens[4]), s5);
+    expect(textOf(src, tokens[0])).toBe(s1);
+    expect(textOf(src, tokens[1])).toBe(s2);
+    expect(textOf(src, tokens[2])).toBe(s3);
+    expect(textOf(src, tokens[4])).toBe(s5);
 
     // Decoded values (quotes stripped, escapes handled)
-    assert.equal(tokens[0].value, "foo");
-    assert.equal(tokens[1].value, "bar");
-    assert.equal(tokens[2].value, "a'b");
-    assert.equal(tokens[3].value, 'c"d');
-    assert.equal(tokens[4].value, "\n");
-    assert.equal(tokens[5].value, "\t");
-    assert.equal(tokens[6].value, "\v");
-    assert.equal(tokens[7].value, "\0");
-    assert.equal(tokens[8].value, "q"); // default escape path
-    assert.equal(tokens[9].value, "\r");
-    assert.equal(tokens[10].value, "\b");
-    assert.equal(tokens[11].value, "\\");
-    assert.equal(tokens[12].value, "\f");
+    expect(tokens[0].value).toBe("foo");
+    expect(tokens[1].value).toBe("bar");
+    expect(tokens[2].value).toBe("a'b");
+    expect(tokens[3].value).toBe('c"d');
+    expect(tokens[4].value).toBe("\n");
+    expect(tokens[5].value).toBe("\t");
+    expect(tokens[6].value).toBe("\v");
+    expect(tokens[7].value).toBe("\0");
+    expect(tokens[8].value).toBe("q"); // default escape path
+    expect(tokens[9].value).toBe("\r");
+    expect(tokens[10].value).toBe("\b");
+    expect(tokens[11].value).toBe("\\");
+    expect(tokens[12].value).toBe("\f");
 
     // Unterminated string: should be marked and not crash
     const unterSrc = "'abc";
     const unterTokens = scanAll(unterSrc);
 
-    assert.equal(unterTokens[0].type, TokenType.StringLiteral);
-    assert.equal(unterTokens[0].unterminated, true);
-    assert.equal(textOf(unterSrc, unterTokens[0]), "'abc");
-    assert.equal(unterTokens[1].type, TokenType.EOF);
+    expect(unterTokens[0].type).toBe(TokenType.StringLiteral);
+    expect(unterTokens[0].unterminated).toBe(true);
+    expect(textOf(unterSrc, unterTokens[0])).toBe("'abc");
+    expect(unterTokens[1].type).toBe(TokenType.EOF);
   });
 
   test("operators", () => {
@@ -154,7 +153,7 @@ describe("expression-scanner", () => {
     const tokens = scanAll(src);
     const types = tokens.map((t) => t.type);
 
-    assert.deepEqual(types, [
+    expect(types).toEqual([
       TokenType.Plus,
       TokenType.Minus,
       TokenType.Asterisk,
@@ -186,15 +185,15 @@ describe("expression-scanner", () => {
     ]);
 
     // Check a few multi-character operator spans
-    assert.equal(textOf(src, tokens[5]), "**");
-    assert.equal(textOf(src, tokens[6]), "==");
-    assert.equal(textOf(src, tokens[7]), "===");
-    assert.equal(textOf(src, tokens[8]), "!=");
-    assert.equal(textOf(src, tokens[9]), "!==");
-    assert.equal(textOf(src, tokens[15]), "||");
-    assert.equal(textOf(src, tokens[16]), "??");
-    assert.equal(textOf(src, tokens[18]), "+=");
-    assert.equal(textOf(src, tokens[22]), "=>");
+    expect(textOf(src, tokens[5])).toBe("**");
+    expect(textOf(src, tokens[6])).toBe("==");
+    expect(textOf(src, tokens[7])).toBe("===");
+    expect(textOf(src, tokens[8])).toBe("!=");
+    expect(textOf(src, tokens[9])).toBe("!==");
+    expect(textOf(src, tokens[15])).toBe("||");
+    expect(textOf(src, tokens[16])).toBe("??");
+    expect(textOf(src, tokens[18])).toBe("+=");
+    expect(textOf(src, tokens[22])).toBe("=>");
   });
 
   test("punctuation and question mark", () => {
@@ -202,7 +201,7 @@ describe("expression-scanner", () => {
     const tokens = scanAll(src);
     const types = tokens.map((t) => t.type);
 
-    assert.deepEqual(types, [
+    expect(types).toEqual([
       TokenType.OpenParen,
       TokenType.CloseParen,
       TokenType.OpenBracket,
@@ -218,67 +217,67 @@ describe("expression-scanner", () => {
     ]);
 
     // Verify a couple of slices
-    assert.equal(textOf(src, tokens[0]), "(");
-    assert.equal(textOf(src, tokens[1]), ")");
-    assert.equal(textOf(src, tokens[2]), "[");
-    assert.equal(textOf(src, tokens[3]), "]");
-    assert.equal(textOf(src, tokens[9]), ".");
-    assert.equal(textOf(src, tokens[10]), "?");
+    expect(textOf(src, tokens[0])).toBe("(");
+    expect(textOf(src, tokens[1])).toBe(")");
+    expect(textOf(src, tokens[2])).toBe("[");
+    expect(textOf(src, tokens[3])).toBe("]");
+    expect(textOf(src, tokens[9])).toBe(".");
+    expect(textOf(src, tokens[10])).toBe("?");
   });
 
   test("BMP identifier start/part (non-ASCII) is accepted", () => {
     const src = "\u00C9foo \u00AA\u00AAbaz";
     const tokens = scanAll(src);
-    assert.equal(tokens[0].type, TokenType.Identifier);
-    assert.equal(tokens[0].value, "\u00C9foo");
-    assert.equal(tokens[1].type, TokenType.Identifier); // whitespace skipped by scanner
-    assert.equal(tokens[1].value, "\u00AA\u00AAbaz");
+    expect(tokens[0].type).toBe(TokenType.Identifier);
+    expect(tokens[0].value).toBe("\u00C9foo");
+    expect(tokens[1].type).toBe(TokenType.Identifier); // whitespace skipped by scanner
+    expect(tokens[1].value).toBe("\u00AA\u00AAbaz");
   });
 
   test("unknown token fallback", () => {
     const src = "@";
     const tokens = scanAll(src);
-    assert.equal(tokens[0].type, TokenType.Unknown);
-    assert.equal(tokens[0].value, "@");
-    assert.equal(tokens[1].type, TokenType.EOF);
+    expect(tokens[0].type).toBe(TokenType.Unknown);
+    expect(tokens[0].value).toBe("@");
+    expect(tokens[1].type).toBe(TokenType.EOF);
   });
 
   test("unterminated block comment reaches EOF", () => {
     const src = "/* unclosed";
     const s = new Scanner(src);
     const t = s.next();
-    assert.equal(t.type, TokenType.EOF);
+    expect(t.type).toBe(TokenType.EOF);
   });
 
   test("line/block comments are skipped", () => {
     const src = "// line\n/* block */foo";
     const tokens = scanAll(src);
-    assert.equal(tokens[0].type, TokenType.Identifier);
-    assert.equal(tokens[0].value, "foo");
+    expect(tokens[0].type).toBe(TokenType.Identifier);
+    expect(tokens[0].value).toBe("foo");
   });
 
   test("backslash at end of string marks unterminated", () => {
     const s = new Scanner("'abc\\\\");
     const tok = s.next();
-    assert.equal(tok.type, TokenType.StringLiteral);
-    assert.equal(tok.value, "abc\\");
-    assert.equal(tok.unterminated, true);
+    expect(tok.type).toBe(TokenType.StringLiteral);
+    expect(tok.value).toBe("abc\\");
+    expect(tok.unterminated).toBe(true);
   });
 
   test("backslash as final char in empty string body", () => {
     const s = new Scanner("'\\\\");
     const tok = s.next();
-    assert.equal(tok.type, TokenType.StringLiteral);
-    assert.equal(tok.value, "\\");
-    assert.equal(tok.unterminated, true);
+    expect(tok.type).toBe(TokenType.StringLiteral);
+    expect(tok.value).toBe("\\");
+    expect(tok.unterminated).toBe(true);
   });
 
   test("position getter and reset range guard", () => {
     const s = new Scanner("abc");
-    assert.equal(s.position, 0);
+    expect(s.position).toBe(0);
     s.next();
-    assert.ok(s.position > 0);
-    assert.throws(() => s.reset(-1), /out of range/);
+    expect(s.position).toBeGreaterThan(0);
+    expect(() => s.reset(-1)).toThrow(/out of range/);
   });
 
   test("backticks are tokenized consistently", () => {
@@ -286,7 +285,7 @@ describe("expression-scanner", () => {
     const tokens = scanAll(src);
     const types = tokens.map((t) => t.type);
 
-    assert.deepEqual(types, [
+    expect(types).toEqual([
       TokenType.Backtick,
       TokenType.Identifier,
       TokenType.Backtick,
@@ -297,14 +296,14 @@ describe("expression-scanner", () => {
     ]);
 
     // Backtick spans should be exactly "`"
-    assert.equal(textOf(src, tokens[0]), "`");
-    assert.equal(textOf(src, tokens[2]), "`");
-    assert.equal(textOf(src, tokens[3]), "`");
-    assert.equal(textOf(src, tokens[5]), "`");
+    expect(textOf(src, tokens[0])).toBe("`");
+    expect(textOf(src, tokens[2])).toBe("`");
+    expect(textOf(src, tokens[3])).toBe("`");
+    expect(textOf(src, tokens[5])).toBe("`");
 
     // Identifier spans inside the backticks
-    assert.equal(textOf(src, tokens[1]), "foo");
-    assert.equal(textOf(src, tokens[4]), "bar");
+    expect(textOf(src, tokens[1])).toBe("foo");
+    expect(textOf(src, tokens[4])).toBe("bar");
   });
 });
 

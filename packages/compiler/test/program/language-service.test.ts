@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 
 import {
   DefaultTemplateLanguageService,
@@ -40,7 +39,7 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(overlay) {
-        assert.equal(overlay.uri, overlayUri);
+        expect(overlay.uri).toBe(overlayUri);
         return [
           {
             category: "error",
@@ -64,18 +63,18 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
 
   const diags = service.getDiagnostics(uri);
   const compilerDiag = diags.compiler.find((d) => d.source === "resolve-host");
-  assert.ok(compilerDiag, "compiler diagnostics should be preserved");
-  assert.equal(compilerDiag.location?.uri, canonicalDocumentUri(uri).uri);
+  expect(compilerDiag, "compiler diagnostics should be preserved").toBeTruthy();
+  expect(compilerDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
 
   const tsDiag = diags.typescript.find((d) => d.source === "typescript");
-  assert.ok(tsDiag, "typescript diagnostics should be present");
+  expect(tsDiag, "typescript diagnostics should be present").toBeTruthy();
   const projected = program.provenance.projectGeneratedSpan(overlayUri, diagSpan);
-  assert.ok(projected, "typescript diagnostic should map through provenance");
-  assert.equal(tsDiag.location?.uri, canonicalDocumentUri(uri).uri);
-  assert.deepEqual(tsDiag.location?.span, projected.edge.to.span);
-  assert.ok(tsDiag.related?.some((rel) => rel.location?.uri === overlayUri), "overlay span should remain as related info");
+  expect(projected, "typescript diagnostic should map through provenance").toBeTruthy();
+  expect(tsDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
+  expect(tsDiag.location?.span).toEqual(projected.edge.to.span);
+  expect(tsDiag.related?.some((rel) => rel.location?.uri === overlayUri), "overlay span should remain as related info").toBeTruthy();
 
-  assert.equal(diags.all.length, diags.compiler.length + diags.typescript.length);
+  expect(diags.all.length).toBe(diags.compiler.length + diags.typescript.length);
 });
 
 test("BadExpression still produces AU1203 and a mapped overlay span", () => {
@@ -88,17 +87,14 @@ test("BadExpression still produces AU1203 and a mapped overlay span", () => {
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
   const entry = compilation.mapping.entries[0];
 
-  assert.ok(entry.overlaySpan.file, "overlay span should carry file metadata");
-  assert.ok(entry.htmlSpan.file, "html span should carry file metadata");
-  assert.ok(
-    compilation.overlay.text.includes("undefined/*bad*/"),
-    "overlay should stay valid with a bad-expression placeholder",
-  );
+  expect(entry.overlaySpan.file, "overlay span should carry file metadata").toBeTruthy();
+  expect(entry.htmlSpan.file, "html span should carry file metadata").toBeTruthy();
+  expect(compilation.overlay.text.includes("undefined/*bad*/"), "overlay should stay valid with a bad-expression placeholder").toBeTruthy();
 
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(overlay) {
-        assert.equal(overlay.uri, overlayUri);
+        expect(overlay.uri).toBe(overlayUri);
         return [];
       },
     },
@@ -106,8 +102,8 @@ test("BadExpression still produces AU1203 and a mapped overlay span", () => {
 
   const diags = service.getDiagnostics(uri);
   const badExpr = diags.compiler.find((d) => d.code === "AU1203");
-  assert.ok(badExpr, "bad expression should surface AU1203");
-  assert.equal(badExpr.location?.uri, canonicalDocumentUri(uri).uri);
+  expect(badExpr, "bad expression should surface AU1203").toBeTruthy();
+  expect(badExpr.location?.uri).toBe(canonicalDocumentUri(uri).uri);
 });
 
 test("diagnostics use VM display name for missing members", () => {
@@ -131,7 +127,7 @@ test("diagnostics use VM display name for missing members", () => {
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(tsOverlay) {
-        assert.equal(tsOverlay.uri, overlayUri);
+        expect(tsOverlay.uri).toBe(overlayUri);
         return [{
           category: "error",
           code: 2339,
@@ -145,8 +141,8 @@ test("diagnostics use VM display name for missing members", () => {
 
   const diags = service.getDiagnostics(uri);
   const tsDiag = diags.typescript.find((d) => d.source === "typescript");
-  assert.ok(tsDiag, "typescript diagnostic should be present");
-  assert.equal(tsDiag.message, "Property 'missing' does not exist on MyVm");
+  expect(tsDiag, "typescript diagnostic should be present").toBeTruthy();
+  expect(tsDiag.message).toBe("Property 'missing' does not exist on MyVm");
 });
 
 test("TypeScript diagnostics replace overlay aliases with VM display names", () => {
@@ -171,7 +167,7 @@ test("TypeScript diagnostics replace overlay aliases with VM display names", () 
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(overlay) {
-        assert.equal(overlay.uri, overlayUri);
+        expect(overlay.uri).toBe(overlayUri);
         return [{
           category: "error",
           code: 2345,
@@ -190,14 +186,14 @@ test("TypeScript diagnostics replace overlay aliases with VM display names", () 
   });
 
   const tsDiag = service.getDiagnostics(uri).typescript[0];
-  assert.ok(tsDiag, "typescript diagnostic should be present");
-  assert.ok(tsDiag.message.includes("FriendlyVm"), "alias should be replaced with display name");
-  assert.ok(!tsDiag.message.includes(alias), "raw overlay alias should be hidden");
+  expect(tsDiag, "typescript diagnostic should be present").toBeTruthy();
+  expect(tsDiag.message.includes("FriendlyVm"), "alias should be replaced with display name").toBeTruthy();
+  expect(tsDiag.message.includes(alias), "raw overlay alias should be hidden").toBeFalsy();
 
   const related = tsDiag.related?.find((rel) => rel.message.startsWith("Related"));
   if (related) {
-    assert.ok(related.message.includes("FriendlyVm"), "related info should use display name");
-    assert.ok(!related.message.includes(alias), "related info should hide alias");
+    expect(related.message.includes("FriendlyVm"), "related info should use display name").toBeTruthy();
+    expect(related.message.includes(alias), "related info should hide alias").toBeFalsy();
   }
 });
 
@@ -223,22 +219,22 @@ test("suppresses AU1301 when TypeScript confirms matching type", () => {
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(overlay) {
-        assert.equal(overlay.uri, overlayUri);
+        expect(overlay.uri).toBe(overlayUri);
         return [];
       },
       getQuickInfo(overlay, offset) {
         quickInfoHits += 1;
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
         return { text: "greeting: string" };
       },
     },
   });
 
   const diags = service.getDiagnostics(uri);
-  assert.ok(quickInfoHits > 0, "should consult TypeScript quick info for typecheck mismatches");
-  assert.equal(diags.compiler.length, 0, "matching types should suppress AU1301 noise");
-  assert.equal(diags.all.length, 0, "no diagnostics should remain when types align");
+  expect(quickInfoHits > 0, "should consult TypeScript quick info for typecheck mismatches").toBeTruthy();
+  expect(diags.compiler.length, "matching types should suppress AU1301 noise").toBe(0);
+  expect(diags.all.length, "no diagnostics should remain when types align").toBe(0);
 });
 
 test("falls back to overlay spans when provenance has no mapping", () => {
@@ -251,7 +247,7 @@ test("falls back to overlay spans when provenance has no mapping", () => {
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(overlay) {
-        assert.equal(overlay.uri, overlayUri);
+        expect(overlay.uri).toBe(overlayUri);
         return [
           {
             category: "warning",
@@ -267,8 +263,8 @@ test("falls back to overlay spans when provenance has no mapping", () => {
 
   const diags = service.getDiagnostics(uri);
   const tsDiag = diags.typescript[0];
-  assert.ok(tsDiag, "typescript diagnostic should be returned even without provenance");
-  assert.equal(tsDiag.location?.uri, overlayUri);
+  expect(tsDiag, "typescript diagnostic should be returned even without provenance").toBeTruthy();
+  expect(tsDiag.location?.uri).toBe(overlayUri);
 });
 
 test("hover merges template query and TypeScript quick info mapped to template span", () => {
@@ -285,8 +281,8 @@ test("hover merges template query and TypeScript quick info mapped to template s
     typescript: {
       getDiagnostics() { return []; },
       getQuickInfo(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end, "hover should target overlay span");
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
         return {
           text: "bar: string",
           documentation: "vm member",
@@ -298,9 +294,9 @@ test("hover merges template query and TypeScript quick info mapped to template s
   });
 
   const hover = service.getHover(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  assert.ok(hover, "hover should be produced");
-  assert.ok(hover.contents.includes("bar: string"), "TS quick info should be present");
-  assert.deepEqual(hover.range, spanToRange(mappingEntry.htmlSpan, markup));
+  expect(hover, "hover should be produced").toBeTruthy();
+  expect(hover.contents.includes("bar: string"), "TS quick info should be present").toBeTruthy();
+  expect(hover.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 });
 
 test("definitions map overlay ranges back to template and pass through VM files", () => {
@@ -317,8 +313,8 @@ test("definitions map overlay ranges back to template and pass through VM files"
     typescript: {
       getDiagnostics() { return []; },
       getDefinition(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
         return [
           { fileName: overlay.uri, range: spanToRange(mappingEntry.overlaySpan, overlay.text) },
           {
@@ -331,14 +327,14 @@ test("definitions map overlay ranges back to template and pass through VM files"
   });
 
   const defs = service.getDefinition(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start));
-  assert.equal(defs.length, 2, "template and VM targets should be present");
+  expect(defs.length, "template and VM targets should be present").toBe(2);
 
   const templateDef = defs.find((loc) => loc.uri === canonicalDocumentUri(uri).uri);
-  assert.ok(templateDef, "overlay hit should map back to template");
-  assert.deepEqual(templateDef.range, spanToRange(mappingEntry.htmlSpan, markup));
+  expect(templateDef, "overlay hit should map back to template").toBeTruthy();
+  expect(templateDef.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 
   const vmUri = canonicalDocumentUri("/app/view-model.ts").uri;
-  assert.ok(defs.some((loc) => loc.uri === vmUri));
+  expect(defs.some((loc) => loc.uri === vmUri)).toBeTruthy();
 });
 
 test("references de-duplicate overlay hits and keep VM references", () => {
@@ -355,8 +351,8 @@ test("references de-duplicate overlay hits and keep VM references", () => {
     typescript: {
       getDiagnostics() { return []; },
       getReferences(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
         const overlayRange = spanToRange(mappingEntry.overlaySpan, overlay.text);
         return [
           { fileName: overlay.uri, range: overlayRange },
@@ -368,10 +364,10 @@ test("references de-duplicate overlay hits and keep VM references", () => {
   });
 
   const refs = service.getReferences(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  assert.equal(refs.length, 2, "duplicate overlay references should be collapsed");
+  expect(refs.length, "duplicate overlay references should be collapsed").toBe(2);
   const templateRef = refs.find((loc) => loc.uri === canonicalDocumentUri(uri).uri);
-  assert.ok(templateRef, "overlay references should map back to template spans");
-  assert.deepEqual(templateRef.range, spanToRange(mappingEntry.htmlSpan, markup));
+  expect(templateRef, "overlay references should map back to template spans").toBeTruthy();
+  expect(templateRef.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 });
 
 test("references map overlay hits from other templates via provenance", () => {
@@ -394,8 +390,8 @@ test("references map overlay hits from other templates via provenance", () => {
     typescript: {
       getDiagnostics() { return []; },
       getReferences(tsOverlay, offset) {
-        assert.equal(tsOverlay.uri, overlayUriA);
-        assert.ok(offset >= mappingA.overlaySpan.start && offset <= mappingA.overlaySpan.end);
+        expect(tsOverlay.uri).toBe(overlayUriA);
+        expect(offset >= mappingA.overlaySpan.start && offset <= mappingA.overlaySpan.end).toBeTruthy();
         return [
           {
             fileName: overlayUriB,
@@ -410,8 +406,8 @@ test("references map overlay hits from other templates via provenance", () => {
 
   const refs = service.getReferences(uriA, positionAtOffset(markup, mappingA.htmlSpan.start + 1));
   const target = refs.find((loc) => loc.uri === canonicalDocumentUri(uriB).uri);
-  assert.ok(target, "reference should map overlay B back to template B");
-  assert.deepEqual(target.range, spanToRange(mappingB.htmlSpan, markup));
+  expect(target, "reference should map overlay B back to template B").toBeTruthy();
+  expect(target.range).toEqual(spanToRange(mappingB.htmlSpan, markup));
 });
 
 test("definitions map overlay hits using start/length when range is absent", () => {
@@ -429,8 +425,8 @@ test("definitions map overlay hits using start/length when range is absent", () 
     typescript: {
       getDiagnostics() { return []; },
       getDefinition(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= overlaySpan.start && offset <= overlaySpan.end);
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= overlaySpan.start && offset <= overlaySpan.end).toBeTruthy();
         return [
           {
             fileName: overlayUri,
@@ -443,8 +439,8 @@ test("definitions map overlay hits using start/length when range is absent", () 
   });
 
   const defs = service.getDefinition(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  assert.equal(defs.length, 1);
-  assert.deepEqual(defs[0], {
+  expect(defs.length).toBe(1);
+  expect(defs[0]).toEqual({
     uri: canonicalDocumentUri(uri).uri,
     range: spanToRange(mappingEntry.htmlSpan, markup),
   });
@@ -464,8 +460,8 @@ test("completions project TypeScript replacement spans through provenance", () =
     typescript: {
       getDiagnostics() { return []; },
       getCompletions(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
         return [
           {
             name: "value",
@@ -482,11 +478,11 @@ test("completions project TypeScript replacement spans through provenance", () =
 
   const pos = positionAtOffset(markup, mappingEntry.htmlSpan.start + 1);
   const completions = service.getCompletions(uri, pos);
-  assert.equal(completions.length, 1);
+  expect(completions.length).toBe(1);
   const [item] = completions;
-  assert.equal(item.label, "value");
-  assert.equal(item.source, "typescript");
-  assert.deepEqual(item.range, spanToRange(mappingEntry.htmlSpan, markup));
+  expect(item.label).toBe("value");
+  expect(item.source).toBe("typescript");
+  expect(item.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 });
 
 test("completions map partial replacement spans to the matching slice of the template expression", () => {
@@ -498,7 +494,7 @@ test("completions map partial replacement spans to the matching slice of the tem
   const compilation = program.getCompilation(uri);
   const mappingEntry = compilation.mapping.entries[0];
   const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
-  assert.ok(memberSeg, "member segment should be present for member completions");
+  expect(memberSeg, "member segment should be present for member completions").toBeTruthy();
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
 
   // Simulate a TS completion that only replaces a subset of the overlay member span.
@@ -511,8 +507,8 @@ test("completions map partial replacement spans to the matching slice of the tem
     typescript: {
       getDiagnostics() { return []; },
       getCompletions(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end);
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end).toBeTruthy();
         return [
           {
             name: "person.name",
@@ -525,16 +521,16 @@ test("completions map partial replacement spans to the matching slice of the tem
 
   const pos = positionAtOffset(markup, memberSeg.htmlSpan.start + 2);
   const completions = service.getCompletions(uri, pos);
-  assert.equal(completions.length, 1);
+  expect(completions.length).toBe(1);
 
   const [item] = completions;
-  assert.equal(item.label, "person.name");
+  expect(item.label).toBe("person.name");
 
   const expectedRange = spanToRange({
     start: memberSeg.htmlSpan.start + 2,
     end: memberSeg.htmlSpan.start + 2 + partialOverlaySpan.length,
   }, markup);
-  assert.deepEqual(item.range, expectedRange, "partial overlay replacements should map to the same slice in the template");
+  expect(item.range, "partial overlay replacements should map to the same slice in the template").toEqual(expectedRange);
 });
 
 test("completions map TypeScript entries without replacement spans to template spans", () => {
@@ -551,8 +547,8 @@ test("completions map TypeScript entries without replacement spans to template s
     typescript: {
       getDiagnostics() { return []; },
       getCompletions(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end);
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
         return [
           {
             name: "vmProp",
@@ -566,12 +562,12 @@ test("completions map TypeScript entries without replacement spans to template s
 
   const pos = positionAtOffset(markup, mappingEntry.htmlSpan.start + 2);
   const completions = service.getCompletions(uri, pos);
-  assert.equal(completions.length, 1);
+  expect(completions.length).toBe(1);
   const [item] = completions;
-  assert.equal(item.label, "vmProp");
-  assert.equal(item.insertText, "vmProp");
-  assert.equal(item.source, "typescript");
-  assert.deepEqual(item.range, spanToRange(mappingEntry.htmlSpan, markup));
+  expect(item.label).toBe("vmProp");
+  expect(item.insertText).toBe("vmProp");
+  expect(item.source).toBe("typescript");
+  expect(item.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 });
 
 test("completions do not invoke TypeScript when provenance misses", () => {
@@ -590,8 +586,8 @@ test("completions do not invoke TypeScript when provenance misses", () => {
 
   const pos = positionAtOffset(markup, markup.length - 1);
   const completions = service.getCompletions(uri, pos);
-  assert.equal(completions.length, 0);
-  assert.equal(tsCalled, false, "TypeScript completions should not run without provenance");
+  expect(completions.length).toBe(0);
+  expect(tsCalled, "TypeScript completions should not run without provenance").toBe(false);
 });
 
 test("code actions map TypeScript fixes through provenance and keep external edits", () => {
@@ -610,15 +606,9 @@ test("code actions map TypeScript fixes through provenance and keep external edi
     typescript: {
       getDiagnostics() { return []; },
       getCodeActions(tsOverlay, start, end) {
-        assert.equal(tsOverlay.uri, overlayUri);
-        assert.ok(
-          start >= mappingEntry.overlaySpan.start && start <= mappingEntry.overlaySpan.end,
-          "overlay start should land inside mapped span",
-        );
-        assert.ok(
-          end >= start && end <= mappingEntry.overlaySpan.end,
-          "overlay end should land inside mapped span",
-        );
+        expect(tsOverlay.uri).toBe(overlayUri);
+        expect(start >= mappingEntry.overlaySpan.start && start <= mappingEntry.overlaySpan.end).toBeTruthy();
+        expect(end >= start && end <= mappingEntry.overlaySpan.end).toBeTruthy();
         return [
           {
             title: "TS fix",
@@ -633,22 +623,22 @@ test("code actions map TypeScript fixes through provenance and keep external edi
   });
 
   const actions = service.getCodeActions(uri, spanToRange(mappingEntry.htmlSpan, markup));
-  assert.equal(actions.length, 1);
+  expect(actions.length).toBe(1);
   const [action] = actions;
-  assert.equal(action.title, "TS fix");
-  assert.equal(action.source, "typescript");
-  assert.equal(action.kind, "quickfix");
+  expect(action.title).toBe("TS fix");
+  expect(action.source).toBe("typescript");
+  expect(action.kind).toBe("quickfix");
 
   const templateUri = canonicalDocumentUri(uri).uri;
   const templateEdit = action.edits.find((edit) => edit.uri === templateUri);
-  assert.ok(templateEdit, "overlay edit should map to template");
-  assert.deepEqual(templateEdit.range, spanToRange(mappingEntry.htmlSpan, markup));
-  assert.equal(templateEdit.newText, "updated");
+  expect(templateEdit, "overlay edit should map to template").toBeTruthy();
+  expect(templateEdit.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
+  expect(templateEdit.newText).toBe("updated");
 
   const vmUri = canonicalDocumentUri("/app/vm.ts").uri;
   const vmEdit = action.edits.find((edit) => edit.uri === vmUri);
-  assert.ok(vmEdit, "VM edits should be preserved");
-  assert.equal(vmEdit.newText, "// vm");
+  expect(vmEdit, "VM edits should be preserved").toBeTruthy();
+  expect(vmEdit.newText).toBe("// vm");
 });
 
 test("code actions drop edits when overlay changes cannot be mapped", () => {
@@ -665,7 +655,7 @@ test("code actions drop edits when overlay changes cannot be mapped", () => {
     typescript: {
       getDiagnostics() { return []; },
       getCodeActions(tsOverlay) {
-        assert.equal(tsOverlay.uri, overlayUri);
+        expect(tsOverlay.uri).toBe(overlayUri);
         // Return an edit against overlay prelude (offset 0) which has no provenance mapping.
         return [{ title: "unmappable", edits: [{ fileName: overlayUri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: "noop" }] }];
       },
@@ -673,7 +663,7 @@ test("code actions drop edits when overlay changes cannot be mapped", () => {
   });
 
   const actions = service.getCodeActions(uri, spanToRange(mappingEntry.htmlSpan, markup));
-  assert.deepEqual(actions, [], "code actions should drop when overlay edits cannot be mapped");
+  expect(actions, "code actions should drop when overlay edits cannot be mapped").toEqual([]);
 });
 
 test("rename maps overlay edits back to the template and preserves external edits", () => {
@@ -686,15 +676,15 @@ test("rename maps overlay edits back to the template and preserves external edit
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
   const mappingEntry = compilation.mapping.entries[0];
   const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
-  assert.ok(memberSeg, "member segment should be present for rename");
+  expect(memberSeg, "member segment should be present for rename").toBeTruthy();
 
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics() { return []; },
       getRenameEdits(overlay, offset, newName) {
-        assert.equal(newName, "renamedProp");
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end);
+        expect(newName).toBe("renamedProp");
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end).toBeTruthy();
         return [
           { fileName: overlay.uri, range: spanToRange(memberSeg.overlaySpan, overlay.text), newText: newName },
           {
@@ -708,18 +698,18 @@ test("rename maps overlay edits back to the template and preserves external edit
   });
 
   const edits = service.renameSymbol(uri, positionAtOffset(markup, memberSeg.htmlSpan.end - 1), "renamedProp");
-  assert.equal(edits.length, 2, "template and VM edits should be returned");
+  expect(edits.length, "template and VM edits should be returned").toBe(2);
 
   const templateUri = canonicalDocumentUri(uri).uri;
   const templateEdit = edits.find((edit) => edit.uri === templateUri);
-  assert.ok(templateEdit, "overlay rename should map to template edit");
-  assert.deepEqual(templateEdit.range, spanToRange(memberSeg.htmlSpan, markup));
-  assert.equal(templateEdit.newText, "renamedProp");
+  expect(templateEdit, "overlay rename should map to template edit").toBeTruthy();
+  expect(templateEdit.range).toEqual(spanToRange(memberSeg.htmlSpan, markup));
+  expect(templateEdit.newText).toBe("renamedProp");
 
   const vmUri = canonicalDocumentUri("/app/vm.ts").uri;
   const vmEdit = edits.find((edit) => edit.uri === vmUri);
-  assert.ok(vmEdit, "VM edits should pass through");
-  assert.equal(vmEdit.newText, "renamedProp");
+  expect(vmEdit, "VM edits should pass through").toBeTruthy();
+  expect(vmEdit.newText).toBe("renamedProp");
 });
 
 test("rename uses start/length fallback when TS edits omit range", () => {
@@ -732,15 +722,15 @@ test("rename uses start/length fallback when TS edits omit range", () => {
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
   const mappingEntry = compilation.mapping.entries[0];
   const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
-  assert.ok(memberSeg, "member segment should be present for rename");
+  expect(memberSeg, "member segment should be present for rename").toBeTruthy();
 
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics() { return []; },
       getRenameEdits(overlay, offset, newName) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.equal(newName, "offsetRename");
-        assert.ok(typeof offset === "number");
+        expect(overlay.uri).toBe(overlayUri);
+        expect(newName).toBe("offsetRename");
+        expect(typeof offset === "number").toBeTruthy();
         return [
           {
             fileName: overlayUri,
@@ -760,12 +750,12 @@ test("rename uses start/length fallback when TS edits omit range", () => {
 
   const edits = service.renameSymbol(uri, positionAtOffset(markup, memberSeg.htmlSpan.start + 1), "offsetRename");
   const templateEdit = edits.find((edit) => edit.uri === canonicalDocumentUri(uri).uri);
-  assert.ok(templateEdit, "overlay edit should map back to template via start/length");
-  assert.deepEqual(templateEdit.range, spanToRange(memberSeg.htmlSpan, markup));
-  assert.equal(templateEdit.newText, "offsetRename");
+  expect(templateEdit, "overlay edit should map back to template via start/length").toBeTruthy();
+  expect(templateEdit.range).toEqual(spanToRange(memberSeg.htmlSpan, markup));
+  expect(templateEdit.newText).toBe("offsetRename");
 
   const vmEdit = edits.find((edit) => edit.uri === canonicalDocumentUri("/app/vm.ts").uri);
-  assert.ok(vmEdit, "non-overlay edits should be preserved");
+  expect(vmEdit, "non-overlay edits should be preserved").toBeTruthy();
 });
 
 test("rename aborts when overlay edits cannot be mapped to the template", () => {
@@ -778,15 +768,15 @@ test("rename aborts when overlay edits cannot be mapped to the template", () => 
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
   const mappingEntry = compilation.mapping.entries[0];
   const memberSeg = mappingEntry.segments?.find((seg) => seg.path === "person.name");
-  assert.ok(memberSeg, "member segment should be present for rename");
+  expect(memberSeg, "member segment should be present for rename").toBeTruthy();
 
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics() { return []; },
       getRenameEdits(overlay, offset, newName) {
-        assert.equal(overlay.uri, overlayUri);
-        assert.ok(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end);
-        assert.equal(newName, "shouldSkip");
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= memberSeg.overlaySpan.start && offset <= memberSeg.overlaySpan.end).toBeTruthy();
+        expect(newName).toBe("shouldSkip");
         // Force an unmapped overlay edit by targeting overlay prelude with no provenance.
         return [{ fileName: overlay.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: newName }];
       },
@@ -794,7 +784,7 @@ test("rename aborts when overlay edits cannot be mapped to the template", () => 
   });
 
   const edits = service.renameSymbol(uri, positionAtOffset(markup, memberSeg.htmlSpan.end - 1), "shouldSkip");
-  assert.deepEqual(edits, [], "rename should abort when overlay edits cannot be mapped");
+  expect(edits, "rename should abort when overlay edits cannot be mapped").toEqual([]);
 });
 
 test("hover uses overlay offset when TS quick info lacks span data", () => {
@@ -811,15 +801,15 @@ test("hover uses overlay offset when TS quick info lacks span data", () => {
     typescript: {
       getDiagnostics() { return []; },
       getQuickInfo(overlay) {
-        assert.equal(overlay.uri, overlayUri);
+        expect(overlay.uri).toBe(overlayUri);
         return { text: "value: number" }; // no start/length provided
       },
     },
   });
 
   const hover = service.getHover(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  assert.ok(hover, "hover should map quick info without span data");
-  assert.deepEqual(hover.range, spanToRange(mappingEntry.htmlSpan, markup));
+  expect(hover, "hover should map quick info without span data").toBeTruthy();
+  expect(hover.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 });
 
 test("navigation is empty when TS services are absent", () => {
@@ -831,8 +821,8 @@ test("navigation is empty when TS services are absent", () => {
   const service = new DefaultTemplateLanguageService(program);
   const pos = positionAtOffset(markup, 5);
 
-  assert.deepEqual(service.getDefinition(uri, pos), [], "definitions should be empty without TS");
-  assert.deepEqual(service.getReferences(uri, pos), [], "references should be empty without TS");
+  expect(service.getDefinition(uri, pos), "definitions should be empty without TS").toEqual([]);
+  expect(service.getReferences(uri, pos), "references should be empty without TS").toEqual([]);
 });
 
 test("navigation short-circuits when no provenance hit at position", () => {
@@ -851,9 +841,9 @@ test("navigation short-circuits when no provenance hit at position", () => {
   });
 
   const outsidePos = positionAtOffset(markup, markup.length - 1); // after closing template
-  assert.deepEqual(service.getDefinition(uri, outsidePos), [], "definitions should be empty without provenance");
-  assert.deepEqual(service.getReferences(uri, outsidePos), [], "references should be empty without provenance");
-  assert.equal(called, false, "TS services should not be invoked when provenance misses");
+  expect(service.getDefinition(uri, outsidePos), "definitions should be empty without provenance").toEqual([]);
+  expect(service.getReferences(uri, outsidePos), "references should be empty without provenance").toEqual([]);
+  expect(called, "TS services should not be invoked when provenance misses").toBe(false);
 });
 
 test("completions aim TS at the member segment under the cursor", () => {
@@ -873,7 +863,7 @@ test("completions aim TS at the member segment under the cursor", () => {
     typescript: {
       getDiagnostics() { return []; },
       getCompletions(overlay, offset) {
-        assert.equal(overlay.uri, overlayUri);
+        expect(overlay.uri).toBe(overlayUri);
         seen.push(offset);
         return [{ name: "dummy" }];
       },
@@ -883,8 +873,8 @@ test("completions aim TS at the member segment under the cursor", () => {
   service.getCompletions(uri, positionAtOffset(markup, nameSeg.htmlSpan.start + 1));
   service.getCompletions(uri, positionAtOffset(markup, ageSeg.htmlSpan.start + 1));
 
-  assert.ok(seen[0] >= nameSeg.overlaySpan.start && seen[0] <= nameSeg.overlaySpan.end);
-  assert.ok(seen[1] >= ageSeg.overlaySpan.start && seen[1] <= ageSeg.overlaySpan.end);
+  expect(seen[0] >= nameSeg.overlaySpan.start && seen[0] <= nameSeg.overlaySpan.end).toBeTruthy();
+  expect(seen[1] >= ageSeg.overlaySpan.start && seen[1] <= ageSeg.overlaySpan.end).toBeTruthy();
 });
 
 test("buildTemplateMapping preserves all member segments for multi-member expressions", () => {
@@ -897,12 +887,12 @@ test("buildTemplateMapping preserves all member segments for multi-member expres
   const entry = compilation.mapping.entries[0];
 
   const paths = (entry.segments ?? []).map((s) => s.path).sort();
-  assert.deepEqual(paths, ["person.age", "person.name"].sort());
+  expect(paths).toEqual(["person.age", "person.name"].sort());
 
   // Ensure segments are disjoint in HTML.
   const [nameSeg] = entry.segments.filter((s) => s.path === "person.name");
   const [ageSeg]  = entry.segments.filter((s) => s.path === "person.age");
-  assert.ok(nameSeg.htmlSpan.end <= ageSeg.htmlSpan.start || ageSeg.htmlSpan.end <= nameSeg.htmlSpan.start);
+  expect(nameSeg.htmlSpan.end <= ageSeg.htmlSpan.start || ageSeg.htmlSpan.end <= nameSeg.htmlSpan.start).toBeTruthy();
 });
 
 function positionAtOffset(text, offset) {

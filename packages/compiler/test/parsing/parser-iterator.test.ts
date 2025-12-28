@@ -1,5 +1,4 @@
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { ExpressionParser } from "../../out/compiler/index.js";
 
@@ -13,75 +12,75 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     const code = "item of items";
     const ast = parseIterator(code);
 
-    assert.equal(ast.$kind, "ForOfStatement");
-    assert.deepEqual(ast.span, { start: 0, end: code.length });
-    assert.equal(ast.semiIdx, -1);
+    expect(ast.$kind).toBe("ForOfStatement");
+    expect(ast.span).toEqual({ start: 0, end: code.length });
+    expect(ast.semiIdx).toBe(-1);
 
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "BindingIdentifier");
-    assert.equal(decl.name, "item");
+    expect(decl.$kind).toBe("BindingIdentifier");
+    expect(decl.name).toBe("item");
 
     const iterable = ast.iterable;
-    assert.equal(iterable.$kind, "AccessScope");
-    assert.equal(iterable.name, "items");
+    expect(iterable.$kind).toBe("AccessScope");
+    expect(iterable.name).toBe("items");
   });
 
   test("item of items; key: id (semiIdx)", () => {
     const code = "item of items; key: id";
     const ast = parseIterator(code);
 
-    assert.equal(ast.$kind, "ForOfStatement");
-    assert.deepEqual(ast.span, { start: 0, end: code.length });
+    expect(ast.$kind).toBe("ForOfStatement");
+    expect(ast.span).toEqual({ start: 0, end: code.length });
 
     const expectedSemi = code.indexOf(";");
-    assert.equal(ast.semiIdx, expectedSemi);
+    expect(ast.semiIdx).toBe(expectedSemi);
 
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "BindingIdentifier");
-    assert.equal(decl.name, "item");
+    expect(decl.$kind).toBe("BindingIdentifier");
+    expect(decl.name).toBe("item");
 
     const iterable = ast.iterable;
-    assert.equal(iterable.$kind, "AccessScope");
-    assert.equal(iterable.name, "items");
+    expect(iterable.$kind).toBe("AccessScope");
+    expect(iterable.name).toBe("items");
   });
 
   test("[value, index] of items", () => {
     const code = "[value, index] of items";
     const ast = parseIterator(code);
 
-    assert.equal(ast.$kind, "ForOfStatement");
-    assert.equal(ast.semiIdx, -1);
+    expect(ast.$kind).toBe("ForOfStatement");
+    expect(ast.semiIdx).toBe(-1);
 
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "ArrayBindingPattern");
+    expect(decl.$kind).toBe("ArrayBindingPattern");
 
-    assert.equal(decl.elements.length, 2);
+    expect(decl.elements.length).toBe(2);
 
     const [valueBinding, indexBinding] = decl.elements;
 
-    assert.equal(valueBinding.$kind, "BindingIdentifier");
-    assert.equal(valueBinding.name, "value");
+    expect(valueBinding.$kind).toBe("BindingIdentifier");
+    expect(valueBinding.name).toBe("value");
 
-    assert.equal(indexBinding.$kind, "BindingIdentifier");
-    assert.equal(indexBinding.name, "index");
+    expect(indexBinding.$kind).toBe("BindingIdentifier");
+    expect(indexBinding.name).toBe("index");
   });
 
   test("{ key, value } of entries", () => {
     const code = "{ key, value } of entries";
     const ast = parseIterator(code);
 
-    assert.equal(ast.$kind, "ForOfStatement");
-    assert.equal(ast.semiIdx, -1);
+    expect(ast.$kind).toBe("ForOfStatement");
+    expect(ast.semiIdx).toBe(-1);
 
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "ObjectBindingPattern");
+    expect(decl.$kind).toBe("ObjectBindingPattern");
 
-    assert.equal(decl.properties.length, 2);
-    assert.deepEqual(decl.properties.map(p => p.key), ["key", "value"]);
-    assert.equal(decl.properties[0].value.$kind, "BindingIdentifier");
-    assert.equal(decl.properties[0].value.name, "key");
-    assert.equal(decl.properties[1].value.$kind, "BindingIdentifier");
-    assert.equal(decl.properties[1].value.name, "value");
+    expect(decl.properties.length).toBe(2);
+    expect(decl.properties.map(p => p.key)).toEqual(["key", "value"]);
+    expect(decl.properties[0].value.$kind).toBe("BindingIdentifier");
+    expect(decl.properties[0].value.name).toBe("key");
+    expect(decl.properties[1].value.$kind).toBe("BindingIdentifier");
+    expect(decl.properties[1].value.name).toBe("value");
   });
 
   test("{ key: alias } of entries", () => {
@@ -89,12 +88,12 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     const ast = parseIterator(code);
 
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "ObjectBindingPattern");
+    expect(decl.$kind).toBe("ObjectBindingPattern");
 
-    assert.equal(decl.properties.length, 1);
-    assert.equal(decl.properties[0].key, "key");
-    assert.equal(decl.properties[0].value.$kind, "BindingIdentifier");
-    assert.equal(decl.properties[0].value.name, "alias");
+    expect(decl.properties.length).toBe(1);
+    expect(decl.properties[0].key).toBe("key");
+    expect(decl.properties[0].value.$kind).toBe("BindingIdentifier");
+    expect(decl.properties[0].value.name).toBe("alias");
   });
 
   test("[first, , second, ...rest] of items", () => {
@@ -102,14 +101,14 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     const ast = parseIterator(code);
 
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "ArrayBindingPattern");
-    assert.equal(decl.elements.length, 3);
+    expect(decl.$kind).toBe("ArrayBindingPattern");
+    expect(decl.elements.length).toBe(3);
 
-    assert.equal(decl.elements[0].$kind, "BindingIdentifier");
-    assert.equal(decl.elements[1].$kind, "BindingPatternHole");
-    assert.equal(decl.elements[2].$kind, "BindingIdentifier");
-    assert.equal(decl.rest?.$kind, "BindingIdentifier");
-    assert.equal(decl.rest?.name, "rest");
+    expect(decl.elements[0].$kind).toBe("BindingIdentifier");
+    expect(decl.elements[1].$kind).toBe("BindingPatternHole");
+    expect(decl.elements[2].$kind).toBe("BindingIdentifier");
+    expect(decl.rest?.$kind).toBe("BindingIdentifier");
+    expect(decl.rest?.name).toBe("rest");
   });
 
   test("{ a: foo = bar, ...rest } of entries", () => {
@@ -117,128 +116,128 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     const ast = parseIterator(code);
 
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "ObjectBindingPattern");
-    assert.equal(decl.properties.length, 1);
+    expect(decl.$kind).toBe("ObjectBindingPattern");
+    expect(decl.properties.length).toBe(1);
 
     const prop = decl.properties[0];
-    assert.equal(prop.key, "a");
-    assert.equal(prop.value.$kind, "BindingPatternDefault");
-    assert.equal(prop.value.target.$kind, "BindingIdentifier");
-    assert.equal(prop.value.target.name, "foo");
-    assert.equal(prop.value.default.$kind, "AccessScope");
-    assert.equal(prop.value.default.name, "bar");
+    expect(prop.key).toBe("a");
+    expect(prop.value.$kind).toBe("BindingPatternDefault");
+    expect(prop.value.target.$kind).toBe("BindingIdentifier");
+    expect(prop.value.target.name).toBe("foo");
+    expect(prop.value.default.$kind).toBe("AccessScope");
+    expect(prop.value.default.name).toBe("bar");
 
-    assert.equal(decl.rest?.$kind, "BindingIdentifier");
-    assert.equal(decl.rest?.name, "rest");
+    expect(decl.rest?.$kind).toBe("BindingIdentifier");
+    expect(decl.rest?.name).toBe("rest");
   });
 
   test("[] of items is accepted and produces an empty array pattern", () => {
     const ast = parseIterator("[] of items");
-    assert.equal(ast.$kind, "ForOfStatement");
-    assert.equal(ast.declaration.$kind, "ArrayBindingPattern");
-    assert.equal(ast.declaration.elements.length, 0);
-    assert.equal(ast.declaration.rest, null);
+    expect(ast.$kind).toBe("ForOfStatement");
+    expect(ast.declaration.$kind).toBe("ArrayBindingPattern");
+    expect(ast.declaration.elements.length).toBe(0);
+    expect(ast.declaration.rest).toBe(null);
   });
 
   test("[a,] of items allows a trailing comma", () => {
     const ast = parseIterator("[a,] of items");
-    assert.equal(ast.$kind, "ForOfStatement");
-    assert.equal(ast.declaration.$kind, "ArrayBindingPattern");
-    assert.equal(ast.declaration.elements.length, 1);
-    assert.equal(ast.declaration.elements[0].$kind, "BindingIdentifier");
-    assert.equal(ast.declaration.elements[0].name, "a");
+    expect(ast.$kind).toBe("ForOfStatement");
+    expect(ast.declaration.$kind).toBe("ArrayBindingPattern");
+    expect(ast.declaration.elements.length).toBe(1);
+    expect(ast.declaration.elements[0].$kind).toBe("BindingIdentifier");
+    expect(ast.declaration.elements[0].name).toBe("a");
   });
 
   test("{} of items is accepted and produces an empty object pattern", () => {
     const ast = parseIterator("{} of items");
-    assert.equal(ast.$kind, "ForOfStatement");
+    expect(ast.$kind).toBe("ForOfStatement");
     const decl = ast.declaration;
-    assert.equal(decl.$kind, "ObjectBindingPattern");
-    assert.equal(decl.properties.length, 0);
-    assert.equal(decl.rest, null);
+    expect(decl.$kind).toBe("ObjectBindingPattern");
+    expect(decl.properties.length).toBe(0);
+    expect(decl.rest).toBe(null);
   });
 
   test("array pattern rest must be followed by closing bracket", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("[...rest a] of items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
-    assert.equal(ast.message, "Expected ']' after array pattern rest element");
-    assert.ok(ast.span.start >= 0);
-    assert.ok(ast.span.end >= ast.span.start);
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.message).toBe("Expected ']' after array pattern rest element");
+    expect(ast.span.start >= 0).toBe(true);
+    expect(ast.span.end >= ast.span.start).toBe(true);
   });
 
   test("object pattern rest must be followed by closing brace", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("{ ...rest a } of items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
-    assert.equal(ast.message, "Expected '}' after object pattern rest element");
-    assert.ok(ast.span.start >= 2);
-    assert.ok(ast.span.end >= ast.span.start);
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.message).toBe("Expected '}' after object pattern rest element");
+    expect(ast.span.start >= 2).toBe(true);
+    expect(ast.span.end >= ast.span.start).toBe(true);
   });
 
   test("object pattern shorthand requires identifier keys", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("{ 'notId' } of items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
-    assert.equal(ast.message, "Object binding pattern shorthand requires an identifier key");
-    assert.equal(ast.text, "'notId'");
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.message).toBe("Object binding pattern shorthand requires an identifier key");
+    expect(ast.text).toBe("'notId'");
   });
 
   test("missing 'of' is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("item items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
+    expect(ast.$kind).toBe("BadExpression");
   });
 
   test("'of' in place of lhs is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("of items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
+    expect(ast.$kind).toBe("BadExpression");
   });
 
   test("missing rhs is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("item of", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
+    expect(ast.$kind).toBe("BadExpression");
   });
 
   test("trailing semicolon without tail is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("item of items;", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
+    expect(ast.$kind).toBe("BadExpression");
   });
 
   test("array pattern with rest not last is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("[a, ...rest, b] of items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
-    assert.equal(ast.message, "Rest element must be in the last position of an array pattern");
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.message).toBe("Rest element must be in the last position of an array pattern");
   });
 
   test("object pattern with rest not last is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("{ ...rest, a } of items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
-    assert.equal(ast.message, "Rest element must be in the last position of an object pattern");
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.message).toBe("Rest element must be in the last position of an object pattern");
   });
 
   test("invalid identifier 'import' in lhs is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("import of items", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
+    expect(ast.$kind).toBe("BadExpression");
   });
 
   test("empty iterator header is rejected", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("", "IsIterator");
-    assert.equal(ast.$kind, "BadExpression");
-    assert.equal(ast.message, "Empty iterator header");
+    expect(ast.$kind).toBe("BadExpression");
+    expect(ast.message).toBe("Empty iterator header");
   });
 
   test("iterator header allows content after semicolon (semiIdx recorded)", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse("item of items; key: id", "IsIterator");
-    assert.equal(ast.$kind, "ForOfStatement");
-    assert.equal(ast.semiIdx >= 0, true);
+    expect(ast.$kind).toBe("ForOfStatement");
+    expect(ast.semiIdx >= 0).toBe(true);
   });
 });

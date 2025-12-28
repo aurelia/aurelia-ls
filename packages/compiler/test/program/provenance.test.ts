@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 
 import {
   InMemoryProvenanceIndex,
@@ -44,28 +43,28 @@ test("overlay mappings expand to provenance edges and offset-aware lookups", () 
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const generatedEdges = provenance.findByGenerated(overlayUri, 22);
-  assert.equal(generatedEdges.length, 3);
-  assert.equal(generatedEdges[0]?.kind, "overlayMember");
+  expect(generatedEdges.length).toBe(3);
+  expect(generatedEdges[0]?.kind).toBe("overlayMember");
   // Last one should be the overlayExpr edge
-  assert.equal(generatedEdges[generatedEdges.length - 1]?.kind, "overlayExpr");
+  expect(generatedEdges[generatedEdges.length - 1]?.kind).toBe("overlayExpr");
 
   const sourceEdges = provenance.findBySource(templateUri, 115);
-  assert.equal(sourceEdges.length, 3);
-  assert.equal(sourceEdges[0]?.kind, "overlayMember");
+  expect(sourceEdges.length).toBe(3);
+  expect(sourceEdges[0]?.kind).toBe("overlayMember");
 
   const overlayHit = provenance.lookupGenerated(overlayUri, 22);
-  assert.equal(overlayHit?.exprId, "expr1");
+  expect(overlayHit?.exprId).toBe("expr1");
   // Should pick the deepest member segment (user.name)
-  assert.equal(overlayHit?.memberPath, "user.name");
-  assert.equal(overlayHit?.edge.kind, "overlayMember");
+  expect(overlayHit?.memberPath).toBe("user.name");
+  expect(overlayHit?.edge.kind).toBe("overlayMember");
 
   const templateHit = provenance.lookupSource(templateUri, 115);
-  assert.equal(templateHit?.exprId, "expr1");
-  assert.equal(templateHit?.memberPath, "user.name");
-  assert.equal(templateHit?.edge.kind, "overlayMember");
+  expect(templateHit?.exprId).toBe("expr1");
+  expect(templateHit?.memberPath).toBe("user.name");
+  expect(templateHit?.edge.kind).toBe("overlayMember");
 
-  assert.ok(provenance.getOverlayMapping(templateUri));
-  assert.equal(provenance.getOverlayUri(templateUri), overlayUri);
+  expect(provenance.getOverlayMapping(templateUri)).toBeTruthy();
+  expect(provenance.getOverlayUri(templateUri)).toBe(overlayUri);
 });
 
 test("overlay projection via projectGeneratedSpan/projectGeneratedOffset", () => {
@@ -74,31 +73,31 @@ test("overlay projection via projectGeneratedSpan/projectGeneratedOffset", () =>
 
   // Full slice across the entire expression range -> maps to full HTML span.
   const fullHit = provenance.projectGeneratedSpan(overlayUri, { start: 10, end: 40 });
-  assert.ok(fullHit);
-  assert.equal(fullHit?.exprId, "expr1");
+  expect(fullHit).toBeTruthy();
+  expect(fullHit?.exprId).toBe("expr1");
   // For the full slice we expect the broader 'user' segment
-  assert.equal(fullHit?.memberPath, "user");
-  assert.equal(fullHit?.edge.to.span.start, 100);
-  assert.equal(fullHit?.edge.to.span.end, 130);
+  expect(fullHit?.memberPath).toBe("user");
+  expect(fullHit?.edge.to.span.start).toBe(100);
+  expect(fullHit?.edge.to.span.end).toBe(130);
 
   // Partial slice inside user.name segment -> proportional mapping into narrower html span.
   const partialHit = provenance.projectGeneratedSpan(overlayUri, { start: 21, end: 26 });
-  assert.ok(partialHit);
-  assert.equal(partialHit?.exprId, "expr1");
-  assert.equal(partialHit?.memberPath, "user.name");
+  expect(partialHit).toBeTruthy();
+  expect(partialHit?.exprId).toBe("expr1");
+  expect(partialHit?.memberPath).toBe("user.name");
   // user.name: overlay [20,30] -> html [110,120]
   // slice [21,26] => html [111,116]
-  assert.equal(partialHit?.edge.to.span.start, 111);
-  assert.equal(partialHit?.edge.to.span.end, 116);
+  expect(partialHit?.edge.to.span.start).toBe(111);
+  expect(partialHit?.edge.to.span.end).toBe(116);
 
   // Offset projection: cursor inside user.name
   const offsetHit = provenance.projectGeneratedOffset(overlayUri, 22);
-  assert.ok(offsetHit);
-  assert.equal(offsetHit?.exprId, "expr1");
-  assert.equal(offsetHit?.memberPath, "user.name");
+  expect(offsetHit).toBeTruthy();
+  expect(offsetHit?.exprId).toBe("expr1");
+  expect(offsetHit?.memberPath).toBe("user.name");
   // cursor at overlay 22 (2 chars into [20,30]) => 2 chars into [110,120]
-  assert.equal(offsetHit?.edge.to.span.start, 112);
-  assert.equal(offsetHit?.edge.to.span.end, 112);
+  expect(offsetHit?.edge.to.span.start).toBe(112);
+  expect(offsetHit?.edge.to.span.end).toBe(112);
 });
 
 test("projectGeneratedSpanToDocumentSpan materializes mapped document spans", () => {
@@ -106,12 +105,12 @@ test("projectGeneratedSpanToDocumentSpan materializes mapped document spans", ()
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const mapped = projectGeneratedSpanToDocumentSpan(provenance, overlayUri, { start: 21, end: 26 });
-  assert.ok(mapped);
-  assert.equal(mapped.uri, templateUri);
-  assert.equal(mapped.exprId, "expr1");
-  assert.equal(mapped.memberPath, "user.name");
-  assert.equal(mapped.span.start, 111);
-  assert.equal(mapped.span.end, 116);
+  expect(mapped).toBeTruthy();
+  expect(mapped.uri).toBe(templateUri);
+  expect(mapped.exprId).toBe("expr1");
+  expect(mapped.memberPath).toBe("user.name");
+  expect(mapped.span.start).toBe(111);
+  expect(mapped.span.end).toBe(116);
 });
 
 test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () => {
@@ -120,20 +119,20 @@ test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () =>
 
   const edges = provenance.findByGenerated(overlayUri, 22);
   const memberEdge = edges.find((e) => e.kind === "overlayMember" && e.tag === "user.name");
-  assert.ok(memberEdge);
+  expect(memberEdge).toBeTruthy();
 
   // Cover the whole member span -> we get the full member html span.
   const coveringSlice = { start: 18, end: 32 }; // fully covers [20,30]
   const coveringResult = projectOverlaySpanToTemplateSpan(memberEdge, coveringSlice);
-  assert.equal(coveringResult.start, 110);
-  assert.equal(coveringResult.end, 120);
+  expect(coveringResult.start).toBe(110);
+  expect(coveringResult.end).toBe(120);
 
   // Proper subset of member span -> proportional slice.
   const innerSlice = { start: 22, end: 27 };
   const innerResult = projectOverlaySpanToTemplateSpan(memberEdge, innerSlice);
   // [20,30] -> [110,120], offset +2..+7 => [112,117]
-  assert.equal(innerResult.start, 112);
-  assert.equal(innerResult.end, 117);
+  expect(innerResult.start).toBe(112);
+  expect(innerResult.end).toBe(117);
 });
 
 test("overlay projection scales proportionally when overlay and template spans differ", () => {
@@ -151,11 +150,11 @@ test("overlay projection scales proportionally when overlay and template spans d
   provenance.addOverlayMapping(templateUri, overlayUri, scaledMapping);
 
   const hit = provenance.projectGeneratedSpan(overlayUri, { start: 2, end: 4 });
-  assert.ok(hit);
-  assert.equal(hit?.exprId, "scaled");
+  expect(hit).toBeTruthy();
+  expect(hit?.exprId).toBe("scaled");
   // overlay [0,10] -> html [500,530]; slice [2,4] => ratios 0.2..0.4 => [506,512]
-  assert.equal(hit?.edge.to.span.start, 506);
-  assert.equal(hit?.edge.to.span.end, 512);
+  expect(hit?.edge.to.span.start).toBe(506);
+  expect(hit?.edge.to.span.end).toBe(512);
 });
 
 test("projectGeneratedSpan breaks ties on member depth after overlap and span length", () => {
@@ -194,12 +193,12 @@ test("projectGeneratedSpan breaks ties on member depth after overlap and span le
   provenance.addOverlayMapping(templateUri, overlayUri, tieMapping);
 
   const hit = provenance.projectGeneratedSpan(overlayUri, { start: 5, end: 8 });
-  assert.ok(hit);
-  assert.equal(hit?.memberPath, "user.name");
-  assert.equal(hit?.exprId, "deep");
+  expect(hit).toBeTruthy();
+  expect(hit?.memberPath).toBe("user.name");
+  expect(hit?.exprId).toBe("deep");
   // overlay [0,10] -> html [200,210]; slice [5,8] => [205,208]
-  assert.equal(hit?.edge.to.span.start, 205);
-  assert.equal(hit?.edge.to.span.end, 208);
+  expect(hit?.edge.to.span.start).toBe(205);
+  expect(hit?.edge.to.span.end).toBe(208);
 });
 
 test("member selection prefers narrower spans before deeper paths", () => {
@@ -232,10 +231,10 @@ test("member selection prefers narrower spans before deeper paths", () => {
   provenance.addOverlayMapping(templateUri, overlayUri, narrowVsDeep);
 
   const hit = provenance.lookupGenerated(overlayUri, 5);
-  assert.ok(hit);
-  assert.equal(hit?.edge.kind, "overlayMember");
+  expect(hit).toBeTruthy();
+  expect(hit?.edge.kind).toBe("overlayMember");
   // Even though the deeper path exists, the narrower span wins first.
-  assert.equal(hit?.memberPath, "user");
+  expect(hit?.memberPath).toBe("user");
 });
 
 test("member specificity prefers deeper member segments when multiple match", () => {
@@ -244,14 +243,14 @@ test("member specificity prefers deeper member segments when multiple match", ()
 
   const offset = 22; // inside both 'user' and 'user.name'
   const overlayHit = provenance.lookupGenerated(overlayUri, offset);
-  assert.ok(overlayHit);
-  assert.equal(overlayHit?.memberPath, "user.name");
-  assert.equal(overlayHit?.edge.kind, "overlayMember");
+  expect(overlayHit).toBeTruthy();
+  expect(overlayHit?.memberPath).toBe("user.name");
+  expect(overlayHit?.edge.kind).toBe("overlayMember");
 
   const templateHit = provenance.lookupSource(templateUri, 115);
-  assert.ok(templateHit);
-  assert.equal(templateHit?.memberPath, "user.name");
-  assert.equal(templateHit?.edge.kind, "overlayMember");
+  expect(templateHit).toBeTruthy();
+  expect(templateHit?.memberPath).toBe("user.name");
+  expect(templateHit?.edge.kind).toBe("overlayMember");
 });
 
 test("lookupGenerated falls back to overlayExpr when no member segment covers offset", () => {
@@ -279,17 +278,17 @@ test("lookupGenerated falls back to overlayExpr when no member segment covers of
 
   // Inside the member segment -> we get the member edge.
   const insideSegment = provenance.lookupGenerated(overlayUri, 57);
-  assert.ok(insideSegment);
-  assert.equal(insideSegment?.exprId, "expr2");
-  assert.equal(insideSegment?.memberPath, "thing");
-  assert.equal(insideSegment?.edge.kind, "overlayMember");
+  expect(insideSegment).toBeTruthy();
+  expect(insideSegment?.exprId).toBe("expr2");
+  expect(insideSegment?.memberPath).toBe("thing");
+  expect(insideSegment?.edge.kind).toBe("overlayMember");
 
   // Inside the expression, but outside any member segment -> fallback to overlayExpr.
   const outsideSegment = provenance.lookupGenerated(overlayUri, 70);
-  assert.ok(outsideSegment);
-  assert.equal(outsideSegment?.exprId, "expr2");
-  assert.equal(outsideSegment?.memberPath, undefined);
-  assert.equal(outsideSegment?.edge.kind, "overlayExpr");
+  expect(outsideSegment).toBeTruthy();
+  expect(outsideSegment?.exprId).toBe("expr2");
+  expect(outsideSegment?.memberPath).toBeUndefined();
+  expect(outsideSegment?.edge.kind).toBe("overlayExpr");
 });
 
 test("provenance stats aggregate edges by kind and document", () => {
@@ -298,44 +297,44 @@ test("provenance stats aggregate edges by kind and document", () => {
 
   const stats = provenance.stats();
   // overlay: 1 overlayExpr + 2 overlayMember
-  assert.equal(stats.totalEdges, 3);
-  assert.equal(stats.byKind.overlayExpr, 1);
-  assert.equal(stats.byKind.overlayMember, 2);
-  assert.equal(stats.byKind.custom, 0);
+  expect(stats.totalEdges).toBe(3);
+  expect(stats.byKind.overlayExpr).toBe(1);
+  expect(stats.byKind.overlayMember).toBe(2);
+  expect(stats.byKind.custom).toBe(0);
 
   const byDoc = new Map(stats.documents.map((d) => [d.uri, d]));
 
   const overlayDoc = byDoc.get(overlayUri);
-  assert.ok(overlayDoc);
-  assert.equal(overlayDoc.edges, 3);
-  assert.equal(overlayDoc.byKind.overlayExpr, 1);
-  assert.equal(overlayDoc.byKind.overlayMember, 2);
+  expect(overlayDoc).toBeTruthy();
+  expect(overlayDoc.edges).toBe(3);
+  expect(overlayDoc.byKind.overlayExpr).toBe(1);
+  expect(overlayDoc.byKind.overlayMember).toBe(2);
 
   const templateDoc = byDoc.get(templateUri);
-  assert.ok(templateDoc);
-  assert.equal(templateDoc.edges, 3);
-  assert.equal(templateDoc.byKind.overlayExpr, 1);
-  assert.equal(templateDoc.byKind.overlayMember, 2);
+  expect(templateDoc).toBeTruthy();
+  expect(templateDoc.edges).toBe(3);
+  expect(templateDoc.byKind.overlayExpr).toBe(1);
+  expect(templateDoc.byKind.overlayMember).toBe(2);
 
   const templateStats = provenance.templateStats(templateUri);
-  assert.equal(templateStats.templateUri, templateUri);
-  assert.equal(templateStats.overlayUri, overlayUri);
-  assert.equal(templateStats.totalEdges, 3);
-  assert.equal(templateStats.overlayEdges, 3);
+  expect(templateStats.templateUri).toBe(templateUri);
+  expect(templateStats.overlayUri).toBe(overlayUri);
+  expect(templateStats.totalEdges).toBe(3);
+  expect(templateStats.overlayEdges).toBe(3);
 });
 
 test("provenance pruning drops edges and overlay cache entries", () => {
   const provenance = new InMemoryProvenanceIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
-  assert.ok(provenance.findByGenerated(overlayUri, 22).length > 0);
+  expect(provenance.findByGenerated(overlayUri, 22).length > 0).toBeTruthy();
   provenance.removeDocument(templateUri);
 
-  assert.equal(provenance.findByGenerated(overlayUri, 22).length, 0);
-  assert.equal(provenance.getOverlayMapping(templateUri), null);
-  assert.equal(provenance.getOverlayUri(templateUri), null);
+  expect(provenance.findByGenerated(overlayUri, 22).length).toBe(0);
+  expect(provenance.getOverlayMapping(templateUri)).toBeNull();
+  expect(provenance.getOverlayUri(templateUri)).toBeNull();
 
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
   provenance.removeDocument(overlayUri);
-  assert.equal(provenance.findBySource(templateUri, 115).length, 0);
+  expect(provenance.findBySource(templateUri, 115).length).toBe(0);
 });

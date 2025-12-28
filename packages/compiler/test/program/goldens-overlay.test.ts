@@ -1,5 +1,4 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, test, expect } from "vitest";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,33 +28,33 @@ describe("TemplateBuildService emits overlay goldens and provenance", () => {
       const artifact = build.getOverlay(uri);
       const derived = deriveTemplatePaths(uri, { isJs: false });
 
-      assert.equal(artifact.overlay.uri, canonicalDocumentUri(overlayPath).uri);
-      assert.equal(artifact.overlay.path, derived.overlay.path);
-      assert.equal(artifact.overlay.baseName, derived.overlay.baseName);
-      assert.equal(artifact.overlay.text, expectedOverlay);
-      assert.ok(artifact.mapping.entries.length > 0, "mapping should contain overlay->template spans");
+      expect(artifact.overlay.uri).toBe(canonicalDocumentUri(overlayPath).uri);
+      expect(artifact.overlay.path).toBe(derived.overlay.path);
+      expect(artifact.overlay.baseName).toBe(derived.overlay.baseName);
+      expect(artifact.overlay.text).toBe(expectedOverlay);
+      expect(artifact.mapping.entries.length > 0, "mapping should contain overlay->template spans").toBeTruthy();
 
       const stats = program.provenance.templateStats(uri);
-      assert.equal(stats.overlayUri, artifact.overlay.uri);
-      assert.ok(stats.overlayEdges > 0, "overlay provenance edges should be indexed");
+      expect(stats.overlayUri).toBe(artifact.overlay.uri);
+      expect(stats.overlayEdges > 0, "overlay provenance edges should be indexed").toBeTruthy();
 
       const entry = artifact.mapping.entries.find((candidate) => candidate.htmlSpan.end > candidate.htmlSpan.start) ?? artifact.mapping.entries[0];
-      assert.ok(entry, "should have at least one mapping entry");
+      expect(entry, "should have at least one mapping entry").toBeTruthy();
 
       const overlayHit = program.provenance.lookupGenerated(artifact.overlay.uri, entry.overlaySpan.start);
-      assert.ok(overlayHit, "overlay hit should exist");
-      assert.equal(overlayHit?.exprId, entry.exprId, "overlay hit should surface expr id");
+      expect(overlayHit, "overlay hit should exist").toBeTruthy();
+      expect(overlayHit?.exprId, "overlay hit should surface expr id").toBe(entry.exprId);
 
       if (entry.htmlSpan.end > entry.htmlSpan.start) {
         const templateHit = program.provenance.lookupSource(uri, entry.htmlSpan.start);
-        assert.ok(templateHit, "template hit should exist");
-        assert.equal(templateHit?.exprId, entry.exprId, "template hit should surface expr id");
+        expect(templateHit, "template hit should exist").toBeTruthy();
+        expect(templateHit?.exprId, "template hit should surface expr id").toBe(entry.exprId);
       }
 
       const memberSeg = entry.segments?.[0];
       if (memberSeg) {
         const memberHit = program.provenance.lookupGenerated(artifact.overlay.uri, memberSeg.overlaySpan.start);
-        assert.equal(memberHit?.memberPath, memberSeg.path, "member segment should be tagged for rename/navigation");
+        expect(memberHit?.memberPath, "member segment should be tagged for rename/navigation").toBe(memberSeg.path);
       }
     });
   }

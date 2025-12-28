@@ -1,5 +1,4 @@
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { AttrSyntax, AttributeParser, createDefaultSyntax, registerBuiltins } from "../../out/compiler/index.js";
 
@@ -8,64 +7,64 @@ describe("attribute parser / built-ins", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse("value.bind", "1");
 
-    assert.equal(attr.rawName, "value.bind");
-    assert.equal(attr.rawValue, "1");
-    assert.equal(attr.target, "value");
-    assert.equal(attr.command, "bind");
-    assert.equal(attr.parts, null);
+    expect(attr.rawName).toBe("value.bind");
+    expect(attr.rawValue).toBe("1");
+    expect(attr.target).toBe("value");
+    expect(attr.command).toBe("bind");
+    expect(attr.parts).toBe(null);
   });
 
   test("parses triple-part binding (PART.PART.PART)", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse("foo.bar.two-way", "v");
 
-    assert.equal(attr.target, "foo.bar");
-    assert.equal(attr.command, "two-way");
-    assert.equal(attr.parts, null);
+    expect(attr.target).toBe("foo.bar");
+    expect(attr.command).toBe("two-way");
+    expect(attr.parts).toBe(null);
   });
 
   test("normalizes view-model.ref to component.ref", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse("view-model.ref", "vm");
 
-    assert.equal(attr.target, "component");
-    assert.equal(attr.command, "ref");
+    expect(attr.target).toBe("component");
+    expect(attr.command).toBe("ref");
   });
 
   test("parses event capture with modifier", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse("click.capture:once", "handler");
 
-    assert.equal(attr.target, "click");
-    assert.equal(attr.command, "capture");
-    assert.deepEqual(attr.parts, ["click", "once"]);
+    expect(attr.target).toBe("click");
+    expect(attr.command).toBe("capture");
+    expect(attr.parts).toEqual(["click", "once"]);
   });
 
   test("parses colon-prefixed bind", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse(":class", "active");
 
-    assert.equal(attr.target, "class");
-    assert.equal(attr.command, "bind");
-    assert.equal(attr.parts, null);
+    expect(attr.target).toBe("class");
+    expect(attr.command).toBe("bind");
+    expect(attr.parts).toBe(null);
   });
 
   test("prefers @PART:PART over @PART and preserves trigger shape", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse("@click:once", "onClick");
 
-    assert.equal(attr.target, "click");
-    assert.equal(attr.command, "trigger");
-    assert.deepEqual(attr.parts, ["click", "trigger", "once"]);
+    expect(attr.target).toBe("click");
+    expect(attr.command).toBe("trigger");
+    expect(attr.parts).toEqual(["click", "trigger", "once"]);
   });
 
   test("falls back to identity when no pattern matches", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse("data-foo", "bar");
 
-    assert.equal(attr.target, "data-foo");
-    assert.equal(attr.command, null);
-    assert.equal(attr.parts, null);
+    expect(attr.target).toBe("data-foo");
+    expect(attr.command).toBe(null);
+    expect(attr.parts).toBe(null);
   });
 });
 
@@ -80,20 +79,19 @@ describe("attribute parser / precedence and lifecycle", () => {
     });
 
     const attr = parser.parse("foo.bar", "v");
-    assert.equal(attr.command, "static");
-    assert.equal(attr.target, "static-target");
+    expect(attr.command).toBe("static");
+    expect(attr.target).toBe("static-target");
   });
 
   test("rejects registrations after first parse", () => {
     const parser = registerBuiltins(new AttributeParser());
     parser.parse("value.bind", "v");
 
-    assert.throws(
+    expect(
       () => parser.registerPattern([{ pattern: "x", symbols: "" }], {
         x: (rawName, rawValue, parts) => new AttrSyntax(rawName, rawValue, parts[0] ?? "x", "x"),
       }),
-      /AttributeParser already used/,
-    );
+    ).toThrow(/AttributeParser already used/);
   });
 
   test("rejects duplicate patterns", () => {
@@ -102,12 +100,11 @@ describe("attribute parser / precedence and lifecycle", () => {
       foo: (rawName, rawValue) => new AttrSyntax(rawName, rawValue, "foo", null),
     });
 
-    assert.throws(
+    expect(
       () => parser.registerPattern([{ pattern: "foo", symbols: "" }], {
         foo: (rawName, rawValue) => new AttrSyntax(rawName, rawValue, "dup", null),
       }),
-      /Duplicate attribute pattern "foo"/,
-    );
+    ).toThrow(/Duplicate attribute pattern "foo"/);
   });
 
   test("calls handler even when cache hits (value-dependent)", () => {
@@ -123,9 +120,9 @@ describe("attribute parser / precedence and lifecycle", () => {
     const first = parser.parse("x", "a");
     const second = parser.parse("x", "b");
 
-    assert.equal(calls, 2);
-    assert.equal(first.target, "a");
-    assert.equal(second.target, "b");
+    expect(calls).toBe(2);
+    expect(first.target).toBe("a");
+    expect(second.target).toBe("b");
   });
 
   test("binds handlers to their implementation object", () => {
@@ -140,16 +137,16 @@ describe("attribute parser / precedence and lifecycle", () => {
     parser.registerPattern([{ pattern: "foo", symbols: "" }], impl);
 
     parser.parse("foo", "v");
-    assert.equal(impl.seenThis, impl);
+    expect(impl.seenThis).toBe(impl);
   });
 
   test("dynamic segments must be non-empty", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse("value..bind", "v");
 
-    assert.equal(attr.command, null);
-    assert.equal(attr.target, "value..bind");
-    assert.equal(attr.parts, null);
+    expect(attr.command).toBe(null);
+    expect(attr.target).toBe("value..bind");
+    expect(attr.parts).toBe(null);
   });
 
   test("ties favor more symbol runs when statics/dynamics equal", () => {
@@ -164,9 +161,9 @@ describe("attribute parser / precedence and lifecycle", () => {
 
     const attr = parser.parse("a.foo:bar", "v");
 
-    assert.equal(attr.command, "more-symbols");
-    assert.equal(attr.target, "dot-form");
-    assert.deepEqual(attr.parts, ["foo", "bar"]); // picked the pattern that splits at the dot
+    expect(attr.command).toBe("more-symbols");
+    expect(attr.target).toBe("dot-form");
+    expect(attr.parts).toEqual(["foo", "bar"]); // picked the pattern that splits at the dot
   });
 });
 
@@ -413,16 +410,16 @@ describe("attribute parser / legacy parity matrices", () => {
           const attr = parser.parse(raw, "foo");
 
           if (match === null) {
-            assert.equal(attr.command, null);
-            assert.equal(attr.target, raw);
-            assert.equal(attr.parts, null);
+            expect(attr.command).toBe(null);
+            expect(attr.target).toBe(raw);
+            expect(attr.parts).toBe(null);
             return;
           }
 
           const expectedParts = normalizeParts(match, parts);
-          assert.equal(attr.command, match);
-          assert.equal(attr.target, `target:${match}`);
-          assert.deepEqual(attr.parts, expectedParts);
+          expect(attr.command).toBe(match);
+          expect(attr.target).toBe(`target:${match}`);
+          expect(attr.parts).toEqual(expectedParts);
         });
       }
     });

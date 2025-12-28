@@ -1,5 +1,4 @@
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { ExpressionParser, splitInterpolationText, toSourceFileId } from "../../out/compiler/index.js";
 
@@ -26,52 +25,52 @@ describe("interpolation splitting", () => {
   test("returns null when there is no interpolation", () => {
     const src = "just plain text";
     const split = splitInterpolationText(src);
-    assert.equal(split, null);
+    expect(split).toBeNull();
   });
 
   test("unterminated ${ yields null", () => {
     const src = "Hello ${name";
     const split = splitInterpolationText(src);
-    assert.equal(split, null);
+    expect(split).toBeNull();
   });
 
   test("simple hello ${name}", () => {
     const src = "Hello ${name}";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
 
-    assert.deepEqual(split.parts, ["Hello ", ""]);
-    assert.equal(split.exprSpans.length, 1);
+    expect(split.parts).toEqual(["Hello ", ""]);
+    expect(split.exprSpans.length).toBe(1);
 
     const span0 = split.exprSpans[0];
-    assert.equal(src.slice(span0.start, span0.end), "name");
-    assert.equal(span0.start, 8);
-    assert.equal(span0.end, 12);
+    expect(src.slice(span0.start, span0.end)).toBe("name");
+    expect(span0.start).toBe(8);
+    expect(span0.end).toBe(12);
   });
 
   test("adjacent interpolations ${a}${b}", () => {
     const src = "${a}${b}";
     const split = splitInterpolationText(src);
-    assert.ok(split);
+    expect(split).toBeTruthy();
 
-    assert.deepEqual(split.parts, ["", "", ""]);
-    assert.equal(split.exprSpans.length, 2);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "a");
-    assert.equal(src.slice(split.exprSpans[1].start, split.exprSpans[1].end), "b");
-    assert.equal(split.exprSpans[0].start, 2);
-    assert.equal(split.exprSpans[0].end, 3);
+    expect(split.parts).toEqual(["", "", ""]);
+    expect(split.exprSpans.length).toBe(2);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("a");
+    expect(src.slice(split.exprSpans[1].start, split.exprSpans[1].end)).toBe("b");
+    expect(split.exprSpans[0].start).toBe(2);
+    expect(split.exprSpans[0].end).toBe(3);
   });
 
   test("nested braces and strings inside interpolation", () => {
     const src = "x ${ foo ? { y: 1 } : { y: 2 } } y";
     const split = splitInterpolationText(src);
-    assert.ok(split);
+    expect(split).toBeTruthy();
 
-    assert.deepEqual(split.parts, ["x ", " y"]);
-    assert.equal(split.exprSpans.length, 1);
+    expect(split.parts).toEqual(["x ", " y"]);
+    expect(split.exprSpans.length).toBe(1);
     const exprText = src.slice(split.exprSpans[0].start, split.exprSpans[0].end);
-    assert.equal(exprText, " foo ? { y: 1 } : { y: 2 } ");
-    assert.equal(split.exprSpans[0].start, 4);
+    expect(exprText).toBe(" foo ? { y: 1 } : { y: 2 } ");
+    expect(split.exprSpans[0].start).toBe(4);
   });
 
   // ==========================================================================
@@ -83,93 +82,93 @@ describe("interpolation splitting", () => {
   test("double quotes surrounding interpolation: \"${x}\"", () => {
     const src = '"${x}"';
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ['"', '"']);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(['"', '"']);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("x");
   });
 
   test("single quotes surrounding interpolation: '${x}'", () => {
     const src = "'${x}'";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["'", "'"]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["'", "'"]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("x");
   });
 
   test("backticks surrounding interpolation: `${x}`", () => {
     const src = "`${x}`";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["`", "`"]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["`", "`"]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("x");
   });
 
   test("multiple interpolations with quotes: \"${a}\" and '${b}'", () => {
     const src = '"${a}" and \'${b}\'';
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ['"', '" and \'', "'"]);
-    assert.equal(split.exprSpans.length, 2);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "a");
-    assert.equal(src.slice(split.exprSpans[1].start, split.exprSpans[1].end), "b");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(['"', '" and \'', "'"]);
+    expect(split.exprSpans.length).toBe(2);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("a");
+    expect(src.slice(split.exprSpans[1].start, split.exprSpans[1].end)).toBe("b");
   });
 
   test("realistic pattern: Name: \"${name}\" (${len} chars)", () => {
     const src = 'Name: "${name}" (${len} chars)';
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ['Name: "', '" (', ' chars)']);
-    assert.equal(split.exprSpans.length, 2);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "name");
-    assert.equal(src.slice(split.exprSpans[1].start, split.exprSpans[1].end), "len");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(['Name: "', '" (', ' chars)']);
+    expect(split.exprSpans.length).toBe(2);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("name");
+    expect(src.slice(split.exprSpans[1].start, split.exprSpans[1].end)).toBe("len");
   });
 
   test("apostrophe after interpolation: It's ${name}'s turn", () => {
     const src = "It's ${name}'s turn";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["It's ", "'s turn"]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "name");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["It's ", "'s turn"]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("name");
   });
 
   test("quote inside expression (should still work): ${obj[\"key\"]}", () => {
     const src = '${obj["key"]}';
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["", ""]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), 'obj["key"]');
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["", ""]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe('obj["key"]');
   });
 
   test("quotes both outside and inside: \"${obj['k']}\"", () => {
     const src = "\"${obj['k']}\"";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ['"', '"']);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "obj['k']");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(['"', '"']);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("obj['k']");
   });
 
   test("unmatched quote before interpolation: say \"${msg}", () => {
     const src = 'say "${msg}';
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ['say "', '']);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "msg");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(['say "', '']);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("msg");
   });
 
   test("unmatched quote after interpolation: ${msg}\" said", () => {
     const src = '${msg}" said';
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ['', '" said']);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "msg");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(['', '" said']);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("msg");
   });
 
   // ==========================================================================
@@ -181,55 +180,55 @@ describe("interpolation splitting", () => {
     // The entire \${x} is treated as literal text, no interpolation detected.
     const src = "\\${x}";
     const split = splitInterpolationText(src);
-    assert.equal(split, null, "escaped interpolation should return null");
+    expect(split, "escaped interpolation should return null").toBeNull();
   });
 
   test("escaped interpolation with following real interpolation: \\${a} ${b}", () => {
     const src = "\\${a} ${b}";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
     // Only ${b} is parsed as interpolation; \${a} is escaped literal text
-    assert.deepEqual(split.parts, ["\\${a} ", ""]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "b");
+    expect(split.parts).toEqual(["\\${a} ", ""]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("b");
   });
 
   test("whitespace inside expression: ${  name  }", () => {
     const src = "${  name  }";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["", ""]);
-    assert.equal(split.exprSpans.length, 1);
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["", ""]);
+    expect(split.exprSpans.length).toBe(1);
     // The expression text includes the whitespace
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "  name  ");
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("  name  ");
   });
 
   test("closing brace immediately after expression: ${a}}", () => {
     // Extra closing brace is literal text
     const src = "${a}}";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["", "}"]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "a");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["", "}"]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("a");
   });
 
   test("template literal inside interpolation: ${`nested ${x}`}", () => {
     const src = "${`nested ${x}`}";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["", ""]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "`nested ${x}`");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["", ""]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("`nested ${x}`");
   });
 
   test("newlines in static text around interpolation", () => {
     const src = "line1\n${x}\nline3";
     const split = splitInterpolationText(src);
-    assert.ok(split, "expected splitInterpolationText to return a result");
-    assert.deepEqual(split.parts, ["line1\n", "\nline3"]);
-    assert.equal(split.exprSpans.length, 1);
-    assert.equal(src.slice(split.exprSpans[0].start, split.exprSpans[0].end), "x");
+    expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
+    expect(split.parts).toEqual(["line1\n", "\nline3"]);
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("x");
   });
 });
 
@@ -239,20 +238,20 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, ["Hello ", ""]);
-    assert.equal(ast.expressions.length, 1);
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual(["Hello ", ""]);
+    expect(ast.expressions.length).toBe(1);
 
     const expr = ast.expressions[0];
-    assert.equal(expr.$kind, "AccessScope");
-    assert.equal(expr.name, "name");
-    assert.equal(expr.ancestor, 0);
+    expect(expr.$kind).toBe("AccessScope");
+    expect(expr.name).toBe("name");
+    expect(expr.ancestor).toBe(0);
 
     // Interpolation span should cover the whole source.
-    assert.equal(src.slice(ast.span.start, ast.span.end), src);
+    expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
 
     // Expression span should slice back to the inner expression text.
-    assert.equal(src.slice(expr.span.start, expr.span.end), "name");
+    expect(src.slice(expr.span.start, expr.span.end)).toBe("name");
   });
 
   test("rebases spans when parse context includes file + baseSpan", () => {
@@ -263,14 +262,14 @@ describe("ExpressionParser / Interpolation AST", () => {
 
     const ast = parser.parse(src, "Interpolation", { baseSpan });
 
-    assert.equal(ast.span.file, file);
-    assert.equal(ast.span.start, baseSpan.start);
-    assert.equal(ast.span.end, baseSpan.end);
+    expect(ast.span.file).toBe(file);
+    expect(ast.span.start).toBe(baseSpan.start);
+    expect(ast.span.end).toBe(baseSpan.end);
 
     const expr = ast.expressions[0];
-    assert.equal(expr.span.file, file);
-    assert.equal(expr.span.start, baseSpan.start + 8);
-    assert.equal(expr.span.end, baseSpan.start + 12);
+    expect(expr.span.file).toBe(file);
+    expect(expr.span.start).toBe(baseSpan.start + 8);
+    expect(expr.span.end).toBe(baseSpan.start + 12);
   });
 
   test("multiple interpolations: ${a} and ${b}", () => {
@@ -278,18 +277,18 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, ["", " and ", ""]);
-    assert.equal(ast.expressions.length, 2);
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual(["", " and ", ""]);
+    expect(ast.expressions.length).toBe(2);
 
     const [aExpr, bExpr] = ast.expressions;
-    assert.equal(aExpr.$kind, "AccessScope");
-    assert.equal(aExpr.name, "a");
-    assert.equal(bExpr.$kind, "AccessScope");
-    assert.equal(bExpr.name, "b");
+    expect(aExpr.$kind).toBe("AccessScope");
+    expect(aExpr.name).toBe("a");
+    expect(bExpr.$kind).toBe("AccessScope");
+    expect(bExpr.name).toBe("b");
 
-    assert.equal(src.slice(aExpr.span.start, aExpr.span.end), "a");
-    assert.equal(src.slice(bExpr.span.start, bExpr.span.end), "b");
+    expect(src.slice(aExpr.span.start, aExpr.span.end)).toBe("a");
+    expect(src.slice(bExpr.span.start, bExpr.span.end)).toBe("b");
   });
 
   test("complex expression with ternary: ${cond ? 'a' : b}", () => {
@@ -297,24 +296,24 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, ["Value: ", ""]);
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual(["Value: ", ""]);
 
-    assert.equal(ast.expressions.length, 1);
+    expect(ast.expressions.length).toBe(1);
     const expr = ast.expressions[0];
 
     // Shape: Conditional(cond, 'a', b)
-    assert.equal(expr.$kind, "Conditional");
-    assert.equal(expr.condition.$kind, "AccessScope");
-    assert.equal(expr.condition.name, "cond");
-    assert.equal(expr.yes.$kind, "PrimitiveLiteral");
-    assert.equal(expr.yes.value, "a");
-    assert.equal(expr.no.$kind, "AccessScope");
-    assert.equal(expr.no.name, "b");
+    expect(expr.$kind).toBe("Conditional");
+    expect(expr.condition.$kind).toBe("AccessScope");
+    expect(expr.condition.name).toBe("cond");
+    expect(expr.yes.$kind).toBe("PrimitiveLiteral");
+    expect(expr.yes.value).toBe("a");
+    expect(expr.no.$kind).toBe("AccessScope");
+    expect(expr.no.name).toBe("b");
 
     // Expression span should slice back to the ternary body (without `${` / `}`).
     const exprText = src.slice(expr.span.start, expr.span.end);
-    assert.equal(exprText, "cond ? 'a' : b");
+    expect(exprText).toBe("cond ? 'a' : b");
   });
 
   test("no interpolation markers yields parts[0] only", () => {
@@ -322,10 +321,10 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, [src]);
-    assert.equal(ast.expressions.length, 0);
-    assert.equal(src.slice(ast.span.start, ast.span.end), src);
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual([src]);
+    expect(ast.expressions.length).toBe(0);
+    expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
   test("unterminated ${ in text yields plain parts", () => {
@@ -333,18 +332,18 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, [src]);
-    assert.equal(ast.expressions.length, 0);
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual([src]);
+    expect(ast.expressions.length).toBe(0);
   });
 
   test("invalid inner expression becomes BadExpression", () => {
     const src = "Hello ${1 =}";
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
-    assert.equal(ast.expressions[0].$kind, "BadExpression");
-    assert.equal(ast.expressions[0].message, "Left-hand side is not assignable");
-    assert.ok(ast.expressions[0].span.start >= 7);
+    expect(ast.expressions[0].$kind).toBe("BadExpression");
+    expect(ast.expressions[0].message).toBe("Left-hand side is not assignable");
+    expect(ast.expressions[0].span.start >= 7).toBe(true);
   });
 
   // ==========================================================================
@@ -357,11 +356,11 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, ['"', '"']);
-    assert.equal(ast.expressions.length, 1);
-    assert.equal(ast.expressions[0].$kind, "AccessScope");
-    assert.equal(ast.expressions[0].name, "name");
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual(['"', '"']);
+    expect(ast.expressions.length).toBe(1);
+    expect(ast.expressions[0].$kind).toBe("AccessScope");
+    expect(ast.expressions[0].name).toBe("name");
   });
 
   test("AST: realistic pattern with quotes and multiple interpolations", () => {
@@ -369,19 +368,19 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, ['Name: "', '" (', ' chars)']);
-    assert.equal(ast.expressions.length, 2);
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual(['Name: "', '" (', ' chars)']);
+    expect(ast.expressions.length).toBe(2);
 
     const [nameExpr, lenExpr] = ast.expressions;
-    assert.equal(nameExpr.$kind, "AccessScope");
-    assert.equal(nameExpr.name, "name");
-    assert.equal(lenExpr.$kind, "AccessScope");
-    assert.equal(lenExpr.name, "len");
+    expect(nameExpr.$kind).toBe("AccessScope");
+    expect(nameExpr.name).toBe("name");
+    expect(lenExpr.$kind).toBe("AccessScope");
+    expect(lenExpr.name).toBe("len");
 
     // Verify spans point to correct positions
-    assert.equal(src.slice(nameExpr.span.start, nameExpr.span.end), "name");
-    assert.equal(src.slice(lenExpr.span.start, lenExpr.span.end), "len");
+    expect(src.slice(nameExpr.span.start, nameExpr.span.end)).toBe("name");
+    expect(src.slice(lenExpr.span.start, lenExpr.span.end)).toBe("len");
   });
 
   test("AST: quotes outside and keyed access inside", () => {
@@ -389,11 +388,11 @@ describe("ExpressionParser / Interpolation AST", () => {
     const parser = new ExpressionParser();
     const ast = parser.parse(src, "Interpolation");
 
-    assert.equal(ast.$kind, "Interpolation");
-    assert.deepEqual(ast.parts, ['"', '"']);
-    assert.equal(ast.expressions.length, 1);
-    assert.equal(ast.expressions[0].$kind, "AccessKeyed");
-    assert.equal(ast.expressions[0].object.name, "obj");
-    assert.equal(ast.expressions[0].key.value, "key");
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.parts).toEqual(['"', '"']);
+    expect(ast.expressions.length).toBe(1);
+    expect(ast.expressions[0].$kind).toBe("AccessKeyed");
+    expect(ast.expressions[0].object.name).toBe("obj");
+    expect(ast.expressions[0].key.value).toBe("key");
   });
 });

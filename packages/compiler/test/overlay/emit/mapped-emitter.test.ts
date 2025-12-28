@@ -1,5 +1,4 @@
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { ExpressionParser, emitMappedExpression } from "../../../out/compiler/index.js";
 
@@ -131,23 +130,23 @@ describe("Overlay mapped emitter", () => {
     test(c.name, () => {
       const ast = c.ast ?? parse(c.src, c.type ?? "IsProperty");
       const emitted = emitMappedExpression(ast);
-      assert.ok(emitted, "expected emit result");
-      assert.ok(typeof emitted.code === "string" && emitted.code.length > 0);
-      assert.ok(Array.isArray(emitted.segments));
+      expect(emitted, "expected emit result").toBeTruthy();
+      expect(typeof emitted.code === "string" && emitted.code.length > 0).toBeTruthy();
+      expect(Array.isArray(emitted.segments)).toBeTruthy();
       emitted.segments.forEach((seg) => {
-        assert.ok(seg.path && typeof seg.path === "string");
-        assert.ok(typeof seg.span.start === "number" && typeof seg.span.end === "number");
+        expect(seg.path && typeof seg.path === "string").toBeTruthy();
+        expect(typeof seg.span.start === "number" && typeof seg.span.end === "number").toBeTruthy();
       });
       if (c.expectSegments) {
         const paths = emitted.segments.map((s) => s.path);
         for (const exp of c.expectSegments) {
-          assert.ok(paths.includes(exp.path), `expected path ${exp.path} in segments: ${paths.join(", ")}`);
+          expect(paths.includes(exp.path), `expected path ${exp.path} in segments: ${paths.join(", ")}`).toBeTruthy();
         }
       }
       if (c.expectCode) {
-        assert.equal(emitted.code, c.expectCode);
-        assert.equal(emitted.segments.length, 0);
-        assert.ok(emitted.mappings.some((m) => m.source.start === (c.ast?.span.start ?? 0) && m.source.end === (c.ast?.span.end ?? 0)));
+        expect(emitted.code).toBe(c.expectCode);
+        expect(emitted.segments.length).toBe(0);
+        expect(emitted.mappings.some((m) => m.source.start === (c.ast?.span.start ?? 0) && m.source.end === (c.ast?.span.end ?? 0))).toBeTruthy();
       }
     });
   }

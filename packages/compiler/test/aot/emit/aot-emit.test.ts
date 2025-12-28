@@ -8,8 +8,7 @@
  * template-compiler.
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -322,33 +321,33 @@ describe("AOT Emit (aot:emit)", () => {
       }
 
       // Assertions
-      assert.ok(
+      expect(
         diff.missingInstructions.length === 0 && diff.extraInstructions.length === 0,
         `Instruction mismatch.` +
         fmtList("missing", diff.missingInstructions) +
         fmtList("extra", diff.extraInstructions) +
         "\nSee failures.json for details."
-      );
+      ).toBeTruthy();
 
       // Order mismatch assertion (for order-sensitive tests)
       if (orderSensitive && diff.orderMismatches?.length > 0) {
         const orderMsg = diff.orderMismatches.map((m) =>
           `[${m.position}] expected ${instructionKey(m.expected)}, got ${instructionKey(m.actual)}`
         ).join("\n  ");
-        assert.fail(`Instruction order mismatch:\n  ${orderMsg}`);
+        expect.fail(`Instruction order mismatch:\n  ${orderMsg}`);
       }
 
-      assert.ok(
+      expect(
         diff.missingNested.length === 0 && diff.extraNested.length === 0,
         `Nested template mismatch.` +
         fmtList("missing", diff.missingNested) +
         fmtList("extra", diff.extraNested)
-      );
+      ).toBeTruthy();
 
-      assert.ok(
+      expect(
         diff.countMismatches.length === 0,
         `Count mismatch: ${diff.countMismatches.join(", ")}`
-      );
+      ).toBeTruthy();
     });
   }
 });

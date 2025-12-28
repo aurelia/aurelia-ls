@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 
 import {
   DefaultTemplateBuildService,
@@ -20,27 +19,27 @@ test("build service exposes canonical overlay artifacts", () => {
   const derived = deriveTemplatePaths(uri, { isJs: false });
   const canonicalTemplate = canonicalDocumentUri(uri);
 
-  assert.equal(artifact.template.uri, canonicalTemplate.uri);
-  assert.equal(artifact.template.path, canonicalTemplate.path);
-  assert.equal(artifact.template.version, 1);
-  assert.ok(artifact.template.contentHash.length > 0);
+  expect(artifact.template.uri).toBe(canonicalTemplate.uri);
+  expect(artifact.template.path).toBe(canonicalTemplate.path);
+  expect(artifact.template.version).toBe(1);
+  expect(artifact.template.contentHash.length > 0).toBeTruthy();
 
-  assert.equal(artifact.overlay.uri, canonicalDocumentUri(derived.overlay.uri).uri);
-  assert.equal(artifact.overlay.path, derived.overlay.path);
-  assert.equal(artifact.overlay.baseName, derived.overlay.baseName);
-  assert.equal(artifact.overlay.version, artifact.template.version);
-  assert.ok(artifact.overlay.contentHash.length > 0);
-  assert.ok(artifact.overlay.text.length > 0);
+  expect(artifact.overlay.uri).toBe(canonicalDocumentUri(derived.overlay.uri).uri);
+  expect(artifact.overlay.path).toBe(derived.overlay.path);
+  expect(artifact.overlay.baseName).toBe(derived.overlay.baseName);
+  expect(artifact.overlay.version).toBe(artifact.template.version);
+  expect(artifact.overlay.contentHash.length > 0).toBeTruthy();
+  expect(artifact.overlay.text.length > 0).toBeTruthy();
 
-  assert.ok(artifact.mapping.entries.length > 0);
-  assert.ok(artifact.calls.length > 0);
+  expect(artifact.mapping.entries.length > 0).toBeTruthy();
+  expect(artifact.calls.length > 0).toBeTruthy();
 
   const repeated = build.getOverlay(uri);
-  assert.equal(repeated.overlay.contentHash, artifact.overlay.contentHash);
+  expect(repeated.overlay.contentHash).toBe(artifact.overlay.contentHash);
 
   program.upsertTemplate(uri, "<template>${value}!</template>");
   const updated = build.getOverlay(uri);
-  assert.notEqual(updated.template.contentHash, artifact.template.contentHash);
+  expect(updated.template.contentHash).not.toBe(artifact.template.contentHash);
 });
 
 test("build service respects custom overlay base name and JS extension", () => {
@@ -52,9 +51,9 @@ test("build service respects custom overlay base name and JS extension", () => {
   const derived = deriveTemplatePaths(uri, { isJs: true, overlayBaseName: "custom.overlay" });
   const overlay = build.getOverlay(uri);
 
-  assert.equal(overlay.overlay.baseName, "custom.overlay");
-  assert.equal(overlay.overlay.path, derived.overlay.path);
-  assert.ok(overlay.overlay.uri.endsWith(".js"));
+  expect(overlay.overlay.baseName).toBe("custom.overlay");
+  expect(overlay.overlay.path).toBe(derived.overlay.path);
+  expect(overlay.overlay.uri.endsWith(".js")).toBeTruthy();
 });
 
 test("language service delegates build calls when provided", () => {
@@ -90,15 +89,15 @@ test("language service delegates build calls when provided", () => {
   const buildService = {
     getOverlay(requestedUri) {
       overlayCalls += 1;
-      assert.equal(canonicalDocumentUri(requestedUri).uri, canonical.uri);
+      expect(canonicalDocumentUri(requestedUri).uri).toBe(canonical.uri);
       return overlayArtifact;
     },
   };
 
   const service = new DefaultTemplateLanguageService(program, { buildService });
 
-  assert.equal(service.getOverlay(uri), overlayArtifact);
-  assert.equal(overlayCalls, 1);
+  expect(service.getOverlay(uri)).toBe(overlayArtifact);
+  expect(overlayCalls).toBe(1);
 });
 
 function createVmReflection() {
