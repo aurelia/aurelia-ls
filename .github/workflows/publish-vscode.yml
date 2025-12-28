@@ -29,8 +29,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -50,7 +48,7 @@ jobs:
           PNPM_APPROVE_BUILDS: esbuild
 
       - name: Build packages
-        run: pnpm run build
+        run: npx tsc -b packages/compiler packages/resolution packages/language-server packages/vscode
         working-directory: .
 
       - name: Bump version

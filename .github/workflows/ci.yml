@@ -38,6 +38,47 @@ jobs:
         env:
           PNPM_APPROVE_BUILDS: esbuild
 
+      - name: Cache Aurelia node_modules
+        id: cache-aurelia-npm
+        uses: actions/cache@v4
+        with:
+          path: aurelia/node_modules
+          key: aurelia-node-modules-${{ hashFiles('aurelia/package-lock.json') }}
+
+      - name: Install Aurelia runtime dependencies
+        if: steps.cache-aurelia-npm.outputs.cache-hit != 'true'
+        run: npm ci
+        working-directory: aurelia
+
+      - name: Cache Aurelia build output
+        id: cache-aurelia-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            aurelia/packages/aurelia/dist
+            aurelia/packages/expression-parser/dist
+            aurelia/packages/fetch-client/dist
+            aurelia/packages/kernel/dist
+            aurelia/packages/metadata/dist
+            aurelia/packages/platform/dist
+            aurelia/packages/platform-browser/dist
+            aurelia/packages/route-recognizer/dist
+            aurelia/packages/router/dist
+            aurelia/packages/runtime/dist
+            aurelia/packages/runtime-html/dist
+            aurelia/packages/template-compiler/dist
+            aurelia/packages/testing/dist
+            aurelia/packages-tooling/plugin-conventions/dist
+            aurelia/packages-tooling/vite-plugin/dist
+          key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**', 'aurelia/packages-tooling/*/src/**') }}
+          restore-keys: |
+            aurelia-build-
+
+      - name: Build Aurelia runtime
+        if: steps.cache-aurelia-build.outputs.cache-hit != 'true'
+        run: npm run build
+        working-directory: aurelia
+
       - name: Lint
         run: pnpm lint:compiler
 
@@ -46,7 +87,7 @@ jobs:
           set -o pipefail
           pnpm -w build
           mkdir -p coverage/typecheck
-          pnpm exec c8 --all --include "packages/compiler/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -r json-summary -o coverage/typecheck node --test --test-reporter=spec | tee coverage/typecheck/coverage.log
+          pnpm exec c8 --all --include "packages/compiler/out/**/*.js" --exclude "**/*.test.*" --exclude "packages/**/test/**" -r text -r html -r lcov -r json -r json-summary -o coverage/typecheck node --test --test-reporter=spec packages/*/test/**/*.test.mjs | tee coverage/typecheck/coverage.log
 
       - name: Coverage summary (job)
         if: always()
