@@ -4,7 +4,9 @@ yarn.lock
 
 # Build outputs
 packages/**/out/
+packages/**/dist/
 **/*.tsbuildinfo
+*.vsix
 
 # VS Code / testing
 .vscode-test/
