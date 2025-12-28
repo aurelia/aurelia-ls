@@ -12,23 +12,16 @@
  * - GreetingCard (child): <div class="greeting-card"> with h2, p
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
-import { JSDOM } from "jsdom";
 import { DI, Registration } from "@aurelia/kernel";
-import {
-  Aurelia,
-  IPlatform,
-  StandardConfiguration,
-  CustomElement,
-} from "@aurelia/runtime-html";
-import { BrowserPlatform } from "@aurelia/platform-browser";
+import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
 
 import { compileWithAot } from "../out/aot.js";
 import { DEFAULT_SEMANTICS } from "../out/index.js";
 import { patchComponentDefinition } from "../out/ssr/patch.js";
 import { renderWithComponents } from "../out/ssr/render.js";
+import { countOccurrences, createHydrationContext } from "./_helpers/test-utils.js";
 
 // =============================================================================
 // Component Classes (mirroring child-component-app/src/)
@@ -128,18 +121,6 @@ function createSemanticsWithGreetingCard() {
   return sem;
 }
 
-/**
- * Count occurrences of a string in another string.
- */
-function countOccurrences(str, substr) {
-  let count = 0;
-  let pos = 0;
-  while ((pos = str.indexOf(substr, pos)) !== -1) {
-    count++;
-    pos += substr.length;
-  }
-  return count;
-}
 
 // =============================================================================
 // Persistent component classes (simulating Vite module cache)
@@ -239,57 +220,32 @@ describe("Child Component SSR E2E: Full App Structure", () => {
 
     // There should be exactly ONE div.app element
     const appDivCount = countOccurrences(result.html, 'class="app"');
-    assert.equal(
-      appDivCount,
-      1,
-      `Expected exactly 1 div.app element, but found ${appDivCount}. This indicates double rendering.`
-    );
+    expect(appDivCount, `DOUBLE RENDER: Found ${appDivCount} div.app elements (expected 1)`).toBe(1);
 
     // There should be exactly TWO greeting-card custom elements
     const greetingCardCount = countOccurrences(result.html, "<greeting-card");
-    assert.equal(
-      greetingCardCount,
-      2,
-      `Expected exactly 2 greeting-card elements, but found ${greetingCardCount}`
-    );
+    expect(greetingCardCount, `Found ${greetingCardCount} <greeting-card> elements (expected 2)`).toBe(2);
 
     // There should be exactly TWO div.greeting-card elements (one per greeting-card)
     const greetingCardDivCount = countOccurrences(result.html, 'class="greeting-card"');
-    assert.equal(
-      greetingCardDivCount,
-      2,
-      `Expected exactly 2 div.greeting-card elements, but found ${greetingCardDivCount}`
-    );
+    expect(greetingCardDivCount, `Found ${greetingCardDivCount} div.greeting-card elements (expected 2)`).toBe(2);
 
     // =======================================================================
     // Content verification
     // =======================================================================
 
     // Parent content should appear once
-    assert.ok(
-      result.html.includes("Child Component SSR Test"),
-      "Should render appTitle"
-    );
+    expect(result.html).toContain("Child Component SSR Test");
 
     // Timestamp should appear once
     const timestampCount = countOccurrences(result.html, "Rendered at:");
-    assert.equal(
-      timestampCount,
-      1,
-      `Expected exactly 1 "Rendered at:" text, but found ${timestampCount}`
-    );
+    expect(timestampCount, `Found ${timestampCount} "Rendered at:" occurrences (expected 1)`).toBe(1);
 
     // First greeting-card should show "Hello, World!" (bound from userName)
-    assert.ok(
-      result.html.includes("Hello, World!"),
-      "Should render first greeting with bound value"
-    );
+    expect(result.html).toContain("Hello, World!");
 
     // Second greeting-card should show "Hello, Aurelia!" (static attribute)
-    assert.ok(
-      result.html.includes("Hello, Aurelia!"),
-      "Should render second greeting with static value"
-    );
+    expect(result.html).toContain("Hello, Aurelia!");
   });
 
   /**
@@ -331,9 +287,9 @@ describe("Child Component SSR E2E: Full App Structure", () => {
     // - 2 h2 (greeting in each GreetingCard)
     // - 3 p (timestamp in MyApp + name info in each GreetingCard)
 
-    assert.equal(h1Count, 1, `Expected 1 h1, got ${h1Count}`);
-    assert.equal(h2Count, 2, `Expected 2 h2, got ${h2Count}`);
-    assert.equal(pCount, 3, `Expected 3 p elements, got ${pCount}`);
+    expect(h1Count).toBe(1);
+    expect(h2Count).toBe(2);
+    expect(pCount).toBe(3);
   });
 
   /**
@@ -389,11 +345,7 @@ describe("Child Component SSR E2E: Full App Structure", () => {
 
     // Check that we DON'T have double div.app
     const appDivMatches = htmlWithoutMarkers.match(/class="app"/g) || [];
-    assert.equal(
-      appDivMatches.length,
-      1,
-      `Expected 1 div.app, found ${appDivMatches.length}. Full HTML:\n${htmlWithoutMarkers}`
-    );
+    expect(appDivMatches.length).toBe(1);
 
     // Verify we have the expected content in the right order
     const expectedSequence = [
@@ -415,10 +367,7 @@ describe("Child Component SSR E2E: Full App Structure", () => {
     let lastIndex = -1;
     for (const expected of expectedSequence) {
       const index = htmlWithoutMarkers.indexOf(expected, lastIndex + 1);
-      assert.ok(
-        index > lastIndex,
-        `Expected "${expected}" to appear after position ${lastIndex}, but found at ${index}.\nHTML: ${htmlWithoutMarkers}`
-      );
+      expect(index).toBeGreaterThan(lastIndex);
       lastIndex = index;
     }
   });
@@ -509,12 +458,6 @@ describe("Child Component SSR E2E: Multi-Request (Vite Cache Simulation)", () =>
     console.log(`# "Child Component SSR Test": ${headerTextCount} (expected: 1)`);
     console.log(`# <greeting-card>: ${greetingCardElementCount} (expected: 2)`);
 
-    // Check for the specific double-rendering symptoms
-    const hasDefaultGreeting = result1.html.includes("Hello, Guest!");
-    const hasLiteralInterpolation = result1.html.includes('${name}');
-    const hasCorrectBoundGreeting = result1.html.includes("Hello, World!");
-    const hasCorrectStaticGreeting = result1.html.includes("Hello, Aurelia!");
-
     // Count occurrences to detect duplicates
     const guestCount = countOccurrences(result1.html, "Hello, Guest!");
     const worldCount = countOccurrences(result1.html, "Hello, World!");
@@ -524,98 +467,40 @@ describe("Child Component SSR E2E: Multi-Request (Vite Cache Simulation)", () =>
     console.log(`# "Hello, Guest!" count: ${guestCount} (expected: 0 - default should not appear)`);
     console.log(`# "Hello, World!" count: ${worldCount} (expected: 1 - from name.bind="userName")`);
     console.log(`# "Hello, Aurelia!" count: ${aureliaCount} (expected: 1 - from name="Aurelia")`);
-    console.log(`# Has literal "\${name}": ${hasLiteralInterpolation} (expected: false)`);
 
     // =======================================================================
     // ASSERTIONS - All of these should pass for correct rendering
     // =======================================================================
 
     // 1. Exactly ONE div.app (the parent component's root)
-    assert.equal(
-      appDivCount,
-      1,
-      `Expected exactly 1 <div class="app">, but found ${appDivCount}. ` +
-      `This indicates the parent component is being rendered multiple times.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(appDivCount, `DOUBLE RENDER: Found ${appDivCount} div.app (expected 1)`).toBe(1);
 
     // 2. Exactly TWO div.greeting-card (one per child component instance)
-    assert.equal(
-      greetingCardDivCount,
-      2,
-      `Expected exactly 2 <div class="greeting-card">, but found ${greetingCardDivCount}. ` +
-      `This indicates child components are being rendered wrong number of times.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(greetingCardDivCount, `Found ${greetingCardDivCount} div.greeting-card (expected 2)`).toBe(2);
 
     // 3. Exactly ONE h1 (the parent's title)
-    assert.equal(
-      h1Count,
-      1,
-      `Expected exactly 1 <h1>, but found ${h1Count}. ` +
-      `This indicates the parent component is being rendered multiple times.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(h1Count, `Found ${h1Count} <h1> (expected 1)`).toBe(1);
 
     // 4. Exactly TWO h2 (one per greeting-card child)
-    assert.equal(
-      h2Count,
-      2,
-      `Expected exactly 2 <h2>, but found ${h2Count}. ` +
-      `This indicates child components are being rendered wrong number of times.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(h2Count, `Found ${h2Count} <h2> (expected 2)`).toBe(2);
 
     // 5. The header text should appear exactly ONCE
-    assert.equal(
-      headerTextCount,
-      1,
-      `Expected "Child Component SSR Test" to appear exactly 1 time, but found ${headerTextCount}. ` +
-      `This indicates the parent is being rendered multiple times.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(headerTextCount, `Header text appeared ${headerTextCount} times (expected 1)`).toBe(1);
 
     // 6. Exactly TWO greeting-card custom elements
-    assert.equal(
-      greetingCardElementCount,
-      2,
-      `Expected exactly 2 <greeting-card> elements, but found ${greetingCardElementCount}.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(greetingCardElementCount, `Found ${greetingCardElementCount} <greeting-card> (expected 2)`).toBe(2);
 
     // 7. Should NOT have default "Guest" value - that indicates bindables not applied
-    assert.equal(
-      guestCount,
-      0,
-      `Found ${guestCount}x "Hello, Guest!" which indicates child components used default values ` +
-      `instead of bound values. Bindables are not being applied to child components.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(guestCount, `BINDABLES NOT APPLIED: "Hello, Guest!" appeared ${guestCount} times`).toBe(0);
 
     // 8. Should NOT have literal ${name} - that indicates interpolation not evaluated
-    assert.equal(
-      hasLiteralInterpolation,
-      false,
-      `Found literal "\${name}" which indicates interpolation was not evaluated. ` +
-      `This is a symptom of the double-rendering/manifest bug.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(result1.html, 'INTERPOLATION NOT EVALUATED: literal ${name} found in output').not.toContain('${name}');
 
     // 9. Should have correct bound value from name.bind="userName" (userName = "World")
-    assert.equal(
-      worldCount,
-      1,
-      `Expected exactly 1 "Hello, World!" (from name.bind="userName"), but found ${worldCount}.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(worldCount, `"Hello, World!" appeared ${worldCount} times (expected 1)`).toBe(1);
 
     // 10. Should have correct static value from name="Aurelia"
-    assert.equal(
-      aureliaCount,
-      1,
-      `Expected exactly 1 "Hello, Aurelia!" (from name="Aurelia"), but found ${aureliaCount}.\n` +
-      `Full HTML:\n${result1.html}`
-    );
+    expect(aureliaCount, `"Hello, Aurelia!" appeared ${aureliaCount} times (expected 1)`).toBe(1);
   });
 });
 
@@ -626,37 +511,6 @@ describe("Child Component SSR E2E: Multi-Request (Vite Cache Simulation)", () =>
 // =============================================================================
 // Server → Client Hydration Test (the REAL bug scenario)
 // =============================================================================
-
-/**
- * Creates a JSDOM environment with SSR HTML pre-loaded.
- * This simulates a browser receiving server-rendered HTML.
- */
-function createHydrationContext(ssrHtml, ssrState, ssrManifest, ssrDef) {
-  // Create DOM with SSR content already in place
-  const html = `<!DOCTYPE html>
-<html>
-<head><title>Child Component Hydration Test</title></head>
-<body>
-  <my-app>${ssrHtml}</my-app>
-  <script>
-    window.__SSR_STATE__ = ${JSON.stringify(ssrState)};
-    window.__AU_MANIFEST__ = ${JSON.stringify(ssrManifest)};
-    window.__AU_DEF__ = ${JSON.stringify(ssrDef)};
-  </script>
-</body>
-</html>`;
-
-  const dom = new JSDOM(html, {
-    pretendToBeVisual: true,
-    runScripts: "dangerously",
-  });
-
-  const window = dom.window;
-  const document = window.document;
-  const platform = new BrowserPlatform(window);
-
-  return { dom, window, document, platform };
-}
 
 describe("Child Component SSR E2E: Server→Client Hydration (REAL BUG)", () => {
   /**
@@ -722,7 +576,11 @@ describe("Child Component SSR E2E: Server→Client Hydration (REAL BUG)", () => 
       instructions: parentAot.instructions,
     };
 
-    const ctx = createHydrationContext(ssrResult.html, ssrState, ssrResult.manifest, ssrDef);
+    const ctx = createHydrationContext(ssrResult.html, ssrState, ssrResult.manifest, {
+      hostElement: "my-app",
+      title: "Child Component Hydration Test",
+      ssrDef,
+    });
 
     // Count elements BEFORE hydration
     const preHydrateAppDivs = ctx.document.querySelectorAll('.app').length;
@@ -832,60 +690,27 @@ describe("Child Component SSR E2E: Server→Client Hydration (REAL BUG)", () => 
     // =========================================================================
 
     // CRITICAL: Should be exactly 1 <div class="app"> - double render = 2
-    assert.equal(
-      postHydrateAppDivs,
-      1,
-      `DOUBLE RENDER BUG: Expected 1 <div class="app">, got ${postHydrateAppDivs}. ` +
-      `The client rendered a NEW app instead of hydrating the SSR content.`
-    );
+    expect(postHydrateAppDivs, `DOUBLE RENDER: Found ${postHydrateAppDivs} div.app (expected 1)`).toBe(1);
 
     // Should be exactly 2 greeting-cards - double render = 4
-    assert.equal(
-      postHydrateGreetingCards,
-      2,
-      `DOUBLE RENDER BUG: Expected 2 <div class="greeting-card">, got ${postHydrateGreetingCards}.`
-    );
+    expect(postHydrateGreetingCards, `Found ${postHydrateGreetingCards} .greeting-card (expected 2)`).toBe(2);
 
     // Should be exactly 1 h1 - double render = 2
-    assert.equal(
-      postHydrateH1s,
-      1,
-      `DOUBLE RENDER BUG: Expected 1 <h1>, got ${postHydrateH1s}.`
-    );
+    expect(postHydrateH1s, `Found ${postHydrateH1s} <h1> (expected 1)`).toBe(1);
 
     // Should be exactly 2 h2 - double render = 4
-    assert.equal(
-      postHydrateH2s,
-      2,
-      `DOUBLE RENDER BUG: Expected 2 <h2>, got ${postHydrateH2s}.`
-    );
+    expect(postHydrateH2s, `Found ${postHydrateH2s} <h2> (expected 2)`).toBe(2);
 
     // Default values should NOT appear (indicates bindings not applied)
-    assert.equal(
-      guestCount,
-      0,
-      `BINDABLE BUG: "Hello, Guest!" appeared ${guestCount} times. Bindables not applied.`
-    );
+    expect(guestCount, `BINDABLES NOT APPLIED: "Hello, Guest!" appeared ${guestCount} times`).toBe(0);
 
     // Correct bound values should appear
-    assert.equal(
-      worldCount,
-      1,
-      `BINDING BUG: "Hello, World!" should appear once (from name.bind="userName").`
-    );
+    expect(worldCount, `"Hello, World!" appeared ${worldCount} times (expected 1)`).toBe(1);
 
-    assert.equal(
-      aureliaCount,
-      1,
-      `BINDING BUG: "Hello, Aurelia!" should appear once (from name="Aurelia").`
-    );
+    expect(aureliaCount, `"Hello, Aurelia!" appeared ${aureliaCount} times (expected 1)`).toBe(1);
 
     // Literal ${name} should NOT appear
-    assert.equal(
-      literalNameCount,
-      0,
-      `INTERPOLATION BUG: Literal "\${name}" found. Expression not evaluated.`
-    );
+    expect(literalNameCount, `INTERPOLATION NOT EVALUATED: literal \${name} appeared ${literalNameCount} times`).toBe(0);
 
     // Cleanup
     if (appRoot) {
@@ -934,11 +759,11 @@ describe("Child Component SSR E2E: Component Isolation", () => {
 
     // Should have exactly ONE greeting-card div
     const divCount = countOccurrences(result.html, 'class="greeting-card"');
-    assert.equal(divCount, 1, `Expected 1 greeting-card div, got ${divCount}`);
+    expect(divCount).toBe(1);
 
     // Should have the content
-    assert.ok(result.html.includes("Hello, TestUser!"), "Should render greeting");
-    assert.ok(result.html.includes("8 characters"), "Should render name length");
+    expect(result.html).toContain("Hello, TestUser!");
+    expect(result.html).toContain("8 characters");
   });
 
   test("MyApp renders correctly without children (placeholder)", async () => {
@@ -972,13 +797,13 @@ describe("Child Component SSR E2E: Component Isolation", () => {
 
     // Should have exactly ONE app div
     const appDivCount = countOccurrences(result.html, 'class="app"');
-    assert.equal(appDivCount, 1, `Expected 1 app div, got ${appDivCount}`);
+    expect(appDivCount).toBe(1);
 
     // Should have parent content
-    assert.ok(result.html.includes("Isolated Test"), "Should render appTitle");
-    assert.ok(result.html.includes("test-timestamp"), "Should render timestamp");
+    expect(result.html).toContain("Isolated Test");
+    expect(result.html).toContain("test-timestamp");
 
     // Should have greeting-card elements as unprocessed custom elements
-    assert.ok(result.html.includes("<greeting-card"), "Should have greeting-card element");
+    expect(result.html).toContain("<greeting-card");
   });
 });

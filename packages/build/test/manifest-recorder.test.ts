@@ -5,8 +5,7 @@
  * building a manifest that mirrors the controller tree structure.
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { JSDOM } from "jsdom";
 import { DI, Registration, LoggerConfiguration, LogLevel, ConsoleSink } from "@aurelia/kernel";
@@ -162,23 +161,24 @@ describe("Tree-shaped Manifest Recorder", () => {
     // Get the root controller
     const rootController = CustomElement.for(host);
 
-    console.log("\n=== CONTROLLER TREE ===");
-    console.log(debugControllerTree(rootController));
+    // Verify controller tree exists and is navigable
+    const treeDebug = debugControllerTree(rootController);
+    expect(treeDebug).toContain("stress-app-rec");
+    expect(treeDebug).toContain("section-panel-rec");
+    expect(treeDebug).toContain("item-card-rec");
+    expect(treeDebug).toContain("status-badge-rec");
 
     // Build manifest using new API (no host parameter needed)
     const manifest = recordManifest(rootController);
-
-    console.log("\n=== HYDRATION MANIFEST ===");
-    console.log(JSON.stringify(manifest, null, 2));
 
     // =======================================================================
     // ASSERTIONS
     // =======================================================================
 
-    assert.ok(manifest, "recordManifest should return a manifest");
-    assert.equal(manifest.root, "stress-app-rec", "Root should be stress-app-rec");
-    assert.ok(manifest.manifest, "Should have root scope manifest");
-    assert.ok(Array.isArray(manifest.manifest.children), "Root scope should have children");
+    expect(manifest).toBeTruthy();
+    expect(manifest.root).toBe("stress-app-rec");
+    expect(manifest.manifest).toBeTruthy();
+    expect(Array.isArray(manifest.manifest.children)).toBe(true);
 
     // Count TCs
     const repeatCount = countTCsOfType(manifest.manifest, "repeat");
@@ -187,35 +187,30 @@ describe("Tree-shaped Manifest Recorder", () => {
     const totalTCs = countAllTCs(manifest.manifest);
     const ceCount = countCEs(manifest.manifest);
 
-    console.log("\n=== SUMMARY ===");
-    console.log(`Total TCs: ${totalTCs}`);
-    console.log(`  - repeat: ${repeatCount}`);
-    console.log(`  - if: ${ifCount}`);
-    console.log(`  - else: ${elseCount}`);
-    console.log(`Total CEs (excluding root): ${ceCount}`);
-
-    // We expect:
+    // Verify TC counts exactly:
     // - 3 repeats: 1 outer (sections) + 2 inner (items per section)
     // - 3 ifs: one per item-card (A1, A2, B1)
     // - 3 elses: one per item-card (siblings to if)
-    assert.equal(repeatCount, 3, "Should have 3 repeat TCs");
-    assert.equal(ifCount, 3, "Should have 3 if TCs");
-    assert.equal(elseCount, 3, "Should have 3 else TCs");
+    expect(repeatCount).toBe(3);
+    expect(ifCount).toBe(3);
+    expect(elseCount).toBe(3);
+    expect(totalTCs).toBe(9);
+
+    // Verify CE count - should have section panels, item cards, status badges
+    // 2 section-panel-rec + 3 item-card-rec + 3 status-badge-rec = 8 CEs (excluding root)
+    expect(ceCount).toBe(8);
 
     // Verify if values (which branch rendered)
     // A1: active=true → value=true
     // A2: active=false → value=false
     // B1: active=true → value=true
-    // We need to dig into the manifest to find the if entries
     function collectIfValues(scope) {
       const values = [];
       for (const child of scope.children ?? []) {
         if (isSSRTemplateController(child)) {
-          // state.value is the if condition result
           if (child.type === "if" && child.state?.value !== undefined) {
             values.push(child.state.value);
           }
-          // Views are scopes directly
           for (const view of child.views ?? []) {
             values.push(...collectIfValues(view));
           }
@@ -227,22 +222,19 @@ describe("Tree-shaped Manifest Recorder", () => {
     }
 
     const ifValues = collectIfValues(manifest.manifest);
-    console.log(`If values (branch indicators): ${JSON.stringify(ifValues)}`);
-
     const trueCount = ifValues.filter(v => v === true).length;
     const falseCount = ifValues.filter(v => v === false).length;
 
-    assert.equal(trueCount, 2, "Should have 2 if branches (A1, B1)");
-    assert.equal(falseCount, 1, "Should have 1 else branch (A2)");
+    expect(trueCount).toBe(2);
+    expect(falseCount).toBe(1);
+    expect(ifValues.sort()).toEqual([false, true, true].sort());
 
     // Verify DOM wasn't duplicated
     const itemCards = document.querySelectorAll('.item-card');
-    assert.equal(itemCards.length, 3, "Should have 3 item-cards");
+    expect(itemCards.length).toBe(3);
 
     await au.stop();
     dom.window.close();
-
-    console.log("\n=== TEST PASSED ===\n");
   });
 
   test("type guards work correctly", () => {
@@ -250,12 +242,12 @@ describe("Tree-shaped Manifest Recorder", () => {
     const ceScope = { name: "my-ce", children: [] };
     const viewScope = { children: [] };
 
-    assert.ok(isSSRTemplateController(tcEntry), "Should identify TC entry");
-    assert.ok(!isSSRTemplateController(ceScope), "Should not identify CE scope as TC");
-    assert.ok(!isSSRTemplateController(viewScope), "Should not identify view scope as TC");
+    expect(isSSRTemplateController(tcEntry)).toBe(true);
+    expect(isSSRTemplateController(ceScope)).toBe(false);
+    expect(isSSRTemplateController(viewScope)).toBe(false);
 
-    assert.ok(isSSRScope(ceScope), "Should identify CE scope");
-    assert.ok(isSSRScope(viewScope), "Should identify view scope");
-    assert.ok(!isSSRScope(tcEntry), "Should not identify TC entry as scope");
+    expect(isSSRScope(ceScope)).toBe(true);
+    expect(isSSRScope(viewScope)).toBe(true);
+    expect(isSSRScope(tcEntry)).toBe(false);
   });
 });

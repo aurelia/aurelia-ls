@@ -4,8 +4,7 @@
  * Tests the static site generation utilities.
  */
 
-import { describe, it, beforeEach, afterEach } from "vitest";
-import assert from "node:assert";
+import { describe, it, beforeEach, afterEach, expect } from "vitest";
 import { mkdir, rm, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -28,7 +27,7 @@ describe("SSG Generator", () => {
   describe("expandPath", () => {
     it("expands single parameter", () => {
       const result = expandPath("/products/:id", { id: "123" });
-      assert.strictEqual(result, "/products/123");
+      expect(result).toBe("/products/123");
     });
 
     it("expands multiple parameters", () => {
@@ -36,17 +35,17 @@ describe("SSG Generator", () => {
         userId: "42",
         postId: "99",
       });
-      assert.strictEqual(result, "/users/42/posts/99");
+      expect(result).toBe("/users/42/posts/99");
     });
 
     it("handles optional parameters", () => {
       const result = expandPath("/blog/:slug?", { slug: "hello-world" });
-      assert.strictEqual(result, "/blog/hello-world");
+      expect(result).toBe("/blog/hello-world");
     });
 
     it("returns path unchanged when no params match", () => {
       const result = expandPath("/about", { id: "123" });
-      assert.strictEqual(result, "/about");
+      expect(result).toBe("/about");
     });
   });
 
@@ -60,9 +59,9 @@ describe("SSG Generator", () => {
 
       const routes = collectStaticRoutes(nodes);
 
-      assert.ok(routes.includes("/"));
-      assert.ok(routes.includes("/about"));
-      assert.ok(!routes.includes("/:id"));
+      expect(routes).toContain("/");
+      expect(routes).toContain("/about");
+      expect(routes).not.toContain("/:id");
     });
 
     it("skips redirects", () => {
@@ -73,8 +72,8 @@ describe("SSG Generator", () => {
 
       const routes = collectStaticRoutes(nodes);
 
-      assert.ok(!routes.includes("/old"));
-      assert.ok(routes.includes("/new"));
+      expect(routes).not.toContain("/old");
+      expect(routes).toContain("/new");
     });
 
     it("collects nested routes", () => {
@@ -91,8 +90,8 @@ describe("SSG Generator", () => {
 
       const routes = collectStaticRoutes(nodes);
 
-      assert.ok(routes.includes("/products"));
-      assert.ok(!routes.includes("/products/:id"));
+      expect(routes).toContain("/products");
+      expect(routes).not.toContain("/products/:id");
     });
 
     it("handles path aliases", () => {
@@ -106,8 +105,8 @@ describe("SSG Generator", () => {
 
       const routes = collectStaticRoutes(nodes);
 
-      assert.ok(routes.includes("/about"));
-      assert.ok(routes.includes("/about-us"));
+      expect(routes).toContain("/about");
+      expect(routes).toContain("/about-us");
     });
   });
 
@@ -153,15 +152,15 @@ describe("SSG Generator", () => {
         resolveStaticPaths,
       );
 
-      assert.strictEqual(result.pages.size, 2);
-      assert.strictEqual(result.errors.length, 0);
+      expect(result.pages.size).toBe(2);
+      expect(result.errors.length).toBe(0);
 
       // Check files were created
       const indexContent = await readFile(join(outDir, "index.html"), "utf-8");
-      assert.ok(indexContent.includes("/"));
+      expect(indexContent).toContain("/");
 
       const aboutContent = await readFile(join(outDir, "about", "index.html"), "utf-8");
-      assert.ok(aboutContent.includes("/about"));
+      expect(aboutContent).toContain("/about");
     });
 
     it("reports errors for failed routes", async () => {
@@ -196,9 +195,9 @@ describe("SSG Generator", () => {
         resolveStaticPaths,
       );
 
-      assert.strictEqual(result.pages.size, 1);
-      assert.strictEqual(result.errors.length, 1);
-      assert.strictEqual(result.errors[0].route, "/error");
+      expect(result.pages.size).toBe(1);
+      expect(result.errors.length).toBe(1);
+      expect(result.errors[0].route).toBe("/error");
     });
 
     it("includes additional routes from hook", async () => {
@@ -229,9 +228,9 @@ describe("SSG Generator", () => {
         resolveStaticPaths,
       );
 
-      assert.strictEqual(result.pages.size, 2);
-      assert.ok(result.pages.has("/"));
-      assert.ok(result.pages.has("/extra"));
+      expect(result.pages.size).toBe(2);
+      expect(result.pages.has("/")).toBe(true);
+      expect(result.pages.has("/extra")).toBe(true);
     });
 
     it("calls onBeforeRender and onAfterRender hooks", async () => {
@@ -272,11 +271,11 @@ describe("SSG Generator", () => {
         resolveStaticPaths,
       );
 
-      assert.ok(beforeRenderCalled);
-      assert.ok(afterRenderCalled);
+      expect(beforeRenderCalled).toBe(true);
+      expect(afterRenderCalled).toBe(true);
 
       const content = await readFile(join(outDir, "index.html"), "utf-8");
-      assert.ok(content.includes("<!-- processed -->"));
+      expect(content).toContain("<!-- processed -->");
     });
 
     it("generates fallback page when configured", async () => {
@@ -308,7 +307,7 @@ describe("SSG Generator", () => {
 
       // Check 404.html was created
       const stats = await stat(join(outDir, "404.html"));
-      assert.ok(stats.isFile());
+      expect(stats.isFile()).toBe(true);
     });
 
     it("expands parameterized routes with getStaticPaths", async () => {
@@ -350,13 +349,13 @@ describe("SSG Generator", () => {
       );
 
       // Should have: /, /products/1, /products/2, /products/3
-      assert.strictEqual(result.pages.size, 4);
-      assert.strictEqual(result.expandedRoutes.length, 1);
-      assert.strictEqual(result.expandedRoutes[0].staticPaths.length, 3);
+      expect(result.pages.size).toBe(4);
+      expect(result.expandedRoutes.length).toBe(1);
+      expect(result.expandedRoutes[0].staticPaths.length).toBe(3);
 
       // Check files exist
       const p1Content = await readFile(join(outDir, "products", "1", "index.html"), "utf-8");
-      assert.ok(p1Content.includes("/products/1"));
+      expect(p1Content).toContain("/products/1");
     });
   });
 });

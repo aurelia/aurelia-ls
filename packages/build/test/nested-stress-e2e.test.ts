@@ -34,22 +34,17 @@
  * </stress-app>
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { JSDOM } from "jsdom";
 import { DI, Registration, LoggerConfiguration, LogLevel, ConsoleSink } from "@aurelia/kernel";
-import {
-  Aurelia,
-  IPlatform,
-  StandardConfiguration,
-} from "@aurelia/runtime-html";
-import { BrowserPlatform } from "@aurelia/platform-browser";
+import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
 
 import { compileWithAot } from "../out/aot.js";
 import { DEFAULT_SEMANTICS } from "../out/index.js";
 import { patchComponentDefinition } from "../out/ssr/patch.js";
 import { renderWithComponents } from "../out/ssr/render.js";
+import { countOccurrences, createHydrationContext } from "./_helpers/test-utils.js";
 
 // =============================================================================
 // Component Classes (4-level hierarchy)
@@ -280,40 +275,6 @@ function createStressTestSemantics() {
   };
 }
 
-function countOccurrences(str, substr) {
-  let count = 0;
-  let pos = 0;
-  while ((pos = str.indexOf(substr, pos)) !== -1) {
-    count++;
-    pos += substr.length;
-  }
-  return count;
-}
-
-/**
- * Creates a JSDOM environment with SSR HTML pre-loaded.
- */
-function createHydrationContext(ssrHtml, ssrState, ssrManifest) {
-  const html = `<!DOCTYPE html>
-<html>
-<head><title>Nested Stress Test</title></head>
-<body>
-  <stress-app>${ssrHtml}</stress-app>
-</body>
-</html>`;
-
-  const dom = new JSDOM(html, {
-    pretendToBeVisual: true,
-    runScripts: "dangerously",
-  });
-
-  const window = dom.window;
-  const document = window.document;
-  const platform = new BrowserPlatform(window);
-
-  return { dom, window, document, platform };
-}
-
 // =============================================================================
 // TESTS
 // =============================================================================
@@ -386,16 +347,16 @@ describe("Nested Stress Test: Deep Component Hierarchy", () => {
     }
 
     // StatusBadge has 2 targets: span (class interpolation) + text node (text interpolation)
-    assert.equal(statusBadgeAot.instructions.length, 2, "StatusBadge should have 2 instruction rows");
+    expect(statusBadgeAot.instructions.length).toBe(2);
 
     // ItemCard has: span + if/else (template controller) = at least 2
-    assert.ok(itemCardAot.instructions.length >= 2, "ItemCard should have at least 2 instruction rows");
+    expect(itemCardAot.instructions.length).toBeGreaterThanOrEqual(2);
 
     // SectionPanel has: h2 + repeat (template controller) + info-tag = at least 3
-    assert.ok(sectionPanelAot.instructions.length >= 2, "SectionPanel should have at least 2 instruction rows");
+    expect(sectionPanelAot.instructions.length).toBeGreaterThanOrEqual(2);
 
     // StressApp has: h1 + repeat (template controller) + footer-widget = at least 3
-    assert.ok(stressAppAot.instructions.length >= 2, "StressApp should have at least 2 instruction rows");
+    expect(stressAppAot.instructions.length).toBeGreaterThanOrEqual(2);
   });
 
   test("SSR renders full hierarchy without duplication", async () => {
@@ -431,53 +392,53 @@ describe("Nested Stress Test: Deep Component Hierarchy", () => {
 
     // 1. Exactly ONE stress-app root div
     const stressAppDivCount = countOccurrences(result.html, 'class="stress-app"');
-    assert.equal(stressAppDivCount, 1, `Expected 1 stress-app div, got ${stressAppDivCount}`);
+    expect(stressAppDivCount).toBe(1);
 
     // 2. Exactly ONE h1 (title)
     const h1Count = countOccurrences(result.html, "<h1");
-    assert.equal(h1Count, 1, `Expected 1 h1, got ${h1Count}`);
-    assert.ok(result.html.includes("Stress Test App"), "Should contain title");
+    expect(h1Count).toBe(1);
+    expect(result.html).toContain("Stress Test App");
 
     // 3. Exactly TWO section-panel divs (one per section in data)
     const sectionPanelDivCount = countOccurrences(result.html, 'class="section-panel"');
-    assert.equal(sectionPanelDivCount, 2, `Expected 2 section-panel divs, got ${sectionPanelDivCount}`);
+    expect(sectionPanelDivCount).toBe(2);
 
     // 4. Exactly TWO h2 elements (one per section)
     const h2Count = countOccurrences(result.html, "<h2");
-    assert.equal(h2Count, 2, `Expected 2 h2, got ${h2Count}`);
-    assert.ok(result.html.includes("Section Alpha"), "Should contain Section Alpha");
-    assert.ok(result.html.includes("Section Beta"), "Should contain Section Beta");
+    expect(h2Count).toBe(2);
+    expect(result.html).toContain("Section Alpha");
+    expect(result.html).toContain("Section Beta");
 
     // 5. Exactly FIVE item-card divs (3 in Alpha + 2 in Beta)
     const itemCardDivCount = countOccurrences(result.html, 'class="item-card"');
-    assert.equal(itemCardDivCount, 5, `Expected 5 item-card divs, got ${itemCardDivCount}`);
+    expect(itemCardDivCount).toBe(5);
 
     // 6. Check item labels
-    assert.ok(result.html.includes("Alpha-1"), "Should contain Alpha-1");
-    assert.ok(result.html.includes("Alpha-2"), "Should contain Alpha-2");
-    assert.ok(result.html.includes("Alpha-3"), "Should contain Alpha-3");
-    assert.ok(result.html.includes("Beta-1"), "Should contain Beta-1");
-    assert.ok(result.html.includes("Beta-2"), "Should contain Beta-2");
+    expect(result.html).toContain("Alpha-1");
+    expect(result.html).toContain("Alpha-2");
+    expect(result.html).toContain("Alpha-3");
+    expect(result.html).toContain("Beta-1");
+    expect(result.html).toContain("Beta-2");
 
     // 7. Check status badges - should have 5 total (one per item)
     // Active items: Alpha-1, Alpha-3, Beta-2 (3 active)
     // Inactive items: Alpha-2, Beta-1 (2 inactive)
     const activeCount = countOccurrences(result.html, "status-active");
     const inactiveCount = countOccurrences(result.html, "status-inactive");
-    assert.equal(activeCount, 3, `Expected 3 active status badges, got ${activeCount}`);
-    assert.equal(inactiveCount, 2, `Expected 2 inactive status badges, got ${inactiveCount}`);
+    expect(activeCount).toBe(3);
+    expect(inactiveCount).toBe(2);
 
     // 8. Check containerless info-tag rendered (should be 2, one per section)
     // Since it's containerless, we look for the content, not the tag
     const infoTagContentCount = countOccurrences(result.html, 'class="info"');
-    assert.equal(infoTagContentCount, 2, `Expected 2 info spans, got ${infoTagContentCount}`);
-    assert.ok(result.html.includes("Total: 3"), "Alpha section should show Total: 3");
-    assert.ok(result.html.includes("Total: 2"), "Beta section should show Total: 2");
+    expect(infoTagContentCount).toBe(2);
+    expect(result.html).toContain("Total: 3");
+    expect(result.html).toContain("Total: 2");
 
     // 9. Exactly ONE footer-widget
     const footerWidgetCount = countOccurrences(result.html, 'class="footer-widget"');
-    assert.equal(footerWidgetCount, 1, `Expected 1 footer-widget, got ${footerWidgetCount}`);
-    assert.ok(result.html.includes("End of content"), "Should contain footer text");
+    expect(footerWidgetCount).toBe(1);
+    expect(result.html).toContain("End of content");
   });
 
   test("if/else renders correct branch for each item", async () => {
@@ -508,12 +469,12 @@ describe("Nested Stress Test: Deep Component Hierarchy", () => {
 
     // Find all item-cards
     const itemCards = doc.querySelectorAll('.item-card');
-    assert.equal(itemCards.length, 5, "Should have 5 item-cards");
+    expect(itemCards.length).toBe(5);
 
     // Check each item-card has exactly ONE status badge (if or else, not both)
     for (const card of itemCards) {
       const badges = card.querySelectorAll('[class^="status-"]');
-      assert.equal(badges.length, 1, `Each item-card should have exactly 1 status badge, got ${badges.length}`);
+      expect(badges.length).toBe(1);
     }
 
     // Verify the status text mapping
@@ -522,11 +483,11 @@ describe("Nested Stress Test: Deep Component Hierarchy", () => {
     const inactiveTexts = doc.querySelectorAll('.status-inactive');
 
     for (const el of activeTexts) {
-      assert.ok(el.textContent.includes("Active"), "Active badge should say Active");
+      expect(el.textContent).toContain("Active");
     }
 
     for (const el of inactiveTexts) {
-      assert.ok(el.textContent.includes("Inactive"), "Inactive badge should say Inactive");
+      expect(el.textContent).toContain("Inactive");
     }
 
     dom.window.close();
@@ -590,17 +551,17 @@ describe("Nested Stress Test: Multi-Request Stability", () => {
     const normalized3 = normalize(result3.html);
 
     // Structure should be identical
-    assert.equal(normalized1, normalized2, "First and second render should produce same structure");
-    assert.equal(normalized2, normalized3, "Second and third render should produce same structure");
+    expect(normalized1).toBe(normalized2);
+    expect(normalized2).toBe(normalized3);
 
     // Count elements to double-check
     const count1 = countOccurrences(result1.html, 'class="item-card"');
     const count2 = countOccurrences(result2.html, 'class="item-card"');
     const count3 = countOccurrences(result3.html, 'class="item-card"');
 
-    assert.equal(count1, 5, "First render: 5 item-cards");
-    assert.equal(count2, 5, "Second render: 5 item-cards");
-    assert.equal(count3, 5, "Third render: 5 item-cards");
+    expect(count1).toBe(5);
+    expect(count2).toBe(5);
+    expect(count3).toBe(5);
   });
 });
 
@@ -672,7 +633,10 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
       ],
     };
 
-    const ctx = createHydrationContext(ssrResult.html, ssrState, ssrResult.manifest);
+    const ctx = createHydrationContext(ssrResult.html, ssrState, ssrResult.manifest, {
+      hostElement: "stress-app",
+      title: "Nested Stress Test",
+    });
 
     // Create client component classes with AOT definitions
     const ClientStatusBadge = class {
@@ -813,19 +777,19 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
     console.log(`  h2: ${postH2Count} (expected: 2)`);
 
     // ASSERTIONS
-    assert.equal(postStressAppCount, 1, `DOUBLE RENDER: Expected 1 stress-app, got ${postStressAppCount}`);
-    assert.equal(postSectionPanelCount, 2, `DOUBLE RENDER: Expected 2 section-panels, got ${postSectionPanelCount}`);
-    assert.equal(postItemCardCount, 5, `DOUBLE RENDER: Expected 5 item-cards, got ${postItemCardCount}`);
-    assert.equal(postFooterCount, 1, `DOUBLE RENDER: Expected 1 footer-widget, got ${postFooterCount}`);
-    assert.equal(postH1Count, 1, `DOUBLE RENDER: Expected 1 h1, got ${postH1Count}`);
-    assert.equal(postH2Count, 2, `DOUBLE RENDER: Expected 2 h2, got ${postH2Count}`);
+    expect(postStressAppCount).toBe(1);
+    expect(postSectionPanelCount).toBe(2);
+    expect(postItemCardCount).toBe(5);
+    expect(postFooterCount).toBe(1);
+    expect(postH1Count).toBe(1);
+    expect(postH2Count).toBe(2);
 
     // Check content preserved
-    assert.ok(host.innerHTML.includes("Stress Test App"), "Title should be preserved");
-    assert.ok(host.innerHTML.includes("Section Alpha"), "Section Alpha should be preserved");
-    assert.ok(host.innerHTML.includes("Section Beta"), "Section Beta should be preserved");
-    assert.ok(host.innerHTML.includes("Alpha-1"), "Item labels should be preserved");
-    assert.ok(host.innerHTML.includes("End of content"), "Footer should be preserved");
+    expect(host.innerHTML).toContain("Stress Test App");
+    expect(host.innerHTML).toContain("Section Alpha");
+    expect(host.innerHTML).toContain("Section Beta");
+    expect(host.innerHTML).toContain("Alpha-1");
+    expect(host.innerHTML).toContain("End of content");
 
     // Cleanup
     if (appRoot) {
@@ -870,7 +834,7 @@ describe("Nested Stress Test: Edge Cases", () => {
     // The containerless element should NOT appear as a tag
     // Note: Current implementation may still include the tag - adjust assertion if needed
     // For now we just verify the content is there
-    assert.equal(infoSpanCount, 2, "Should have 2 info spans (one per section)");
+    expect(infoSpanCount).toBe(2);
   });
 
   test("sibling components at root level render correctly", async () => {
@@ -902,7 +866,7 @@ describe("Nested Stress Test: Edge Cases", () => {
     // 2. section-panel (repeated, but shown here as custom element)
     // 3. footer-widget
     const stressAppDiv = doc.querySelector('.stress-app');
-    assert.ok(stressAppDiv, "Should have stress-app div");
+    expect(stressAppDiv).toBeTruthy();
 
     const children = Array.from(stressAppDiv.children);
     const childTags = children.map(c => c.tagName.toLowerCase());
@@ -910,7 +874,7 @@ describe("Nested Stress Test: Edge Cases", () => {
     console.log("stress-app children:", childTags);
 
     // Should start with h1
-    assert.equal(childTags[0], "h1", "First child should be h1");
+    expect(childTags[0]).toBe("h1");
 
     // Should end with footer-widget (or its content)
     const lastChild = children[children.length - 1];
@@ -919,8 +883,7 @@ describe("Nested Stress Test: Edge Cases", () => {
                       lastChild.querySelector('.footer-widget') ||
                       lastChild.tagName.toLowerCase() === 'footer';
 
-    assert.ok(hasFooter || result.html.includes("End of content"),
-      "Footer should be rendered after sections");
+    expect(hasFooter || result.html.includes("End of content")).toBe(true);
 
     dom.window.close();
   });

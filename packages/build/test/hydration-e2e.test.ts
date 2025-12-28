@@ -11,8 +11,7 @@
  * These tests simulate the exact flow: Server → HTML+Manifest → Client Hydrate
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { JSDOM } from "jsdom";
 import { DI, Registration } from "@aurelia/kernel";
@@ -22,65 +21,18 @@ import {
   StandardConfiguration,
   CustomElement,
 } from "@aurelia/runtime-html";
-import { BrowserPlatform } from "@aurelia/platform-browser";
 import { compileAndRenderAot, compileWithAot } from "../out/index.js";
-
-// =============================================================================
-// Helper: Create a test component class with given state and template
-// =============================================================================
-
-/**
- * Creates a component class with the specified state and template.
- * This is the correct pattern - components define their own state naturally.
- */
-function createComponent(name, template, state = {}) {
-  const ComponentClass = class {
-    constructor() {
-      Object.assign(this, state);
-    }
-  };
-  ComponentClass.$au = {
-    type: "custom-element",
-    name,
-    template,
-  };
-  return ComponentClass;
-}
+import {
+  createComponent,
+  createHydrationContext,
+  countElements,
+  getTexts,
+  checkForDoubleRender,
+} from "./_helpers/test-utils.js";
 
 // =============================================================================
 // Test Infrastructure
 // =============================================================================
-
-/**
- * Creates a JSDOM environment with SSR HTML pre-loaded.
- * This simulates a browser receiving server-rendered HTML.
- */
-function createHydrationContext(ssrHtml, ssrState, ssrManifest, ssrDef) {
-  // Create DOM with SSR content already in place
-  const html = `<!DOCTYPE html>
-<html>
-<head><title>Hydration Test</title></head>
-<body>
-  <div id="app">${ssrHtml}</div>
-  <script>
-    window.__SSR_STATE__ = ${JSON.stringify(ssrState)};
-    window.__AU_MANIFEST__ = ${JSON.stringify(ssrManifest)};
-    window.__AU_DEF__ = ${JSON.stringify(ssrDef)};
-  </script>
-</body>
-</html>`;
-
-  const dom = new JSDOM(html, {
-    pretendToBeVisual: true,
-    runScripts: "dangerously",
-  });
-
-  const window = dom.window;
-  const document = window.document;
-  const platform = new BrowserPlatform(window);
-
-  return { dom, window, document, platform };
-}
 
 /**
  * Hydrate SSR content using Aurelia.hydrate().
@@ -88,17 +40,17 @@ function createHydrationContext(ssrHtml, ssrState, ssrManifest, ssrDef) {
  */
 async function hydrateSSR(ssrHtml, ssrState, ssrManifest, aotResult, ComponentClass) {
   const ctx = createHydrationContext(ssrHtml, ssrState, ssrManifest, {
-    template: aotResult.template,
-    instructions: aotResult.instructions,
+    ssrDef: {
+      template: aotResult.template,
+      instructions: aotResult.instructions,
+    },
   });
 
-  const container = DI.createContainer();
-  container.register(
-    StandardConfiguration,
-    Registration.instance(IPlatform, ctx.platform)
-  );
+  // Rest uses ctx from shared helper
+  const { dom, document, platform } = ctx;
 
-  // Create component class with AOT definition
+  // Create component class with AOT definition, extending the provided class
+  // to preserve computed getters
   const HydrateComponent = class extends ComponentClass {
     static $au = {
       type: "custom-element",
@@ -117,12 +69,16 @@ async function hydrateSSR(ssrHtml, ssrState, ssrManifest, aotResult, ComponentCl
         : value;
   }
 
-  const host = ctx.document.getElementById("app");
+  const container = DI.createContainer();
+  container.register(
+    StandardConfiguration,
+    Registration.instance(IPlatform, platform)
+  );
+
+  const host = document.getElementById("app");
   const au = new Aurelia(container);
 
-  // This is the critical hydration call - returns AppRoot directly
-  // ssrManifest is ISSRManifest = { root, manifest: ISSRScope }
-  // IHydrateConfig expects ssrScope: ISSRScope (the inner scope)
+  // Use hydrate to adopt existing SSR DOM
   const appRoot = await au.hydrate({
     host,
     component: HydrateComponent,
@@ -133,55 +89,13 @@ async function hydrateSSR(ssrHtml, ssrState, ssrManifest, aotResult, ComponentCl
     host,
     appRoot,
     vm: appRoot.controller.viewModel,
-    document: ctx.document,
-    dom: ctx.dom,
+    document,
+    dom,
     html: () => host.innerHTML,
     stop: async () => {
       await appRoot.deactivate();
-      ctx.dom.window.close();
+      dom.window.close();
     },
-  };
-}
-
-/**
- * Count elements in DOM.
- */
-function countElements(host, selector) {
-  return host.querySelectorAll(selector).length;
-}
-
-/**
- * Get text content of elements.
- */
-function getTexts(host, selector) {
-  return Array.from(host.querySelectorAll(selector)).map(
-    (el) => el.textContent?.trim() ?? ""
-  );
-}
-
-/**
- * Check for double rendering by searching the ENTIRE document body.
- * Returns { total: number, texts: string[], hasDuplicates: boolean }
- */
-function checkForDoubleRender(document, selector, expectedTexts) {
-  // Query the entire document body, not just a container
-  const allElements = document.body.querySelectorAll(selector);
-  const texts = Array.from(allElements).map(el => el.textContent?.trim() ?? "");
-
-  // Check if any expected text appears more than once
-  const textCounts = {};
-  for (const text of texts) {
-    textCounts[text] = (textCounts[text] || 0) + 1;
-  }
-
-  const duplicates = Object.entries(textCounts).filter(([_, count]) => count > 1);
-
-  return {
-    total: allElements.length,
-    texts,
-    textCounts,
-    hasDuplicates: duplicates.length > 0,
-    duplicates: duplicates.map(([text, count]) => `"${text}" appears ${count} times`),
   };
 }
 
@@ -339,8 +253,8 @@ describe("Hydration E2E: Simple Repeat", () => {
     console.log("AOT Template:", aot.template);
     console.log("AOT Instructions:", JSON.stringify(aot.instructions, null, 2));
 
-    assert.ok(aot.template, "Should produce template");
-    assert.ok(aot.instructions.length > 0, "Should have instructions");
+    expect(aot.template).toBeTruthy();
+    expect(aot.instructions.length).toBeGreaterThan(0);
   });
 
   test("Step 2: SSR renders with correct manifest", async () => {
@@ -355,9 +269,9 @@ describe("Hydration E2E: Simple Repeat", () => {
     const dom = new JSDOM(`<div>${result.html}</div>`);
     const count = dom.window.document.querySelectorAll(selector).length;
 
-    assert.equal(count, expectedCount, `SSR should render ${expectedCount} items`);
-    assert.ok(result.manifest, "Should have manifest");
-    assert.ok(result.manifest.manifest, "Manifest should have manifest tree");
+    expect(count).toBe(expectedCount);
+    expect(result.manifest).toBeTruthy();
+    expect(result.manifest.manifest).toBeTruthy();
   });
 
   test("Step 3: Client hydration - DOM is adopted, not duplicated", async () => {
@@ -390,18 +304,10 @@ describe("Hydration E2E: Simple Repeat", () => {
     console.log("Double render check:", JSON.stringify(doubleRenderCheck, null, 2));
 
     // CRITICAL: No duplicates allowed
-    assert.equal(
-      doubleRenderCheck.hasDuplicates,
-      false,
-      `DOUBLE RENDER BUG: ${doubleRenderCheck.duplicates.join(", ")}`
-    );
+    expect(doubleRenderCheck.hasDuplicates, `DOUBLE RENDER: ${doubleRenderCheck.duplicates.join(", ")}`).toBe(false);
 
     // Also check total count
-    assert.equal(
-      doubleRenderCheck.total,
-      expectedCount,
-      `HYDRATION BUG: Expected ${expectedCount} items in entire document, got ${doubleRenderCheck.total}`
-    );
+    expect(doubleRenderCheck.total, `Expected ${expectedCount} items, got ${doubleRenderCheck.total}`).toBe(expectedCount);
 
     await client.stop();
   });
@@ -432,7 +338,7 @@ describe("Hydration E2E: Simple Repeat", () => {
     const afterAddCount = countElements(client.host, selector);
     console.log("After add count:", afterAddCount);
 
-    assert.equal(afterAddCount, initialCount + 1, "Should add one item");
+    expect(afterAddCount).toBe(initialCount + 1);
 
     // Remove item
     client.vm.items.shift();
@@ -441,7 +347,7 @@ describe("Hydration E2E: Simple Repeat", () => {
     const afterRemoveCount = countElements(client.host, selector);
     console.log("After remove count:", afterRemoveCount);
 
-    assert.equal(afterRemoveCount, initialCount, "Should return to initial count");
+    expect(afterRemoveCount).toBe(initialCount);
 
     await client.stop();
   });
@@ -467,7 +373,7 @@ describe("Hydration E2E: If Containing Repeat (Double Render Bug)", () => {
     const ssrDom = new JSDOM(`<div>${ssrResult.html}</div>`);
     const ssrCount = ssrDom.window.document.querySelectorAll(selector).length;
     console.log("SSR item count:", ssrCount);
-    assert.equal(ssrCount, expectedCount, "SSR should render correct count");
+    expect(ssrCount).toBe(expectedCount);
 
     // Step 3: Hydrate
     const client = await hydrateSSR(
@@ -485,17 +391,9 @@ describe("Hydration E2E: If Containing Repeat (Double Render Bug)", () => {
     console.log("Double render check:", JSON.stringify(doubleRenderCheck, null, 2));
 
     // CRITICAL: No duplicates allowed
-    assert.equal(
-      doubleRenderCheck.hasDuplicates,
-      false,
-      `DOUBLE RENDER BUG: ${doubleRenderCheck.duplicates.join(", ")}`
-    );
+    expect(doubleRenderCheck.hasDuplicates, `DOUBLE RENDER: ${doubleRenderCheck.duplicates.join(", ")}`).toBe(false);
 
-    assert.equal(
-      doubleRenderCheck.total,
-      expectedCount,
-      `HYDRATION BUG: Expected ${expectedCount} items in entire document, got ${doubleRenderCheck.total}`
-    );
+    expect(doubleRenderCheck.total, `Expected ${expectedCount} items, got ${doubleRenderCheck.total}`).toBe(expectedCount);
 
     // Step 4: Verify reactivity
     client.vm.items.push("W");
@@ -503,7 +401,7 @@ describe("Hydration E2E: If Containing Repeat (Double Render Bug)", () => {
 
     const afterAddCount = countElements(client.host, selector);
     console.log("After add count:", afterAddCount);
-    assert.equal(afterAddCount, expectedCount + 1, "Reactivity should work");
+    expect(afterAddCount, `After adding item: expected ${expectedCount + 1}, got ${afterAddCount}`).toBe(expectedCount + 1);
 
     await client.stop();
   });
@@ -530,11 +428,7 @@ describe("Hydration E2E: If Containing Repeat (Double Render Bug)", () => {
     console.log("Items inside <ul>:", itemsInUl);
     console.log("Total items:", totalItems);
 
-    assert.equal(
-      itemsInUl,
-      totalItems,
-      "All items should be inside <ul>, not elsewhere in DOM"
-    );
+    expect(itemsInUl).toBe(totalItems);
 
     await client.stop();
   });
@@ -558,7 +452,7 @@ describe("Hydration E2E: Todo App Pattern", () => {
     // Verify SSR
     const ssrDom = new JSDOM(`<div>${ssrResult.html}</div>`);
     const ssrCount = ssrDom.window.document.querySelectorAll(selector).length;
-    assert.equal(ssrCount, expectedCount, "SSR count correct");
+    expect(ssrCount).toBe(expectedCount);
 
     // Step 3: Hydrate
     const client = await hydrateSSR(
@@ -577,17 +471,9 @@ describe("Hydration E2E: Todo App Pattern", () => {
     console.log("Double render check:", JSON.stringify(doubleRenderCheck, null, 2));
 
     // CRITICAL: No duplicates allowed
-    assert.equal(
-      doubleRenderCheck.hasDuplicates,
-      false,
-      `DOUBLE RENDER BUG: ${doubleRenderCheck.duplicates.join(", ")}`
-    );
+    expect(doubleRenderCheck.hasDuplicates, `DOUBLE RENDER: ${doubleRenderCheck.duplicates.join(", ")}`).toBe(false);
 
-    assert.equal(
-      doubleRenderCheck.total,
-      expectedCount,
-      `HYDRATION BUG: Expected ${expectedCount} items in entire document, got ${doubleRenderCheck.total}`
-    );
+    expect(doubleRenderCheck.total, `Expected ${expectedCount} items, got ${doubleRenderCheck.total}`).toBe(expectedCount);
 
     // Items should be inside todo-list, not in header
     const itemsInList = client.host.querySelectorAll(".todo-list .todo-item").length;
@@ -596,8 +482,8 @@ describe("Hydration E2E: Todo App Pattern", () => {
     console.log("Items in .todo-list:", itemsInList);
     console.log("Items in header:", itemsInHeader);
 
-    assert.equal(itemsInList, expectedCount, "All items should be in .todo-list");
-    assert.equal(itemsInHeader, 0, "NO items should be in header");
+    expect(itemsInList, `Items in .todo-list: expected ${expectedCount}, got ${itemsInList}`).toBe(expectedCount);
+    expect(itemsInHeader, `Items leaked to header: got ${itemsInHeader}`).toBe(0);
 
     await client.stop();
   });
@@ -624,18 +510,18 @@ describe("Hydration E2E: Todo App Pattern", () => {
     await Promise.resolve();
 
     const afterAddCount = countElements(client.host, selector);
-    assert.equal(afterAddCount, initialCount + 1, "Should add todo");
+    expect(afterAddCount).toBe(initialCount + 1);
 
     // Verify it's in the right place
     const texts = getTexts(client.host, ".todo-list .text");
-    assert.ok(texts.includes("New Task"), "New task should be in todo-list");
+    expect(texts).toContain("New Task");
 
     // Remove todo
     client.vm.todos.pop();
     await Promise.resolve();
 
     const afterRemoveCount = countElements(client.host, selector);
-    assert.equal(afterRemoveCount, initialCount, "Should remove todo");
+    expect(afterRemoveCount).toBe(initialCount);
 
     await client.stop();
   });
@@ -665,7 +551,7 @@ describe("Hydration E2E: Real Todo App (examples/todo-app)", () => {
     const ssrDom = new JSDOM(`<div>${ssrResult.html}</div>`);
     const ssrCount = ssrDom.window.document.querySelectorAll(selector).length;
     console.log("SSR item count:", ssrCount);
-    assert.equal(ssrCount, expectedCount, "SSR should render correct count");
+    expect(ssrCount).toBe(expectedCount);
 
     // Step 3: Hydrate - create class with computed getters like real app
     // (client doesn't get computed properties in state, it has getters)
@@ -706,17 +592,9 @@ describe("Hydration E2E: Real Todo App (examples/todo-app)", () => {
     console.log("Double render check:", JSON.stringify(doubleRenderCheck, null, 2));
 
     // CRITICAL: No duplicates allowed
-    assert.equal(
-      doubleRenderCheck.hasDuplicates,
-      false,
-      `DOUBLE RENDER BUG: ${doubleRenderCheck.duplicates.join(", ")}`
-    );
+    expect(doubleRenderCheck.hasDuplicates, `DOUBLE RENDER: ${doubleRenderCheck.duplicates.join(", ")}`).toBe(false);
 
-    assert.equal(
-      doubleRenderCheck.total,
-      expectedCount,
-      `HYDRATION BUG: Expected ${expectedCount} items in entire document, got ${doubleRenderCheck.total}`
-    );
+    expect(doubleRenderCheck.total, `Expected ${expectedCount} items, got ${doubleRenderCheck.total}`).toBe(expectedCount);
 
     // Items should be inside .todo-list, not elsewhere
     const itemsInList = client.host.querySelectorAll(".todo-list .todo-item").length;
@@ -725,8 +603,8 @@ describe("Hydration E2E: Real Todo App (examples/todo-app)", () => {
     console.log("Items in .todo-list:", itemsInList);
     console.log("Items in header:", itemsInHeader);
 
-    assert.equal(itemsInList, expectedCount, "All items should be in .todo-list");
-    assert.equal(itemsInHeader, 0, "NO items should be in header");
+    expect(itemsInList, `Items in .todo-list: expected ${expectedCount}, got ${itemsInList}`).toBe(expectedCount);
+    expect(itemsInHeader, `Items leaked to header: got ${itemsInHeader}`).toBe(0);
 
     await client.stop();
   });
@@ -776,16 +654,12 @@ describe("Hydration E2E: Real Todo App (examples/todo-app)", () => {
 
     const afterAddCount = countElements(client.host, selector);
     console.log("After add count:", afterAddCount);
-    assert.equal(afterAddCount, initialCount + 1, "Should add todo");
+    expect(afterAddCount, `After adding todo: expected ${initialCount + 1}, got ${afterAddCount}`).toBe(initialCount + 1);
 
     // Check no duplicates after adding
     const doubleRenderCheck = checkForDoubleRender(client.document, selector, []);
     console.log("Post-add double render check:", JSON.stringify(doubleRenderCheck, null, 2));
-    assert.equal(
-      doubleRenderCheck.hasDuplicates,
-      false,
-      `POST-ADD DOUBLE RENDER: ${doubleRenderCheck.duplicates.join(", ")}`
-    );
+    expect(doubleRenderCheck.hasDuplicates, `POST-ADD DOUBLE RENDER: ${doubleRenderCheck.duplicates.join(", ")}`).toBe(false);
 
     await client.stop();
   });
@@ -836,7 +710,7 @@ describe("Diagnostic: Verify Manifest has _targets set", () => {
 
     // Verify manifest before hydration
     console.log("Manifest before hydration:", JSON.stringify(ssrResult.manifest, null, 2));
-    assert.ok(ssrResult.manifest.manifest, "Manifest should have manifest tree");
+    expect(ssrResult.manifest.manifest).toBeTruthy();
 
     const appRoot = await au.hydrate({
       host,
@@ -854,10 +728,7 @@ describe("Diagnostic: Verify Manifest has _targets set", () => {
     if (ssrResult.manifest._targets == null) {
       console.log("SKIPPED: _targets check requires development bundle (terser mangles _targets in prod)");
     } else {
-      assert.ok(
-        ssrResult.manifest._targets != null,
-        "manifest._targets should be set after hydration"
-      );
+      expect(ssrResult.manifest._targets).toBeTruthy();
     }
 
     await appRoot.deactivate();
@@ -1057,10 +928,7 @@ describe("Diagnostic: Container Hierarchy", () => {
     if (ssrResult.manifest._targets == null) {
       console.log("SKIPPED: _targets check requires development bundle (terser mangles _targets in prod)");
     } else {
-      assert.ok(
-        ssrResult.manifest._targets != null,
-        "manifest._targets should be set after hydration"
-      );
+      expect(ssrResult.manifest._targets).toBeTruthy();
     }
 
     await appRoot.deactivate();

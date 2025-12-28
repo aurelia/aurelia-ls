@@ -15,10 +15,8 @@
  * - https://docs.aurelia.io/getting-to-know-aurelia/routing/aurelia-router/
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
-import { JSDOM } from "jsdom";
 import { DI, Registration, IContainer } from "@aurelia/kernel";
 import {
   Aurelia,
@@ -36,12 +34,12 @@ import {
   RouterOptions,
   IRouterOptions,
 } from "@aurelia/router";
-import { BrowserPlatform } from "@aurelia/platform-browser";
 
 import { compileWithAot } from "../out/aot.js";
 import { DEFAULT_SEMANTICS } from "../out/index.js";
 import { patchComponentDefinition } from "../out/ssr/patch.js";
 import { renderWithComponents } from "../out/ssr/render.js";
+import { countOccurrences } from "./_helpers/test-utils.js";
 
 // =============================================================================
 // Route Components (simple pages for testing)
@@ -227,19 +225,6 @@ function createRouterSemantics() {
   };
 }
 
-/**
- * Count occurrences of a string.
- */
-function countOccurrences(str, substr) {
-  let count = 0;
-  let pos = 0;
-  while ((pos = str.indexOf(substr, pos)) !== -1) {
-    count++;
-    pos += substr.length;
-  }
-  return count;
-}
-
 // =============================================================================
 // Tests: AOT Compilation of Router Resources
 // =============================================================================
@@ -257,16 +242,10 @@ describe("Router SSR: AOT Compilation", () => {
     console.log("# Router app AOT instructions:", JSON.stringify(aot.instructions, null, 2));
 
     // Template should preserve au-viewport element
-    assert.ok(
-      aot.template.includes("<au-viewport"),
-      "AOT template should contain au-viewport element"
-    );
+    expect(aot.template).toContain("<au-viewport");
 
     // Should have instructions for the template
-    assert.ok(
-      aot.instructions.length > 0,
-      "Should have AOT instructions"
-    );
+    expect(aot.instructions.length).toBeGreaterThan(0);
   });
 
   test("compiles template with interpolation", () => {
@@ -278,10 +257,7 @@ describe("Router SSR: AOT Compilation", () => {
     });
 
     // The template should have text bindings for the interpolation
-    assert.ok(
-      aot.template.includes("<!--au-->") || aot.instructions.length > 0,
-      "AOT should compile interpolation in router template"
-    );
+    expect(aot.template.includes("<!--au-->") || aot.instructions.length > 0).toBe(true);
   });
 
   test("compiles route component templates", () => {
@@ -292,8 +268,8 @@ describe("Router SSR: AOT Compilation", () => {
     console.log("# About AOT template:", aboutAot.template);
 
     // Both should compile successfully
-    assert.ok(homeAot.template.includes("home-page"), "Home template should have class");
-    assert.ok(aboutAot.template.includes("about-page"), "About template should have class");
+    expect(homeAot.template).toContain("home-page");
+    expect(aboutAot.template).toContain("about-page");
   });
 });
 
@@ -334,26 +310,15 @@ describe("Router SSR: Server-Side Rendering", () => {
     });
 
     // Should have the root app structure
-    assert.ok(
-      result.html.includes("router-app"),
-      "Should render router-app class"
-    );
-    assert.ok(
-      result.html.includes("Router SSR Test"),
-      "Should render app name"
-    );
+    expect(result.html).toContain("router-app");
+    expect(result.html).toContain("Router SSR Test");
 
     // Should have au-viewport element
-    assert.ok(
-      result.html.includes("<au-viewport"),
-      "Should render au-viewport element"
-    );
+    expect(result.html).toContain("<au-viewport");
 
     // Navigation links should be present
-    assert.ok(
-      result.html.includes("Home") && result.html.includes("About"),
-      "Should render navigation links"
-    );
+    expect(result.html).toContain("Home");
+    expect(result.html).toContain("About");
   });
 
   test("renders correct route for /home URL", async () => {
@@ -386,10 +351,7 @@ describe("Router SSR: Server-Side Rendering", () => {
 
     // This test uses activateRoutes=false (default), so route content is not rendered.
     // The viewport element renders but stays empty. Use activateRoutes=true to populate.
-    assert.ok(
-      result.html.includes("<au-viewport"),
-      "Should render au-viewport element"
-    );
+    expect(result.html).toContain("<au-viewport");
   });
 
   test("renders correct route for /about URL", async () => {
@@ -422,10 +384,7 @@ describe("Router SSR: Server-Side Rendering", () => {
 
     // This test uses activateRoutes=false (default), so route content is not rendered.
     // The viewport element renders but stays empty. Use activateRoutes=true to populate.
-    assert.ok(
-      result.html.includes("<au-viewport"),
-      "Should render au-viewport element"
-    );
+    expect(result.html).toContain("<au-viewport");
   });
 });
 
@@ -463,23 +422,19 @@ describe("Router SSR: Manifest Recording", () => {
     });
 
     // Manifest should exist
-    assert.ok(result.manifest, "Should have manifest");
-    assert.ok(result.manifest.manifest, "Should have root scope");
+    expect(result.manifest).toBeTruthy();
+    expect(result.manifest.manifest).toBeTruthy();
 
     // Root should be router-app
-    assert.equal(
-      result.manifest.root,
-      "router-app",
-      "Manifest root should be router-app"
-    );
+    expect(result.manifest.root).toBe("router-app");
 
     // Check for viewport in children
     const rootScope = result.manifest.manifest;
-    const hasViewport = rootScope.children?.some(
+    const viewportChild = rootScope.children?.find(
       child => child.name === "au-viewport"
     );
 
-    assert.ok(hasViewport, "Manifest should include au-viewport in children");
+    expect(viewportChild).toBeTruthy();
   });
 
   test("manifest includes routed component inside viewport", async () => {
@@ -517,18 +472,15 @@ describe("Router SSR: Manifest Recording", () => {
       child => child.name === "au-viewport"
     );
 
-    assert.ok(viewport, "Should have viewport in manifest");
-    assert.ok(viewport.children?.length > 0, "Viewport should have children");
+    expect(viewport).toBeTruthy();
+    expect(viewport.children?.length).toBeGreaterThan(0);
 
     // The routed component (home-page for "/" route) should be inside viewport
     const routedComponent = viewport.children?.find(
       child => child.name === "home-page"
     );
 
-    assert.ok(
-      routedComponent,
-      "Routed component (home-page) should be recorded inside viewport"
-    );
+    expect(routedComponent).toBeTruthy();
   });
 });
 
@@ -572,26 +524,10 @@ describe("Router SSR: DOM Structure", () => {
     const viewportCount = countOccurrences(result.html, "<au-viewport");
 
     // Should have exactly one of each structural element
-    assert.equal(
-      routerAppCount,
-      1,
-      `Expected 1 .router-app, got ${routerAppCount}`
-    );
-    assert.equal(
-      headerCount,
-      1,
-      `Expected 1 header, got ${headerCount}`
-    );
-    assert.equal(
-      mainCount,
-      1,
-      `Expected 1 main, got ${mainCount}`
-    );
-    assert.equal(
-      viewportCount,
-      1,
-      `Expected 1 au-viewport, got ${viewportCount}`
-    );
+    expect(routerAppCount).toBe(1);
+    expect(headerCount).toBe(1);
+    expect(mainCount).toBe(1);
+    expect(viewportCount).toBe(1);
   });
 });
 
@@ -629,14 +565,8 @@ describe("Router SSR: Route Activation", () => {
     });
 
     // Should render route content inside viewport
-    assert.ok(
-      result.html.includes("home-page"),
-      "Should render home-page element"
-    );
-    assert.ok(
-      result.html.includes("Welcome to the home page"),
-      "Should render home page content"
-    );
+    expect(result.html).toContain("home-page");
+    expect(result.html).toContain("Welcome to the home page");
   });
 
   test("renders about route content for /about URL", async () => {
@@ -668,14 +598,8 @@ describe("Router SSR: Route Activation", () => {
     });
 
     // Should render about route content inside viewport
-    assert.ok(
-      result.html.includes("about-page"),
-      "Should render about-page element"
-    );
-    assert.ok(
-      result.html.includes("This is the about page"),
-      "Should render about page content"
-    );
+    expect(result.html).toContain("about-page");
+    expect(result.html).toContain("This is the about page");
   });
 
   test("no double rendering when routes are activated", async () => {
@@ -712,8 +636,8 @@ describe("Router SSR: Route Activation", () => {
     const viewportCount = countOccurrences(result.html, "<au-viewport");
 
     // Should have exactly one of each
-    assert.equal(routerAppCount, 1, `Expected 1 .router-app, got ${routerAppCount}`);
-    assert.equal(homePageCount, 1, `Expected 1 .home-page, got ${homePageCount}`);
-    assert.equal(viewportCount, 1, `Expected 1 au-viewport, got ${viewportCount}`);
+    expect(routerAppCount).toBe(1);
+    expect(homePageCount).toBe(1);
+    expect(viewportCount).toBe(1);
   });
 });

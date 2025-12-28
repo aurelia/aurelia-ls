@@ -11,36 +11,14 @@
  * to ensure consistency.
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { JSDOM } from "jsdom";
 import { DI, Registration } from "@aurelia/kernel";
 import { Aurelia, IPlatform, StandardConfiguration, CustomElement } from "@aurelia/runtime-html";
 import { BrowserPlatform } from "@aurelia/platform-browser";
 import { compileAndRenderAot } from "../out/index.js";
-
-// =============================================================================
-// Helper: Create a test component class with given state and template
-// =============================================================================
-
-/**
- * Creates a component class with the specified state and template.
- * This is the correct pattern - components define their own state naturally.
- */
-function createComponent(name, template, state = {}) {
-  const ComponentClass = class {
-    constructor() {
-      Object.assign(this, state);
-    }
-  };
-  ComponentClass.$au = {
-    type: "custom-element",
-    name,
-    template,
-  };
-  return ComponentClass;
-}
+import { createComponent } from "./_helpers/test-utils.js";
 
 // =============================================================================
 // Test Infrastructure
@@ -189,20 +167,20 @@ describe("E2E: SSR Output", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Verify structure
-    assert.ok(result.html.includes("todo-app"), "Should have todo-app div");
-    assert.ok(result.html.includes("todo-list"), "Should have todo-list ul");
-    assert.ok(result.html.includes("todo-item"), "Should have todo-item li");
+    expect(result.html).toContain("todo-app");
+    expect(result.html).toContain("todo-list");
+    expect(result.html).toContain("todo-item");
 
     // Verify content
-    assert.ok(result.html.includes("Active task"), "Should render active task");
-    assert.ok(result.html.includes("Done task"), "Should render done task");
+    expect(result.html).toContain("Active task");
+    expect(result.html).toContain("Done task");
 
     // Verify conditional (if/else) - strikethrough for completed
-    assert.ok(result.html.includes("<s>"), "Should have <s> for completed task");
+    expect(result.html).toContain("<s>");
 
     // Verify footer
-    assert.ok(result.html.includes("footer"), "Should have footer");
-    assert.ok(result.html.includes("1 item"), "Should show remaining count");
+    expect(result.html).toContain("footer");
+    expect(result.html).toContain("1 item");
   });
 
   test("SSR renders nested repeat correctly", async () => {
@@ -223,12 +201,12 @@ describe("E2E: SSR Output", () => {
     const TestApp = createComponent("test-app", template, state);
     const result = await compileAndRenderAot(TestApp);
 
-    assert.ok(result.html.includes("Fruits"), "Should have Fruits group");
-    assert.ok(result.html.includes("Veggies"), "Should have Veggies group");
-    assert.ok(result.html.includes("Apple"), "Should have Apple");
-    assert.ok(result.html.includes("Banana"), "Should have Banana");
-    assert.ok(result.html.includes("Carrot"), "Should have Carrot");
-    assert.ok(result.html.includes("Potato"), "Should have Potato");
+    expect(result.html).toContain("Fruits");
+    expect(result.html).toContain("Veggies");
+    expect(result.html).toContain("Apple");
+    expect(result.html).toContain("Banana");
+    expect(result.html).toContain("Carrot");
+    expect(result.html).toContain("Potato");
   });
 
   test("SSR renders empty state correctly", async () => {
@@ -240,8 +218,8 @@ describe("E2E: SSR Output", () => {
     const TestApp = createComponent("test-app", template, { items: [] });
     const result = await compileAndRenderAot(TestApp);
 
-    assert.ok(result.html.includes("No items"), "Should show empty message");
-    assert.ok(!result.html.includes("<li>"), "Should not have list items");
+    expect(result.html).toContain("No items");
+    expect(result.html).not.toContain("<li>");
   });
 });
 
@@ -260,20 +238,20 @@ describe("E2E: Client Reactivity", () => {
 
     try {
       // Initial state
-      assert.equal(count(host, ".item"), 3);
-      assert.deepEqual(texts(host, ".item"), ["A", "B", "C"]);
+      expect(count(host, ".item")).toBe(3);
+      expect(texts(host, ".item")).toEqual(["A", "B", "C"]);
 
       // Push
       vm.items.push("D");
-      assert.equal(count(host, ".item"), 4);
+      expect(count(host, ".item")).toBe(4);
 
       // Shift
       vm.items.shift();
-      assert.deepEqual(texts(host, ".item"), ["B", "C", "D"]);
+      expect(texts(host, ".item")).toEqual(["B", "C", "D"]);
 
       // Replace
       vm.items = ["X", "Y"];
-      assert.deepEqual(texts(host, ".item"), ["X", "Y"]);
+      expect(texts(host, ".item")).toEqual(["X", "Y"]);
     } finally {
       await stop();
     }
@@ -292,19 +270,19 @@ describe("E2E: Client Reactivity", () => {
 
     try {
       // Initial: shown
-      assert.equal(count(host, ".shown"), 1);
-      assert.equal(count(host, ".hidden"), 0);
+      expect(count(host, ".shown")).toBe(1);
+      expect(count(host, ".hidden")).toBe(0);
 
       // Toggle
       vm.show = false;
       await Promise.resolve();
-      assert.equal(count(host, ".shown"), 0);
-      assert.equal(count(host, ".hidden"), 1);
+      expect(count(host, ".shown")).toBe(0);
+      expect(count(host, ".hidden")).toBe(1);
 
       // Toggle back
       vm.show = true;
       await Promise.resolve();
-      assert.equal(count(host, ".shown"), 1);
+      expect(count(host, ".shown")).toBe(1);
     } finally {
       await stop();
     }
@@ -323,14 +301,14 @@ describe("E2E: Client Reactivity", () => {
 
     try {
       // Initial: else
-      assert.equal(count(host, ".inactive"), 1);
-      assert.equal(count(host, ".active"), 0);
+      expect(count(host, ".inactive")).toBe(1);
+      expect(count(host, ".active")).toBe(0);
 
       // Toggle
       vm.active = true;
       await Promise.resolve();
-      assert.equal(count(host, ".active"), 1);
-      assert.equal(count(host, ".inactive"), 0);
+      expect(count(host, ".active")).toBe(1);
+      expect(count(host, ".inactive")).toBe(0);
     } finally {
       await stop();
     }
@@ -346,12 +324,12 @@ describe("E2E: Client Reactivity", () => {
 
     try {
       // Initial - VM value reflected in DOM
-      assert.equal(text(host, ".output"), "initial");
+      expect(text(host, ".output")).toBe("initial");
 
       // Update from VM propagates to DOM
       vm.text = "updated";
       await Promise.resolve();
-      assert.equal(text(host, ".output"), "updated");
+      expect(text(host, ".output")).toBe("updated");
     } finally {
       await stop();
     }
@@ -367,12 +345,12 @@ describe("E2E: Client Reactivity", () => {
 
     try {
       // Initial
-      assert.equal(text(host, ".output"), "Alice");
+      expect(text(host, ".output")).toBe("Alice");
 
       // Update nested property
       vm.user.name = "Bob";
       await Promise.resolve();
-      assert.equal(text(host, ".output"), "Bob");
+      expect(text(host, ".output")).toBe("Bob");
     } finally {
       await stop();
     }
@@ -391,14 +369,14 @@ describe("E2E: Client Reactivity", () => {
     );
 
     try {
-      assert.equal(vm.count, 0);
+      expect(vm.count).toBe(0);
 
       click(host, ".btn");
-      assert.equal(vm.count, 1);
+      expect(vm.count).toBe(1);
 
       click(host, ".btn");
       click(host, ".btn");
-      assert.equal(vm.count, 3);
+      expect(vm.count).toBe(3);
     } finally {
       await stop();
     }
@@ -419,17 +397,17 @@ describe("E2E: Client Reactivity", () => {
     );
 
     try {
-      assert.equal(count(host, ".group"), 2);
-      assert.equal(count(host, ".item"), 3);
+      expect(count(host, ".group")).toBe(2);
+      expect(count(host, ".item")).toBe(3);
 
       // Add to nested
       vm.groups[0].items.push("new");
-      assert.equal(count(host, ".item"), 4);
+      expect(count(host, ".item")).toBe(4);
 
       // Add new group
       vm.groups.push({ name: "C", items: ["x", "y"] });
-      assert.equal(count(host, ".group"), 3);
-      assert.equal(count(host, ".item"), 6);
+      expect(count(host, ".group")).toBe(3);
+      expect(count(host, ".item")).toBe(6);
     } finally {
       await stop();
     }
@@ -454,21 +432,21 @@ describe("E2E: Todo App Integration", () => {
 
     try {
       // Initial state
-      assert.equal(count(host, ".todo-item"), 1);
-      assert.equal(text(host, ".title"), "First");
+      expect(count(host, ".todo-item")).toBe(1);
+      expect(text(host, ".title")).toBe("First");
 
       // Add todo via VM
       vm.todos.push({ title: "Second", completed: false });
-      assert.equal(count(host, ".todo-item"), 2);
+      expect(count(host, ".todo-item")).toBe(2);
 
       // Remove first todo via VM
       vm.todos.shift();
-      assert.equal(count(host, ".todo-item"), 1);
-      assert.equal(text(host, ".title"), "Second");
+      expect(count(host, ".todo-item")).toBe(1);
+      expect(text(host, ".title")).toBe("Second");
 
       // Clear all
       vm.todos = [];
-      assert.equal(count(host, ".todo-item"), 0);
+      expect(count(host, ".todo-item")).toBe(0);
 
       // Add multiple
       vm.todos.push(
@@ -476,8 +454,8 @@ describe("E2E: Todo App Integration", () => {
         { title: "B", completed: false },
         { title: "C", completed: false }
       );
-      assert.equal(count(host, ".todo-item"), 3);
-      assert.deepEqual(texts(host, ".title"), ["A", "B", "C"]);
+      expect(count(host, ".todo-item")).toBe(3);
+      expect(texts(host, ".title")).toEqual(["A", "B", "C"]);
     } finally {
       await stop();
     }

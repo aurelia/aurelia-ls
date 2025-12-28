@@ -11,33 +11,11 @@
  * Uses `compileAndRenderAot` which combines compileWithAot + render.
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { compileAndRenderAot, compileWithAot } from "../out/index.js";
 import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler";
-
-// =============================================================================
-// Helper: Create a test component class with given state and template
-// =============================================================================
-
-/**
- * Creates a component class with the specified state and template.
- * This is the correct pattern - components define their own state naturally.
- */
-function createComponent(name, template, state = {}) {
-  const ComponentClass = class {
-    constructor() {
-      Object.assign(this, state);
-    }
-  };
-  ComponentClass.$au = {
-    type: "custom-element",
-    name,
-    template,
-  };
-  return ComponentClass;
-}
+import { createComponent } from "./_helpers/test-utils.js";
 
 // =============================================================================
 // Basic AOT Compilation Tests
@@ -50,13 +28,13 @@ describe("AOT Compilation", () => {
     });
 
     // All targets use <!--au--> marker comments
-    assert.ok(result.template.includes("<!--au-->"), "Should have <!--au--> hydration marker");
+    expect(result.template).toContain("<!--au-->");
 
     // Verify instructions were generated
-    assert.ok(result.instructions.length > 0, "Should have instructions");
+    expect(result.instructions.length).toBeGreaterThan(0);
 
     // Verify target count
-    assert.ok(result.targetCount > 0, "Should have at least one target");
+    expect(result.targetCount).toBeGreaterThan(0);
   });
 
   test("compiles property binding", () => {
@@ -64,8 +42,8 @@ describe("AOT Compilation", () => {
       name: "test-comp",
     });
 
-    assert.ok(result.template.includes("<!--au-->"), "Should have <!--au--> hydration marker");
-    assert.ok(result.instructions.length > 0, "Should have binding instructions");
+    expect(result.template).toContain("<!--au-->");
+    expect(result.instructions.length).toBeGreaterThan(0);
   });
 
   test("compiles static attributes", () => {
@@ -73,8 +51,8 @@ describe("AOT Compilation", () => {
       name: "test-comp",
     });
 
-    assert.ok(result.template.includes('class="container"'), "Should preserve class attr");
-    assert.ok(result.template.includes('id="main"'), "Should preserve id attr");
+    expect(result.template).toContain('class="container"');
+    expect(result.template).toContain('id="main"');
   });
 
   test("compiles multiple bindings on same element", () => {
@@ -82,7 +60,7 @@ describe("AOT Compilation", () => {
       name: "test-comp",
     });
 
-    assert.ok(result.instructions.length > 0, "Should have instructions");
+    expect(result.instructions.length).toBeGreaterThan(0);
   });
 });
 
@@ -97,7 +75,7 @@ describe("AOT SSR: Basic Rendering", () => {
     });
 
     const result = await compileAndRenderAot(TestApp);
-    assert.ok(result.html.includes("Hello AOT"), "Should render interpolated value");
+    expect(result.html).toContain("Hello AOT");
   });
 
   test("renders multiple interpolations", async () => {
@@ -107,8 +85,8 @@ describe("AOT SSR: Basic Rendering", () => {
     });
 
     const result = await compileAndRenderAot(TestApp);
-    assert.ok(result.html.includes("John"), "Should render first name");
-    assert.ok(result.html.includes("Doe"), "Should render last name");
+    expect(result.html).toContain("John");
+    expect(result.html).toContain("Doe");
   });
 
   test("renders nested property access", async () => {
@@ -117,7 +95,7 @@ describe("AOT SSR: Basic Rendering", () => {
     });
 
     const result = await compileAndRenderAot(TestApp);
-    assert.ok(result.html.includes("Alice"), "Should render nested property");
+    expect(result.html).toContain("Alice");
   });
 
   test("renders expression in text", async () => {
@@ -126,7 +104,7 @@ describe("AOT SSR: Basic Rendering", () => {
     });
 
     const result = await compileAndRenderAot(TestApp);
-    assert.ok(result.html.includes("6"), "Should evaluate expression");
+    expect(result.html).toContain("6");
   });
 
   test("renders ternary expression", async () => {
@@ -135,7 +113,7 @@ describe("AOT SSR: Basic Rendering", () => {
     });
 
     const result = await compileAndRenderAot(TestApp);
-    assert.ok(result.html.includes("Yes"), "Should evaluate ternary");
+    expect(result.html).toContain("Yes");
   });
 });
 
@@ -147,14 +125,9 @@ describe("AOT SSR: Property Bindings", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
-    // Property binding may set value attribute or property
-    // Just verify the input element is rendered
-    assert.ok(result.html.includes("<input"), "Should render input element");
-    // The binding itself may not appear in static HTML - it's evaluated at runtime
-    // If value does appear, it should have our value
-    if (result.html.includes('value=')) {
-      assert.ok(result.html.includes("test-value"), "If value attr present, should have our value");
-    }
+    // SSR should render the input element with the bound value
+    expect(result.html).toContain("<input");
+    expect(result.html).toContain('value="test-value"');
   });
 
   test("renders checked.bind on checkbox", async () => {
@@ -165,10 +138,8 @@ describe("AOT SSR: Property Bindings", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Checkbox with checked=true should have checked attribute
-    assert.ok(
-      result.html.includes("checked") && result.html.includes("checkbox"),
-      "Should have checked attribute"
-    );
+    expect(result.html).toContain("checked");
+    expect(result.html).toContain("checkbox");
   });
 });
 
@@ -182,9 +153,9 @@ describe("AOT SSR: Static Content", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
-    assert.ok(result.html.includes('class="wrapper"'), "Should have wrapper class");
-    assert.ok(result.html.includes('class="label"'), "Should have label class");
-    assert.ok(result.html.includes("Hello"), "Should have static text");
+    expect(result.html).toContain('class="wrapper"');
+    expect(result.html).toContain('class="label"');
+    expect(result.html).toContain("Hello");
   });
 
   test("renders mixed static and dynamic content", async () => {
@@ -194,9 +165,9 @@ describe("AOT SSR: Static Content", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
-    assert.ok(result.html.includes('class="greeting"'), "Should have static class");
-    assert.ok(result.html.includes("Hello,"), "Should have static text");
-    assert.ok(result.html.includes("World"), "Should have interpolated name");
+    expect(result.html).toContain('class="greeting"');
+    expect(result.html).toContain("Hello,");
+    expect(result.html).toContain("World");
   });
 });
 
@@ -208,24 +179,24 @@ describe("AOT Compilation: Result Structure", () => {
   test("provides raw plan and code result", () => {
     const result = compileWithAot("<div>${x}</div>", { name: "test" });
 
-    assert.ok(result.raw, "Should have raw output");
-    assert.ok(result.raw.plan, "Should have raw plan");
-    assert.ok(result.raw.codeResult, "Should have raw code result");
+    expect(result.raw).toBeTruthy();
+    expect(result.raw.plan).toBeTruthy();
+    expect(result.raw.codeResult).toBeTruthy();
   });
 
   test("provides expression table", () => {
     const result = compileWithAot("<div>${x}</div>", { name: "test" });
 
     const expressions = result.raw.codeResult.expressions;
-    assert.ok(expressions.length > 0, "Should have expressions");
-    assert.ok(expressions[0]?.ast, "Expression should have AST");
+    expect(expressions.length).toBeGreaterThan(0);
+    expect(expressions[0]?.ast).toBeTruthy();
   });
 
   test("provides nested definitions for controllers", () => {
     // This test verifies the structure exists, even if empty for simple templates
     const result = compileWithAot("<div>${x}</div>", { name: "test" });
 
-    assert.ok(Array.isArray(result.nestedDefs), "Should have nestedDefs array");
+    expect(Array.isArray(result.nestedDefs)).toBe(true);
   });
 });
 
@@ -241,7 +212,7 @@ describe("AOT Error Handling", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Should render without crashing
-    assert.ok(result.html.includes("<div"), "Should render div");
+    expect(result.html).toContain("<div");
   });
 
   test("handles null state value", async () => {
@@ -252,7 +223,7 @@ describe("AOT Error Handling", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Should render without crashing
-    assert.ok(result.html.includes("<div"), "Should render div");
+    expect(result.html).toContain("<div");
   });
 });
 
@@ -271,9 +242,9 @@ describe("AOT Template Controllers", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Should render all items
-    assert.ok(result.html.includes("A"), `Expected item A in: ${result.html}`);
-    assert.ok(result.html.includes("B"), `Expected item B in: ${result.html}`);
-    assert.ok(result.html.includes("C"), `Expected item C in: ${result.html}`);
+    expect(result.html).toContain("A");
+    expect(result.html).toContain("B");
+    expect(result.html).toContain("C");
   });
 
   test("renders if.bind controller - true condition", async () => {
@@ -282,7 +253,7 @@ describe("AOT Template Controllers", () => {
     });
 
     const result = await compileAndRenderAot(TestApp);
-    assert.ok(result.html.includes("Visible"), `Expected Visible in: ${result.html}`);
+    expect(result.html).toContain("Visible");
   });
 
   test("renders if.bind controller - false condition", async () => {
@@ -292,9 +263,9 @@ describe("AOT Template Controllers", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
-    // When condition is false, content should not appear
-    assert.ok(!result.html.includes("Hidden") || result.html.includes("<!--"),
-      `Expected Hidden to be hidden or just markers in: ${result.html}`);
+    // When condition is false, the content text should not appear in rendered output
+    // (the div may be replaced by a comment marker for hydration)
+    expect(result.html).not.toContain(">Hidden<");
   });
 
   test("renders nested repeat with inner bindings", async () => {
@@ -306,8 +277,8 @@ describe("AOT Template Controllers", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
-    assert.ok(result.html.includes("First"), `Expected First in: ${result.html}`);
-    assert.ok(result.html.includes("Second"), `Expected Second in: ${result.html}`);
+    expect(result.html).toContain("First");
+    expect(result.html).toContain("Second");
   });
 
   test("renders if containing repeat (todo app pattern)", async () => {
@@ -322,9 +293,9 @@ describe("AOT Template Controllers", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Should render all items since condition is true
-    assert.ok(result.html.includes("A"), `Expected A in: ${result.html}`);
-    assert.ok(result.html.includes("B"), `Expected B in: ${result.html}`);
-    assert.ok(result.html.includes("C"), `Expected C in: ${result.html}`);
+    expect(result.html).toContain("A");
+    expect(result.html).toContain("B");
+    expect(result.html).toContain("C");
   });
 
   test("renders if containing repeat with false condition", async () => {
@@ -339,7 +310,7 @@ describe("AOT Template Controllers", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Should not render items since condition is false
-    assert.ok(!result.html.includes("<li>"), `Expected no li elements in: ${result.html}`);
+    expect(result.html).not.toContain("<li>");
   });
 
   test("renders repeat with element-level attribute binding", async () => {
@@ -351,11 +322,11 @@ describe("AOT Template Controllers", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
-    assert.ok(result.html.includes("Task 1"), `Expected Task 1 in: ${result.html}`);
-    assert.ok(result.html.includes("Task 2"), `Expected Task 2 in: ${result.html}`);
+    expect(result.html).toContain("Task 1");
+    expect(result.html).toContain("Task 2");
     // Check class bindings
-    assert.ok(result.html.includes("done"), `Expected done class in: ${result.html}`);
-    assert.ok(result.html.includes("pending"), `Expected pending class in: ${result.html}`);
+    expect(result.html).toContain("done");
+    expect(result.html).toContain("pending");
   });
 
   test("renders todo app structure (if > repeat > inner content)", async () => {
@@ -391,15 +362,16 @@ describe("AOT Template Controllers", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Verify items are rendered
-    assert.ok(result.html.includes("Learn Aurelia"), `Expected Learn Aurelia in: ${result.html}`);
-    assert.ok(result.html.includes("Build app"), `Expected Build app in: ${result.html}`);
+    expect(result.html).toContain("Learn Aurelia");
+    expect(result.html).toContain("Build app");
 
     // Verify class interpolation works
-    assert.ok(result.html.includes("completed"), `Expected completed class in: ${result.html}`);
+    expect(result.html).toContain("completed");
 
     // Verify the button exists (with the click handler - it won't show in HTML but the element should)
-    assert.ok(result.html.includes("destroy"), `Expected destroy class button in: ${result.html}`);
-    assert.ok(result.html.includes("×") || result.html.includes("&times;"), `Expected × in button in: ${result.html}`);
+    expect(result.html).toContain("destroy");
+    // The × character may be rendered as entity or literal depending on serialization
+    expect(result.html).toMatch(/×|&times;/);
   });
 
   test("compiles repeat.for with key.bind auxiliary binding", async () => {
@@ -416,20 +388,20 @@ describe("AOT Template Controllers", () => {
 
     // Find the iteratorBinding instruction
     const htcInst = def.instructions.flat().find(i => i.type === INSTRUCTION_TYPE.hydrateTemplateController);
-    assert.ok(htcInst, "Should have hydrateTemplateController instruction");
+    expect(htcInst).toBeTruthy();
 
     // The iteratorBinding should be in the HTC's instructions
     const iteratorInst = htcInst.instructions.find(i => i.type === INSTRUCTION_TYPE.iteratorBinding);
-    assert.ok(iteratorInst, "Should have iteratorBinding instruction");
-    assert.ok(iteratorInst.aux, "iteratorBinding should have aux array");
-    assert.equal(iteratorInst.aux.length, 1, "Should have 1 aux binding (key)");
-    assert.equal(iteratorInst.aux[0].name, "key", "Aux binding should be 'key'");
-    assert.ok(iteratorInst.aux[0].exprId, "Key aux should have exprId");
+    expect(iteratorInst).toBeTruthy();
+    expect(iteratorInst.aux).toBeTruthy();
+    expect(iteratorInst.aux.length).toBe(1);
+    expect(iteratorInst.aux[0].name).toBe("key");
+    expect(iteratorInst.aux[0].exprId).toBeTruthy();
 
     // Verify the expression exists in the expression table
     const keyExpr = codeResult.expressions.find(e => e.id === iteratorInst.aux[0].exprId);
-    assert.ok(keyExpr, "Key expression should exist in expression table");
-    assert.equal(keyExpr.ast.$kind, "AccessMember", "Key expression should be AccessMember (item.id)");
+    expect(keyExpr).toBeTruthy();
+    expect(keyExpr.ast.$kind).toBe("AccessMember");
 
     // Also verify rendering works
     const TestApp = createComponent(
@@ -438,8 +410,8 @@ describe("AOT Template Controllers", () => {
       { items: [{ id: 1, name: "First" }, { id: 2, name: "Second" }] }
     );
     const renderResult = await compileAndRenderAot(TestApp);
-    assert.ok(renderResult.html.includes("First"), `Expected First in: ${renderResult.html}`);
-    assert.ok(renderResult.html.includes("Second"), `Expected Second in: ${renderResult.html}`);
+    expect(renderResult.html).toContain("First");
+    expect(renderResult.html).toContain("Second");
   });
 
   test("compiles repeat.for with static key", async () => {
@@ -453,7 +425,7 @@ describe("AOT Template Controllers", () => {
     const result = await compileAndRenderAot(TestApp);
 
     // Should render correctly
-    assert.ok(result.html.includes("First"), `Expected First in: ${result.html}`);
-    assert.ok(result.html.includes("Second"), `Expected Second in: ${result.html}`);
+    expect(result.html).toContain("First");
+    expect(result.html).toContain("Second");
   });
 });

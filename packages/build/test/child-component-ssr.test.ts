@@ -6,13 +6,9 @@
  * 2. Both parent and child are AOT-compiled
  * 3. Child class is patched with $au definition
  * 4. renderWithComponents renders the full tree
- *
- * This isolates the SSR pipeline from Vite/file loading to debug the
- * target count mismatch (AUR0757) error.
  */
 
-import { test, describe } from "vitest";
-import assert from "node:assert/strict";
+import { test, describe, expect } from "vitest";
 
 import { compileWithAot } from "../out/aot.js";
 import { patchComponentDefinition } from "../out/ssr/patch.js";
@@ -104,15 +100,14 @@ describe("Child Component SSR: AOT Compilation", () => {
       name: "greeting-card",
     });
 
-    console.log("\n=== CHILD AOT COMPILATION ===");
-    console.log("Template:", result.template);
-    console.log("Instructions length:", result.instructions.length);
-    console.log("Instructions:", JSON.stringify(result.instructions, null, 2));
-    console.log("Target count:", result.targetCount);
+    // Template should be produced with markers
+    expect(result.template).toContain('class="greeting-card"');
+    expect(result.template).toContain("<!--au-->");
 
-    assert.ok(result.template, "Should produce template");
-    assert.ok(result.instructions.length > 0, "Should have instructions");
-    assert.ok(result.targetCount > 0, "Should have target count");
+    // Critical: instruction count must match target count
+    expect(result.instructions.length).toBe(result.targetCount);
+    // Should have at least 2 instructions (h2 interpolation + p interpolation)
+    expect(result.instructions.length).toBeGreaterThanOrEqual(2);
   });
 
   test("compiles parent component template with child element", () => {
@@ -124,20 +119,12 @@ describe("Child Component SSR: AOT Compilation", () => {
 
     const result = compileWithAot(parentTemplate, {
       name: "my-app",
-      // Note: We need to provide semantics/resourceGraph for child element resolution
-      // For now, test without it to see what happens
     });
 
-    console.log("\n=== PARENT AOT COMPILATION ===");
-    console.log("Template:", result.template);
-    console.log("Instructions length:", result.instructions.length);
-    console.log("Instructions:", JSON.stringify(result.instructions, null, 2));
-    console.log("Target count:", result.targetCount);
-    console.log("Nested defs:", result.nestedDefs.length);
-
-    assert.ok(result.template, "Should produce template");
-    // Parent should have instructions for its own bindings + child element
-    assert.ok(result.instructions.length > 0, "Should have instructions");
+    expect(result.template).toBeTruthy();
+    // Parent has: appTitle interpolation, greeting-card element, timestamp interpolation
+    expect(result.instructions.length).toBe(3);
+    expect(result.targetCount).toBe(3);
   });
 });
 
@@ -162,22 +149,18 @@ describe("Child Component SSR: Patching", () => {
       name: "test-child",
     });
 
-    console.log("\n=== BEFORE PATCHING ===");
-    console.log("$au.template:", TestChild.$au.template);
-    console.log("$au.instructions:", TestChild.$au.instructions);
-    console.log("$au.needsCompile:", TestChild.$au.needsCompile);
+    // Before patching
+    expect(TestChild.$au.template).toBe(undefined);
+    expect(TestChild.$au.instructions).toBe(undefined);
 
     patchComponentDefinition(TestChild, aot);
 
-    console.log("\n=== AFTER PATCHING ===");
-    console.log("$au.template:", TestChild.$au.template);
-    console.log("$au.instructions:", JSON.stringify(TestChild.$au.instructions, null, 2));
-    console.log("$au.needsCompile:", TestChild.$au.needsCompile);
-
-    assert.strictEqual(TestChild.$au.template, aot.template, "Template should be patched");
-    assert.deepStrictEqual(TestChild.$au.instructions, aot.instructions, "Instructions should be patched");
-    assert.strictEqual(TestChild.$au.needsCompile, false, "needsCompile should be false");
-    assert.ok(TestChild.$au.bindables, "Bindables should be preserved");
+    // After patching
+    expect(TestChild.$au.template).toBe(aot.template);
+    expect(TestChild.$au.instructions).toEqual(aot.instructions);
+    expect(TestChild.$au.needsCompile).toBe(false);
+    expect(TestChild.$au.bindables).toBeTruthy();
+    expect(TestChild.$au.bindables).toEqual({ message: { mode: 2 } });
   });
 
   test("patching preserves bindables from original $au", () => {
@@ -199,12 +182,12 @@ describe("Child Component SSR: Patching", () => {
 
     patchComponentDefinition(TestBindableChild, aot);
 
-    console.log("\n=== PATCHED WITH BINDABLES ===");
-    console.log("$au:", JSON.stringify(TestBindableChild.$au, null, 2));
-
-    assert.ok(TestBindableChild.$au.bindables.value, "value bindable should be preserved");
-    assert.ok(TestBindableChild.$au.bindables.label, "label bindable should be preserved");
-    assert.strictEqual(TestBindableChild.$au.containerless, true, "containerless should be preserved");
+    expect(TestBindableChild.$au.bindables).toEqual({
+      value: { mode: 2 },
+      label: { mode: 1 },
+    });
+    expect(TestBindableChild.$au.containerless).toBe(true);
+    expect(TestBindableChild.$au.needsCompile).toBe(false);
   });
 });
 
@@ -230,18 +213,14 @@ describe("Child Component SSR: Minimal Rendering", () => {
 
     patchComponentDefinition(NoChildComponent, aot);
 
-    console.log("\n=== RENDERING NO-CHILD COMPONENT ===");
-    console.log("$au after patch:", JSON.stringify(NoChildComponent.$au, null, 2));
-
     const result = await renderWithComponents(NoChildComponent, {
       childComponents: [],
     });
 
-    console.log("Rendered HTML:", result.html);
-    console.log("Manifest:", JSON.stringify(result.manifest, null, 2));
-
-    assert.ok(result.html.includes("Hello SSR"), "Should render message");
-    assert.ok(result.html.includes("<div"), "Should render div");
+    expect(result.html).toContain("Hello SSR");
+    expect(result.html).toContain("<div");
+    expect(result.manifest).toBeTruthy();
+    expect(result.manifest.root).toBe("no-child");
   });
 
   test("renders component with static content only", async () => {
@@ -256,20 +235,18 @@ describe("Child Component SSR: Minimal Rendering", () => {
       name: "static-comp",
     });
 
-    patchComponentDefinition(StaticComponent, aot);
+    // Static content has no instructions
+    expect(aot.instructions.length).toBe(0);
+    expect(aot.targetCount).toBe(0);
 
-    console.log("\n=== RENDERING STATIC COMPONENT ===");
-    console.log("Template:", aot.template);
-    console.log("Instructions:", aot.instructions);
+    patchComponentDefinition(StaticComponent, aot);
 
     const result = await renderWithComponents(StaticComponent, {
       childComponents: [],
     });
 
-    console.log("Rendered HTML:", result.html);
-
-    assert.ok(result.html.includes("No bindings here"), "Should render static text");
-    assert.ok(result.html.includes('class="static"'), "Should render class");
+    expect(result.html).toContain("No bindings here");
+    expect(result.html).toContain('class="static"');
   });
 
   test("verifies instructions match target count", async () => {
@@ -287,19 +264,9 @@ describe("Child Component SSR: Minimal Rendering", () => {
     const template = '<div><span>${a}</span><span>${b}</span><span>${c}</span></div>';
     const aot = compileWithAot(template, { name: "count-test" });
 
-    console.log("\n=== COUNT TEST ===");
-    console.log("Template:", aot.template);
-    console.log("Instructions array length:", aot.instructions.length);
-    console.log("Target count:", aot.targetCount);
-    console.log("Instructions:", JSON.stringify(aot.instructions, null, 2));
-
-    // Critical check: instructions.length should match the number of targets
-    // This is what AUR0757 checks
-    assert.strictEqual(
-      aot.instructions.length,
-      aot.targetCount,
-      `Instructions length (${aot.instructions.length}) should match target count (${aot.targetCount})`
-    );
+    // Critical: instructions.length must match targetCount (AUR0757 check)
+    expect(aot.instructions.length).toBe(aot.targetCount);
+    expect(aot.instructions.length).toBe(3);
 
     patchComponentDefinition(CountTestComponent, aot);
 
@@ -307,11 +274,9 @@ describe("Child Component SSR: Minimal Rendering", () => {
       childComponents: [],
     });
 
-    console.log("Rendered HTML:", result.html);
-
-    assert.ok(result.html.includes("A"), "Should render A");
-    assert.ok(result.html.includes("B"), "Should render B");
-    assert.ok(result.html.includes("C"), "Should render C");
+    expect(result.html).toContain(">A<");
+    expect(result.html).toContain(">B<");
+    expect(result.html).toContain(">C<");
   });
 });
 
@@ -347,46 +312,22 @@ describe("Child Component SSR: Parent-Child Rendering", () => {
       name: "test-child",
     });
 
-    // For parent, we need to compile with knowledge of the child element
-    // This is where ResourceGraph would normally come in
-    // For now, compile the parent template
     const parentAot = compileWithAot(
       '<div class="parent"><span>${parentValue}</span><test-child></test-child></div>',
       { name: "test-parent" }
     );
 
-    console.log("\n=== PARENT-CHILD AOT ===");
-    console.log("Child template:", childAot.template);
-    console.log("Child instructions:", JSON.stringify(childAot.instructions, null, 2));
-    console.log("Parent template:", parentAot.template);
-    console.log("Parent instructions:", JSON.stringify(parentAot.instructions, null, 2));
-
     // Patch both
     patchComponentDefinition(Child, childAot);
     patchComponentDefinition(Parent, parentAot);
 
-    console.log("\n=== PATCHED DEFINITIONS ===");
-    console.log("Child $au:", JSON.stringify(Child.$au, null, 2));
-    console.log("Parent $au:", JSON.stringify(Parent.$au, null, 2));
-
     // Render
-    try {
-      const result = await renderWithComponents(Parent, {
-        childComponents: [Child],
-      });
+    const result = await renderWithComponents(Parent, {
+      childComponents: [Child],
+    });
 
-      console.log("\n=== RENDER RESULT ===");
-      console.log("HTML:", result.html);
-      console.log("Manifest:", JSON.stringify(result.manifest, null, 2));
-
-      assert.ok(result.html.includes("Parent Value"), "Should render parent value");
-      // Child rendering depends on whether the runtime recognizes test-child
-    } catch (error) {
-      console.log("\n=== RENDER ERROR ===");
-      console.log("Error:", error.message);
-      console.log("Stack:", error.stack);
-      throw error;
-    }
+    expect(result.html).toContain("Parent Value");
+    expect(result.html).toContain('class="parent"');
   });
 });
 
@@ -415,17 +356,6 @@ describe("Diagnostic: AUR0757 Target Count Mismatch", () => {
       };
     }
 
-    class DiagParent {
-      appTitle = "Test";
-      userName = "World";
-
-      static $au = {
-        type: "custom-element",
-        name: "diag-parent",
-        dependencies: [DiagChild],
-      };
-    }
-
     // Compile child
     const childTemplate = `<div class="greeting-card">
   <h2>\${greeting}</h2>
@@ -434,53 +364,25 @@ describe("Diagnostic: AUR0757 Target Count Mismatch", () => {
 
     const childAot = compileWithAot(childTemplate, { name: "diag-child" });
 
-    console.log("\n========== DIAGNOSTIC: AUR0757 ==========");
-    console.log("\n--- CHILD COMPILATION ---");
-    console.log("Input template:", childTemplate);
-    console.log("Output template:", childAot.template);
-    console.log("Instructions length:", childAot.instructions.length);
-    console.log("Target count:", childAot.targetCount);
-    console.log("Full instructions:", JSON.stringify(childAot.instructions, null, 2));
-
     // Count markers in template (all targets use <!--au-->)
     const auMarkerMatches = childAot.template.match(/<!--au-->/g) ?? [];
-    console.log("\nMarkers in template:");
-    console.log("  <!--au--> markers:", auMarkerMatches.length);
 
     // Check the critical condition that causes AUR0757
     const markersCount = auMarkerMatches.length;
     const instructionsLength = childAot.instructions.length;
 
-    console.log("\n--- CRITICAL CHECK ---");
-    console.log(`instructions.length = ${instructionsLength}`);
-    console.log(`markers in template = ${markersCount}`);
-    console.log(`Match: ${instructionsLength === markersCount ? "YES" : "NO - THIS CAUSES AUR0757!"}`);
+    // Verify alignment
+    expect(instructionsLength).toBe(markersCount);
+    expect(instructionsLength).toBeGreaterThanOrEqual(2);
 
     // Patch and try to render
     patchComponentDefinition(DiagChild, childAot);
 
-    console.log("\n--- PATCHED $au ---");
-    console.log(JSON.stringify(DiagChild.$au, null, 2));
+    const result = await renderWithComponents(DiagChild, {
+      childComponents: [],
+    });
 
-    try {
-      const result = await renderWithComponents(DiagChild, {
-        childComponents: [],
-      });
-      console.log("\n--- RENDER SUCCESS ---");
-      console.log("HTML:", result.html);
-    } catch (error) {
-      console.log("\n--- RENDER ERROR ---");
-      console.log("Error:", error.message);
-
-      // If this is AUR0757, extract the numbers
-      const match = error.message.match(/AUR0757:(\d+),(\d+)/);
-      if (match) {
-        console.log(`\nAUR0757 details:`);
-        console.log(`  Expected targets (instructions.length): ${match[1]}`);
-        console.log(`  Actual targets (in template): ${match[2]}`);
-      }
-    }
-
-    console.log("\n========== END DIAGNOSTIC ==========\n");
+    expect(result.html).toContain("Hello, Guest!");
+    expect(result.html).toContain("5 characters");
   });
 });

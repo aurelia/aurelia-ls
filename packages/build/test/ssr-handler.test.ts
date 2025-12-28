@@ -4,8 +4,7 @@
  * Tests for the createSSRHandler factory function.
  */
 
-import { describe, it } from "vitest";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 
 import {
   createSSRHandler,
@@ -50,10 +49,10 @@ describe("SSR Handler", () => {
         root: MockApp,
       });
 
-      assert.ok(handler, "should create handler");
-      assert.strictEqual(typeof handler.render, "function", "should have render method");
-      assert.strictEqual(typeof handler.renderMany, "function", "should have renderMany method");
-      assert.ok(handler.config, "should have config");
+      expect(handler).toBeTruthy();
+      expect(typeof handler.render).toBe("function");
+      expect(typeof handler.renderMany).toBe("function");
+      expect(handler.config).toBeTruthy();
     });
 
     it("applies default values", () => {
@@ -61,10 +60,10 @@ describe("SSR Handler", () => {
         root: MockApp,
       });
 
-      assert.deepStrictEqual(handler.config.components, []);
-      assert.strictEqual(handler.config.baseHref, "/");
-      assert.strictEqual(handler.config.stripMarkers, false);
-      assert.ok(handler.config.shell.includes("<!DOCTYPE html>"));
+      expect(handler.config.components).toEqual([]);
+      expect(handler.config.baseHref).toBe("/");
+      expect(handler.config.stripMarkers).toBe(false);
+      expect(handler.config.shell).toContain("<!DOCTYPE html>");
     });
 
     it("accepts custom configuration", () => {
@@ -77,40 +76,39 @@ describe("SSR Handler", () => {
         shell: customShell,
       });
 
-      assert.deepStrictEqual(handler.config.components, [MockAbout]);
-      assert.strictEqual(handler.config.baseHref, "/app/");
-      assert.strictEqual(handler.config.stripMarkers, true);
-      assert.strictEqual(handler.config.shell, customShell);
+      expect(handler.config.components).toEqual([MockAbout]);
+      expect(handler.config.baseHref).toBe("/app/");
+      expect(handler.config.stripMarkers).toBe(true);
+      expect(handler.config.shell).toBe(customShell);
     });
   });
 
   describe("isSSRHandler", () => {
     it("returns true for valid handler", () => {
       const handler = createSSRHandler({ root: MockApp });
-      assert.strictEqual(isSSRHandler(handler), true);
+      expect(isSSRHandler(handler)).toBe(true);
     });
 
     it("returns false for null", () => {
-      assert.strictEqual(isSSRHandler(null), false);
+      expect(isSSRHandler(null)).toBe(false);
     });
 
     it("returns false for undefined", () => {
-      assert.strictEqual(isSSRHandler(undefined), false);
+      expect(isSSRHandler(undefined)).toBe(false);
     });
 
     it("returns false for plain object", () => {
-      assert.strictEqual(isSSRHandler({}), false);
+      expect(isSSRHandler({})).toBe(false);
     });
 
     it("returns false for object with only render", () => {
-      assert.strictEqual(isSSRHandler({ render: () => {} }), false);
+      expect(isSSRHandler({ render: () => {} })).toBe(false);
     });
 
     it("returns false for object with non-function render", () => {
-      assert.strictEqual(
-        isSSRHandler({ render: "not a function", renderMany: () => {} }),
-        false
-      );
+      expect(
+        isSSRHandler({ render: "not a function", renderMany: () => {} })
+      ).toBe(false);
     });
   });
 
@@ -123,10 +121,10 @@ describe("SSR Handler", () => {
 
       const result = await handler.render("/");
 
-      assert.strictEqual(result.url, "/");
-      assert.ok(result.html, "should return HTML");
-      assert.ok(result.html.includes("<!DOCTYPE html>"), "should include shell");
-      assert.ok(result.manifest, "should return manifest");
+      expect(result.url).toBe("/");
+      expect(result.html).toBeTruthy();
+      expect(result.html).toContain("<!DOCTYPE html>");
+      expect(result.manifest).toBeTruthy();
     });
 
     it("includes hydration script in output", async () => {
@@ -137,10 +135,7 @@ describe("SSR Handler", () => {
 
       const result = await handler.render("/about");
 
-      assert.ok(
-        result.html.includes("__AU_SSR_SCOPE__"),
-        "should include hydration data"
-      );
+      expect(result.html).toContain("__AU_SSR_SCOPE__");
     });
   });
 
@@ -158,10 +153,10 @@ describe("SSR Handler", () => {
         results.push(result);
       }
 
-      assert.strictEqual(results.length, 3);
-      assert.strictEqual(results[0].url, "/");
-      assert.strictEqual(results[1].url, "/about");
-      assert.strictEqual(results[2].url, "/contact");
+      expect(results.length).toBe(3);
+      expect(results[0].url).toBe("/");
+      expect(results[1].url).toBe("/about");
+      expect(results[2].url).toBe("/contact");
     });
 
     it("continues on error", async () => {
@@ -179,7 +174,7 @@ describe("SSR Handler", () => {
       }
 
       // Should have results for all URLs (even if some errored)
-      assert.strictEqual(results.length, 2);
+      expect(results.length).toBe(2);
     });
   });
 });
