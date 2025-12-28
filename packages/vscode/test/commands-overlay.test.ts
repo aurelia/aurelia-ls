@@ -121,3 +121,138 @@ test("showOverlayMapping falls back to overlay call sites when mapping entries a
   expect(mappingText, "fallback view should be labeled as overlay mapping").toContain("# Overlay Mapping");
   expect(mappingText, "overlay call site should be listed").toContain("expr-1");
 });
+
+test("showSsrPreview opens HTML and manifest documents side by side", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const ssrHtml = "<div>rendered</div>";
+  const ssrManifest = '{"scopes":[]}';
+  const client = new StubLanguageClient({
+    "aurelia/getSsr": {
+      artifact: {
+        html: { path: "/component.ssr.html", text: ssrHtml },
+        manifest: { path: "/component.manifest.json", text: ssrManifest },
+      },
+    },
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showSsrPreview")();
+
+  expect(client.calls[0]?.method).toBe("aurelia/getSsr");
+  expect(recorded.openedDocuments).toHaveLength(2);
+  const htmlDoc = recorded.openedDocuments[0];
+  const manifestDoc = recorded.openedDocuments[1];
+  expect(htmlDoc?.text).toBe(ssrHtml);
+  expect(htmlDoc?.languageId).toBe("html");
+  expect(manifestDoc?.text).toBe(ssrManifest);
+  expect(manifestDoc?.languageId).toBe("json");
+  const lastShown = recorded.shownDocuments.at(-1) as { opts?: { viewColumn?: number } };
+  expect(lastShown?.opts?.viewColumn).toBe(stubVscode.ViewColumn.Beside);
+});
+
+test("showSsrPreview shows message when no SSR output available", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({ "aurelia/getSsr": null });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showSsrPreview")();
+
+  expect(recorded.infoMessages).toContain("No SSR output for this document");
+  expect(recorded.openedDocuments).toHaveLength(0);
+});
+
+test("showTemplateInfo displays query result with expression and node info", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({
+    "aurelia/queryAtPosition": {
+      expr: { exprId: "e1" },
+      node: { kind: "element" },
+      controller: { kind: "repeat" },
+      bindables: [{ name: "items" }],
+      mappingSize: 5,
+    },
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showTemplateInfo")();
+
+  expect(client.calls[0]?.method).toBe("aurelia/queryAtPosition");
+  expect(client.calls[0]?.params).toHaveProperty("position");
+  const doc = recorded.openedDocuments.at(-1);
+  const text = doc?.text ?? "";
+  expect(text).toContain("# Template Info");
+  expect(text).toContain("expr: e1");
+  expect(text).toContain("node: element");
+  expect(text).toContain("controller: repeat");
+  expect(text).toContain("bindables: 1");
+  expect(text).toContain("mapping entries: 5");
+});
+
+test("dumpState sends request and logs result", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const serverState = { templates: 3, resources: 10 };
+  const client = new StubLanguageClient({ "aurelia/dumpState": serverState });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.dumpState")();
+
+  expect(client.calls[0]?.method).toBe("aurelia/dumpState");
+  expect(recorded.infoMessages).toContain("Dumped state to 'Aurelia LS (Client)' output.");
+  const logLines = (logger.channel as unknown as { lines: string[] }).lines;
+  expect(logLines.some((line: string) => line.includes('"templates": 3'))).toBe(true);
+});
+
+test("showOverlay shows error message when request fails", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({
+    "aurelia/getOverlay": () => { throw new Error("Server crashed"); },
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showOverlay")();
+
+  expect(recorded.errorMessages[0]).toContain("Show Generated Overlay failed");
+  expect(recorded.errorMessages[0]).toContain("Server crashed");
+});
+
+test("commands show message when no active editor", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({});
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  // No active editor set
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showOverlay")();
+  await recorded.commandHandlers.get("aurelia.showSsrPreview")();
+  await recorded.commandHandlers.get("aurelia.showTemplateInfo")();
+
+  expect(recorded.infoMessages.filter((m: string) => m === "No active editor")).toHaveLength(3);
+  expect(client.calls).toHaveLength(0);
+});
