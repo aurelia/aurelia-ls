@@ -4,6 +4,7 @@
   "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
   "version": "0.1.0",
   "publisher": "AureliaEffect",
+  "icon": "images/logo.png",
   "type": "module",
   "main": "./out/extension.js",
   "engines": {
