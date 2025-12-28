@@ -1,0 +1,46 @@
+import * as esbuild from "esbuild";
+import { existsSync, mkdirSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const distDir = join(__dirname, "dist");
+
+if (!existsSync(distDir)) {
+  mkdirSync(distDir, { recursive: true });
+}
+
+const watch = process.argv.includes("--watch");
+const minify = process.argv.includes("--minify");
+
+/** @type {esbuild.BuildOptions} */
+const commonOptions = {
+  bundle: true,
+  platform: "node",
+  target: "node18",
+  format: "cjs", // VS Code extensions must be CJS
+  sourcemap: true,
+  minify,
+  logLevel: "info",
+};
+
+// Extension bundle
+const extensionBuild = esbuild.build({
+  ...commonOptions,
+  entryPoints: [join(__dirname, "out/extension.js")],
+  outfile: join(distDir, "extension.js"),
+  external: ["vscode"],
+});
+
+// Language server bundle
+const serverBuild = esbuild.build({
+  ...commonOptions,
+  entryPoints: [join(__dirname, "../language-server/out/main.js")],
+  outfile: join(distDir, "server/main.js"),
+  // vscode-languageserver uses dynamic requires that don't bundle well
+  // but we can still bundle most of it
+});
+
+await Promise.all([extensionBuild, serverBuild]);
+
+console.log("Build complete.");

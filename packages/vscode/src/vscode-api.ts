@@ -1,5 +1,4 @@
 import type * as vscode from "vscode";
-import { createRequire } from "node:module";
 
 export type VscodeApi = typeof vscode;
 
@@ -15,8 +14,8 @@ export function useVscodeApi(api: VscodeApi): void {
 
 export function getVscodeApi(): VscodeApi {
   if (override) return override;
-  // VS Code bundles the `vscode` module; use require to avoid ESM resolution issues when running in the extension host.
-  const require = createRequire(import.meta.url);
-  // eslint-disable-next-line no-restricted-syntax
-  return require("vscode") as VscodeApi;
+  // VS Code provides the `vscode` module at runtime.
+  // Use eval to avoid bundler trying to resolve it.
+  // eslint-disable-next-line no-eval
+  return eval('require("vscode")') as VscodeApi;
 }

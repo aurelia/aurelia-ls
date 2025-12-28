@@ -1,0 +1,16 @@
+# Source and build artifacts
+src/**
+out/**
+test/**
+node_modules/**
+
+# Config files
+tsconfig.json
+tsconfig.tsbuildinfo
+esbuild.mjs
+.eslintrc*
+
+# Development files
+**/*.map
+
+# Keep dist, images, package.json, README, CHANGELOG, LICENSE
