@@ -13,6 +13,7 @@ import {
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
+import { pathToFileURL } from "node:url";
 import {
   canonicalDocumentUri,
   type DocumentSpan,
@@ -30,7 +31,18 @@ export type LookupTextFn = (uri: DocumentUri) => string | null;
 
 export function toLspUri(uri: DocumentUri): string {
   const canonical = canonicalDocumentUri(uri);
-  return URI.file(canonical.path).toString();
+  // canonical.path may be:
+  // 1. A filesystem path (e.g., "c:/projects/file.ts") - needs conversion
+  // 2. A file:// URI string (e.g., "file:///app/file.ts") - already valid
+  const pathOrUri = canonical.path;
+
+  // If it's already a file:// URI, return it directly
+  if (pathOrUri.startsWith("file://")) {
+    return pathOrUri;
+  }
+
+  // Otherwise, convert the filesystem path to a file:// URI
+  return pathToFileURL(pathOrUri).toString();
 }
 
 export function guessLanguage(uri: DocumentUri): string {
