@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import { registerCommands } from "../out/commands.js";
 import { VirtualDocProvider } from "../out/virtual-docs.js";
 import { ClientLogger } from "../out/log.js";
@@ -55,12 +54,12 @@ test("showOverlay opens an overlay virtual document beside the active editor", a
   registerCommands(context, client, virtualDocs, logger, vscode);
   await recorded.commandHandlers.get("aurelia.showOverlay")();
 
-  assert.equal(client.calls[0]?.method, "aurelia/getOverlay", "overlay request should be sent");
+  expect(client.calls[0]?.method, "overlay request should be sent").toBe("aurelia/getOverlay");
   const opened = recorded.openedDocuments.at(-1);
-  assert.ok(opened?.uri.toString().startsWith("aurelia-overlay:"), "virtual document should use overlay scheme");
-  assert.equal(virtualDocs.provideTextDocumentContent(opened.uri), overlayText, "virtual document should contain overlay text");
+  expect(opened?.uri.toString().startsWith("aurelia-overlay:"), "virtual document should use overlay scheme").toBe(true);
+  expect(virtualDocs.provideTextDocumentContent(opened.uri), "virtual document should contain overlay text").toBe(overlayText);
   const shown = recorded.shownDocuments.at(-1);
-  assert.equal(shown?.opts?.viewColumn, vscode.ViewColumn.Beside, "overlay should open beside the template");
+  expect(shown?.opts?.viewColumn, "overlay should open beside the template").toBe(vscode.ViewColumn.Beside);
 });
 
 test("showOverlayMapping renders mapping entries and avoids overlay fallback when mapping is present", async () => {
@@ -81,12 +80,12 @@ test("showOverlayMapping renders mapping entries and avoids overlay fallback whe
   await recorded.commandHandlers.get("aurelia.showOverlayMapping")();
 
   const mappingCall = client.calls.find((c) => c.method === "aurelia/getMapping");
-  assert.ok(mappingCall, "mapping request should be issued");
-  assert.ok(!client.calls.some((c) => c.method === "aurelia/getOverlay"), "overlay fallback should not run when mapping exists");
+  expect(mappingCall, "mapping request should be issued").toBeTruthy();
+  expect(client.calls.some((c) => c.method === "aurelia/getOverlay"), "overlay fallback should not run when mapping exists").toBe(false);
   const mappingDoc = recorded.openedDocuments.at(-1);
   const mappingText = mappingDoc?.getText?.() ?? mappingDoc?.text ?? "";
-  assert.ok(mappingText.includes("# Mapping Artifact"), "mapping view should be markdown");
-  assert.ok(mappingText.includes("expr=1"), "mapping view should list mapping entries");
+  expect(mappingText, "mapping view should be markdown").toContain("# Mapping Artifact");
+  expect(mappingText, "mapping view should list mapping entries").toContain("expr=1");
 });
 
 test("showOverlayMapping falls back to overlay call sites when mapping entries are empty", async () => {
@@ -111,9 +110,9 @@ test("showOverlayMapping falls back to overlay call sites when mapping entries a
   await recorded.commandHandlers.get("aurelia.showOverlayMapping")();
 
   const overlayCall = client.calls.find((c) => c.method === "aurelia/getOverlay");
-  assert.ok(overlayCall, "overlay fallback should be triggered");
+  expect(overlayCall, "overlay fallback should be triggered").toBeTruthy();
   const mappingDoc = recorded.openedDocuments.at(-1);
   const mappingText = mappingDoc?.getText?.() ?? mappingDoc?.text ?? "";
-  assert.ok(mappingText.includes("# Overlay Mapping"), "fallback view should be labeled as overlay mapping");
-  assert.ok(mappingText.includes("expr-1"), "overlay call site should be listed");
+  expect(mappingText, "fallback view should be labeled as overlay mapping").toContain("# Overlay Mapping");
+  expect(mappingText, "overlay call site should be listed").toContain("expr-1");
 });

@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import { activate, deactivate } from "../out/extension.js";
 import { VirtualDocProvider } from "../out/virtual-docs.js";
 import { ClientLogger } from "../out/log.js";
@@ -65,22 +64,22 @@ test("activate wires language client, commands, and notifications", async () => 
 
   await activate(context, { vscode, languageClient, status, virtualDocs, logger });
 
-  assert.equal(languageClient.startCalls, 1, "language client should be started");
-  assert.ok(recorded.contentProviders.some((p) => p.scheme === "aurelia-overlay"), "virtual doc provider registered");
+  expect(languageClient.startCalls, "language client should be started").toBe(1);
+  expect(recorded.contentProviders.some((p) => p.scheme === "aurelia-overlay"), "virtual doc provider registered").toBe(true);
   for (const command of [
     "aurelia.showOverlay",
     "aurelia.showOverlayMapping",
     "aurelia.showTemplateInfo",
     "aurelia.dumpState",
   ]) {
-    assert.ok(recorded.registeredCommands.includes(command), `${command} should be registered`);
+    expect(recorded.registeredCommands, `${command} should be registered`).toContain(command);
   }
 
   const payload = { uri: "file:///component.html", calls: 2, diags: 1 };
   lsp.trigger("aurelia/overlayReady", payload);
-  assert.equal(status.overlays.length, 1, "overlayReady should be forwarded to status");
-  assert.deepEqual(status.overlays[0], payload);
+  expect(status.overlays.length, "overlayReady should be forwarded to status").toBe(1);
+  expect(status.overlays[0]).toEqual(payload);
 
   await deactivate();
-  assert.equal(languageClient.stopCalls, 1, "language client should be stopped on deactivate");
+  expect(languageClient.stopCalls, "language client should be stopped on deactivate").toBe(1);
 });
