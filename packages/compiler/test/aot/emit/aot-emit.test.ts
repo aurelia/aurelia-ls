@@ -24,10 +24,10 @@ import {
   emitAotCode,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT as SEM_DEFAULT,
+  DEFAULT_SEMANTICS as SEM_DEFAULT,
   INSTRUCTION_TYPE,
   BINDING_MODE,
-} from "../../../out/compiler/index.js";
+} from "@aurelia-ls/compiler";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

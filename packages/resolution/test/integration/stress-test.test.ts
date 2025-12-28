@@ -16,7 +16,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolve } from "../../out/resolve.js";
+import { resolve } from "@aurelia-ls/resolution";
 import {
   DEFAULT_SEMANTICS,
   normalizePathForId,

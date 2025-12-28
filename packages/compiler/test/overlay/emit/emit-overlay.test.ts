@@ -1,6 +1,6 @@
 import { runVectorTests, getDirname, lowerOpts } from "../../_helpers/vector-runner.js";
 
-import { lowerDocument, resolveHost, bindScopes, planOverlay, emitOverlay } from "../../../out/compiler/index.js";
+import { lowerDocument, resolveHost, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
 
 runVectorTests({
   dirname: getDirname(import.meta.url),

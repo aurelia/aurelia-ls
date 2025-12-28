@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 
-import { InMemorySourceStore } from "../../out/index.js";
+import { InMemorySourceStore } from "@aurelia-ls/compiler";
 
 test("InMemorySourceStore auto-increments versions and overwrites snapshots", () => {
   const store = new InMemorySourceStore();

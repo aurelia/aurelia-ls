@@ -1,6 +1,6 @@
 import { test, describe, expect } from "vitest";
 
-import { ExpressionParser, toSourceFileId } from "../../out/compiler/index.js";
+import { ExpressionParser, toSourceFileId } from "@aurelia-ls/compiler";
 
 /**
  * Helper: strip span information recursively from an AST node.

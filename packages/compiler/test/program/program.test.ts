@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 
-import { DefaultTemplateProgram } from "../../out/index.js";
+import { DefaultTemplateProgram } from "@aurelia-ls/compiler";
 
 test("cache stats track hits and invalidation", () => {
   const program = createProgram();

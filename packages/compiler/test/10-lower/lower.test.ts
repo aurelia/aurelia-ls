@@ -7,7 +7,7 @@ import {
 } from "../_helpers/vector-runner.js";
 import { diffByKey } from "../_helpers/test-utils.js";
 
-import { lowerDocument } from "../../out/compiler/index.js";
+import { lowerDocument } from "@aurelia-ls/compiler";
 
 interface LowerIntent {
   expressions: ExpressionIntent[];

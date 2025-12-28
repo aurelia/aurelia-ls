@@ -1,6 +1,6 @@
 import { test, describe, expect } from "vitest";
 
-import { ExpressionParser } from "../../out/compiler/index.js";
+import { ExpressionParser } from "@aurelia-ls/compiler";
 
 function parseIterator(code) {
   const parser = new ExpressionParser();

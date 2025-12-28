@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, createCompilerContext } from "../../_helpers/vector-runner.js";
 import { diffByKey } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes, planAot } from "../../../out/compiler/index.js";
+import { lowerDocument, resolveHost, bindScopes, planAot } from "@aurelia-ls/compiler";
 
 runVectorTests({
   dirname: getDirname(import.meta.url),

@@ -28,8 +28,8 @@ import { deepMergeSemantics } from "./semantics-merge.js";
 import {
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT as SEM_DEFAULT,
-} from "../../out/compiler/index.js";
+  DEFAULT_SEMANTICS as SEM_DEFAULT,
+} from "@aurelia-ls/compiler";
 
 export interface TestVector {
   name: string;

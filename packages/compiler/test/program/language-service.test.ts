@@ -4,7 +4,7 @@ import {
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
   canonicalDocumentUri,
-} from "../../out/program/index.js";
+} from "@aurelia-ls/compiler";
 
 function createVmReflection() {
   return {

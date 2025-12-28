@@ -1,6 +1,6 @@
 import { test, describe, expect } from "vitest";
 
-import { ExpressionParser, emitMappedExpression } from "../../../out/compiler/index.js";
+import { ExpressionParser, emitMappedExpression } from "@aurelia-ls/compiler";
 
 describe("Overlay mapped emitter", () => {
   const cases = [

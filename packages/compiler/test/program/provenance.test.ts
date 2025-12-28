@@ -6,7 +6,7 @@ import {
   projectGeneratedSpanToDocumentSpan,
   provenanceHitToDocumentSpan,
   projectOverlaySpanToTemplateSpan,
-} from "../../out/index.js";
+} from "@aurelia-ls/compiler";
 
 const templateUri = "/app/components/example.html";
 const overlayUri = "/app/components/example.__au.ttc.ts";

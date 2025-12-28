@@ -7,10 +7,10 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   lowerDocument,
-  DEFAULT,
+  DEFAULT_SEMANTICS as DEFAULT,
   resolveHost,
   materializeResourcesForScope,
-} from "../../out/compiler/index.js";
+} from "@aurelia-ls/compiler";
 
 const dirname = getDirname(import.meta.url);
 

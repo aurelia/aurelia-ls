@@ -1,6 +1,6 @@
 import { test, describe, expect } from "vitest";
 
-import { Scanner, TokenType } from "../../out/compiler/index.js";
+import { Scanner, TokenType } from "@aurelia-ls/compiler";
 
 /**
  * Scan the entire input and return all tokens including EOF.

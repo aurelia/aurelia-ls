@@ -2,7 +2,7 @@ import { test, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { TemplateWorkspace } from "../../out/services/template-workspace.js";
-import { canonicalDocumentUri } from "../../../compiler/out/program/index.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 
 function createWorkspace(programOverrides = {}, options = {}) {
   return new TemplateWorkspace({

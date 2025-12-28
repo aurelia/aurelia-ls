@@ -8,8 +8,8 @@ import {
   DefaultTemplateProgram,
   canonicalDocumentUri,
   deriveTemplatePaths,
-} from "../../out/program/index.js";
-import { DEFAULT_SYNTAX, getExpressionParser } from "../../out/index.js";
+} from "@aurelia-ls/compiler";
+import { DEFAULT_SYNTAX, getExpressionParser } from "@aurelia-ls/compiler";
 
 const overlayFixtures = [
   { name: "kitchen-sink", dir: new URL("../../../../fixtures/overlays/kitchen-sink/", import.meta.url), vmType: "any" },

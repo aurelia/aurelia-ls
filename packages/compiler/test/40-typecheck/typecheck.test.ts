@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../_helpers/vector-runner.js";
 import { diffByKey } from "../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes, typecheck } from "../../out/compiler/index.js";
+import { lowerDocument, resolveHost, bindScopes, typecheck } from "@aurelia-ls/compiler";
 
 runVectorTests({
   dirname: getDirname(import.meta.url),

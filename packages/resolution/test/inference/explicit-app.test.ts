@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractAllFacts } from "../../out/extraction/index.js";
-import { createResolverPipeline } from "../../out/inference/index.js";
+import { extractAllFacts } from "@aurelia-ls/resolution";
+import { createResolverPipeline } from "@aurelia-ls/resolution";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");

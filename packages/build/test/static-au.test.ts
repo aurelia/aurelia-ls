@@ -10,7 +10,7 @@
 
 import { test, describe, expect } from "vitest";
 
-import { compileWithAot, render } from "../out/index.js";
+import { compileWithAot, render } from "@aurelia-ls/build";
 
 // =============================================================================
 // Test: Pre-built $au renders without compilation

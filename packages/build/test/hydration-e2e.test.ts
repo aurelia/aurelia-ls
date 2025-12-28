@@ -21,7 +21,7 @@ import {
   StandardConfiguration,
   CustomElement,
 } from "@aurelia/runtime-html";
-import { compileAndRenderAot, compileWithAot } from "../out/index.js";
+import { compileAndRenderAot, compileWithAot } from "@aurelia-ls/build";
 import {
   createComponent,
   createHydrationContext,

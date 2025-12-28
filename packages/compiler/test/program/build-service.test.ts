@@ -6,7 +6,7 @@ import {
   DefaultTemplateProgram,
   canonicalDocumentUri,
   deriveTemplatePaths,
-} from "../../out/program/index.js";
+} from "@aurelia-ls/compiler";
 
 test("build service exposes canonical overlay artifacts", () => {
   const program = createProgram();

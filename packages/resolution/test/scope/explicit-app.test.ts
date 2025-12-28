@@ -2,10 +2,10 @@ import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractAllFacts } from "../../out/extraction/index.js";
-import { createResolverPipeline } from "../../out/inference/index.js";
-import { createRegistrationAnalyzer } from "../../out/registration/index.js";
-import { buildResourceGraph } from "../../out/scope/index.js";
+import { extractAllFacts } from "@aurelia-ls/resolution";
+import { createResolverPipeline } from "@aurelia-ls/resolution";
+import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
+import { buildResourceGraph } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 

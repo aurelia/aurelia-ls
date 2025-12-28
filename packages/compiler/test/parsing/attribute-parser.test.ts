@@ -1,6 +1,6 @@
 import { test, describe, expect } from "vitest";
 
-import { AttrSyntax, AttributeParser, createDefaultSyntax, registerBuiltins } from "../../out/compiler/index.js";
+import { AttrSyntax, AttributeParser, createDefaultSyntax, registerBuiltins } from "@aurelia-ls/compiler";
 
 describe("attribute parser / built-ins", () => {
   test("parses dot binding (PART.PART)", () => {

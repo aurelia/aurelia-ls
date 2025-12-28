@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolve } from "../../out/resolve.js";
+import { resolve } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

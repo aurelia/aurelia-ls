@@ -5,6 +5,7 @@ export default defineConfig({
     include: ["packages/*/test/**/*.test.ts"],
     globals: false,
     testTimeout: 30000,
+    hookTimeout: 30000, // Needed for coverage runs (instrumentation adds overhead)
     coverage: {
       provider: "v8",
       include: ["packages/*/out/**/*.js"],
