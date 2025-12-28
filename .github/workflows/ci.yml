@@ -93,6 +93,21 @@ jobs:
           path: coverage
           if-no-files-found: ignore
 
+      # Download base branch coverage for comparison (if available)
+      - name: Download base coverage
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          branch: ${{ github.base_ref }}
+          name: coverage
+          path: coverage-base
+        continue-on-error: true
+
       - name: Coverage Report
         if: always()
         uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          file-coverage-mode: changes
+          name: Tests
+          json-summary-compare-path: coverage-base/coverage-summary.json
