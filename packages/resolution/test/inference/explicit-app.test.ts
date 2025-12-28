@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import assert from "node:assert";
+import assert from "node:assert/strict";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,34 +62,33 @@ describe("Inference: explicit-app", () => {
     const pipeline = createResolverPipeline();
     const result = pipeline.resolve(appFacts);
 
-    // Log for inspection
-    console.log("\n=== RESOLVED CANDIDATES ===\n");
-    const grouped = {
-      elements: result.candidates.filter(c => c.kind === "element"),
-      attributes: result.candidates.filter(c => c.kind === "attribute"),
-      valueConverters: result.candidates.filter(c => c.kind === "valueConverter"),
-      bindingBehaviors: result.candidates.filter(c => c.kind === "bindingBehavior"),
-    };
-    console.log(JSON.stringify(grouped, null, 2));
-    console.log("\n=== END CANDIDATES ===\n");
-
-    // Should find all our expected resources
+    // Group candidates by kind for structured assertions
     const elements = result.candidates.filter(c => c.kind === "element");
     const attributes = result.candidates.filter(c => c.kind === "attribute");
     const valueConverters = result.candidates.filter(c => c.kind === "valueConverter");
     const bindingBehaviors = result.candidates.filter(c => c.kind === "bindingBehavior");
 
-    // Elements: my-app, nav-bar, user-card, data-grid, product-card, price-tag, stock-badge, fancy-button
-    assert.ok(elements.length >= 8, `Expected at least 8 elements, got ${elements.length}`);
+    // Assert exact element names found
+    const elementNames = elements.map(e => e.name).sort();
+    assert.deepStrictEqual(elementNames, [
+      "data-grid", "fancy-button", "my-app", "nav-bar",
+      "price-tag", "product-card", "stock-badge", "user-card"
+    ], "Should find exactly these 8 elements");
 
-    // Attributes: tooltip, highlight
-    assert.ok(attributes.length >= 2, `Expected at least 2 attributes, got ${attributes.length}`);
+    // Assert exact attribute names found
+    const attributeNames = attributes.map(a => a.name).sort();
+    assert.deepStrictEqual(attributeNames, ["highlight", "tooltip"],
+      "Should find exactly these 2 attributes");
 
-    // Value converters: date, currency
-    assert.ok(valueConverters.length >= 2, `Expected at least 2 value converters, got ${valueConverters.length}`);
+    // Assert exact value converter names found
+    const vcNames = valueConverters.map(v => v.name).sort();
+    assert.deepStrictEqual(vcNames, ["currency", "date"],
+      "Should find exactly these 2 value converters");
 
-    // Binding behaviors: debounce, throttle
-    assert.ok(bindingBehaviors.length >= 2, `Expected at least 2 binding behaviors, got ${bindingBehaviors.length}`);
+    // Assert exact binding behavior names found
+    const bbNames = bindingBehaviors.map(b => b.name).sort();
+    assert.deepStrictEqual(bbNames, ["debounce", "throttle"],
+      "Should find exactly these 2 binding behaviors");
   });
 
   it("correctly resolves decorator-based elements", () => {

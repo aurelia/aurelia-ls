@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import assert from "node:assert";
+import assert from "node:assert/strict";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,19 +42,43 @@ describe("Full Pipeline: explicit-app", () => {
 
     // Should have all expected artifacts
     assert.ok(result.resourceGraph, "Should produce a ResourceGraph");
-    assert.ok(result.candidates.length > 0, "Should find candidates");
-    assert.ok(result.intents.length > 0, "Should produce intents");
     assert.ok(result.facts.size > 0, "Should produce facts");
 
-    console.log("\n=== PIPELINE SUMMARY ===");
-    console.log(`Candidates: ${result.candidates.length}`);
-    console.log(`Intents: ${result.intents.length}`);
-    console.log(`  - Global: ${result.intents.filter(i => i.kind === "global").length}`);
-    console.log(`  - Local: ${result.intents.filter(i => i.kind === "local").length}`);
-    console.log(`  - Unknown: ${result.intents.filter(i => i.kind === "unknown").length}`);
-    console.log(`Scopes: ${Object.keys(result.resourceGraph.scopes).length}`);
-    console.log(`Diagnostics: ${result.diagnostics.length}`);
-    console.log("=== END SUMMARY ===\n");
+    // Assert candidate counts by kind (includes runtime resources from Aurelia)
+    // Full pipeline picks up runtime resources like promise template controllers, binding behaviors, etc.
+    assert.strictEqual(result.candidates.length, 29, "Should find 29 candidates (app + runtime)");
+    const byKind = {
+      elements: result.candidates.filter(c => c.kind === "element").length,
+      attributes: result.candidates.filter(c => c.kind === "attribute").length,
+      valueConverters: result.candidates.filter(c => c.kind === "valueConverter").length,
+      bindingBehaviors: result.candidates.filter(c => c.kind === "bindingBehavior").length,
+    };
+    assert.deepStrictEqual(byKind, {
+      elements: 8,        // 8 app elements
+      attributes: 7,      // 2 app + 5 runtime (promise, pending, fulfilled, rejected, else)
+      valueConverters: 3, // 2 app + 1 runtime (sanitize)
+      bindingBehaviors: 11, // 2 app + 9 runtime
+    }, "Candidate breakdown by kind");
+
+    // Assert intent counts by kind
+    assert.strictEqual(result.intents.length, 29, "Should produce 29 intents");
+    const intentsByKind = {
+      global: result.intents.filter(i => i.kind === "global").length,
+      local: result.intents.filter(i => i.kind === "local").length,
+      unknown: result.intents.filter(i => i.kind === "unknown").length,
+    };
+    assert.deepStrictEqual(intentsByKind, {
+      global: 10, // Resources registered via barrels
+      local: 2,   // price-tag, stock-badge (via static dependencies)
+      unknown: 17, // Runtime resources + app resources not in barrels
+    }, "Intent breakdown by kind");
+
+    // Assert scope count
+    const scopeCount = Object.keys(result.resourceGraph.scopes).length;
+    assert.strictEqual(scopeCount, 2, "Should have exactly 2 scopes (root + 1 local)");
+
+    // Should have no diagnostics in well-formed app
+    assert.strictEqual(result.diagnostics.length, 0, "Should have no diagnostics");
   });
 
   it("produces a usable ResourceGraph for template compilation", () => {
@@ -133,15 +157,12 @@ describe("Full Pipeline: explicit-app", () => {
     const program = createProgramFromApp(EXPLICIT_APP);
     const result = resolve(program);
 
-    // Should have templates array
+    // Should have templates array with exact count
     assert.ok(result.templates, "Should have templates array");
-    assert.ok(result.templates.length > 0, "Should discover templates");
-
-    console.log("\n=== TEMPLATES DISCOVERED ===");
-    for (const t of result.templates) {
-      console.log(`${t.resourceName}: ${t.templatePath} (scope: ${t.scopeId})`);
-    }
-    console.log("=== END TEMPLATES ===\n");
+    const templateNames = result.templates.map(t => t.resourceName).sort();
+    assert.deepStrictEqual(templateNames, [
+      "data-grid", "my-app", "nav-bar", "product-card", "user-card"
+    ], "Should discover exactly these 5 file-based templates");
 
     // Find nav-bar template
     const navBarTemplate = result.templates.find(t => t.resourceName === "nav-bar");
@@ -171,15 +192,12 @@ describe("Full Pipeline: explicit-app", () => {
     const program = createProgramFromApp(EXPLICIT_APP);
     const result = resolve(program);
 
-    // Should have inlineTemplates array
+    // Should have inlineTemplates array with exact count
     assert.ok(result.inlineTemplates, "Should have inlineTemplates array");
-    assert.ok(result.inlineTemplates.length > 0, "Should discover inline templates");
-
-    console.log("\n=== INLINE TEMPLATES DISCOVERED ===");
-    for (const t of result.inlineTemplates) {
-      console.log(`${t.resourceName}: ${t.content.substring(0, 50)}... (scope: ${t.scopeId})`);
-    }
-    console.log("=== END INLINE TEMPLATES ===\n");
+    const inlineNames = result.inlineTemplates.map(t => t.resourceName).sort();
+    assert.deepStrictEqual(inlineNames, [
+      "fancy-button", "price-tag", "stock-badge"
+    ], "Should discover exactly these 3 inline templates");
 
     // Find price-tag inline template (local scope)
     const priceTagInline = result.inlineTemplates.find(t => t.resourceName === "price-tag");

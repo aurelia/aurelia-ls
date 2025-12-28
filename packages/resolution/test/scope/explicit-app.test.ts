@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import assert from "node:assert";
+import assert from "node:assert/strict";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,30 +87,31 @@ describe("Scope: explicit-app", () => {
     // Materialize root scope resources
     const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
 
-    // Global elements should be in root scope
-    assert.ok(resources.elements["nav-bar"], "nav-bar should be in root scope");
-    assert.ok(resources.elements["user-card"], "user-card should be in root scope");
-    assert.ok(resources.elements["data-grid"], "data-grid should be in root scope");
-    assert.ok(resources.elements["fancy-button"], "fancy-button should be in root scope");
+    // Filter out built-in resources from semantics to get just app resources
+    const appElements = Object.keys(resources.elements)
+      .filter(k => !DEFAULT_SEMANTICS.resources.elements[k]).sort();
+    const appAttributes = Object.keys(resources.attributes)
+      .filter(k => !DEFAULT_SEMANTICS.resources.attributes[k]).sort();
+    const appValueConverters = Object.keys(resources.valueConverters)
+      .filter(k => !DEFAULT_SEMANTICS.resources.valueConverters[k]).sort();
+    const appBindingBehaviors = Object.keys(resources.bindingBehaviors)
+      .filter(k => !DEFAULT_SEMANTICS.resources.bindingBehaviors[k]).sort();
 
-    // Global attributes
-    assert.ok(resources.attributes["tooltip"], "tooltip should be in root scope");
-    assert.ok(resources.attributes["highlight"], "highlight should be in root scope");
+    // Assert exact app resources in root scope
+    // Note: includes both globally registered and unknown-scope resources
+    assert.deepStrictEqual(appElements, [
+      "data-grid", "fancy-button", "my-app", "nav-bar", "product-card", "user-card"
+    ], "Root scope should have exactly these 6 elements");
 
-    // Global value converters
-    assert.ok(resources.valueConverters["date"], "date should be in root scope");
-    assert.ok(resources.valueConverters["currency"], "currency should be in root scope");
+    assert.deepStrictEqual(appAttributes, ["highlight", "tooltip"],
+      "Root scope should have exactly these 2 attributes");
 
-    // Global binding behaviors
-    assert.ok(resources.bindingBehaviors["debounce"], "debounce should be in root scope");
-    assert.ok(resources.bindingBehaviors["throttle"], "throttle should be in root scope");
+    assert.deepStrictEqual(appValueConverters, ["currency", "date"],
+      "Root scope should have exactly these 2 value converters");
 
-    console.log("\n=== ROOT SCOPE RESOURCES ===");
-    console.log("Elements:", Object.keys(resources.elements).filter(k => !DEFAULT_SEMANTICS.resources.elements[k]));
-    console.log("Attributes:", Object.keys(resources.attributes).filter(k => !DEFAULT_SEMANTICS.resources.attributes[k]));
-    console.log("Value Converters:", Object.keys(resources.valueConverters).filter(k => !DEFAULT_SEMANTICS.resources.valueConverters[k]));
-    console.log("Binding Behaviors:", Object.keys(resources.bindingBehaviors).filter(k => !DEFAULT_SEMANTICS.resources.bindingBehaviors[k]));
-    console.log("=== END ROOT SCOPE ===\n");
+    // Binding behaviors are not currently placed in the ResourceGraph scope overlay
+    assert.deepStrictEqual(appBindingBehaviors, [],
+      "Binding behaviors are registered but not in scope overlay");
   });
 
   it("creates local scopes for components with static dependencies", () => {
@@ -122,20 +123,19 @@ describe("Scope: explicit-app", () => {
       s => s.id !== graph.root && s.id.startsWith("local:")
     );
 
-    assert.ok(localScopes.length > 0, "Should have at least one local scope");
+    // Should have exactly 1 local scope (product-card)
+    assert.strictEqual(localScopes.length, 1, "Should have exactly 1 local scope");
 
-    // Find product-card's local scope
-    const productCardScope = localScopes.find(s => s.id.includes("product-card"));
-    assert.ok(productCardScope, "Should have a local scope for product-card");
+    // Verify product-card's local scope structure
+    const productCardScope = localScopes[0];
+    assert.ok(productCardScope.id.includes("product-card"), "Local scope should be for product-card");
+    assert.ok(productCardScope.label?.includes("ProductCard"), "Scope label should include class name");
+    assert.strictEqual(productCardScope.parent, graph.root, "Local scope parent should be root");
 
-    console.log("\n=== LOCAL SCOPES ===");
-    for (const scope of localScopes) {
-      console.log(`Scope: ${scope.id}`);
-      console.log(`  Label: ${scope.label}`);
-      console.log(`  Parent: ${scope.parent}`);
-      console.log(`  Resources:`, scope.resources);
-    }
-    console.log("=== END LOCAL SCOPES ===\n");
+    // Verify local resources in scope
+    const localElementNames = Object.keys(productCardScope.resources?.elements ?? {}).sort();
+    assert.deepStrictEqual(localElementNames, ["price-tag", "stock-badge"],
+      "product-card scope should have exactly these 2 local elements");
   });
 
   it("places local resources in component-specific scopes", () => {
@@ -197,21 +197,15 @@ describe("Scope: explicit-app", () => {
     // Check user-card bindables (has name, avatar, selected)
     const userCard = resources.elements["user-card"];
     assert.ok(userCard, "user-card should be in graph");
-    assert.ok(userCard.bindables, "user-card should have bindables");
-    assert.ok(userCard.bindables["name"], "user-card should have 'name' bindable");
-    assert.ok(userCard.bindables["avatar"], "user-card should have 'avatar' bindable");
-    assert.ok(userCard.bindables["selected"], "user-card should have 'selected' bindable");
+    const userCardBindables = Object.keys(userCard.bindables ?? {}).sort();
+    assert.deepStrictEqual(userCardBindables, ["avatar", "name", "selected"],
+      "user-card should have exactly these bindables");
 
     // Check data-grid bindables
     const dataGrid = resources.elements["data-grid"];
     assert.ok(dataGrid, "data-grid should be in graph");
-    assert.ok(dataGrid.bindables, "data-grid should have bindables");
-    assert.ok(dataGrid.bindables["items"], "data-grid should have 'items' bindable");
-    assert.ok(dataGrid.bindables["columns"], "data-grid should have 'columns' bindable");
-
-    console.log("\n=== ELEMENT BINDABLES ===");
-    console.log("user-card:", userCard.bindables);
-    console.log("data-grid:", dataGrid.bindables);
-    console.log("=== END BINDABLES ===\n");
+    const dataGridBindables = Object.keys(dataGrid.bindables ?? {}).sort();
+    assert.deepStrictEqual(dataGridBindables, ["columns", "items", "pageSize"],
+      "data-grid should have exactly these bindables");
   });
 });

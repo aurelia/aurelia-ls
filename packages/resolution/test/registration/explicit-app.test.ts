@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import assert from "node:assert";
+import assert from "node:assert/strict";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,30 +61,25 @@ describe("Registration: explicit-app", () => {
     const analyzer = createRegistrationAnalyzer();
     const intents = analyzer.analyze(resolved.candidates, appFacts, program);
 
-    // Log for inspection
-    console.log("\n=== REGISTRATION INTENTS ===\n");
-    const grouped = {
-      global: intents.filter(i => i.kind === "global").map(i => ({
-        name: i.resource.name,
-        type: i.resource.kind,
-        evidence: i.evidence[0]?.kind,
-      })),
-      local: intents.filter(i => i.kind === "local").map(i => ({
-        name: i.resource.name,
-        type: i.resource.kind,
-        scope: i.scope?.split("/").pop(),
-        evidence: i.evidence[0]?.kind,
-      })),
-      unknown: intents.filter(i => i.kind === "unknown").map(i => ({
-        name: i.resource.name,
-        type: i.resource.kind,
-      })),
-    };
-    console.log(JSON.stringify(grouped, null, 2));
-    console.log("\n=== END INTENTS ===\n");
-
     // We should have intents for all candidates
-    assert.strictEqual(intents.length, resolved.candidates.length);
+    assert.strictEqual(intents.length, resolved.candidates.length,
+      "Should produce one intent per candidate");
+    assert.strictEqual(intents.length, 14, "Should have exactly 14 intents");
+
+    // Assert intent breakdown by kind
+    const byKind = {
+      global: intents.filter(i => i.kind === "global").map(i => i.resource.name).sort(),
+      local: intents.filter(i => i.kind === "local").map(i => i.resource.name).sort(),
+      unknown: intents.filter(i => i.kind === "unknown").map(i => i.resource.name).sort(),
+    };
+    assert.deepStrictEqual(byKind.global, [
+      "currency", "data-grid", "date", "debounce", "fancy-button",
+      "highlight", "nav-bar", "throttle", "tooltip", "user-card"
+    ], "Global resources (registered via barrels)");
+    assert.deepStrictEqual(byKind.local, ["price-tag", "stock-badge"],
+      "Local resources (scoped to product-card via static dependencies)");
+    assert.deepStrictEqual(byKind.unknown, ["my-app", "product-card"],
+      "Unknown resources (not explicitly registered via barrels)");
   });
 
   it("identifies globally registered resources via barrel exports", () => {

@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import assert from "node:assert";
+import assert from "node:assert/strict";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,50 +34,40 @@ function createProgramFromApp(appPath) {
   return program;
 }
 
-/**
- * Pretty-print facts for inspection.
- */
-function formatFacts(factsMap) {
-  const result = {};
-  for (const [filePath, facts] of factsMap) {
-    // Use relative path for readability
-    const relPath = path.relative(EXPLICIT_APP, filePath).replace(/\\/g, "/");
-    result[relPath] = {
-      classes: facts.classes.map(c => ({
-        name: c.name,
-        decorators: c.decorators.length > 0 ? c.decorators : undefined,
-        staticAu: c.staticAu || undefined,
-        staticDependencies: c.staticDependencies || undefined,
-        bindableMembers: c.bindableMembers.length > 0 ? c.bindableMembers : undefined,
-      })),
-      registrationCalls: facts.registrationCalls.length > 0 ? facts.registrationCalls : undefined,
-    };
-  }
-  return result;
-}
-
 describe("Extraction: explicit-app", () => {
   it("extracts facts from all source files", () => {
     const program = createProgramFromApp(EXPLICIT_APP);
     const facts = extractAllFacts(program);
 
-    // Log for manual inspection
-    console.log("\n=== EXTRACTED FACTS ===\n");
-    console.log(JSON.stringify(formatFacts(facts), null, 2));
-    console.log("\n=== END FACTS ===\n");
+    // Get just app source files (not node_modules or aurelia runtime)
+    const appFiles = Array.from(facts.keys())
+      .filter(p => p.replace(/\\/g, "/").includes("/explicit-app/src/"))
+      .map(p => path.relative(EXPLICIT_APP, p).replace(/\\/g, "/"))
+      .sort();
 
-    // Basic assertions - we should find our key files
-    const paths = Array.from(facts.keys()).map(p =>
-      path.relative(EXPLICIT_APP, p).replace(/\\/g, "/")
-    );
-
-    // Verify key files are found
-    assert.ok(paths.some(p => p.includes("main")), "Should find main.ts");
-    assert.ok(paths.some(p => p.includes("nav-bar")), "Should find nav-bar.ts");
-    assert.ok(paths.some(p => p.includes("user-card")), "Should find user-card.ts");
-    assert.ok(paths.some(p => p.includes("product-card")), "Should find product-card.ts");
-    assert.ok(paths.some(p => p.includes("fancy-button")), "Should find fancy-button.ts");
-    assert.ok(paths.some(p => p.includes("currency")), "Should find currency.ts");
+    // Assert exact file discovery
+    assert.deepStrictEqual(appFiles, [
+      "src/attributes/highlight.ts",
+      "src/attributes/index.ts",
+      "src/attributes/tooltip.ts",
+      "src/binding-behaviors/debounce.ts",
+      "src/binding-behaviors/index.ts",
+      "src/binding-behaviors/throttle.ts",
+      "src/components/data-grid.ts",
+      "src/components/index.ts",
+      "src/components/nav-bar.ts",
+      "src/components/user-card.ts",
+      "src/main.ts",
+      "src/my-app.ts",
+      "src/static-au/fancy-button.ts",
+      "src/static-au/index.ts",
+      "src/value-converters/currency.ts",
+      "src/value-converters/date-format.ts",
+      "src/value-converters/index.ts",
+      "src/widgets/price-tag.ts",
+      "src/widgets/product-card.ts",
+      "src/widgets/stock-badge.ts",
+    ], "Should extract facts from exactly these 20 app source files");
   });
 
   it("extracts decorators correctly", () => {
