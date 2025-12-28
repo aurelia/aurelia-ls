@@ -24,21 +24,19 @@ const commonOptions = {
   logLevel: "info",
 };
 
-// Extension bundle
+// Extension bundle - use .cjs to avoid ESM/CJS conflict with "type": "module"
 const extensionBuild = esbuild.build({
   ...commonOptions,
   entryPoints: [join(__dirname, "out/extension.js")],
-  outfile: join(distDir, "extension.js"),
+  outfile: join(distDir, "extension.cjs"),
   external: ["vscode"],
 });
 
-// Language server bundle
+// Language server bundle - use .cjs to avoid ESM/CJS conflict
 const serverBuild = esbuild.build({
   ...commonOptions,
   entryPoints: [join(__dirname, "../language-server/out/main.js")],
-  outfile: join(distDir, "server/main.js"),
-  // vscode-languageserver uses dynamic requires that don't bundle well
-  // but we can still bundle most of it
+  outfile: join(distDir, "server/main.cjs"),
 });
 
 await Promise.all([extensionBuild, serverBuild]);

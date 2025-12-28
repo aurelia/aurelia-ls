@@ -6,7 +6,7 @@
   "publisher": "AureliaEffect",
   "icon": "images/logo.png",
   "type": "module",
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.cjs",
   "engines": {
     "vscode": "^1.90.0"
   },
