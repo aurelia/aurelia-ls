@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,16 +51,17 @@ function filterAppFacts(facts, appPath) {
 }
 
 describe("Inference: explicit-app", () => {
-  it("resolves all resource candidates from explicit-app", () => {
+  let result: ReturnType<ReturnType<typeof createResolverPipeline>["resolve"]>;
+
+  beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
     const allFacts = extractAllFacts(program);
-
-    // Filter to just app files
     const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
     const pipeline = createResolverPipeline();
-    const result = pipeline.resolve(appFacts);
+    result = pipeline.resolve(appFacts);
+  });
 
+  it("resolves all resource candidates from explicit-app", () => {
     // Group candidates by kind for structured assertions
     const elements = result.candidates.filter(c => c.kind === "element");
     const attributes = result.candidates.filter(c => c.kind === "attribute");
@@ -88,13 +89,6 @@ describe("Inference: explicit-app", () => {
   });
 
   it("correctly resolves decorator-based elements", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const result = pipeline.resolve(appFacts);
-
     // Find nav-bar (simple decorator)
     const navBar = result.candidates.find(c => c.name === "nav-bar" && c.kind === "element");
     expect(navBar, "Should find nav-bar element").toBeTruthy();
@@ -120,13 +114,6 @@ describe("Inference: explicit-app", () => {
   });
 
   it("correctly resolves static $au resources", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const result = pipeline.resolve(appFacts);
-
     // Find fancy-button (static $au element)
     const fancyButton = result.candidates.find(c => c.name === "fancy-button" && c.kind === "element");
     expect(fancyButton, "Should find fancy-button element").toBeTruthy();
@@ -142,13 +129,6 @@ describe("Inference: explicit-app", () => {
   });
 
   it("correctly resolves attributes with primary bindables", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const result = pipeline.resolve(appFacts);
-
     // Find highlight (attribute with primary bindable)
     const highlight = result.candidates.find(c => c.name === "highlight" && c.kind === "attribute");
     expect(highlight, "Should find highlight attribute").toBeTruthy();
@@ -160,13 +140,6 @@ describe("Inference: explicit-app", () => {
   });
 
   it("correctly resolves value converters and binding behaviors", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const result = pipeline.resolve(appFacts);
-
     // Find date value converter
     const date = result.candidates.find(c => c.name === "date" && c.kind === "valueConverter");
     expect(date, "Should find date value converter").toBeTruthy();
@@ -183,13 +156,6 @@ describe("Inference: explicit-app", () => {
   });
 
   it("correctly resolves bindable attribute mappings", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const result = pipeline.resolve(appFacts);
-
     // Find stock-badge with attribute mapping
     const stockBadge = result.candidates.find(c => c.name === "stock-badge" && c.kind === "element");
     expect(stockBadge, "Should find stock-badge element").toBeTruthy();

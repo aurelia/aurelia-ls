@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,17 +49,22 @@ function filterAppFacts(facts, appPath) {
 }
 
 describe("Registration: explicit-app", () => {
-  it("analyzes registration intents for all candidates", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
+  let program: ts.Program;
+  let appFacts: ReturnType<typeof filterAppFacts>;
+  let resolved: ReturnType<ReturnType<typeof createResolverPipeline>["resolve"]>;
+  let intents: ReturnType<ReturnType<typeof createRegistrationAnalyzer>["analyze"]>;
+
+  beforeAll(() => {
+    program = createProgramFromApp(EXPLICIT_APP);
     const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
+    appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
     const pipeline = createResolverPipeline();
-    const resolved = pipeline.resolve(appFacts);
-
+    resolved = pipeline.resolve(appFacts);
     const analyzer = createRegistrationAnalyzer();
-    const intents = analyzer.analyze(resolved.candidates, appFacts, program);
+    intents = analyzer.analyze(resolved.candidates, appFacts, program);
+  });
 
+  it("analyzes registration intents for all candidates", () => {
     // We should have intents for all candidates
     expect(intents.length, "Should produce one intent per candidate").toBe(resolved.candidates.length);
     expect(intents.length, "Should have exactly 14 intents").toBe(14);
@@ -79,16 +84,6 @@ describe("Registration: explicit-app", () => {
   });
 
   it("identifies globally registered resources via barrel exports", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const resolved = pipeline.resolve(appFacts);
-
-    const analyzer = createRegistrationAnalyzer();
-    const intents = analyzer.analyze(resolved.candidates, appFacts, program);
-
     // nav-bar should be global (registered via barrel)
     const navBar = intents.find(i => i.resource.name === "nav-bar");
     expect(navBar, "Should find nav-bar intent").toBeTruthy();
@@ -117,16 +112,6 @@ describe("Registration: explicit-app", () => {
   });
 
   it("identifies locally scoped resources via static dependencies", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const resolved = pipeline.resolve(appFacts);
-
-    const analyzer = createRegistrationAnalyzer();
-    const intents = analyzer.analyze(resolved.candidates, appFacts, program);
-
     // price-tag should be local (in ProductCard's static dependencies)
     const priceTag = intents.find(i => i.resource.name === "price-tag");
     expect(priceTag, "Should find price-tag intent").toBeTruthy();
@@ -142,16 +127,6 @@ describe("Registration: explicit-app", () => {
   });
 
   it("identifies static $au resources registered via barrel", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
-    const pipeline = createResolverPipeline();
-    const resolved = pipeline.resolve(appFacts);
-
-    const analyzer = createRegistrationAnalyzer();
-    const intents = analyzer.analyze(resolved.candidates, appFacts, program);
-
     // fancy-button (static $au element) should be global
     const fancyButton = intents.find(i => i.resource.name === "fancy-button");
     expect(fancyButton, "Should find fancy-button intent").toBeTruthy();
@@ -164,10 +139,6 @@ describe("Registration: explicit-app", () => {
   });
 
   it("extracts import facts correctly", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
     // Find main.ts facts
     const mainFacts = Array.from(appFacts.values()).find(f =>
       f.path.includes("main.ts")
@@ -185,10 +156,6 @@ describe("Registration: explicit-app", () => {
   });
 
   it("extracts export facts correctly from barrel files", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, EXPLICIT_APP);
-
     // Find components/index.ts facts
     const indexFacts = Array.from(appFacts.values()).find(f =>
       f.path.includes("components/index.ts")

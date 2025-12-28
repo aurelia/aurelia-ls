@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,9 +69,15 @@ function runPipeline(appPath) {
 }
 
 describe("Scope: explicit-app", () => {
+  let pipelineResult: ReturnType<typeof runPipeline>;
+  let graph: ReturnType<typeof buildResourceGraph>;
+
+  beforeAll(() => {
+    pipelineResult = runPipeline(EXPLICIT_APP);
+    graph = buildResourceGraph(pipelineResult.intents);
+  });
+
   it("builds a ResourceGraph from registration intents", () => {
-    const { intents } = runPipeline(EXPLICIT_APP);
-    const graph = buildResourceGraph(intents);
 
     // Should produce a valid graph
     expect(graph.version).toBe("aurelia-resource-graph@1");
@@ -80,9 +86,6 @@ describe("Scope: explicit-app", () => {
   });
 
   it("places global resources in the root scope", () => {
-    const { intents } = runPipeline(EXPLICIT_APP);
-    const graph = buildResourceGraph(intents);
-
     // Materialize root scope resources
     const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
 
@@ -111,9 +114,6 @@ describe("Scope: explicit-app", () => {
   });
 
   it("creates local scopes for components with static dependencies", () => {
-    const { intents } = runPipeline(EXPLICIT_APP);
-    const graph = buildResourceGraph(intents);
-
     // Find the local scope for product-card
     const localScopes = Object.values(graph.scopes).filter(
       s => s.id !== graph.root && s.id.startsWith("local:")
@@ -134,9 +134,6 @@ describe("Scope: explicit-app", () => {
   });
 
   it("places local resources in component-specific scopes", () => {
-    const { intents } = runPipeline(EXPLICIT_APP);
-    const graph = buildResourceGraph(intents);
-
     // Find product-card's local scope
     const productCardScope = Object.values(graph.scopes).find(
       s => s.id.includes("product-card")
@@ -153,9 +150,6 @@ describe("Scope: explicit-app", () => {
   });
 
   it("supports two-level scope lookup: local → global", () => {
-    const { intents } = runPipeline(EXPLICIT_APP);
-    const graph = buildResourceGraph(intents);
-
     // Find product-card's local scope ID
     const productCardScopeId = Object.keys(graph.scopes).find(
       id => id.includes("product-card")
@@ -184,9 +178,6 @@ describe("Scope: explicit-app", () => {
   });
 
   it("preserves bindable information in the resource graph", () => {
-    const { intents } = runPipeline(EXPLICIT_APP);
-    const graph = buildResourceGraph(intents);
-
     const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
 
     // Check user-card bindables (has name, avatar, selected)

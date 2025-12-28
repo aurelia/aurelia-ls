@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,11 +34,14 @@ function createProgramFromApp(appPath) {
 }
 
 describe("Full Pipeline: explicit-app", () => {
-  it("runs the complete resolution pipeline", () => {
+  let result: ReturnType<typeof resolve>;
+
+  beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
+    result = resolve(program);
+  });
 
-    const result = resolve(program);
-
+  it("runs the complete resolution pipeline", () => {
     // Should have all expected artifacts
     expect(result.resourceGraph, "Should produce a ResourceGraph").toBeTruthy();
     expect(result.facts.size > 0, "Should produce facts").toBe(true);
@@ -81,9 +84,6 @@ describe("Full Pipeline: explicit-app", () => {
   });
 
   it("produces a usable ResourceGraph for template compilation", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const result = resolve(program);
-
     // Materialize resources at root scope
     const { resources } = materializeResourcesForScope(
       DEFAULT_SEMANTICS,
@@ -105,9 +105,6 @@ describe("Full Pipeline: explicit-app", () => {
   });
 
   it("returns facts for debugging/tooling", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const result = resolve(program);
-
     // Should have facts for multiple files
     expect(result.facts.size > 5, "Should have facts for multiple files").toBe(true);
 
@@ -118,9 +115,6 @@ describe("Full Pipeline: explicit-app", () => {
   });
 
   it("exposes candidates for tooling", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const result = resolve(program);
-
     // Find specific candidates
     const navBar = result.candidates.find(c => c.name === "nav-bar");
     expect(navBar, "Should find nav-bar candidate").toBeTruthy();
@@ -134,9 +128,6 @@ describe("Full Pipeline: explicit-app", () => {
   });
 
   it("exposes intents for tooling", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const result = resolve(program);
-
     // Check global intent evidence
     const navBarIntent = result.intents.find(i => i.resource.name === "nav-bar");
     expect(navBarIntent, "Should have nav-bar intent").toBeTruthy();
@@ -153,9 +144,6 @@ describe("Full Pipeline: explicit-app", () => {
   });
 
   it("discovers templates for element resources", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const result = resolve(program);
-
     // Should have templates array with exact count
     expect(result.templates, "Should have templates array").toBeTruthy();
     const templateNames = result.templates.map(t => t.resourceName).sort();
@@ -188,9 +176,6 @@ describe("Full Pipeline: explicit-app", () => {
   });
 
   it("collects inline templates separately", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const result = resolve(program);
-
     // Should have inlineTemplates array with exact count
     expect(result.inlineTemplates, "Should have inlineTemplates array").toBeTruthy();
     const inlineNames = result.inlineTemplates.map(t => t.resourceName).sort();

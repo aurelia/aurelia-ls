@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,9 +34,15 @@ function createProgramFromApp(appPath) {
 }
 
 describe("Extraction: explicit-app", () => {
+  let program: ts.Program;
+  let facts: ReturnType<typeof extractAllFacts>;
+
+  beforeAll(() => {
+    program = createProgramFromApp(EXPLICIT_APP);
+    facts = extractAllFacts(program);
+  });
+
   it("extracts facts from all source files", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const facts = extractAllFacts(program);
 
     // Get just app source files (not node_modules or aurelia runtime)
     const appFiles = Array.from(facts.keys())
@@ -70,9 +76,6 @@ describe("Extraction: explicit-app", () => {
   });
 
   it("extracts decorators correctly", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const facts = extractAllFacts(program);
-
     // Find nav-bar facts
     const navBarEntry = Array.from(facts.entries()).find(([p]) => p.includes("nav-bar"));
     expect(navBarEntry, "nav-bar.ts should be extracted").toBeTruthy();
@@ -88,9 +91,6 @@ describe("Extraction: explicit-app", () => {
   });
 
   it("extracts static $au correctly", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const facts = extractAllFacts(program);
-
     // Find currency facts (static $au value converter)
     const currencyEntry = Array.from(facts.entries()).find(([p]) => p.includes("currency"));
     expect(currencyEntry, "currency.ts should be extracted").toBeTruthy();
@@ -115,9 +115,6 @@ describe("Extraction: explicit-app", () => {
   });
 
   it("extracts static dependencies correctly", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const facts = extractAllFacts(program);
-
     // Find product-card facts
     const productEntry = Array.from(facts.entries()).find(([p]) => p.includes("product-card"));
     expect(productEntry, "product-card.ts should be extracted").toBeTruthy();
@@ -135,9 +132,6 @@ describe("Extraction: explicit-app", () => {
   });
 
   it("extracts @bindable members correctly", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const facts = extractAllFacts(program);
-
     // Find user-card facts
     const userCardEntry = Array.from(facts.entries()).find(([p]) => p.includes("user-card"));
     expect(userCardEntry, "user-card.ts should be extracted").toBeTruthy();
@@ -155,9 +149,6 @@ describe("Extraction: explicit-app", () => {
   });
 
   it("extracts registration calls correctly", () => {
-    const program = createProgramFromApp(EXPLICIT_APP);
-    const facts = extractAllFacts(program);
-
     // Find main.ts facts
     const mainEntry = Array.from(facts.entries()).find(([p]) => p.includes("main"));
     expect(mainEntry, "main.ts should be extracted").toBeTruthy();
