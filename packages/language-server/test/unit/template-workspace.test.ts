@@ -2,7 +2,7 @@ import { test, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { TemplateWorkspace } from "../../out/services/template-workspace.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri, asDocumentUri } from "@aurelia-ls/compiler";
 
 function createWorkspace(programOverrides = {}, options = {}) {
   return new TemplateWorkspace({
@@ -20,7 +20,7 @@ function createWorkspace(programOverrides = {}, options = {}) {
 
 test("workspace syncs documents and invalidates caches on change", () => {
   const workspace = createWorkspace();
-  const uri = "file:///app/components/example.html";
+  const uri = asDocumentUri("file:///app/components/example.html");
 
   const firstDoc = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
   workspace.open(firstDoc);
@@ -42,7 +42,7 @@ test("workspace syncs documents and invalidates caches on change", () => {
 
 test("reconfigure rebuilds the program on option drift while preserving sources", () => {
   const workspace = createWorkspace();
-  const uri = "file:///app/components/options.html";
+  const uri = asDocumentUri("file:///app/components/options.html");
   const doc = TextDocument.create(uri, "html", 1, "<template>${value}</template>");
   workspace.upsertDocument(doc);
 
@@ -73,7 +73,7 @@ test("reconfigure rebuilds the program on option drift while preserving sources"
 
 test("reconfigure reacts to fingerprint drift even when program options are stable", () => {
   const workspace = createWorkspace({}, { fingerprint: "index@1" });
-  const uri = "file:///app/components/fingerprint.html";
+  const uri = asDocumentUri("file:///app/components/fingerprint.html");
   const doc = TextDocument.create(uri, "html", 1, "<template>${value}</template>");
   workspace.open(doc);
 

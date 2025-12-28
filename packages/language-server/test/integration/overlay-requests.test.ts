@@ -10,6 +10,25 @@ import {
   waitForDiagnostics,
   waitForExit,
 } from "./helpers/lsp-harness.js";
+import type { MessageConnection } from "vscode-languageserver/node.js";
+
+interface OverlayResult {
+  fingerprint?: string;
+  artifact?: OverlayArtifact;
+  overlay?: { path: string; text?: string };
+  mapping?: { entries?: unknown[] };
+  calls?: unknown[];
+}
+
+interface OverlayArtifact {
+  overlay: { path: string; text?: string };
+  mapping: { entries?: unknown[] };
+  calls: unknown[];
+}
+
+interface DumpStateResult {
+  overlays?: string[];
+}
 
 test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async () => {
   const fixture = createFixture({
@@ -39,7 +58,7 @@ test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async
     await openTemplate(connection, fixture, htmlUri, "component.html");
     await waitForDiagnostics(connection, child, getStderr, htmlUri, 5000);
 
-    const overlayResult = await connection.sendRequest("aurelia/getOverlay", { uri: htmlUri });
+    const overlayResult = (await connection.sendRequest("aurelia/getOverlay", { uri: htmlUri })) as OverlayResult;
     expect(overlayResult, "overlay response should not be null").toBeTruthy();
     expect(typeof overlayResult.fingerprint, "overlay fingerprint should be reported").toBe("string");
     const artifact = overlayResult.artifact ?? overlayResult;
@@ -52,10 +71,10 @@ test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async
       "overlay path should use overlay naming convention",
     ).toBe(true);
 
-    const state = await connection.sendRequest("aurelia/dumpState");
+    const state = (await connection.sendRequest("aurelia/dumpState")) as DumpStateResult;
     const overlays = Array.isArray(state?.overlays) ? state.overlays : [];
     const normalized = overlays.map((o) => normalizePath(o));
-    expect(normalized.includes(normalizePath(artifact.overlay.path)), "overlay FS should contain the materialized overlay path").toBe(true);
+    expect(normalized.includes(normalizePath(artifact.overlay!.path)), "overlay FS should contain the materialized overlay path").toBe(true);
   } finally {
     dispose();
     child.kill("SIGKILL");
@@ -64,11 +83,11 @@ test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async
   }
 });
 
-async function openTemplate(connection, fixtureRoot, uri, relativePath) {
+async function openTemplate(connection: MessageConnection, fixtureRoot: string, uri: string, relativePath: string) {
   const htmlText = fs.readFileSync(path.join(fixtureRoot, relativePath), "utf8");
   await openDocument(connection, uri, "html", htmlText);
 }
 
-function normalizePath(p) {
+function normalizePath(p: string) {
   return path.normalize(p).toLowerCase();
 }
