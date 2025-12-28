@@ -4,8 +4,7 @@
  * Tests for TypeScript source analysis.
  */
 
-import { describe, it } from "vitest";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 import {
   findClasses,
   findClassByName,
@@ -23,49 +22,48 @@ export class MyApp {
 }
 `;
     const classes = findClasses(source);
-    assert.strictEqual(classes.length, 1);
+    expect(classes.length).toBe(1);
     const cls = classes[0]!;
-    assert.strictEqual(cls.name, "MyApp");
-    assert.strictEqual(cls.exportType, "named");
+    expect(cls.name).toBe("MyApp");
+    expect(cls.exportType).toBe("named");
   });
 
   it("finds class with decorator", () => {
     const source = loadFixture("decorator-simple");
     const classes = findClasses(source);
-    assert.strictEqual(classes.length, 1);
+    expect(classes.length).toBe(1);
     const cls = classes[0]!;
-    assert.strictEqual(cls.name, "MyElement");
-    assert.strictEqual(cls.decorators.length, 1);
+    expect(cls.name).toBe("MyElement");
+    expect(cls.decorators.length).toBe(1);
     const dec = cls.decorators[0]!;
-    assert.strictEqual(dec.name, "customElement");
-    assert.strictEqual(dec.isCall, true);
+    expect(dec.name).toBe("customElement");
+    expect(dec.isCall).toBe(true);
   });
 
   it("finds default export class", () => {
     const source = loadFixture("default-export");
     const classes = findClasses(source);
-    assert.strictEqual(classes.length, 1);
+    expect(classes.length).toBe(1);
     const cls = classes[0]!;
-    assert.strictEqual(cls.name, "DefaultComponent");
-    assert.strictEqual(cls.exportType, "default");
+    expect(cls.name).toBe("DefaultComponent");
+    expect(cls.exportType).toBe("default");
   });
 
   it("finds class with existing static $au", () => {
     const source = loadFixture("static-au");
     const classes = findClasses(source);
-    assert.strictEqual(classes.length, 1);
+    expect(classes.length).toBe(1);
     const cls = classes[0]!;
-    assert.strictEqual(cls.name, "StatusBadge");
-    assert.strictEqual(cls.hasStaticAu, true);
-    assert.ok(cls.existingAuSpan);
+    expect(cls.name).toBe("StatusBadge");
+    expect(cls.hasStaticAu).toBe(true);
+    expect(cls.existingAuSpan).toBeTruthy();
   });
 
   it("finds multiple classes in same file", () => {
     const source = loadFixture("export-variations");
     const classes = findClasses(source);
-    assert.strictEqual(classes.length, 3);
-    assert.deepStrictEqual(
-      classes.map(c => c.name),
+    expect(classes.length).toBe(3);
+    expect(classes.map(c => c.name)).toEqual(
       ["NamedExport", "InternalComponent", "LaterExport"]
     );
   });
@@ -75,14 +73,14 @@ describe("findClassByName", () => {
   it("finds specific class by name", () => {
     const source = loadFixture("export-variations");
     const classInfo = findClassByName(source, "InternalComponent");
-    assert.ok(classInfo);
-    assert.strictEqual(classInfo.name, "InternalComponent");
+    expect(classInfo).toBeTruthy();
+    expect(classInfo!.name).toBe("InternalComponent");
   });
 
   it("returns null for non-existent class", () => {
     const source = loadFixture("decorator-simple");
     const classInfo = findClassByName(source, "NonExistent");
-    assert.strictEqual(classInfo, null);
+    expect(classInfo).toBe(null);
   });
 });
 
@@ -91,71 +89,71 @@ describe("detectDeclarationForm", () => {
     const source = loadFixture("decorator-name-only");
     const classInfo = findClassByName(source, "CounterElement")!;
     const form = detectDeclarationForm(classInfo, "CounterElement");
-    assert.strictEqual(form.form, "decorator");
+    expect(form.form).toBe("decorator");
   });
 
   it("detects decorator-config form", () => {
     const source = loadFixture("decorator-config");
     const classInfo = findClassByName(source, "UserCard")!;
     const form = detectDeclarationForm(classInfo, "UserCard");
-    assert.strictEqual(form.form, "decorator-config");
+    expect(form.form).toBe("decorator-config");
   });
 
   it("detects static-au form", () => {
     const source = loadFixture("static-au");
     const classInfo = findClassByName(source, "StatusBadge")!;
     const form = detectDeclarationForm(classInfo, "StatusBadge");
-    assert.strictEqual(form.form, "static-au");
+    expect(form.form).toBe("static-au");
   });
 
   it("detects convention form", () => {
     const source = loadFixture("convention");
     const classInfo = findClassByName(source, "NavBarCustomElement")!;
     const form = detectDeclarationForm(classInfo, "NavBarCustomElement");
-    assert.strictEqual(form.form, "convention");
+    expect(form.form).toBe("convention");
   });
 });
 
 describe("isConventionName", () => {
   it("recognizes CustomElement suffix", () => {
-    assert.strictEqual(isConventionName("MyAppCustomElement"), true);
-    assert.strictEqual(isConventionName("NavBarCustomElement"), true);
+    expect(isConventionName("MyAppCustomElement")).toBe(true);
+    expect(isConventionName("NavBarCustomElement")).toBe(true);
   });
 
   it("recognizes ValueConverter suffix", () => {
-    assert.strictEqual(isConventionName("DateFormatValueConverter"), true);
+    expect(isConventionName("DateFormatValueConverter")).toBe(true);
   });
 
   it("recognizes BindingBehavior suffix", () => {
-    assert.strictEqual(isConventionName("ThrottleBindingBehavior"), true);
+    expect(isConventionName("ThrottleBindingBehavior")).toBe(true);
   });
 
   it("recognizes CustomAttribute suffix", () => {
-    assert.strictEqual(isConventionName("TooltipCustomAttribute"), true);
+    expect(isConventionName("TooltipCustomAttribute")).toBe(true);
   });
 
   it("returns false for non-convention names", () => {
-    assert.strictEqual(isConventionName("MyApp"), false);
-    assert.strictEqual(isConventionName("Counter"), false);
-    assert.strictEqual(isConventionName("Element"), false);
+    expect(isConventionName("MyApp")).toBe(false);
+    expect(isConventionName("Counter")).toBe(false);
+    expect(isConventionName("Element")).toBe(false);
   });
 });
 
 describe("deriveResourceName", () => {
   it("converts PascalCase to kebab-case", () => {
-    assert.strictEqual(deriveResourceName("MyAppCustomElement"), "my-app");
-    assert.strictEqual(deriveResourceName("NavBarCustomElement"), "nav-bar");
-    assert.strictEqual(deriveResourceName("UserProfileCardCustomElement"), "user-profile-card");
+    expect(deriveResourceName("MyAppCustomElement")).toBe("my-app");
+    expect(deriveResourceName("NavBarCustomElement")).toBe("nav-bar");
+    expect(deriveResourceName("UserProfileCardCustomElement")).toBe("user-profile-card");
   });
 
   it("handles consecutive capitals", () => {
-    assert.strictEqual(deriveResourceName("XMLParserCustomElement"), "xml-parser");
-    assert.strictEqual(deriveResourceName("HTMLEditorCustomElement"), "html-editor");
+    expect(deriveResourceName("XMLParserCustomElement")).toBe("xml-parser");
+    expect(deriveResourceName("HTMLEditorCustomElement")).toBe("html-editor");
   });
 
   it("handles names without suffix", () => {
-    assert.strictEqual(deriveResourceName("MyApp"), "my-app");
-    assert.strictEqual(deriveResourceName("Counter"), "counter");
+    expect(deriveResourceName("MyApp")).toBe("my-app");
+    expect(deriveResourceName("Counter")).toBe("counter");
   });
 });
 
@@ -164,8 +162,8 @@ describe("fixture coverage", () => {
     it(`can parse ${fixture.name}`, () => {
       const source = loadFixture(fixture.name);
       const classInfo = findClassByName(source, fixture.className);
-      assert.ok(classInfo, `Class ${fixture.className} not found in ${fixture.name}`);
-      assert.strictEqual(classInfo.name, fixture.className);
+      expect(classInfo, `Class ${fixture.className} not found in ${fixture.name}`).toBeTruthy();
+      expect(classInfo!.name).toBe(fixture.className);
     });
   }
 });

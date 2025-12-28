@@ -4,8 +4,7 @@
  * Tests for JavaScript source generation.
  */
 
-import { describe, it } from "vitest";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 import {
   emitStaticAu,
   emitExpressionTable,
@@ -37,87 +36,87 @@ function mockDef(name: string, instructions: unknown[][] = [], nestedTemplates: 
 
 describe("escapeString", () => {
   it("escapes double quotes", () => {
-    assert.strictEqual(escapeString('hello "world"'), 'hello \\"world\\"');
+    expect(escapeString('hello "world"')).toBe('hello \\"world\\"');
   });
 
   it("escapes backslashes", () => {
-    assert.strictEqual(escapeString("path\\to\\file"), "path\\\\to\\\\file");
+    expect(escapeString("path\\to\\file")).toBe("path\\\\to\\\\file");
   });
 
   it("escapes newlines", () => {
-    assert.strictEqual(escapeString("line1\nline2"), "line1\\nline2");
+    expect(escapeString("line1\nline2")).toBe("line1\\nline2");
   });
 
   it("escapes tabs", () => {
-    assert.strictEqual(escapeString("col1\tcol2"), "col1\\tcol2");
+    expect(escapeString("col1\tcol2")).toBe("col1\\tcol2");
   });
 });
 
 describe("toIdentifierPrefix", () => {
   it("converts kebab-case to camelCase", () => {
-    assert.strictEqual(toIdentifierPrefix("my-app"), "myApp");
-    assert.strictEqual(toIdentifierPrefix("user-profile-card"), "userProfileCard");
+    expect(toIdentifierPrefix("my-app")).toBe("myApp");
+    expect(toIdentifierPrefix("user-profile-card")).toBe("userProfileCard");
   });
 
   it("preserves single words (lowercased)", () => {
-    assert.strictEqual(toIdentifierPrefix("counter"), "counter");
+    expect(toIdentifierPrefix("counter")).toBe("counter");
   });
 
   it("converts PascalCase to camelCase", () => {
-    assert.strictEqual(toIdentifierPrefix("MyApp"), "myApp");
-    assert.strictEqual(toIdentifierPrefix("Counter"), "counter");
+    expect(toIdentifierPrefix("MyApp")).toBe("myApp");
+    expect(toIdentifierPrefix("Counter")).toBe("counter");
   });
 });
 
 describe("formatValue", () => {
   it("formats strings", () => {
-    assert.strictEqual(formatValue("hello"), '"hello"');
+    expect(formatValue("hello")).toBe('"hello"');
   });
 
   it("formats numbers", () => {
-    assert.strictEqual(formatValue(42), "42");
-    assert.strictEqual(formatValue(3.14), "3.14");
+    expect(formatValue(42)).toBe("42");
+    expect(formatValue(3.14)).toBe("3.14");
   });
 
   it("formats booleans", () => {
-    assert.strictEqual(formatValue(true), "true");
-    assert.strictEqual(formatValue(false), "false");
+    expect(formatValue(true)).toBe("true");
+    expect(formatValue(false)).toBe("false");
   });
 
   it("formats null and undefined", () => {
-    assert.strictEqual(formatValue(null), "null");
-    assert.strictEqual(formatValue(undefined), "undefined");
+    expect(formatValue(null)).toBe("null");
+    expect(formatValue(undefined)).toBe("undefined");
   });
 
   it("formats simple arrays", () => {
-    assert.strictEqual(formatValue([1, 2, 3]), "[1, 2, 3]");
+    expect(formatValue([1, 2, 3])).toBe("[1, 2, 3]");
   });
 
   it("formats simple objects", () => {
     const result = formatValue({ a: 1, b: 2 });
-    assert.ok(result.includes("a: 1"));
-    assert.ok(result.includes("b: 2"));
+    expect(result).toContain("a: 1");
+    expect(result).toContain("b: 2");
   });
 });
 
 describe("emitExpressionTable", () => {
   it("emits empty array for no expressions", () => {
     const result = emitExpressionTable([], { prefix: "myApp" });
-    assert.strictEqual(result, "const myApp__e = [];");
+    expect(result).toBe("const myApp__e = [];");
   });
 
   it("emits expression with kind comment", () => {
     const expressions = [mockExpr("e1", "AccessScope", "message")];
     const result = emitExpressionTable(expressions, { prefix: "myApp" });
-    assert.ok(result.includes("const myApp__e = ["));
-    assert.ok(result.includes("AccessScope"));
+    expect(result).toContain("const myApp__e = [");
+    expect(result).toContain("AccessScope");
   });
 
   it("can strip spans from AST", () => {
     const expressions = [mockExpr("e1", "AccessScope", "x")];
     const result = emitExpressionTable(expressions, { prefix: "test", stripSpans: true });
-    assert.ok(!result.includes('"start"'));
-    assert.ok(!result.includes('"end"'));
+    expect(result).not.toContain('"start"');
+    expect(result).not.toContain('"end"');
   });
 });
 
@@ -138,13 +137,13 @@ describe("emitStaticAu", () => {
       template: "<div>${message}</div>",
     });
 
-    assert.ok(result.expressionTable.includes("myElement__e"));
-    assert.ok(result.mainDefinition.includes("myElement_$au"));
-    assert.ok(result.combined.includes('template: "'));
-    assert.ok(result.combined.includes('needsCompile: false'));
-    assert.strictEqual(result.prefix, "myElement");
-    assert.strictEqual(result.expressionTableVar, "myElement__e");
-    assert.strictEqual(result.definitionVar, "myElement_$au");
+    expect(result.expressionTable).toContain("myElement__e");
+    expect(result.mainDefinition).toContain("myElement_$au");
+    expect(result.combined).toContain('template: "');
+    expect(result.combined).toContain('needsCompile: false');
+    expect(result.prefix).toBe("myElement");
+    expect(result.expressionTableVar).toBe("myElement__e");
+    expect(result.definitionVar).toBe("myElement_$au");
   });
 
   it("includes nested definitions for template controllers", () => {
@@ -168,8 +167,8 @@ describe("emitStaticAu", () => {
       template: '<template if.bind="show">Visible</template>',
     });
 
-    assert.ok(result.nestedDefinitions.length > 0);
-    assert.ok(result.combined.includes("__def"));
+    expect(result.nestedDefinitions.length > 0).toBe(true);
+    expect(result.combined).toContain("__def");
   });
 
   it("includes dependencies in definition", () => {
@@ -187,7 +186,7 @@ describe("emitStaticAu", () => {
       dependencies: ["ChildA", "ChildB"],
     });
 
-    assert.ok(result.mainDefinition.includes("dependencies: [ChildA, ChildB]"));
+    expect(result.mainDefinition).toContain("dependencies: [ChildA, ChildB]");
   });
 
   it("omits dependencies when empty", () => {
@@ -205,7 +204,7 @@ describe("emitStaticAu", () => {
       dependencies: [],
     });
 
-    assert.ok(!result.mainDefinition.includes("dependencies"));
+    expect(result.mainDefinition).not.toContain("dependencies");
   });
 
   it("includes bindables in definition", () => {
@@ -226,9 +225,9 @@ describe("emitStaticAu", () => {
       ],
     });
 
-    assert.ok(result.mainDefinition.includes("bindables:"));
-    assert.ok(result.mainDefinition.includes("value: { mode: 6 }"));
-    assert.ok(result.mainDefinition.includes("label: {}"));
+    expect(result.mainDefinition).toContain("bindables:");
+    expect(result.mainDefinition).toContain("value: { mode: 6 }");
+    expect(result.mainDefinition).toContain("label: {}");
   });
 
   it("includes bindable with primary option", () => {
@@ -246,7 +245,7 @@ describe("emitStaticAu", () => {
       bindables: [{ name: "value", primary: true }],
     });
 
-    assert.ok(result.mainDefinition.includes("value: { primary: true }"));
+    expect(result.mainDefinition).toContain("value: { primary: true }");
   });
 
   it("omits bindables when empty", () => {
@@ -264,7 +263,7 @@ describe("emitStaticAu", () => {
       bindables: [],
     });
 
-    assert.ok(!result.mainDefinition.includes("bindables"));
+    expect(result.mainDefinition).not.toContain("bindables");
   });
 });
 
@@ -275,7 +274,7 @@ describe("hasEmittableContent", () => {
       definition: mockDef(""),
       mapping: [],
     };
-    assert.strictEqual(hasEmittableContent(aot), false);
+    expect(hasEmittableContent(aot)).toBe(false);
   });
 
   it("returns true when there are expressions", () => {
@@ -284,7 +283,7 @@ describe("hasEmittableContent", () => {
       definition: mockDef(""),
       mapping: [],
     };
-    assert.strictEqual(hasEmittableContent(aot), true);
+    expect(hasEmittableContent(aot)).toBe(true);
   });
 
   it("returns true when there are instructions", () => {
@@ -293,22 +292,16 @@ describe("hasEmittableContent", () => {
       definition: mockDef("", [[]]),
       mapping: [],
     };
-    assert.strictEqual(hasEmittableContent(aot), true);
+    expect(hasEmittableContent(aot)).toBe(true);
   });
 });
 
 describe("generateAuAssignment", () => {
   it("generates assignment statement", () => {
-    assert.strictEqual(
-      generateAuAssignment("MyApp", "myApp"),
-      "MyApp.$au = myApp_$au;"
-    );
+    expect(generateAuAssignment("MyApp", "myApp")).toBe("MyApp.$au = myApp_$au;");
   });
 
   it("derives prefix from class name", () => {
-    assert.strictEqual(
-      generateAuAssignment("MyApp"),
-      "MyApp.$au = myApp_$au;"
-    );
+    expect(generateAuAssignment("MyApp")).toBe("MyApp.$au = myApp_$au;");
   });
 });

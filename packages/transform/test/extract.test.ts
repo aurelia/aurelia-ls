@@ -10,8 +10,7 @@
  * See: docs/testing.md (Known Gaps > Transform Package)
  */
 
-import { describe, it } from "vitest";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 import {
   extractDependencies,
   extractDecoratorConfig,
@@ -42,9 +41,9 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "Parent")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.strictEqual(deps.length, 2);
-      assert.deepStrictEqual(deps[0], { type: "identifier", name: "ChildA" });
-      assert.deepStrictEqual(deps[1], { type: "identifier", name: "ChildB" });
+      expect(deps.length).toBe(2);
+      expect(deps[0]).toEqual({ type: "identifier", name: "ChildA" });
+      expect(deps[1]).toEqual({ type: "identifier", name: "ChildB" });
     });
 
     it("extracts namespaced dependencies", () => {
@@ -62,10 +61,10 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "Parent")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.strictEqual(deps.length, 2);
+      expect(deps.length).toBe(2);
       // Namespaced access should be preserved
-      assert.deepStrictEqual(deps[0], { type: "identifier", name: "components.ChildA" });
-      assert.deepStrictEqual(deps[1], { type: "identifier", name: "components.ChildB" });
+      expect(deps[0]).toEqual({ type: "identifier", name: "components.ChildA" });
+      expect(deps[1]).toEqual({ type: "identifier", name: "components.ChildB" });
     });
 
     it("handles spread in dependencies array", () => {
@@ -83,8 +82,8 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "Parent")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.strictEqual(deps.length, 1);
-      assert.strictEqual(deps[0]!.type, "dynamic");
+      expect(deps.length).toBe(1);
+      expect(deps[0]!.type).toBe("dynamic");
       // Dynamic expression should capture the spread
     });
 
@@ -104,9 +103,9 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "Parent")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.strictEqual(deps.length, 2);
-      assert.deepStrictEqual(deps[0], { type: "identifier", name: "Static" });
-      assert.strictEqual(deps[1]!.type, "dynamic");
+      expect(deps.length).toBe(2);
+      expect(deps[0]).toEqual({ type: "identifier", name: "Static" });
+      expect(deps[1]!.type).toBe("dynamic");
     });
   });
 
@@ -122,7 +121,7 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "SimpleElement")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.deepStrictEqual(deps, []);
+      expect(deps).toEqual([]);
     });
   });
 
@@ -135,7 +134,7 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "PlainClass")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.deepStrictEqual(deps, []);
+      expect(deps).toEqual([]);
     });
 
     it("returns empty array when dependencies not specified", () => {
@@ -152,7 +151,7 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "NoDeps")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.deepStrictEqual(deps, []);
+      expect(deps).toEqual([]);
     });
 
     it("handles empty dependencies array", () => {
@@ -169,7 +168,7 @@ describe("extractDependencies", () => {
       const classInfo = findClassByName(source, "EmptyDeps")!;
       const deps = extractDependencies(source, classInfo);
 
-      assert.deepStrictEqual(deps, []);
+      expect(deps).toEqual([]);
     });
   });
 });
@@ -204,10 +203,10 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "Greeting")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.strictEqual(bindables.length, 1);
-    assert.strictEqual(bindables[0]!.name, "name");
-    assert.strictEqual(bindables[0]!.mode, undefined);
-    assert.strictEqual(bindables[0]!.primary, undefined);
+    expect(bindables.length).toBe(1);
+    expect(bindables[0]!.name).toBe("name");
+    expect(bindables[0]!.mode).toBe(undefined);
+    expect(bindables[0]!.primary).toBe(undefined);
   });
 
   it("extracts @bindable with mode option", () => {
@@ -222,9 +221,9 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "MyComponent")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.strictEqual(bindables.length, 1);
-    assert.strictEqual(bindables[0]!.name, "value");
-    assert.strictEqual(bindables[0]!.mode, 6); // twoWay = 6
+    expect(bindables.length).toBe(1);
+    expect(bindables[0]!.name).toBe("value");
+    expect(bindables[0]!.mode).toBe(6); // twoWay = 6
   });
 
   it("extracts @bindable with mode as direct import", () => {
@@ -239,8 +238,8 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "MyComponent")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.strictEqual(bindables.length, 1);
-    assert.strictEqual(bindables[0]!.mode, 6);
+    expect(bindables.length).toBe(1);
+    expect(bindables[0]!.mode).toBe(6);
   });
 
   it("extracts @bindable with primary option", () => {
@@ -255,9 +254,9 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "MyComponent")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.strictEqual(bindables.length, 1);
-    assert.strictEqual(bindables[0]!.name, "value");
-    assert.strictEqual(bindables[0]!.primary, true);
+    expect(bindables.length).toBe(1);
+    expect(bindables[0]!.name).toBe("value");
+    expect(bindables[0]!.primary).toBe(true);
   });
 
   it("extracts @bindable with attribute option", () => {
@@ -272,9 +271,9 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "MyComponent")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.strictEqual(bindables.length, 1);
-    assert.strictEqual(bindables[0]!.name, "myValue");
-    assert.strictEqual(bindables[0]!.attribute, "my-value");
+    expect(bindables.length).toBe(1);
+    expect(bindables[0]!.name).toBe("myValue");
+    expect(bindables[0]!.attribute).toBe("my-value");
   });
 
   it("extracts multiple bindables", () => {
@@ -291,12 +290,12 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "FormInput")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.strictEqual(bindables.length, 3);
-    assert.strictEqual(bindables[0]!.name, "label");
-    assert.strictEqual(bindables[1]!.name, "value");
-    assert.strictEqual(bindables[1]!.mode, 6);
-    assert.strictEqual(bindables[2]!.name, "type");
-    assert.strictEqual(bindables[2]!.primary, true);
+    expect(bindables.length).toBe(3);
+    expect(bindables[0]!.name).toBe("label");
+    expect(bindables[1]!.name).toBe("value");
+    expect(bindables[1]!.mode).toBe(6);
+    expect(bindables[2]!.name).toBe("type");
+    expect(bindables[2]!.primary).toBe(true);
   });
 
   it("returns empty array when no bindables", () => {
@@ -309,7 +308,7 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "PlainClass")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.deepStrictEqual(bindables, []);
+    expect(bindables).toEqual([]);
   });
 
   it("handles @bindable() with empty parens", () => {
@@ -324,8 +323,8 @@ describe("extractBindables", () => {
     const classInfo = findClassByName(source, "MyComponent")!;
     const bindables = extractBindables(source, classInfo);
 
-    assert.strictEqual(bindables.length, 1);
-    assert.strictEqual(bindables[0]!.name, "value");
+    expect(bindables.length).toBe(1);
+    expect(bindables[0]!.name).toBe("value");
   });
 
   it.todo("extracts bindables from decorator config");
