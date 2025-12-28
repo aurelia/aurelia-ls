@@ -4,7 +4,7 @@
  * Tests for TypeScript source analysis.
  */
 
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert";
 import {
   findClasses,

@@ -4,7 +4,7 @@
  * Tests for JavaScript source generation.
  */
 
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert";
 import {
   emitStaticAu,

@@ -10,7 +10,7 @@
  * See: docs/testing.md (Known Gaps > Transform Package)
  */
 
-import { describe, it, todo } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert";
 import {
   extractDependencies,
@@ -179,12 +179,12 @@ describe("extractDependencies", () => {
  * ============================================================================= */
 
 describe("extractDecoratorConfig", () => {
-  todo("extracts name from string argument");
-  todo("extracts name from config object");
-  todo("extracts template identifier");
-  todo("extracts aliases array");
-  todo("extracts containerless flag");
-  todo("extracts all config properties together");
+  it.todo("extracts name from string argument");
+  it.todo("extracts name from config object");
+  it.todo("extracts template identifier");
+  it.todo("extracts aliases array");
+  it.todo("extracts containerless flag");
+  it.todo("extracts all config properties together");
 });
 
 /* =============================================================================
@@ -328,7 +328,7 @@ describe("extractBindables", () => {
     assert.strictEqual(bindables[0]!.name, "value");
   });
 
-  todo("extracts bindables from decorator config");
+  it.todo("extracts bindables from decorator config");
 });
 
 /* =============================================================================
@@ -337,14 +337,14 @@ describe("extractBindables", () => {
  * ============================================================================= */
 
 describe("extractValueConverterConfig", () => {
-  todo("extracts name from @valueConverter decorator");
+  it.todo("extracts name from @valueConverter decorator");
 });
 
 describe("extractCustomAttributeConfig", () => {
-  todo("extracts name from @customAttribute decorator");
-  todo("extracts bindables from @customAttribute");
+  it.todo("extracts name from @customAttribute decorator");
+  it.todo("extracts bindables from @customAttribute");
 });
 
 describe("extractBindingBehaviorConfig", () => {
-  todo("extracts name from @bindingBehavior decorator");
+  it.todo("extracts name from @bindingBehavior decorator");
 });

@@ -11,15 +11,10 @@
     }
   },
   "scripts": {
-    "build": "tsc -b",
-    "test": "node --test --test-reporter=spec test/**/*.test.mjs",
-    "test:routes": "tsx --test --test-reporter=spec test/routes/**/*.test.ts"
+    "build": "tsc -b"
   },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*"
-  },
-  "devDependencies": {
-    "tsx": "^4.19.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"

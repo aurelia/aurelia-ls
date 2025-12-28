@@ -4,7 +4,7 @@
  * Tests for analyzing and transforming Aurelia entry points.
  */
 
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert";
 import {
   analyzeEntryPoint,

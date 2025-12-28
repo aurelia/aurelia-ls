@@ -4,7 +4,7 @@
  * Tests the full route discovery pipeline using the routed-app test fixture.
  */
 
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";

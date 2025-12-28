@@ -5,7 +5,7 @@
  * Uses vector files for comprehensive coverage.
  */
 
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
