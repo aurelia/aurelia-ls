@@ -43,6 +43,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         working-directory: .
+        env:
+          # Allow esbuild postinstall script
+          PNPM_APPROVE_BUILDS: esbuild
 
       - name: Build packages
         run: pnpm run build

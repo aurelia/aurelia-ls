@@ -8,6 +8,7 @@
     "node": ">=18.17 <23"
   },
   "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"],
     "overrides": {
       "aurelia": "link:aurelia/packages/aurelia",
       "@aurelia/kernel": "link:aurelia/packages/kernel",
