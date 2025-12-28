@@ -1,5 +1,8 @@
 /**
  * LSP feature handlers: completions, hover, definition, references, rename, code actions
+ *
+ * Each handler is wrapped in try/catch to prevent exceptions from destabilizing
+ * the LSP connection. Errors are logged and graceful fallbacks are returned.
  */
 import type {
   CompletionItem,
@@ -18,57 +21,92 @@ import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
 import { mapCompletions, mapHover, mapLocations, mapWorkspaceEdit } from "../mapping/lsp-types.js";
 
+function formatError(e: unknown): string {
+  if (e instanceof Error) return e.stack ?? e.message;
+  return String(e);
+}
+
 export function handleCompletion(ctx: ServerContext, params: CompletionParams): CompletionItem[] {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-  if (!doc) return [];
-  const canonical = canonicalDocumentUri(doc.uri);
-  const completions = ctx.workspace.languageService.getCompletions(canonical.uri, params.position);
-  return mapCompletions(completions);
+  try {
+    const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+    if (!doc) return [];
+    const canonical = canonicalDocumentUri(doc.uri);
+    const completions = ctx.workspace.languageService.getCompletions(canonical.uri, params.position);
+    return mapCompletions(completions);
+  } catch (e) {
+    ctx.logger.error(`[completion] failed for ${params.textDocument.uri}: ${formatError(e)}`);
+    return [];
+  }
 }
 
 export function handleHover(ctx: ServerContext, params: TextDocumentPositionParams): Hover | null {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-  if (!doc) return null;
-  const canonical = canonicalDocumentUri(doc.uri);
-  return mapHover(ctx.workspace.languageService.getHover(canonical.uri, params.position));
+  try {
+    const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+    if (!doc) return null;
+    const canonical = canonicalDocumentUri(doc.uri);
+    return mapHover(ctx.workspace.languageService.getHover(canonical.uri, params.position));
+  } catch (e) {
+    ctx.logger.error(`[hover] failed for ${params.textDocument.uri}: ${formatError(e)}`);
+    return null;
+  }
 }
 
 export function handleDefinition(ctx: ServerContext, params: TextDocumentPositionParams): Definition | null {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-  if (!doc) return null;
-  const canonical = canonicalDocumentUri(doc.uri);
-  return mapLocations(ctx.workspace.languageService.getDefinition(canonical.uri, params.position));
+  try {
+    const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+    if (!doc) return null;
+    const canonical = canonicalDocumentUri(doc.uri);
+    return mapLocations(ctx.workspace.languageService.getDefinition(canonical.uri, params.position));
+  } catch (e) {
+    ctx.logger.error(`[definition] failed for ${params.textDocument.uri}: ${formatError(e)}`);
+    return null;
+  }
 }
 
 export function handleReferences(ctx: ServerContext, params: ReferenceParams): Location[] | null {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-  if (!doc) return null;
-  const canonical = canonicalDocumentUri(doc.uri);
-  return mapLocations(ctx.workspace.languageService.getReferences(canonical.uri, params.position));
+  try {
+    const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+    if (!doc) return null;
+    const canonical = canonicalDocumentUri(doc.uri);
+    return mapLocations(ctx.workspace.languageService.getReferences(canonical.uri, params.position));
+  } catch (e) {
+    ctx.logger.error(`[references] failed for ${params.textDocument.uri}: ${formatError(e)}`);
+    return null;
+  }
 }
 
 export function handleRename(ctx: ServerContext, params: RenameParams): WorkspaceEdit | null {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-  if (!doc) return null;
-  const canonical = canonicalDocumentUri(doc.uri);
-  const edits = ctx.workspace.languageService.renameSymbol(canonical.uri, params.position, params.newName);
-  return mapWorkspaceEdit(edits);
+  try {
+    const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+    if (!doc) return null;
+    const canonical = canonicalDocumentUri(doc.uri);
+    const edits = ctx.workspace.languageService.renameSymbol(canonical.uri, params.position, params.newName);
+    return mapWorkspaceEdit(edits);
+  } catch (e) {
+    ctx.logger.error(`[rename] failed for ${params.textDocument.uri}: ${formatError(e)}`);
+    return null;
+  }
 }
 
 export function handleCodeAction(ctx: ServerContext, params: CodeActionParams): CodeAction[] | null {
-  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-  if (!doc) return null;
-  const canonical = canonicalDocumentUri(doc.uri);
-  const actions = ctx.workspace.languageService.getCodeActions(canonical.uri, params.range);
-  const mapped: CodeAction[] = [];
-  for (const action of actions) {
-    const edit = mapWorkspaceEdit(action.edits);
-    if (!edit) continue;
-    const mappedAction: CodeAction = { title: action.title, edit };
-    if (action.kind) mappedAction.kind = action.kind;
-    mapped.push(mappedAction);
+  try {
+    const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+    if (!doc) return null;
+    const canonical = canonicalDocumentUri(doc.uri);
+    const actions = ctx.workspace.languageService.getCodeActions(canonical.uri, params.range);
+    const mapped: CodeAction[] = [];
+    for (const action of actions) {
+      const edit = mapWorkspaceEdit(action.edits);
+      if (!edit) continue;
+      const mappedAction: CodeAction = { title: action.title, edit };
+      if (action.kind) mappedAction.kind = action.kind;
+      mapped.push(mappedAction);
+    }
+    return mapped.length ? mapped : null;
+  } catch (e) {
+    ctx.logger.error(`[codeAction] failed for ${params.textDocument.uri}: ${formatError(e)}`);
+    return null;
   }
-  return mapped.length ? mapped : null;
 }
 
 /**
