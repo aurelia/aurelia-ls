@@ -95,6 +95,7 @@ jobs:
 
       # Download base branch coverage for comparison (if available)
       - name: Download base coverage
+        id: download-base-coverage
         if: github.event_name == 'pull_request'
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -104,10 +105,27 @@ jobs:
           path: coverage-base
         continue-on-error: true
 
-      - name: Coverage Report
-        if: always()
+      - name: Check base coverage exists
+        id: check-base-coverage
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f "coverage-base/coverage-summary.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Coverage Report (with comparison)
+        if: always() && steps.check-base-coverage.outputs.exists == 'true'
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           file-coverage-mode: changes
           name: Tests
           json-summary-compare-path: coverage-base/coverage-summary.json
+
+      - name: Coverage Report (without comparison)
+        if: always() && steps.check-base-coverage.outputs.exists != 'true'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          file-coverage-mode: changes
+          name: Tests
