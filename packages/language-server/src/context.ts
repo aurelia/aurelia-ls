@@ -1,6 +1,5 @@
 import type { Connection, TextDocuments } from "vscode-languageserver/node.js";
-import type { TextDocument } from "vscode-languageserver-textdocument";
-import { URI } from "vscode-uri";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import path from "node:path";
 import fs from "node:fs";
 import {
@@ -18,6 +17,14 @@ import type { AureliaProjectIndex } from "./services/project-index.js";
 import type { TemplateWorkspace } from "./services/template-workspace.js";
 import type { VmReflectionService } from "./services/vm-reflection.js";
 import type { Logger } from "./services/types.js";
+
+/** Minimum time (ms) between sync operations to avoid redundant work */
+const SYNC_DEBOUNCE_MS = 100;
+
+export interface SyncOptions {
+  /** Force sync even if recently synced */
+  force?: boolean;
+}
 
 /**
  * Shared server context passed to all handlers.
@@ -40,10 +47,16 @@ export interface ServerContext {
 
   // Workspace management
   ensurePrelude(): void;
-  syncWorkspaceWithIndex(): void;
+  /**
+   * Syncs workspace with project index.
+   * Debounced by default - skips if synced within last 100ms.
+   * Pass { force: true } to bypass debouncing.
+   */
+  syncWorkspaceWithIndex(options?: SyncOptions): void;
   ensureProgramDocument(uri: string): TextDocument | null;
   materializeOverlay(uri: DocumentUri | string): OverlayBuildArtifact | null;
   overlayPathOptions(): { isJs: boolean; overlayBaseName?: string };
+  lookupText(uri: DocumentUri): string | null;
 }
 
 export interface ServerContextInit {
@@ -78,6 +91,9 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   let projectIndex: AureliaProjectIndex;
   let workspace: TemplateWorkspace;
 
+  // Sync debouncing state
+  let lastSyncTime = 0;
+
   function ensurePrelude(): void {
     const root = workspaceRoot ?? process.cwd();
     const preludePath = path.join(root, ".aurelia", "__prelude.d.ts");
@@ -104,7 +120,16 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     return options;
   }
 
-  function syncWorkspaceWithIndex(): void {
+  function syncWorkspaceWithIndex(options?: SyncOptions): void {
+    const now = Date.now();
+    const timeSinceLastSync = now - lastSyncTime;
+
+    // Skip if recently synced (unless forced)
+    if (!options?.force && timeSinceLastSync < SYNC_DEBOUNCE_MS) {
+      return;
+    }
+
+    lastSyncTime = now;
     projectIndex.refresh();
     const updated = workspace.reconfigure({
       program: workspaceProgramOptions(),
@@ -130,7 +155,6 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   }
 
   function ensureProgramDocument(uri: string): TextDocument | null {
-    const { TextDocument } = require("vscode-languageserver-textdocument") as typeof import("vscode-languageserver-textdocument");
     const live = documents.get(uri);
     if (live) {
       vmReflection.setActiveTemplate(canonicalDocumentUri(uri).path);
@@ -185,10 +209,8 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     ensureProgramDocument,
     materializeOverlay,
     overlayPathOptions,
-
-    // Expose for mapping utilities
     lookupText,
-  } as ServerContext & { lookupText: typeof lookupText };
+  };
 }
 
 // Re-export for convenience

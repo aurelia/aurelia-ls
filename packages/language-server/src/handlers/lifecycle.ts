@@ -33,7 +33,7 @@ async function reloadProjectConfiguration(ctx: ServerContext, reason: string): P
   const beforeVersion = ctx.tsService.getProjectVersion();
 
   ctx.tsService.configure({ workspaceRoot: ctx.workspaceRoot });
-  ctx.syncWorkspaceWithIndex();
+  ctx.syncWorkspaceWithIndex({ force: true });  // Force sync on config reload
 
   const versionChanged = ctx.tsService.getProjectVersion() !== beforeVersion;
   const label = `${reason}; version=${ctx.tsService.getProjectVersion()} fingerprint=${ctx.workspace.fingerprint}`;
@@ -76,8 +76,7 @@ export async function refreshDocument(
     }
     const overlay = ctx.materializeOverlay(canonical.uri);
 
-    // Create lookupText function for diagnostics mapping
-    const lookupText: LookupTextFn = (uri) => (ctx as any).lookupText(uri);
+    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
     const diagnostics = ctx.workspace.languageService.getDiagnostics(canonical.uri);
     const lspDiagnostics = mapDiagnostics(diagnostics, lookupText);
