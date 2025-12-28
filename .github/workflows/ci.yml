@@ -79,6 +79,10 @@ jobs:
         run: npm run build
         working-directory: aurelia
 
+      - name: Bundle VS Code extension
+        run: pnpm -w build && npm run bundle
+        working-directory: packages/vscode
+
       - name: Lint
         run: pnpm lint:compiler
 
