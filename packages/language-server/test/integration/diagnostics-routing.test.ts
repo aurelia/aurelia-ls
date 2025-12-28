@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -13,7 +12,7 @@ import {
   startServer,
   waitForDiagnostics,
   waitForExit,
-} from "./helpers/lsp-harness.mjs";
+} from "./helpers/lsp-harness.js";
 
 test("maps TypeScript diagnostics back to template spans", async () => {
   const fixture = createFixture({
@@ -44,11 +43,11 @@ test("maps TypeScript diagnostics back to template spans", async () => {
 
     const diagnostics = await waitForDiagnostics(connection, child, () => getStderr(), diagUri, 5000);
     const tsDiag = diagnostics.find((d) => d.source === "typescript") ?? diagnostics[0];
-    assert.ok(tsDiag, "should receive at least one diagnostic");
-    assert.equal(tsDiag.range.start.line, 0);
-    assert.equal(tsDiag.range.start.character, 12);
-    assert.equal(tsDiag.range.end.character, 19);
-    assert.ok(/missing/i.test(tsDiag.message), "diagnostic message should mention missing");
+    expect(tsDiag, "should receive at least one diagnostic").toBeTruthy();
+    expect(tsDiag.range.start.line).toBe(0);
+    expect(tsDiag.range.start.character).toBe(12);
+    expect(tsDiag.range.end.character).toBe(19);
+    expect(tsDiag.message, "diagnostic message should mention missing").toMatch(/missing/i);
   } finally {
     dispose();
     child.kill("SIGKILL");
@@ -92,11 +91,11 @@ test("routes definitions to the view-model via provenance", async () => {
       position,
     });
 
-    assert.ok(Array.isArray(definitions), "definition response should be an array");
+    expect(Array.isArray(definitions), "definition response should be an array").toBe(true);
     const vmDef = definitions.find?.((def) => def.uri === vmUri);
     if (vmDef) {
-      assert.equal(vmDef.range.start.line, 1);
-      assert.equal(vmDef.range.start.character, 2);
+      expect(vmDef.range.start.line).toBe(1);
+      expect(vmDef.range.start.character).toBe(2);
     }
   } finally {
     dispose();
@@ -142,19 +141,19 @@ test("hover/definition/rename map through overlay for simple interpolation", asy
       textDocument: { uri: htmlUri },
       position: pos,
     });
-    assert.ok(hover, "hover should be returned");
+    expect(hover, "hover should be returned").toBeTruthy();
     const hoverText = decodeHover(hover);
-    assert.ok(/message/i.test(hoverText), `hover text should mention message: ${hoverText}`);
+    expect(hoverText, `hover text should mention message: ${hoverText}`).toMatch(/message/i);
 
     const definitions = await connection.sendRequest("textDocument/definition", {
       textDocument: { uri: htmlUri },
       position: pos,
     });
     const defArray = Array.isArray(definitions) ? definitions : [];
-    assert.ok(defArray.length > 0, "definition response should contain at least one location");
+    expect(defArray.length > 0, "definition response should contain at least one location").toBe(true);
     const vmDef = defArray.find((d) => d.uri === tsUri);
     if (vmDef) {
-      assert.equal(vmDef.range.start.line, 1);
+      expect(vmDef.range.start.line).toBe(1);
     }
 
     const rename = await connection.sendRequest("textDocument/rename", {
@@ -162,12 +161,12 @@ test("hover/definition/rename map through overlay for simple interpolation", asy
       position: pos,
       newName: "title",
     });
-    assert.ok(rename, "rename response should be present");
+    expect(rename, "rename response should be present").toBeTruthy();
     const edits = collectEdits(rename);
     const templateUri = htmlUri.toLowerCase();
     const vmUri = tsUri.toLowerCase();
-    assert.ok(edits.some((e) => e.uri.toLowerCase() === templateUri), "rename should edit the template");
-    assert.ok(edits.some((e) => e.uri.toLowerCase() === vmUri), "rename should edit the view-model");
+    expect(edits.some((e) => e.uri.toLowerCase() === templateUri), "rename should edit the template").toBe(true);
+    expect(edits.some((e) => e.uri.toLowerCase() === vmUri), "rename should edit the view-model").toBe(true);
   } finally {
     dispose();
     child.kill("SIGKILL");

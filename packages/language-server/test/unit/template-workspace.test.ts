@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { TemplateWorkspace } from "../../out/services/template-workspace.js";
@@ -28,17 +27,17 @@ test("workspace syncs documents and invalidates caches on change", () => {
 
   workspace.buildService.getOverlay(uri);
   const firstStats = workspace.program.getCacheStats(uri).documents[0];
-  assert.equal(firstStats.compilation?.programCacheHit, false);
-  assert.ok((firstStats.provenance.overlayEdges ?? 0) > 0);
+  expect(firstStats.compilation?.programCacheHit).toBe(false);
+  expect((firstStats.provenance.overlayEdges ?? 0) > 0).toBe(true);
 
   const secondDoc = TextDocument.create(uri, "html", 2, "<template>${name}! ${name}</template>");
   workspace.change(secondDoc);
 
   workspace.buildService.getOverlay(uri);
   const secondStats = workspace.program.getCacheStats(uri).documents[0];
-  assert.equal(secondStats.version, 2);
-  assert.equal(secondStats.compilation?.programCacheHit, false);
-  assert.notEqual(firstStats.contentHash, secondStats.contentHash);
+  expect(secondStats.version).toBe(2);
+  expect(secondStats.compilation?.programCacheHit).toBe(false);
+  expect(firstStats.contentHash).not.toBe(secondStats.contentHash);
 });
 
 test("reconfigure rebuilds the program on option drift while preserving sources", () => {
@@ -49,7 +48,7 @@ test("reconfigure rebuilds the program on option drift while preserving sources"
 
   const firstOverlay = workspace.buildService.getOverlay(uri).overlay.path;
   const firstStats = workspace.program.getCacheStats(uri).documents[0];
-  assert.equal(firstStats.compilation?.programCacheHit, false);
+  expect(firstStats.compilation?.programCacheHit).toBe(false);
 
   const changed = workspace.reconfigure({
     program: {
@@ -57,19 +56,19 @@ test("reconfigure rebuilds the program on option drift while preserving sources"
       overlayBaseName: "__custom__",
     },
   });
-  assert.equal(changed, true);
+  expect(changed).toBe(true);
 
   const snap = workspace.snapshot(uri);
-  assert.equal(snap?.version, 1);
+  expect(snap?.version).toBe(1);
 
   const canonical = canonicalDocumentUri(uri);
   const nextOverlay = workspace.buildService.getOverlay(canonical.uri).overlay.path;
-  assert.notEqual(nextOverlay, firstOverlay);
-  assert.ok(nextOverlay.includes("__custom__"));
+  expect(nextOverlay).not.toBe(firstOverlay);
+  expect(nextOverlay).toContain("__custom__");
 
   const nextStats = workspace.program.getCacheStats(uri).documents[0];
-  assert.equal(nextStats.compilation?.programCacheHit, false);
-  assert.ok((nextStats.provenance.overlayEdges ?? 0) > 0);
+  expect(nextStats.compilation?.programCacheHit).toBe(false);
+  expect((nextStats.provenance.overlayEdges ?? 0) > 0).toBe(true);
 });
 
 test("reconfigure reacts to fingerprint drift even when program options are stable", () => {
@@ -80,18 +79,18 @@ test("reconfigure reacts to fingerprint drift even when program options are stab
 
   workspace.buildService.getOverlay(uri);
   const firstStats = workspace.program.getCacheStats(uri).documents[0];
-  assert.equal(firstStats.compilation?.programCacheHit, false);
-  assert.equal(workspace.fingerprint, "index@1");
+  expect(firstStats.compilation?.programCacheHit).toBe(false);
+  expect(workspace.fingerprint).toBe("index@1");
 
   const changed = workspace.reconfigure({
     program: workspace.program.options,
     fingerprint: "index@2",
   });
 
-  assert.equal(changed, true);
-  assert.equal(workspace.fingerprint, "index@2");
+  expect(changed).toBe(true);
+  expect(workspace.fingerprint).toBe("index@2");
 
   workspace.buildService.getOverlay(uri);
   const nextStats = workspace.program.getCacheStats(uri).documents[0];
-  assert.equal(nextStats.compilation?.programCacheHit, false);
+  expect(nextStats.compilation?.programCacheHit).toBe(false);
 });

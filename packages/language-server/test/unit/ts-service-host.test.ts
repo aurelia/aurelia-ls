@@ -1,8 +1,7 @@
-import assert from "node:assert/strict";
+import { test, expect, onTestFinished } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test, onTestFinished } from "vitest";
 import ts from "typescript";
 import { fileURLToPath } from "node:url";
 import { createPathUtils } from "../../out/services/paths.js";
@@ -33,13 +32,13 @@ test("configure loads tsconfig and base roots", () => {
   const before = tsService.getProjectVersion();
   tsService.configure({ workspaceRoot: fixtureRoot });
 
-  assert.equal(tsService.compilerOptions().allowJs, false);
-  assert.equal(tsService.compilerOptions().target, ts.ScriptTarget.ES2020);
-  assert.equal(tsService.getProjectVersion(), before + 1);
+  expect(tsService.compilerOptions().allowJs).toBe(false);
+  expect(tsService.compilerOptions().target).toBe(ts.ScriptTarget.ES2020);
+  expect(tsService.getProjectVersion()).toBe(before + 1);
 
   const canonicalComponent = paths.canonical(componentPath);
-  assert.ok(tsService.getRootFileNames().includes(canonicalComponent));
-  assert.ok(new Set(overlay.listScriptRoots()).has(canonicalComponent));
+  expect(tsService.getRootFileNames()).toContain(canonicalComponent);
+  expect(new Set(overlay.listScriptRoots()).has(canonicalComponent)).toBe(true);
 });
 
 test("overlays are treated as script roots and preferred for snapshots", () => {
@@ -51,13 +50,13 @@ test("overlays are treated as script roots and preferred for snapshots", () => {
 
   const program = tsService.getService().getProgram();
   const sourceFile = program?.getSourceFile(paths.canonical(overlayPath));
-  assert.ok(sourceFile, "expected overlay source file in program");
-  assert.ok(sourceFile.text.includes("fromOverlay"), "overlay text should win over disk");
+  expect(sourceFile, "expected overlay source file in program").toBeTruthy();
+  expect(sourceFile.text, "overlay text should win over disk").toContain("fromOverlay");
 
   const virtualOverlay = path.join(fixtureRoot, ".aurelia", "virtual.ts");
   tsService.upsertOverlay(virtualOverlay, "export const virtual = 1;");
   const roots = tsService.getService().getProgram()?.getRootFileNames() ?? [];
-  assert.ok(roots.includes(paths.canonical(virtualOverlay)), "virtual overlay should be a root file");
+  expect(roots, "virtual overlay should be a root file").toContain(paths.canonical(virtualOverlay));
 });
 
 test("configure reloads when tsconfig changes on disk", () => {
@@ -79,7 +78,7 @@ test("configure reloads when tsconfig changes on disk", () => {
 
   const baselineVersion = tsService.getProjectVersion();
   const baselineTarget = tsService.compilerOptions().target;
-  assert.ok(tsService.getRootFileNames().includes(paths.canonical(filePath)));
+  expect(tsService.getRootFileNames()).toContain(paths.canonical(filePath));
 
   fs.writeFileSync(tsconfigPath, JSON.stringify({
     compilerOptions: { target: "ES2022", module: "ESNext" },
@@ -88,6 +87,6 @@ test("configure reloads when tsconfig changes on disk", () => {
 
   tsService.configure({ workspaceRoot: tmp, tsconfigPath });
 
-  assert.ok(tsService.getProjectVersion() > baselineVersion, "project version should bump after config change");
-  assert.notEqual(tsService.compilerOptions().target, baselineTarget, "compiler options should reflect updated tsconfig");
+  expect(tsService.getProjectVersion(), "project version should bump after config change").toBeGreaterThan(baselineVersion);
+  expect(tsService.compilerOptions().target, "compiler options should reflect updated tsconfig").not.toBe(baselineTarget);
 });

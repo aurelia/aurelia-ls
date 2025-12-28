@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -10,7 +9,7 @@ import {
   startServer,
   waitForDiagnostics,
   waitForExit,
-} from "./helpers/lsp-harness.mjs";
+} from "./helpers/lsp-harness.js";
 
 test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async () => {
   const fixture = createFixture({
@@ -41,22 +40,22 @@ test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async
     await waitForDiagnostics(connection, child, getStderr, htmlUri, 5000);
 
     const overlayResult = await connection.sendRequest("aurelia/getOverlay", { uri: htmlUri });
-    assert.ok(overlayResult, "overlay response should not be null");
-    assert.equal(typeof overlayResult.fingerprint, "string", "overlay fingerprint should be reported");
+    expect(overlayResult, "overlay response should not be null").toBeTruthy();
+    expect(typeof overlayResult.fingerprint, "overlay fingerprint should be reported").toBe("string");
     const artifact = overlayResult.artifact ?? overlayResult;
-    assert.ok(artifact?.overlay?.path, "overlay path should be present");
-    assert.ok((artifact?.mapping?.entries?.length ?? 0) > 0, "overlay mapping should contain entries");
-    assert.ok((artifact?.calls?.length ?? 0) > 0, "overlay should contain compiled call sites");
-    assert.ok((artifact?.overlay?.text?.length ?? 0) > 0, "overlay text should not be empty");
-    assert.ok(
+    expect(artifact?.overlay?.path, "overlay path should be present").toBeTruthy();
+    expect((artifact?.mapping?.entries?.length ?? 0) > 0, "overlay mapping should contain entries").toBe(true);
+    expect((artifact?.calls?.length ?? 0) > 0, "overlay should contain compiled call sites").toBe(true);
+    expect((artifact?.overlay?.text?.length ?? 0) > 0, "overlay text should not be empty").toBe(true);
+    expect(
       artifact?.overlay?.path.endsWith(".overlay.ts") || artifact?.overlay?.path.endsWith(".overlay.js"),
       "overlay path should use overlay naming convention",
-    );
+    ).toBe(true);
 
     const state = await connection.sendRequest("aurelia/dumpState");
     const overlays = Array.isArray(state?.overlays) ? state.overlays : [];
     const normalized = overlays.map((o) => normalizePath(o));
-    assert.ok(normalized.includes(normalizePath(artifact.overlay.path)), "overlay FS should contain the materialized overlay path");
+    expect(normalized.includes(normalizePath(artifact.overlay.path)), "overlay FS should contain the materialized overlay path").toBe(true);
   } finally {
     dispose();
     child.kill("SIGKILL");

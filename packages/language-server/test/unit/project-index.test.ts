@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import path from "node:path";
 import ts from "typescript";
 
@@ -73,11 +72,11 @@ test("produces a semantics + resource graph snapshot from TS project state", () 
   const semantics = index.currentSemantics();
   const graph = index.currentResourceGraph();
 
-  assert.equal(semantics.version, DEFAULT_SEMANTICS.version);
-  assert.ok(graph.root);
-  assert.equal(graph.version, "aurelia-resource-graph@1");
-  assert.ok(graph.scopes[graph.root]);
-  assert.ok(index.currentFingerprint().length > 0);
+  expect(semantics.version).toBe(DEFAULT_SEMANTICS.version);
+  expect(graph.root).toBeTruthy();
+  expect(graph.version).toBe("aurelia-resource-graph@1");
+  expect(graph.scopes[graph.root]).toBeTruthy();
+  expect(index.currentFingerprint().length > 0).toBe(true);
 });
 
 test("fingerprint tracks resource and root changes", async () => {
@@ -87,11 +86,11 @@ test("fingerprint tracks resource and root changes", async () => {
   const baseline = index.currentFingerprint();
 
   await index.refresh();
-  assert.equal(index.currentFingerprint(), baseline, "refresh without change should be stable");
+  expect(index.currentFingerprint(), "refresh without change should be stable").toBe(baseline);
 
   tsProject.bumpVersion();
   await index.refresh();
-  assert.equal(index.currentFingerprint(), baseline, "project version bumps alone should not affect fingerprint");
+  expect(index.currentFingerprint(), "project version bumps alone should not affect fingerprint").toBe(baseline);
 
   const examplePath = path.join(process.cwd(), "src", "example.ts");
   tsProject.updateFile(examplePath, `
@@ -102,12 +101,12 @@ test("fingerprint tracks resource and root changes", async () => {
   `);
   await index.refresh();
   const afterResourceChange = index.currentFingerprint();
-  assert.notEqual(afterResourceChange, baseline);
+  expect(afterResourceChange).not.toBe(baseline);
 
   tsProject.addFile(path.join(process.cwd(), "src", "other.ts"), "export const value = 1;");
   await index.refresh();
   const afterRootChange = index.currentFingerprint();
-  assert.notEqual(afterRootChange, afterResourceChange);
+  expect(afterRootChange).not.toBe(afterResourceChange);
 });
 
 test("discovers Aurelia resources from decorators and bindable members", () => {
@@ -148,27 +147,27 @@ test("discovers Aurelia resources from decorators and bindable members", () => {
   const sem = index.currentSemantics();
 
   const fancy = sem.resources.elements["fancy-box"];
-  assert.ok(fancy, "custom element discovered");
-  assert.equal(fancy.aliases?.includes("box"), true);
-  assert.equal(fancy.bindables.value?.mode, "fromView");
-  assert.equal(fancy.bindables.count?.mode, "twoWay");
+  expect(fancy, "custom element discovered").toBeTruthy();
+  expect(fancy.aliases?.includes("box")).toBe(true);
+  expect(fancy.bindables.value?.mode).toBe("fromView");
+  expect(fancy.bindables.count?.mode).toBe("twoWay");
 
   const panel = sem.resources.elements.panel;
-  assert.ok(panel, "fallback name from class detected");
-  assert.equal(panel.containerless, true);
+  expect(panel, "fallback name from class detected").toBeTruthy();
+  expect(panel.containerless).toBe(true);
 
   const ifNot = sem.resources.attributes["if-not"];
-  assert.ok(ifNot, "custom attribute discovered");
-  assert.equal(ifNot.isTemplateController, true);
-  assert.equal(ifNot.primary, "toggle");
-  assert.equal(ifNot.aliases?.includes("unless"), true);
-  assert.equal(ifNot.noMultiBindings, true);
+  expect(ifNot, "custom attribute discovered").toBeTruthy();
+  expect(ifNot.isTemplateController).toBe(true);
+  expect(ifNot.primary).toBe("toggle");
+  expect(ifNot.aliases?.includes("unless")).toBe(true);
+  expect(ifNot.noMultiBindings).toBe(true);
 
   const vc = sem.resources.valueConverters["date-format"];
-  assert.ok(vc, "value converter discovered");
+  expect(vc, "value converter discovered").toBeTruthy();
 
   const bb = sem.resources.bindingBehaviors.throttle;
-  assert.ok(bb, "binding behavior discovered");
+  expect(bb, "binding behavior discovered").toBeTruthy();
 });
 
 test("maps discoveries into the default resource scope when a graph is provided", () => {
@@ -188,12 +187,12 @@ test("maps discoveries into the default resource scope when a graph is provided"
   const graph = index.currentResourceGraph();
   const sem = index.currentSemantics();
 
-  assert.equal(graph, sem.resourceGraph);
+  expect(graph).toBe(sem.resourceGraph);
 
   const scoped = graph.scopes[featureScope];
-  assert.ok(scoped, "expected scoped overlay to exist");
-  assert.ok(scoped.resources.elements["scoped-box"], "discovered element should be scoped");
-  assert.equal(graph.scopes[graph.root].resources.elements["scoped-box"], undefined, "root scope should remain unchanged");
-  assert.ok(sem.resources.elements["scoped-box"], "semantics should still surface discovered resources");
-  assert.equal(baseGraph.scopes[featureScope].resources.elements?.["scoped-box"], undefined, "base graph should not be mutated");
+  expect(scoped, "expected scoped overlay to exist").toBeTruthy();
+  expect(scoped.resources.elements["scoped-box"], "discovered element should be scoped").toBeTruthy();
+  expect(graph.scopes[graph.root].resources.elements["scoped-box"], "root scope should remain unchanged").toBe(undefined);
+  expect(sem.resources.elements["scoped-box"], "semantics should still surface discovered resources").toBeTruthy();
+  expect(baseGraph.scopes[featureScope].resources.elements?.["scoped-box"], "base graph should not be mutated").toBe(undefined);
 });

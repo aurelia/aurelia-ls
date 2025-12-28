@@ -1,8 +1,7 @@
-import assert from "node:assert/strict";
+import { test, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test } from "vitest";
 import { OverlayFs } from "../../out/services/overlay-fs.js";
 import { createPathUtils } from "../../out/services/paths.js";
 
@@ -16,17 +15,17 @@ test("overlay snapshots are versioned and preferred over disk", () => {
 
   try {
     const first = overlay.upsert(diskFile, "export const fromOverlay = 1;");
-    assert.equal(first.version, 1);
-    assert.equal(overlay.snapshot(diskFile)?.text, "export const fromOverlay = 1;");
-    assert.equal(overlay.readFile(diskFile), "export const fromOverlay = 1;");
+    expect(first.version).toBe(1);
+    expect(overlay.snapshot(diskFile)?.text).toBe("export const fromOverlay = 1;");
+    expect(overlay.readFile(diskFile)).toBe("export const fromOverlay = 1;");
 
     const second = overlay.upsert(diskFile, "export const bumped = 2;");
-    assert.equal(second.version, 2);
-    assert.equal(overlay.snapshot(diskFile)?.version, 2);
+    expect(second.version).toBe(2);
+    expect(overlay.snapshot(diskFile)?.version).toBe(2);
 
     overlay.delete(diskFile);
-    assert.equal(overlay.snapshot(diskFile), undefined);
-    assert.equal(overlay.readFile(diskFile), "export const fromDisk = 1;");
+    expect(overlay.snapshot(diskFile)).toBe(undefined);
+    expect(overlay.readFile(diskFile)).toBe("export const fromDisk = 1;");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -39,14 +38,14 @@ test("script roots merge base files with overlays", () => {
   const baseB = path.join(root, "src", "b.ts");
   try {
     overlay.setBaseRoots([baseA, baseB]);
-    assert.deepEqual(new Set(overlay.listScriptRoots()), new Set([
+    expect(new Set(overlay.listScriptRoots())).toEqual(new Set([
       paths.canonical(baseA),
       paths.canonical(baseB),
     ]));
 
     const virtual = path.join(root, ".aurelia", "overlay.ts");
     overlay.upsert(virtual, "// overlay root");
-    assert.deepEqual(new Set(overlay.listScriptRoots()), new Set([
+    expect(new Set(overlay.listScriptRoots())).toEqual(new Set([
       paths.canonical(baseA),
       paths.canonical(baseB),
       paths.canonical(virtual),
