@@ -1,14 +1,29 @@
 {
-  "name": "@aurelia-ls/client",
-  "displayName": "Aurelia Language Server (experimental)",
-  "description": "Diagnostics for Aurelia templates via a TypeScript overlay (experimental slice).",
-  "version": "0.0.1",
-  "publisher": "aurelia-experimental",
+  "name": "@aurelia-ls/vscode",
+  "displayName": "Aurelia 2",
+  "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
+  "version": "0.1.0",
+  "publisher": "AureliaEffect",
   "type": "module",
   "main": "./out/extension.js",
   "engines": {
     "vscode": "^1.90.0"
   },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "aurelia",
+    "aurelia2",
+    "template",
+    "html",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aurelia/aurelia-ls"
+  },
+  "license": "MIT",
   "activationEvents": [
     "onLanguage:html"
   ],

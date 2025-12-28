@@ -3,8 +3,8 @@
   "references": [
     { "path": "packages/compiler" },
     { "path": "packages/resolution" },
-    { "path": "packages/server" },
-    { "path": "packages/client" },
+    { "path": "packages/language-server" },
+    { "path": "packages/vscode" },
     { "path": "packages/build" },
     { "path": "packages/transform" }
   ]

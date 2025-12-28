@@ -1,9 +1,15 @@
 {
-  "name": "@aurelia-ls/server",
-  "version": "0.0.1",
+  "name": "@aurelia-ls/language-server",
+  "version": "0.1.0",
+  "description": "Language server for Aurelia 2 templates",
   "type": "module",
   "main": "./out/main.js",
   "types": "./out/main.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aurelia/aurelia-ls"
+  },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*",
     "@aurelia-ls/resolution": "workspace:*",

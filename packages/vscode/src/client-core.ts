@@ -23,10 +23,10 @@ async function resolveServerModule(context: ExtensionContext, logger: ClientLogg
     logger.warn(`[client] override set but not found: ${override}`);
   }
   const candidates = [
-    vscode.Uri.joinPath(context.extensionUri, "dist", "server", "main.js").fsPath,
-    vscode.Uri.joinPath(context.extensionUri, "..", "server", "out", "main.js").fsPath,
-    vscode.Uri.joinPath(context.extensionUri, "..", "server", "dist", "main.js").fsPath,
-    vscode.Uri.joinPath(context.extensionUri, "..", "server", "build", "main.js").fsPath,
+    vscode.Uri.joinPath(context.extensionUri, "dist", "language-server", "main.js").fsPath,
+    vscode.Uri.joinPath(context.extensionUri, "..", "language-server", "out", "main.js").fsPath,
+    vscode.Uri.joinPath(context.extensionUri, "..", "language-server", "dist", "main.js").fsPath,
+    vscode.Uri.joinPath(context.extensionUri, "..", "language-server", "build", "main.js").fsPath,
   ];
   for (const p of candidates) {
     if (await fileExists(vscode, p)) {
