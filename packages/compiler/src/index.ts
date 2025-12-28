@@ -14,8 +14,21 @@ export { compileTemplate } from "./compiler/index.js";
 export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./compiler/index.js";
 
 // Parsing
-export { getExpressionParser, rebaseExpressionSpans, DEFAULT_SYNTAX } from "./compiler/index.js";
-export type { ExpressionParseContext, IExpressionParser } from "./compiler/index.js";
+export {
+  getExpressionParser,
+  rebaseExpressionSpans,
+  DEFAULT_SYNTAX,
+  // Low-level parsing (for tooling/testing)
+  ExpressionParser,
+  Scanner,
+  TokenType,
+  splitInterpolationText,
+  AttrSyntax,
+  AttributeParser,
+  createDefaultSyntax,
+  registerBuiltins,
+} from "./compiler/index.js";
+export type { ExpressionParseContext, IExpressionParser, Token } from "./compiler/index.js";
 
 // Language / Semantics
 export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./compiler/index.js";
@@ -129,7 +142,7 @@ export type {
 } from "./compiler/index.js";
 
 // Analysis (for build tools)
-export { lowerDocument, resolveHost, bindScopes } from "./compiler/index.js";
+export { lowerDocument, resolveHost, bindScopes, typecheck, planOverlay, emitOverlay, emitMappedExpression } from "./compiler/index.js";
 export type { BuildIrOptions } from "./compiler/index.js";
 
 // Shared Infrastructure

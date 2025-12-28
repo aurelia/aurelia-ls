@@ -5,8 +5,7 @@
  * Uses vector files for comprehensive coverage.
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert";
+import { describe, it, expect, assert } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -158,17 +157,17 @@ function assertComponentRefMatches(
     return; // Don't check if not specified in expected
   }
 
-  assert.ok(actual, `${context}: component should exist`);
-  assert.strictEqual(actual.kind, expected.kind, `${context}: component kind`);
+  expect(actual, `${context}: component should exist`).toBeTruthy();
+  expect(actual.kind, `${context}: component kind`).toBe(expected.kind);
 
   if (expected.className && actual.kind === "class") {
-    assert.strictEqual(actual.className, expected.className, `${context}: className`);
+    expect(actual.className, `${context}: className`).toBe(expected.className);
   }
   if (expected.name && (actual.kind === "string" || actual.kind === "inline")) {
-    assert.strictEqual(actual.name, expected.name, `${context}: name`);
+    expect(actual.name, `${context}: name`).toBe(expected.name);
   }
   if (expected.importPath && actual.kind === "import") {
-    assert.strictEqual(actual.importPath, expected.importPath, `${context}: importPath`);
+    expect(actual.importPath, `${context}: importPath`).toBe(expected.importPath);
   }
 }
 
@@ -180,31 +179,31 @@ function assertChildRoutesMatch(
   expected: ExpectedChildRoute[],
   context: string
 ): void {
-  assert.strictEqual(actual.length, expected.length, `${context}: routes count`);
+  expect(actual.length, `${context}: routes count`).toBe(expected.length);
 
   for (let i = 0; i < expected.length; i++) {
     const actualRoute = actual[i]!;
     const expectedRoute = expected[i]!;
     const routeContext = `${context}[${i}]`;
 
-    assert.strictEqual(actualRoute.path, expectedRoute.path, `${routeContext}: path`);
+    expect(actualRoute.path, `${routeContext}: path`).toBe(expectedRoute.path);
 
     if (expectedRoute.component) {
       assertComponentRefMatches(actualRoute.component, expectedRoute.component, routeContext);
     }
 
     if (expectedRoute.id !== undefined) {
-      assert.strictEqual(actualRoute.id, expectedRoute.id, `${routeContext}: id`);
+      expect(actualRoute.id, `${routeContext}: id`).toBe(expectedRoute.id);
     }
     if (expectedRoute.title !== undefined) {
-      assert.strictEqual(actualRoute.title, expectedRoute.title, `${routeContext}: title`);
+      expect(actualRoute.title, `${routeContext}: title`).toBe(expectedRoute.title);
     }
     if (expectedRoute.redirectTo !== undefined) {
-      assert.strictEqual(actualRoute.redirectTo, expectedRoute.redirectTo, `${routeContext}: redirectTo`);
+      expect(actualRoute.redirectTo, `${routeContext}: redirectTo`).toBe(expectedRoute.redirectTo);
     }
 
     if (expectedRoute.routes) {
-      assert.ok(actualRoute.children, `${routeContext}: should have children`);
+      expect(actualRoute.children, `${routeContext}: should have children`).toBeTruthy();
       assertChildRoutesMatch(actualRoute.children!, expectedRoute.routes, `${routeContext}.children`);
     }
   }
@@ -220,32 +219,32 @@ function assertRouteConfigMatches(
   // Check path
   if (expected.path !== undefined) {
     if (Array.isArray(expected.path)) {
-      assert.deepStrictEqual(actual.path, expected.path, "path should match");
+      expect(actual.path, "path should match").toEqual(expected.path);
     } else {
-      assert.strictEqual(actual.path, expected.path, "path should match");
+      expect(actual.path, "path should match").toBe(expected.path);
     }
   }
 
   // Check simple string fields
   if (expected.id !== undefined) {
-    assert.strictEqual(actual.id, expected.id, "id should match");
+    expect(actual.id, "id should match").toBe(expected.id);
   }
   if (expected.title !== undefined) {
-    assert.strictEqual(actual.title, expected.title, "title should match");
+    expect(actual.title, "title should match").toBe(expected.title);
   }
   if (expected.redirectTo !== undefined) {
-    assert.strictEqual(actual.redirectTo, expected.redirectTo, "redirectTo should match");
+    expect(actual.redirectTo, "redirectTo should match").toBe(expected.redirectTo);
   }
   if (expected.viewport !== undefined) {
-    assert.strictEqual(actual.viewport, expected.viewport, "viewport should match");
+    expect(actual.viewport, "viewport should match").toBe(expected.viewport);
   }
   if (expected.definitionType !== undefined) {
-    assert.strictEqual(actual.definitionType, expected.definitionType, "definitionType should match");
+    expect(actual.definitionType, "definitionType should match").toBe(expected.definitionType);
   }
 
   // Check params
   if (expected.params !== undefined) {
-    assert.deepStrictEqual(actual.params, expected.params, "params should match");
+    expect(actual.params, "params should match").toEqual(expected.params);
   }
 
   // Check routes
@@ -260,7 +259,7 @@ function assertRouteConfigMatches(
 
   // Check data
   if (expected.data !== undefined) {
-    assert.deepStrictEqual(actual.data, expected.data, "data should match");
+    expect(actual.data, "data should match").toEqual(expected.data);
   }
 }
 
@@ -272,32 +271,32 @@ describe("route extraction", () => {
   describe("extractPathParams", () => {
     it("extracts single parameter", () => {
       const params = extractPathParams(":id");
-      assert.deepStrictEqual(params, ["id"]);
+      expect(params).toEqual(["id"]);
     });
 
     it("extracts multiple parameters", () => {
       const params = extractPathParams(":category/:id");
-      assert.deepStrictEqual(params, ["category", "id"]);
+      expect(params).toEqual(["category", "id"]);
     });
 
     it("extracts parameters from complex path", () => {
       const params = extractPathParams("products/:category/items/:id");
-      assert.deepStrictEqual(params, ["category", "id"]);
+      expect(params).toEqual(["category", "id"]);
     });
 
     it("handles optional parameters", () => {
       const params = extractPathParams(":id?");
-      assert.deepStrictEqual(params, ["id"]);
+      expect(params).toEqual(["id"]);
     });
 
     it("returns empty array for static path", () => {
       const params = extractPathParams("products/list");
-      assert.deepStrictEqual(params, []);
+      expect(params).toEqual([]);
     });
 
     it("returns empty array for empty path", () => {
       const params = extractPathParams("");
-      assert.deepStrictEqual(params, []);
+      expect(params).toEqual([]);
     });
   });
 
@@ -306,40 +305,40 @@ describe("route extraction", () => {
       const source = `@route\nexport class Test {}`;
       const sourceFile = parseSource(source);
       const classDecl = findClass(sourceFile);
-      assert.ok(classDecl);
+      expect(classDecl).toBeTruthy();
 
       const decorator = findDecorator(classDecl, "route");
-      assert.ok(decorator);
+      expect(decorator).toBeTruthy();
     });
 
     it("finds @route decorator with arguments", () => {
       const source = `@route('path')\nexport class Test {}`;
       const sourceFile = parseSource(source);
       const classDecl = findClass(sourceFile);
-      assert.ok(classDecl);
+      expect(classDecl).toBeTruthy();
 
       const decorator = findDecorator(classDecl, "route");
-      assert.ok(decorator);
+      expect(decorator).toBeTruthy();
     });
 
     it("finds @route decorator with config object", () => {
       const source = `@route({ path: 'test' })\nexport class Test {}`;
       const sourceFile = parseSource(source);
       const classDecl = findClass(sourceFile);
-      assert.ok(classDecl);
+      expect(classDecl).toBeTruthy();
 
       const decorator = findDecorator(classDecl, "route");
-      assert.ok(decorator);
+      expect(decorator).toBeTruthy();
     });
 
     it("returns undefined when decorator not present", () => {
       const source = `@customElement('test')\nexport class Test {}`;
       const sourceFile = parseSource(source);
       const classDecl = findClass(sourceFile);
-      assert.ok(classDecl);
+      expect(classDecl).toBeTruthy();
 
       const decorator = findDecorator(classDecl, "route");
-      assert.strictEqual(decorator, undefined);
+      expect(decorator).toBeUndefined();
     });
   });
 
@@ -349,8 +348,8 @@ describe("route extraction", () => {
       const sourceFile = parseSource(source);
 
       const classDecl = findClass(sourceFile, "MyComponent");
-      assert.ok(classDecl);
-      assert.strictEqual(classDecl.name?.text, "MyComponent");
+      expect(classDecl).toBeTruthy();
+      expect(classDecl.name?.text).toBe("MyComponent");
     });
 
     it("finds first class when no name specified", () => {
@@ -358,8 +357,8 @@ describe("route extraction", () => {
       const sourceFile = parseSource(source);
 
       const classDecl = findClass(sourceFile);
-      assert.ok(classDecl);
-      assert.strictEqual(classDecl.name?.text, "First");
+      expect(classDecl).toBeTruthy();
+      expect(classDecl.name?.text).toBe("First");
     });
 
     it("returns undefined for non-existent class", () => {
@@ -367,7 +366,7 @@ describe("route extraction", () => {
       const sourceFile = parseSource(source);
 
       const classDecl = findClass(sourceFile, "NotFound");
-      assert.strictEqual(classDecl, undefined);
+      expect(classDecl).toBeUndefined();
     });
   });
 
@@ -376,16 +375,16 @@ describe("route extraction", () => {
       const source = `export class App { getRouteConfig() { return {}; } }`;
       const sourceFile = parseSource(source);
       const classDecl = findClass(sourceFile);
-      assert.ok(classDecl);
-      assert.strictEqual(hasGetRouteConfigMethod(classDecl), true);
+      expect(classDecl).toBeTruthy();
+      expect(hasGetRouteConfigMethod(classDecl)).toBe(true);
     });
 
     it("returns false when no getRouteConfig", () => {
       const source = `export class App { static routes = []; }`;
       const sourceFile = parseSource(source);
       const classDecl = findClass(sourceFile);
-      assert.ok(classDecl);
-      assert.strictEqual(hasGetRouteConfigMethod(classDecl), false);
+      expect(classDecl).toBeTruthy();
+      expect(hasGetRouteConfigMethod(classDecl)).toBe(false);
     });
   });
 
@@ -401,24 +400,23 @@ describe("route extraction", () => {
         it(testCase.name, () => {
           const sourceFile = parseSource(testCase.source);
           const classDecl = findClass(sourceFile);
-          assert.ok(classDecl, "Class not found in source");
+          expect(classDecl, "Class not found in source").toBeTruthy();
 
           // Handle dynamic route case (getRouteConfig)
           if (testCase.expected && "isDynamic" in testCase.expected && testCase.expected.isDynamic) {
-            assert.strictEqual(
+            expect(
               hasGetRouteConfigMethod(classDecl),
-              true,
               "Should detect getRouteConfig method"
-            );
+            ).toBe(true);
             return;
           }
 
           const result = extractRouteConfig(classDecl);
 
           if (testCase.expected === null) {
-            assert.strictEqual(result, null, "Should return null for no routes");
+            expect(result, "Should return null for no routes").toBeNull();
           } else {
-            assert.ok(result, "Should extract route config");
+            expect(result, "Should extract route config").toBeTruthy();
             assertRouteConfigMatches(result, testCase.expected);
           }
         });
@@ -436,13 +434,13 @@ describe("vector files are valid JSON", () => {
     it(`${file} is valid JSON`, () => {
       const content = readFileSync(join(VECTORS_DIR, file), "utf-8");
       const parsed = JSON.parse(content);
-      assert.ok(parsed.name, "Vector file should have a name");
-      assert.ok(Array.isArray(parsed.cases), "Vector file should have cases array");
+      expect(parsed.name, "Vector file should have a name").toBeTruthy();
+      expect(Array.isArray(parsed.cases), "Vector file should have cases array").toBe(true);
 
       for (const testCase of parsed.cases) {
-        assert.ok(testCase.name, "Each case should have a name");
-        assert.ok(typeof testCase.source === "string", "Each case should have source");
-        assert.ok("expected" in testCase, "Each case should have expected");
+        expect(testCase.name, "Each case should have a name").toBeTruthy();
+        expect(typeof testCase.source === "string", "Each case should have source").toBe(true);
+        expect("expected" in testCase, "Each case should have expected").toBe(true);
       }
     });
   }

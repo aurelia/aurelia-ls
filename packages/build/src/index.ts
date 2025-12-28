@@ -53,6 +53,21 @@ export {
   type CompileAndRenderAotResult,
 } from "./aot.js";
 
+// SSG (Static Site Generation) - still in progress
+export {
+  generateStaticSite,
+  createStaticPathsResolver,
+  expandPath,
+  collectStaticRoutes,
+  type SSGOptions,
+  type ResolvedSSGOptions,
+  type SSGResult,
+  type SSGError,
+  type ExpandedRoute,
+  type RenderFn,
+  type StaticPathsResolver,
+} from "./ssg/index.js";
+
 // Runtime re-exports for SSR consumers
 export { DI, Registration } from "@aurelia/kernel";
 export { Aurelia, IPlatform, StandardConfiguration, CustomElement } from "@aurelia/runtime-html";

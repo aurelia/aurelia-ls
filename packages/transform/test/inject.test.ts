@@ -4,8 +4,7 @@
  * Tests for $au injection and decorator removal.
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 import {
   generateInjectionEdits,
   generateImportCleanupEdits,
@@ -37,9 +36,9 @@ export class Greeting {
       const transformed = applyEdits(source, result.edits);
 
       // @bindable should be removed
-      assert.ok(!transformed.includes("@bindable"));
+      expect(transformed).not.toContain("@bindable");
       // Property should remain
-      assert.ok(transformed.includes("name: string = \"World\""));
+      expect(transformed).toContain('name: string = "World"');
     });
 
     it("removes multiple @bindable decorators", () => {
@@ -66,13 +65,13 @@ export class FormInput {
       const transformed = applyEdits(source, result.edits);
 
       // All @bindable should be removed
-      assert.ok(!transformed.includes("@bindable"));
+      expect(transformed).not.toContain("@bindable");
       // Properties should remain
-      assert.ok(transformed.includes("label: string"));
-      assert.ok(transformed.includes("value: string"));
-      assert.ok(transformed.includes("type: string = \"text\""));
+      expect(transformed).toContain("label: string");
+      expect(transformed).toContain("value: string");
+      expect(transformed).toContain('type: string = "text"');
       // Warning should indicate removal count
-      assert.ok(result.warnings.some((w: string) => w.includes("3 @bindable")));
+      expect(result.warnings.some((w: string) => w.includes("3 @bindable"))).toBe(true);
     });
 
     it("preserves property indentation", () => {
@@ -95,7 +94,7 @@ export class MyComp {
       const transformed = applyEdits(source, result.edits);
 
       // Property should have proper indentation (2 spaces)
-      assert.ok(transformed.includes("  value: string"));
+      expect(transformed).toContain("  value: string");
     });
 
     it("can skip @bindable removal", () => {
@@ -118,7 +117,7 @@ export class Greeting {
       const transformed = applyEdits(source, result.edits);
 
       // @bindable should still be there
-      assert.ok(transformed.includes("@bindable"));
+      expect(transformed).toContain("@bindable");
     });
   });
 });
@@ -137,9 +136,9 @@ export class Greeting {
 
     // Check the import line specifically
     const importLine = transformed.split("\n")[0]!;
-    assert.ok(importLine.includes("customElement"));
-    assert.ok(!importLine.includes("bindable"));
-    assert.deepStrictEqual(result.removedSpecifiers, ["bindable"]);
+    expect(importLine).toContain("customElement");
+    expect(importLine).not.toContain("bindable");
+    expect(result.removedSpecifiers).toEqual(["bindable"]);
   });
 
   it("removes entire import when all specifiers are unused", () => {
@@ -153,7 +152,7 @@ export class Greeting {
     const transformed = applyEdits(source, result.edits);
 
     // Import should be completely removed
-    assert.ok(!transformed.includes('from "aurelia"'));
+    expect(transformed).not.toContain('from "aurelia"');
   });
 
   it("removes multiple specifiers from same import", () => {
@@ -168,9 +167,9 @@ export class Greeting {
 
     // Check the import line specifically
     const importLine = transformed.split("\n")[0]!;
-    assert.ok(importLine.includes("customElement"));
-    assert.ok(!importLine.includes("bindable"));
-    assert.ok(!importLine.includes("BindingMode"));
+    expect(importLine).toContain("customElement");
+    expect(importLine).not.toContain("bindable");
+    expect(importLine).not.toContain("BindingMode");
   });
 
   it("handles @aurelia/ scoped packages", () => {
@@ -183,8 +182,8 @@ export class MyComp {
     const result = generateImportCleanupEdits(source, ["bindable"]);
     const transformed = applyEdits(source, result.edits);
 
-    assert.ok(!transformed.includes("import"));
-    assert.ok(!transformed.includes("@aurelia/runtime-html"));
+    expect(transformed).not.toContain("import");
+    expect(transformed).not.toContain("@aurelia/runtime-html");
   });
 
   it("preserves non-aurelia imports", () => {
@@ -199,9 +198,9 @@ export class MyComp {
     const transformed = applyEdits(source, result.edits);
 
     // Should preserve non-aurelia import
-    assert.ok(transformed.includes('import { Something } from "other-lib"'));
+    expect(transformed).toContain('import { Something } from "other-lib"');
     // Should remove aurelia import
-    assert.ok(!transformed.includes('from "aurelia"'));
+    expect(transformed).not.toContain('from "aurelia"');
   });
 
   it("returns empty when no specifiers to remove", () => {
@@ -209,8 +208,8 @@ export class MyComp {
 
     const result = generateImportCleanupEdits(source, ["bindable"]);
 
-    assert.strictEqual(result.edits.length, 0);
-    assert.strictEqual(result.removedSpecifiers.length, 0);
+    expect(result.edits.length).toBe(0);
+    expect(result.removedSpecifiers.length).toBe(0);
   });
 
   it("handles first specifier removal correctly", () => {
@@ -219,8 +218,8 @@ export class MyComp {
     const result = generateImportCleanupEdits(source, ["bindable"]);
     const transformed = applyEdits(source, result.edits);
 
-    assert.ok(transformed.includes('import { customElement } from "aurelia"'));
-    assert.ok(!transformed.includes("bindable"));
+    expect(transformed).toContain('import { customElement } from "aurelia"');
+    expect(transformed).not.toContain("bindable");
   });
 
   it("handles middle specifier removal correctly", () => {
@@ -229,8 +228,8 @@ export class MyComp {
     const result = generateImportCleanupEdits(source, ["bindable"]);
     const transformed = applyEdits(source, result.edits);
 
-    assert.ok(transformed.includes("customElement"));
-    assert.ok(transformed.includes("Aurelia"));
-    assert.ok(!transformed.includes("bindable"));
+    expect(transformed).toContain("customElement");
+    expect(transformed).toContain("Aurelia");
+    expect(transformed).not.toContain("bindable");
   });
 });

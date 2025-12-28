@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Relax strict rules for tests - tests are allowed to be looser
+    "strict": false,
+    "noImplicitAny": false,
+    "noUncheckedIndexedAccess": false,
+    "strictNullChecks": false,
+    "strictPropertyInitialization": false,
+    "useUnknownInCatchVariables": false,
+
+    // Don't emit - just type-check
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+
+    // Path mappings for package imports (vitest aliases equivalent)
+    "paths": {
+      "@aurelia-ls/compiler": ["./packages/compiler/src/index.ts"],
+      "@aurelia-ls/resolution": ["./packages/resolution/src/index.ts"],
+      "@aurelia-ls/transform": ["./packages/transform/src/index.ts"],
+      "@aurelia-ls/build": ["./packages/build/src/index.ts"]
+    },
+    "baseUrl": "."
+  }
+}

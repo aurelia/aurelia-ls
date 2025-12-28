@@ -4,8 +4,7 @@
  * Tests for analyzing and transforming Aurelia entry points.
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert";
+import { describe, it, expect } from "vitest";
 import {
   analyzeEntryPoint,
   shouldTransformEntryPoint,
@@ -26,9 +25,9 @@ Aurelia.app(MyApp).start();
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.initPattern, "static-api");
-      assert.strictEqual(analysis.hasStandardConfiguration, true);
-      assert.strictEqual(analysis.configLocation?.type, "implicit");
+      expect(analysis.initPattern).toBe("static-api");
+      expect(analysis.hasStandardConfiguration).toBe(true);
+      expect(analysis.configLocation?.type).toBe("implicit");
     });
 
     it("detects Aurelia.register(...).app() with preserved registrations", () => {
@@ -44,13 +43,10 @@ Aurelia
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.initPattern, "static-api");
-      assert.strictEqual(analysis.hasStandardConfiguration, true);
-      assert.strictEqual(analysis.preservedRegistrations.length, 1);
-      assert.strictEqual(
-        analysis.preservedRegistrations[0]?.expression,
-        "RouterConfiguration"
-      );
+      expect(analysis.initPattern).toBe("static-api");
+      expect(analysis.hasStandardConfiguration).toBe(true);
+      expect(analysis.preservedRegistrations.length).toBe(1);
+      expect(analysis.preservedRegistrations[0]?.expression).toBe("RouterConfiguration");
     });
 
     it("detects multiple preserved registrations", () => {
@@ -66,15 +62,9 @@ Aurelia
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.preservedRegistrations.length, 2);
-      assert.strictEqual(
-        analysis.preservedRegistrations[0]?.expression,
-        "RouterConfiguration"
-      );
-      assert.strictEqual(
-        analysis.preservedRegistrations[1]?.expression,
-        "DialogConfiguration"
-      );
+      expect(analysis.preservedRegistrations.length).toBe(2);
+      expect(analysis.preservedRegistrations[0]?.expression).toBe("RouterConfiguration");
+      expect(analysis.preservedRegistrations[1]?.expression).toBe("DialogConfiguration");
     });
   });
 
@@ -89,7 +79,7 @@ new Aurelia().app(MyApp).start();
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.initPattern, "instance-api");
+      expect(analysis.initPattern).toBe("instance-api");
     });
 
     it("detects explicit StandardConfiguration in .register()", () => {
@@ -105,8 +95,8 @@ new Aurelia()
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.hasStandardConfiguration, true);
-      assert.strictEqual(analysis.configLocation?.type, "explicit");
+      expect(analysis.hasStandardConfiguration).toBe(true);
+      expect(analysis.configLocation?.type).toBe("explicit");
     });
   });
 
@@ -121,13 +111,10 @@ Aurelia.app(MyApp).start();
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.imports.primarySource, "aurelia");
-      assert.strictEqual(analysis.imports.aureliaImports.length, 1);
-      assert.strictEqual(analysis.imports.aureliaImports[0]?.hasDefault, true);
-      assert.strictEqual(
-        analysis.imports.aureliaImports[0]?.defaultName,
-        "Aurelia"
-      );
+      expect(analysis.imports.primarySource).toBe("aurelia");
+      expect(analysis.imports.aureliaImports.length).toBe(1);
+      expect(analysis.imports.aureliaImports[0]?.hasDefault).toBe(true);
+      expect(analysis.imports.aureliaImports[0]?.defaultName).toBe("Aurelia");
     });
 
     it("handles scoped @aurelia/* imports", () => {
@@ -141,17 +128,9 @@ new Aurelia().register(RouterConfiguration).app(MyApp).start();
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.imports.aureliaImports.length, 2);
-      assert.ok(
-        analysis.imports.aureliaImports.some(
-          (i) => i.source === "@aurelia/runtime-html"
-        )
-      );
-      assert.ok(
-        analysis.imports.aureliaImports.some(
-          (i) => i.source === "@aurelia/router"
-        )
-      );
+      expect(analysis.imports.aureliaImports.length).toBe(2);
+      expect(analysis.imports.aureliaImports.some((i) => i.source === "@aurelia/runtime-html")).toBe(true);
+      expect(analysis.imports.aureliaImports.some((i) => i.source === "@aurelia/router")).toBe(true);
     });
 
     it("preserves non-Aurelia imports", () => {
@@ -165,7 +144,7 @@ Aurelia.app(MyApp).start();
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.imports.otherImports.length, 2);
+      expect(analysis.imports.otherImports.length).toBe(2);
     });
   });
 
@@ -180,7 +159,7 @@ Aurelia.app(MyApp).start();
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.strictEqual(analysis.initChain?.component, "MyApp");
+      expect(analysis.initChain?.component).toBe("MyApp");
     });
 
     it("extracts method chain", () => {
@@ -193,11 +172,11 @@ Aurelia.register(X).app(MyApp).start();
 
       const analysis = analyzeEntryPoint(source);
 
-      assert.ok(analysis.initChain);
-      assert.strictEqual(analysis.initChain.methods.length, 3);
-      assert.strictEqual(analysis.initChain.methods[0]?.name, "register");
-      assert.strictEqual(analysis.initChain.methods[1]?.name, "app");
-      assert.strictEqual(analysis.initChain.methods[2]?.name, "start");
+      expect(analysis.initChain).toBeTruthy();
+      expect(analysis.initChain!.methods.length).toBe(3);
+      expect(analysis.initChain!.methods[0]?.name).toBe("register");
+      expect(analysis.initChain!.methods[1]?.name).toBe("app");
+      expect(analysis.initChain!.methods[2]?.name).toBe("start");
     });
   });
 });
@@ -212,7 +191,7 @@ Aurelia.app(MyApp).start();
     const analysis = analyzeEntryPoint(source);
     const reason = shouldTransformEntryPoint(analysis);
 
-    assert.strictEqual(reason, undefined);
+    expect(reason).toBe(undefined);
   });
 
   it("returns reason when no StandardConfiguration detected", () => {
@@ -224,7 +203,7 @@ createApp().start();
     const analysis = analyzeEntryPoint(source);
     const reason = shouldTransformEntryPoint(analysis);
 
-    assert.ok(reason?.includes("StandardConfiguration"));
+    expect(reason).toContain("StandardConfiguration");
   });
 });
 
@@ -234,11 +213,11 @@ describe("buildAotConfiguration", () => {
       preservedRegistrations: [],
     });
 
-    assert.ok(result.code.includes("const AotConfiguration"));
-    assert.ok(result.code.includes("DirtyChecker"));
-    assert.ok(result.code.includes("NodeObserverLocator"));
-    assert.ok(result.code.includes("DefaultResources"));
-    assert.ok(result.code.includes("DefaultRenderers"));
+    expect(result.code).toContain("const AotConfiguration");
+    expect(result.code).toContain("DirtyChecker");
+    expect(result.code).toContain("NodeObserverLocator");
+    expect(result.code).toContain("DefaultResources");
+    expect(result.code).toContain("DefaultRenderers");
   });
 
   it("generates factory function", () => {
@@ -246,9 +225,9 @@ describe("buildAotConfiguration", () => {
       preservedRegistrations: [],
     });
 
-    assert.ok(result.code.includes("function createAotAurelia"));
-    assert.ok(result.code.includes("BrowserPlatform"));
-    assert.ok(result.code.includes("DI.createContainer"));
+    expect(result.code).toContain("function createAotAurelia");
+    expect(result.code).toContain("BrowserPlatform");
+    expect(result.code).toContain("DI.createContainer");
   });
 
   it("includes required imports", () => {
@@ -256,18 +235,10 @@ describe("buildAotConfiguration", () => {
       preservedRegistrations: [],
     });
 
-    assert.ok(
-      result.requiredImports.some((i) => i.source === "@aurelia/kernel")
-    );
-    assert.ok(
-      result.requiredImports.some((i) => i.source === "@aurelia/runtime")
-    );
-    assert.ok(
-      result.requiredImports.some((i) => i.source === "@aurelia/runtime-html")
-    );
-    assert.ok(
-      result.requiredImports.some((i) => i.source === "@aurelia/platform-browser")
-    );
+    expect(result.requiredImports.some((i) => i.source === "@aurelia/kernel")).toBe(true);
+    expect(result.requiredImports.some((i) => i.source === "@aurelia/runtime")).toBe(true);
+    expect(result.requiredImports.some((i) => i.source === "@aurelia/runtime-html")).toBe(true);
+    expect(result.requiredImports.some((i) => i.source === "@aurelia/platform-browser")).toBe(true);
   });
 
   it("adds imports for preserved known configurations", () => {
@@ -275,13 +246,13 @@ describe("buildAotConfiguration", () => {
       preservedRegistrations: ["RouterConfiguration"],
     });
 
-    assert.ok(
+    expect(
       result.requiredImports.some(
         (i) =>
           i.source === "@aurelia/router" &&
           i.specifiers.includes("RouterConfiguration")
       )
-    );
+    ).toBe(true);
   });
 });
 
@@ -292,10 +263,10 @@ describe("generateInitialization", () => {
       preservedRegistrations: [],
     });
 
-    assert.ok(code.includes("createAotAurelia()"));
-    assert.ok(code.includes(".app("));
-    assert.ok(code.includes("MyApp"));
-    assert.ok(code.includes(".start()"));
+    expect(code).toContain("createAotAurelia()");
+    expect(code).toContain(".app(");
+    expect(code).toContain("MyApp");
+    expect(code).toContain(".start()");
   });
 
   it("includes preserved registrations", () => {
@@ -304,7 +275,7 @@ describe("generateInitialization", () => {
       preservedRegistrations: ["RouterConfiguration", "DialogConfiguration"],
     });
 
-    assert.ok(code.includes(".register(RouterConfiguration, DialogConfiguration)"));
+    expect(code).toContain(".register(RouterConfiguration, DialogConfiguration)");
   });
 
   it("uses custom host when specified", () => {
@@ -314,7 +285,7 @@ describe("generateInitialization", () => {
       preservedRegistrations: [],
     });
 
-    assert.ok(code.includes("document.querySelector('#app')"));
+    expect(code).toContain("document.querySelector('#app')");
   });
 });
 
@@ -329,11 +300,11 @@ Aurelia.app(MyApp).start();
 
     const result = transformEntryPoint({ source, filePath: "main.ts" });
 
-    assert.strictEqual(result.transformed, true);
-    assert.ok(result.code.includes("AotConfiguration"));
-    assert.ok(result.code.includes("createAotAurelia"));
-    assert.ok(result.code.includes("@aurelia/kernel"));
-    assert.ok(!result.code.includes("import Aurelia from 'aurelia'"));
+    expect(result.transformed).toBe(true);
+    expect(result.code).toContain("AotConfiguration");
+    expect(result.code).toContain("createAotAurelia");
+    expect(result.code).toContain("@aurelia/kernel");
+    expect(result.code).not.toContain("import Aurelia from 'aurelia'");
   });
 
   it("preserves other registrations", () => {
@@ -346,9 +317,9 @@ Aurelia.register(RouterConfiguration).app(MyApp).start();
 
     const result = transformEntryPoint({ source, filePath: "main.ts" });
 
-    assert.strictEqual(result.transformed, true);
-    assert.ok(result.code.includes("RouterConfiguration"));
-    assert.ok(result.code.includes(".register(RouterConfiguration)"));
+    expect(result.transformed).toBe(true);
+    expect(result.code).toContain("RouterConfiguration");
+    expect(result.code).toContain(".register(RouterConfiguration)");
   });
 
   it("skips transformation when no StandardConfiguration", () => {
@@ -359,9 +330,9 @@ createCustomApp().start();
 
     const result = transformEntryPoint({ source, filePath: "main.ts" });
 
-    assert.strictEqual(result.transformed, false);
-    assert.ok(result.skipReason?.includes("StandardConfiguration"));
-    assert.strictEqual(result.code, source);
+    expect(result.transformed).toBe(false);
+    expect(result.skipReason).toContain("StandardConfiguration");
+    expect(result.code).toBe(source);
   });
 
   it("excludes StandardConfiguration from preserved registrations", () => {
@@ -376,10 +347,7 @@ Aurelia.register(StandardConfiguration, RouterConfiguration).app(MyApp).start();
 
     // StandardConfiguration should be removed, RouterConfiguration preserved
     const analysis = result.analysis;
-    assert.strictEqual(analysis.preservedRegistrations.length, 1);
-    assert.strictEqual(
-      analysis.preservedRegistrations[0]?.expression,
-      "RouterConfiguration"
-    );
+    expect(analysis.preservedRegistrations.length).toBe(1);
+    expect(analysis.preservedRegistrations[0]?.expression).toBe("RouterConfiguration");
   });
 });

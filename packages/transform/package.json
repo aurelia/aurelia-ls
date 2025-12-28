@@ -17,8 +17,6 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "build:test": "tsc -b tsconfig.test.json",
-    "test": "tsc -b tsconfig.test.json && node --test out/test/**/*.test.js",
     "clean": "rm -rf out"
   },
   "dependencies": {
