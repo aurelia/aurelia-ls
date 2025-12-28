@@ -256,3 +256,125 @@ test("commands show message when no active editor", async () => {
   expect(recorded.infoMessages.filter((m: string) => m === "No active editor")).toHaveLength(3);
   expect(client.calls).toHaveLength(0);
 });
+
+test("showOverlay shows message when no overlay found", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({ "aurelia/getOverlay": null });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showOverlay")();
+
+  expect(recorded.infoMessages).toContain("No overlay found for this document");
+  expect(recorded.openedDocuments).toHaveLength(0);
+});
+
+test("showOverlayMapping shows message when no mapping available", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({
+    "aurelia/getMapping": { overlayPath: null, mapping: { entries: [] } },
+    "aurelia/getOverlay": null,
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showOverlayMapping")();
+
+  expect(recorded.infoMessages).toContain("No overlay mapping available for this document");
+});
+
+test("showOverlayMapping shows error message when request fails", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({
+    "aurelia/getMapping": () => { throw new Error("Mapping service crashed"); },
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showOverlayMapping")();
+
+  expect(recorded.errorMessages[0]).toContain("Show Overlay Mapping failed");
+  expect(recorded.errorMessages[0]).toContain("Mapping service crashed");
+});
+
+test("showTemplateInfo shows message when no result", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({ "aurelia/queryAtPosition": null });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showTemplateInfo")();
+
+  expect(recorded.infoMessages).toContain("No query info available for this document");
+  expect(recorded.openedDocuments).toHaveLength(0);
+});
+
+test("showTemplateInfo shows error message when request fails", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({
+    "aurelia/queryAtPosition": () => { throw new Error("Query failed"); },
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showTemplateInfo")();
+
+  expect(recorded.errorMessages[0]).toContain("Show Template Info failed");
+  expect(recorded.errorMessages[0]).toContain("Query failed");
+});
+
+test("showSsrPreview shows error message when request fails", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({
+    "aurelia/getSsr": () => { throw new Error("SSR engine crashed"); },
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.showSsrPreview")();
+
+  expect(recorded.errorMessages[0]).toContain("Show SSR Preview failed");
+  expect(recorded.errorMessages[0]).toContain("SSR engine crashed");
+});
+
+test("dumpState shows error message when request fails", async () => {
+  const { vscode: stubVscode, recorded } = createVscodeApi();
+  const vscode = stubVscode as unknown as VscodeApi;
+  const client = new StubLanguageClient({
+    "aurelia/dumpState": () => { throw new Error("State dump failed"); },
+  });
+  const virtualDocs = new VirtualDocProvider(vscode);
+  const logger = new ClientLogger("test", vscode);
+  const context = stubExtensionContext(stubVscode);
+
+  registerCommands(context, client as unknown as LanguageClient, virtualDocs, logger, vscode);
+  await recorded.commandHandlers.get("aurelia.dumpState")();
+
+  const logLines = (logger.channel as unknown as { lines: string[] }).lines;
+  expect(logLines.some((line: string) => line.includes("dumpState error"))).toBe(true);
+  expect(logLines.some((line: string) => line.includes("State dump failed"))).toBe(true);
+});
