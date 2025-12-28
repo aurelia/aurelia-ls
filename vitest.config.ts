@@ -5,6 +5,7 @@ export default defineConfig({
     include: ["packages/*/test/**/*.test.ts"],
     globals: false,
     testTimeout: 30000, // 30 seconds for slow tests
+    hookTimeout: 60000, // 60 seconds for beforeAll/afterAll hooks (TS program creation)
     coverage: {
       provider: "v8",
       include: ["packages/*/out/**/*.js"],
