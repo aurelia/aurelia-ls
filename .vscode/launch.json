@@ -6,12 +6,12 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/client",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}/fixtures/hello-world"
       ],
       "outFiles": [
-        "${workspaceFolder}/packages/client/out/**/*.js",
-        "${workspaceFolder}/packages/server/out/**/*.js"
+        "${workspaceFolder}/packages/vscode/out/**/*.js",
+        "${workspaceFolder}/packages/language-server/out/**/*.js"
       ],
       "preLaunchTask": "build:tsc"
     },

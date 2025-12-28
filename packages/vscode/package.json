@@ -1,0 +1,52 @@
+{
+  "name": "aurelia-2",
+  "displayName": "Aurelia 2",
+  "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
+  "version": "0.1.0",
+  "publisher": "AureliaEffect",
+  "icon": "images/logo.png",
+  "type": "module",
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "aurelia",
+    "aurelia2",
+    "template",
+    "html",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aurelia/aurelia-ls"
+  },
+  "license": "MIT",
+  "activationEvents": [
+    "onLanguage:html"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
+      { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
+      { "command": "aurelia.showTemplateInfo", "title": "Aurelia: Show Template Info" },
+      { "command": "aurelia.dumpState", "title": "Aurelia: Dump Server State" }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run bundle",
+    "bundle": "node esbuild.mjs",
+    "bundle:watch": "node esbuild.mjs --watch",
+    "bundle:minify": "node esbuild.mjs --minify"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.0"
+  }
+}
