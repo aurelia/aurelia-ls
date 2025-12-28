@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,9 +74,9 @@ describe("Scope: explicit-app", () => {
     const graph = buildResourceGraph(intents);
 
     // Should produce a valid graph
-    assert.strictEqual(graph.version, "aurelia-resource-graph@1");
-    assert.ok(graph.root, "Graph should have a root scope");
-    assert.ok(graph.scopes[graph.root], "Root scope should exist");
+    expect(graph.version).toBe("aurelia-resource-graph@1");
+    expect(graph.root, "Graph should have a root scope").toBeTruthy();
+    expect(graph.scopes[graph.root], "Root scope should exist").toBeTruthy();
   });
 
   it("places global resources in the root scope", () => {
@@ -99,19 +98,16 @@ describe("Scope: explicit-app", () => {
 
     // Assert exact app resources in root scope
     // Note: includes both globally registered and unknown-scope resources
-    assert.deepStrictEqual(appElements, [
+    expect(appElements, "Root scope should have exactly these 6 elements").toEqual([
       "data-grid", "fancy-button", "my-app", "nav-bar", "product-card", "user-card"
-    ], "Root scope should have exactly these 6 elements");
+    ]);
 
-    assert.deepStrictEqual(appAttributes, ["highlight", "tooltip"],
-      "Root scope should have exactly these 2 attributes");
+    expect(appAttributes, "Root scope should have exactly these 2 attributes").toEqual(["highlight", "tooltip"]);
 
-    assert.deepStrictEqual(appValueConverters, ["currency", "date"],
-      "Root scope should have exactly these 2 value converters");
+    expect(appValueConverters, "Root scope should have exactly these 2 value converters").toEqual(["currency", "date"]);
 
     // Binding behaviors are not currently placed in the ResourceGraph scope overlay
-    assert.deepStrictEqual(appBindingBehaviors, [],
-      "Binding behaviors are registered but not in scope overlay");
+    expect(appBindingBehaviors, "Binding behaviors are registered but not in scope overlay").toEqual([]);
   });
 
   it("creates local scopes for components with static dependencies", () => {
@@ -124,18 +120,17 @@ describe("Scope: explicit-app", () => {
     );
 
     // Should have exactly 1 local scope (product-card)
-    assert.strictEqual(localScopes.length, 1, "Should have exactly 1 local scope");
+    expect(localScopes.length, "Should have exactly 1 local scope").toBe(1);
 
     // Verify product-card's local scope structure
     const productCardScope = localScopes[0];
-    assert.ok(productCardScope.id.includes("product-card"), "Local scope should be for product-card");
-    assert.ok(productCardScope.label?.includes("ProductCard"), "Scope label should include class name");
-    assert.strictEqual(productCardScope.parent, graph.root, "Local scope parent should be root");
+    expect(productCardScope.id.includes("product-card"), "Local scope should be for product-card").toBe(true);
+    expect(productCardScope.label?.includes("ProductCard"), "Scope label should include class name").toBe(true);
+    expect(productCardScope.parent, "Local scope parent should be root").toBe(graph.root);
 
     // Verify local resources in scope
     const localElementNames = Object.keys(productCardScope.resources?.elements ?? {}).sort();
-    assert.deepStrictEqual(localElementNames, ["price-tag", "stock-badge"],
-      "product-card scope should have exactly these 2 local elements");
+    expect(localElementNames, "product-card scope should have exactly these 2 local elements").toEqual(["price-tag", "stock-badge"]);
   });
 
   it("places local resources in component-specific scopes", () => {
@@ -147,14 +142,14 @@ describe("Scope: explicit-app", () => {
       s => s.id.includes("product-card")
     );
 
-    assert.ok(productCardScope, "Should find product-card scope");
-    assert.ok(productCardScope.resources?.elements?.["price-tag"], "price-tag should be in product-card scope");
-    assert.ok(productCardScope.resources?.elements?.["stock-badge"], "stock-badge should be in product-card scope");
+    expect(productCardScope, "Should find product-card scope").toBeTruthy();
+    expect(productCardScope.resources?.elements?.["price-tag"], "price-tag should be in product-card scope").toBeTruthy();
+    expect(productCardScope.resources?.elements?.["stock-badge"], "stock-badge should be in product-card scope").toBeTruthy();
 
     // Local resources should NOT be in root scope resources (only via overlay)
     const rootScope = graph.scopes[graph.root];
-    assert.ok(!rootScope.resources?.elements?.["price-tag"], "price-tag should NOT be in root scope overlay");
-    assert.ok(!rootScope.resources?.elements?.["stock-badge"], "stock-badge should NOT be in root scope overlay");
+    expect(!rootScope.resources?.elements?.["price-tag"], "price-tag should NOT be in root scope overlay").toBe(true);
+    expect(!rootScope.resources?.elements?.["stock-badge"], "stock-badge should NOT be in root scope overlay").toBe(true);
   });
 
   it("supports two-level scope lookup: local → global", () => {
@@ -165,7 +160,7 @@ describe("Scope: explicit-app", () => {
     const productCardScopeId = Object.keys(graph.scopes).find(
       id => id.includes("product-card")
     );
-    assert.ok(productCardScopeId, "Should find product-card scope ID");
+    expect(productCardScopeId, "Should find product-card scope ID").toBeTruthy();
 
     // Materialize resources for product-card's local scope
     const { resources } = materializeResourcesForScope(
@@ -175,17 +170,17 @@ describe("Scope: explicit-app", () => {
     );
 
     // Should have local resources (from product-card scope)
-    assert.ok(resources.elements["price-tag"], "price-tag should be visible in product-card context");
-    assert.ok(resources.elements["stock-badge"], "stock-badge should be visible in product-card context");
+    expect(resources.elements["price-tag"], "price-tag should be visible in product-card context").toBeTruthy();
+    expect(resources.elements["stock-badge"], "stock-badge should be visible in product-card context").toBeTruthy();
 
     // Should also have global resources (from root scope)
-    assert.ok(resources.elements["nav-bar"], "nav-bar (global) should be visible in product-card context");
-    assert.ok(resources.valueConverters["date"], "date (global) should be visible in product-card context");
-    assert.ok(resources.bindingBehaviors["debounce"], "debounce (global) should be visible in product-card context");
+    expect(resources.elements["nav-bar"], "nav-bar (global) should be visible in product-card context").toBeTruthy();
+    expect(resources.valueConverters["date"], "date (global) should be visible in product-card context").toBeTruthy();
+    expect(resources.bindingBehaviors["debounce"], "debounce (global) should be visible in product-card context").toBeTruthy();
 
     // Should have built-in resources (from semantics)
-    assert.ok(resources.controllers["if"], "if (built-in) should be visible in product-card context");
-    assert.ok(resources.controllers["repeat"], "repeat (built-in) should be visible in product-card context");
+    expect(resources.controllers["if"], "if (built-in) should be visible in product-card context").toBeTruthy();
+    expect(resources.controllers["repeat"], "repeat (built-in) should be visible in product-card context").toBeTruthy();
   });
 
   it("preserves bindable information in the resource graph", () => {
@@ -196,16 +191,14 @@ describe("Scope: explicit-app", () => {
 
     // Check user-card bindables (has name, avatar, selected)
     const userCard = resources.elements["user-card"];
-    assert.ok(userCard, "user-card should be in graph");
+    expect(userCard, "user-card should be in graph").toBeTruthy();
     const userCardBindables = Object.keys(userCard.bindables ?? {}).sort();
-    assert.deepStrictEqual(userCardBindables, ["avatar", "name", "selected"],
-      "user-card should have exactly these bindables");
+    expect(userCardBindables, "user-card should have exactly these bindables").toEqual(["avatar", "name", "selected"]);
 
     // Check data-grid bindables
     const dataGrid = resources.elements["data-grid"];
-    assert.ok(dataGrid, "data-grid should be in graph");
+    expect(dataGrid, "data-grid should be in graph").toBeTruthy();
     const dataGridBindables = Object.keys(dataGrid.bindables ?? {}).sort();
-    assert.deepStrictEqual(dataGridBindables, ["columns", "items", "pageSize"],
-      "data-grid should have exactly these bindables");
+    expect(dataGridBindables, "data-grid should have exactly these bindables").toEqual(["columns", "items", "pageSize"]);
   });
 });

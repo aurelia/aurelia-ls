@@ -4,8 +4,7 @@
  * Tests the full route discovery pipeline using the routed-app test fixture.
  */
 
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,67 +78,67 @@ describe("routed-app integration", () => {
   // ==========================================================================
 
   it("test fixture exists", () => {
-    assert.ok(
+    expect(
       existsSync(join(ROUTED_APP_DIR, "tsconfig.json")),
       "tsconfig.json should exist"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       existsSync(join(ROUTED_APP_DIR, "src", "app.ts")),
       "app.ts should exist"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       existsSync(join(ROUTED_APP_DIR, "expected.json")),
       "expected.json should exist"
-    );
+    ).toBe(true);
   });
 
   it("expected.json is valid", () => {
     const expected = loadExpected();
 
-    assert.ok(Array.isArray(expected.entryPoints), "should have entryPoints");
-    assert.ok(Array.isArray(expected.roots), "should have roots");
-    assert.ok(
+    expect(Array.isArray(expected.entryPoints), "should have entryPoints").toBe(true);
+    expect(Array.isArray(expected.roots), "should have roots").toBe(true);
+    expect(
       Array.isArray(expected.parameterizedRoutes),
       "should have parameterizedRoutes"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       Array.isArray(expected.allStaticPaths),
       "should have allStaticPaths"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       Array.isArray(expected.dynamicComponents),
       "should have dynamicComponents"
-    );
+    ).toBe(true);
   });
 
   it("expected paths cover all route patterns", () => {
     const expected = loadExpected();
 
     // Static paths
-    assert.ok(expected.allStaticPaths.includes("/"), "should have root path");
-    assert.ok(
+    expect(expected.allStaticPaths.includes("/"), "should have root path").toBe(true);
+    expect(
       expected.allStaticPaths.includes("/about"),
       "should have about path"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       expected.allStaticPaths.includes("/products"),
       "should have products path"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       expected.allStaticPaths.includes("/blog"),
       "should have blog path"
-    );
+    ).toBe(true);
 
     // Parameterized routes
     const paramPaths = expected.parameterizedRoutes.map(r => r.fullPath);
-    assert.ok(
+    expect(
       paramPaths.includes("/products/:id"),
       "should have product detail param route"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       paramPaths.includes("/blog/:slug"),
       "should have blog post param route"
-    );
+    ).toBe(true);
   });
 
   // ==========================================================================
@@ -150,16 +149,15 @@ describe("routed-app integration", () => {
     const program = createProgram(join(ROUTED_APP_DIR, "tsconfig.json"));
     const routeTree = buildRouteTree(program, { entryPoints: ["App"] });
 
-    assert.ok(routeTree, "should build route tree");
-    assert.ok(routeTree.roots.length > 0, "should have root routes");
+    expect(routeTree, "should build route tree").toBeTruthy();
+    expect(routeTree.roots.length > 0, "should have root routes").toBe(true);
 
     // Should find the main routes defined in App
     const expected = loadExpected();
-    assert.strictEqual(
+    expect(
       routeTree.roots.length,
-      expected.roots.length,
       `should have ${expected.roots.length} root routes, got ${routeTree.roots.length}`
-    );
+    ).toBe(expected.roots.length);
   });
 
   it("extracts all static paths", () => {
@@ -170,10 +168,10 @@ describe("routed-app integration", () => {
 
     // Check each expected static path exists
     for (const expectedPath of expected.allStaticPaths) {
-      assert.ok(
+      expect(
         routeTree.allStaticPaths.includes(expectedPath),
         `should have static path: ${expectedPath}`
-      );
+      ).toBe(true);
     }
   });
 
@@ -183,22 +181,20 @@ describe("routed-app integration", () => {
 
     const expected = loadExpected();
 
-    assert.strictEqual(
+    expect(
       routeTree.parameterizedRoutes.length,
-      expected.parameterizedRoutes.length,
       "should have correct number of parameterized routes"
-    );
+    ).toBe(expected.parameterizedRoutes.length);
 
     for (const expectedRoute of expected.parameterizedRoutes) {
       const found = routeTree.parameterizedRoutes.find(
         r => r.fullPath === expectedRoute.fullPath
       );
-      assert.ok(found, `should find parameterized route: ${expectedRoute.fullPath}`);
-      assert.deepStrictEqual(
+      expect(found, `should find parameterized route: ${expectedRoute.fullPath}`).toBeTruthy();
+      expect(
         [...found.params],
-        expectedRoute.params,
         `params should match for ${expectedRoute.fullPath}`
-      );
+      ).toEqual(expectedRoute.params);
     }
   });
 
@@ -209,22 +205,20 @@ describe("routed-app integration", () => {
     const productDetail = routeTree.parameterizedRoutes.find(
       r => r.fullPath === "/products/:id"
     );
-    assert.ok(productDetail, "should find /products/:id");
-    assert.strictEqual(
+    expect(productDetail, "should find /products/:id").toBeTruthy();
+    expect(
       productDetail.hasStaticPaths,
-      true,
       "ProductDetailComponent should have getStaticPaths"
-    );
+    ).toBe(true);
 
     const blogPost = routeTree.parameterizedRoutes.find(
       r => r.fullPath === "/blog/:slug"
     );
-    assert.ok(blogPost, "should find /blog/:slug");
-    assert.strictEqual(
+    expect(blogPost, "should find /blog/:slug").toBeTruthy();
+    expect(
       blogPost.hasStaticPaths,
-      true,
       "BlogPostComponent should have getStaticPaths"
-    );
+    ).toBe(true);
   });
 
   it("follows class references to discover nested routes", () => {
@@ -233,16 +227,16 @@ describe("routed-app integration", () => {
 
     // Find products route
     const products = findRoute(routeTree.roots, "products");
-    assert.ok(products, "should find products route");
-    assert.ok(products.children.length >= 2, "products should have children");
+    expect(products, "should find products route").toBeTruthy();
+    expect(products.children.length >= 2, "products should have children").toBe(true);
 
     // Check for product list (empty path child)
     const productList = findRoute(products.children, "");
-    assert.ok(productList, "should find product list (empty path)");
+    expect(productList, "should find product list (empty path)").toBeTruthy();
 
     // Check for product detail (parameterized child)
     const productDetail = findRoute(products.children, ":id");
-    assert.ok(productDetail, "should find product detail (:id)");
+    expect(productDetail, "should find product detail (:id)").toBeTruthy();
   });
 
   it("handles static routes property pattern", () => {
@@ -251,16 +245,16 @@ describe("routed-app integration", () => {
 
     // Blog uses static routes property
     const blog = findRoute(routeTree.roots, "blog");
-    assert.ok(blog, "should find blog route");
-    assert.ok(blog.children.length >= 2, "blog should have children");
+    expect(blog, "should find blog route").toBeTruthy();
+    expect(blog.children.length >= 2, "blog should have children").toBe(true);
 
     // Check for blog list
     const blogList = findRoute(blog.children, "");
-    assert.ok(blogList, "should find blog list (empty path)");
+    expect(blogList, "should find blog list (empty path)").toBeTruthy();
 
     // Check for blog post
     const blogPost = findRoute(blog.children, ":slug");
-    assert.ok(blogPost, "should find blog post (:slug)");
+    expect(blogPost, "should find blog post (:slug)").toBeTruthy();
   });
 
   it("handles redirects", () => {
@@ -268,8 +262,8 @@ describe("routed-app integration", () => {
     const routeTree = buildRouteTree(program, { entryPoints: ["App"] });
 
     const redirect = findRoute(routeTree.roots, "old-home");
-    assert.ok(redirect, "should find redirect route");
-    assert.strictEqual(redirect.redirectTo, "", "should redirect to empty path");
+    expect(redirect, "should find redirect route").toBeTruthy();
+    expect(redirect.redirectTo, "should redirect to empty path").toBe("");
   });
 
   it("handles path aliases", () => {
@@ -278,17 +272,17 @@ describe("routed-app integration", () => {
 
     // About uses path aliases ['about', 'about-us']
     const about = findRoute(routeTree.roots, "about");
-    assert.ok(about, "should find about route");
+    expect(about, "should find about route").toBeTruthy();
 
     // Check static paths include the alias
-    assert.ok(
+    expect(
       routeTree.allStaticPaths.includes("/about"),
       "should have /about path"
-    );
-    assert.ok(
+    ).toBe(true);
+    expect(
       routeTree.allStaticPaths.includes("/about-us"),
       "should have /about-us alias path"
-    );
+    ).toBe(true);
   });
 
   it("preserves route metadata (title, id)", () => {
@@ -297,13 +291,13 @@ describe("routed-app integration", () => {
 
     // Home route should have title
     const home = findRoute(routeTree.roots, "");
-    assert.ok(home, "should find home route");
-    assert.strictEqual(home.title, "Home", "home should have title");
+    expect(home, "should find home route").toBeTruthy();
+    expect(home.title, "home should have title").toBe("Home");
 
     // About route should have title
     const about = findRoute(routeTree.roots, "about");
-    assert.ok(about, "should find about route");
-    assert.strictEqual(about.title, "About Us", "about should have title");
+    expect(about, "should find about route").toBeTruthy();
+    expect(about.title, "about should have title").toBe("About Us");
   });
 
   it("reports no dynamic components for static routes", () => {
@@ -311,10 +305,9 @@ describe("routed-app integration", () => {
     const routeTree = buildRouteTree(program, { entryPoints: ["App"] });
 
     // The routed-app fixture doesn't use getRouteConfig()
-    assert.strictEqual(
+    expect(
       routeTree.dynamicComponents.length,
-      0,
       "should have no dynamic components"
-    );
+    ).toBe(0);
   });
 });

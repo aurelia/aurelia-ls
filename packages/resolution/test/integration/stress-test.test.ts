@@ -10,8 +10,7 @@
  * Test structure mirrors aot-compile.test.mjs but uses stress-test-app fixture.
  */
 
-import { describe, it, beforeAll } from "vitest";
-import assert from "node:assert/strict";
+import { describe, it, beforeAll, expect, assert } from "vitest";
 import * as ts from "typescript";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -799,7 +798,7 @@ describe("Stress Test: AOT Compiler Kitchen Sink", () => {
       const reduced1 = reduceEmitResult(result1.codeResult, result1.exprCodeMap);
       const reduced2 = reduceEmitResult(result2.codeResult, result2.exprCodeMap);
 
-      assert.deepStrictEqual(reduced1, reduced2, "outputs should be identical");
+      expect(reduced1, "outputs should be identical").toEqual(reduced2);
     });
   });
 
@@ -820,12 +819,12 @@ describe("Stress Test: AOT Compiler Kitchen Sink", () => {
 
       // Should have: text interpolation, repeat controller, element hydration
       const kinds = new Set(reduced.instructions.map(i => i.kind));
-      assert.ok(kinds.has("text"), "should have text binding");
-      assert.ok(kinds.has("controller"), "should have template controller");
-      assert.ok(kinds.has("element"), "should have element hydration");
+      expect(kinds.has("text"), "should have text binding").toBe(true);
+      expect(kinds.has("controller"), "should have template controller").toBe(true);
+      expect(kinds.has("element"), "should have element hydration").toBe(true);
 
       // Should have at least one nested template (for repeat)
-      assert.ok(reduced.templates.length >= 1, "should have nested templates");
+      expect(reduced.templates.length >= 1, "should have nested templates").toBe(true);
     });
 
     it("item-card has if/else controllers", () => {
@@ -843,8 +842,8 @@ describe("Stress Test: AOT Compiler Kitchen Sink", () => {
       const ifControllers = controllers.filter(c => c.name === "if");
       const elseControllers = controllers.filter(c => c.name === "else");
 
-      assert.ok(ifControllers.length >= 1, "should have if controller");
-      assert.ok(elseControllers.length >= 1, "should have else controller");
+      expect(ifControllers.length >= 1, "should have if controller").toBe(true);
+      expect(elseControllers.length >= 1, "should have else controller").toBe(true);
     });
   });
 });

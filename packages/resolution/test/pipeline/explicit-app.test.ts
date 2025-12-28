@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,44 +40,44 @@ describe("Full Pipeline: explicit-app", () => {
     const result = resolve(program);
 
     // Should have all expected artifacts
-    assert.ok(result.resourceGraph, "Should produce a ResourceGraph");
-    assert.ok(result.facts.size > 0, "Should produce facts");
+    expect(result.resourceGraph, "Should produce a ResourceGraph").toBeTruthy();
+    expect(result.facts.size > 0, "Should produce facts").toBe(true);
 
     // Assert candidate counts by kind (includes runtime resources from Aurelia)
     // Full pipeline picks up runtime resources like promise template controllers, binding behaviors, etc.
-    assert.strictEqual(result.candidates.length, 29, "Should find 29 candidates (app + runtime)");
+    expect(result.candidates.length, "Should find 29 candidates (app + runtime)").toBe(29);
     const byKind = {
       elements: result.candidates.filter(c => c.kind === "element").length,
       attributes: result.candidates.filter(c => c.kind === "attribute").length,
       valueConverters: result.candidates.filter(c => c.kind === "valueConverter").length,
       bindingBehaviors: result.candidates.filter(c => c.kind === "bindingBehavior").length,
     };
-    assert.deepStrictEqual(byKind, {
+    expect(byKind, "Candidate breakdown by kind").toEqual({
       elements: 8,        // 8 app elements
       attributes: 7,      // 2 app + 5 runtime (promise, pending, fulfilled, rejected, else)
       valueConverters: 3, // 2 app + 1 runtime (sanitize)
       bindingBehaviors: 11, // 2 app + 9 runtime
-    }, "Candidate breakdown by kind");
+    });
 
     // Assert intent counts by kind
-    assert.strictEqual(result.intents.length, 29, "Should produce 29 intents");
+    expect(result.intents.length, "Should produce 29 intents").toBe(29);
     const intentsByKind = {
       global: result.intents.filter(i => i.kind === "global").length,
       local: result.intents.filter(i => i.kind === "local").length,
       unknown: result.intents.filter(i => i.kind === "unknown").length,
     };
-    assert.deepStrictEqual(intentsByKind, {
+    expect(intentsByKind, "Intent breakdown by kind").toEqual({
       global: 10, // Resources registered via barrels
       local: 2,   // price-tag, stock-badge (via static dependencies)
       unknown: 17, // Runtime resources + app resources not in barrels
-    }, "Intent breakdown by kind");
+    });
 
     // Assert scope count
     const scopeCount = Object.keys(result.resourceGraph.scopes).length;
-    assert.strictEqual(scopeCount, 2, "Should have exactly 2 scopes (root + 1 local)");
+    expect(scopeCount, "Should have exactly 2 scopes (root + 1 local)").toBe(2);
 
     // Should have no diagnostics in well-formed app
-    assert.strictEqual(result.diagnostics.length, 0, "Should have no diagnostics");
+    expect(result.diagnostics.length, "Should have no diagnostics").toBe(0);
   });
 
   it("produces a usable ResourceGraph for template compilation", () => {
@@ -93,16 +92,16 @@ describe("Full Pipeline: explicit-app", () => {
     );
 
     // Should have app-specific elements
-    assert.ok(resources.elements["nav-bar"], "Should have nav-bar element");
-    assert.ok(resources.elements["data-grid"], "Should have data-grid element");
+    expect(resources.elements["nav-bar"], "Should have nav-bar element").toBeTruthy();
+    expect(resources.elements["data-grid"], "Should have data-grid element").toBeTruthy();
 
     // Should have built-in controllers from semantics
-    assert.ok(resources.controllers["if"], "Should have if controller");
-    assert.ok(resources.controllers["repeat"], "Should have repeat controller");
+    expect(resources.controllers["if"], "Should have if controller").toBeTruthy();
+    expect(resources.controllers["repeat"], "Should have repeat controller").toBeTruthy();
 
     // Should be able to look up bindables
     const dataGrid = resources.elements["data-grid"];
-    assert.ok(dataGrid.bindables["items"], "data-grid should have items bindable");
+    expect(dataGrid.bindables["items"], "data-grid should have items bindable").toBeTruthy();
   });
 
   it("returns facts for debugging/tooling", () => {
@@ -110,12 +109,12 @@ describe("Full Pipeline: explicit-app", () => {
     const result = resolve(program);
 
     // Should have facts for multiple files
-    assert.ok(result.facts.size > 5, "Should have facts for multiple files");
+    expect(result.facts.size > 5, "Should have facts for multiple files").toBe(true);
 
     // Find main.ts facts
     const mainFacts = [...result.facts.values()].find(f => f.path.includes("main.ts"));
-    assert.ok(mainFacts, "Should have facts for main.ts");
-    assert.ok(mainFacts.registrationCalls.length > 0, "main.ts should have registration calls");
+    expect(mainFacts, "Should have facts for main.ts").toBeTruthy();
+    expect(mainFacts.registrationCalls.length > 0, "main.ts should have registration calls").toBe(true);
   });
 
   it("exposes candidates for tooling", () => {
@@ -124,14 +123,14 @@ describe("Full Pipeline: explicit-app", () => {
 
     // Find specific candidates
     const navBar = result.candidates.find(c => c.name === "nav-bar");
-    assert.ok(navBar, "Should find nav-bar candidate");
-    assert.strictEqual(navBar.kind, "element");
-    assert.strictEqual(navBar.resolver, "decorator");
+    expect(navBar, "Should find nav-bar candidate").toBeTruthy();
+    expect(navBar.kind).toBe("element");
+    expect(navBar.resolver).toBe("decorator");
 
     const currency = result.candidates.find(c => c.name === "currency");
-    assert.ok(currency, "Should find currency candidate");
-    assert.strictEqual(currency.kind, "valueConverter");
-    assert.strictEqual(currency.resolver, "static-au");
+    expect(currency, "Should find currency candidate").toBeTruthy();
+    expect(currency.kind).toBe("valueConverter");
+    expect(currency.resolver).toBe("static-au");
   });
 
   it("exposes intents for tooling", () => {
@@ -140,17 +139,17 @@ describe("Full Pipeline: explicit-app", () => {
 
     // Check global intent evidence
     const navBarIntent = result.intents.find(i => i.resource.name === "nav-bar");
-    assert.ok(navBarIntent, "Should have nav-bar intent");
-    assert.strictEqual(navBarIntent.kind, "global");
-    assert.ok(navBarIntent.evidence.length > 0, "Should have evidence");
-    assert.strictEqual(navBarIntent.evidence[0].kind, "aurelia-register");
+    expect(navBarIntent, "Should have nav-bar intent").toBeTruthy();
+    expect(navBarIntent.kind).toBe("global");
+    expect(navBarIntent.evidence.length > 0, "Should have evidence").toBe(true);
+    expect(navBarIntent.evidence[0].kind).toBe("aurelia-register");
 
     // Check local intent evidence
     const priceTagIntent = result.intents.find(i => i.resource.name === "price-tag");
-    assert.ok(priceTagIntent, "Should have price-tag intent");
-    assert.strictEqual(priceTagIntent.kind, "local");
-    assert.ok(priceTagIntent.scope?.includes("product-card"), "Should be scoped to product-card");
-    assert.strictEqual(priceTagIntent.evidence[0].kind, "static-dependencies");
+    expect(priceTagIntent, "Should have price-tag intent").toBeTruthy();
+    expect(priceTagIntent.kind).toBe("local");
+    expect(priceTagIntent.scope?.includes("product-card"), "Should be scoped to product-card").toBe(true);
+    expect(priceTagIntent.evidence[0].kind).toBe("static-dependencies");
   });
 
   it("discovers templates for element resources", () => {
@@ -158,34 +157,34 @@ describe("Full Pipeline: explicit-app", () => {
     const result = resolve(program);
 
     // Should have templates array with exact count
-    assert.ok(result.templates, "Should have templates array");
+    expect(result.templates, "Should have templates array").toBeTruthy();
     const templateNames = result.templates.map(t => t.resourceName).sort();
-    assert.deepStrictEqual(templateNames, [
+    expect(templateNames, "Should discover exactly these 5 file-based templates").toEqual([
       "data-grid", "my-app", "nav-bar", "product-card", "user-card"
-    ], "Should discover exactly these 5 file-based templates");
+    ]);
 
     // Find nav-bar template
     const navBarTemplate = result.templates.find(t => t.resourceName === "nav-bar");
-    assert.ok(navBarTemplate, "Should find nav-bar template");
-    assert.ok(navBarTemplate.templatePath.endsWith("nav-bar.html"), "Template path should end with .html");
-    assert.ok(navBarTemplate.componentPath.endsWith("nav-bar.ts"), "Component path should end with .ts");
-    assert.strictEqual(navBarTemplate.scopeId, "root", "nav-bar should be in root scope");
+    expect(navBarTemplate, "Should find nav-bar template").toBeTruthy();
+    expect(navBarTemplate.templatePath.endsWith("nav-bar.html"), "Template path should end with .html").toBe(true);
+    expect(navBarTemplate.componentPath.endsWith("nav-bar.ts"), "Component path should end with .ts").toBe(true);
+    expect(navBarTemplate.scopeId, "nav-bar should be in root scope").toBe("root");
 
     // Find product-card template (local scope)
     const productCardTemplate = result.templates.find(t => t.resourceName === "product-card");
-    assert.ok(productCardTemplate, "Should find product-card template");
-    assert.strictEqual(productCardTemplate.scopeId, "root", "product-card is unknown/global scope");
+    expect(productCardTemplate, "Should find product-card template").toBeTruthy();
+    expect(productCardTemplate.scopeId, "product-card is unknown/global scope").toBe("root");
 
     // Components with INLINE templates should NOT appear in templates array
     // (price-tag and stock-badge have template: `<template>...` in their decorators)
     const priceTagTemplate = result.templates.find(t => t.resourceName === "price-tag");
-    assert.strictEqual(priceTagTemplate, undefined, "price-tag has inline template, should not appear in templates");
+    expect(priceTagTemplate, "price-tag has inline template, should not appear in templates").toBeUndefined();
 
     const stockBadgeTemplate = result.templates.find(t => t.resourceName === "stock-badge");
-    assert.strictEqual(stockBadgeTemplate, undefined, "stock-badge has inline template, should not appear in templates");
+    expect(stockBadgeTemplate, "stock-badge has inline template, should not appear in templates").toBeUndefined();
 
     const fancyButtonTemplate = result.templates.find(t => t.resourceName === "fancy-button");
-    assert.strictEqual(fancyButtonTemplate, undefined, "fancy-button has inline template, should not appear in templates");
+    expect(fancyButtonTemplate, "fancy-button has inline template, should not appear in templates").toBeUndefined();
   });
 
   it("collects inline templates separately", () => {
@@ -193,28 +192,28 @@ describe("Full Pipeline: explicit-app", () => {
     const result = resolve(program);
 
     // Should have inlineTemplates array with exact count
-    assert.ok(result.inlineTemplates, "Should have inlineTemplates array");
+    expect(result.inlineTemplates, "Should have inlineTemplates array").toBeTruthy();
     const inlineNames = result.inlineTemplates.map(t => t.resourceName).sort();
-    assert.deepStrictEqual(inlineNames, [
+    expect(inlineNames, "Should discover exactly these 3 inline templates").toEqual([
       "fancy-button", "price-tag", "stock-badge"
-    ], "Should discover exactly these 3 inline templates");
+    ]);
 
     // Find price-tag inline template (local scope)
     const priceTagInline = result.inlineTemplates.find(t => t.resourceName === "price-tag");
-    assert.ok(priceTagInline, "Should find price-tag inline template");
-    assert.ok(priceTagInline.content.includes("<span"), "price-tag content should be HTML");
-    assert.ok(priceTagInline.scopeId.includes("local:"), "price-tag should be in local scope");
-    assert.ok(priceTagInline.componentPath.endsWith("price-tag.ts"), "Component path should end with .ts");
+    expect(priceTagInline, "Should find price-tag inline template").toBeTruthy();
+    expect(priceTagInline.content.includes("<span"), "price-tag content should be HTML").toBe(true);
+    expect(priceTagInline.scopeId.includes("local:"), "price-tag should be in local scope").toBe(true);
+    expect(priceTagInline.componentPath.endsWith("price-tag.ts"), "Component path should end with .ts").toBe(true);
 
     // Find stock-badge inline template (local scope)
     const stockBadgeInline = result.inlineTemplates.find(t => t.resourceName === "stock-badge");
-    assert.ok(stockBadgeInline, "Should find stock-badge inline template");
-    assert.ok(stockBadgeInline.content.includes("<span"), "stock-badge content should be HTML");
+    expect(stockBadgeInline, "Should find stock-badge inline template").toBeTruthy();
+    expect(stockBadgeInline.content.includes("<span"), "stock-badge content should be HTML").toBe(true);
 
     // Find fancy-button inline template (global scope via barrel)
     const fancyButtonInline = result.inlineTemplates.find(t => t.resourceName === "fancy-button");
-    assert.ok(fancyButtonInline, "Should find fancy-button inline template");
-    assert.ok(fancyButtonInline.content.includes("<button"), "fancy-button content should be HTML");
-    assert.strictEqual(fancyButtonInline.scopeId, "root", "fancy-button should be in root scope (global)");
+    expect(fancyButtonInline, "Should find fancy-button inline template").toBeTruthy();
+    expect(fancyButtonInline.content.includes("<button"), "fancy-button content should be HTML").toBe(true);
+    expect(fancyButtonInline.scopeId, "fancy-button should be in root scope (global)").toBe("root");
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,9 +61,8 @@ describe("Registration: explicit-app", () => {
     const intents = analyzer.analyze(resolved.candidates, appFacts, program);
 
     // We should have intents for all candidates
-    assert.strictEqual(intents.length, resolved.candidates.length,
-      "Should produce one intent per candidate");
-    assert.strictEqual(intents.length, 14, "Should have exactly 14 intents");
+    expect(intents.length, "Should produce one intent per candidate").toBe(resolved.candidates.length);
+    expect(intents.length, "Should have exactly 14 intents").toBe(14);
 
     // Assert intent breakdown by kind
     const byKind = {
@@ -72,14 +70,12 @@ describe("Registration: explicit-app", () => {
       local: intents.filter(i => i.kind === "local").map(i => i.resource.name).sort(),
       unknown: intents.filter(i => i.kind === "unknown").map(i => i.resource.name).sort(),
     };
-    assert.deepStrictEqual(byKind.global, [
+    expect(byKind.global, "Global resources (registered via barrels)").toEqual([
       "currency", "data-grid", "date", "debounce", "fancy-button",
       "highlight", "nav-bar", "throttle", "tooltip", "user-card"
-    ], "Global resources (registered via barrels)");
-    assert.deepStrictEqual(byKind.local, ["price-tag", "stock-badge"],
-      "Local resources (scoped to product-card via static dependencies)");
-    assert.deepStrictEqual(byKind.unknown, ["my-app", "product-card"],
-      "Unknown resources (not explicitly registered via barrels)");
+    ]);
+    expect(byKind.local, "Local resources (scoped to product-card via static dependencies)").toEqual(["price-tag", "stock-badge"]);
+    expect(byKind.unknown, "Unknown resources (not explicitly registered via barrels)").toEqual(["my-app", "product-card"]);
   });
 
   it("identifies globally registered resources via barrel exports", () => {
@@ -95,29 +91,29 @@ describe("Registration: explicit-app", () => {
 
     // nav-bar should be global (registered via barrel)
     const navBar = intents.find(i => i.resource.name === "nav-bar");
-    assert.ok(navBar, "Should find nav-bar intent");
-    assert.strictEqual(navBar.kind, "global", "nav-bar should be global");
-    assert.strictEqual(navBar.evidence[0]?.kind, "aurelia-register", "nav-bar evidence should be aurelia-register");
+    expect(navBar, "Should find nav-bar intent").toBeTruthy();
+    expect(navBar.kind, "nav-bar should be global").toBe("global");
+    expect(navBar.evidence[0]?.kind, "nav-bar evidence should be aurelia-register").toBe("aurelia-register");
 
     // data-grid should be global
     const dataGrid = intents.find(i => i.resource.name === "data-grid");
-    assert.ok(dataGrid, "Should find data-grid intent");
-    assert.strictEqual(dataGrid.kind, "global", "data-grid should be global");
+    expect(dataGrid, "Should find data-grid intent").toBeTruthy();
+    expect(dataGrid.kind, "data-grid should be global").toBe("global");
 
     // tooltip should be global
     const tooltip = intents.find(i => i.resource.name === "tooltip");
-    assert.ok(tooltip, "Should find tooltip intent");
-    assert.strictEqual(tooltip.kind, "global", "tooltip should be global");
+    expect(tooltip, "Should find tooltip intent").toBeTruthy();
+    expect(tooltip.kind, "tooltip should be global").toBe("global");
 
     // date value converter should be global
     const date = intents.find(i => i.resource.name === "date" && i.resource.kind === "valueConverter");
-    assert.ok(date, "Should find date intent");
-    assert.strictEqual(date.kind, "global", "date should be global");
+    expect(date, "Should find date intent").toBeTruthy();
+    expect(date.kind, "date should be global").toBe("global");
 
     // debounce binding behavior should be global
     const debounce = intents.find(i => i.resource.name === "debounce");
-    assert.ok(debounce, "Should find debounce intent");
-    assert.strictEqual(debounce.kind, "global", "debounce should be global");
+    expect(debounce, "Should find debounce intent").toBeTruthy();
+    expect(debounce.kind, "debounce should be global").toBe("global");
   });
 
   it("identifies locally scoped resources via static dependencies", () => {
@@ -133,16 +129,16 @@ describe("Registration: explicit-app", () => {
 
     // price-tag should be local (in ProductCard's static dependencies)
     const priceTag = intents.find(i => i.resource.name === "price-tag");
-    assert.ok(priceTag, "Should find price-tag intent");
-    assert.strictEqual(priceTag.kind, "local", "price-tag should be local");
-    assert.ok(priceTag.scope?.includes("product-card"), "price-tag scope should be product-card");
-    assert.strictEqual(priceTag.evidence[0]?.kind, "static-dependencies");
+    expect(priceTag, "Should find price-tag intent").toBeTruthy();
+    expect(priceTag.kind, "price-tag should be local").toBe("local");
+    expect(priceTag.scope?.includes("product-card"), "price-tag scope should be product-card").toBe(true);
+    expect(priceTag.evidence[0]?.kind).toBe("static-dependencies");
 
     // stock-badge should be local
     const stockBadge = intents.find(i => i.resource.name === "stock-badge");
-    assert.ok(stockBadge, "Should find stock-badge intent");
-    assert.strictEqual(stockBadge.kind, "local", "stock-badge should be local");
-    assert.ok(stockBadge.scope?.includes("product-card"), "stock-badge scope should be product-card");
+    expect(stockBadge, "Should find stock-badge intent").toBeTruthy();
+    expect(stockBadge.kind, "stock-badge should be local").toBe("local");
+    expect(stockBadge.scope?.includes("product-card"), "stock-badge scope should be product-card").toBe(true);
   });
 
   it("identifies static $au resources registered via barrel", () => {
@@ -158,13 +154,13 @@ describe("Registration: explicit-app", () => {
 
     // fancy-button (static $au element) should be global
     const fancyButton = intents.find(i => i.resource.name === "fancy-button");
-    assert.ok(fancyButton, "Should find fancy-button intent");
-    assert.strictEqual(fancyButton.kind, "global", "fancy-button should be global");
+    expect(fancyButton, "Should find fancy-button intent").toBeTruthy();
+    expect(fancyButton.kind, "fancy-button should be global").toBe("global");
 
     // currency (static $au value converter) should be global
     const currency = intents.find(i => i.resource.name === "currency");
-    assert.ok(currency, "Should find currency intent");
-    assert.strictEqual(currency.kind, "global", "currency should be global");
+    expect(currency, "Should find currency intent").toBeTruthy();
+    expect(currency.kind, "currency should be global").toBe("global");
   });
 
   it("extracts import facts correctly", () => {
@@ -176,16 +172,16 @@ describe("Registration: explicit-app", () => {
     const mainFacts = Array.from(appFacts.values()).find(f =>
       f.path.includes("main.ts")
     );
-    assert.ok(mainFacts, "Should find main.ts facts");
+    expect(mainFacts, "Should find main.ts facts").toBeTruthy();
 
     // Should have namespace imports
     const nsImports = mainFacts.imports.filter(i => i.kind === "namespace");
-    assert.ok(nsImports.length >= 5, `Should have at least 5 namespace imports, got ${nsImports.length}`);
+    expect(nsImports.length >= 5, `Should have at least 5 namespace imports, got ${nsImports.length}`).toBe(true);
 
     // Check components import
     const componentsImport = nsImports.find(i => i.alias === "components");
-    assert.ok(componentsImport, "Should have components namespace import");
-    assert.ok(componentsImport.resolvedPath?.includes("components/index"), "components should resolve to index");
+    expect(componentsImport, "Should have components namespace import").toBeTruthy();
+    expect(componentsImport.resolvedPath?.includes("components/index"), "components should resolve to index").toBe(true);
   });
 
   it("extracts export facts correctly from barrel files", () => {
@@ -197,10 +193,10 @@ describe("Registration: explicit-app", () => {
     const indexFacts = Array.from(appFacts.values()).find(f =>
       f.path.includes("components/index.ts")
     );
-    assert.ok(indexFacts, "Should find components/index.ts facts");
+    expect(indexFacts, "Should find components/index.ts facts").toBeTruthy();
 
     // Should have named exports
-    assert.ok(indexFacts.exports.length > 0, "Should have exports");
+    expect(indexFacts.exports.length > 0, "Should have exports").toBe(true);
 
     // Check that exports include our components
     const exportedNames = new Set();
@@ -217,9 +213,9 @@ describe("Registration: explicit-app", () => {
     }
 
     // The barrel re-exports NavBar, UserCard, DataGrid
-    assert.ok(
+    expect(
       exportedNames.has("NavBar") || indexFacts.exports.some(e => e.kind === "reexport-named"),
       "Should export NavBar or have re-exports"
-    );
+    ).toBe(true);
   });
 });

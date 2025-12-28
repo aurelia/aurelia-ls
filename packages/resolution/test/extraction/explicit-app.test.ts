@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,7 +45,7 @@ describe("Extraction: explicit-app", () => {
       .sort();
 
     // Assert exact file discovery
-    assert.deepStrictEqual(appFiles, [
+    expect(appFiles, "Should extract facts from exactly these 20 app source files").toEqual([
       "src/attributes/highlight.ts",
       "src/attributes/index.ts",
       "src/attributes/tooltip.ts",
@@ -67,7 +66,7 @@ describe("Extraction: explicit-app", () => {
       "src/widgets/price-tag.ts",
       "src/widgets/product-card.ts",
       "src/widgets/stock-badge.ts",
-    ], "Should extract facts from exactly these 20 app source files");
+    ]);
   });
 
   it("extracts decorators correctly", () => {
@@ -76,16 +75,16 @@ describe("Extraction: explicit-app", () => {
 
     // Find nav-bar facts
     const navBarEntry = Array.from(facts.entries()).find(([p]) => p.includes("nav-bar"));
-    assert.ok(navBarEntry, "nav-bar.ts should be extracted");
+    expect(navBarEntry, "nav-bar.ts should be extracted").toBeTruthy();
 
     const [, navBarFacts] = navBarEntry;
     const navBarClass = navBarFacts.classes.find(c => c.name === "NavBar");
-    assert.ok(navBarClass, "NavBar class should be found");
+    expect(navBarClass, "NavBar class should be found").toBeTruthy();
 
     // Should have customElement decorator
     const ceDecorator = navBarClass.decorators.find(d => d.name === "customElement");
-    assert.ok(ceDecorator, "Should have @customElement decorator");
-    assert.ok(ceDecorator.args, "Decorator should have args");
+    expect(ceDecorator, "Should have @customElement decorator").toBeTruthy();
+    expect(ceDecorator.args, "Decorator should have args").toBeTruthy();
   });
 
   it("extracts static $au correctly", () => {
@@ -94,25 +93,25 @@ describe("Extraction: explicit-app", () => {
 
     // Find currency facts (static $au value converter)
     const currencyEntry = Array.from(facts.entries()).find(([p]) => p.includes("currency"));
-    assert.ok(currencyEntry, "currency.ts should be extracted");
+    expect(currencyEntry, "currency.ts should be extracted").toBeTruthy();
 
     const [, currencyFacts] = currencyEntry;
     const currencyClass = currencyFacts.classes.find(c => c.name === "CurrencyValueConverter");
-    assert.ok(currencyClass, "CurrencyValueConverter class should be found");
-    assert.ok(currencyClass.staticAu, "Should have static $au");
-    assert.strictEqual(currencyClass.staticAu.type, "value-converter");
-    assert.strictEqual(currencyClass.staticAu.name, "currency");
+    expect(currencyClass, "CurrencyValueConverter class should be found").toBeTruthy();
+    expect(currencyClass.staticAu, "Should have static $au").toBeTruthy();
+    expect(currencyClass.staticAu.type).toBe("value-converter");
+    expect(currencyClass.staticAu.name).toBe("currency");
 
     // Find fancy-button facts (static $au element)
     const fancyEntry = Array.from(facts.entries()).find(([p]) => p.includes("fancy-button"));
-    assert.ok(fancyEntry, "fancy-button.ts should be extracted");
+    expect(fancyEntry, "fancy-button.ts should be extracted").toBeTruthy();
 
     const [, fancyFacts] = fancyEntry;
     const fancyClass = fancyFacts.classes.find(c => c.name === "FancyButton");
-    assert.ok(fancyClass, "FancyButton class should be found");
-    assert.ok(fancyClass.staticAu, "Should have static $au");
-    assert.strictEqual(fancyClass.staticAu.type, "custom-element");
-    assert.strictEqual(fancyClass.staticAu.name, "fancy-button");
+    expect(fancyClass, "FancyButton class should be found").toBeTruthy();
+    expect(fancyClass.staticAu, "Should have static $au").toBeTruthy();
+    expect(fancyClass.staticAu.type).toBe("custom-element");
+    expect(fancyClass.staticAu.name).toBe("fancy-button");
   });
 
   it("extracts static dependencies correctly", () => {
@@ -121,18 +120,18 @@ describe("Extraction: explicit-app", () => {
 
     // Find product-card facts
     const productEntry = Array.from(facts.entries()).find(([p]) => p.includes("product-card"));
-    assert.ok(productEntry, "product-card.ts should be extracted");
+    expect(productEntry, "product-card.ts should be extracted").toBeTruthy();
 
     const [, productFacts] = productEntry;
     const productClass = productFacts.classes.find(c => c.name === "ProductCard");
-    assert.ok(productClass, "ProductCard class should be found");
-    assert.ok(productClass.staticDependencies, "Should have static dependencies");
+    expect(productClass, "ProductCard class should be found").toBeTruthy();
+    expect(productClass.staticDependencies, "Should have static dependencies").toBeTruthy();
 
     const depNames = productClass.staticDependencies.references.map(r =>
       r.kind === "identifier" ? r.name : r.exportName
     );
-    assert.ok(depNames.includes("PriceTag"), "Should reference PriceTag");
-    assert.ok(depNames.includes("StockBadge"), "Should reference StockBadge");
+    expect(depNames.includes("PriceTag"), "Should reference PriceTag").toBe(true);
+    expect(depNames.includes("StockBadge"), "Should reference StockBadge").toBe(true);
   });
 
   it("extracts @bindable members correctly", () => {
@@ -141,18 +140,18 @@ describe("Extraction: explicit-app", () => {
 
     // Find user-card facts
     const userCardEntry = Array.from(facts.entries()).find(([p]) => p.includes("user-card"));
-    assert.ok(userCardEntry, "user-card.ts should be extracted");
+    expect(userCardEntry, "user-card.ts should be extracted").toBeTruthy();
 
     const [, userCardFacts] = userCardEntry;
     const userCardClass = userCardFacts.classes.find(c => c.name === "UserCard");
-    assert.ok(userCardClass, "UserCard class should be found");
-    assert.ok(userCardClass.bindableMembers.length >= 2, "Should have bindable members");
+    expect(userCardClass, "UserCard class should be found").toBeTruthy();
+    expect(userCardClass.bindableMembers.length >= 2, "Should have bindable members").toBe(true);
 
     const nameBindable = userCardClass.bindableMembers.find(b => b.name === "name");
-    assert.ok(nameBindable, "Should have 'name' bindable");
+    expect(nameBindable, "Should have 'name' bindable").toBeTruthy();
 
     const selectedBindable = userCardClass.bindableMembers.find(b => b.name === "selected");
-    assert.ok(selectedBindable, "Should have 'selected' bindable");
+    expect(selectedBindable, "Should have 'selected' bindable").toBeTruthy();
   });
 
   it("extracts registration calls correctly", () => {
@@ -161,16 +160,16 @@ describe("Extraction: explicit-app", () => {
 
     // Find main.ts facts
     const mainEntry = Array.from(facts.entries()).find(([p]) => p.includes("main"));
-    assert.ok(mainEntry, "main.ts should be extracted");
+    expect(mainEntry, "main.ts should be extracted").toBeTruthy();
 
     const [, mainFacts] = mainEntry;
-    assert.ok(mainFacts.registrationCalls.length > 0, "Should have registration calls");
+    expect(mainFacts.registrationCalls.length > 0, "Should have registration calls").toBe(true);
 
     const aureliaRegister = mainFacts.registrationCalls.find(r => r.receiver === "Aurelia");
-    assert.ok(aureliaRegister, "Should have Aurelia.register() call");
+    expect(aureliaRegister, "Should have Aurelia.register() call").toBeTruthy();
 
     // Check for spread arguments (barrel imports)
     const spreadArgs = aureliaRegister.arguments.filter(a => a.kind === "spread");
-    assert.ok(spreadArgs.length >= 5, `Should have spread args for barrels, got ${spreadArgs.length}`);
+    expect(spreadArgs.length >= 5, `Should have spread args for barrels, got ${spreadArgs.length}`).toBe(true);
   });
 });

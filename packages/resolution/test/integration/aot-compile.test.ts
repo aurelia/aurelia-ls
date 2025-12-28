@@ -10,8 +10,7 @@
  * 3. Semantic Correctness (procedural) - verify resolution extracts correct metadata
  */
 
-import { describe, it, beforeAll } from "vitest";
-import assert from "node:assert/strict";
+import { describe, it, beforeAll, expect, assert } from "vitest";
 import * as ts from "typescript";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -690,9 +689,9 @@ describe("Resolution + AOT Integration: explicit-app", () => {
     it("global elements accessible from root scope", () => {
       const rootSem = getRootSemantics();
 
-      assert.ok(rootSem.resources.elements["nav-bar"], "nav-bar in root");
-      assert.ok(rootSem.resources.elements["data-grid"], "data-grid in root");
-      assert.ok(rootSem.resources.elements["user-card"], "user-card in root");
+      expect(rootSem.resources.elements["nav-bar"], "nav-bar in root").toBeTruthy();
+      expect(rootSem.resources.elements["data-grid"], "data-grid in root").toBeTruthy();
+      expect(rootSem.resources.elements["user-card"], "user-card in root").toBeTruthy();
     });
 
     it("local elements only in owner scope", () => {
@@ -703,8 +702,8 @@ describe("Resolution + AOT Integration: explicit-app", () => {
         productCardLocalScopeId,
       );
 
-      assert.ok(local.elements["price-tag"], "price-tag in local scope");
-      assert.ok(local.elements["stock-badge"], "stock-badge in local scope");
+      expect(local.elements["price-tag"], "price-tag in local scope").toBeTruthy();
+      expect(local.elements["stock-badge"], "stock-badge in local scope").toBeTruthy();
 
       // From root scope - should NOT see local elements
       const { resources: root } = materializeResourcesForScope(
@@ -713,22 +712,22 @@ describe("Resolution + AOT Integration: explicit-app", () => {
         resolutionResult.resourceGraph.root,
       );
 
-      assert.strictEqual(root.elements["price-tag"], undefined, "price-tag NOT in root");
-      assert.strictEqual(root.elements["stock-badge"], undefined, "stock-badge NOT in root");
+      expect(root.elements["price-tag"], "price-tag NOT in root").toBeUndefined();
+      expect(root.elements["stock-badge"], "stock-badge NOT in root").toBeUndefined();
     });
 
     it("local scope inherits global elements", () => {
       const localSem = getProductCardSemantics();
 
       // Global elements accessible from local scope
-      assert.ok(localSem.resources.elements["nav-bar"], "nav-bar accessible from local");
+      expect(localSem.resources.elements["nav-bar"], "nav-bar accessible from local").toBeTruthy();
 
       // Local elements also accessible
-      assert.ok(localSem.resources.elements["price-tag"], "price-tag accessible from local");
+      expect(localSem.resources.elements["price-tag"], "price-tag accessible from local").toBeTruthy();
 
       // Built-in controllers accessible
-      assert.ok(localSem.resources.controllers["if"], "if controller accessible");
-      assert.ok(localSem.resources.controllers["repeat"], "repeat controller accessible");
+      expect(localSem.resources.controllers["if"], "if controller accessible").toBeTruthy();
+      expect(localSem.resources.controllers["repeat"], "repeat controller accessible").toBeTruthy();
     });
 
     it("local element not recognized from root scope compilation", () => {
@@ -746,7 +745,7 @@ describe("Resolution + AOT Integration: explicit-app", () => {
         (i) => i.type === "hydrateElement" && i.resource === "price-tag"
       );
 
-      assert.strictEqual(priceTagHydrate, undefined, "price-tag not recognized from root");
+      expect(priceTagHydrate, "price-tag not recognized from root").toBeUndefined();
     });
 
     it("unknown element compiles as plain HTML", () => {
@@ -763,8 +762,8 @@ describe("Resolution + AOT Integration: explicit-app", () => {
         (i) => i.type === "hydrateElement" && i.resource === "unknown-element"
       );
 
-      assert.strictEqual(unknownHydrate, undefined, "unknown-element not hydrated");
-      assert.ok(result.codeResult, "template compiled");
+      expect(unknownHydrate, "unknown-element not hydrated").toBeUndefined();
+      expect(result.codeResult, "template compiled").toBeTruthy();
     });
   });
 
@@ -777,51 +776,49 @@ describe("Resolution + AOT Integration: explicit-app", () => {
       const rootSem = getRootSemantics();
       const userCard = rootSem.resources.elements["user-card"];
 
-      assert.ok(userCard, "user-card exists");
-      assert.ok(userCard.bindables["selected"], "selected bindable exists");
-      assert.strictEqual(userCard.bindables["selected"].mode, "twoWay", "selected is twoWay");
+      expect(userCard, "user-card exists").toBeTruthy();
+      expect(userCard.bindables["selected"], "selected bindable exists").toBeTruthy();
+      expect(userCard.bindables["selected"].mode, "selected is twoWay").toBe("twoWay");
     });
 
     it("preserves element aliases from resolution", () => {
       const rootSem = getRootSemantics();
       const dataGrid = rootSem.resources.elements["data-grid"];
 
-      assert.ok(dataGrid, "data-grid exists");
-      assert.ok(dataGrid.aliases.includes("grid"), "has grid alias");
-      assert.ok(dataGrid.aliases.includes("table-view"), "has table-view alias");
+      expect(dataGrid, "data-grid exists").toBeTruthy();
+      expect(dataGrid.aliases.includes("grid"), "has grid alias").toBe(true);
+      expect(dataGrid.aliases.includes("table-view"), "has table-view alias").toBe(true);
     });
 
     it("preserves containerless flag from resolution", () => {
       const rootSem = getRootSemantics();
 
-      assert.strictEqual(
+      expect(
         rootSem.resources.elements["user-card"].containerless,
-        true,
         "user-card containerless"
-      );
-      assert.strictEqual(
+      ).toBe(true);
+      expect(
         rootSem.resources.elements["data-grid"].containerless,
-        true,
         "data-grid containerless"
-      );
+      ).toBe(true);
     });
 
     it("preserves custom attribute bindables", () => {
       const rootSem = getRootSemantics();
       const highlight = rootSem.resources.attributes["highlight"];
 
-      assert.ok(highlight, "highlight exists");
-      assert.ok(highlight.bindables["color"], "has color bindable");
-      assert.ok(highlight.bindables["intensity"], "has intensity bindable");
+      expect(highlight, "highlight exists").toBeTruthy();
+      expect(highlight.bindables["color"], "has color bindable").toBeTruthy();
+      expect(highlight.bindables["intensity"], "has intensity bindable").toBeTruthy();
     });
 
     it("preserves value converters and binding behaviors", () => {
       const rootSem = getRootSemantics();
 
-      assert.ok(rootSem.resources.valueConverters["date"], "date VC exists");
-      assert.ok(rootSem.resources.valueConverters["currency"], "currency VC exists");
-      assert.ok(rootSem.resources.bindingBehaviors["debounce"], "debounce BB exists");
-      assert.ok(rootSem.resources.bindingBehaviors["throttle"], "throttle BB exists");
+      expect(rootSem.resources.valueConverters["date"], "date VC exists").toBeTruthy();
+      expect(rootSem.resources.valueConverters["currency"], "currency VC exists").toBeTruthy();
+      expect(rootSem.resources.bindingBehaviors["debounce"], "debounce BB exists").toBeTruthy();
+      expect(rootSem.resources.bindingBehaviors["throttle"], "throttle BB exists").toBeTruthy();
     });
   });
 
@@ -844,7 +841,7 @@ describe("Resolution + AOT Integration: explicit-app", () => {
       const reduced1 = reduceEmitResult(result1.codeResult, result1.exprCodeMap);
       const reduced2 = reduceEmitResult(result2.codeResult, result2.exprCodeMap);
 
-      assert.deepStrictEqual(reduced1, reduced2, "outputs identical");
+      expect(reduced1, "outputs identical").toEqual(reduced2);
     });
   });
 });
