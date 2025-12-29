@@ -7,10 +7,11 @@ import {
   offsetToLineChar,
   buildNodeMap,
   extractTokens,
+  extractExpressionTokens,
   handleSemanticTokensFull,
   type RawToken,
 } from "../../out/handlers/semantic-tokens.js";
-import type { DOMNode, ElementNode, LinkedRow, NodeSem } from "@aurelia-ls/compiler";
+import type { DOMNode, ElementNode, LinkedRow, NodeSem, ExprTableEntry, SourceSpan } from "@aurelia-ls/compiler";
 
 /* ===========================
  * Token Legend Tests
@@ -576,5 +577,371 @@ describe("handleSemanticTokensFull", () => {
 
     // No custom elements, so no tokens
     expect(result).toBe(null);
+  });
+});
+
+/* ===========================
+ * extractExpressionTokens Tests
+ * =========================== */
+
+describe("extractExpressionTokens", () => {
+  // Helper to create a minimal expression table entry
+  function createExprEntry(
+    id: string,
+    ast: Record<string, unknown>,
+    type: string = "IsProperty",
+  ): ExprTableEntry {
+    return {
+      id: id as any,
+      expressionType: type as any,
+      ast,
+    } as ExprTableEntry;
+  }
+
+  test("returns empty array for empty input", () => {
+    expect(extractExpressionTokens("", [], new Map())).toEqual([]);
+  });
+
+  test("extracts token for AccessScope expression (variable)", () => {
+    const text = "name";
+    const entry = createExprEntry("0", {
+      $kind: "AccessScope",
+      span: { start: 0, end: 4 },
+      name: "name",
+      ancestor: 0,
+    });
+    const spans = new Map([["0", { start: 0, end: 4 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]).toEqual({
+      line: 0,
+      char: 0,
+      length: 4,
+      type: TOKEN_TYPES.indexOf("variable"),
+      modifiers: 0,
+    });
+  });
+
+  test("marks Aurelia built-ins with defaultLibrary modifier", () => {
+    const text = "$index";
+    const entry = createExprEntry("0", {
+      $kind: "AccessScope",
+      span: { start: 0, end: 6 },
+      name: "$index",
+      ancestor: 0,
+    });
+    const spans = new Map([["0", { start: 0, end: 6 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    // defaultLibrary is at index 2 in modifiers
+    expect(tokens[0]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+  });
+
+  test("extracts token for AccessMember expression (property)", () => {
+    const text = "user.name";
+    const entry = createExprEntry("0", {
+      $kind: "AccessMember",
+      span: { start: 0, end: 9 },
+      name: "name",
+      object: {
+        $kind: "AccessScope",
+        span: { start: 0, end: 4 },
+        name: "user",
+        ancestor: 0,
+      },
+    });
+    const spans = new Map([["0", { start: 0, end: 9 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    // Should have 2 tokens: user (variable) and name (property)
+    expect(tokens.length).toBe(2);
+
+    // First token: 'user' variable
+    expect(tokens[0]).toEqual({
+      line: 0,
+      char: 0,
+      length: 4,
+      type: TOKEN_TYPES.indexOf("variable"),
+      modifiers: 0,
+    });
+
+    // Second token: 'name' property
+    expect(tokens[1]).toEqual({
+      line: 0,
+      char: 5, // after 'user.'
+      length: 4,
+      type: TOKEN_TYPES.indexOf("property"),
+      modifiers: 0,
+    });
+  });
+
+  test("extracts token for CallScope expression (function)", () => {
+    const text = "save()";
+    const entry = createExprEntry("0", {
+      $kind: "CallScope",
+      span: { start: 0, end: 6 },
+      name: "save",
+      args: [],
+    });
+    const spans = new Map([["0", { start: 0, end: 6 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]).toEqual({
+      line: 0,
+      char: 0,
+      length: 4,
+      type: TOKEN_TYPES.indexOf("function"),
+      modifiers: 0,
+    });
+  });
+
+  test("extracts token for CallMember expression (method)", () => {
+    const text = "user.getName()";
+    const entry = createExprEntry("0", {
+      $kind: "CallMember",
+      span: { start: 0, end: 14 },
+      name: "getName",
+      object: {
+        $kind: "AccessScope",
+        span: { start: 0, end: 4 },
+        name: "user",
+        ancestor: 0,
+      },
+      args: [],
+    });
+    const spans = new Map([["0", { start: 0, end: 14 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(2);
+
+    // 'user' variable
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    expect(tokens[0]!.length).toBe(4);
+
+    // 'getName' method (function type)
+    expect(tokens[1]!.type).toBe(TOKEN_TYPES.indexOf("function"));
+    expect(tokens[1]!.char).toBe(5); // after 'user.'
+    expect(tokens[1]!.length).toBe(7);
+  });
+
+  test("extracts tokens for conditional expression", () => {
+    const text = "active ? yes : no";
+    const entry = createExprEntry("0", {
+      $kind: "Conditional",
+      span: { start: 0, end: 17 },
+      condition: {
+        $kind: "AccessScope",
+        span: { start: 0, end: 6 },
+        name: "active",
+        ancestor: 0,
+      },
+      yes: {
+        $kind: "AccessScope",
+        span: { start: 9, end: 12 },
+        name: "yes",
+        ancestor: 0,
+      },
+      no: {
+        $kind: "AccessScope",
+        span: { start: 15, end: 17 },
+        name: "no",
+        ancestor: 0,
+      },
+    });
+    const spans = new Map([["0", { start: 0, end: 17 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    // 3 tokens: active, yes, no
+    expect(tokens.length).toBe(3);
+    expect(tokens[0]!.length).toBe(6); // active
+    expect(tokens[1]!.length).toBe(3); // yes
+    expect(tokens[2]!.length).toBe(2); // no
+  });
+
+  test("handles binary expressions", () => {
+    const text = "a + b";
+    const entry = createExprEntry("0", {
+      $kind: "Binary",
+      span: { start: 0, end: 5 },
+      left: {
+        $kind: "AccessScope",
+        span: { start: 0, end: 1 },
+        name: "a",
+        ancestor: 0,
+      },
+      right: {
+        $kind: "AccessScope",
+        span: { start: 4, end: 5 },
+        name: "b",
+        ancestor: 0,
+      },
+    });
+    const spans = new Map([["0", { start: 0, end: 5 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(2);
+    expect(tokens[0]!.char).toBe(0);
+    expect(tokens[0]!.length).toBe(1); // a
+    expect(tokens[1]!.char).toBe(4);
+    expect(tokens[1]!.length).toBe(1); // b
+  });
+
+  test("marks $host with defaultLibrary modifier", () => {
+    const text = "$host";
+    const entry = createExprEntry("0", {
+      $kind: "AccessBoundary",
+      span: { start: 0, end: 5 },
+    });
+    const spans = new Map([["0", { start: 0, end: 5 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    expect(tokens[0]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+  });
+
+  test("marks $this with defaultLibrary modifier", () => {
+    const text = "$this";
+    const entry = createExprEntry("0", {
+      $kind: "AccessThis",
+      span: { start: 0, end: 5 },
+      ancestor: 0,
+    });
+    const spans = new Map([["0", { start: 0, end: 5 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    expect(tokens[0]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+  });
+
+  test("skips entry without corresponding span", () => {
+    const text = "name";
+    const entry = createExprEntry("0", {
+      $kind: "AccessScope",
+      span: { start: 0, end: 4 },
+      name: "name",
+    });
+    // Empty spans map - entry id "0" has no span
+    const spans = new Map<string, SourceSpan>();
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(0);
+  });
+
+  test("skips primitive literals", () => {
+    const text = "42";
+    const entry = createExprEntry("0", {
+      $kind: "PrimitiveLiteral",
+      span: { start: 0, end: 2 },
+      value: 42,
+    });
+    const spans = new Map([["0", { start: 0, end: 2 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(0);
+  });
+
+  test("handles ForOfStatement with declaration", () => {
+    const text = "item of items";
+    const entry = createExprEntry("0", {
+      $kind: "ForOfStatement",
+      span: { start: 0, end: 13 },
+      declaration: {
+        $kind: "BindingIdentifier",
+        span: { start: 0, end: 4 },
+        name: "item",
+      },
+      iterable: {
+        $kind: "AccessScope",
+        span: { start: 8, end: 13 },
+        name: "items",
+        ancestor: 0,
+      },
+    }, "IsIterator");
+    const spans = new Map([["0", { start: 0, end: 13 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    // 2 tokens: item (declaration) and items (variable)
+    expect(tokens.length).toBe(2);
+
+    // item with declaration modifier
+    expect(tokens[0]!.char).toBe(0);
+    expect(tokens[0]!.length).toBe(4);
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    expect(tokens[0]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("declaration"));
+
+    // items variable
+    expect(tokens[1]!.char).toBe(8);
+    expect(tokens[1]!.length).toBe(5);
+    expect(tokens[1]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+  });
+
+  test("handles value converter expression", () => {
+    const text = "date | format";
+    const entry = createExprEntry("0", {
+      $kind: "ValueConverter",
+      span: { start: 0, end: 13 },
+      name: "format",
+      expression: {
+        $kind: "AccessScope",
+        span: { start: 0, end: 4 },
+        name: "date",
+        ancestor: 0,
+      },
+      args: [],
+    });
+    const spans = new Map([["0", { start: 0, end: 13 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    // At least the date variable should be tokenized
+    expect(tokens.length).toBeGreaterThanOrEqual(1);
+    expect(tokens[0]!.length).toBe(4); // date
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+  });
+
+  test("handles multiple expressions in one template", () => {
+    const text = "<div>${name}</div><div>${count}</div>";
+    const entry1 = createExprEntry("0", {
+      $kind: "AccessScope",
+      span: { start: 7, end: 11 },
+      name: "name",
+      ancestor: 0,
+    });
+    const entry2 = createExprEntry("1", {
+      $kind: "AccessScope",
+      span: { start: 25, end: 30 },
+      name: "count",
+      ancestor: 0,
+    });
+    const spans = new Map([
+      ["0", { start: 7, end: 11 } as SourceSpan],
+      ["1", { start: 25, end: 30 } as SourceSpan],
+    ]);
+
+    const tokens = extractExpressionTokens(text, [entry1, entry2], spans);
+
+    expect(tokens.length).toBe(2);
+    expect(tokens[0]!.char).toBe(7);
+    expect(tokens[0]!.length).toBe(4); // name
+    expect(tokens[1]!.char).toBe(25);
+    expect(tokens[1]!.length).toBe(5); // count
   });
 });

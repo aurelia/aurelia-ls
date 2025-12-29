@@ -220,6 +220,7 @@ export type {
   ForOfStatement,
   TemplateExpression,
   BindingIdentifier,
+  ExprTableEntry,
 } from "./compiler/index.js";
 
 // === Program ===
