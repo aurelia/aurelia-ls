@@ -524,5 +524,77 @@
         { "kind": "text", "code": "e" }
       ]
     }
+  },
+  {
+    "name": "LC-39 case combined with if (case not rightmost)",
+    "markup": "<div switch.bind=\"x\"><span case=\"1\" if.bind=\"show\">content</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "switch" },
+        { "name": "case" },
+        { "name": "if" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" },
+        { "kind": "controllerValue", "command": "bind", "code": "\"1\"" },
+        { "kind": "controllerValue", "command": "bind", "code": "show" }
+      ]
+    }
+  },
+  {
+    "name": "LC-40 default-case combined with if (default-case not rightmost)",
+    "markup": "<div switch.bind=\"x\"><span default-case if.bind=\"show\">fallback</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "switch" },
+        { "name": "default-case" },
+        { "name": "if" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" },
+        { "kind": "controllerValue", "command": "bind", "code": "show" }
+      ]
+    }
+  },
+  {
+    "name": "LC-41 promise then with interpolation (attributeBinding marker)",
+    "markup": "<div promise.bind=\"p\"><span then=\"val${x}\">${x}</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "x" }
+      ]
+    }
+  },
+  {
+    "name": "LC-42 repeat with key.bind tail option",
+    "markup": "<div repeat.for=\"item of items; key.bind: item.id\"></div>",
+    "expect": {
+      "controllers": [
+        { "name": "repeat" }
+      ],
+      "expressions": [
+        { "kind": "iterator", "code": "item of items; key.bind: item.id" },
+        { "kind": "propCommand", "command": "bind", "code": "item.id" }
+      ]
+    }
+  },
+  {
+    "name": "LC-43 else combined with repeat (else not rightmost)",
+    "markup": "<div if.bind=\"a\">A</div><div else repeat.for=\"x of xs\">B</div>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" },
+        { "name": "repeat" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "a" },
+        { "kind": "iterator", "code": "x of xs" }
+      ]
+    }
   }
 ]
