@@ -911,10 +911,84 @@ describe("extractExpressionTokens", () => {
 
     const tokens = extractExpressionTokens(text, [entry], spans);
 
-    // At least the date variable should be tokenized
-    expect(tokens.length).toBeGreaterThanOrEqual(1);
+    // Should have 2 tokens: date (variable) and format (function for converter)
+    expect(tokens.length).toBe(2);
     expect(tokens[0]!.length).toBe(4); // date
     expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    expect(tokens[1]!.char).toBe(7); // 'format' starts after "date | "
+    expect(tokens[1]!.length).toBe(6); // format
+    expect(tokens[1]!.type).toBe(TOKEN_TYPES.indexOf("function"));
+  });
+
+  test("handles binding behavior expression", () => {
+    const text = "value & debounce:500";
+    const entry = createExprEntry("0", {
+      $kind: "BindingBehavior",
+      span: { start: 0, end: 20 },
+      name: "debounce",
+      expression: {
+        $kind: "AccessScope",
+        span: { start: 0, end: 5 },
+        name: "value",
+        ancestor: 0,
+      },
+      args: [
+        {
+          $kind: "PrimitiveLiteral",
+          span: { start: 17, end: 20 },
+          value: 500,
+        },
+      ],
+    });
+    const spans = new Map([["0", { start: 0, end: 20 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    // Should have 2 tokens: value (variable) and debounce (function for behavior)
+    expect(tokens.length).toBe(2);
+    expect(tokens[0]!.length).toBe(5); // value
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    expect(tokens[1]!.char).toBe(8); // 'debounce' starts after "value & "
+    expect(tokens[1]!.length).toBe(8); // debounce
+    expect(tokens[1]!.type).toBe(TOKEN_TYPES.indexOf("function"));
+  });
+
+  test("handles chained value converters", () => {
+    const text = "date | format:'short' | uppercase";
+    // The outer node is the last converter in the chain
+    const entry = createExprEntry("0", {
+      $kind: "ValueConverter",
+      span: { start: 0, end: 33 },
+      name: "uppercase",
+      expression: {
+        $kind: "ValueConverter",
+        span: { start: 0, end: 21 },
+        name: "format",
+        expression: {
+          $kind: "AccessScope",
+          span: { start: 0, end: 4 },
+          name: "date",
+          ancestor: 0,
+        },
+        args: [
+          {
+            $kind: "PrimitiveLiteral",
+            span: { start: 14, end: 21 },
+            value: "short",
+          },
+        ],
+      },
+      args: [],
+    });
+    const spans = new Map([["0", { start: 0, end: 33 } as SourceSpan]]);
+
+    const tokens = extractExpressionTokens(text, [entry], spans);
+
+    // Should have 3 tokens: date, format, uppercase
+    expect(tokens.length).toBe(3);
+    expect(tokens.some(t => t.length === 4)).toBe(true); // date
+    expect(tokens.some(t => t.length === 6)).toBe(true); // format
+    expect(tokens.some(t => t.length === 9)).toBe(true); // uppercase
   });
 
   test("handles multiple expressions in one template", () => {

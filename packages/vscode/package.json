@@ -29,13 +29,6 @@
     "onLanguage:html"
   ],
   "contributes": {
-    "grammars": [
-      {
-        "scopeName": "text.html.aurelia",
-        "path": "./syntaxes/aurelia.tmLanguage.json",
-        "injectTo": ["text.html.basic", "text.html.derivative"]
-      }
-    ],
     "snippets": [
       {
         "language": "html",

@@ -475,10 +475,46 @@ function walkExpression(
       break;
     }
 
-    case "ValueConverter":
-    case "BindingBehavior": {
-      // expr | converter:arg or expr & behavior:arg
+    case "ValueConverter": {
+      // expr | converter:arg
       walkExpression(node.expression, text, baseSpan, tokens);
+      // Emit token for the converter name
+      if (node.name && node.span) {
+        const namePos = findPipeOrAmpName(text, node.span, "|", node.name);
+        if (namePos !== -1) {
+          const { line, char } = offsetToLineChar(text, namePos);
+          tokens.push({
+            line,
+            char,
+            length: node.name.length,
+            type: TokenType.function, // value converters are like functions
+            modifiers: 0,
+          });
+        }
+      }
+      for (const arg of node.args ?? []) {
+        walkExpression(arg, text, baseSpan, tokens);
+      }
+      break;
+    }
+
+    case "BindingBehavior": {
+      // expr & behavior:arg
+      walkExpression(node.expression, text, baseSpan, tokens);
+      // Emit token for the behavior name
+      if (node.name && node.span) {
+        const namePos = findPipeOrAmpName(text, node.span, "&", node.name);
+        if (namePos !== -1) {
+          const { line, char } = offsetToLineChar(text, namePos);
+          tokens.push({
+            line,
+            char,
+            length: node.name.length,
+            type: TokenType.function, // binding behaviors are like functions
+            modifiers: 0,
+          });
+        }
+      }
       for (const arg of node.args ?? []) {
         walkExpression(arg, text, baseSpan, tokens);
       }
@@ -634,6 +670,29 @@ function walkBindingPattern(
       break;
     }
   }
+}
+
+/**
+ * Find the start position of a value converter or binding behavior name.
+ * The name appears after '|' (for converters) or '&' (for behaviors).
+ */
+function findPipeOrAmpName(text: string, span: SourceSpan, separator: "|" | "&", name: string): number {
+  // Search within the span for the separator followed by the name
+  const searchText = text.slice(span.start, span.end);
+  const sepIndex = searchText.lastIndexOf(separator);
+  if (sepIndex === -1) return -1;
+
+  // Find the name after the separator (skipping whitespace)
+  const afterSep = searchText.slice(sepIndex + 1);
+  const nameMatch = afterSep.match(/^\s*/);
+  const whitespaceLen = nameMatch ? nameMatch[0].length : 0;
+
+  // Verify the name is there
+  if (afterSep.slice(whitespaceLen, whitespaceLen + name.length) === name) {
+    return span.start + sepIndex + 1 + whitespaceLen;
+  }
+
+  return -1;
 }
 
 /**
