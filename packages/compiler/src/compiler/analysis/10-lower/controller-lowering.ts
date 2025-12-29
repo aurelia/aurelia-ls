@@ -302,13 +302,17 @@ function buildControllerPrototypes(
     return [{ res: "else", props: [] }];
   }
 
-  // `case` has a value binding (the case expression)
+  // `case` has a value binding for the case expression
+  // case="foo" means literal "foo", case.bind="foo" means expression foo
   if (kind === "case") {
     const raw = a.value ?? "";
+    const isBinding = s.command === "bind";
     const valueProp: PropertyBindingIR = {
       type: "propertyBinding",
       to: "value",
-      from: toExprRef(raw, valueLoc, table, "IsProperty"),
+      from: isBinding
+        ? toExprRef(raw, valueLoc, table, "IsProperty")
+        : toExprRef(JSON.stringify(raw), valueLoc, table, "IsProperty"),
       mode: "default",
       loc: toSpan(loc, table.source),
     };
@@ -388,10 +392,9 @@ function injectPromiseBranchesIntoDef(
     if (ins.type === "propertyBinding") {
       return ins.to === "then" || ins.to === "catch" || ins.to === "pending";
     }
-    if (ins.type === "attributeBinding") {
-      return ins.attr === "then" || ins.attr === "catch" || ins.attr === "pending" ||
-             ins.to === "then" || ins.to === "catch" || ins.to === "pending";
-    }
+    // Note: attributeBinding with then/catch/pending as attr/to cannot occur because
+    // these branch marker attributes are consumed by promise branch processing before
+    // creating any binding instructions.
     return false;
   };
 
