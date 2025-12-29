@@ -30,14 +30,14 @@ import type { DOMNode, ElementNode } from "@aurelia-ls/compiler";
  * Order matters: index in array = token type ID.
  */
 export const TOKEN_TYPES = [
-  "namespace",   // 0: Custom element tag names
+  "namespace",   // 0: Custom element tag names, custom attributes
   "type",        // 1: Component class references
   "class",       // 2: Class names
-  "parameter",   // 3: Binding commands (bind, trigger, for)
+  "parameter",   // 3: (reserved)
   "variable",    // 4: Template variables
   "property",    // 5: Property access, bindables
   "function",    // 6: Method calls in expressions
-  "keyword",     // 7: Template controllers (if, repeat, else)
+  "keyword",     // 7: Binding commands AND template controllers (for better theme colors)
 ] as const;
 
 /**
@@ -1060,8 +1060,9 @@ function findBindingCommandInAttr(attrName: string): { command: string; position
 }
 
 /**
- * Emit a token for a binding command.
- * Uses 'keyword' type for better theme support (most themes style keywords distinctly).
+ * Emit a token for a binding command (bind, trigger, for, :, @).
+ * Uses 'keyword' type intentionally — VS Code's default themes style keywords
+ * distinctly, giving better visual differentiation than 'parameter'.
  */
 function emitCommandToken(
   text: string,
@@ -1074,7 +1075,7 @@ function emitCommandToken(
     line,
     char,
     length,
-    type: TokenType.keyword,
+    type: TokenType.keyword, // Intentionally keyword for better theme colors
     modifiers: 0,
   });
 }

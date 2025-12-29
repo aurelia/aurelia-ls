@@ -1055,7 +1055,7 @@ describe("extractBindingCommandTokens", () => {
     expect(tokens.length).toBe(1);
     expect(tokens[0]!.char).toBe(13); // 'bind' starts at position 13
     expect(tokens[0]!.length).toBe(4); // 'bind'
-    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("parameter"));
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("keyword")); // keyword for better theme colors
   });
 
   test("extracts .trigger command from listener binding", () => {
@@ -1074,7 +1074,7 @@ describe("extractBindingCommandTokens", () => {
     expect(tokens.length).toBe(1);
     expect(tokens[0]!.char).toBe(14); // 'trigger' starts at position 14
     expect(tokens[0]!.length).toBe(7); // 'trigger'
-    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("parameter"));
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("keyword")); // keyword for better theme colors
   });
 
   test("extracts .capture command from listener binding", () => {
@@ -1114,7 +1114,7 @@ describe("extractBindingCommandTokens", () => {
     expect(tokens[0]!.length).toBe(7); // 'two-way'
   });
 
-  test("does not extract command for @ shorthand", () => {
+  test("extracts command for @ shorthand", () => {
     const text = '<button @click="save()">';
     const instruction: LinkedInstruction = {
       kind: "listenerBinding",
@@ -1127,11 +1127,13 @@ describe("extractBindingCommandTokens", () => {
 
     const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
 
-    // @ shorthand doesn't have a visible command to highlight
-    expect(tokens.length).toBe(0);
+    // @ shorthand highlights the @ sigil
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.char).toBe(8); // '@' at position 8
+    expect(tokens[0]!.length).toBe(1); // '@'
   });
 
-  test("does not extract command for : shorthand", () => {
+  test("extracts command for : shorthand", () => {
     const text = '<input :value="name">';
     const instruction: LinkedInstruction = {
       kind: "propertyBinding",
@@ -1145,8 +1147,10 @@ describe("extractBindingCommandTokens", () => {
 
     const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
 
-    // : shorthand doesn't have a visible command to highlight
-    expect(tokens.length).toBe(0);
+    // : shorthand highlights the : sigil
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.char).toBe(7); // ':' at position 7
+    expect(tokens[0]!.length).toBe(1); // ':'
   });
 
   test("extracts ref command", () => {
