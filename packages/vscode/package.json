@@ -36,6 +36,12 @@
         "injectTo": ["text.html.basic", "text.html.derivative"]
       }
     ],
+    "snippets": [
+      {
+        "language": "html",
+        "path": "./snippets/aurelia.json"
+      }
+    ],
     "commands": [
       { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
       { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
