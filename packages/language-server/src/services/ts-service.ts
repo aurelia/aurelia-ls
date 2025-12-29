@@ -88,7 +88,10 @@ export class TsService {
     const canonical = this.#paths.canonical(fileAbs);
     this.#overlay.upsert(canonical, text);
     this.#projectVersion++;
-    this.#recreate();
+    // Note: We intentionally do NOT recreate the TS service here.
+    // TypeScript's language service is designed for incremental updates.
+    // Bumping projectVersion tells TS to call getScriptVersion/getScriptSnapshot
+    // to pick up changes, avoiding expensive full recreation.
     this.#logger.log(`[ts] overlay updated: ${canonical} (version=${this.#projectVersion})`);
   }
 
@@ -96,7 +99,8 @@ export class TsService {
     const canonical = this.#paths.canonical(fileAbs);
     this.#overlay.delete(canonical);
     this.#projectVersion++;
-    this.#recreate();
+    // Note: We intentionally do NOT recreate the TS service here.
+    // See upsertOverlay comment for rationale.
     this.#logger.log(`[ts] overlay removed: ${canonical} (version=${this.#projectVersion})`);
   }
 

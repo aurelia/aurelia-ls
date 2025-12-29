@@ -19,6 +19,12 @@ import type { ServerContext } from "../context.js";
 import { mapDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./features.js";
 
+/** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
+const DOCUMENT_CHANGE_DEBOUNCE_MS = 300;
+
+/** Tracks pending debounced refresh operations per document URI */
+const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+
 function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
     const fsPath = URI.parse(change.uri).fsPath;
@@ -175,12 +181,36 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   });
 
   ctx.documents.onDidChangeContent((e) => {
-    ctx.logger.log(`didChange ${e.document.uri}`);
-    void refreshDocument(ctx, e.document, "change");
+    const uri = e.document.uri;
+    ctx.logger.log(`didChange ${uri} (debouncing)`);
+
+    // Cancel any pending refresh for this document
+    const existing = pendingRefreshes.get(uri);
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    // Schedule new refresh after debounce period
+    // This ensures we only process after typing pauses, not on every keystroke
+    const timeout = setTimeout(() => {
+      pendingRefreshes.delete(uri);
+      ctx.logger.log(`didChange ${uri} (processing after debounce)`);
+      void refreshDocument(ctx, e.document, "change");
+    }, DOCUMENT_CHANGE_DEBOUNCE_MS);
+
+    pendingRefreshes.set(uri, timeout);
   });
 
   ctx.documents.onDidClose((e) => {
     ctx.logger.log(`didClose ${e.document.uri}`);
+
+    // Cancel any pending refresh for this document
+    const pending = pendingRefreshes.get(e.document.uri);
+    if (pending) {
+      clearTimeout(pending);
+      pendingRefreshes.delete(e.document.uri);
+    }
+
     const canonical = canonicalDocumentUri(e.document.uri);
     ctx.workspace.close(canonical.uri);
     const derived = deriveTemplatePaths(canonical.uri, ctx.overlayPathOptions());
