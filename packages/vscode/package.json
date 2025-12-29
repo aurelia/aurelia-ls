@@ -45,6 +45,7 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
+    "typescript": "^5.7.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {

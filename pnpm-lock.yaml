@@ -295,6 +295,9 @@ importers:
 
   packages/vscode:
     dependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
       vscode-languageclient:
         specifier: ^9.0.1
         version: 9.0.1
