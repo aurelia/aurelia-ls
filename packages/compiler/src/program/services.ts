@@ -1009,31 +1009,45 @@ function mapTypeScriptDiagnostic(
   const mappedLocation = provenanceHit ? provenanceHitToDocumentSpan(provenanceHit) : null;
 
   const related: DiagnosticRelatedInfo[] = [];
-  if (overlayLocation && mappedLocation && !sameLocation(overlayLocation, mappedLocation)) {
-    related.push({ message: "overlay", location: overlayLocation });
-  }
+  // Note: We intentionally do NOT add the overlay location as related info.
+  // The overlay file is an internal implementation detail and should not be exposed to users.
 
   for (const rel of diag.relatedInformation ?? []) {
     const relCanonical = rel.fileName ? canonicalDocumentUri(rel.fileName) : canonicalDocumentUri(overlay.uri);
     const relSpan = tsSpan(rel, relCanonical.file);
     const relUri = relCanonical.uri;
-    const relLocation = relSpan ? { uri: relUri, span: relSpan } : null;
     const relHit = relSpan ? provenance.projectGeneratedSpan(relUri, relSpan) : null;
     const relMapped = relHit ? provenanceHitToDocumentSpan(relHit) : null;
+
+    // If provenance mapping succeeded, use the mapped location.
+    // If it failed but the location is in an overlay file, fall back to template URI.
+    // This ensures we never expose internal overlay file paths to users.
+    const isOverlayFile = relUri === overlay.uri || isOverlayPath(relCanonical.path);
+    const fallbackLocation = isOverlayFile && relSpan
+      ? { uri: overlay.templateUri, span: relSpan }
+      : relSpan ? { uri: relUri, span: relSpan } : null;
+
     related.push({
       message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames),
-      location: relMapped ?? relLocation,
+      location: relMapped ?? fallbackLocation,
     });
   }
 
   const severity = tsCategoryToSeverity(diag.category);
   const message = formatTypeScriptMessage(diag, vmDisplayName, provenanceHit, typeNames);
+
+  // If provenance mapping failed, fall back to template URI instead of overlay URI.
+  // This ensures we never expose internal overlay file paths to users.
+  const fallbackLocation = overlaySpan
+    ? { uri: overlay.templateUri, span: overlaySpan }
+    : null;
+
   return {
     code: diag.code ?? "TS",
     message,
     source: "typescript",
     severity,
-    location: mappedLocation ?? overlayLocation,
+    location: mappedLocation ?? fallbackLocation,
     ...(related.length ? { related } : {}),
     ...(diag.tags ? { tags: diag.tags } : {}),
   };
@@ -1200,4 +1214,12 @@ function dedupeTextEdits(edits: readonly TextEdit[]): TextEdit[] {
     results.push(edit);
   }
   return results;
+}
+
+/**
+ * Checks if a path looks like an overlay file path.
+ * Overlay files have patterns like `.__au.ttc.overlay.ts` or similar.
+ */
+function isOverlayPath(path: string): boolean {
+  return path.includes(".__au.") && path.includes(".overlay.");
 }

@@ -65,7 +65,10 @@ export class AureliaLanguageClient {
     ];
 
     const clientOptions: LanguageClientOptions = {
-      documentSelector: [{ pattern: "**/*.html" }],
+      documentSelector: [
+        { scheme: "file", language: "html" },
+        { scheme: "untitled", language: "html" },
+      ],
       synchronize: { fileEvents },
     };
 

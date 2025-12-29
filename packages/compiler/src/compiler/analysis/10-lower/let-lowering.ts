@@ -1,7 +1,7 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
 import type { ExprTable, P5Element } from "./lower-shared.js";
-import { attrLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
+import { attrLoc, attrValueLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
 
 export function lowerLetElement(
   el: P5Element,
@@ -38,10 +38,11 @@ function compileLet(
     const validLetCommands = new Set(["bind", "one-time", "to-view", "two-way", "from-view"]);
     if (validLetCommands.has(s.command ?? "")) {
       const loc = attrLoc(el, a.name);
+      const valueLoc = attrValueLoc(el, a.name, table.sourceText);
       out.push({
         type: "letBinding",
         to: s.target,
-        from: toBindingSource(a.value ?? "", loc, table, "IsProperty"),
+        from: toBindingSource(a.value ?? "", valueLoc, table, "IsProperty"),
         loc: toSpan(loc, table.source),
       });
       continue;
@@ -53,10 +54,11 @@ function compileLet(
       const raw = a.value ?? "";
       if (raw.includes("${")) {
         const loc = attrLoc(el, a.name);
+        const valueLoc = attrValueLoc(el, a.name, table.sourceText);
         out.push({
           type: "letBinding",
           to: s.target,
-          from: toInterpIR(raw, loc, table),
+          from: toInterpIR(raw, valueLoc, table),
           loc: toSpan(loc, table.source),
         });
       }

@@ -72,7 +72,8 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   expect(projected, "typescript diagnostic should map through provenance").toBeTruthy();
   expect(tsDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
   expect(tsDiag.location?.span).toEqual(projected.edge.to.span);
-  expect(tsDiag.related?.some((rel) => rel.location?.uri === overlayUri), "overlay span should remain as related info").toBeTruthy();
+  // Overlay paths should NOT appear in related info - they are internal implementation details
+  expect(tsDiag.related?.some((rel) => rel.location?.uri === overlayUri), "overlay paths should not leak to related info").toBeFalsy();
 
   expect(diags.all.length).toBe(diags.compiler.length + diags.typescript.length);
 });
@@ -237,13 +238,14 @@ test("suppresses AU1301 when TypeScript confirms matching type", () => {
   expect(diags.all.length, "no diagnostics should remain when types align").toBe(0);
 });
 
-test("falls back to overlay spans when provenance has no mapping", () => {
+test("falls back to template URI when provenance has no mapping", () => {
   const program = createProgram();
   const uri = "/app/raw-overlay.html";
   program.upsertTemplate(uri, "<template>${value}</template>");
 
   const compilation = program.getCompilation(uri);
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const templateUri = canonicalDocumentUri(uri).uri;
   const service = new DefaultTemplateLanguageService(program, {
     typescript: {
       getDiagnostics(overlay) {
@@ -264,7 +266,9 @@ test("falls back to overlay spans when provenance has no mapping", () => {
   const diags = service.getDiagnostics(uri);
   const tsDiag = diags.typescript[0];
   expect(tsDiag, "typescript diagnostic should be returned even without provenance").toBeTruthy();
-  expect(tsDiag.location?.uri).toBe(overlayUri);
+  // When provenance mapping fails, fall back to template URI (not overlay URI)
+  // Overlay paths are internal implementation details and should not be exposed
+  expect(tsDiag.location?.uri).toBe(templateUri);
 });
 
 test("hover merges template query and TypeScript quick info mapped to template span", () => {

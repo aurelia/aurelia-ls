@@ -144,6 +144,17 @@ export type {
 // Analysis (for build tools)
 export { lowerDocument, resolveHost, bindScopes, typecheck, planOverlay, emitOverlay, emitMappedExpression } from "./compiler/index.js";
 export type { BuildIrOptions } from "./compiler/index.js";
+export type {
+  // Linked semantics (for semantic tokens, etc.)
+  LinkedSemanticsModule,
+  LinkedTemplate,
+  LinkedRow,
+  NodeSem,
+  LinkedInstruction,
+  LinkedPropertyBinding,
+  LinkedListenerBinding,
+  LinkedHydrateTemplateController,
+} from "./compiler/index.js";
 
 // Shared Infrastructure
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./compiler/index.js";
@@ -173,6 +184,18 @@ export {
 } from "./compiler/index.js";
 export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode } from "./compiler/index.js";
 
+// IR types (DOM tree)
+export type {
+  DOMNode,
+  ElementNode,
+  TemplateNode,
+  TextNode,
+  CommentNode,
+  BaseNode,
+  Attr,
+  NodeId,
+} from "./compiler/index.js";
+
 // Expression AST types (for evaluation)
 export type {
   AnyBindingExpression,
@@ -197,6 +220,7 @@ export type {
   ForOfStatement,
   TemplateExpression,
   BindingIdentifier,
+  ExprTableEntry,
 } from "./compiler/index.js";
 
 // === Program ===

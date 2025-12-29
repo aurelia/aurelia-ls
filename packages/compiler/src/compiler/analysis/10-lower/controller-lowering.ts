@@ -13,7 +13,7 @@ import type {
 import { resolveControllerAttr } from "./element-lowering.js";
 import type { ControllerName } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Loc, P5Node, P5Template } from "./lower-shared.js";
-import { attrLoc, findAttr, parseRepeatTailProps, toExprRef, toSpan } from "./lower-shared.js";
+import { attrLoc, attrValueLoc, findAttr, parseRepeatTailProps, toExprRef, toSpan } from "./lower-shared.js";
 import type { RowCollector } from "./template-builders.js";
 import {
   makeWrapperTemplate,
@@ -56,7 +56,8 @@ export function collectControllers(
     if (!candidate) continue;
     const { a, s, kind } = candidate;
     const loc = attrLoc(el, a.name);
-    const prototypes = buildControllerPrototypes(el, a, s, attrParser, table, loc, sem, kind);
+    const valueLoc = attrValueLoc(el, a.name, table.sourceText);
+    const prototypes = buildControllerPrototypes(el, a, s, attrParser, table, loc, valueLoc, sem, kind);
 
     const nextLayer: HydrateTemplateControllerIR[] = [];
     for (const proto of prototypes) {
@@ -98,12 +99,13 @@ function buildBaseInstructionsForRightmost(
 ): HydrateTemplateControllerIR[] {
   const { a } = rightmost;
   const loc = attrLoc(el, a.name);
+  const valueLoc = attrValueLoc(el, a.name, table.sourceText);
   const raw = a.value ?? "";
 
   if (kind === "repeat") {
-    const forRef = table.add(raw, loc, "IsIterator");
-    const forOf = { astId: forRef.id, code: raw, loc: toSpan(loc, table.source) };
-    const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, loc, table);
+    const forRef = table.add(raw, valueLoc, "IsIterator");
+    const forOf = { astId: forRef.id, code: raw, loc: toSpan(valueLoc, table.source) };
+    const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, valueLoc, table);
     const iter: IteratorBindingIR = {
       type: "iteratorBinding",
       to: "items",
@@ -152,8 +154,8 @@ function buildBaseInstructionsForRightmost(
       type: "propertyBinding",
       to: "value",
       from: isBinding
-        ? toExprRef(raw, loc, table, "IsProperty")
-        : toExprRef(JSON.stringify(raw), loc, table, "IsProperty"), // Literal as quoted string
+        ? toExprRef(raw, valueLoc, table, "IsProperty")
+        : toExprRef(JSON.stringify(raw), valueLoc, table, "IsProperty"), // Literal as quoted string
       mode: "default",
       loc: toSpan(loc, table.source),
     };
@@ -196,7 +198,7 @@ function buildBaseInstructionsForRightmost(
   const valueProp: PropertyBindingIR = {
     type: "propertyBinding",
     to: propName,
-    from: toExprRef(exprText, loc, table, "IsProperty"),
+    from: toExprRef(exprText, valueLoc, table, "IsProperty"),
     mode: "default",
     loc: toSpan(loc, table.source),
   };
@@ -275,15 +277,16 @@ function buildControllerPrototypes(
   _attrParser: AttributeParser,
   table: ExprTable,
   loc: P5Loc,
+  valueLoc: P5Loc,
   _sem: Semantics,
   kind: ControllerName
 ): ControllerPrototype[] {
   const raw = a.value ?? "";
 
   if (kind === "repeat") {
-    const forRef = table.add(raw, loc, "IsIterator");
-    const forOf = { astId: forRef.id, code: raw, loc: toSpan(loc, table.source) };
-    const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, loc, table);
+    const forRef = table.add(raw, valueLoc, "IsIterator");
+    const forOf = { astId: forRef.id, code: raw, loc: toSpan(valueLoc, table.source) };
+    const tailProps: MultiAttrIR[] | null = toRepeatTailIR(raw, valueLoc, table);
     const iter: IteratorBindingIR = {
       type: "iteratorBinding",
       to: "items",
@@ -305,7 +308,7 @@ function buildControllerPrototypes(
     const valueProp: PropertyBindingIR = {
       type: "propertyBinding",
       to: "value",
-      from: toExprRef(raw, loc, table, "IsProperty"),
+      from: toExprRef(raw, valueLoc, table, "IsProperty"),
       mode: "default",
       loc: toSpan(loc, table.source),
     };
@@ -324,7 +327,7 @@ function buildControllerPrototypes(
   const valueProp: PropertyBindingIR = {
     type: "propertyBinding",
     to: propName,
-    from: toExprRef(exprText, loc, table, "IsProperty"),
+    from: toExprRef(exprText, valueLoc, table, "IsProperty"),
     mode: "default",
     loc: toSpan(loc, table.source),
   };

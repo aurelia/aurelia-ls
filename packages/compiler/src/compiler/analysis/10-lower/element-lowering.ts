@@ -10,6 +10,7 @@ import type {
 import type { ExprTable, P5Element, P5Loc } from "./lower-shared.js";
 import {
   attrLoc,
+  attrValueLoc,
   camelCase,
   findAttr,
   toBindingSource,
@@ -57,6 +58,7 @@ function parseMultiBindings(
   attrDef: AttrRes,
   attrParser: AttributeParser,
   loc: P5Loc,
+  valueLoc: P5Loc,
   table: ExprTable
 ): ElementBindableIR[] {
   const props: ElementBindableIR[] = [];
@@ -100,7 +102,7 @@ function parseMultiBindings(
           props.push({
             type: "propertyBinding",
             to,
-            from: toBindingSource(valuePart, loc, table, "IsProperty"),
+            from: toBindingSource(valuePart, valueLoc, table, "IsProperty"),
             mode: toMode(parsed.command, propPart),
             loc: toSpan(loc, table.source),
           });
@@ -110,7 +112,7 @@ function parseMultiBindings(
             type: "attributeBinding",
             attr: propPart,
             to,
-            from: toInterpIR(valuePart, loc, table),
+            from: toInterpIR(valuePart, valueLoc, table),
             loc: toSpan(loc, table.source),
           });
         } else if (valuePart.length > 0) {
@@ -162,6 +164,7 @@ export function lowerElementAttributes(
     attrName: string,
     raw: string,
     loc: P5Loc,
+    valueLoc: P5Loc,
     command: string | null
   ) => {
     const to = camelCase(target);
@@ -169,7 +172,7 @@ export function lowerElementAttributes(
       sink.push({
         type: "propertyBinding",
         to,
-        from: toBindingSource(raw, loc, table, "IsProperty"),
+        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         mode: toMode(command, attrName),
         loc: toSpan(loc, table.source),
       });
@@ -180,7 +183,7 @@ export function lowerElementAttributes(
         type: "attributeBinding",
         attr: attrName,
         to,
-        from: toInterpIR(raw, loc, table),
+        from: toInterpIR(raw, valueLoc, table),
         loc: toSpan(loc, table.source),
       });
       return;
@@ -196,6 +199,7 @@ export function lowerElementAttributes(
 
   for (const a of attrs) {
     const loc = attrLoc(el, a.name);
+    const valueLoc = attrValueLoc(el, a.name, table.sourceText);
     const s = attrParser.parse(a.name, a.value ?? "");
     const raw = a.value ?? "";
 
@@ -206,7 +210,7 @@ export function lowerElementAttributes(
       tail.push({
         type: "listenerBinding",
         to: s.target,
-        from: toExprRef(raw, loc, table, "IsFunction"),
+        from: toExprRef(raw, valueLoc, table, "IsFunction"),
         capture: s.command === "capture",
         modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
         loc: toSpan(loc, table.source),
@@ -218,7 +222,7 @@ export function lowerElementAttributes(
       tail.push({
         type: "refBinding",
         to: s.target,
-        from: toExprRef(raw, loc, table, "IsProperty"),
+        from: toExprRef(raw, valueLoc, table, "IsProperty"),
         loc: toSpan(loc, table.source),
       });
       continue;
@@ -228,7 +232,7 @@ export function lowerElementAttributes(
       tail.push({
         type: "stylePropertyBinding",
         to: s.target,
-        from: toBindingSource(raw, loc, table, "IsProperty"),
+        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         loc: toSpan(loc, table.source),
       });
       continue;
@@ -238,7 +242,7 @@ export function lowerElementAttributes(
         type: "attributeBinding",
         attr: "class",
         to: "class",
-        from: toBindingSource(raw, loc, table, "IsProperty"),
+        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         loc: toSpan(loc, table.source),
       });
       continue;
@@ -248,7 +252,7 @@ export function lowerElementAttributes(
         type: "attributeBinding",
         attr: s.target,
         to: s.target,
-        from: toBindingSource(raw, loc, table, "IsProperty"),
+        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         loc: toSpan(loc, table.source),
       });
       continue;
@@ -256,7 +260,7 @@ export function lowerElementAttributes(
 
     const bindable = elementDef?.bindables[camelCase(s.target)];
     if (bindable) {
-      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, s.command);
+      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command);
       continue;
     }
 
@@ -271,7 +275,7 @@ export function lowerElementAttributes(
 
       let props: ElementBindableIR[];
       if (isMultiBinding) {
-        props = parseMultiBindings(raw, attrDef, attrParser, loc, table);
+        props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table);
       } else {
         props = [];
         const targetBindableName =
@@ -279,7 +283,7 @@ export function lowerElementAttributes(
             ? camelCase(s.target)
             : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
         if (targetBindableName) {
-          lowerBindable(props, targetBindableName, a.name, raw, loc, s.command);
+          lowerBindable(props, targetBindableName, a.name, raw, loc, valueLoc, s.command);
         }
       }
 
@@ -297,7 +301,7 @@ export function lowerElementAttributes(
       tail.push({
         type: "propertyBinding",
         to: camelCase(s.target),
-        from: toBindingSource(raw, loc, table, "IsProperty"),
+        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         mode: toMode(s.command, a.name),
         loc: toSpan(loc, table.source),
       });
@@ -309,7 +313,7 @@ export function lowerElementAttributes(
         type: "attributeBinding",
         attr: a.name,
         to: camelCase(a.name),
-        from: toInterpIR(raw, loc, table),
+        from: toInterpIR(raw, valueLoc, table),
         loc: toSpan(loc, table.source),
       });
       continue;

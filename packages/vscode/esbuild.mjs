@@ -33,10 +33,12 @@ const extensionBuild = esbuild.build({
 });
 
 // Language server bundle - use .cjs to avoid ESM/CJS conflict
+// TypeScript must be external so it can resolve its lib.d.ts files at runtime
 const serverBuild = esbuild.build({
   ...commonOptions,
   entryPoints: [join(__dirname, "../language-server/out/main.js")],
   outfile: join(distDir, "server/main.cjs"),
+  external: ["typescript"],
 });
 
 await Promise.all([extensionBuild, serverBuild]);

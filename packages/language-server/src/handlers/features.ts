@@ -4,22 +4,25 @@
  * Each handler is wrapped in try/catch to prevent exceptions from destabilizing
  * the LSP connection. Errors are logged and graceful fallbacks are returned.
  */
-import type {
-  CompletionItem,
-  Hover,
-  Definition,
-  Location,
-  WorkspaceEdit,
-  CodeAction,
-  TextDocumentPositionParams,
-  ReferenceParams,
-  RenameParams,
-  CodeActionParams,
-  CompletionParams,
+import {
+  SemanticTokensRequest,
+  type CompletionItem,
+  type Hover,
+  type Definition,
+  type Location,
+  type WorkspaceEdit,
+  type CodeAction,
+  type TextDocumentPositionParams,
+  type ReferenceParams,
+  type RenameParams,
+  type CodeActionParams,
+  type CompletionParams,
+  type SemanticTokensParams,
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
 import { mapCompletions, mapHover, mapLocations, mapWorkspaceEdit } from "../mapping/lsp-types.js";
+import { handleSemanticTokensFull, SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 
 function formatError(e: unknown): string {
   if (e instanceof Error) return e.stack ?? e.message;
@@ -119,4 +122,15 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
   ctx.connection.onReferences((params) => handleReferences(ctx, params));
   ctx.connection.onRenameRequest((params) => handleRename(ctx, params));
   ctx.connection.onCodeAction((params) => handleCodeAction(ctx, params));
+
+  // Semantic tokens for rich syntax highlighting
+  // Use onRequest instead of languages.semanticTokens.on for proper LSP handling
+  ctx.connection.onRequest(SemanticTokensRequest.type, (params) => {
+    const result = handleSemanticTokensFull(ctx, params);
+    // Return empty data array instead of null (LSP requires SemanticTokens, not null)
+    return result ?? { data: [] };
+  });
 }
+
+// Re-export legend for capability registration
+export { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";

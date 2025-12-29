@@ -2,7 +2,7 @@
   "name": "aurelia-2",
   "displayName": "Aurelia 2",
   "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "AureliaEffect",
   "icon": "images/logo.png",
   "type": "module",
@@ -29,6 +29,12 @@
     "onLanguage:html"
   ],
   "contributes": {
+    "snippets": [
+      {
+        "language": "html",
+        "path": "./snippets/aurelia.json"
+      }
+    ],
     "commands": [
       { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
       { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
@@ -45,6 +51,7 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
+    "typescript": "^5.7.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
