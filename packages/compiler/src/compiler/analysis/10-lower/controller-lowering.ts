@@ -332,9 +332,6 @@ function buildControllerPrototypes(
     loc: toSpan(loc, table.source),
   };
 
-  if (controller === "promise" || controller === "switch") {
-    return [{ res: controller, props: [valueProp] }];
-  }
   return [{ res: controller, props: [valueProp] }];
 }
 

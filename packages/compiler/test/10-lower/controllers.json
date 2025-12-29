@@ -497,5 +497,32 @@
         { "kind": "controllerValue", "command": "bind", "code": "b" }
       ]
     }
+  },
+  {
+    "name": "LC-37 promise with template pending branch",
+    "markup": "<div promise.bind=\"p\"><template pending>Loading...</template><template then=\"r\">${r}</template></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "r" }
+      ]
+    }
+  },
+  {
+    "name": "LC-38 promise with all three template branches",
+    "markup": "<div promise.bind=\"p\"><template pending>Wait...</template><template then=\"v\">${v}</template><template catch=\"e\">${e}</template></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "v" },
+        { "kind": "text", "code": "e" }
+      ]
+    }
   }
 ]
