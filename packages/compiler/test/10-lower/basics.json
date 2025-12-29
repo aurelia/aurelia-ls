@@ -340,5 +340,14 @@
         { "kind": "text", "code": "`hello ${name}`" }
       ]
     }
+  },
+  {
+    "name": "LB-39 attribute value with whitespace after equals",
+    "markup": "<div foo.bind=  \"x\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "x" }
+      ]
+    }
   }
 ]
