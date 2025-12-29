@@ -450,7 +450,10 @@ function linkHydrateTemplateController(
   host: NodeSem,
   ctx: ResolverContext,
 ): LinkedHydrateTemplateController {
-  const ctrlSem = resolveControllerSem(ctx.lookup, ins.res, ctx.diags, ins.loc);
+  // Resolve controller semantics (returns Diagnosed)
+  const ctrlSemDiagnosed = resolveControllerSem(ctx.lookup, ins.res, ins.loc);
+  ctx.diags.push(...ctrlSemDiagnosed.diagnostics as SemDiagnostic[]);
+  const ctrlSem = ctrlSemDiagnosed.value;
 
   // Map controller props
   const props = ins.props.map((p) => {

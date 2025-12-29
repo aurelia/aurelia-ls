@@ -1,6 +1,7 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { Semantics } from "../../language/registry.js";
+import type { ControllerConfig, Semantics } from "../../language/registry.js";
+import { getTriggerProp } from "../../language/registry.js";
 import type {
   HydrateTemplateControllerIR,
   InstructionIR,
@@ -12,7 +13,6 @@ import type {
   SourceSpan,
 } from "../../model/ir.js";
 import { resolveControllerAttr } from "./element-lowering.js";
-import type { ControllerName } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Loc, P5Node, P5Template } from "./lower-shared.js";
 import { attrLoc, attrValueLoc, findAttr, parseRepeatTailProps, toExprRef, toSpan } from "./lower-shared.js";
 import type { RowCollector } from "./template-builders.js";
@@ -24,26 +24,16 @@ import {
 } from "./template-builders.js";
 
 // -----------------------------------------------------------------------------
-// Controller Configuration Table
+// Trigger kind helpers
 // -----------------------------------------------------------------------------
 
-type ControllerConfig =
-  | { kind: "marker" }
-  | { kind: "iterator" }
-  | { kind: "literalOrBinding" }
-  | { kind: "property"; propName: string; promiseBranches?: boolean };
-
-const CONTROLLER_CONFIG: Record<ControllerName, ControllerConfig> = {
-  repeat: { kind: "iterator" },
-  else: { kind: "marker" },
-  case: { kind: "literalOrBinding" },
-  "default-case": { kind: "marker" },
-  promise: { kind: "property", propName: "value", promiseBranches: true },
-  switch: { kind: "property", propName: "value" },
-  if: { kind: "property", propName: "value" },
-  with: { kind: "property", propName: "value" },
-  portal: { kind: "property", propName: "target" },
-};
+/**
+ * Check if the controller has promise branches (then/catch/pending).
+ * This determines whether special branch injection is needed.
+ */
+function hasPromiseBranches(config: ControllerConfig): boolean {
+  return config.branches?.names.includes("then") ?? false;
+}
 
 // -----------------------------------------------------------------------------
 // Prop Builders
@@ -92,7 +82,7 @@ function buildPropertyProps(
   loc: P5Loc,
   table: ExprTable,
   propName: string,
-  controllerName: ControllerName
+  controllerName: string
 ): PropertyBindingIR {
   const exprText = raw.length === 0 ? controllerName : raw;
   return {
@@ -116,11 +106,11 @@ export function collectControllers(
   sem: Semantics,
   collectRows: RowCollector
 ): HydrateTemplateControllerIR[] {
-  const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; kind: ControllerName }[] = [];
+  const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; config: ControllerConfig }[] = [];
   for (const a of el.attrs ?? []) {
     const s = attrParser.parse(a.name, a.value ?? "");
-    const kind = resolveControllerAttr(s, sem);
-    if (kind) candidates.push({ a, s, kind });
+    const config = resolveControllerAttr(s, sem);
+    if (config) candidates.push({ a, s, config });
   }
   if (!candidates.length) return [];
 
@@ -132,10 +122,10 @@ export function collectControllers(
   for (let i = candidates.length - 2; i >= 0; i--) {
     const candidate = candidates[i];
     if (!candidate) continue;
-    const { a, s, kind } = candidate;
+    const { a, s, config } = candidate;
     const loc = attrLoc(el, a.name);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
-    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, kind);
+    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config);
 
     const nextLayer: HydrateTemplateControllerIR[] = [];
     for (const inner of current) {
@@ -162,7 +152,7 @@ export function collectControllers(
 // -----------------------------------------------------------------------------
 
 type ControllerPrototype = {
-  res: ControllerName;
+  res: string;
   props: (PropertyBindingIR | IteratorBindingIR)[];
 };
 
@@ -172,23 +162,29 @@ function buildControllerPrototype(
   table: ExprTable,
   loc: P5Loc,
   valueLoc: P5Loc,
-  kind: ControllerName
+  config: ControllerConfig
 ): ControllerPrototype {
   const raw = a.value ?? "";
-  const config = CONTROLLER_CONFIG[kind];
+  const name = config.name;
+  const trigger = config.trigger;
 
-  switch (config.kind) {
+  switch (trigger.kind) {
     case "marker":
-      return { res: kind, props: [] };
+      return { res: name, props: [] };
 
     case "iterator":
-      return { res: kind, props: [buildIteratorProps(raw, valueLoc, loc, table)] };
+      return { res: name, props: [buildIteratorProps(raw, valueLoc, loc, table)] };
 
-    case "literalOrBinding":
-      return { res: kind, props: [buildLiteralOrBindingProps(raw, valueLoc, loc, table, s.command)] };
+    case "branch":
+      // Branch controllers (else, case, then, etc.) may have literal or binding values
+      // Case has value.bind, else has no value
+      if (config.props?.["value"]) {
+        return { res: name, props: [buildLiteralOrBindingProps(raw, valueLoc, loc, table, s.command)] };
+      }
+      return { res: name, props: [] };
 
-    case "property":
-      return { res: kind, props: [buildPropertyProps(raw, valueLoc, loc, table, config.propName, kind)] };
+    case "value":
+      return { res: name, props: [buildPropertyProps(raw, valueLoc, loc, table, trigger.prop, name)] };
   }
 }
 
@@ -198,31 +194,31 @@ function buildControllerPrototype(
 
 function buildRightmostController(
   el: P5Element,
-  rightmost: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; kind: ControllerName },
+  rightmost: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; config: ControllerConfig },
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   sem: Semantics,
   collectRows: RowCollector
 ): HydrateTemplateControllerIR[] {
-  const { a, s, kind } = rightmost;
+  const { a, s, config } = rightmost;
   const loc = attrLoc(el, a.name);
   const valueLoc = attrValueLoc(el, a.name, table.sourceText);
   const raw = a.value ?? "";
-  const config = CONTROLLER_CONFIG[kind];
   const locSpan = toSpan(loc, table.source);
+  const name = config.name;
 
   // Build props based on controller type
-  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command, kind);
+  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command);
 
   // Promise needs special handling for branch injection
-  if (config.kind === "property" && config.promiseBranches) {
+  if (hasPromiseBranches(config)) {
     return buildPromiseController(el, props as PropertyBindingIR[], locSpan, attrParser, table, nestedTemplates, sem, collectRows);
   }
 
   // All other controllers just need the template definition
   const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
-  return [createHydrateInstruction(kind, def, props, locSpan)];
+  return [createHydrateInstruction(name, def, props, locSpan)];
 }
 
 function buildPropsForConfig(
@@ -231,23 +227,29 @@ function buildPropsForConfig(
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
-  command: string | null,
-  kind: ControllerName
+  command: string | null
 ): (PropertyBindingIR | IteratorBindingIR)[] {
-  switch (config.kind) {
+  const trigger = config.trigger;
+  const name = config.name;
+
+  switch (trigger.kind) {
     case "marker":
       return [];
     case "iterator":
       return [buildIteratorProps(raw, valueLoc, loc, table)];
-    case "literalOrBinding":
-      return [buildLiteralOrBindingProps(raw, valueLoc, loc, table, command)];
-    case "property":
-      return [buildPropertyProps(raw, valueLoc, loc, table, config.propName, kind)];
+    case "branch":
+      // Branch controllers (case) may have literal or binding values
+      if (config.props?.["value"]) {
+        return [buildLiteralOrBindingProps(raw, valueLoc, loc, table, command)];
+      }
+      return [];
+    case "value":
+      return [buildPropertyProps(raw, valueLoc, loc, table, trigger.prop, name)];
   }
 }
 
 function createHydrateInstruction(
-  res: ControllerName,
+  res: string,
   def: TemplateIR,
   props: (PropertyBindingIR | IteratorBindingIR)[],
   loc: SourceSpan | null

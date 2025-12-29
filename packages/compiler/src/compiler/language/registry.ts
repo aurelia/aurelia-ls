@@ -239,6 +239,458 @@ export interface LinkingController<R extends string, L extends string> {
 }
 
 /* =======================
+ * Unified Controller Configuration
+ * =======================
+ *
+ * Config-driven system for template controllers. All controllers (built-in and custom)
+ * are described by configuration primitives across 6 orthogonal axes:
+ *
+ * 1. Trigger Kind - what causes rendering (value, iterator, branch, marker)
+ * 2. Scope Behavior - how scope is affected (reuse, overlay)
+ * 3. Cardinality - how many times content renders (zero-one, zero-many, one-of-n, one)
+ * 4. Relationship - relation to other controllers (standalone, sibling, child)
+ * 5. DOM Placement - where content goes (in-place, teleported)
+ * 6. Injection Pattern - what variables are introduced (none, contextuals, alias)
+ *
+ * See `.claude/docs/controller-config-design.md` for full design rationale.
+ */
+
+/** What causes the controller to render its content. */
+export type ControllerTrigger =
+  | { kind: "value"; prop: string }                // Single expression: if, with, switch, promise, portal
+  | { kind: "iterator"; prop: string; command?: string }  // Collection iteration: repeat
+  | { kind: "branch"; parent: string }             // Linked to parent: else, case, then, catch, pending
+  | { kind: "marker" };                            // Presence-based: default-case
+
+/** How many times the controller's content can render. */
+export type ControllerCardinality =
+  | "zero-one"    // Conditional (0 or 1): if, else, case, pending
+  | "zero-many"   // Collection (0 to N): repeat
+  | "one-of-n"    // Exactly one branch: switch
+  | "one";        // Always once: with, portal
+
+/** Where the rendered content is placed. */
+export type ControllerPlacement =
+  | "in-place"    // Render at declaration site (all except portal)
+  | "teleported"; // Render at different location (portal)
+
+/** Valid child/sibling branch controllers. */
+export interface ControllerBranches {
+  /** Valid branch names for this controller. */
+  names: readonly string[];
+  /** Where to look for branches. */
+  relationship: "sibling" | "child";
+}
+
+/** Variables injected into scope by the controller. */
+export interface ControllerInjects {
+  /** Fixed variable names derived from iteration state (repeat contextuals). */
+  contextuals?: readonly string[];
+  /** User-named variable bound to a value (with, then, catch). */
+  alias?: {
+    /** Property name the alias binds to. */
+    prop: string;
+    /** Default name if user doesn't specify. */
+    defaultName: string;
+  };
+}
+
+/**
+ * Unified configuration for template controllers.
+ * Captures all semantic variations through orthogonal primitives.
+ *
+ * This interface supports both built-in controllers (if, repeat, etc.)
+ * and custom template controllers discovered via @templateController decorator.
+ */
+export interface ControllerConfig {
+  /** Canonical name (kebab-case). */
+  name: string;
+
+  // ===== Core Axes =====
+
+  /** What causes rendering. */
+  trigger: ControllerTrigger;
+
+  /** How scope behaves: 'reuse' (parent scope) or 'overlay' (new context). */
+  scope: ScopeBehavior;
+
+  /** How many times content renders (for type inference). */
+  cardinality?: ControllerCardinality;
+
+  /** Where content is placed. */
+  placement?: ControllerPlacement;
+
+  // ===== Relationships =====
+
+  /** Valid child/sibling branch controllers (for parent controllers like if, switch, promise). */
+  branches?: ControllerBranches;
+
+  /** Parent controller this links to (for branch controllers like else, case, then). */
+  linksTo?: string;
+
+  // ===== Scope Injection =====
+
+  /** Variables injected into scope. */
+  injects?: ControllerInjects;
+
+  // ===== Properties =====
+
+  /** Bindable properties. */
+  props?: Record<string, Bindable>;
+
+  /** Iterator tail props (repeat-specific: key, contextual). */
+  tailProps?: Record<string, IteratorTailPropSpec>;
+}
+
+/**
+ * Built-in controller configurations.
+ * These define the complete semantics for all Aurelia template controllers.
+ */
+export const BUILTIN_CONTROLLER_CONFIGS: Record<string, ControllerConfig> = {
+  // ===== Standalone Controllers =====
+
+  if: {
+    name: "if",
+    trigger: { kind: "value", prop: "value" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    branches: { names: ["else"], relationship: "sibling" },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "ts", name: "boolean" } },
+      cache: { name: "cache", mode: "default", type: { kind: "ts", name: "boolean" } },
+    },
+  },
+
+  repeat: {
+    name: "repeat",
+    trigger: { kind: "iterator", prop: "items", command: "for" },
+    scope: "overlay",
+    cardinality: "zero-many",
+    injects: {
+      contextuals: ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"],
+    },
+    tailProps: {
+      key: { name: "key", accepts: ["bind", null] },
+      contextual: { name: "contextual", accepts: ["bind", null] },
+    },
+  },
+
+  with: {
+    name: "with",
+    trigger: { kind: "value", prop: "value" },
+    scope: "overlay",
+    cardinality: "one",
+    injects: {
+      alias: { prop: "value", defaultName: "$this" },
+    },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "unknown" } },
+    },
+  },
+
+  switch: {
+    name: "switch",
+    trigger: { kind: "value", prop: "value" },
+    scope: "reuse",
+    cardinality: "one-of-n",
+    branches: { names: ["case", "default-case"], relationship: "child" },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "unknown" } },
+    },
+  },
+
+  promise: {
+    name: "promise",
+    trigger: { kind: "value", prop: "value" },
+    scope: "overlay",
+    cardinality: "one",
+    branches: { names: ["then", "catch", "pending"], relationship: "child" },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "ts", name: "Promise<unknown>" } },
+    },
+  },
+
+  portal: {
+    name: "portal",
+    trigger: { kind: "value", prop: "target" },
+    scope: "reuse",
+    cardinality: "one",
+    placement: "teleported",
+    props: {
+      target: { name: "target", mode: "default", type: { kind: "ts", name: "string | Element | null" } },
+      strict: { name: "strict", mode: "default", type: { kind: "ts", name: "boolean" } },
+      renderContext: { name: "renderContext", mode: "default", type: { kind: "ts", name: "Document | ShadowRoot" } },
+    },
+  },
+
+  // ===== Branch Controllers =====
+
+  else: {
+    name: "else",
+    trigger: { kind: "branch", parent: "if" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "if",
+  },
+
+  case: {
+    name: "case",
+    trigger: { kind: "branch", parent: "switch" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "switch",
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "unknown" } },
+      fallThrough: { name: "fallThrough", mode: "default", type: { kind: "ts", name: "boolean" } },
+    },
+  },
+
+  "default-case": {
+    name: "default-case",
+    trigger: { kind: "marker" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "switch",
+    props: {
+      fallThrough: { name: "fallThrough", mode: "default", type: { kind: "ts", name: "boolean" } },
+    },
+  },
+
+  pending: {
+    name: "pending",
+    trigger: { kind: "branch", parent: "promise" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "promise",
+  },
+
+  then: {
+    name: "then",
+    trigger: { kind: "branch", parent: "promise" },
+    scope: "overlay",
+    cardinality: "zero-one",
+    linksTo: "promise",
+    injects: {
+      alias: { prop: "value", defaultName: "data" },
+    },
+  },
+
+  catch: {
+    name: "catch",
+    trigger: { kind: "branch", parent: "promise" },
+    scope: "overlay",
+    cardinality: "zero-one",
+    linksTo: "promise",
+    injects: {
+      alias: { prop: "value", defaultName: "error" },
+    },
+  },
+};
+
+/**
+ * Stub controller config for degraded/unknown controllers.
+ * Used when a template controller is referenced but not found.
+ *
+ * - Uses 'overlay' scope to be maximally permissive for binding analysis
+ * - Named "__stub__" to clearly indicate it's not a real controller
+ * - Downstream code can check isStub() to detect degraded values
+ */
+export const STUB_CONTROLLER_CONFIG: ControllerConfig = {
+  name: "__stub__",
+  trigger: { kind: "value", prop: "value" },
+  scope: "overlay",
+  cardinality: "zero-one",
+};
+
+/**
+ * Look up a controller config by name.
+ * Returns the built-in config, or undefined if not found.
+ */
+export function getControllerConfig(name: string): ControllerConfig | undefined {
+  return BUILTIN_CONTROLLER_CONFIGS[name];
+}
+
+/**
+ * Check if a controller config represents a branch controller.
+ * Branch controllers link to a parent (else→if, case→switch, then→promise).
+ */
+export function isBranchController(config: ControllerConfig): boolean {
+  return config.trigger.kind === "branch" || config.trigger.kind === "marker";
+}
+
+/**
+ * Check if a controller config creates an overlay scope.
+ * Overlay scopes inject new variables or change the binding context.
+ */
+export function isOverlayController(config: ControllerConfig): boolean {
+  return config.scope === "overlay";
+}
+
+/**
+ * Get the primary trigger property name for a controller.
+ * Returns the prop name for value/iterator triggers, undefined for branch/marker.
+ */
+export function getTriggerProp(config: ControllerConfig): string | undefined {
+  if (config.trigger.kind === "value" || config.trigger.kind === "iterator") {
+    return config.trigger.prop;
+  }
+  return undefined;
+}
+
+/**
+ * Convert a legacy controller from the Controllers interface to ControllerConfig.
+ * Used for backward compatibility during migration.
+ *
+ * @param name - The controller name (e.g., "repeat", "if")
+ * @param controller - The legacy controller definition from Controllers interface
+ * @returns ControllerConfig equivalent
+ */
+export function toControllerConfig(
+  name: string,
+  controller: Controllers[keyof Controllers]
+): ControllerConfig {
+  // First check if we have a built-in config (preferred)
+  const builtin = BUILTIN_CONTROLLER_CONFIGS[name];
+  if (builtin) return builtin;
+
+  // Fall back to converting from legacy format
+  // This handles custom TCs that might be added to Controllers dynamically
+  if (controller.kind === "linking-controller") {
+    // Branch controller (else)
+    return {
+      name,
+      trigger: { kind: "branch", parent: controller.linksTo },
+      scope: controller.scope,
+      linksTo: controller.linksTo,
+    };
+  }
+
+  // For standard controllers, infer from res field
+  const res = controller.res;
+
+  // Repeat controller
+  if (res === "repeat" && "iteratorProp" in controller) {
+    const repeat = controller as RepeatController;
+    return {
+      name,
+      trigger: { kind: "iterator", prop: repeat.iteratorProp, command: "for" },
+      scope: repeat.scope,
+      cardinality: "zero-many",
+      injects: { contextuals: [...repeat.contextuals] },
+      tailProps: repeat.tailProps,
+    };
+  }
+
+  // Switch controller
+  if (res === "switch" && "branches" in controller) {
+    const sw = controller as SwitchController;
+    return {
+      name,
+      trigger: { kind: "value", prop: "value" },
+      scope: sw.scope,
+      cardinality: "one-of-n",
+      branches: { names: [...sw.branches], relationship: "child" },
+      props: sw.props,
+    };
+  }
+
+  // Promise controller
+  if (res === "promise" && "branches" in controller) {
+    const prom = controller as PromiseController;
+    return {
+      name,
+      trigger: { kind: "value", prop: "value" },
+      scope: prom.scope,
+      cardinality: "one",
+      branches: { names: [...prom.branches], relationship: "child" },
+      props: prom.props,
+    };
+  }
+
+  // Portal controller
+  if (res === "portal") {
+    const portal = controller as PortalController;
+    return {
+      name,
+      trigger: { kind: "value", prop: "target" },
+      scope: portal.scope,
+      cardinality: "one",
+      placement: "teleported",
+      props: portal.props,
+    };
+  }
+
+  // Case controller
+  if (res === "case" && "linksTo" in controller) {
+    const caseCtrl = controller as CaseController;
+    return {
+      name,
+      trigger: { kind: "branch", parent: caseCtrl.linksTo },
+      scope: caseCtrl.scope,
+      cardinality: "zero-one",
+      linksTo: caseCtrl.linksTo,
+      props: caseCtrl.props,
+    };
+  }
+
+  // Default-case controller
+  if (res === "default-case" && "linksTo" in controller) {
+    const dc = controller as DefaultCaseController;
+    return {
+      name,
+      trigger: { kind: "marker" },
+      scope: dc.scope,
+      cardinality: "zero-one",
+      linksTo: dc.linksTo,
+      props: dc.props,
+    };
+  }
+
+  // Simple controllers (if, with)
+  if ("props" in controller) {
+    const simple = controller as SimpleController<"if" | "with">;
+    const isOverlay = simple.scope === "overlay";
+    return {
+      name,
+      trigger: { kind: "value", prop: "value" },
+      scope: simple.scope,
+      cardinality: isOverlay ? "one" : "zero-one",
+      injects: isOverlay ? { alias: { prop: "value", defaultName: "$this" } } : undefined,
+      props: simple.props,
+    };
+  }
+
+  // Fallback: minimal config
+  return {
+    name,
+    trigger: { kind: "value", prop: "value" },
+    scope: "reuse",
+  };
+}
+
+/**
+ * Create a default ControllerConfig for a custom template controller.
+ * Used when resolution discovers a custom TC via @templateController decorator.
+ *
+ * @param name - Controller name (kebab-case)
+ * @param primaryBindable - Optional primary bindable property name
+ * @returns Default ControllerConfig for custom TC
+ */
+export function createCustomControllerConfig(
+  name: string,
+  primaryBindable?: string | null,
+  bindables?: Record<string, Bindable>
+): ControllerConfig {
+  return {
+    name,
+    trigger: { kind: "value", prop: primaryBindable ?? "value" },
+    scope: "overlay", // Standard TC behavior: creates overlay scope
+    cardinality: "zero-one",
+    props: bindables,
+  };
+}
+
+/* =======================
  * DOM & Events
  * ======================= */
 

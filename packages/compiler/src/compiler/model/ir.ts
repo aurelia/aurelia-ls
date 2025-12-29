@@ -267,7 +267,18 @@ export interface HydrateAttributeIR {
 
 /* ---- Template controllers & branches ---- */
 
-export type TemplateControllerRes = 'repeat' | 'with' | 'if' | 'else' | 'switch' | 'promise' | 'portal' | 'case' | 'default-case';
+/**
+ * Built-in template controller resource names.
+ * Custom template controllers can use any string name.
+ */
+export type BuiltinTemplateControllerRes = 'repeat' | 'with' | 'if' | 'else' | 'switch' | 'promise' | 'portal' | 'case' | 'default-case';
+
+/**
+ * Template controller resource name.
+ * Includes built-in controllers plus any custom TC name (string).
+ */
+export type TemplateControllerRes = BuiltinTemplateControllerRes | (string & {});
+
 export type TemplateControllerAlias = 'then' | 'catch' | 'case' | 'default';
 
 export type ControllerBranchInfo =
@@ -280,7 +291,7 @@ export type ControllerBranchInfo =
 // For promise/switch, branch alias/local is represented structurally via `branch`.
 export interface HydrateTemplateControllerIR {
   type: 'hydrateTemplateController';
-  res: TemplateControllerRes; // e.g., 'repeat', 'if', 'with', 'promise', 'switch', 'portal'
+  res: TemplateControllerRes; // e.g., 'repeat', 'if', 'with', or custom TC name
   def: TemplateIR;            // nested template/view
   props: ControllerBindableIR[];
   alias?: TemplateControllerAlias | null; // branch alias when applicable (informational)

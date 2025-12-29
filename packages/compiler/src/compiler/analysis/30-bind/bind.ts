@@ -27,7 +27,6 @@ import type {
   ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic, ScopeDiagCode, OverlayBase, FrameOrigin,
 } from "../../model/symbols.js";
 
-import type { RepeatController } from "../../language/registry.js";
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
@@ -220,7 +219,7 @@ function walkRows(
                 names.map(n => ({ kind: "repeatLocal" as const, name: n, span: iter.forOf.loc ?? null })),
                 diags,
               );
-              for (const c of (ins.controller.spec as RepeatController).contextuals) {
+              for (const c of ins.controller.config.injects?.contextuals ?? []) {
                 addUniqueSymbols(nextFrame, frames, [{ kind: "repeatContextual", name: c, span: iter.forOf.loc ?? null }], diags);
               }
               break;
@@ -264,7 +263,9 @@ function walkRows(
               break;
 
             default:
-              assertUnreachable(ins);
+              // Custom template controllers: use config to determine behavior
+              // For now, just proceed with the chosen frame (based on config.scope)
+              break;
           }
 
           // 4) Recurse into nested template view using the chosen frame
@@ -273,7 +274,7 @@ function walkRows(
             // For nested views:
             // - overlay scope (repeat/with/promise): their <let> belong to that overlay frame
             // - reuse scope (if/switch/portal): their <let> must not leak to the whole frame
-            const childAllowsLets = ins.controller.spec.scope === "overlay";
+            const childAllowsLets = ins.controller.config.scope === "overlay";
             walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs, childAllowsLets);
           }
           break;
@@ -300,7 +301,7 @@ function enterControllerFrame(
   frames: ScopeFrame[],
   frameIds: FrameIdAllocator,
 ): FrameId {
-  switch (ctrl.controller.spec.scope) {
+  switch (ctrl.controller.config.scope) {
     case "overlay": {
       const id = frameIds.allocate();
       frames.push({ id, parent: current, kind: "overlay", overlay: null, symbols: [], origin: null, letValueExprs: null });

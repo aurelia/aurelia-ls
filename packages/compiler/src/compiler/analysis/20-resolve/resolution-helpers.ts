@@ -2,6 +2,11 @@ import type { SourceSpan } from "../../model/ir.js";
 import type { BindingMode, HydrateAttributeIR, HydrateElementIR } from "../../model/ir.js";
 import type { Bindable } from "../../language/registry.js";
 import type { SemanticsLookup } from "../../language/registry.js";
+import {
+  getControllerConfig,
+  STUB_CONTROLLER_CONFIG,
+  createCustomControllerConfig,
+} from "../../language/registry.js";
 import type {
   AttrResRef,
   ControllerSem,
@@ -14,6 +19,7 @@ import type {
 } from "./types.js";
 import { camelCase } from "./name-normalizer.js";
 import { buildDiagnostic, type CompilerDiagnostic } from "../../shared/diagnostics.js";
+import { type Diagnosed, pure, diag, withStub } from "../../shared/diagnosed.js";
 
 export function pushDiag(diags: SemDiagnostic[], code: SemDiagCode, message: string, span?: SourceSpan | null): void {
   const diag: CompilerDiagnostic = buildDiagnostic({
@@ -67,68 +73,60 @@ export function resolveAttrTarget(host: NodeSem, to: string): TargetSem {
   return { kind: "unknown", reason: host.kind === "element" ? "no-prop" : "no-element" };
 }
 
+/**
+ * Resolve controller semantics using unified ControllerConfig.
+ *
+ * Resolution order:
+ * 1. Built-in controller configs (if, repeat, with, etc.)
+ * 2. Custom template controllers in attributes (via @templateController decorator)
+ *
+ * Returns Diagnosed<ControllerSem>:
+ * - On success: pure({ res, config }) with no diagnostics
+ * - On failure: diag(AU1101, { res, config: STUB }) with stub controller
+ *
+ * The stub config is marked with isStub() to enable cascade suppression.
+ */
 export function resolveControllerSem(
   lookup: SemanticsLookup,
   res: string,
-  diags: SemDiagnostic[],
   span: SourceSpan | null | undefined,
-): ControllerSem {
-  const sem = lookup.sem;
-  switch (res) {
-    case "repeat":
-      return { res, spec: sem.resources.controllers.repeat };
-    case "with":
-      return { res, spec: sem.resources.controllers.with };
-    case "promise":
-      return { res, spec: sem.resources.controllers.promise };
-    case "if":
-      return { res, spec: sem.resources.controllers.if };
-    case "switch":
-      return { res, spec: sem.resources.controllers.switch };
-    case "portal":
-      return { res, spec: sem.resources.controllers.portal };
-    case "else":
-      // Linking controller - linked to preceding 'if' at runtime via Else.link()
-      return { res, spec: { kind: "linking-controller", res: "else", linksTo: "if", scope: "reuse" } };
-    case "case":
-      // Linking controller - linked to parent 'switch' at runtime via Case.link()
-      return { res, spec: { kind: "linking-controller", res: "case", linksTo: "switch", scope: "reuse" } };
-    case "default-case":
-      // Linking controller - linked to parent 'switch' at runtime via DefaultCase.link()
-      return { res, spec: { kind: "linking-controller", res: "default-case", linksTo: "switch", scope: "reuse" } };
-    default:
-      pushDiag(diags, "AU1101", `Unknown controller '${res}'.`, span);
-      // Fallback to 'with' shape to keep traversal alive
-      return { res: "with", spec: { kind: "controller", res: "with", scope: "overlay", props: { value: { name: "value" } } } };
+): Diagnosed<ControllerSem> {
+  // 1. Check built-in controller configs
+  const builtinConfig = getControllerConfig(res);
+  if (builtinConfig) {
+    return pure({ res, config: builtinConfig });
   }
+
+  // 2. Check custom TCs in attributes (discovered via @templateController decorator)
+  const customAttr = lookup.attribute(res);
+  if (customAttr?.isTemplateController) {
+    const customConfig = createCustomControllerConfig(
+      customAttr.name,
+      customAttr.primary,
+      customAttr.bindables
+    );
+    return pure({ res, config: customConfig });
+  }
+
+  // 3. Unknown controller - return stub + diagnostic
+  const diagnostic = buildDiagnostic({
+    code: "AU1101" as SemDiagCode,
+    message: `Unknown template controller '${res}'.`,
+    span,
+    source: "resolve-host",
+  });
+
+  const stubConfig = withStub({ ...STUB_CONTROLLER_CONFIG }, { span: span ?? undefined, diagnostic });
+  return diag(diagnostic, { res, config: stubConfig });
 }
 
+/**
+ * Resolve a controller's bindable property by name.
+ * Uses the unified ControllerConfig.props lookup.
+ */
 export function resolveControllerBindable(ctrl: ControllerSem, prop: string): Bindable {
-  switch (ctrl.res) {
-    case "repeat": {
-      // repeat header tail options are not bindables; iterator handled separately.
-      return { name: prop };
-    }
-    case "with":
-    case "promise":
-    case "if":
-    case "switch":
-    case "portal": {
-      const b = ctrl.spec.props[prop];
-      return b ?? { name: prop };
-    }
-    case "else":
-      // else controller has no bindable props
-      return { name: prop };
-    case "case":
-      // case controller has 'value' bindable prop
-      return prop === "value" ? { name: "value" } : { name: prop };
-    case "default-case":
-      // default-case controller has no bindable props
-      return { name: prop };
-    default:
-      return unreachable(ctrl);
-  }
+  // Config-driven: look up in controller's props, fall back to default bindable
+  return ctrl.config.props?.[prop] ?? { name: prop };
 }
 
 /**

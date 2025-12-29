@@ -909,6 +909,10 @@ function transformController(
       return transformPromiseController(ins, instructionsByTarget, controllerFrame, ctx);
     case "portal":
       return transformPortalController(ins, instructionsByTarget, controllerFrame, ctx);
+    default:
+      // Custom template controllers - for now, treat as simple controllers like 'with'
+      // TODO: Generate proper plan for custom TCs based on their config
+      return transformWithController(ins, instructionsByTarget, controllerFrame, ctx);
   }
 }
 
@@ -918,7 +922,7 @@ function findControllerFrame(
   ctx: PlanningContext,
 ): FrameId {
   // For overlay scope controllers, find the child frame
-  if (ins.controller.spec.scope === "overlay") {
+  if (ins.controller.config.scope === "overlay") {
     const scopeTemplate = ctx.scope.templates[0];
     if (scopeTemplate) {
       const frame = scopeTemplate.frames.find(f =>
@@ -946,10 +950,8 @@ function transformRepeatController(
   // Extract locals from ForOfStatement
   const locals = extractIteratorLocals(iteratorBinding.forOf.astId, ctx);
 
-  // Extract contextuals from controller spec
-  const contextuals = ins.controller.spec.scope === "overlay"
-    ? (ins.controller.spec as { contextuals?: string[] }).contextuals ?? []
-    : [];
+  // Extract contextuals from controller config (convert to mutable array)
+  const contextuals = [...(ins.controller.config.injects?.contextuals ?? [])];
 
   // Handle key expression
   let keyExprId: ExprId | undefined;

@@ -22,14 +22,9 @@ import type {
   AttrRes,
   DomElement,
   DomProp,
-  RepeatController,
-  SimpleController,
-  PromiseController,
-  SwitchController,
-  PortalController,
-  LinkingController,
   Bindable,
   TypeRef,
+  ControllerConfig,
 } from "../../language/registry.js";
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 
@@ -279,7 +274,8 @@ export interface IteratorAuxSpec {
  */
 export interface LinkedHydrateTemplateController extends BaseLinked {
   kind: "hydrateTemplateController";
-  res: "repeat" | "with" | "promise" | "if" | "else" | "switch" | "portal" | "case" | "default-case";
+  /** Controller name (built-in like "repeat", "if", or custom TC name). */
+  res: string;
   def: TemplateIR;
   controller: ControllerSem;
   props: (LinkedPropertyBinding | LinkedIteratorBinding)[];
@@ -318,13 +314,23 @@ export type TargetSem =
  * Controller resolution
  * =========================== */
 
-export type ControllerSem =
-  | { res: "repeat";  spec: RepeatController }
-  | { res: "with";    spec: SimpleController<"with"> }
-  | { res: "promise"; spec: PromiseController }
-  | { res: "if";      spec: SimpleController<"if"> }
-  | { res: "else";    spec: LinkingController<"else", "if"> }
-  | { res: "switch";  spec: SwitchController }
-  | { res: "case";    spec: LinkingController<"case", "switch"> }
-  | { res: "default-case"; spec: LinkingController<"default-case", "switch"> }
-  | { res: "portal";  spec: PortalController };
+/**
+ * Resolved controller semantics.
+ *
+ * Uses the unified ControllerConfig for all controllers (built-in and custom).
+ * The config provides:
+ * - trigger: what causes rendering (value, iterator, branch, marker)
+ * - scope: how scope behaves (reuse, overlay)
+ * - props: bindable properties
+ * - injects: scope-injected variables (contextuals, alias)
+ * - branches: valid child/sibling controllers
+ * - linksTo: parent controller for branch controllers
+ *
+ * When a controller is unknown, the config will be a stub (check with isStub()).
+ */
+export interface ControllerSem {
+  /** Controller name (e.g., "repeat", "if", or custom TC name). */
+  res: string;
+  /** Unified configuration defining controller behavior. */
+  config: ControllerConfig;
+}
