@@ -32,6 +32,7 @@ import {
 
 import {
   extractTokens,
+  extractBindingCommandTokens,
   buildNodeMap,
   encodeTokens,
   type RawToken,
@@ -319,7 +320,62 @@ describe("Semantic Tokens + Resolution Integration", () => {
   });
 
   // =========================================================================
-  // Section 4: Self-closed custom elements
+  // Section 4: Custom elements inside template controllers
+  // =========================================================================
+
+  describe("Custom elements inside template controllers", () => {
+    it("generates token for custom element inside if.bind", () => {
+      const markup = `<div if.bind="show"><nav-bar></nav-bar></div>`;
+      const { linked } = compileTemplateForSemanticTokens(markup, rootSemantics);
+
+      const template = linked.templates[0]!;
+      const nodeMap = buildNodeMap(template.dom);
+
+      // Merge tokens from both sources, like the handler does
+      const elementTokens = extractTokens(markup, template.rows, nodeMap);
+      const commandTokens = extractBindingCommandTokens(markup, template.rows);
+      const tokens = [...elementTokens, ...commandTokens];
+
+      // Filter to just the nav-bar tokens (type 0 = namespace)
+      const navBarTokens = tokens.filter((t) => t.length === "nav-bar".length && t.type === 0);
+      expect(navBarTokens.length, "has tokens for nav-bar inside if").toBe(2);
+    });
+
+    it("generates token for custom element inside repeat.for", () => {
+      const markup = `<div repeat.for="item of items"><user-card></user-card></div>`;
+      const { linked } = compileTemplateForSemanticTokens(markup, rootSemantics);
+
+      const template = linked.templates[0]!;
+      const nodeMap = buildNodeMap(template.dom);
+
+      const elementTokens = extractTokens(markup, template.rows, nodeMap);
+      const commandTokens = extractBindingCommandTokens(markup, template.rows);
+      const tokens = [...elementTokens, ...commandTokens];
+
+      // Filter to just the user-card tokens (type 0 = namespace)
+      const userCardTokens = tokens.filter((t) => t.length === "user-card".length && t.type === 0);
+      expect(userCardTokens.length, "has tokens for user-card inside repeat").toBe(2);
+    });
+
+    it("generates tokens for deeply nested custom element", () => {
+      const markup = `<div if.bind="a"><div if.bind="b"><nav-bar></nav-bar></div></div>`;
+      const { linked } = compileTemplateForSemanticTokens(markup, rootSemantics);
+
+      const template = linked.templates[0]!;
+      const nodeMap = buildNodeMap(template.dom);
+
+      const elementTokens = extractTokens(markup, template.rows, nodeMap);
+      const commandTokens = extractBindingCommandTokens(markup, template.rows);
+      const tokens = [...elementTokens, ...commandTokens];
+
+      // Filter to just the nav-bar tokens (type 0 = namespace)
+      const navBarTokens = tokens.filter((t) => t.length === "nav-bar".length && t.type === 0);
+      expect(navBarTokens.length, "has tokens for deeply nested nav-bar").toBe(2);
+    });
+  });
+
+  // =========================================================================
+  // Section 5: Self-closed custom elements
   // =========================================================================
 
   describe("Self-closed custom elements", () => {

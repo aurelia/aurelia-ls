@@ -265,6 +265,101 @@ describe("Semantic Tokens - Template Controllers", () => {
     expect(tokens.length).toBe(1);
     verifyTokenPosition(text, tokens[0]!, "else");
   });
+
+  it("highlights 'switch' and 'bind' in switch.bind", () => {
+    const markup = `<div switch.bind="status">Content</div>`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    // Should have 'switch' (keyword) and 'bind' (parameter)
+    expect(tokens.length).toBe(2);
+
+    const switchToken = tokens.find(t => t.length === 6);
+    const bindToken = tokens.find(t => t.length === 4);
+
+    expect(switchToken).toBeDefined();
+    expect(bindToken).toBeDefined();
+
+    verifyTokenPosition(text, switchToken!, "switch");
+    verifyTokenPosition(text, bindToken!, "bind");
+  });
+
+  it("highlights 'case' in case attribute", () => {
+    const markup = `<div switch.bind="status"><span case="active">Active</span></div>`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    // Should have 'switch' (keyword), 'bind' (parameter), and 'case' (keyword)
+    expect(tokens.length).toBe(3);
+
+    const caseToken = tokens.find(t => {
+      const lines = text.split("\n");
+      const line = lines[t.line] ?? "";
+      return line.slice(t.char, t.char + t.length) === "case";
+    });
+
+    expect(caseToken, "Should find case token").toBeDefined();
+    verifyTokenPosition(text, caseToken!, "case");
+  });
+
+  it("highlights 'default-case' keyword", () => {
+    const markup = `<div switch.bind="status"><span default-case>Unknown</span></div>`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    const defaultCaseToken = tokens.find(t => t.length === 12);
+    expect(defaultCaseToken, "Should find default-case token").toBeDefined();
+    verifyTokenPosition(text, defaultCaseToken!, "default-case");
+  });
+
+  it("highlights nested template controllers (if inside if)", () => {
+    const markup = `<div if.bind="outer"><span if.bind="inner">Nested</span></div>`;
+    const { tokens } = getBindingTokens(markup);
+
+    // Should have: outer 'if', outer 'bind', inner 'if', inner 'bind'
+    expect(tokens.length).toBe(4);
+  });
+
+  it("highlights binding commands inside template controllers", () => {
+    const markup = `<div if.bind="show"><button click.trigger="doIt()">Click</button></div>`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    // Should have: 'if', 'bind', 'trigger'
+    const triggerToken = tokens.find(t => {
+      const lines = text.split("\n");
+      const line = lines[t.line] ?? "";
+      return line.slice(t.char, t.char + t.length) === "trigger";
+    });
+
+    expect(triggerToken, "Should find nested trigger token").toBeDefined();
+  });
+
+  it("highlights custom attributes inside template controllers", () => {
+    // Custom attribute 'focus' nested inside 'if'
+    const markup = `<div if.bind="show"><input focus.bind="shouldFocus"></div>`;
+    const { tokens } = getBindingTokens(markup);
+
+    // Should have: if, bind, focus (namespace), bind
+    expect(tokens.length).toBeGreaterThan(2); // At least if + bind + something for focus
+  });
+
+  it("highlights repeat.for inside if.bind", () => {
+    const markup = `<div if.bind="show"><ul><li repeat.for="item of items">\${item}</li></ul></div>`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    // Should have: 'if', 'bind', 'repeat', 'for'
+    const repeatToken = tokens.find(t => {
+      const lines = text.split("\n");
+      const line = lines[t.line] ?? "";
+      return line.slice(t.char, t.char + t.length) === "repeat";
+    });
+
+    const forToken = tokens.find(t => {
+      const lines = text.split("\n");
+      const line = lines[t.line] ?? "";
+      return line.slice(t.char, t.char + t.length) === "for";
+    });
+
+    expect(repeatToken, "Should find nested repeat token").toBeDefined();
+    expect(forToken, "Should find nested for token").toBeDefined();
+  });
 });
 
 /* ===========================

@@ -736,14 +736,6 @@ const BINDING_COMMANDS = new Set([
 ]);
 
 /**
- * Template controller names for keyword highlighting.
- */
-const TEMPLATE_CONTROLLERS = new Set([
-  "repeat", "if", "else", "switch", "with", "promise", "portal",
-  "case", "default-case", "then", "catch", "pending",
-]);
-
-/**
  * Extract semantic tokens for binding commands and template controllers.
  * Handles property bindings, listener bindings, custom attributes, and template controllers.
  */
@@ -868,7 +860,146 @@ function extractBindingTokensFromInstruction(
       if (cmdInfo && cmdInfo.command !== res) { // Don't double-highlight
         emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
       }
+
+      // Recursively process nested template (case, default-case inside switch, etc.)
+      const def = ins.def;
+      if (def?.rows) {
+        for (const row of def.rows) {
+          for (const nestedIns of row.instructions) {
+            extractBindingTokensFromIR(nestedIns, text, tokens);
+          }
+        }
+      }
       break;
+    }
+  }
+}
+
+/**
+ * Extract binding tokens from an IR instruction (nested inside template controllers).
+ * IR instructions use `type` instead of `kind`.
+ */
+function extractBindingTokensFromIR(
+  ins: { type?: string; res?: string; loc?: SourceSpan | null; def?: { rows: { instructions: unknown[] }[] } },
+  text: string,
+  tokens: RawToken[],
+): void {
+  const loc = ins.loc;
+  if (!loc) return;
+
+  const attrText = text.slice(loc.start, loc.end);
+  const eqPos = attrText.indexOf("=");
+  const rawAttrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
+  const attrName = rawAttrName.trim();
+  const whitespaceOffset = rawAttrName.indexOf(attrName);
+
+  // Handle hydrateTemplateController (case, default-case, etc.)
+  if (ins.type === "hydrateTemplateController" && ins.res) {
+    const res = ins.res;
+    const controllerPos = attrName.indexOf(res);
+    if (controllerPos !== -1) {
+      const { line, char } = offsetToLineChar(text, loc.start + whitespaceOffset + controllerPos);
+      tokens.push({
+        line,
+        char,
+        length: res.length,
+        type: TokenType.keyword,
+        modifiers: 0,
+      });
+    }
+
+    // Also highlight any binding command
+    const cmdInfo = findBindingCommandInAttr(attrName);
+    if (cmdInfo && cmdInfo.command !== res) {
+      emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+    }
+
+    // Recurse into nested templates
+    if (ins.def?.rows) {
+      for (const row of ins.def.rows) {
+        for (const nestedIns of row.instructions) {
+          extractBindingTokensFromIR(nestedIns as typeof ins, text, tokens);
+        }
+      }
+    }
+    return;
+  }
+
+  // Handle hydrateAttribute (custom attributes like focus, tooltip)
+  if (ins.type === "hydrateAttribute" && ins.res) {
+    const cmdInfo = findBindingCommandInAttr(attrName);
+    if (cmdInfo) {
+      emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+    }
+    // Also highlight the custom attribute name itself
+    const attrNameOnly = cmdInfo ? attrName.slice(0, cmdInfo.position - 1) : attrName;
+    if (attrNameOnly.length > 0) {
+      const { line, char } = offsetToLineChar(text, loc.start + whitespaceOffset);
+      tokens.push({
+        line,
+        char,
+        length: attrNameOnly.length,
+        type: TokenType.namespace, // Custom attributes
+        modifiers: 0,
+      });
+    }
+    return;
+  }
+
+  // Handle refBinding (ref, element.ref, view-model.ref)
+  if (ins.type === "refBinding") {
+    if (attrName === "ref") {
+      emitCommandToken(text, loc.start + whitespaceOffset, 3, tokens);
+    } else {
+      const cmdInfo = findBindingCommandInAttr(attrName);
+      if (cmdInfo) {
+        emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+      }
+    }
+    return;
+  }
+
+  // Handle hydrateElement (custom element inside template controller)
+  if (ins.type === "hydrateElement" && ins.res) {
+    const elementName = ins.res as string;
+
+    // Opening tag: <element-name
+    // Tag name starts at loc.start + 1 (after '<')
+    const openTagStart = loc.start + 1;
+    const { line: openLine, char: openChar } = offsetToLineChar(text, openTagStart);
+    tokens.push({
+      line: openLine,
+      char: openChar,
+      length: elementName.length,
+      type: TokenType.namespace,
+      modifiers: 0,
+    });
+
+    // Closing tag: </element-name>
+    const closeTagPattern = `</${elementName}>`;
+    const closeTagStart = text.lastIndexOf(closeTagPattern, loc.end);
+    if (closeTagStart !== -1 && closeTagStart > loc.start) {
+      const closeTagNameStart = closeTagStart + 2; // after '</'
+      const { line: closeLine, char: closeChar } = offsetToLineChar(text, closeTagNameStart);
+      tokens.push({
+        line: closeLine,
+        char: closeChar,
+        length: elementName.length,
+        type: TokenType.namespace,
+        modifiers: 0,
+      });
+    }
+    // Note: Also handle binding commands on the custom element's attributes
+    // The hydrateElement may have its own props that need highlighting
+    return;
+  }
+
+  // Handle other IR instruction types that may have binding commands
+  if (ins.type === "propertyBinding" || ins.type === "attributeBinding" ||
+      ins.type === "listenerBinding" || ins.type === "stylePropertyBinding") {
+    const cmdInfo = findBindingCommandInAttr(attrName);
+    if (cmdInfo) {
+      emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
     }
   }
 }
