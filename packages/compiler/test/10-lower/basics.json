@@ -349,5 +349,14 @@
         { "kind": "propCommand", "command": "bind", "code": "x" }
       ]
     }
+  },
+  {
+    "name": "LB-40 repeat.bind is NOT a controller (wrong command)",
+    "markup": "<div repeat.bind=\"items\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "items" }
+      ]
+    }
   }
 ]

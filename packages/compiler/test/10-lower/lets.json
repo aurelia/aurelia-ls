@@ -82,5 +82,13 @@
         { "name": "foo", "toBindingContext": false, "hasValue": true }
       ]
     }
+  },
+  {
+    "name": "LL-08 static let value is currently dropped (no interpolation, no command)",
+    "markup": "<let foo=\"bar\"></let>",
+    "expect": {
+      "lets": [],
+      "expressions": []
+    }
   }
 ]

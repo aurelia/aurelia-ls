@@ -271,5 +271,27 @@
         { "res": "nav", "alias": null, "props": [ "route", "title" ] }
       ]
     }
+  },
+  {
+    "name": "LR-11 custom attribute with no bindables (fallback to null path)",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "marker": {
+            "kind": "attribute",
+            "name": "marker",
+            "isTemplateController": false,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<div marker=\"some-value\"></div>",
+    "expect": {
+      "expressions": [],
+      "attributes": [
+        { "res": "marker", "alias": null, "props": [] }
+      ]
+    }
   }
 ]
