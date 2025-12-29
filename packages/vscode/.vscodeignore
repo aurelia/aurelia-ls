@@ -2,6 +2,8 @@
 src/**
 out/**
 test/**
+
+# Exclude root node_modules (TypeScript is copied to dist/node_modules by esbuild.mjs)
 node_modules/**
 
 # Config files

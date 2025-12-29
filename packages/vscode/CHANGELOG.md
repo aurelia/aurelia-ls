@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+### Fixes
+
+- Fixed extension crash on startup: TypeScript was not being bundled with the extension, causing "Cannot find module 'typescript'" error
+
 ## 0.3.0
 
 ### Semantic Tokens
