@@ -222,7 +222,17 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
           out.controllers.push(ctrl);
           for (const p of ins.props ?? []) {
             if (p.type === "iteratorBinding") {
-              out.expressions.push({ kind: "iterator" });
+              out.expressions.push({ kind: "iterator", code: p.forOf?.code });
+              // Handle repeat tail props (key.bind, etc.)
+              for (const tailProp of p.props ?? []) {
+                if (tailProp.type === "multiAttr" && tailProp.command) {
+                  out.expressions.push({
+                    kind: "propCommand",
+                    code: tailProp.from?.code,
+                    command: tailProp.command,
+                  });
+                }
+              }
             } else if (p.type === "propertyBinding") {
               const isControllerValue =
                 p.to === "value" ||

@@ -53,7 +53,7 @@
         { "name": "with" }
       ],
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "i of ii" },
         { "kind": "controllerValue", "command": "bind", "code": "if" },
         { "kind": "controllerValue", "command": "bind", "code": "with" }
       ]
@@ -85,7 +85,7 @@
         { "name": "with" }
       ],
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "i of items" },
         { "kind": "controllerValue", "command": "bind", "code": "cond" },
         { "kind": "controllerValue", "command": "bind", "code": "ctx" }
       ]
@@ -283,7 +283,7 @@
         { "name": "repeat" }
       ],
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "i of items" },
         { "kind": "text", "code": "i" }
       ]
     }
@@ -364,7 +364,7 @@
     "markup": "<template repeat.for=\"item of items\">${item}</template>",
     "expect": {
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "item of items" },
         { "kind": "text", "code": "item" }
       ],
       "controllers": [
