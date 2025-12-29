@@ -728,17 +728,24 @@ function findPropertyStart(text: string, span: SourceSpan, propName: string): nu
 
 /**
  * Binding commands that can appear after a dot in attribute names.
- * Maps command to its canonical form for token emission.
  */
 const BINDING_COMMANDS = new Set([
   "bind", "to-view", "two-way", "from-view", "one-time",
   "trigger", "capture", "delegate",
-  "ref", "call",
+  "ref", "call", "for", // "for" is used in repeat.for
 ]);
 
 /**
- * Extract semantic tokens for binding commands from linked instructions.
- * For attributes like `value.bind="..."`, emits a token for `.bind`.
+ * Template controller names for keyword highlighting.
+ */
+const TEMPLATE_CONTROLLERS = new Set([
+  "repeat", "if", "else", "switch", "with", "promise", "portal",
+  "case", "default-case", "then", "catch", "pending",
+]);
+
+/**
+ * Extract semantic tokens for binding commands and template controllers.
+ * Handles property bindings, listener bindings, custom attributes, and template controllers.
  */
 export function extractBindingCommandTokens(
   text: string,
@@ -748,32 +755,7 @@ export function extractBindingCommandTokens(
 
   for (const row of rows) {
     for (const ins of row.instructions) {
-      const loc = (ins as { loc?: SourceSpan | null }).loc;
-      if (!loc) continue;
-
-      // Get the binding command based on instruction type
-      const command = getBindingCommand(ins, text, loc);
-      if (!command) continue;
-
-      // Find the command position in the attribute name
-      const attrText = text.slice(loc.start, loc.end);
-      const eqPos = attrText.indexOf("=");
-      const attrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
-
-      // Find the command after a dot in the attribute name
-      const commandPos = findCommandInAttrName(attrName, command);
-      if (commandPos === -1) continue;
-
-      const absolutePos = loc.start + commandPos;
-      const { line, char } = offsetToLineChar(text, absolutePos);
-
-      tokens.push({
-        line,
-        char,
-        length: command.length,
-        type: TokenType.parameter, // binding commands use parameter token type
-        modifiers: 0,
-      });
+      extractBindingTokensFromInstruction(ins, text, tokens);
     }
   }
 
@@ -781,53 +763,151 @@ export function extractBindingCommandTokens(
 }
 
 /**
- * Determine the binding command for an instruction by parsing the source text.
- * This approach works for all binding types by looking at the actual attribute syntax.
+ * Extract binding tokens from a single instruction.
  */
-function getBindingCommand(ins: LinkedInstruction, text: string, loc: SourceSpan): string | null {
-  // Extract the attribute name from the source text
+function extractBindingTokensFromInstruction(
+  ins: LinkedInstruction,
+  text: string,
+  tokens: RawToken[],
+): void {
+  const loc = (ins as { loc?: SourceSpan | null }).loc;
+  if (!loc) return;
+
+  // Get the raw attribute text from the source
   const attrText = text.slice(loc.start, loc.end);
   const eqPos = attrText.indexOf("=");
-  const attrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
+  const rawAttrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
 
-  // Find the last dot-separated segment that is a binding command
+  // Trim whitespace from attribute name (handles formatting variations)
+  const attrName = rawAttrName.trim();
+  const whitespaceOffset = rawAttrName.indexOf(attrName);
+
+  switch (ins.kind) {
+    case "propertyBinding":
+    case "attributeBinding":
+    case "stylePropertyBinding": {
+      // Look for binding commands like .bind, .two-way, .to-view
+      const cmdInfo = findBindingCommandInAttr(attrName);
+      if (cmdInfo) {
+        emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+      }
+      break;
+    }
+
+    case "listenerBinding": {
+      // Look for .trigger or .capture
+      if (attrName.startsWith("@")) {
+        // @ shorthand - no explicit command to highlight
+        return;
+      }
+      const cmdInfo = findBindingCommandInAttr(attrName);
+      if (cmdInfo) {
+        emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+      }
+      break;
+    }
+
+    case "refBinding": {
+      // ref or target.ref
+      if (attrName === "ref") {
+        emitCommandToken(text, loc.start + whitespaceOffset, 3, tokens);
+      } else {
+        const cmdInfo = findBindingCommandInAttr(attrName);
+        if (cmdInfo) {
+          emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+        }
+      }
+      break;
+    }
+
+    case "hydrateAttribute": {
+      // Custom attribute - highlight the attribute name and any binding command
+      // e.g., focus, tooltip.bind
+      const cmdInfo = findBindingCommandInAttr(attrName);
+      if (cmdInfo) {
+        emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+      }
+      // Also highlight the custom attribute name itself
+      const attrNameOnly = cmdInfo ? attrName.slice(0, cmdInfo.position - 1) : attrName;
+      if (attrNameOnly.length > 0) {
+        const { line, char } = offsetToLineChar(text, loc.start + whitespaceOffset);
+        tokens.push({
+          line,
+          char,
+          length: attrNameOnly.length,
+          type: TokenType.namespace, // Custom attributes like custom elements
+          modifiers: 0,
+        });
+      }
+      break;
+    }
+
+    case "hydrateTemplateController": {
+      // Template controller - highlight the controller keyword and binding command
+      // e.g., if.bind, repeat.for, else
+      const res = ins.res; // "repeat", "if", "else", etc.
+
+      // Find the controller name in the attribute
+      const controllerPos = attrName.indexOf(res);
+      if (controllerPos !== -1) {
+        const { line, char } = offsetToLineChar(text, loc.start + whitespaceOffset + controllerPos);
+        tokens.push({
+          line,
+          char,
+          length: res.length,
+          type: TokenType.keyword, // Template controllers as keywords
+          modifiers: 0,
+        });
+      }
+
+      // Also highlight any binding command (bind, for, etc.)
+      const cmdInfo = findBindingCommandInAttr(attrName);
+      if (cmdInfo && cmdInfo.command !== res) { // Don't double-highlight
+        emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Find a binding command in an attribute name.
+ * Returns the command and its position, or null if not found.
+ */
+function findBindingCommandInAttr(attrName: string): { command: string; position: number } | null {
+  // Split by dots and find the last segment that is a command
   const parts = attrName.split(".");
-  for (let i = parts.length - 1; i >= 0; i--) {
+  let position = 0;
+
+  for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
-    if (BINDING_COMMANDS.has(part)) return part;
-  }
-
-  // Check for @event shorthand (e.g., @click)
-  if (attrName.startsWith("@") && ins.kind === "listenerBinding") {
-    // @ shorthand maps to trigger, but we don't highlight it as a command
-    // since the @ itself is the shorthand
-    return null;
-  }
-
-  // Check for :prop shorthand (e.g., :value)
-  // This maps to bind/to-view but doesn't have a visible command
-  if (attrName.startsWith(":")) {
-    return null;
+    if (i > 0 && BINDING_COMMANDS.has(part)) {
+      // Found a command - return its position (after the dot)
+      return { command: part, position };
+    }
+    position += part.length + 1; // +1 for the dot
   }
 
   return null;
 }
 
 /**
- * Find the position of a command within an attribute name.
- * Returns the position of the command (not including the dot).
+ * Emit a token for a binding command.
  */
-function findCommandInAttrName(attrName: string, command: string): number {
-  // Special case: "ref" as standalone attribute
-  if (attrName === command) {
-    return 0;
-  }
-
-  // Look for .command pattern
-  const pattern = "." + command;
-  const idx = attrName.indexOf(pattern);
-  if (idx === -1) return -1;
-  return idx + 1; // Return position after the dot
+function emitCommandToken(
+  text: string,
+  offset: number,
+  length: number,
+  tokens: RawToken[],
+): void {
+  const { line, char } = offsetToLineChar(text, offset);
+  tokens.push({
+    line,
+    char,
+    length,
+    type: TokenType.parameter,
+    modifiers: 0,
+  });
 }
 
 /* ===========================
