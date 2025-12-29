@@ -48,6 +48,7 @@ export class ExprTable {
   public constructor(
     private readonly parser: IExpressionParser,
     public readonly source: SourceFile,
+    public readonly sourceText?: string,
   ) {}
 
   public add(code: string, loc: P5Loc | null, expressionType: ExpressionType): ExprRef {
@@ -103,6 +104,55 @@ export function attrLoc(el: P5Element, attrName: string): P5Loc | null {
   const loc = el.sourceCodeLocation;
   const attrLocTable = loc?.attrs;
   return (attrLocTable?.[attrName] ?? loc) ?? null;
+}
+
+/**
+ * Returns the location of just the attribute value (inside quotes).
+ * Parse5's attrLoc covers the full `name="value"` span, but expression parsing
+ * needs the value-only span so local offsets rebase correctly.
+ */
+export function attrValueLoc(el: P5Element, attrName: string, sourceText?: string): P5Loc | null {
+  const loc = attrLoc(el, attrName);
+  if (!loc || loc.startOffset == null || loc.endOffset == null) return loc;
+
+  const attrStart = loc.startOffset;
+  const attrEnd = loc.endOffset;
+
+  if (sourceText) {
+    // Parse actual text to handle single/double quotes and whitespace around '='
+    const attrText = sourceText.slice(attrStart, attrEnd);
+    const eqIdx = attrText.indexOf("=");
+    if (eqIdx === -1) return loc; // Boolean attribute
+
+    let valueStart = eqIdx + 1;
+    while (valueStart < attrText.length && /\s/.test(attrText[valueStart]!)) {
+      valueStart++;
+    }
+    const openQuote = attrText[valueStart];
+    if (openQuote === '"' || openQuote === "'") {
+      valueStart++;
+    }
+
+    let valueEnd = attrText.length;
+    const closeQuote = attrText[valueEnd - 1];
+    if (closeQuote === '"' || closeQuote === "'") {
+      valueEnd--;
+    }
+
+    if (valueStart > valueEnd) return loc;
+
+    return { ...loc, startOffset: attrStart + valueStart, endOffset: attrStart + valueEnd };
+  }
+
+  // Fallback without source text: assume name="value" format
+  const valueStart = attrStart + attrName.length + 2; // name + '="'
+  const valueEnd = attrEnd - 1; // before closing '"'
+
+  if (valueStart > valueEnd || valueStart < attrStart || valueEnd > attrEnd) {
+    return loc;
+  }
+
+  return { ...loc, startOffset: valueStart, endOffset: valueEnd };
 }
 
 export function toBindingSource(

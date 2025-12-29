@@ -417,6 +417,9 @@ describe("handleSemanticTokensFull", () => {
         program: {
           getCompilation: vi.fn(),
         },
+        sources: {
+          get: vi.fn().mockReturnValue(null), // Falls back to doc.getText()
+        },
       },
       ...overrides,
     };

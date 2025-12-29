@@ -23,7 +23,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
   const sem = opts.sem ?? DEFAULT_SEMANTICS;
   const source = resolveSourceFile(opts.file ?? opts.name ?? "");
   const ids = new DomIdAllocator();
-  const table = new ExprTable(opts.exprParser, source);
+  const table = new ExprTable(opts.exprParser, source, html);
   const nestedTemplates: TemplateIR[] = [];
 
   const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source);

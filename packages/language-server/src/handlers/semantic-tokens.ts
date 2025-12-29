@@ -771,7 +771,9 @@ function extractBindingTokensFromInstruction(
   tokens: RawToken[],
 ): void {
   const loc = (ins as { loc?: SourceSpan | null }).loc;
-  if (!loc) return;
+  if (!loc) {
+    return;
+  }
 
   // Get the raw attribute text from the source
   const attrText = text.slice(loc.start, loc.end);
@@ -802,7 +804,8 @@ function extractBindingTokensFromInstruction(
       }
       const cmdInfo = findBindingCommandInAttr(attrName);
       if (cmdInfo) {
-        emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+        const finalOffset = loc.start + whitespaceOffset + cmdInfo.position;
+        emitCommandToken(text, finalOffset, cmdInfo.command.length, tokens);
       }
       break;
     }
@@ -992,11 +995,8 @@ export function handleSemanticTokensFull(
   params: SemanticTokensParams
 ): SemanticTokens | null {
   try {
-    ctx.logger.log(`[semanticTokens] request for ${params.textDocument.uri}`);
-
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
     if (!doc) {
-      ctx.logger.log(`[semanticTokens] no document found`);
       return null;
     }
 
@@ -1004,23 +1004,15 @@ export function handleSemanticTokensFull(
     const compilation = ctx.workspace.program.getCompilation(canonical.uri);
 
     if (!compilation?.linked?.templates?.length) {
-      ctx.logger.log(`[semanticTokens] no linked templates found`);
       return null;
     }
 
-    const text = doc.getText();
+    // Use source store text (not doc.getText) to match compiler's loc offsets.
+    // VS Code normalizes CRLF→LF in TextDocument, but source store preserves original.
+    const snap = ctx.workspace.sources.get(canonical.uri);
+    const text = snap?.text ?? doc.getText();
     const template = compilation.linked.templates[0];
     if (!template) return null;
-
-    ctx.logger.log(`[semanticTokens] found ${template.rows.length} rows`);
-
-    // Log row details for debugging
-    for (const row of template.rows) {
-      if (row.node.kind === "element") {
-        const nodeSem = row.node as NodeSem & { kind: "element" };
-        ctx.logger.log(`[semanticTokens] element: ${nodeSem.tag}, custom=${!!nodeSem.custom}, native=${!!nodeSem.native}`);
-      }
-    }
 
     const nodeMap = buildNodeMap(template.dom);
     const elementTokens = extractTokens(text, template.rows, nodeMap);
@@ -1039,15 +1031,11 @@ export function handleSemanticTokensFull(
     // Merge all tokens
     const tokens = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens];
 
-    ctx.logger.log(`[semanticTokens] extracted ${elementTokens.length} element, ${exprTokens.length} expression, ${commandTokens.length} command, ${delimiterTokens.length} delimiter tokens`);
-
     if (tokens.length === 0) {
       return null;
     }
 
     const encoded = encodeTokens(tokens);
-    ctx.logger.log(`[semanticTokens] returning ${encoded.length / 5} tokens`);
-
     return {
       data: encoded,
     };
