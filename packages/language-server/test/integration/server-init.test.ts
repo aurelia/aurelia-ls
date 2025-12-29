@@ -69,6 +69,14 @@ describe("Server initialization", () => {
       expect(capabilities.codeActionProvider).toBe(true);
       expect(capabilities.completionProvider).toBeDefined();
       expect(capabilities.textDocumentSync).toBeDefined();
+
+      // Semantic tokens capability
+      const semanticTokensProvider = capabilities.semanticTokensProvider as Record<string, unknown> | undefined;
+      expect(semanticTokensProvider).toBeDefined();
+      expect(semanticTokensProvider?.full).toBe(true);
+      const legend = semanticTokensProvider?.legend as { tokenTypes: string[]; tokenModifiers: string[] } | undefined;
+      expect(legend?.tokenTypes).toContain("namespace");
+      expect(legend?.tokenModifiers).toContain("declaration");
     } finally {
       dispose();
       child.kill("SIGKILL");

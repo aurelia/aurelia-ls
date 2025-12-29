@@ -3,6 +3,7 @@
  */
 import {
   TextDocumentSyncKind,
+  SemanticTokensRegistrationType,
   type InitializeParams,
   type InitializeResult,
   type DidChangeWatchedFilesParams,
@@ -16,6 +17,7 @@ import { AureliaProjectIndex } from "../services/project-index.js";
 import { TemplateWorkspace } from "../services/template-workspace.js";
 import type { ServerContext } from "../context.js";
 import { mapDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
+import { SEMANTIC_TOKENS_LEGEND } from "./features.js";
 
 function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
@@ -140,6 +142,11 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       referencesProvider: true,
       renameProvider: true,
       codeActionProvider: true,
+      semanticTokensProvider: {
+        legend: SEMANTIC_TOKENS_LEGEND,
+        full: true,
+        // delta: true,  // TODO: Enable incremental updates for performance
+      },
     },
   };
 }

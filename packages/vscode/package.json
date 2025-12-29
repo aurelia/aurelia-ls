@@ -29,6 +29,13 @@
     "onLanguage:html"
   ],
   "contributes": {
+    "grammars": [
+      {
+        "scopeName": "text.html.aurelia",
+        "path": "./syntaxes/aurelia.tmLanguage.json",
+        "injectTo": ["text.html.basic", "text.html.derivative"]
+      }
+    ],
     "commands": [
       { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
       { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
