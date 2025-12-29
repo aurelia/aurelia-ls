@@ -736,6 +736,15 @@ const BINDING_COMMANDS = new Set([
 ]);
 
 /**
+ * Shorthand prefixes for binding commands.
+ * @click = click.trigger, :value = value.bind
+ */
+const SHORTHAND_PREFIXES: Record<string, string> = {
+  "@": "trigger",
+  ":": "bind",
+};
+
+/**
  * Extract semantic tokens for binding commands and template controllers.
  * Handles property bindings, listener bindings, custom attributes, and template controllers.
  */
@@ -780,6 +789,12 @@ function extractBindingTokensFromInstruction(
     case "propertyBinding":
     case "attributeBinding":
     case "stylePropertyBinding": {
+      // Check for : shorthand first (e.g., :value)
+      if (attrName.startsWith(":")) {
+        // : shorthand for .bind - highlight the : symbol
+        emitCommandToken(text, loc.start + whitespaceOffset, 1, tokens);
+        break;
+      }
       // Look for binding commands like .bind, .two-way, .to-view
       const cmdInfo = findBindingCommandInAttr(attrName);
       if (cmdInfo) {
@@ -789,9 +804,10 @@ function extractBindingTokensFromInstruction(
     }
 
     case "listenerBinding": {
-      // Look for .trigger or .capture
+      // Look for .trigger or .capture, or @ shorthand
       if (attrName.startsWith("@")) {
-        // @ shorthand - no explicit command to highlight
+        // @ shorthand for .trigger - highlight the @ symbol
+        emitCommandToken(text, loc.start + whitespaceOffset, 1, tokens);
         return;
       }
       const cmdInfo = findBindingCommandInAttr(attrName);
@@ -996,7 +1012,25 @@ function extractBindingTokensFromIR(
 
   // Handle other IR instruction types that may have binding commands
   if (ins.type === "propertyBinding" || ins.type === "attributeBinding" ||
-      ins.type === "listenerBinding" || ins.type === "stylePropertyBinding") {
+      ins.type === "stylePropertyBinding") {
+    // Check for : shorthand first
+    if (attrName.startsWith(":")) {
+      emitCommandToken(text, loc.start + whitespaceOffset, 1, tokens);
+      return;
+    }
+    const cmdInfo = findBindingCommandInAttr(attrName);
+    if (cmdInfo) {
+      emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
+    }
+    return;
+  }
+
+  // Handle listener bindings with @ shorthand
+  if (ins.type === "listenerBinding") {
+    if (attrName.startsWith("@")) {
+      emitCommandToken(text, loc.start + whitespaceOffset, 1, tokens);
+      return;
+    }
     const cmdInfo = findBindingCommandInAttr(attrName);
     if (cmdInfo) {
       emitCommandToken(text, loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, tokens);
@@ -1027,6 +1061,7 @@ function findBindingCommandInAttr(attrName: string): { command: string; position
 
 /**
  * Emit a token for a binding command.
+ * Uses 'keyword' type for better theme support (most themes style keywords distinctly).
  */
 function emitCommandToken(
   text: string,
@@ -1039,7 +1074,7 @@ function emitCommandToken(
     line,
     char,
     length,
-    type: TokenType.parameter,
+    type: TokenType.keyword,
     modifiers: 0,
   });
 }
@@ -1049,67 +1084,121 @@ function emitCommandToken(
  * =========================== */
 
 /**
+ * InterpIR shape from the compiler - interpolation with expression references.
+ */
+interface InterpIRShape {
+  kind: "interp";
+  exprs: { loc?: SourceSpan | null }[];
+}
+
+/**
  * Extract semantic tokens for interpolation delimiters (${ and }).
- * Walks through the expression table to find interpolation expressions.
+ * Uses the compiler's InterpIR structure which has pre-computed expression spans.
+ * The expression loc points to the expression content, so:
+ *   - ${ is at loc.start - 2 (length 2)
+ *   - } is at loc.end (length 1)
  */
 export function extractInterpolationDelimiterTokens(
   text: string,
-  exprTable: readonly ExprTableEntry[],
-  exprSpans: ReadonlyMap<string, SourceSpan>,
+  rows: LinkedRow[],
 ): RawToken[] {
   const tokens: RawToken[] = [];
 
-  for (const entry of exprTable) {
-    if (entry.expressionType !== "Interpolation") continue;
-
-    const exprSpan = exprSpans.get(entry.id);
-    if (!exprSpan) continue;
-
-    // The interpolation AST has parts and expressions arrays
-    // parts[i] is the text before expressions[i], parts[last] is after all expressions
-    // We need to find ${ before each expression and } after each expression
-    const ast = entry.ast as {
-      $kind: string;
-      span?: SourceSpan;
-      parts?: string[];
-      expressions?: ExpressionAst[];
-    };
-
-    if (!ast.expressions || ast.expressions.length === 0) continue;
-
-    // Find delimiters by looking for ${ and } in the text around expression spans
-    for (const expr of ast.expressions) {
-      if (!expr.span) continue;
-
-      // Find ${ before the expression
-      const openSearch = text.lastIndexOf("${", expr.span.start);
-      if (openSearch !== -1 && openSearch >= exprSpan.start) {
-        const { line, char } = offsetToLineChar(text, openSearch);
-        tokens.push({
-          line,
-          char,
-          length: 2, // ${
-          type: TokenType.keyword, // Use keyword for delimiters
-          modifiers: TokenModifier.defaultLibrary,
-        });
-      }
-
-      // Find } after the expression
-      const closeSearch = text.indexOf("}", expr.span.end);
-      if (closeSearch !== -1 && closeSearch < exprSpan.end + 5) { // Allow some slack
-        const { line, char } = offsetToLineChar(text, closeSearch);
-        tokens.push({
-          line,
-          char,
-          length: 1, // }
-          type: TokenType.keyword,
-          modifiers: TokenModifier.defaultLibrary,
-        });
-      }
+  for (const row of rows) {
+    for (const ins of row.instructions) {
+      extractDelimitersFromInstruction(ins, text, tokens);
     }
   }
 
   return tokens;
+}
+
+/**
+ * Extract interpolation delimiter tokens from a linked instruction.
+ */
+function extractDelimitersFromInstruction(
+  ins: LinkedInstruction,
+  text: string,
+  tokens: RawToken[],
+): void {
+  // Check for interpolation in 'from' field (attributeBinding, textBinding, etc.)
+  const from = (ins as { from?: { kind?: string; exprs?: { loc?: SourceSpan | null }[] } }).from;
+  if (from?.kind === "interp") {
+    emitDelimiterTokensFromInterp(from as InterpIRShape, text, tokens);
+  }
+
+  // Handle template controllers that may have nested interpolations
+  if (ins.kind === "hydrateTemplateController") {
+    const def = ins.def;
+    if (def?.rows) {
+      for (const nestedRow of def.rows) {
+        for (const nestedIns of nestedRow.instructions) {
+          extractDelimitersFromIR(nestedIns, text, tokens);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Extract interpolation delimiter tokens from an IR instruction (nested inside template controllers).
+ */
+function extractDelimitersFromIR(
+  ins: { type?: string; from?: unknown; def?: { rows: { instructions: unknown[] }[] } },
+  text: string,
+  tokens: RawToken[],
+): void {
+  // Check if from is an InterpIR (has kind: "interp" and exprs array)
+  const from = ins.from as { kind?: string; exprs?: { loc?: SourceSpan | null }[] } | undefined;
+  if (from?.kind === "interp") {
+    emitDelimiterTokensFromInterp(from as InterpIRShape, text, tokens);
+  }
+
+  // Recurse into nested template controllers
+  if (ins.type === "hydrateTemplateController" && ins.def?.rows) {
+    for (const nestedRow of ins.def.rows) {
+      for (const nestedIns of nestedRow.instructions) {
+        extractDelimitersFromIR(nestedIns as typeof ins, text, tokens);
+      }
+    }
+  }
+}
+
+/**
+ * Emit delimiter tokens for an InterpIR's expressions.
+ * Uses the pre-computed expression locations from the compiler.
+ */
+function emitDelimiterTokensFromInterp(
+  interp: InterpIRShape,
+  text: string,
+  tokens: RawToken[],
+): void {
+  for (const expr of interp.exprs) {
+    if (!expr.loc) continue;
+
+    // ${ is 2 characters before the expression start
+    const openStart = expr.loc.start - 2;
+    if (openStart >= 0) {
+      const { line, char } = offsetToLineChar(text, openStart);
+      tokens.push({
+        line,
+        char,
+        length: 2,
+        type: TokenType.keyword,
+        modifiers: TokenModifier.defaultLibrary,
+      });
+    }
+
+    // } is at the expression end
+    const { line: closeLine, char: closeChar } = offsetToLineChar(text, expr.loc.end);
+    tokens.push({
+      line: closeLine,
+      char: closeChar,
+      length: 1,
+      type: TokenType.keyword,
+      modifiers: TokenModifier.defaultLibrary,
+    });
+  }
 }
 
 /* ===========================
@@ -1157,7 +1246,7 @@ export function handleSemanticTokensFull(
     const commandTokens = extractBindingCommandTokens(text, template.rows);
 
     // Extract interpolation delimiter tokens (${ and })
-    const delimiterTokens = extractInterpolationDelimiterTokens(text, exprTable, exprSpans);
+    const delimiterTokens = extractInterpolationDelimiterTokens(text, template.rows);
 
     // Merge all tokens
     const tokens = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens];

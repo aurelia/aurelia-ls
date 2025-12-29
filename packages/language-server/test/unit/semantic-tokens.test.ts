@@ -1221,77 +1221,66 @@ describe("extractBindingCommandTokens", () => {
  * =========================== */
 
 describe("extractInterpolationDelimiterTokens", () => {
-  function createInterpEntry(
-    id: string,
-    ast: Record<string, unknown>,
-  ): ExprTableEntry {
-    return {
-      id: id as any,
-      expressionType: "Interpolation" as any,
-      ast,
-    } as ExprTableEntry;
+  /**
+   * Creates a mock LinkedRow with a textBinding instruction containing an InterpIR.
+   * The InterpIR.exprs[i].loc points to the expression content (between ${ and }).
+   */
+  function createInterpRow(exprs: { start: number; end: number }[]): LinkedRow[] {
+    return [{
+      target: "0",
+      node: { kind: "text" } as any,
+      instructions: [{
+        kind: "textBinding",
+        from: {
+          kind: "interp",
+          parts: [],
+          exprs: exprs.map(e => ({
+            id: "expr",
+            code: "",
+            loc: { start: e.start, end: e.end, file: "test.html" },
+          })),
+          loc: null,
+        },
+        loc: null,
+      }] as LinkedInstruction[],
+    }];
   }
 
   test("extracts ${ and } delimiters from simple interpolation", () => {
+    // Text: "Hello ${name}!"
+    // Expression "name" is at positions 8-12
     const text = "Hello ${name}!";
-    const entry = createInterpEntry("0", {
-      $kind: "Interpolation",
-      span: { start: 0, end: 14 },
-      parts: ["Hello ", "!"],
-      expressions: [
-        {
-          $kind: "AccessScope",
-          span: { start: 8, end: 12 },
-          name: "name",
-        },
-      ],
-    });
-    const spans = new Map([["0", { start: 0, end: 14 } as SourceSpan]]);
+    const rows = createInterpRow([{ start: 8, end: 12 }]);
 
-    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+    const tokens = extractInterpolationDelimiterTokens(text, rows);
 
     // Should have 2 tokens: ${ and }
     expect(tokens.length).toBe(2);
 
-    // ${ delimiter
-    expect(tokens[0]!.char).toBe(6); // Position of $
-    expect(tokens[0]!.length).toBe(2); // ${
+    // ${ delimiter at position 6 (8 - 2)
+    expect(tokens[0]!.char).toBe(6);
+    expect(tokens[0]!.length).toBe(2);
     expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
 
-    // } delimiter
-    expect(tokens[1]!.char).toBe(12); // Position of }
-    expect(tokens[1]!.length).toBe(1); // }
+    // } delimiter at position 12
+    expect(tokens[1]!.char).toBe(12);
+    expect(tokens[1]!.length).toBe(1);
     expect(tokens[1]!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
   });
 
   test("extracts delimiters from multiple interpolations", () => {
+    // Text: "${a} and ${b}"
+    // Expression "a" at 2-3, expression "b" at 11-12
     const text = "${a} and ${b}";
-    const entry = createInterpEntry("0", {
-      $kind: "Interpolation",
-      span: { start: 0, end: 13 },
-      parts: ["", " and ", ""],
-      expressions: [
-        {
-          $kind: "AccessScope",
-          span: { start: 2, end: 3 },
-          name: "a",
-        },
-        {
-          $kind: "AccessScope",
-          span: { start: 11, end: 12 },
-          name: "b",
-        },
-      ],
-    });
-    const spans = new Map([["0", { start: 0, end: 13 } as SourceSpan]]);
+    const rows = createInterpRow([{ start: 2, end: 3 }, { start: 11, end: 12 }]);
 
-    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+    const tokens = extractInterpolationDelimiterTokens(text, rows);
 
     // Should have 4 tokens: ${, }, ${, }
     expect(tokens.length).toBe(4);
 
     // First ${
-    expect(tokens[0]!.char).toBe(0);
+    expect(tokens[0]!.char).toBe(0); // 2 - 2
     expect(tokens[0]!.length).toBe(2);
 
     // First }
@@ -1299,7 +1288,7 @@ describe("extractInterpolationDelimiterTokens", () => {
     expect(tokens[1]!.length).toBe(1);
 
     // Second ${
-    expect(tokens[2]!.char).toBe(9);
+    expect(tokens[2]!.char).toBe(9); // 11 - 2
     expect(tokens[2]!.length).toBe(2);
 
     // Second }
@@ -1307,78 +1296,77 @@ describe("extractInterpolationDelimiterTokens", () => {
     expect(tokens[3]!.length).toBe(1);
   });
 
-  test("skips non-interpolation expressions", () => {
+  test("skips instructions without interpolation", () => {
     const text = "name";
-    const entry: ExprTableEntry = {
-      id: "0" as any,
-      expressionType: "IsProperty" as any,
-      ast: {
-        $kind: "AccessScope",
-        span: { start: 0, end: 4 },
-        name: "name",
-      },
-    } as ExprTableEntry;
-    const spans = new Map([["0", { start: 0, end: 4 } as SourceSpan]]);
+    // A propertyBinding instruction (not an interpolation)
+    const rows: LinkedRow[] = [{
+      target: "0",
+      node: { kind: "element" } as any,
+      instructions: [{
+        kind: "propertyBinding",
+        to: "value",
+        from: { id: "expr", code: "name", loc: { start: 0, end: 4, file: "test.html" } },
+        mode: "default",
+        loc: null,
+      }] as LinkedInstruction[],
+    }];
 
-    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+    const tokens = extractInterpolationDelimiterTokens(text, rows);
 
     expect(tokens.length).toBe(0);
   });
 
   test("skips interpolation without expressions", () => {
     const text = "plain text";
-    const entry = createInterpEntry("0", {
-      $kind: "Interpolation",
-      span: { start: 0, end: 10 },
-      parts: ["plain text"],
-      expressions: [],
-    });
-    const spans = new Map([["0", { start: 0, end: 10 } as SourceSpan]]);
+    const rows: LinkedRow[] = [{
+      target: "0",
+      node: { kind: "text" } as any,
+      instructions: [{
+        kind: "textBinding",
+        from: {
+          kind: "interp",
+          parts: ["plain text"],
+          exprs: [], // No expressions
+          loc: null,
+        },
+        loc: null,
+      }] as LinkedInstruction[],
+    }];
 
-    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+    const tokens = extractInterpolationDelimiterTokens(text, rows);
 
     expect(tokens.length).toBe(0);
   });
 
-  test("skips interpolation entry without corresponding span", () => {
+  test("skips expression without loc", () => {
     const text = "Hello ${name}!";
-    const entry = createInterpEntry("0", {
-      $kind: "Interpolation",
-      span: { start: 0, end: 14 },
-      parts: ["Hello ", "!"],
-      expressions: [
-        {
-          $kind: "AccessScope",
-          span: { start: 8, end: 12 },
-          name: "name",
+    const rows: LinkedRow[] = [{
+      target: "0",
+      node: { kind: "text" } as any,
+      instructions: [{
+        kind: "textBinding",
+        from: {
+          kind: "interp",
+          parts: ["Hello ", "!"],
+          exprs: [{ id: "expr", code: "name", loc: null }], // No loc
+          loc: null,
         },
-      ],
-    });
-    // Empty spans map
-    const spans = new Map<string, SourceSpan>();
+        loc: null,
+      }] as LinkedInstruction[],
+    }];
 
-    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+    const tokens = extractInterpolationDelimiterTokens(text, rows);
 
     expect(tokens.length).toBe(0);
   });
 
   test("marks delimiters with defaultLibrary modifier", () => {
+    // Text: "${x}"
+    // Expression "x" at 2-3
     const text = "${x}";
-    const entry = createInterpEntry("0", {
-      $kind: "Interpolation",
-      span: { start: 0, end: 4 },
-      parts: ["", ""],
-      expressions: [
-        {
-          $kind: "AccessScope",
-          span: { start: 2, end: 3 },
-          name: "x",
-        },
-      ],
-    });
-    const spans = new Map([["0", { start: 0, end: 4 } as SourceSpan]]);
+    const rows = createInterpRow([{ start: 2, end: 3 }]);
 
-    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+    const tokens = extractInterpolationDelimiterTokens(text, rows);
 
     expect(tokens.length).toBe(2);
     expect(tokens[0]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));

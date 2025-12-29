@@ -22,6 +22,7 @@ import {
 } from "@aurelia-ls/compiler";
 import {
   extractBindingCommandTokens,
+  extractInterpolationDelimiterTokens,
   offsetToLineChar,
   type RawToken,
 } from "../../out/handlers/semantic-tokens.js";
@@ -363,6 +364,74 @@ describe("Semantic Tokens - Template Controllers", () => {
 });
 
 /* ===========================
+ * Shorthand Syntax Tests
+ * =========================== */
+
+describe("Semantic Tokens - Shorthand Syntax", () => {
+  it("highlights '@' in @click shorthand", () => {
+    const markup = `<button @click="save()">Save</button>`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    expect(tokens.length).toBe(1);
+    verifyTokenPosition(text, tokens[0]!, "@");
+  });
+
+  it("highlights ':' in :value shorthand", () => {
+    const markup = `<input :value="name">`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    expect(tokens.length).toBe(1);
+    verifyTokenPosition(text, tokens[0]!, ":");
+  });
+
+  it("highlights '@' with multiline template (CRLF)", () => {
+    const markup = withCRLF(`<div>
+  <span>Hello</span>
+  <button @click="increment()">+</button>
+</div>`);
+    const { tokens, text } = getBindingTokens(markup);
+
+    const atToken = tokens.find(t => t.length === 1);
+    expect(atToken, "Should find @ token").toBeDefined();
+    verifyTokenPosition(text, atToken!, "@");
+  });
+
+  it("highlights ':' with multiline template (CRLF)", () => {
+    const markup = withCRLF(`<div>
+  <span>Hello</span>
+  <input :value="name">
+</div>`);
+    const { tokens, text } = getBindingTokens(markup);
+
+    const colonToken = tokens.find(t => t.length === 1);
+    expect(colonToken, "Should find : token").toBeDefined();
+    verifyTokenPosition(text, colonToken!, ":");
+  });
+
+  it("handles mixed shorthand and explicit bindings", () => {
+    const markup = `<input :value="name" @change="update()">`;
+    const { tokens, text } = getBindingTokens(markup);
+
+    // Should have : for bind and @ for trigger
+    expect(tokens.length).toBe(2);
+
+    const colonToken = tokens.find(t => {
+      const lines = text.split("\n");
+      const line = lines[t.line] ?? "";
+      return line.slice(t.char, t.char + t.length) === ":";
+    });
+    const atToken = tokens.find(t => {
+      const lines = text.split("\n");
+      const line = lines[t.line] ?? "";
+      return line.slice(t.char, t.char + t.length) === "@";
+    });
+
+    expect(colonToken, "Should find : token").toBeDefined();
+    expect(atToken, "Should find @ token").toBeDefined();
+  });
+});
+
+/* ===========================
  * Complex Template Tests
  * =========================== */
 
@@ -616,5 +685,96 @@ describe("offsetToLineChar with CRLF", () => {
     // In CRLF text, 'c' is at offset 4
     const result = offsetToLineChar(textCRLF, 4);
     expect(result).toEqual({ line: 1, char: 0 });
+  });
+});
+
+/* ===========================
+ * Interpolation Delimiter Tests
+ * =========================== */
+
+/**
+ * Helper to get interpolation delimiter tokens from compiled template.
+ */
+function getInterpolationTokens(markup: string): { tokens: RawToken[]; text: string; rows: LinkedRow[] } {
+  const exprParser = getExpressionParser();
+  const ir = lowerDocument(markup, {
+    attrParser: DEFAULT_SYNTAX,
+    exprParser,
+    file: "test.html",
+    name: "test",
+    sem: DEFAULT_SEMANTICS,
+  });
+
+  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+  const template = linked.templates[0];
+  if (!template) {
+    return { tokens: [], text: markup, rows: [] };
+  }
+
+  const tokens = extractInterpolationDelimiterTokens(markup, template.rows);
+  return { tokens, text: markup, rows: template.rows };
+}
+
+describe("Semantic Tokens - Interpolation Delimiters", () => {
+  it("highlights ${ and } in text interpolation", () => {
+    const markup = `<div>\${count} items</div>`;
+    const { tokens, text } = getInterpolationTokens(markup);
+
+    // Should have 2 tokens: ${ and }
+    expect(tokens.length).toBe(2);
+
+    // ${ token
+    verifyTokenPosition(text, tokens[0]!, "${");
+    expect(tokens[0]!.length).toBe(2);
+
+    // } token
+    verifyTokenPosition(text, tokens[1]!, "}");
+    expect(tokens[1]!.length).toBe(1);
+  });
+
+  it("highlights ${ and } in attribute interpolation", () => {
+    const markup = `<div title="Hello \${name}!"></div>`;
+    const { tokens, text } = getInterpolationTokens(markup);
+
+    expect(tokens.length).toBe(2);
+    verifyTokenPosition(text, tokens[0]!, "${");
+    verifyTokenPosition(text, tokens[1]!, "}");
+  });
+
+  it("highlights multiple interpolations", () => {
+    const markup = `<div>\${a} and \${b}</div>`;
+    const { tokens, text } = getInterpolationTokens(markup);
+
+    // 2 interpolations × 2 delimiters = 4 tokens
+    expect(tokens.length).toBe(4);
+
+    // First ${
+    verifyTokenPosition(text, tokens[0]!, "${");
+    // First }
+    verifyTokenPosition(text, tokens[1]!, "}");
+    // Second ${
+    verifyTokenPosition(text, tokens[2]!, "${");
+    // Second }
+    verifyTokenPosition(text, tokens[3]!, "}");
+  });
+
+  it("handles interpolation with CRLF line endings", () => {
+    const markup = withCRLF(`<div>
+  <span>\${message}</span>
+</div>`);
+    const { tokens, text } = getInterpolationTokens(markup);
+
+    expect(tokens.length).toBe(2);
+    verifyTokenPosition(text, tokens[0]!, "${");
+    verifyTokenPosition(text, tokens[1]!, "}");
+  });
+
+  it("handles complex expression in interpolation", () => {
+    const markup = `<div>\${user.name | uppercase}</div>`;
+    const { tokens, text } = getInterpolationTokens(markup);
+
+    expect(tokens.length).toBe(2);
+    verifyTokenPosition(text, tokens[0]!, "${");
+    verifyTokenPosition(text, tokens[1]!, "}");
   });
 });
