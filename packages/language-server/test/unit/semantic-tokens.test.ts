@@ -8,10 +8,12 @@ import {
   buildNodeMap,
   extractTokens,
   extractExpressionTokens,
+  extractBindingCommandTokens,
+  extractInterpolationDelimiterTokens,
   handleSemanticTokensFull,
   type RawToken,
 } from "../../out/handlers/semantic-tokens.js";
-import type { DOMNode, ElementNode, LinkedRow, NodeSem, ExprTableEntry, SourceSpan } from "@aurelia-ls/compiler";
+import type { DOMNode, ElementNode, LinkedRow, NodeSem, ExprTableEntry, SourceSpan, LinkedInstruction } from "@aurelia-ls/compiler";
 
 /* ===========================
  * Token Legend Tests
@@ -1017,5 +1019,366 @@ describe("extractExpressionTokens", () => {
     expect(tokens[0]!.length).toBe(4); // name
     expect(tokens[1]!.char).toBe(25);
     expect(tokens[1]!.length).toBe(5); // count
+  });
+});
+
+/* ===========================
+ * extractBindingCommandTokens Tests
+ * =========================== */
+
+describe("extractBindingCommandTokens", () => {
+  function createRow(instructions: LinkedInstruction[]): LinkedRow {
+    return {
+      target: "1" as any,
+      node: { kind: "element", tag: "div" } as NodeSem,
+      instructions,
+    };
+  }
+
+  test("extracts .bind command from property binding", () => {
+    const text = '<input value.bind="name">';
+    const instruction: LinkedInstruction = {
+      kind: "propertyBinding",
+      to: "value",
+      from: { id: "0" as any, code: "name", loc: null } as any,
+      mode: "default" as any,
+      effectiveMode: "twoWay" as any,
+      target: { kind: "unknown", reason: "no-element" } as any,
+      loc: { start: 7, end: 24 }, // span of value.bind="name"
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.char).toBe(13); // 'bind' starts at position 13
+    expect(tokens[0]!.length).toBe(4); // 'bind'
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("parameter"));
+  });
+
+  test("extracts .trigger command from listener binding", () => {
+    const text = '<button click.trigger="save()">';
+    const instruction: LinkedInstruction = {
+      kind: "listenerBinding",
+      to: "click",
+      from: { id: "0" as any, code: "save()", loc: null } as any,
+      eventType: { kind: "primitive", name: "Event" } as any,
+      capture: false,
+      loc: { start: 8, end: 30 },
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.char).toBe(14); // 'trigger' starts at position 14
+    expect(tokens[0]!.length).toBe(7); // 'trigger'
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("parameter"));
+  });
+
+  test("extracts .capture command from listener binding", () => {
+    const text = '<div click.capture="handler()">';
+    const instruction: LinkedInstruction = {
+      kind: "listenerBinding",
+      to: "click",
+      from: { id: "0" as any, code: "handler()", loc: null } as any,
+      eventType: { kind: "primitive", name: "Event" } as any,
+      capture: true,
+      loc: { start: 5, end: 30 },
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.char).toBe(11); // 'capture' starts at position 11
+    expect(tokens[0]!.length).toBe(7); // 'capture'
+  });
+
+  test("extracts .two-way command", () => {
+    const text = '<input value.two-way="data">';
+    const instruction: LinkedInstruction = {
+      kind: "propertyBinding",
+      to: "value",
+      from: { id: "0" as any, code: "data", loc: null } as any,
+      mode: "twoWay" as any,
+      effectiveMode: "twoWay" as any,
+      target: { kind: "unknown", reason: "no-element" } as any,
+      loc: { start: 7, end: 27 },
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.char).toBe(13); // 'two-way' starts at position 13
+    expect(tokens[0]!.length).toBe(7); // 'two-way'
+  });
+
+  test("does not extract command for @ shorthand", () => {
+    const text = '<button @click="save()">';
+    const instruction: LinkedInstruction = {
+      kind: "listenerBinding",
+      to: "click",
+      from: { id: "0" as any, code: "save()", loc: null } as any,
+      eventType: { kind: "primitive", name: "Event" } as any,
+      capture: false,
+      loc: { start: 8, end: 23 },
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    // @ shorthand doesn't have a visible command to highlight
+    expect(tokens.length).toBe(0);
+  });
+
+  test("does not extract command for : shorthand", () => {
+    const text = '<input :value="name">';
+    const instruction: LinkedInstruction = {
+      kind: "propertyBinding",
+      to: "value",
+      from: { id: "0" as any, code: "name", loc: null } as any,
+      mode: "default" as any,
+      effectiveMode: "toView" as any,
+      target: { kind: "unknown", reason: "no-element" } as any,
+      loc: { start: 7, end: 20 },
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    // : shorthand doesn't have a visible command to highlight
+    expect(tokens.length).toBe(0);
+  });
+
+  test("extracts ref command", () => {
+    const text = '<div ref="myDiv">';
+    const instruction: LinkedInstruction = {
+      kind: "refBinding",
+      to: "element",
+      from: { id: "0" as any, code: "myDiv", loc: null } as any,
+      loc: { start: 5, end: 16 },
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]!.char).toBe(5); // 'ref' starts at position 5
+    expect(tokens[0]!.length).toBe(3); // 'ref'
+  });
+
+  test("skips instructions without loc", () => {
+    const text = '<input value.bind="name">';
+    const instruction: LinkedInstruction = {
+      kind: "propertyBinding",
+      to: "value",
+      from: { id: "0" as any, code: "name", loc: null } as any,
+      mode: "default" as any,
+      effectiveMode: "twoWay" as any,
+      target: { kind: "unknown", reason: "no-element" } as any,
+      // No loc
+    };
+
+    const tokens = extractBindingCommandTokens(text, [createRow([instruction])]);
+
+    expect(tokens.length).toBe(0);
+  });
+
+  test("handles multiple rows with multiple instructions", () => {
+    const text = '<input value.bind="a" click.trigger="b()">';
+    const row: LinkedRow = {
+      target: "1" as any,
+      node: { kind: "element", tag: "input" } as NodeSem,
+      instructions: [
+        {
+          kind: "propertyBinding",
+          to: "value",
+          from: { id: "0" as any, code: "a", loc: null } as any,
+          mode: "default" as any,
+          effectiveMode: "twoWay" as any,
+          target: { kind: "unknown", reason: "no-element" } as any,
+          loc: { start: 7, end: 21 },
+        },
+        {
+          kind: "listenerBinding",
+          to: "click",
+          from: { id: "1" as any, code: "b()", loc: null } as any,
+          eventType: { kind: "primitive", name: "Event" } as any,
+          capture: false,
+          loc: { start: 22, end: 41 },
+        },
+      ] as LinkedInstruction[],
+    };
+
+    const tokens = extractBindingCommandTokens(text, [row]);
+
+    expect(tokens.length).toBe(2);
+    expect(tokens[0]!.length).toBe(4); // bind
+    expect(tokens[1]!.length).toBe(7); // trigger
+  });
+});
+
+/* ===========================
+ * extractInterpolationDelimiterTokens Tests
+ * =========================== */
+
+describe("extractInterpolationDelimiterTokens", () => {
+  function createInterpEntry(
+    id: string,
+    ast: Record<string, unknown>,
+  ): ExprTableEntry {
+    return {
+      id: id as any,
+      expressionType: "Interpolation" as any,
+      ast,
+    } as ExprTableEntry;
+  }
+
+  test("extracts ${ and } delimiters from simple interpolation", () => {
+    const text = "Hello ${name}!";
+    const entry = createInterpEntry("0", {
+      $kind: "Interpolation",
+      span: { start: 0, end: 14 },
+      parts: ["Hello ", "!"],
+      expressions: [
+        {
+          $kind: "AccessScope",
+          span: { start: 8, end: 12 },
+          name: "name",
+        },
+      ],
+    });
+    const spans = new Map([["0", { start: 0, end: 14 } as SourceSpan]]);
+
+    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+
+    // Should have 2 tokens: ${ and }
+    expect(tokens.length).toBe(2);
+
+    // ${ delimiter
+    expect(tokens[0]!.char).toBe(6); // Position of $
+    expect(tokens[0]!.length).toBe(2); // ${
+    expect(tokens[0]!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+
+    // } delimiter
+    expect(tokens[1]!.char).toBe(12); // Position of }
+    expect(tokens[1]!.length).toBe(1); // }
+    expect(tokens[1]!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+  });
+
+  test("extracts delimiters from multiple interpolations", () => {
+    const text = "${a} and ${b}";
+    const entry = createInterpEntry("0", {
+      $kind: "Interpolation",
+      span: { start: 0, end: 13 },
+      parts: ["", " and ", ""],
+      expressions: [
+        {
+          $kind: "AccessScope",
+          span: { start: 2, end: 3 },
+          name: "a",
+        },
+        {
+          $kind: "AccessScope",
+          span: { start: 11, end: 12 },
+          name: "b",
+        },
+      ],
+    });
+    const spans = new Map([["0", { start: 0, end: 13 } as SourceSpan]]);
+
+    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+
+    // Should have 4 tokens: ${, }, ${, }
+    expect(tokens.length).toBe(4);
+
+    // First ${
+    expect(tokens[0]!.char).toBe(0);
+    expect(tokens[0]!.length).toBe(2);
+
+    // First }
+    expect(tokens[1]!.char).toBe(3);
+    expect(tokens[1]!.length).toBe(1);
+
+    // Second ${
+    expect(tokens[2]!.char).toBe(9);
+    expect(tokens[2]!.length).toBe(2);
+
+    // Second }
+    expect(tokens[3]!.char).toBe(12);
+    expect(tokens[3]!.length).toBe(1);
+  });
+
+  test("skips non-interpolation expressions", () => {
+    const text = "name";
+    const entry: ExprTableEntry = {
+      id: "0" as any,
+      expressionType: "IsProperty" as any,
+      ast: {
+        $kind: "AccessScope",
+        span: { start: 0, end: 4 },
+        name: "name",
+      },
+    } as ExprTableEntry;
+    const spans = new Map([["0", { start: 0, end: 4 } as SourceSpan]]);
+
+    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(0);
+  });
+
+  test("skips interpolation without expressions", () => {
+    const text = "plain text";
+    const entry = createInterpEntry("0", {
+      $kind: "Interpolation",
+      span: { start: 0, end: 10 },
+      parts: ["plain text"],
+      expressions: [],
+    });
+    const spans = new Map([["0", { start: 0, end: 10 } as SourceSpan]]);
+
+    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(0);
+  });
+
+  test("skips interpolation entry without corresponding span", () => {
+    const text = "Hello ${name}!";
+    const entry = createInterpEntry("0", {
+      $kind: "Interpolation",
+      span: { start: 0, end: 14 },
+      parts: ["Hello ", "!"],
+      expressions: [
+        {
+          $kind: "AccessScope",
+          span: { start: 8, end: 12 },
+          name: "name",
+        },
+      ],
+    });
+    // Empty spans map
+    const spans = new Map<string, SourceSpan>();
+
+    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(0);
+  });
+
+  test("marks delimiters with defaultLibrary modifier", () => {
+    const text = "${x}";
+    const entry = createInterpEntry("0", {
+      $kind: "Interpolation",
+      span: { start: 0, end: 4 },
+      parts: ["", ""],
+      expressions: [
+        {
+          $kind: "AccessScope",
+          span: { start: 2, end: 3 },
+          name: "x",
+        },
+      ],
+    });
+    const spans = new Map([["0", { start: 0, end: 4 } as SourceSpan]]);
+
+    const tokens = extractInterpolationDelimiterTokens(text, [entry], spans);
+
+    expect(tokens.length).toBe(2);
+    expect(tokens[0]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+    expect(tokens[1]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
   });
 });

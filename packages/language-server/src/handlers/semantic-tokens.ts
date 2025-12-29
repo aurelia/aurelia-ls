@@ -6,6 +6,8 @@
  * - Custom element tags (distinguished from HTML tags)
  * - Expression variables, properties, and method calls
  * - Aurelia built-in contextual variables ($index, $first, $event, etc.)
+ * - Binding commands (.bind, .trigger, .two-way, etc.)
+ * - Interpolation delimiters (${ and })
  *
  * See vscode-roadmap.md Phase 6 for the full vision.
  */
@@ -16,7 +18,7 @@ import type {
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
-import type { LinkedRow, NodeSem, ExprTableEntry, SourceSpan } from "@aurelia-ls/compiler";
+import type { LinkedRow, NodeSem, ExprTableEntry, SourceSpan, LinkedInstruction } from "@aurelia-ls/compiler";
 import type { DOMNode, ElementNode } from "@aurelia-ls/compiler";
 
 /* ===========================
@@ -721,6 +723,182 @@ function findPropertyStart(text: string, span: SourceSpan, propName: string): nu
 }
 
 /* ===========================
+ * Binding Command Token Extraction
+ * =========================== */
+
+/**
+ * Binding commands that can appear after a dot in attribute names.
+ * Maps command to its canonical form for token emission.
+ */
+const BINDING_COMMANDS = new Set([
+  "bind", "to-view", "two-way", "from-view", "one-time",
+  "trigger", "capture", "delegate",
+  "ref", "call",
+]);
+
+/**
+ * Extract semantic tokens for binding commands from linked instructions.
+ * For attributes like `value.bind="..."`, emits a token for `.bind`.
+ */
+export function extractBindingCommandTokens(
+  text: string,
+  rows: LinkedRow[],
+): RawToken[] {
+  const tokens: RawToken[] = [];
+
+  for (const row of rows) {
+    for (const ins of row.instructions) {
+      const loc = (ins as { loc?: SourceSpan | null }).loc;
+      if (!loc) continue;
+
+      // Get the binding command based on instruction type
+      const command = getBindingCommand(ins, text, loc);
+      if (!command) continue;
+
+      // Find the command position in the attribute name
+      const attrText = text.slice(loc.start, loc.end);
+      const eqPos = attrText.indexOf("=");
+      const attrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
+
+      // Find the command after a dot in the attribute name
+      const commandPos = findCommandInAttrName(attrName, command);
+      if (commandPos === -1) continue;
+
+      const absolutePos = loc.start + commandPos;
+      const { line, char } = offsetToLineChar(text, absolutePos);
+
+      tokens.push({
+        line,
+        char,
+        length: command.length,
+        type: TokenType.parameter, // binding commands use parameter token type
+        modifiers: 0,
+      });
+    }
+  }
+
+  return tokens;
+}
+
+/**
+ * Determine the binding command for an instruction by parsing the source text.
+ * This approach works for all binding types by looking at the actual attribute syntax.
+ */
+function getBindingCommand(ins: LinkedInstruction, text: string, loc: SourceSpan): string | null {
+  // Extract the attribute name from the source text
+  const attrText = text.slice(loc.start, loc.end);
+  const eqPos = attrText.indexOf("=");
+  const attrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
+
+  // Find the last dot-separated segment that is a binding command
+  const parts = attrName.split(".");
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]!;
+    if (BINDING_COMMANDS.has(part)) return part;
+  }
+
+  // Check for @event shorthand (e.g., @click)
+  if (attrName.startsWith("@") && ins.kind === "listenerBinding") {
+    // @ shorthand maps to trigger, but we don't highlight it as a command
+    // since the @ itself is the shorthand
+    return null;
+  }
+
+  // Check for :prop shorthand (e.g., :value)
+  // This maps to bind/to-view but doesn't have a visible command
+  if (attrName.startsWith(":")) {
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Find the position of a command within an attribute name.
+ * Returns the position of the command (not including the dot).
+ */
+function findCommandInAttrName(attrName: string, command: string): number {
+  // Special case: "ref" as standalone attribute
+  if (attrName === command) {
+    return 0;
+  }
+
+  // Look for .command pattern
+  const pattern = "." + command;
+  const idx = attrName.indexOf(pattern);
+  if (idx === -1) return -1;
+  return idx + 1; // Return position after the dot
+}
+
+/* ===========================
+ * Interpolation Delimiter Token Extraction
+ * =========================== */
+
+/**
+ * Extract semantic tokens for interpolation delimiters (${ and }).
+ * Walks through the expression table to find interpolation expressions.
+ */
+export function extractInterpolationDelimiterTokens(
+  text: string,
+  exprTable: readonly ExprTableEntry[],
+  exprSpans: ReadonlyMap<string, SourceSpan>,
+): RawToken[] {
+  const tokens: RawToken[] = [];
+
+  for (const entry of exprTable) {
+    if (entry.expressionType !== "Interpolation") continue;
+
+    const exprSpan = exprSpans.get(entry.id);
+    if (!exprSpan) continue;
+
+    // The interpolation AST has parts and expressions arrays
+    // parts[i] is the text before expressions[i], parts[last] is after all expressions
+    // We need to find ${ before each expression and } after each expression
+    const ast = entry.ast as {
+      $kind: string;
+      span?: SourceSpan;
+      parts?: string[];
+      expressions?: ExpressionAst[];
+    };
+
+    if (!ast.expressions || ast.expressions.length === 0) continue;
+
+    // Find delimiters by looking for ${ and } in the text around expression spans
+    for (const expr of ast.expressions) {
+      if (!expr.span) continue;
+
+      // Find ${ before the expression
+      const openSearch = text.lastIndexOf("${", expr.span.start);
+      if (openSearch !== -1 && openSearch >= exprSpan.start) {
+        const { line, char } = offsetToLineChar(text, openSearch);
+        tokens.push({
+          line,
+          char,
+          length: 2, // ${
+          type: TokenType.keyword, // Use keyword for delimiters
+          modifiers: TokenModifier.defaultLibrary,
+        });
+      }
+
+      // Find } after the expression
+      const closeSearch = text.indexOf("}", expr.span.end);
+      if (closeSearch !== -1 && closeSearch < exprSpan.end + 5) { // Allow some slack
+        const { line, char } = offsetToLineChar(text, closeSearch);
+        tokens.push({
+          line,
+          char,
+          length: 1, // }
+          type: TokenType.keyword,
+          modifiers: TokenModifier.defaultLibrary,
+        });
+      }
+    }
+  }
+
+  return tokens;
+}
+
+/* ===========================
  * Handler
  * =========================== */
 
@@ -772,10 +950,16 @@ export function handleSemanticTokensFull(
     const exprSpans = compilation.exprSpans ?? new Map();
     const exprTokens = extractExpressionTokens(text, exprTable, exprSpans);
 
-    // Merge all tokens
-    const tokens = [...elementTokens, ...exprTokens];
+    // Extract binding command tokens (.bind, .trigger, etc.)
+    const commandTokens = extractBindingCommandTokens(text, template.rows);
 
-    ctx.logger.log(`[semanticTokens] extracted ${elementTokens.length} element tokens, ${exprTokens.length} expression tokens`);
+    // Extract interpolation delimiter tokens (${ and })
+    const delimiterTokens = extractInterpolationDelimiterTokens(text, exprTable, exprSpans);
+
+    // Merge all tokens
+    const tokens = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens];
+
+    ctx.logger.log(`[semanticTokens] extracted ${elementTokens.length} element, ${exprTokens.length} expression, ${commandTokens.length} command, ${delimiterTokens.length} delimiter tokens`);
 
     if (tokens.length === 0) {
       return null;
