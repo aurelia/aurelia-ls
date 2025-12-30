@@ -234,6 +234,17 @@ export type ElementBindableIR =
   | StylePropertyBindingIR
   | MultiAttrIR;
 
+/**
+ * Bindable types that can appear in custom attribute props.
+ * Narrower than ElementBindableIR because lowering only produces these three
+ * types for custom attributes (via lowerBindable/parseMultiBindings).
+ * StylePropertyBindingIR goes on element tail, MultiAttrIR is for repeat tail.
+ */
+export type AttributeBindableIR =
+  | PropertyBindingIR
+  | SetPropertyIR
+  | AttributeBindingIR;
+
 export type ControllerBindableIR =
   | PropertyBindingIR
   | SetPropertyIR
@@ -260,7 +271,7 @@ export interface HydrateElementIR {
 export interface HydrateAttributeIR {
   type: 'hydrateAttribute';
   res: string;
-  props: ElementBindableIR[];
+  props: AttributeBindableIR[];
   alias?: string | null;
   data?: Record<string, string | null>;
   loc?: SourceSpan | null;

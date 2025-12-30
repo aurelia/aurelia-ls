@@ -204,6 +204,7 @@ function walkRows(
                 exprToFrame.set(p.forOf.astId, propFrame); // header evaluated in outer frame
                 for (const a of p.aux) mapBindingSource(a.from, propFrame, exprToFrame, badCtx);
                 break;
+              /* c8 ignore next 2 -- type exhaustiveness guard */
               default:
                 assertUnreachable(p);
             }
@@ -246,7 +247,7 @@ function walkRows(
           for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
           break;
         }
-
+        /* c8 ignore next 2 -- type exhaustiveness guard */
         default:
           assertUnreachable(ins);
       }
@@ -549,6 +550,7 @@ function mapLinkedBindable(b: LinkedElementBindable, frame: FrameId, out: ExprId
       return;
     case "setProperty":
       return;
+    /* c8 ignore next 2 -- type exhaustiveness guard */
     default:
       assertUnreachable(b);
   }
@@ -614,6 +616,9 @@ function bindingNamesFromDeclaration(
 
 function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] {
   switch (pattern.$kind) {
+    // TODO: Parser currently returns top-level BadExpression on any error (fail-fast).
+    // Upgrade parser to produce nested BadExpression for partial error recovery,
+    // enabling better IDE experience (preserve valid bindings, localized errors).
     case "BadExpression":
       return [];
     case "BindingIdentifier":
@@ -632,6 +637,7 @@ function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] 
       if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
       return names;
     }
+    /* c8 ignore next 2 -- type exhaustiveness guard */
     default:
       return assertUnreachable(pattern);
   }
@@ -639,6 +645,9 @@ function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] 
 
 function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | null {
   switch (pattern.$kind) {
+    // TODO: Parser currently returns top-level BadExpression on any error (fail-fast).
+    // Upgrade parser to produce nested BadExpression for partial error recovery,
+    // enabling better IDE experience (preserve valid bindings, localized errors).
     case "BadExpression":
       return pattern;
     case "BindingIdentifier":
@@ -668,6 +677,7 @@ function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | 
       }
       return null;
     }
+    /* c8 ignore next 2 -- type exhaustiveness guard */
     default:
       return assertUnreachable(pattern);
   }

@@ -9,6 +9,7 @@ import {
   createCustomControllerConfig,
 } from "../../language/registry.js";
 import type {
+  AttributeBindableIR,
   ElementBindableIR,
   HydrateAttributeIR,
   HydrateElementIR,
@@ -59,7 +60,7 @@ function hasInlineBindings(value: string): boolean {
 
 /**
  * Parses multi-binding syntax: "prop1: value1; prop2.bind: expr; prop3: ${interp}"
- * Returns an array of ElementBindableIR instructions.
+ * Returns an array of AttributeBindableIR instructions (narrower type for custom attrs).
  */
 function parseMultiBindings(
   raw: string,
@@ -68,8 +69,8 @@ function parseMultiBindings(
   loc: P5Loc,
   valueLoc: P5Loc,
   table: ExprTable
-): ElementBindableIR[] {
-  const props: ElementBindableIR[] = [];
+): AttributeBindableIR[] {
+  const props: AttributeBindableIR[] = [];
   const len = raw.length;
   let start = 0;
 
@@ -174,7 +175,7 @@ export function lowerElementAttributes(
     loc: P5Loc,
     valueLoc: P5Loc,
     command: string | null
-  ) => {
+  ): void => {
     const to = camelCase(target);
     if (command) {
       sink.push({
@@ -281,7 +282,7 @@ export function lowerElementAttributes(
         s.command === null &&
         hasInlineBindings(raw);
 
-      let props: ElementBindableIR[];
+      let props: AttributeBindableIR[];
       if (isMultiBinding) {
         props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table);
       } else {

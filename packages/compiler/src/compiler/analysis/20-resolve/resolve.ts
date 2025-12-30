@@ -33,6 +33,7 @@ import type {
   HydrateElementIR,
   HydrateAttributeIR,
   ElementBindableIR,
+  AttributeBindableIR,
   SourceSpan,
 } from "../../model/ir.js";
 
@@ -539,6 +540,7 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
       return linkHydrateTemplateController(ins, host, ctx);
     case "hydrateLetElement":
       return linkHydrateLetElement(ins);
+    /* c8 ignore next 2 -- type exhaustiveness guard */
     default:
       return assertUnreachable(ins as never);
   }
@@ -731,13 +733,14 @@ function linkElementBindable(ins: ElementBindableIR, host: NodeSem, ctx: Resolve
       return linkStylePropertyBinding(ins);
     case "setProperty":
       return merge(linkSetProperty(ins, host, ctx), ctx);
+    /* c8 ignore next 2 -- type exhaustiveness guard */
     default:
       return assertUnreachable(ins as never);
   }
 }
 
 function linkAttributeBindable(
-  ins: ElementBindableIR,
+  ins: AttributeBindableIR,
   attr: AttrResRef | null,
 ): LinkedElementBindable {
   switch (ins.type) {
@@ -772,8 +775,6 @@ function linkAttributeBindable(
         loc: ins.loc ?? null,
       };
     }
-    case "stylePropertyBinding":
-      return linkStylePropertyBinding(ins);
     case "setProperty": {
       const bindable = attr ? resolveAttrBindable(attr, ins.to) : null;
       const target: TargetSem = bindable
@@ -787,8 +788,6 @@ function linkAttributeBindable(
         loc: ins.loc ?? null,
       };
     }
-    default:
-      return assertUnreachable(ins as never);
   }
 }
 
@@ -871,6 +870,7 @@ function linkHydrateTemplateController(
       };
       return linked;
     } else {
+      /* c8 ignore next -- type exhaustiveness guard */
       return assertUnreachable(p as never);
     }
   });
@@ -892,6 +892,7 @@ function linkHydrateTemplateController(
       case "default":
         branch = { kind: "default" };
         break;
+      /* c8 ignore next 2 -- type exhaustiveness guard */
       default:
         assertUnreachable(ins.branch);
     }
