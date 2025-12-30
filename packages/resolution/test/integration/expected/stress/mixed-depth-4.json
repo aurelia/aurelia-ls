@@ -1,5 +1,5 @@
 {
-  "targets": 4,
+  "targets": 2,
   "expressions": 17,
   "instructions": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "kind": "controller",
-      "target": 3,
+      "target": 1,
       "name": "switch",
       "template": 1,
       "bindings": [

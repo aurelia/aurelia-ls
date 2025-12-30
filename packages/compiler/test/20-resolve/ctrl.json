@@ -154,5 +154,49 @@
         { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" }
       ]
     }
+  },
+  {
+    "name": "R-C-17 custom template controller registered in attributes resolves correctly",
+    "markup": "<div my-tc.bind=\"ctx\"></div>",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "my-tc": {
+            "kind": "attribute",
+            "name": "my-tc",
+            "isTemplateController": true,
+            "bindables": { "value": { "name": "value" } },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "my-tc", "to": "value", "target": "controller", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
+    "name": "R-C-18 custom TC without isTemplateController flag not treated as controller",
+    "markup": "<div my-attr.bind=\"ctx\"></div>",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "my-attr": {
+            "kind": "attribute",
+            "name": "my-attr",
+            "isTemplateController": false,
+            "bindables": { "value": { "name": "value" } },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "toView" }
+      ]
+    }
   }
 ]

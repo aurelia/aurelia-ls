@@ -164,7 +164,7 @@
     },
     {
       "kind": "controller",
-      "target": 16,
+      "target": 14,
       "name": "switch",
       "template": 14,
       "bindings": [

@@ -166,10 +166,14 @@ function walkRows(
 
         // ---- Template controllers ----
         case "hydrateTemplateController": {
-          const isPromiseBranch = ins.res === "promise" && !!ins.branch;
-          const propFrame = isPromiseBranch ? frames[currentFrame]?.parent ?? currentFrame : currentFrame;
+          // For linking controllers (then/catch/pending/else/case/default-case), props are forwarded
+          // from parent and should be evaluated in the grandparent frame (parent's outer frame).
+          const isLinkingController = !!ins.controller.config.linksTo;
+          const propFrame = isLinkingController
+            ? frames[currentFrame]?.parent ?? currentFrame
+            : currentFrame;
 
-          // 1) Map controller prop expressions at the *outer* frame.
+          // 1) Map controller prop expressions at the appropriate frame.
           for (const p of ins.props) {
             switch (p.kind) {
               case "propertyBinding":
@@ -189,7 +193,7 @@ function walkRows(
           }
 
           // 2) Enter the controller's frame according to semantics.scope
-          const nextFrame = isPromiseBranch ? currentFrame : enterControllerFrame(ins, currentFrame, frames, frameIds);
+          const nextFrame = enterControllerFrame(ins, currentFrame, frames, frameIds);
 
           // 3) Populate locals / overlays + record origin metadata
           switch (ins.res) {
@@ -236,21 +240,35 @@ function walkRows(
               break;
             }
             case "promise": {
-              if (!isPromiseBranch) {
-                const valueProp = getValueProp(ins);
-                const ids = exprIdsOf(valueProp.from);
-                const [valueExprId] = ids;
-                if (valueExprId) {
-                  const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
-                  setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...provenanceFromSpan("bind", originSpan, "promise controller") });
-                }
+              const valueProp = getValueProp(ins);
+              const ids = exprIdsOf(valueProp.from);
+              const [valueExprId] = ids;
+              if (valueExprId) {
+                const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
+                setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...provenanceFromSpan("bind", originSpan, "promise controller") });
               }
+              break;
+            }
+            case "then":
+            case "catch": {
+              // Branch controllers with scope: "overlay" - set origin and add alias
+              const valueProp = getValueProp(ins);
+              const ids = exprIdsOf(valueProp.from);
+              const [valueExprId] = ids;
+              if (valueExprId) {
+                const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
+                setFrameOrigin(nextFrame, frames, { kind: ins.res, valueExprId, ...provenanceFromSpan("bind", originSpan, `${ins.res} controller`) });
+              }
+              // Add promise alias symbol
               if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
                 const aliasName = ins.branch.local && ins.branch.local.length > 0 ? ins.branch.local : ins.branch.kind;
                 addUniqueSymbols(nextFrame, frames, [{ kind: "promiseAlias", name: aliasName, branch: ins.branch.kind, span: ins.loc ?? null }], diags);
               }
               break;
             }
+            case "pending":
+              // scope: "reuse", no alias - nothing to do
+              break;
             case "if":
             case "else":
             case "switch":

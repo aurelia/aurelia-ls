@@ -141,8 +141,20 @@ export function buildFrameAnalysis(
       if (s.kind === "repeatContextual") env.set(s.name, contextualType(s.name));
     }
 
-    if (f.origin?.kind === "promise") {
-      const base = h.promiseBase;
+    // Handle promiseAlias symbols - they can be on promise frames OR on then/catch frames.
+    // For then/catch frames, we need to look up the promiseBase from the parent (promise) frame.
+    //
+    // Type assignments match runtime semantics (see promise.ts in aurelia runtime):
+    // - then alias: Awaited<T> where T is the promise type (resolved value)
+    // - catch alias: `any` (rejection can be any value, not just Error)
+    // - pending: no alias (just shows loading state)
+    if (f.origin?.kind === "promise" || f.origin?.kind === "then" || f.origin?.kind === "catch") {
+      // For promise frames, use our own promiseBase. For then/catch, find parent's promiseBase.
+      let base = h.promiseBase;
+      if (!base && f.parent != null) {
+        const parentHints = hints.get(f.parent);
+        base = parentHints?.promiseBase;
+      }
       for (const s of f.symbols) {
         if (s.kind === "promiseAlias") {
           if (s.branch === "then" && base) env.set(s.name, `Awaited<${base}>`);

@@ -1,10 +1,10 @@
 {
-  "targets": 20,
+  "targets": 15,
   "expressions": 24,
   "instructions": [
     {
       "kind": "controller",
-      "target": 4,
+      "target": 0,
       "name": "switch",
       "template": 0,
       "bindings": [
@@ -17,7 +17,7 @@
     },
     {
       "kind": "controller",
-      "target": 9,
+      "target": 5,
       "name": "switch",
       "template": 1,
       "bindings": [
@@ -30,7 +30,7 @@
     },
     {
       "kind": "controller",
-      "target": 13,
+      "target": 10,
       "name": "switch",
       "template": 2,
       "bindings": [
@@ -43,7 +43,7 @@
     },
     {
       "kind": "controller",
-      "target": 19,
+      "target": 14,
       "name": "switch",
       "template": 3,
       "bindings": [
@@ -120,7 +120,7 @@
           "instructions": []
         },
         {
-          "name": "default_4",
+          "name": "default-case_4",
           "instructions": []
         }
       ]
@@ -207,7 +207,7 @@
           ]
         },
         {
-          "name": "default_9",
+          "name": "default-case_9",
           "instructions": []
         }
       ]
@@ -309,7 +309,7 @@
           ]
         },
         {
-          "name": "default_15",
+          "name": "default-case_15",
           "instructions": []
         }
       ]

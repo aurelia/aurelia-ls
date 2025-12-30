@@ -72,21 +72,15 @@ import type {
   PlanLetElement,
   PlanLetBinding,
   PlanController,
-  PlanRepeatController,
-  PlanIfController,
-  PlanElseController,
-  PlanWithController,
-  PlanSwitchController,
-  PlanCaseController,
-  PlanDefaultCaseController,
-  PlanPromiseController,
-  PlanPortalController,
+  PlanAuxExpr,
   PlanExpression,
   PlanScope,
   PlanScopeKind,
   PlanLocal,
   PlanLocalSource,
 } from "./types.js";
+
+import { getControllerConfig } from "../../language/registry.js";
 
 /* =============================================================================
  * Public API
@@ -879,43 +873,139 @@ function transformLetElement(ins: LinkedHydrateLetElement, ctx: PlanningContext)
 
 /* =============================================================================
  * Template Controller Transformations
+ * -----------------------------------------------------------------------------
+ * Unified config-driven transformation for ALL template controllers.
+ * No switch-on-name — all behavior derived from ControllerConfig.
  * ============================================================================= */
 
+/**
+ * Transform a LinkedHydrateTemplateController to a PlanController.
+ *
+ * This is the single entry point for ALL controller types (built-in and custom).
+ * Behavior is entirely derived from the controller's ControllerConfig:
+ *
+ * - trigger.kind === "iterator" → extract ForOfStatement, locals, aux exprs
+ * - trigger.kind === "value" → extract value expression
+ * - trigger.kind === "branch" → may or may not have value expression
+ * - trigger.kind === "marker" → no expression needed
+ *
+ * - config.branches?.relationship === "child" → collect child branch controllers
+ * - config.injects?.contextuals → populate contextuals array
+ * - config.injects?.alias → populate locals with alias name
+ */
 function transformController(
   ins: LinkedHydrateTemplateController,
   instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
   currentFrame: FrameId,
   ctx: PlanningContext,
 ): PlanController {
-  // Get the frame for this controller from scope analysis
-  const controllerFrame = findControllerFrame(ins, currentFrame, ctx);
+  const { config } = ins.controller;
+  const frameId = findControllerFrame(ins, currentFrame, ctx);
+  const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
 
-  switch (ins.res) {
-    case "repeat":
-      return transformRepeatController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "if":
-      return transformIfController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "else":
-      return transformElseController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "with":
-      return transformWithController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "switch":
-      return transformSwitchController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "case":
-      return transformCaseController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "default-case":
-      return transformDefaultCaseController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "promise":
-      return transformPromiseController(ins, instructionsByTarget, controllerFrame, ctx);
-    case "portal":
-      return transformPortalController(ins, instructionsByTarget, controllerFrame, ctx);
-    default:
-      // Custom template controllers - for now, treat as simple controllers like 'with'
-      // TODO: Generate proper plan for custom TCs based on their config
-      return transformWithController(ins, instructionsByTarget, controllerFrame, ctx);
+  // For controllers with child branches (switch, promise), we collect branches separately
+  // and don't transform the nested template normally
+  const hasChildBranches = config.branches?.relationship === "child";
+
+  // Transform the nested template (unless this controller has child branches)
+  // Controllers with child branches process their children via collectChildBranches
+  const template = (nestedLinked && !hasChildBranches)
+    ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
+    : createEmptyFragment();
+
+  // Build base result
+  const result: PlanController = {
+    resource: ins.res,
+    config,
+    frameId,
+    template,
+    targetIndex: ctx.allocateTarget(),
+  };
+
+  if (ins.loc) result.loc = ins.loc;
+
+  // === Handle trigger-derived data ===
+  switch (config.trigger.kind) {
+    case "iterator": {
+      // Iterator trigger: extract ForOfStatement, locals, aux expressions
+      const iteratorBinding = ins.props.find(
+        (p): p is LinkedIteratorBinding => p.kind === "iteratorBinding"
+      );
+      if (iteratorBinding) {
+        result.exprId = iteratorBinding.forOf.astId;
+        ctx.registerExpression(result.exprId, ins.loc ?? undefined);
+
+        // Extract locals from ForOfStatement destructuring
+        result.locals = extractIteratorLocals(result.exprId, ctx);
+
+        // Collect auxiliary expressions (key, etc.)
+        const auxExprs: PlanAuxExpr[] = [];
+        for (const aux of iteratorBinding.aux) {
+          const auxExprId = primaryExprId(aux.from);
+          ctx.registerExpression(auxExprId, ins.loc ?? undefined);
+          auxExprs.push({ name: aux.name, exprId: auxExprId });
+        }
+        if (auxExprs.length > 0) {
+          result.auxExprs = auxExprs;
+        }
+      }
+      break;
+    }
+
+    case "value": {
+      // Value trigger: extract the primary value expression
+      const valueProp = ins.props.find(
+        (p): p is LinkedPropertyBinding => p.kind === "propertyBinding"
+      );
+      if (valueProp) {
+        result.exprId = primaryExprId(valueProp.from);
+        ctx.registerExpression(result.exprId, ins.loc ?? undefined);
+      }
+      break;
+    }
+
+    case "branch": {
+      // Branch trigger: may have a value expression (case) or not (pending)
+      const valueProp = ins.props.find(
+        (p): p is LinkedPropertyBinding => p.kind === "propertyBinding"
+      );
+      if (valueProp) {
+        result.exprId = primaryExprId(valueProp.from);
+        ctx.registerExpression(result.exprId, ins.loc ?? undefined);
+      }
+
+      // Handle alias local (then="result", catch="error")
+      // The 'local' property only exists on then/catch branches, not pending
+      if (ins.branch && "local" in ins.branch && ins.branch.local) {
+        result.locals = [ins.branch.local];
+      }
+      break;
+    }
+
+    case "marker":
+      // Marker trigger: no expression needed (else, default-case)
+      break;
   }
+
+  // === Handle injects-derived data ===
+  if (config.injects?.contextuals && config.injects.contextuals.length > 0) {
+    result.contextuals = [...config.injects.contextuals];
+  }
+
+  // === Handle child branches ===
+  if (hasChildBranches && nestedLinked) {
+    const branches = collectChildBranches(nestedLinked, frameId, ctx);
+    if (branches.length > 0) {
+      result.branches = branches;
+    }
+  }
+
+  return result;
 }
 
+/**
+ * Find the appropriate frame for a controller based on its scope config.
+ */
 function findControllerFrame(
   ins: LinkedHydrateTemplateController,
   currentFrame: FrameId,
@@ -934,360 +1024,39 @@ function findControllerFrame(
   return currentFrame;
 }
 
-function transformRepeatController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanRepeatController {
-  const iteratorBinding = ins.props.find((p): p is LinkedIteratorBinding => p.kind === "iteratorBinding");
-  if (!iteratorBinding) {
-    throw new Error("repeat controller missing iteratorBinding");
-  }
-
-  ctx.registerExpression(iteratorBinding.forOf.astId, ins.loc ?? undefined);
-
-  // Extract locals from ForOfStatement
-  const locals = extractIteratorLocals(iteratorBinding.forOf.astId, ctx);
-
-  // Extract contextuals from controller config (convert to mutable array)
-  const contextuals = [...(ins.controller.config.injects?.contextuals ?? [])];
-
-  // Handle key expression
-  let keyExprId: ExprId | undefined;
-  const keyAux = iteratorBinding.aux.find(a => a.name === "key");
-  if (keyAux) {
-    keyExprId = primaryExprId(keyAux.from);
-    ctx.registerExpression(keyExprId, ins.loc ?? undefined);
-  }
-
-  // Look up the LinkedTemplate for the nested template
-  const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
-  const template = nestedLinked
-    ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
-    : createEmptyFragment();
-
-  const result: PlanRepeatController = {
-    kind: "repeat",
-    frameId,
-    iteratorExprId: iteratorBinding.forOf.astId,
-    locals,
-    contextuals,
-    template,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  if (keyExprId) result.keyExprId = keyExprId;
-  if (ins.loc) result.loc = ins.loc;
-
-  return result;
-}
-
-function transformIfController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanIfController {
-  const valueProp = ins.props.find((p): p is LinkedPropertyBinding => p.kind === "propertyBinding");
-  if (!valueProp) {
-    throw new Error("if controller missing condition binding");
-  }
-
-  const conditionExprId = primaryExprId(valueProp.from);
-  ctx.registerExpression(conditionExprId, ins.loc ?? undefined);
-
-  // Look up the LinkedTemplate for the nested template
-  const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
-  const template = nestedLinked
-    ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
-    : createEmptyFragment();
-
-  const result: PlanIfController = {
-    kind: "if",
-    frameId,
-    conditionExprId,
-    template,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
-}
-
 /**
- * Transform `else` controller.
- * Else is linked to preceding if at runtime via Else.link() hook.
+ * Collect child branch controllers from a parent controller's nested template.
+ * Used for switch (case/default-case) and promise (then/catch/pending).
  */
-function transformElseController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+function collectChildBranches(
+  linkedDef: LinkedTemplate,
   frameId: FrameId,
   ctx: PlanningContext,
-): PlanElseController {
-  // Transform the nested template
-  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
-  const template = linkedDef
-    ? transformNestedTemplate(linkedDef, instructionsByTarget, frameId, ctx)
-    : createEmptyFragment();
+): PlanController[] {
+  const branches: PlanController[] = [];
 
-  const result: PlanElseController = {
-    kind: "else",
-    frameId,
-    template,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
-}
-
-/**
- * Transform `case` controller.
- * Case is a child of switch, linked at runtime via Case.link() hook.
- */
-function transformCaseController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanCaseController {
-  const valueProp = ins.props.find((p): p is LinkedPropertyBinding => p.kind === "propertyBinding");
-  if (!valueProp) {
-    throw new Error("case controller missing value binding");
+  // Build instruction map for the nested template
+  const defInstructionsByTarget = new Map<NodeId, LinkedInstruction[]>();
+  for (const row of linkedDef.rows) {
+    defInstructionsByTarget.set(row.target, row.instructions);
   }
 
-  const valueExprId = primaryExprId(valueProp.from);
-  ctx.registerExpression(valueExprId, ins.loc ?? undefined);
-
-  // Transform the nested template
-  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
-  const template = linkedDef
-    ? transformNestedTemplate(linkedDef, instructionsByTarget, frameId, ctx)
-    : createEmptyFragment();
-
-  const result: PlanCaseController = {
-    kind: "case",
-    frameId,
-    valueExprId,
-    template,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
-}
-
-/**
- * Transform `default-case` controller.
- * Default-case is a child of switch, linked at runtime via DefaultCase.link() hook.
- */
-function transformDefaultCaseController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanDefaultCaseController {
-  // Transform the nested template
-  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
-  const template = linkedDef
-    ? transformNestedTemplate(linkedDef, instructionsByTarget, frameId, ctx)
-    : createEmptyFragment();
-
-  const result: PlanDefaultCaseController = {
-    kind: "default-case",
-    frameId,
-    template,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
-}
-
-function transformWithController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanWithController {
-  const valueProp = ins.props.find((p): p is LinkedPropertyBinding => p.kind === "propertyBinding");
-  if (!valueProp) {
-    throw new Error("with controller missing value binding");
-  }
-
-  const valueExprId = primaryExprId(valueProp.from);
-  ctx.registerExpression(valueExprId, ins.loc ?? undefined);
-
-  // Look up the LinkedTemplate for the nested template
-  const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
-  const template = nestedLinked
-    ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
-    : createEmptyFragment();
-
-  const result: PlanWithController = {
-    kind: "with",
-    frameId,
-    valueExprId,
-    template,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
-}
-
-function transformSwitchController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanSwitchController {
-  const valueProp = ins.props.find((p): p is LinkedPropertyBinding => p.kind === "propertyBinding");
-  if (!valueProp) {
-    throw new Error("switch controller missing value binding");
-  }
-
-  const valueExprId = primaryExprId(valueProp.from);
-  ctx.registerExpression(valueExprId, ins.loc ?? undefined);
-
-  // Look up the LinkedTemplate for switch's definition template
-  // This template contains the case/default-case controllers as children
-  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
-  const cases: (PlanCaseController | PlanDefaultCaseController)[] = [];
-
-  if (linkedDef) {
-    // Build instruction map for the switch's definition template
-    const defInstructionsByTarget = new Map<NodeId, LinkedInstruction[]>();
-    for (const row of linkedDef.rows) {
-      defInstructionsByTarget.set(row.target, row.instructions);
-    }
-
-    // Process each row to find case/default-case controllers
-    for (const row of linkedDef.rows) {
-      for (const childIns of row.instructions) {
-        if (childIns.kind === "hydrateTemplateController") {
-          if (childIns.res === "case") {
-            const caseCtrl = transformCaseController(childIns, defInstructionsByTarget, frameId, ctx);
-            cases.push(caseCtrl);
-          } else if (childIns.res === "default-case") {
-            const defaultCaseCtrl = transformDefaultCaseController(childIns, defInstructionsByTarget, frameId, ctx);
-            cases.push(defaultCaseCtrl);
-          }
+  // Find all child template controllers
+  for (const row of linkedDef.rows) {
+    for (const childIns of row.instructions) {
+      if (childIns.kind === "hydrateTemplateController") {
+        // Check if this is a branch controller (has linksTo in its config)
+        const childConfig = childIns.controller.config;
+        if (childConfig.linksTo) {
+          // Recursively transform the branch controller
+          const branchCtrl = transformController(childIns, defInstructionsByTarget, frameId, ctx);
+          branches.push(branchCtrl);
         }
       }
     }
   }
 
-  const result: PlanSwitchController = {
-    kind: "switch",
-    frameId,
-    valueExprId,
-    cases,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
-}
-
-function transformPromiseController(
-  ins: LinkedHydrateTemplateController,
-  _instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanPromiseController {
-  const valueProp = ins.props.find((p): p is LinkedPropertyBinding => p.kind === "propertyBinding");
-  if (!valueProp) {
-    throw new Error("promise controller missing value binding");
-  }
-
-  const valueExprId = primaryExprId(valueProp.from);
-  ctx.registerExpression(valueExprId, ins.loc ?? undefined);
-
-  const result: PlanPromiseController = {
-    kind: "promise",
-    frameId,
-    valueExprId,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  // Look up the promise's definition template which contains branch controllers
-  const linkedDef = ctx.getLinkedTemplate(ins.def.dom);
-  if (linkedDef) {
-    // Build instruction map for nested template transformation
-    const defInstructionsByTarget = new Map<NodeId, LinkedInstruction[]>();
-    for (const row of linkedDef.rows) {
-      defInstructionsByTarget.set(row.target, row.instructions);
-    }
-
-    // Find and transform each branch (pending/then/catch)
-    for (const row of linkedDef.rows) {
-      for (const childIns of row.instructions) {
-        if (childIns.kind === "hydrateTemplateController" && childIns.res === "promise" && childIns.branch) {
-          // Transform this branch's nested template directly
-          const branchLinked = ctx.getLinkedTemplate(childIns.def.dom);
-          const template = branchLinked
-            ? transformNestedTemplate(branchLinked, defInstructionsByTarget, frameId, ctx)
-            : createEmptyFragment();
-
-          // Store on the appropriate field based on branch kind
-          switch (childIns.branch.kind) {
-            case "pending":
-              result.pendingTemplate = template;
-              result.pendingFrameId = frameId;
-              break;
-            case "then":
-              result.thenTemplate = template;
-              if (childIns.branch.local) result.thenLocal = childIns.branch.local;
-              result.thenFrameId = frameId;
-              break;
-            case "catch":
-              result.catchTemplate = template;
-              if (childIns.branch.local) result.catchLocal = childIns.branch.local;
-              result.catchFrameId = frameId;
-              break;
-          }
-        }
-      }
-    }
-  }
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
-}
-
-function transformPortalController(
-  ins: LinkedHydrateTemplateController,
-  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
-  frameId: FrameId,
-  ctx: PlanningContext,
-): PlanPortalController {
-  // Look up the LinkedTemplate for the nested template
-  const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
-  const template = nestedLinked
-    ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
-    : createEmptyFragment();
-
-  const result: PlanPortalController = {
-    kind: "portal",
-    frameId,
-    template,
-    targetIndex: ctx.allocateTarget(),
-  };
-
-  // Check for target expression or selector in props
-  const targetProp = ins.props.find((p): p is LinkedPropertyBinding =>
-    p.kind === "propertyBinding" && p.to === "target"
-  );
-  if (targetProp) {
-    const targetExprId = primaryExprId(targetProp.from);
-    ctx.registerExpression(targetExprId, ins.loc ?? undefined);
-    result.targetExprId = targetExprId;
-  }
-
-  if (ins.loc) result.loc = ins.loc;
-  return result;
+  return branches;
 }
 
 function transformNestedTemplate(

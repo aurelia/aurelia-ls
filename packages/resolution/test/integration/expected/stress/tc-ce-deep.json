@@ -81,7 +81,7 @@
     },
     {
       "kind": "controller",
-      "target": 10,
+      "target": 7,
       "name": "switch",
       "template": 7,
       "bindings": [
@@ -353,7 +353,7 @@
           ]
         },
         {
-          "name": "default_10",
+          "name": "default-case_10",
           "instructions": [
             {
               "kind": "element",

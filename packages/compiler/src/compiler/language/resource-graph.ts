@@ -1,7 +1,7 @@
 import type {
   AttrRes,
   BindingBehaviorSig,
-  Controllers,
+  ControllerConfig,
   ElementRes,
   Semantics,
   ValueConverterSig,
@@ -13,7 +13,7 @@ export type ResourceScopeId = string & Brand<"ResourceScopeId">;
 export interface ResourceCollections {
   elements: Record<string, ElementRes>;
   attributes: Record<string, AttrRes>;
-  controllers: Controllers;
+  controllers: Record<string, ControllerConfig>;
   valueConverters: Record<string, ValueConverterSig>;
   bindingBehaviors: Record<string, BindingBehaviorSig>;
 }

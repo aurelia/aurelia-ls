@@ -57,6 +57,8 @@
         { "name": "repeat" },
         { "name": "if" },
         { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" },
         { "name": "with" }
       ],
       "lets": [

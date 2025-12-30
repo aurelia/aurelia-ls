@@ -367,7 +367,7 @@ function injectPromiseBranchesIntoDef(
       instructions: [
         {
           type: "hydrateTemplateController",
-          res: "promise",
+          res: branch.kind,  // Use actual branch name (then/catch/pending), not "promise"
           def: branchDef,
           props: [valueProp],
           alias: branch.kind === "pending" ? null : branch.kind,

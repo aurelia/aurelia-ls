@@ -101,7 +101,9 @@
     "markup": "<div promise><template then=\"r\"><span>${a}</span></template><template catch><span>${b}</span></template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -146,7 +148,8 @@
     "markup": "<div promise.bind=\"p\"><template then><b>${a}</b></template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -159,7 +162,8 @@
     "markup": "<div promise><template catch><i>${e}</i></template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -293,7 +297,10 @@
     "markup": "<div promise.bind=\"p\"><span then.from-view=\"data\">${data.toUpperCase()}</span><i catch.from-view=\"err\">${err}</i><span pending>loading</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" },
+        { "name": "pending" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -307,7 +314,9 @@
     "markup": "<div promise.bind=\"p\"><span then=\"d\">${d}</span><b catch=\"e\">${e}</b></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -321,7 +330,9 @@
     "markup": "<div promise><span then>${a}</span><span catch>${b}</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -335,7 +346,9 @@
     "markup": "<div promise.bind=\"p\"><template then=\"x\"><em>${x}</em></template><span catch.from-view=\"y\">${y}</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -391,7 +404,8 @@
     "markup": "<div promise><span then=\"a ${b}\">${b}</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -503,7 +517,9 @@
     "markup": "<div promise.bind=\"p\"><template pending>Loading...</template><template then=\"r\">${r}</template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "pending" },
+        { "name": "then" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -516,7 +532,10 @@
     "markup": "<div promise.bind=\"p\"><template pending>Wait...</template><template then=\"v\">${v}</template><template catch=\"e\">${e}</template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "pending" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -561,7 +580,8 @@
     "markup": "<div promise.bind=\"p\"><span then=\"val${x}\">${x}</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },

@@ -1,5 +1,5 @@
 {
-  "targets": 4,
+  "targets": 12,
   "expressions": 15,
   "instructions": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "kind": "controller",
-      "target": 1,
+      "target": 4,
       "name": "promise",
       "template": 1,
       "bindings": [
@@ -30,7 +30,7 @@
     },
     {
       "kind": "controller",
-      "target": 2,
+      "target": 8,
       "name": "promise",
       "template": 2,
       "bindings": [
@@ -43,7 +43,7 @@
     },
     {
       "kind": "controller",
-      "target": 3,
+      "target": 11,
       "name": "promise",
       "template": 3,
       "bindings": [
@@ -64,21 +64,39 @@
           "target": 0,
           "name": "pending",
           "template": 0,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "dataPromise",
+              "mode": "toView"
+            }
+          ]
         },
         {
           "kind": "controller",
           "target": 1,
           "name": "then",
           "template": 1,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "dataPromise",
+              "mode": "toView"
+            }
+          ]
         },
         {
           "kind": "controller",
           "target": 2,
           "name": "catch",
           "template": 2,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "dataPromise",
+              "mode": "toView"
+            }
+          ]
         }
       ],
       "templates": [
@@ -116,21 +134,39 @@
           "target": 0,
           "name": "pending",
           "template": 0,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "userPromise",
+              "mode": "toView"
+            }
+          ]
         },
         {
           "kind": "controller",
           "target": 1,
           "name": "then",
           "template": 1,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "userPromise",
+              "mode": "toView"
+            }
+          ]
         },
         {
           "kind": "controller",
           "target": 2,
           "name": "catch",
           "template": 2,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "userPromise",
+              "mode": "toView"
+            }
+          ]
         }
       ],
       "templates": [
@@ -185,14 +221,26 @@
           "target": 0,
           "name": "then",
           "template": 0,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "quickPromise",
+              "mode": "toView"
+            }
+          ]
         },
         {
           "kind": "controller",
           "target": 1,
           "name": "catch",
           "template": 1,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "quickPromise",
+              "mode": "toView"
+            }
+          ]
         }
       ],
       "templates": [
@@ -226,14 +274,26 @@
           "target": 0,
           "name": "pending",
           "template": 0,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "outerPromise",
+              "mode": "toView"
+            }
+          ]
         },
         {
           "kind": "controller",
           "target": 1,
           "name": "then",
           "template": 1,
-          "bindings": []
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "outerPromise",
+              "mode": "toView"
+            }
+          ]
         }
       ],
       "templates": [

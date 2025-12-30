@@ -39,7 +39,9 @@ export type FrameKind =
 export type FrameOrigin =
   | ({ kind: "repeat";  forOfAstId: ExprId } & Provenance)
   | ({ kind: "with";    valueExprId: ExprId } & Provenance)
-  | ({ kind: "promise"; valueExprId: ExprId; branch?: "then" | "catch" } & Provenance);
+  | ({ kind: "promise"; valueExprId: ExprId } & Provenance)
+  | ({ kind: "then";    valueExprId: ExprId } & Provenance)
+  | ({ kind: "catch";   valueExprId: ExprId } & Provenance);
 
 /**
  * Overlay base kinds:

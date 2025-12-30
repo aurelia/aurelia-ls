@@ -214,7 +214,8 @@ export function resolveIteratorAuxSpec(
   name: string,
   authoredMode: BindingMode,
 ): IteratorAuxSpec | null {
-  const tailSpec = lookup.sem.resources.controllers.repeat.tailProps?.[name];
+  const repeatConfig = lookup.sem.resources.controllers["repeat"];
+  const tailSpec = repeatConfig?.tailProps?.[name];
   if (!tailSpec) return null;
   const accepts = tailSpec.accepts ?? ["bind", null];
   const incoming: "bind" | null = authoredMode === "default" ? null : "bind";

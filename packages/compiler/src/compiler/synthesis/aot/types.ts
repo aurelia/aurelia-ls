@@ -26,6 +26,7 @@ import type {
   JsonValue,
   AnyBindingExpression,
 } from "../../model/index.js";
+import type { ControllerConfig } from "../../language/registry.js";
 
 /* =============================================================================
  * AOT PLAN MODULE - Top-level container
@@ -365,20 +366,39 @@ export interface PlanLetBinding {
 
 /* =============================================================================
  * TEMPLATE CONTROLLERS
+ * -----------------------------------------------------------------------------
+ * Unified representation for ALL template controllers (built-in and custom).
+ *
+ * Key design: Controllers are defined by their ControllerConfig, not by
+ * hardcoded type variants. This enables custom TCs (virtual-repeat, async-if,
+ * user-defined) to receive identical treatment to built-ins.
+ *
+ * All behavior is derived from the config's 6 orthogonal axes:
+ * - trigger: value | iterator | branch | marker
+ * - scope: reuse | overlay
+ * - cardinality: zero-one | zero-many | one-of-n | one
+ * - branches: child branch controllers (switch cases, promise branches)
+ * - injects: contextuals ($index, etc.) and aliases (with, then, catch)
+ * - placement: in-place | teleported
  * ============================================================================= */
 
-export type PlanController =
-  | PlanRepeatController
-  | PlanIfController
-  | PlanElseController
-  | PlanWithController
-  | PlanSwitchController
-  | PlanCaseController
-  | PlanDefaultCaseController
-  | PlanPromiseController
-  | PlanPortalController;
+/**
+ * Unified template controller in the AOT plan.
+ *
+ * All controller variations are expressed through:
+ * - `resource`: The controller name (e.g., "repeat", "virtual-repeat")
+ * - `config`: The ControllerConfig defining all semantics
+ * - Trigger-derived data: exprId, auxExprs
+ * - Injects-derived data: locals, contextuals
+ * - Branches-derived data: branches array for child controllers
+ */
+export interface PlanController {
+  /** Controller resource name (e.g., "repeat", "if", "virtual-repeat") */
+  resource: string;
 
-interface PlanControllerBase {
+  /** Controller config (defines ALL semantics via 6 axes) */
+  config: ControllerConfig;
+
   /** Frame ID for this controller's scope */
   frameId: FrameId;
 
@@ -387,173 +407,59 @@ interface PlanControllerBase {
 
   /** Source location */
   loc?: SourceSpan;
-}
 
-/**
- * Repeat controller (e.g., `repeat.for="item of items"`).
- */
-export interface PlanRepeatController extends PlanControllerBase {
-  kind: "repeat";
-
-  /** Iterator expression ID (ForOfStatement in expr table) */
-  iteratorExprId: ExprId;
-
-  /** Loop variable name(s) - supports destructuring */
-  locals: string[];
-
-  /** Contextual variables ($index, $first, $last, etc.) */
-  contextuals: string[];
-
-  /** Key expression for efficient diffing (optional) */
-  keyExprId?: ExprId;
-
-  /** Inner template (repeated content) */
-  template: PlanNode;
-}
-
-/**
- * If controller (e.g., `if.bind="condition"`).
- */
-export interface PlanIfController extends PlanControllerBase {
-  kind: "if";
-
-  /** Condition expression ID */
-  conditionExprId: ExprId;
-
-  /** True branch template */
-  template: PlanNode;
-}
-
-/**
- * Else controller (sibling to if controller).
- * Linked at runtime via Else.link() hook.
- */
-export interface PlanElseController extends PlanControllerBase {
-  kind: "else";
-
-  /** Else branch template */
-  template: PlanNode;
-}
-
-/**
- * With controller (e.g., `with.bind="object"`).
- * Creates a new scope with the value as the binding context.
- */
-export interface PlanWithController extends PlanControllerBase {
-  kind: "with";
-
-  /** Value expression ID */
-  valueExprId: ExprId;
-
-  /** Inner template */
-  template: PlanNode;
-}
-
-/**
- * Switch controller (e.g., `switch.bind="value"`).
- */
-export interface PlanSwitchController extends PlanControllerBase {
-  kind: "switch";
-
-  /** Switch value expression ID */
-  valueExprId: ExprId;
-
-  /** Case and default-case controller children */
-  cases: (PlanCaseController | PlanDefaultCaseController)[];
-}
-
-/**
- * Case branch within a switch controller.
- * @deprecated Use PlanCaseController instead - case/default-case are standalone controllers
- */
-export interface PlanCaseBranch {
-  /** Case value expression ID */
-  valueExprId: ExprId;
-
-  /** Case template */
+  /** Inner template (the wrapped content) */
   template: PlanNode;
 
-  /** Frame ID if case introduces scope */
-  frameId?: FrameId;
+  // ===== Expression data (varies by config.trigger.kind) =====
 
-  /** Source location */
-  loc?: SourceSpan;
+  /**
+   * Primary expression ID.
+   * - iterator trigger: ForOfStatement expression
+   * - value trigger: value/condition expression
+   * - branch trigger: may have value (case) or not (else, default-case, pending)
+   * - marker trigger: none
+   */
+  exprId?: ExprId;
+
+  /**
+   * Auxiliary expressions (tail props like key for repeat).
+   */
+  auxExprs?: PlanAuxExpr[];
+
+  // ===== Local variables (varies by config.trigger.kind and config.injects) =====
+
+  /**
+   * Local variables introduced into scope.
+   * - iterator: destructured loop variables from ForOfStatement
+   * - alias: the aliased name (with, then, catch)
+   */
+  locals?: string[];
+
+  /**
+   * Contextual variables ($index, $first, $last, etc.).
+   * From config.injects.contextuals.
+   */
+  contextuals?: string[];
+
+  // ===== Child branches (only for config.branches.relationship === "child") =====
+
+  /**
+   * Child branch controllers (switch cases, promise branches).
+   * Only populated when config.branches?.relationship === "child".
+   */
+  branches?: PlanController[];
 }
 
 /**
- * Case controller (child of switch, e.g., `case="value"`).
- * Standalone template controller, similar to else for if.
+ * Auxiliary expression binding (e.g., key for repeat).
  */
-export interface PlanCaseController extends PlanControllerBase {
-  kind: "case";
+export interface PlanAuxExpr {
+  /** Auxiliary property name (e.g., "key") */
+  name: string;
 
-  /** Case value expression ID */
-  valueExprId: ExprId;
-
-  /** Case template (content inside the case) */
-  template: PlanNode;
-}
-
-/**
- * Default-case controller (child of switch, e.g., `default-case`).
- * Standalone template controller, similar to else for if.
- */
-export interface PlanDefaultCaseController extends PlanControllerBase {
-  kind: "default-case";
-
-  /** Default case template (content inside the default case) */
-  template: PlanNode;
-}
-
-/**
- * Promise controller (e.g., `promise.bind="asyncValue"`).
- */
-export interface PlanPromiseController extends PlanControllerBase {
-  kind: "promise";
-
-  /** Promise expression ID */
-  valueExprId: ExprId;
-
-  /** Pending template (shown while promise is pending) */
-  pendingTemplate?: PlanNode | undefined;
-
-  /** Frame ID for pending branch */
-  pendingFrameId?: FrameId | undefined;
-
-  /** Then template (shown when promise resolves) */
-  thenTemplate?: PlanNode | undefined;
-
-  /** Local name for resolved value in then template */
-  thenLocal?: string | undefined;
-
-  /** Frame ID for then branch */
-  thenFrameId?: FrameId | undefined;
-
-  /** Catch template (shown when promise rejects) */
-  catchTemplate?: PlanNode | undefined;
-
-  /** Local name for error in catch template */
-  catchLocal?: string | undefined;
-
-  /** Frame ID for catch branch */
-  catchFrameId?: FrameId | undefined;
-}
-
-/**
- * Portal controller (e.g., `portal="selector"`).
- * Renders content at a different location in the DOM.
- */
-export interface PlanPortalController extends PlanControllerBase {
-  kind: "portal";
-
-  /** Target expression ID (dynamic target) */
-  targetExprId?: ExprId;
-
-  /** Target selector (static target) */
-  targetSelector?: string;
-
-  /** Portaled content template */
-  template: PlanNode;
+  /** Expression ID for this aux binding */
+  exprId: ExprId;
 }
 
 /* =============================================================================

@@ -414,7 +414,9 @@ function linkAttributeBindable(
 /* ---- IteratorBinding (repeat) ---- */
 
 function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): LinkedIteratorBinding {
-  const normalizedTo = ctx.lookup.sem.resources.controllers.repeat.iteratorProp;
+  // Get iterator prop from repeat controller config (config-driven)
+  const repeatConfig = ctx.lookup.sem.resources.controllers["repeat"];
+  const normalizedTo = repeatConfig?.trigger.kind === "iterator" ? repeatConfig.trigger.prop : "items";
   const aux: LinkedIteratorBinding["aux"] = [];
 
   if (ins.props?.length) {
@@ -459,7 +461,7 @@ function linkHydrateTemplateController(
   const props = ins.props.map((p) => {
     if (p.type === "iteratorBinding") {
       const iter = linkIteratorBinding(p, ctx);
-      iter.to = ctx.lookup.sem.resources.controllers.repeat.iteratorProp; // ensure parity with spec
+      // iter.to is already set by linkIteratorBinding (config-driven)
       return iter;
     } else if (p.type === "propertyBinding") {
       const to = normalizePropLikeName(host, p.to, ctx.lookup);
