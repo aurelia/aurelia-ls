@@ -3,8 +3,25 @@
  * LinkedSemantics -> ScopeModule (pure, deterministic)
  * - Map each expression occurrence to the frame where it is evaluated
  * - Introduce frames for overlay controllers (repeat/with/promise)
- * - Materialize locals: <let>, repeat declaration, repeat contextuals, promise alias
+ * - Materialize locals: <let>, iterator declaration, contextuals, aliases
  * - Record provenance to aid later typing/planning
+ *
+ * ## Config-Driven Controller Handling
+ *
+ * This phase is ENTIRELY config-driven for template controllers. Instead of
+ * switching on controller names (repeat, with, promise), we switch on config
+ * properties (trigger.kind, scope, injects). This enables:
+ *
+ * 1. **Userland TC Support**: A custom `virtual-repeat` with the same config
+ *    shape as `repeat` gets identical scope/typing behavior automatically.
+ *
+ * 2. **Single Source of Truth**: Controller behavior is defined in ControllerConfig.
+ *    This phase just reads the config — no hardcoded controller knowledge.
+ *
+ * 3. **Pattern-Based Origins**: FrameOrigin kinds are generic (iterator, valueOverlay)
+ *    so type-analysis can handle any controller with matching semantics.
+ *
+ * See symbols.ts header comment for the full design rationale.
  * ============================================================================= */
 
 import type {
@@ -21,11 +38,14 @@ import type {
 import type {
   LinkedSemanticsModule, LinkedTemplate, LinkedRow,
   LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement, LinkedElementBindable,
+  LinkedPropertyBinding,
 } from "../20-resolve/types.js";
 
 import type {
   ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic, ScopeDiagCode, OverlayBase, FrameOrigin,
 } from "../../model/symbols.js";
+
+import type { ControllerConfig } from "../../language/registry.js";
 
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";
@@ -196,95 +216,15 @@ function walkRows(
           const nextFrame = enterControllerFrame(ins, currentFrame, frames, frameIds);
 
           // 3) Populate locals / overlays + record origin metadata
-          switch (ins.res) {
-            case "repeat": {
-              const iter = getIteratorProp(ins);
+          //    This is CONFIG-DRIVEN: we switch on config properties, not controller names.
+          //    This allows userland TCs to get the same behavior as built-ins.
+          const config = ins.controller.config;
+          const controllerName = ins.res;
 
-              // provenance for plan/typecheck
-              const forOfAstId = iter.forOf.astId;
-              const repeatSpan = normalizeSpanMaybe(iter.forOf.loc ?? ins.loc ?? null);
-              setFrameOrigin(nextFrame, frames, { kind: "repeat", forOfAstId, ...provenanceFromSpan("bind", repeatSpan, "repeat controller") });
-
-              // locals/contextuals
-              const forOfAst = forOfIndex.get(forOfAstId)!;
-              if (forOfAst.$kind === 'BadExpression') {
-                addDiag(diags, "AU1201", forOfAst.message ?? "Invalid or unsupported repeat header (could not parse iterator).", forOfAst.span);
-                break;
-              }
-              const badPattern = findBadInPattern(forOfAst.declaration);
-              if (badPattern) {
-                addDiag(diags, "AU1201", badPattern.message ?? "Invalid or unsupported repeat header (could not parse iterator).", badPattern.span);
-                break;
-              }
-              const names = bindingNamesFromDeclaration(forOfAst.declaration);
-              addUniqueSymbols(
-                nextFrame,
-                frames,
-                names.map(n => ({ kind: "repeatLocal" as const, name: n, span: iter.forOf.loc ?? null })),
-                diags,
-              );
-              for (const c of ins.controller.config.injects?.contextuals ?? []) {
-                addUniqueSymbols(nextFrame, frames, [{ kind: "repeatContextual", name: c, span: iter.forOf.loc ?? null }], diags);
-              }
-              break;
-            }
-            case "with": {
-              const valueProp = getValueProp(ins);
-              setOverlayBase(nextFrame, frames, { kind: "with", from: valueProp.from, span: valueProp.loc ?? null });
-              const ids = exprIdsOf(valueProp.from);
-              const [valueExprId] = ids;
-              if (valueExprId) {
-                const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
-                setFrameOrigin(nextFrame, frames, { kind: "with", valueExprId, ...provenanceFromSpan("bind", originSpan, "'with' controller") });
-              }
-              break;
-            }
-            case "promise": {
-              const valueProp = getValueProp(ins);
-              const ids = exprIdsOf(valueProp.from);
-              const [valueExprId] = ids;
-              if (valueExprId) {
-                const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
-                setFrameOrigin(nextFrame, frames, { kind: "promise", valueExprId, ...provenanceFromSpan("bind", originSpan, "promise controller") });
-              }
-              break;
-            }
-            case "then":
-            case "catch": {
-              // Branch controllers with scope: "overlay" - set origin and add alias
-              const valueProp = getValueProp(ins);
-              const ids = exprIdsOf(valueProp.from);
-              const [valueExprId] = ids;
-              if (valueExprId) {
-                const originSpan = normalizeSpanMaybe(valueProp.loc ?? ins.loc ?? null);
-                setFrameOrigin(nextFrame, frames, { kind: ins.res, valueExprId, ...provenanceFromSpan("bind", originSpan, `${ins.res} controller`) });
-              }
-              // Add promise alias symbol
-              if (ins.branch && (ins.branch.kind === "then" || ins.branch.kind === "catch")) {
-                const aliasName = ins.branch.local && ins.branch.local.length > 0 ? ins.branch.local : ins.branch.kind;
-                addUniqueSymbols(nextFrame, frames, [{ kind: "promiseAlias", name: aliasName, branch: ins.branch.kind, span: ins.loc ?? null }], diags);
-              }
-              break;
-            }
-            case "pending":
-              // scope: "reuse", no alias - nothing to do
-              break;
-            case "if":
-            case "else":
-            case "switch":
-            case "case":
-            case "default-case":
-            case "portal":
-              // scope === 'reuse' → keep current frame; no overlay / locals.
-              // 'else' is a linking controller with no value - linked to preceding 'if' at runtime.
-              // 'case' and 'default-case' are children of switch, linked at runtime.
-              break;
-
-            default:
-              // Custom template controllers: use config to determine behavior
-              // For now, just proceed with the chosen frame (based on config.scope)
-              break;
-          }
+          populateControllerFrame(
+            ins, config, controllerName, nextFrame, frames, frameIds,
+            forOfIndex, diags
+          );
 
           // 4) Recurse into nested template view using the chosen frame
           const linkedNested = domToLinked.get(ins.def.dom);
@@ -331,6 +271,185 @@ function enterControllerFrame(
       // Future scopes (e.g., 'isolate') — keep traversal alive in MVP.
       return current;
   }
+}
+
+/**
+ * Populate a controller's frame with locals, contextuals, aliases, and origin metadata.
+ *
+ * This is ENTIRELY CONFIG-DRIVEN. We switch on config properties (trigger.kind, scope,
+ * injects, linksTo), NOT controller names. This enables userland template controllers
+ * to get the same scope/typing behavior as built-ins by using matching configs.
+ *
+ * ## Pattern Mapping
+ *
+ * | Config Pattern                              | Frame Origin       | Symbols Added                |
+ * |---------------------------------------------|--------------------|------------------------------|
+ * | trigger.kind="iterator" + scope="overlay"  | iterator           | iteratorLocal, contextual    |
+ * | trigger.kind="value" + scope="overlay"     | valueOverlay       | alias (if injects.alias)     |
+ * | trigger.kind="value" + linksTo="promise"   | promiseValue       | (parent for branches)        |
+ * | trigger.kind="branch" + linksTo="promise"  | promiseBranch      | alias (then/catch)           |
+ * | trigger.kind="branch" (non-promise)        | (none)             | (none)                       |
+ * | scope="reuse"                              | (none)             | (none)                       |
+ */
+function populateControllerFrame(
+  ins: LinkedHydrateTemplateController,
+  config: ControllerConfig,
+  controllerName: string,
+  targetFrame: FrameId,
+  frames: ScopeFrame[],
+  _frameIds: FrameIdAllocator,
+  forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
+  diags: ScopeDiagnostic[],
+): void {
+  const span = ins.loc ?? null;
+
+  // === Iterator Pattern ===
+  // Controllers with trigger.kind="iterator" (e.g., repeat, virtual-repeat)
+  if (config.trigger.kind === "iterator" && config.scope === "overlay") {
+    const iter = findIteratorBinding(ins);
+    if (!iter) return; // Shouldn't happen if config is correct
+
+    const forOfAstId = iter.forOf.astId;
+    const originSpan = normalizeSpanMaybe(iter.forOf.loc ?? span);
+
+    // Set origin for type inference
+    setFrameOrigin(targetFrame, frames, {
+      kind: "iterator",
+      forOfAstId,
+      controller: controllerName,
+      ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
+    });
+
+    // Extract locals from ForOfStatement destructuring
+    const forOfAst = forOfIndex.get(forOfAstId);
+    if (!forOfAst) return;
+    if (forOfAst.$kind === "BadExpression") {
+      addDiag(diags, "AU1201", forOfAst.message ?? "Invalid or unsupported iterator header.", forOfAst.span);
+      return;
+    }
+    const badPattern = findBadInPattern(forOfAst.declaration);
+    if (badPattern) {
+      addDiag(diags, "AU1201", badPattern.message ?? "Invalid or unsupported iterator header.", badPattern.span);
+      return;
+    }
+
+    // Add iterator locals (loop variables)
+    const names = bindingNamesFromDeclaration(forOfAst.declaration);
+    addUniqueSymbols(
+      targetFrame,
+      frames,
+      names.map(n => ({ kind: "iteratorLocal" as const, name: n, span: iter.forOf.loc ?? null })),
+      diags,
+    );
+
+    // Add contextuals from config ($index, $first, etc.)
+    for (const c of config.injects?.contextuals ?? []) {
+      addUniqueSymbols(targetFrame, frames, [{ kind: "contextual", name: c, span: iter.forOf.loc ?? null }], diags);
+    }
+    return;
+  }
+
+  // === Promise Branch Pattern ===
+  // Controllers that are branches of promise (then, catch)
+  if (config.trigger.kind === "branch" && config.linksTo === "promise" && config.scope === "overlay") {
+    const valueProp = findValueBinding(ins);
+    const valueExprId = valueProp ? exprIdsOf(valueProp.from)[0] : undefined;
+    const originSpan = normalizeSpanMaybe(valueProp?.loc ?? span);
+
+    // Determine branch type from the controller's branch metadata
+    const branch = ins.branch;
+    if (branch && (branch.kind === "then" || branch.kind === "catch")) {
+      const branchKind = branch.kind;
+      setFrameOrigin(targetFrame, frames, {
+        kind: "promiseBranch",
+        branch: branchKind,
+        valueExprId,
+        controller: controllerName,
+        ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
+      });
+
+      // Add alias symbol (the variable that receives the resolved/rejected value)
+      const aliasName = branch.local && branch.local.length > 0 ? branch.local : branchKind;
+      addUniqueSymbols(targetFrame, frames, [{
+        kind: "alias",
+        name: aliasName,
+        aliasKind: branchKind,
+        span,
+      }], diags);
+    }
+    return;
+  }
+
+  // === Promise Value Pattern ===
+  // The promise controller itself (parent of then/catch branches)
+  // Identified by: has branches with relationship="child" AND branches include promise-related controllers
+  if (config.trigger.kind === "value" && config.scope === "overlay" && config.branches?.relationship === "child") {
+    const branchNames = config.branches.names;
+    const isPromiseLike = branchNames.includes("then") || branchNames.includes("catch");
+
+    if (isPromiseLike) {
+      const valueProp = findValueBinding(ins);
+      const valueExprId = valueProp ? exprIdsOf(valueProp.from)[0] : undefined;
+      if (valueExprId) {
+        const originSpan = normalizeSpanMaybe(valueProp?.loc ?? span);
+        setFrameOrigin(targetFrame, frames, {
+          kind: "promiseValue",
+          valueExprId,
+          controller: controllerName,
+          ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
+        });
+      }
+      return;
+    }
+  }
+
+  // === Value Overlay Pattern ===
+  // Controllers with trigger.kind="value" + scope="overlay" + injects.alias (e.g., with)
+  if (config.trigger.kind === "value" && config.scope === "overlay" && config.injects?.alias) {
+    const valueProp = findValueBinding(ins);
+    if (!valueProp) return;
+
+    const valueExprId = exprIdsOf(valueProp.from)[0];
+    const originSpan = normalizeSpanMaybe(valueProp.loc ?? span);
+
+    // Set overlay base (the value becomes implicit scope)
+    setOverlayBase(targetFrame, frames, { kind: "value", from: valueProp.from, span: valueProp.loc ?? null });
+
+    // Set origin for type inference
+    if (valueExprId) {
+      setFrameOrigin(targetFrame, frames, {
+        kind: "valueOverlay",
+        valueExprId,
+        controller: controllerName,
+        ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
+      });
+    }
+
+    // Add alias symbol if configured
+    // Note: For 'with', the alias is optional and comes from the authored syntax
+    // For now, we don't add an explicit symbol - the overlay base handles scope resolution
+    return;
+  }
+
+  // === Reuse Scope Pattern ===
+  // Controllers with scope="reuse" (if, else, switch, case, default-case, portal)
+  // These don't create new frames or add symbols - nothing to do.
+}
+
+/** Find the iterator binding in a controller's props. */
+function findIteratorBinding(ctrl: LinkedHydrateTemplateController): LinkedIteratorBinding | null {
+  for (const p of ctrl.props) {
+    if (p.kind === "iteratorBinding") return p;
+  }
+  return null;
+}
+
+/** Find the value property binding in a controller's props. */
+function findValueBinding(ctrl: LinkedHydrateTemplateController): LinkedPropertyBinding | null {
+  for (const p of ctrl.props) {
+    if (p.kind === "propertyBinding" && p.to === "value") return p;
+  }
+  return null;
 }
 
 function setOverlayBase(targetFrame: FrameId, frames: ScopeFrame[], overlay: OverlayBase | null): void {
@@ -406,27 +525,6 @@ function createLetValueMap(): Record<string, ExprId> {
 function spanOfLet(ins: LinkedHydrateLetElement, _name: string): SourceSpan | null | undefined {
   // TODO(linker-carry): Thread per-let SourceSpan through LinkedHydrateLetElement if needed.
   return normalizeSpanMaybe(ins.loc ?? null);
-}
-
-function getIteratorProp(ctrl: LinkedHydrateTemplateController): LinkedIteratorBinding {
-  for (const p of ctrl.props) {
-    if (p.kind === "iteratorBinding") return p;
-  }
-  // Semantics enforces iteratorProp presence on 'repeat'
-  throw new Error("repeat controller missing iteratorBinding");
-}
-
-type _LinkedValueProp = Extract<LinkedHydrateTemplateController["props"][number], { kind: "propertyBinding" }>;
-type _LinkedValuePropCandidate = LinkedHydrateTemplateController["props"][number];
-
-function getValueProp(ctrl: LinkedHydrateTemplateController): _LinkedValueProp {
-  const valueProp = ctrl.props.find(isValueProp);
-  if (valueProp) return valueProp;
-  throw new Error(`${ctrl.res} controller missing 'value' property`);
-}
-
-function isValueProp(prop: _LinkedValuePropCandidate): prop is _LinkedValueProp {
-  return prop.kind === "propertyBinding" && prop.to === "value";
 }
 
 /* =============================================================================

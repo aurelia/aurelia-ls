@@ -1,4 +1,22 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+/**
+ * Type Analysis — derive types for scope symbols from expression ASTs.
+ *
+ * ## Pattern-Based Type Inference
+ *
+ * This module uses GENERIC origin patterns (iterator, valueOverlay, promiseValue, promiseBranch)
+ * to determine how to type scope symbols. This enables userland template controllers
+ * to get the same type inference as built-ins by using matching ControllerConfig.
+ *
+ * | Origin Pattern   | Type Inference                                            |
+ * |------------------|-----------------------------------------------------------|
+ * | iterator         | Extract iterable type → element type → project to locals |
+ * | valueOverlay     | Extract value type → becomes overlay base for scope      |
+ * | promiseValue     | Extract promise type → used by child branches            |
+ * | promiseBranch    | then: Awaited<T>, catch: any                             |
+ *
+ * See symbols.ts header comment for the full design rationale.
+ */
 import type {
   AccessKeyedExpression,
   AccessMemberExpression,
@@ -33,10 +51,17 @@ import { buildScopeLookup } from "./scope-lookup.js";
 export type Env = ReadonlyMap<string, string>;
 type MutableEnv = Map<string, string>;
 
+/**
+ * Typing hints extracted from frame origin for downstream type inference.
+ * These are pattern-based (not controller-specific) to support userland TCs.
+ */
 export type FrameTypingHints = {
+  /** For valueOverlay: the type of the overlay base expression. */
   overlayBase?: string;
+  /** For promiseValue/promiseBranch: the type of the promise expression. */
   promiseBase?: string;
-  repeatIterable?: string;
+  /** For iterator: the type of the iterable expression. */
+  iterableType?: string;
 };
 
 export type FrameAnalysis = {
@@ -99,20 +124,29 @@ export function buildFrameAnalysis(
     const env: MutableEnv = new Map(parentEnv);
     const h: FrameTypingHints = {};
 
-    if (f.origin?.kind === "repeat") {
+    // === Extract typing hints from frame origin (pattern-based) ===
+    // These patterns work for any controller with matching config, not just built-ins.
+
+    if (f.origin?.kind === "iterator") {
+      // Iterator pattern: extract iterable type for element type inference
+      // Works for: repeat, virtual-repeat, or any TC with trigger.kind="iterator"
       const forOfAst = exprIndex.get(f.origin.forOfAstId);
       if (forOfAst?.expressionType === "IsIterator") {
         if (forOfAst.ast.$kind !== "BadExpression") {
           const iterType = evalTypeInFrame(f.parent ?? f.id, forOfAst.ast.iterable);
-          h.repeatIterable = iterType;
+          h.iterableType = iterType;
         }
       }
-    } else if (f.origin?.kind === "with") {
+    } else if (f.origin?.kind === "valueOverlay") {
+      // Value overlay pattern: extract overlay base type
+      // Works for: with, or any TC with scope="overlay" + injects.alias
       const e = exprIndex.get(f.origin.valueExprId);
       if (e?.expressionType === "IsProperty") {
         h.overlayBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
       }
-    } else if (f.origin?.kind === "promise") {
+    } else if (f.origin?.kind === "promiseValue") {
+      // Promise value pattern: extract promise type for child branches
+      // Works for: promise, or any TC with promise-like branch structure
       const e = exprIndex.get(f.origin.valueExprId);
       if (e?.expressionType === "IsProperty") {
         h.promiseBase = evalTypeInFrame(f.parent ?? f.id, e.ast);
@@ -120,50 +154,60 @@ export function buildFrameAnalysis(
     }
     hints.set(f.id, h);
 
-    if (h.repeatIterable) {
-      const iterT = h.repeatIterable;
+    // === Type iterator locals ===
+    // Project element type from iterable onto destructured loop variables
+    if (h.iterableType) {
+      const iterT = h.iterableType;
       const elemT = `CollectionElement<${iterT}>`;
-      const proj = f.origin?.kind === "repeat"
-        ? projectRepeatLocals(exprIndex.get(f.origin.forOfAstId)?.ast as ForOfStatement | undefined, elemT)
+      const proj = f.origin?.kind === "iterator"
+        ? projectIteratorLocals(exprIndex.get(f.origin.forOfAstId)?.ast as ForOfStatement | undefined, elemT)
         : new Map<string, string>();
       for (const s of f.symbols) {
-        if (s.kind === "repeatLocal") {
+        if (s.kind === "iteratorLocal") {
           const t = proj.get(s.name);
           env.set(s.name, t ?? "unknown");
         }
       }
     } else {
+      // Fallback for iterator locals without type info
       for (const s of f.symbols) {
-        if (s.kind === "repeatLocal") env.set(s.name, "unknown");
+        if (s.kind === "iteratorLocal") env.set(s.name, "unknown");
       }
     }
+
+    // === Type contextuals ===
+    // These have known types based on their names ($index → number, etc.)
     for (const s of f.symbols) {
-      if (s.kind === "repeatContextual") env.set(s.name, contextualType(s.name));
+      if (s.kind === "contextual") env.set(s.name, contextualType(s.name));
     }
 
-    // Handle promiseAlias symbols - they can be on promise frames OR on then/catch frames.
-    // For then/catch frames, we need to look up the promiseBase from the parent (promise) frame.
+    // === Type alias symbols ===
+    // Aliases receive their type from the frame origin or parent frame.
     //
-    // Type assignments match runtime semantics (see promise.ts in aurelia runtime):
+    // For promise branches (then/catch):
     // - then alias: Awaited<T> where T is the promise type (resolved value)
     // - catch alias: `any` (rejection can be any value, not just Error)
-    // - pending: no alias (just shows loading state)
-    if (f.origin?.kind === "promise" || f.origin?.kind === "then" || f.origin?.kind === "catch") {
-      // For promise frames, use our own promiseBase. For then/catch, find parent's promiseBase.
+    //
+    // For value overlays (with):
+    // - The overlay base handles scope resolution; no explicit alias symbol needed
+    if (f.origin?.kind === "promiseValue" || f.origin?.kind === "promiseBranch") {
+      // For promiseValue frames, use our own promiseBase.
+      // For promiseBranch frames, find parent's promiseBase.
       let base = h.promiseBase;
       if (!base && f.parent != null) {
         const parentHints = hints.get(f.parent);
         base = parentHints?.promiseBase;
       }
       for (const s of f.symbols) {
-        if (s.kind === "promiseAlias") {
-          if (s.branch === "then" && base) env.set(s.name, `Awaited<${base}>`);
-          else if (s.branch === "catch") env.set(s.name, "any");
+        if (s.kind === "alias") {
+          if (s.aliasKind === "then" && base) env.set(s.name, `Awaited<${base}>`);
+          else if (s.aliasKind === "catch") env.set(s.name, "any");
           else env.set(s.name, "unknown");
         }
       }
     }
 
+    // === Type <let> locals ===
     if (f.letValueExprs) {
       for (const [name, id] of Object.entries(f.letValueExprs)) {
         const entry = exprIndex.get(id);
@@ -268,7 +312,11 @@ export function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   }
 }
 
-export function projectRepeatLocals(forOf: ForOfStatement | undefined, elemT: string): Map<string, string> {
+/**
+ * Project element type onto iterator locals from ForOfStatement destructuring.
+ * Works for any iterator-based controller (repeat, virtual-repeat, etc.).
+ */
+export function projectIteratorLocals(forOf: ForOfStatement | undefined, elemT: string): Map<string, string> {
   const out = new Map<string, string>();
   if (!forOf) return out;
   projectPatternTypes(forOf.declaration, elemT, out);

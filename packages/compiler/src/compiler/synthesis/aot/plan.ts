@@ -289,23 +289,24 @@ function symbolToLocal(sym: ScopeSymbol, frame: ScopeFrame, ctx: PlanningContext
 function symbolKindToSource(kind: ScopeSymbol["kind"]): PlanLocalSource {
   switch (kind) {
     case "let": return "let";
-    case "repeatLocal": return "iterator";
-    case "repeatContextual": return "contextual";
-    case "promiseAlias": return "alias";
+    case "iteratorLocal": return "iterator";
+    case "contextual": return "contextual";
+    case "alias": return "alias";
   }
 }
 
 function frameToPlanKind(frame: ScopeFrame): PlanScopeKind {
   if (frame.kind === "root") return "root";
 
-  // Determine kind from origin if available
+  // Determine kind from origin if available (pattern-based, not controller-specific)
   const origin = frame.origin;
   if (!origin) return "root";
 
   switch (origin.kind) {
-    case "repeat": return "repeat";
-    case "with": return "with";
-    case "promise": return "promise";
+    case "iterator": return "repeat";      // Iterator pattern → repeat-like scope
+    case "valueOverlay": return "with";    // Value overlay pattern → with-like scope
+    case "promiseValue": return "promise"; // Promise value pattern → promise-like scope
+    case "promiseBranch": return "promise"; // Promise branch also uses promise scope kind
     default: return "root";
   }
 }

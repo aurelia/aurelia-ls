@@ -5,12 +5,12 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
-        { "kind": "expr", "code": "a", "frame": "overlay:with@1" }
+        { "kind": "expr", "code": "a", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": []
     }
@@ -21,12 +21,12 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "with", "frame": "root" },
-        { "kind": "expr", "code": "a", "frame": "overlay:with@1" }
+        { "kind": "expr", "code": "a", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": []
     }
@@ -83,14 +83,14 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" },
-        { "label": "overlay:with@2", "parent": "overlay:with@1", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" },
+        { "label": "overlay:valueOverlay@2", "parent": "overlay:valueOverlay@1", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "outer", "frame": "root" },
-        { "kind": "expr", "code": "inner", "frame": "overlay:with@1" },
-        { "kind": "expr", "code": "t", "frame": "overlay:with@2" }
+        { "kind": "expr", "code": "inner", "frame": "overlay:valueOverlay@1" },
+        { "kind": "expr", "code": "t", "frame": "overlay:valueOverlay@2" }
       ],
       "diags": []
     }
@@ -101,12 +101,12 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
-        { "kind": "expr", "code": "t", "frame": "overlay:with@1" }
+        { "kind": "expr", "code": "t", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": []
     }
@@ -117,13 +117,13 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
-        { "kind": "expr", "code": "a", "frame": "overlay:with@1" },
-        { "kind": "expr", "code": "b", "frame": "overlay:with@1" }
+        { "kind": "expr", "code": "a", "frame": "overlay:valueOverlay@1" },
+        { "kind": "expr", "code": "b", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": []
     }
@@ -134,12 +134,12 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [],
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
-        { "kind": "expr", "code": "y", "frame": "overlay:with@1" }
+        { "kind": "expr", "code": "y", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": []
     }
@@ -150,14 +150,14 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [],
       "exprs": [
         { "kind": "expr", "frame": "root", "code": "c" },
         { "kind": "expr", "frame": "root", "code": "ctx" },
-        { "kind": "expr", "frame": "overlay:with@1", "code": "portal" },
-        { "kind": "expr", "frame": "overlay:with@1", "code": "t" }
+        { "kind": "expr", "frame": "overlay:valueOverlay@1", "code": "portal" },
+        { "kind": "expr", "frame": "overlay:valueOverlay@1", "code": "t" }
       ],
       "diags": []
     }

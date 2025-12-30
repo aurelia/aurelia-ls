@@ -5,21 +5,21 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "i" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
-        { "kind": "expr", "code": "i", "frame": "overlay:repeat@1" }
+        { "kind": "expr", "code": "i", "frame": "overlay:iterator@1" }
       ],
       "diags": []
     }
@@ -30,23 +30,23 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" },
-        { "label": "overlay:repeat@2", "parent": "overlay:with@1", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" },
+        { "label": "overlay:iterator@2", "parent": "overlay:valueOverlay@1", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@2", "kind": "repeatLocal", "name": "i" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@2", "kind": "iteratorLocal", "name": "i" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
-        { "kind": "forOfHeader", "frame": "overlay:with@1" },
-        { "kind": "expr", "code": "t", "frame": "overlay:repeat@2" }
+        { "kind": "forOfHeader", "frame": "overlay:valueOverlay@1" },
+        { "kind": "expr", "code": "t", "frame": "overlay:iterator@2" }
       ],
       "diags": []
     }
@@ -57,32 +57,32 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" },
-        { "label": "overlay:repeat@2", "parent": "overlay:repeat@1", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" },
+        { "label": "overlay:iterator@2", "parent": "overlay:iterator@1", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" },
-        { "frame": "overlay:repeat@2", "kind": "repeatLocal", "name": "j" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@2", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "i" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@2", "kind": "iteratorLocal", "name": "j" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
-        { "kind": "forOfHeader", "frame": "overlay:repeat@1" },
-        { "kind": "expr", "code": "i", "frame": "overlay:repeat@2" },
-        { "kind": "expr", "code": "j", "frame": "overlay:repeat@2" }
+        { "kind": "forOfHeader", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "i", "frame": "overlay:iterator@2" },
+        { "kind": "expr", "code": "j", "frame": "overlay:iterator@2" }
       ],
       "diags": []
     }
@@ -93,23 +93,23 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "a" },
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "b" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "a" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "b" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
-        { "kind": "expr", "code": "a", "frame": "overlay:repeat@1" },
-        { "kind": "expr", "code": "b", "frame": "overlay:repeat@1" }
+        { "kind": "expr", "code": "a", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "b", "frame": "overlay:iterator@1" }
       ],
       "diags": []
     }
@@ -120,23 +120,23 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "x" },
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "y" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "x" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "y" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
-        { "kind": "expr", "code": "x", "frame": "overlay:repeat@1" },
-        { "kind": "expr", "code": "y", "frame": "overlay:repeat@1" }
+        { "kind": "expr", "code": "x", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "y", "frame": "overlay:iterator@1" }
       ],
       "diags": []
     }
@@ -147,23 +147,23 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "i" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "i" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
-        { "kind": "expr", "code": "$index", "frame": "overlay:repeat@1" },
-        { "kind": "expr", "code": "$length", "frame": "overlay:repeat@1" },
-        { "kind": "expr", "code": "$odd", "frame": "overlay:repeat@1" }
+        { "kind": "expr", "code": "$index", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "$length", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "$odd", "frame": "overlay:iterator@1" }
       ],
       "diags": []
     }
@@ -174,23 +174,23 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "a" },
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "rest" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "a" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "rest" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
-        { "kind": "expr", "code": "a", "frame": "overlay:repeat@1" },
-        { "kind": "expr", "code": "rest[0]", "frame": "overlay:repeat@1" }
+        { "kind": "expr", "code": "a", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "rest[0]", "frame": "overlay:iterator@1" }
       ],
       "diags": []
     }
@@ -201,24 +201,24 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "x" },
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "alias" },
-        { "frame": "overlay:repeat@1", "kind": "repeatLocal", "name": "rest" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$index" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$first" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$last" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$even" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$odd" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$length" },
-        { "frame": "overlay:repeat@1", "kind": "repeatContextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "x" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "alias" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "rest" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
-        { "kind": "expr", "code": "alias", "frame": "overlay:repeat@1" },
-        { "kind": "expr", "code": "rest.extra", "frame": "overlay:repeat@1" }
+        { "kind": "expr", "code": "alias", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "rest.extra", "frame": "overlay:iterator@1" }
       ],
       "diags": []
     }

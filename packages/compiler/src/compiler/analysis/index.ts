@@ -61,7 +61,7 @@ export {
   typeFromExprAst,
   wrap,
   contextualType,
-  projectRepeatLocals,
+  projectIteratorLocals,
   type Env,
   type FrameTypingHints,
   type FrameAnalysis,
