@@ -311,5 +311,123 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "R-D-44 registered custom element with unknown prop surfaces AU1104",
+    "comment": "Known element but unknown bindable property (HTML lowercases attr names)",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-component": {
+            "kind": "element",
+            "name": "my-component",
+            "bindables": { "value": { "name": "value" } }
+          }
+        }
+      }
+    },
+    "markup": "<my-component unknownprop.bind=\"x\"></my-component>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "unknownprop", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-45 multiple unknown behaviors accumulate diagnostics",
+    "markup": "<div textcontent.bind=\"value & unknown1 & unknown2\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0101" },
+        { "code": "AU0101" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-46 multiple unknown converters accumulate diagnostics",
+    "markup": "<div textcontent.bind=\"value | unknown1 | unknown2\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0103" },
+        { "code": "AU0103" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-47 unknown behavior AND unknown converter combined",
+    "markup": "<div textcontent.bind=\"value | unknownConv & unknownBeh\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0103" },
+        { "code": "AU0101" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-48 multiple [case] values in same switch are allowed",
+    "markup": "<div switch.bind=\"x\"><template case.bind=\"1\">one</template><template case.bind=\"2\">two</template><template case.bind=\"3\">three</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "branch", "res": "case", "branch": "case" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "branch", "res": "case", "branch": "case" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "branch", "res": "case", "branch": "case" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-49 custom attribute with unknown prop surfaces AU1104",
+    "comment": "HTML lowercases attribute names",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "tooltip": {
+            "kind": "attribute",
+            "name": "tooltip",
+            "isTemplateController": false,
+            "bindables": { "message": { "name": "message" } },
+            "primary": "message"
+          }
+        }
+      }
+    },
+    "markup": "<div tooltip.bind=\"msg\" unknownattr.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "message", "target": "bindable", "effectiveMode": "toView" },
+        { "kind": "prop", "to": "unknownattr", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-50 multiple tail options with one unknown surfaces AU1106 once",
+    "markup": "<ul repeat.for=\"item of items; key.bind: item.id; unknownOpt: foo\"></ul>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ],
+      "diags": [
+        { "code": "AU1106" }
+      ]
+    }
   }
 ]

@@ -358,5 +358,148 @@
         { "kind": "propCommand", "command": "bind", "code": "items" }
       ]
     }
+  },
+  {
+    "name": "LB-41 empty template produces no expressions",
+    "markup": "",
+    "expect": {
+      "expressions": []
+    }
+  },
+  {
+    "name": "LB-42 whitespace-only template produces no expressions",
+    "markup": "   \n   \t   ",
+    "expect": {
+      "expressions": []
+    }
+  },
+  {
+    "name": "LB-43 multiple interpolations in same text node",
+    "markup": "<p>${a} and ${b} and ${c}</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "a" },
+        { "kind": "text", "code": "b" },
+        { "kind": "text", "code": "c" }
+      ]
+    }
+  },
+  {
+    "name": "LB-44 deeply nested elements with binding",
+    "markup": "<div><div><div><div><span title.bind=\"x\"></span></div></div></div></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "x" }
+      ]
+    }
+  },
+  {
+    "name": "LB-45 multiple attributes on same element",
+    "markup": "<div a.bind=\"1\" b.bind=\"2\" c.bind=\"3\" d.bind=\"4\" e.bind=\"5\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "1" },
+        { "kind": "propCommand", "command": "bind", "code": "2" },
+        { "kind": "propCommand", "command": "bind", "code": "3" },
+        { "kind": "propCommand", "command": "bind", "code": "4" },
+        { "kind": "propCommand", "command": "bind", "code": "5" }
+      ]
+    }
+  },
+  {
+    "name": "LB-46 attribute with empty string value",
+    "markup": "<div title.bind=\"\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "" }
+      ]
+    }
+  },
+  {
+    "name": "LB-47 interpolation with complex expression",
+    "markup": "<p>${items.filter(x => x.active).map(x => x.name).join(', ')}</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "items.filter(x => x.active).map(x => x.name).join(', ')" }
+      ]
+    }
+  },
+  {
+    "name": "LB-48 interpolation with nested braces in object",
+    "markup": "<p>${{a: 1, b: {c: 2}}}</p>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "{a: 1, b: {c: 2}}" }
+      ]
+    }
+  },
+  {
+    "name": "LB-49 multiple events on same element",
+    "markup": "<button click.trigger=\"a()\" mouseenter.trigger=\"b()\" mouseleave.trigger=\"c()\"></button>",
+    "expect": {
+      "expressions": [
+        { "kind": "event", "on": "click", "command": "trigger", "code": "a()" },
+        { "kind": "event", "on": "mouseenter", "command": "trigger", "code": "b()" },
+        { "kind": "event", "on": "mouseleave", "command": "trigger", "code": "c()" }
+      ]
+    }
+  },
+  {
+    "name": "LB-50 mixed ref types on different elements",
+    "markup": "<div ref=\"divEl\"><input ref=\"inputEl\"><my-el view-model.ref=\"vm\"></my-el></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "ref", "on": "element", "code": "divEl" },
+        { "kind": "ref", "on": "element", "code": "inputEl" },
+        { "kind": "ref", "on": "component", "code": "vm" }
+      ]
+    }
+  },
+  {
+    "name": "LB-51 attribute interpolation with multiple expressions",
+    "markup": "<div title=\"${a}-${b}-${c}\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "title", "code": "a" },
+        { "kind": "attrInterpolation", "on": "title", "code": "b" },
+        { "kind": "attrInterpolation", "on": "title", "code": "c" }
+      ]
+    }
+  },
+  {
+    "name": "LB-52 style.prop shorthand",
+    "markup": "<div background-color.style=\"bgColor\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "bgColor" }
+      ]
+    }
+  },
+  {
+    "name": "LB-53 class.prop shorthand",
+    "markup": "<div active.class=\"isActive\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "isActive" }
+      ]
+    }
+  },
+  {
+    "name": "LB-54 capture event modifier",
+    "markup": "<div click.capture=\"handleClick()\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "event", "on": "click", "command": "capture", "code": "handleClick()" }
+      ]
+    }
+  },
+  {
+    "name": "LB-55 event with modifier suffix",
+    "markup": "<div click.trigger:once=\"handleClick()\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "event", "on": "click", "command": "trigger", "code": "handleClick()" }
+      ]
+    }
   }
 ]
