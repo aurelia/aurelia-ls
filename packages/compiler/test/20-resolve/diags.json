@@ -150,7 +150,7 @@
   },
   {
     "name": "R-D-24 registered value converter has no diagnostic",
-    "markup": "<div textcontent.bind=\"value | identity\"></div>",
+    "markup": "<div textcontent.bind=\"value | sanitize\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }

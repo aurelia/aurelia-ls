@@ -693,7 +693,7 @@ export const DEFAULT: Semantics = {
      * Analysis treats VCs as identity unless configured; BBs don't change static shapes in MVP.
      */
     valueConverters: {
-      identity: { name: "identity", in: { kind: "unknown" }, out: { kind: "unknown" } },
+      sanitize: { name: "sanitize", in: { kind: "ts", name: "string" }, out: { kind: "ts", name: "string | null" } },
     },
     bindingBehaviors: {
       // Rate limiting behaviors
