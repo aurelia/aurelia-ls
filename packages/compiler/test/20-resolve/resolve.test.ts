@@ -33,6 +33,7 @@ interface ResolveItem {
   capture?: boolean;
   modifier?: string;
   value?: unknown;
+  branch?: string; // Branch kind: "then" | "catch" | "pending" | "case" | "default"
 }
 
 interface DiagExpect {
@@ -400,6 +401,14 @@ function visitTemplate(
                 pushBindingItem(items, p);
               }
             }
+          }
+          // Emit branch metadata if present (case, default, then, catch, pending)
+          if (ins.branch) {
+            items.push({
+              kind: "branch",
+              res: ins.res,
+              branch: ins.branch.kind,
+            });
           }
           if (ins.def) visit(ins.def);
           break;
