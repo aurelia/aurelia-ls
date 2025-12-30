@@ -921,3 +921,284 @@ function spanToRange(span, text) {
     end: positionAtOffset(text, span.end),
   };
 }
+
+// =============================================================================
+// Typecheck Phase Integration Tests
+// =============================================================================
+// These tests verify that typecheck diagnostics (AU1301/AU1302/AU1303) surface
+// correctly through the language service layer.
+
+import { describe } from "vitest";
+import { resolveTypecheckConfig } from "@aurelia-ls/compiler";
+
+describe("typecheck diagnostics integration", () => {
+  // Note: Default config is "lenient" which produces:
+  // - AU1302 (warning) for type mismatches
+  // - AU1301 (error) only with strict/standard configs
+
+  test("AU1302 (warning) surfaces for boolean target with string value in lenient mode", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-warning.html";
+    // disabled expects boolean, but we give it a string literal
+    const markup = "<template><input disabled.bind=\"'yes'\"></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiag = diags.compiler.find((d) => d.code === "AU1302");
+    expect(tcDiag, "AU1302 should surface for string→boolean mismatch in lenient mode").toBeTruthy();
+    expect(tcDiag.source).toBe("typecheck");
+    expect(tcDiag.severity).toBe("warning");
+    expect(tcDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
+    expect(tcDiag.message).toContain("expected boolean");
+    expect(tcDiag.message).toContain("string");
+  });
+
+  test("typecheck diagnostic has correct location pointing to expression", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-location.html";
+    // The 'yes' literal is at offset 32-37 in: <template><input disabled.bind="'yes'"></template>
+    const markup = "<template><input disabled.bind=\"'yes'\"></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiag = diags.compiler.find((d) => d.source === "typecheck");
+    expect(tcDiag, "typecheck diagnostic should be present").toBeTruthy();
+    expect(tcDiag.location).toBeTruthy();
+    // Location should point to the expression 'yes' not the whole binding
+    expect(tcDiag.location?.span.start).toBeGreaterThanOrEqual(32);
+    expect(tcDiag.location?.span.end).toBeLessThanOrEqual(37);
+  });
+
+  test("null→string produces no diagnostic in lenient mode (nullToString: off)", () => {
+    // Lenient mode has nullToString: "off"
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-null.html";
+    // value expects string, null would be problematic in strict mode
+    const markup = "<template><input value.bind=\"null\"></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    // With lenient defaults, nullToString is "off" so no warning
+    const nullDiag = diags.compiler.find((d) => d.source === "typecheck");
+    expect(nullDiag, "lenient mode should NOT emit null→string warning").toBeFalsy();
+  });
+
+  test("DOM coercion allows number→string for input value", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-coerce.html";
+    // value expects string, number should coerce without error
+    const markup = "<template><input value.bind=\"42\"></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    expect(tcDiags.length, "DOM coercion should allow number→string").toBe(0);
+  });
+
+  test("cascade suppression: no typecheck diagnostic when target is unknown", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-cascade.html";
+    // nonexistent is not a valid property - resolve will set target.kind = "unknown"
+    const markup = "<template><div nonexistent.bind=\"42\"></div></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    // Should have resolve diagnostic (AU1201) but no typecheck diagnostic
+    const resolveDiag = diags.compiler.find((d) => d.source === "resolve-host");
+    expect(resolveDiag, "resolve should emit diagnostic for unknown property").toBeTruthy();
+
+    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    expect(tcDiags.length, "typecheck should not emit when target.kind is unknown").toBe(0);
+  });
+
+  test("style binding coercion allows number→string", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-style.html";
+    // width.style expects string, number should coerce without error
+    const markup = "<template><div width.style=\"100\"></div></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    expect(tcDiags.length, "style coercion should allow number→string").toBe(0);
+  });
+
+  test("style binding rejects boolean→string as type mismatch", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-style-bool.html";
+    // width.style expects string, boolean should error
+    const markup = "<template><div width.style=\"true\"></div></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiag = diags.compiler.find((d) => d.code === "AU1301" || d.code === "AU1302");
+    // This should produce a mismatch since boolean→string isn't a style coercion
+    expect(tcDiag, "style binding should reject boolean→string").toBeTruthy();
+    expect(tcDiag?.source).toBe("typecheck");
+  });
+
+  test("if.bind expects boolean, string literal produces warning", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-if.html";
+    // if.bind expects boolean value
+    const markup = "<template><div if.bind=\"'show'\">content</div></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiag = diags.compiler.find((d) => d.source === "typecheck");
+    expect(tcDiag, "if.bind should produce typecheck warning for string→boolean").toBeTruthy();
+    // Lenient mode produces AU1302 (warning), not AU1301 (error)
+    expect(tcDiag?.code).toBe("AU1302");
+    expect(tcDiag?.severity).toBe("warning");
+  });
+
+  test("multiple bindings produce independent diagnostics", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-multi.html";
+    // value.bind is fine (string→string), disabled.bind is mismatch (number→boolean)
+    const markup = "<template><input value.bind=\"'ok'\" disabled.bind=\"99\"></template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    // Should have exactly one diagnostic for disabled.bind (number→boolean mismatch)
+    expect(tcDiags.length, "should have one typecheck diagnostic for disabled").toBe(1);
+    // Lenient mode produces AU1302 (warning)
+    expect(tcDiags[0]?.code).toBe("AU1302");
+    expect(tcDiags[0]?.severity).toBe("warning");
+  });
+
+  test("text interpolation has unknown expected type, accepts any value", () => {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const uri = "/app/tc-text.html";
+    // Text bindings accept anything - they stringify the value
+    const markup = "<template>${42}</template>";
+    program.upsertTemplate(uri, markup);
+
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+
+    const diags = service.getDiagnostics(uri);
+    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    expect(tcDiags.length, "text interpolation should accept any type").toBe(0);
+  });
+
+  test("typecheck config presets work correctly", () => {
+    // Test that resolveTypecheckConfig produces expected configs
+    const lenient = resolveTypecheckConfig({ preset: "lenient" });
+    expect(lenient.enabled).toBe(true);
+    expect(lenient.domCoercion).toBe(true);
+    expect(lenient.nullToString).toBe("off");
+    expect(lenient.typeMismatch).toBe("warning");
+
+    const strict = resolveTypecheckConfig({ preset: "strict" });
+    expect(strict.enabled).toBe(true);
+    expect(strict.domCoercion).toBe(false);
+    expect(strict.nullToString).toBe("error");
+    expect(strict.typeMismatch).toBe("error");
+
+    const standard = resolveTypecheckConfig({ preset: "standard" });
+    expect(standard.nullToString).toBe("warning");
+    expect(standard.typeMismatch).toBe("error");
+
+    const off = resolveTypecheckConfig({ preset: "off" });
+    expect(off.enabled).toBe(false);
+  });
+});
