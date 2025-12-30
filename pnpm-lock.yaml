@@ -281,6 +281,55 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
+  packages/ssg:
+    dependencies:
+      '@aurelia-ls/resolution':
+        specifier: workspace:*
+        version: link:../resolution
+      '@aurelia-ls/ssr':
+        specifier: workspace:*
+        version: link:../ssr
+
+  packages/ssr:
+    dependencies:
+      '@aurelia-ls/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@aurelia/expression-parser':
+        specifier: link:../../aurelia/packages/expression-parser
+        version: link:../../aurelia/packages/expression-parser
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
+      '@aurelia/metadata':
+        specifier: link:../../aurelia/packages/metadata
+        version: link:../../aurelia/packages/metadata
+      '@aurelia/platform':
+        specifier: link:../../aurelia/packages/platform
+        version: link:../../aurelia/packages/platform
+      '@aurelia/platform-browser':
+        specifier: link:../../aurelia/packages/platform-browser
+        version: link:../../aurelia/packages/platform-browser
+      '@aurelia/router':
+        specifier: link:../../aurelia/packages/router
+        version: link:../../aurelia/packages/router
+      '@aurelia/runtime':
+        specifier: link:../../aurelia/packages/runtime
+        version: link:../../aurelia/packages/runtime
+      '@aurelia/runtime-html':
+        specifier: link:../../aurelia/packages/runtime-html
+        version: link:../../aurelia/packages/runtime-html
+      '@aurelia/template-compiler':
+        specifier: link:../../aurelia/packages/template-compiler
+        version: link:../../aurelia/packages/template-compiler
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+    devDependencies:
+      '@types/jsdom':
+        specifier: ^21.1.7
+        version: 21.1.7
+
   packages/transform:
     dependencies:
       '@aurelia-ls/compiler':
@@ -292,6 +341,27 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
+
+  packages/vite-plugin:
+    dependencies:
+      '@aurelia-ls/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@aurelia-ls/resolution':
+        specifier: workspace:*
+        version: link:../resolution
+      '@aurelia-ls/ssr':
+        specifier: workspace:*
+        version: link:../ssr
+      '@aurelia-ls/transform':
+        specifier: workspace:*
+        version: link:../transform
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0 || ^6.0.0
+        version: 6.4.1(@types/node@22.19.1)(tsx@4.21.0)
 
   packages/vscode:
     dependencies:

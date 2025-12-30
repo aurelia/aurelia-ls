@@ -21,7 +21,10 @@
       "@aurelia-ls/compiler": ["./packages/compiler/src/index.ts"],
       "@aurelia-ls/resolution": ["./packages/resolution/src/index.ts"],
       "@aurelia-ls/transform": ["./packages/transform/src/index.ts"],
-      "@aurelia-ls/build": ["./packages/build/src/index.ts"]
+      "@aurelia-ls/build": ["./packages/build/src/index.ts"],
+      "@aurelia-ls/ssr": ["./packages/ssr/src/index.ts"],
+      "@aurelia-ls/vite-plugin": ["./packages/vite-plugin/src/index.ts"],
+      "@aurelia-ls/ssg": ["./packages/ssg/src/index.ts"]
     },
     "baseUrl": "."
   }

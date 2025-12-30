@@ -1,0 +1,28 @@
+{
+  "name": "@aurelia-ls/ssg",
+  "version": "0.2.0",
+  "description": "Static site generation for Aurelia applications",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aurelia-ls/ssr": "workspace:*"
+  },
+  "peerDependencies": {
+    "@aurelia-ls/resolution": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@aurelia-ls/resolution": {
+      "optional": true
+    }
+  }
+}

@@ -3,9 +3,12 @@
   "references": [
     { "path": "packages/compiler" },
     { "path": "packages/resolution" },
-    { "path": "packages/language-server" },
-    { "path": "packages/vscode" },
+    { "path": "packages/transform" },
+    { "path": "packages/ssr" },
+    { "path": "packages/ssg" },
+    { "path": "packages/vite-plugin" },
     { "path": "packages/build" },
-    { "path": "packages/transform" }
+    { "path": "packages/language-server" },
+    { "path": "packages/vscode" }
   ]
 }
