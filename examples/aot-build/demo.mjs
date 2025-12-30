@@ -30,10 +30,10 @@ const shouldEmit = args.includes("--emit") || args.includes("-e");
 const quietMode = args.includes("--quiet") || args.includes("-q");
 
 // Import from local packages (use file:// URLs for Windows compatibility)
-const buildPath = pathToFileURL(resolve(rootDir, "packages/build/out/index.js")).href;
+const ssrPath = pathToFileURL(resolve(rootDir, "packages/ssr/out/index.js")).href;
 const transformPath = pathToFileURL(resolve(rootDir, "packages/transform/out/index.js")).href;
 
-const { compileWithAot } = await import(buildPath);
+const { compileWithAot } = await import(ssrPath);
 const { transform } = await import(transformPath);
 
 // =============================================================================

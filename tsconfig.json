@@ -7,7 +7,6 @@
     { "path": "packages/ssr" },
     { "path": "packages/ssg" },
     { "path": "packages/vite-plugin" },
-    { "path": "packages/build" },
     { "path": "packages/language-server" },
     { "path": "packages/vscode" }
   ]
