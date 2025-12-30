@@ -101,5 +101,71 @@
         { "code": "AU0816" }
       ]
     }
+  },
+  {
+    "name": "R-D-20 unknown binding behavior surfaces AU0101",
+    "markup": "<div textcontent.bind=\"value & unknownBehavior\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0101" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-21 duplicate binding behavior surfaces AU0102",
+    "markup": "<div textcontent.bind=\"value & debounce & debounce\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0102" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-22 unknown value converter surfaces AU0103",
+    "markup": "<div textcontent.bind=\"value | unknownConverter\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0103" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-23 registered binding behavior has no diagnostic",
+    "markup": "<div textcontent.bind=\"value & debounce\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-24 registered value converter has no diagnostic",
+    "markup": "<div textcontent.bind=\"value | identity\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-25 multiple different binding behaviors allowed",
+    "markup": "<div textcontent.bind=\"value & debounce & throttle\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
   }
 ]

@@ -89,6 +89,7 @@ import {
   DiagnosticAccumulator,
 } from "../../shared/diagnosed.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
+import { extractExprResources } from "../../shared/expr-utils.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
@@ -125,13 +126,10 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
     validateBranchControllers(templates[0].rows, ctx);
   }
 
-  // TODO: Validate expression resources (AU01xx diagnostics)
-  // Walk ir.exprTable to extract binding behaviors and value converters from AST.
-  // Check each against ctx.lookup (registry + ResourceGraph).
-  // Emit AU0101 for unknown binding behaviors, AU0103 for unknown value converters.
-  // See: BindingBehaviorExpression.$kind === 'BindingBehavior' with .name
-  //      ValueConverterExpression.$kind === 'ValueConverter' with .name
-  // validateExpressionResources(ir.exprTable, ctx);
+  // Validate expression resources (AU01xx diagnostics)
+  if (ir.exprTable) {
+    validateExpressionResources(ir.exprTable, ctx);
+  }
 
   return {
     version: "aurelia-linked@1",
@@ -164,6 +162,74 @@ function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
   });
 
   return { dom: t.dom, rows, name: t.name! };
+}
+
+/* ============================================================================
+ * Expression Resource Validation
+ * ============================================================================ */
+
+/**
+ * Validates binding behaviors and value converters referenced in expressions.
+ *
+ * Error codes:
+ * - AU0101: Binding behavior not found in registry
+ * - AU0102: Duplicate binding behavior in same expression
+ * - AU0103: Value converter not found in registry
+ */
+function validateExpressionResources(
+  exprTable: NonNullable<IrModule["exprTable"]>,
+  ctx: ResolverContext,
+): void {
+  const refs = extractExprResources(exprTable);
+
+  // Group refs by exprId for duplicate detection
+  const byExpr = new Map<typeof refs[0]["exprId"], typeof refs>();
+  for (const ref of refs) {
+    const list = byExpr.get(ref.exprId) ?? [];
+    list.push(ref);
+    byExpr.set(ref.exprId, list);
+  }
+
+  // Check each expression for duplicates and unknown resources
+  for (const [, exprRefs] of byExpr) {
+    const seenBehaviors = new Set<string>();
+
+    for (const ref of exprRefs) {
+      if (ref.kind === "bindingBehavior") {
+        // Check for duplicate
+        if (seenBehaviors.has(ref.name)) {
+          pushDiag(
+            ctx.diags,
+            "AU0102",
+            `Binding behavior '${ref.name}' applied more than once in the same expression.`,
+            ref.span,
+          );
+        } else {
+          seenBehaviors.add(ref.name);
+        }
+
+        // Check if registered
+        if (!ctx.lookup.sem.resources.bindingBehaviors[ref.name]) {
+          pushDiag(
+            ctx.diags,
+            "AU0101",
+            `Binding behavior '${ref.name}' not found.`,
+            ref.span,
+          );
+        }
+      } else {
+        // valueConverter
+        if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
+          pushDiag(
+            ctx.diags,
+            "AU0103",
+            `Value converter '${ref.name}' not found.`,
+            ref.span,
+          );
+        }
+      }
+    }
+  }
 }
 
 /**

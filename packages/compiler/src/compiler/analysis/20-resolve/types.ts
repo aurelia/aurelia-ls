@@ -45,9 +45,9 @@ import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 export type SemDiagCode =
   // ─── Expression Resource Errors (AU01xx) ───────────────────────────────────
   // These match runtime error codes for consistency.
-  // TODO: AU0101 - Binding behavior not found (walk exprTable, check against registry + ResourceGraph)
-  // TODO: AU0102 - Duplicate binding behavior (same behavior applied twice in expression)
-  // TODO: AU0103 - Value converter not found (walk exprTable, check against registry + ResourceGraph)
+  | "AU0101" // Binding behavior not found
+  | "AU0102" // Duplicate binding behavior (same behavior applied twice in expression)
+  | "AU0103" // Value converter not found
 
   // ─── Template Structure Errors (AU08xx) ────────────────────────────────────
   // Branch validation: sibling and parent relationships
