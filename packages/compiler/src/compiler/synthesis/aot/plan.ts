@@ -47,7 +47,7 @@ import type {
   LinkedIteratorBinding,
 } from "../../analysis/index.js";
 
-import { indexExprTable } from "../../shared/expr-utils.js";
+import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
 
 import type {
   AotPlanModule,
@@ -1113,32 +1113,8 @@ function extractIteratorLocals(forOfExprId: ExprId, ctx: PlanningContext): strin
   const ast = entry.ast;
   if (ast.$kind !== "ForOfStatement") return [];
 
-  return extractBindingNames(ast.declaration);
-}
-
-function extractBindingNames(pattern: BindingIdentifierOrPattern): string[] {
-  switch (pattern.$kind) {
-    case "BindingIdentifier":
-      return pattern.name ? [pattern.name] : [];
-    case "ArrayBindingPattern": {
-      const names = pattern.elements.flatMap(extractBindingNames);
-      if (pattern.rest) names.push(...extractBindingNames(pattern.rest));
-      return names;
-    }
-    case "ObjectBindingPattern": {
-      const names = pattern.properties.flatMap(p => extractBindingNames(p.value));
-      if (pattern.rest) names.push(...extractBindingNames(pattern.rest));
-      return names;
-    }
-    case "BindingPatternDefault":
-      return extractBindingNames(pattern.target);
-    case "BindingPatternHole":
-      return [];
-    case "BadExpression":
-      return [];
-    default:
-      return [];
-  }
+  // Uses shared collectBindingNames from expr-utils.ts
+  return collectBindingNames(ast.declaration);
 }
 
 /* =============================================================================

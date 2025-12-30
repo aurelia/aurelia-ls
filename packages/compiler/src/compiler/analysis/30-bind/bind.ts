@@ -50,7 +50,7 @@ import type { ControllerConfig } from "../../language/registry.js";
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
-import { exprIdsOf } from "../../shared/expr-utils.js";
+import { exprIdsOf, collectBindingNames, findBadInPattern } from "../../shared/expr-utils.js";
 import { normalizeSpanMaybe } from "../../model/span.js";
 import type { Origin, Provenance } from "../../model/origin.js";
 import { isStub } from "../../shared/diagnosed.js";
@@ -608,7 +608,8 @@ function reportBadExpression(ref: ExprRef, ctx: BadExprContext): void {
 }
 
 /* =============================================================================
- * repeat.for declaration → local names (AST-based, shallow by design)
+ * repeat.for declaration → local names
+ * Uses shared collectBindingNames from expr-utils.ts
  * ============================================================================= */
 
 function bindingNamesFromDeclaration(
@@ -616,79 +617,12 @@ function bindingNamesFromDeclaration(
 ): string[] {
   if (decl.$kind === "BadExpression") return [];
   if (decl.$kind === "DestructuringAssignment") {
-    return bindingNamesFromPattern(decl.pattern);
+    return collectBindingNames(decl.pattern);
   }
-  return bindingNamesFromPattern(decl);
+  return collectBindingNames(decl);
 }
 
-function bindingNamesFromPattern(pattern: BindingIdentifierOrPattern): string[] {
-  switch (pattern.$kind) {
-    // TODO: Parser currently returns top-level BadExpression on any error (fail-fast).
-    // Upgrade parser to produce nested BadExpression for partial error recovery,
-    // enabling better IDE experience (preserve valid bindings, localized errors).
-    case "BadExpression":
-      return [];
-    case "BindingIdentifier":
-      return pattern.name ? [pattern.name] : [];
-    case "BindingPatternDefault":
-      return bindingNamesFromPattern(pattern.target);
-    case "BindingPatternHole":
-      return [];
-    case "ArrayBindingPattern": {
-      const names = pattern.elements.flatMap(bindingNamesFromPattern);
-      if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
-      return names;
-    }
-    case "ObjectBindingPattern": {
-      const names = pattern.properties.flatMap(p => bindingNamesFromPattern(p.value));
-      if (pattern.rest) names.push(...bindingNamesFromPattern(pattern.rest));
-      return names;
-    }
-    /* c8 ignore next 2 -- type exhaustiveness guard */
-    default:
-      return assertUnreachable(pattern);
-  }
-}
-
-function findBadInPattern(pattern: BindingIdentifierOrPattern): BadExpression | null {
-  switch (pattern.$kind) {
-    // TODO: Parser currently returns top-level BadExpression on any error (fail-fast).
-    // Upgrade parser to produce nested BadExpression for partial error recovery,
-    // enabling better IDE experience (preserve valid bindings, localized errors).
-    case "BadExpression":
-      return pattern;
-    case "BindingIdentifier":
-    case "BindingPatternHole":
-      return null;
-    case "BindingPatternDefault":
-      return findBadInPattern(pattern.target);
-    case "ArrayBindingPattern": {
-      for (const el of pattern.elements) {
-        const bad = findBadInPattern(el);
-        if (bad) return bad;
-      }
-      if (pattern.rest) {
-        const bad = findBadInPattern(pattern.rest);
-        if (bad) return bad;
-      }
-      return null;
-    }
-    case "ObjectBindingPattern": {
-      for (const prop of pattern.properties) {
-        const bad = findBadInPattern(prop.value);
-        if (bad) return bad;
-      }
-      if (pattern.rest) {
-        const bad = findBadInPattern(pattern.rest);
-        if (bad) return bad;
-      }
-      return null;
-    }
-    /* c8 ignore next 2 -- type exhaustiveness guard */
-    default:
-      return assertUnreachable(pattern);
-  }
-}
+// Note: findBadInPattern is now imported from expr-utils.ts
 
 function badExpressionSpan(ast: BadExpression, ref: ExprRef): SourceSpan | null {
   const span = provenanceSpan(ast.origin ?? null) ?? ast.span ?? ref.loc ?? null;
