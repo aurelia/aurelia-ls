@@ -222,7 +222,10 @@ function validateBranchControllers(
  * Used to check child relationships (then/catch inside promise, case inside switch).
  *
  * Error codes:
- * - AU0816: Multiple [default-case] in same switch
+ * - AU0816: Multiple marker controllers in same parent (e.g., [default-case] in [switch])
+ *
+ * Note: Marker controllers (trigger.kind="marker") are presence-based and implicitly unique.
+ * This check is CONFIG-DRIVEN: any userland marker controller gets the same validation.
  */
 function validateNestedIrRows(
   rows: InstructionRow[],
@@ -231,9 +234,10 @@ function validateNestedIrRows(
 ): void {
   let prevRowControllers: string[] = [];
 
-  // Track cardinality for controllers with "zero-one" constraint (e.g., default-case)
-  let defaultCaseCount = 0;
-  let firstDefaultCaseLoc: SourceSpan | null = null;
+  // Track uniqueness for marker-triggered controllers (presence-based, only one per parent).
+  // This is CONFIG-DRIVEN: any controller with trigger.kind="marker" is implicitly unique.
+  // Example: default-case can only appear once per switch.
+  const markerCounts = new Map<string, number>();
 
   for (const row of rows) {
     const currentRowControllers: string[] = [];
@@ -265,17 +269,17 @@ function validateNestedIrRows(
           }
         }
 
-        // Track cardinality for default-case (zero-one constraint)
-        // AU0816: Multiple [default-case] in same switch
-        if (ins.res === "default-case" && parentController === "switch") {
-          defaultCaseCount++;
-          if (defaultCaseCount === 1) {
-            firstDefaultCaseLoc = ins.loc ?? null;
-          } else if (defaultCaseCount === 2) {
-            // Emit diagnostic on the second occurrence, pointing to it
-            pushDiag(ctx.diags, "AU0816", "Multiple [default-case] in same [switch]", ins.loc);
+        // Uniqueness check for marker-triggered controllers (config-driven).
+        // Marker controllers are presence-based (no value), so duplicates are invalid.
+        // AU0816: Multiple [X] in same [parent]
+        if (config?.trigger.kind === "marker" && config.linksTo === parentController) {
+          const count = (markerCounts.get(ins.res) ?? 0) + 1;
+          markerCounts.set(ins.res, count);
+          if (count === 2) {
+            // Emit diagnostic on the second occurrence
+            pushDiag(ctx.diags, "AU0816", `Multiple [${ins.res}] in same [${parentController}]`, ins.loc);
           }
-          // For 3+, we don't emit more diagnostics (one per switch is enough)
+          // For 3+, we don't emit more diagnostics (one per parent is enough)
         }
 
         // Recursively validate nested def
