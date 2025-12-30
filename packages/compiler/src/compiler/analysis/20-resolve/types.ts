@@ -48,6 +48,10 @@ export type SemDiagCode =
   | "AU0101" // Binding behavior not found
   | "AU0102" // Duplicate binding behavior (same behavior applied twice in expression)
   | "AU0103" // Value converter not found
+  | "AU0106" // Assignment to $host is not allowed
+
+  // ─── Binding Behavior Usage Errors (AU99xx) ───────────────────────────────
+  | "AU9996" // Conflicting rate-limit behaviors (throttle + debounce on same binding)
 
   // ─── Template Structure Errors (AU08xx) ────────────────────────────────────
   // Branch validation: sibling and parent relationships

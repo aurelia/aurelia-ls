@@ -276,6 +276,11 @@ export interface ExprResourceRef {
   exprId: ExprId;
 }
 
+export interface HostAssignmentRef {
+  span: SourceSpan;
+  exprId: ExprId;
+}
+
 /**
  * Extract all binding behavior and value converter references from an expression table.
  * Returns refs with name, span, and source expression ID for validation.
@@ -284,6 +289,23 @@ export function extractExprResources(table: readonly ExprTableEntry[]): ExprReso
   const refs: ExprResourceRef[] = [];
   for (const entry of table) {
     walkAst(entry.ast, refs, entry.id);
+  }
+  return refs;
+}
+
+/**
+ * Extract all assignments to `$host` from an expression table.
+ * Used by 20-resolve for AU0106 diagnostics.
+ *
+ * Detects patterns like:
+ * - `$host = x`
+ * - `$host.prop = x`
+ * - `$host[key] = x`
+ */
+export function extractHostAssignments(table: readonly ExprTableEntry[]): HostAssignmentRef[] {
+  const refs: HostAssignmentRef[] = [];
+  for (const entry of table) {
+    walkAstForHostAssign(entry.ast, refs, entry.id);
   }
   return refs;
 }
@@ -430,6 +452,132 @@ function walkAst(node: AstNode | undefined, refs: ExprResourceRef[], exprId: Exp
       // Unknown node type - ignore
       break;
   }
+}
+
+/**
+ * Walk AST to find assignments to $host.
+ * Checks if the assignment target is $host or any property/key access starting from $host.
+ */
+function walkAstForHostAssign(node: AstNode | undefined, refs: HostAssignmentRef[], exprId: ExprId): void {
+  if (!node || typeof node !== "object") return;
+  const kind = (node as { $kind?: string }).$kind;
+  if (!kind) return;
+
+  if (kind === "Assign") {
+    const n = node as { target: AstNode; value: AstNode; span?: SourceSpan };
+    if (isHostTarget(n.target)) {
+      refs.push({ span: n.span ?? { start: 0, end: 0 }, exprId });
+    }
+    // Continue walking in case there are nested assignments
+    walkAstForHostAssign(n.target, refs, exprId);
+    walkAstForHostAssign(n.value, refs, exprId);
+    return;
+  }
+
+  // Recursively walk all child nodes for other patterns
+  switch (kind) {
+    case "BindingBehavior":
+    case "ValueConverter": {
+      const n = node as { expression: AstNode; args?: AstNode[] };
+      walkAstForHostAssign(n.expression, refs, exprId);
+      for (const arg of n.args ?? []) walkAstForHostAssign(arg, refs, exprId);
+      break;
+    }
+    case "Conditional": {
+      const n = node as { condition: AstNode; yes: AstNode; no: AstNode };
+      walkAstForHostAssign(n.condition, refs, exprId);
+      walkAstForHostAssign(n.yes, refs, exprId);
+      walkAstForHostAssign(n.no, refs, exprId);
+      break;
+    }
+    case "AccessMember":
+    case "AccessKeyed": {
+      const n = node as { object: AstNode; key?: AstNode };
+      walkAstForHostAssign(n.object, refs, exprId);
+      if (n.key) walkAstForHostAssign(n.key, refs, exprId);
+      break;
+    }
+    case "CallScope":
+    case "CallMember":
+    case "CallFunction":
+    case "CallGlobal": {
+      const n = node as { object?: AstNode; func?: AstNode; args?: AstNode[] };
+      if (n.object) walkAstForHostAssign(n.object, refs, exprId);
+      if (n.func) walkAstForHostAssign(n.func, refs, exprId);
+      for (const arg of n.args ?? []) walkAstForHostAssign(arg, refs, exprId);
+      break;
+    }
+    case "Binary": {
+      const n = node as { left: AstNode; right: AstNode };
+      walkAstForHostAssign(n.left, refs, exprId);
+      walkAstForHostAssign(n.right, refs, exprId);
+      break;
+    }
+    case "Unary":
+    case "Paren": {
+      const n = node as { expression: AstNode };
+      walkAstForHostAssign(n.expression, refs, exprId);
+      break;
+    }
+    case "ArrayLiteral": {
+      const n = node as { elements?: AstNode[] };
+      for (const el of n.elements ?? []) walkAstForHostAssign(el, refs, exprId);
+      break;
+    }
+    case "ObjectLiteral": {
+      const n = node as { values?: AstNode[] };
+      for (const v of n.values ?? []) walkAstForHostAssign(v, refs, exprId);
+      break;
+    }
+    case "Template":
+    case "TaggedTemplate": {
+      const n = node as { func?: AstNode; expressions?: AstNode[] };
+      if (n.func) walkAstForHostAssign(n.func, refs, exprId);
+      for (const e of n.expressions ?? []) walkAstForHostAssign(e, refs, exprId);
+      break;
+    }
+    case "Interpolation": {
+      const n = node as { expressions?: AstNode[] };
+      for (const e of n.expressions ?? []) walkAstForHostAssign(e, refs, exprId);
+      break;
+    }
+    case "ArrowFunction": {
+      const n = node as { body: AstNode };
+      walkAstForHostAssign(n.body, refs, exprId);
+      break;
+    }
+    default:
+      // Terminal nodes or not relevant for $host assignment detection
+      break;
+  }
+}
+
+/**
+ * Check if an AST node is $host or an access chain rooted at $host.
+ */
+function isHostTarget(node: AstNode | undefined): boolean {
+  if (!node || typeof node !== "object") return false;
+  const kind = (node as { $kind?: string }).$kind;
+  if (!kind) return false;
+
+  // Direct $host access (AccessBoundary represents $host)
+  if (kind === "AccessBoundary") {
+    return true;
+  }
+
+  // AccessScope with name "$host" (in case parser represents it this way)
+  if (kind === "AccessScope") {
+    const n = node as { name: string };
+    return n.name === "$host";
+  }
+
+  // Property/key access on $host (e.g., $host.prop or $host[key])
+  if (kind === "AccessMember" || kind === "AccessKeyed") {
+    const n = node as { object: AstNode };
+    return isHostTarget(n.object);
+  }
+
+  return false;
 }
 
 function firstFileFromSpans(spans: ReadonlyExprIdMap<SourceSpan>): SourceFileId | undefined {

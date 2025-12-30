@@ -89,7 +89,7 @@ import {
   DiagnosticAccumulator,
 } from "../../shared/diagnosed.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
-import { extractExprResources } from "../../shared/expr-utils.js";
+import { extractExprResources, extractHostAssignments } from "../../shared/expr-utils.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
@@ -175,11 +175,24 @@ function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
  * - AU0101: Binding behavior not found in registry
  * - AU0102: Duplicate binding behavior in same expression
  * - AU0103: Value converter not found in registry
+ * - AU0106: Assignment to $host is not allowed
+ * - AU9996: Conflicting rate-limit behaviors (throttle + debounce)
  */
 function validateExpressionResources(
   exprTable: NonNullable<IrModule["exprTable"]>,
   ctx: ResolverContext,
 ): void {
+  // Check for $host assignments (AU0106)
+  const hostAssignments = extractHostAssignments(exprTable);
+  for (const ref of hostAssignments) {
+    pushDiag(
+      ctx.diags,
+      "AU0106",
+      "Assignment to $host is not allowed.",
+      ref.span,
+    );
+  }
+
   const refs = extractExprResources(exprTable);
 
   // Group refs by exprId for duplicate detection
@@ -190,9 +203,14 @@ function validateExpressionResources(
     byExpr.set(ref.exprId, list);
   }
 
+  // Rate-limit behaviors that conflict with each other
+  const RATE_LIMIT_BEHAVIORS = new Set(["throttle", "debounce"]);
+
   // Check each expression for duplicates and unknown resources
   for (const [, exprRefs] of byExpr) {
     const seenBehaviors = new Set<string>();
+    // Track unique rate-limiters for conflict detection (different behaviors only)
+    const seenRateLimiters = new Map<string, SourceSpan>();
 
     for (const ref of exprRefs) {
       if (ref.kind === "bindingBehavior") {
@@ -217,6 +235,11 @@ function validateExpressionResources(
             ref.span,
           );
         }
+
+        // Track unique rate-limiters for conflict detection
+        if (RATE_LIMIT_BEHAVIORS.has(ref.name) && !seenRateLimiters.has(ref.name)) {
+          seenRateLimiters.set(ref.name, ref.span);
+        }
       } else {
         // valueConverter
         if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
@@ -228,6 +251,21 @@ function validateExpressionResources(
           );
         }
       }
+    }
+
+    // Check for conflicting rate-limiters (AU9996)
+    // Only triggers when DIFFERENT rate-limiters are used (e.g., throttle + debounce)
+    if (seenRateLimiters.size > 1) {
+      const names = [...seenRateLimiters.keys()].join(" and ");
+      // Report on the second rate-limiter (the conflict)
+      const entries = [...seenRateLimiters.entries()];
+      const conflicting = entries[1]!;
+      pushDiag(
+        ctx.diags,
+        "AU9996",
+        `Conflicting rate-limit behaviors: ${names} cannot be used together on the same binding.`,
+        conflicting[1],
+      );
     }
   }
 }

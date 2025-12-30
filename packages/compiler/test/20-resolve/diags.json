@@ -159,8 +159,86 @@
     }
   },
   {
-    "name": "R-D-25 multiple different binding behaviors allowed",
+    "name": "R-D-25 multiple different non-conflicting behaviors allowed",
+    "markup": "<div textcontent.bind=\"value & debounce & signal\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-26 conflicting rate-limiters (debounce + throttle) surfaces AU9996",
     "markup": "<div textcontent.bind=\"value & debounce & throttle\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU9996" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-27 conflicting rate-limiters (throttle + debounce) surfaces AU9996",
+    "markup": "<div textcontent.bind=\"value & throttle & debounce\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU9996" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-28 single rate-limiter (debounce only) has no diagnostic",
+    "markup": "<div textcontent.bind=\"value & debounce\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-29 single rate-limiter (throttle only) has no diagnostic",
+    "markup": "<div textcontent.bind=\"value & throttle\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-30 assignment to $host surfaces AU0106",
+    "markup": "<div au-slot textcontent.bind=\"$host = newValue\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0106" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-31 assignment to $host.prop surfaces AU0106",
+    "markup": "<div au-slot textcontent.bind=\"$host.value = newValue\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0106" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-32 reading $host has no diagnostic",
+    "markup": "<div au-slot textcontent.bind=\"$host.value\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
