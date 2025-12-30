@@ -14,7 +14,7 @@ import {
   generateStaticSite,
   expandPath,
   collectStaticRoutes,
-} from "@aurelia-ls/build";
+} from "@aurelia-ls/ssg";
 
 // Create a temporary directory for test output
 const createTempDir = async () => {

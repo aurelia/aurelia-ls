@@ -13,7 +13,7 @@
 
 import { test, describe, expect } from "vitest";
 
-import { compileAndRenderAot, compileWithAot } from "@aurelia-ls/build";
+import { compileAndRenderAot, compileWithAot } from "@aurelia-ls/ssr";
 import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler";
 import { createComponent } from "./_helpers/test-utils.js";
 

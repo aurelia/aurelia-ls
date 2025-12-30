@@ -21,7 +21,7 @@ import { BrowserPlatform } from "@aurelia/platform-browser";
 import {
   recordManifest,
   debugControllerTree,
-} from "@aurelia-ls/build";
+} from "@aurelia-ls/ssr";
 
 // Types and type guards from runtime (needed for hydration)
 import {

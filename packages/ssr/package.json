@@ -35,6 +35,7 @@
     }
   },
   "devDependencies": {
-    "@types/jsdom": "^21.1.7"
+    "@types/jsdom": "^21.1.7",
+    "@aurelia/router": "file:../../aurelia/packages/router"
   }
 }

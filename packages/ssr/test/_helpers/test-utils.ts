@@ -1,5 +1,5 @@
 /**
- * Shared test utilities for build package tests.
+ * Shared test utilities for SSR package tests.
  *
  * Consolidates common helpers used across multiple test files to avoid duplication
  * and ensure consistency.

@@ -10,9 +10,9 @@
 
 import { test, describe, expect } from "vitest";
 
-import { compileWithAot } from "@aurelia-ls/build";
-import { patchComponentDefinition } from "@aurelia-ls/build";
-import { renderWithComponents } from "@aurelia-ls/build";
+import { compileWithAot } from "@aurelia-ls/ssr";
+import { patchComponentDefinition } from "@aurelia-ls/ssr";
+import { renderWithComponents } from "@aurelia-ls/ssr";
 
 // =============================================================================
 // Test Component Classes (using static $au pattern)

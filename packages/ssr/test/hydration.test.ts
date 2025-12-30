@@ -17,7 +17,7 @@ import { JSDOM } from "jsdom";
 import { DI, Registration } from "@aurelia/kernel";
 import { Aurelia, IPlatform, StandardConfiguration, CustomElement } from "@aurelia/runtime-html";
 import { BrowserPlatform } from "@aurelia/platform-browser";
-import { compileAndRenderAot } from "@aurelia-ls/build";
+import { compileAndRenderAot } from "@aurelia-ls/ssr";
 import { createComponent } from "./_helpers/test-utils.js";
 
 // =============================================================================

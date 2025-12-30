@@ -17,10 +17,10 @@ import { test, describe, expect } from "vitest";
 import { DI, Registration } from "@aurelia/kernel";
 import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
 
-import { compileWithAot } from "@aurelia-ls/build";
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/build";
-import { patchComponentDefinition } from "@aurelia-ls/build";
-import { renderWithComponents } from "@aurelia-ls/build";
+import { compileWithAot } from "@aurelia-ls/ssr";
+import { DEFAULT_SEMANTICS } from "@aurelia-ls/ssr";
+import { patchComponentDefinition } from "@aurelia-ls/ssr";
+import { renderWithComponents } from "@aurelia-ls/ssr";
 import { countOccurrences, createHydrationContext } from "./_helpers/test-utils.js";
 
 // =============================================================================

@@ -274,9 +274,6 @@ importers:
       '@aurelia-ls/resolution':
         specifier: workspace:*
         version: link:../resolution
-      '@aurelia-ls/ssr':
-        specifier: workspace:*
-        version: link:../ssr
 
   packages/ssr:
     dependencies:

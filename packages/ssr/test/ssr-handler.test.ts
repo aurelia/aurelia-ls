@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   createSSRHandler,
   isSSRHandler,
-} from "@aurelia-ls/build";
+} from "@aurelia-ls/ssr";
 
 // Mock component class with $au definition
 class MockApp {

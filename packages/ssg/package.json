@@ -15,14 +15,6 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aurelia-ls/ssr": "workspace:*"
-  },
-  "peerDependencies": {
     "@aurelia-ls/resolution": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@aurelia-ls/resolution": {
-      "optional": true
-    }
   }
 }
