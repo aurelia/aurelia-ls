@@ -151,7 +151,9 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "branch", "res": "case", "branch": "case" },
+        { "kind": "branch", "res": "default-case", "branch": "default" }
       ]
     }
   },

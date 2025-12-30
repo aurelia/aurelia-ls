@@ -3,6 +3,8 @@ import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ControllerConfig, Semantics } from "../../language/registry.js";
 import { getTriggerProp } from "../../language/registry.js";
 import type {
+  ControllerBranchInfo,
+  ExprRef,
   HydrateTemplateControllerIR,
   InstructionIR,
   IteratorBindingIR,
@@ -33,6 +35,48 @@ import {
  */
 function hasPromiseBranches(config: ControllerConfig): boolean {
   return config.branches?.names.includes("then") ?? false;
+}
+
+/**
+ * Type guard to check if a BindingSourceIR is an ExprRef (not InterpIR).
+ */
+function isExprRef(source: PropertyBindingIR["from"]): source is ExprRef {
+  return !("kind" in source && source.kind === "interp");
+}
+
+/**
+ * Build switch branch info for case/default-case controllers.
+ * Returns null for non-switch-branch controllers.
+ *
+ * CONFIG-DRIVEN: Uses trigger.kind to distinguish case vs default:
+ * - trigger.kind="branch" with linksTo="switch" → case (has expr)
+ * - trigger.kind="marker" with linksTo="switch" → default (no expr)
+ */
+function buildSwitchBranchInfo(
+  config: ControllerConfig,
+  props: (PropertyBindingIR | IteratorBindingIR)[]
+): ControllerBranchInfo | null {
+  // Only handle switch branch controllers
+  if (config.linksTo !== "switch") return null;
+
+  // Config-driven: branch trigger = case (has expression value)
+  if (config.trigger.kind === "branch") {
+    const valueProp = props.find(
+      (p): p is PropertyBindingIR => p.type === "propertyBinding" && p.to === "value"
+    );
+    if (valueProp && isExprRef(valueProp.from)) {
+      return { kind: "case", expr: valueProp.from };
+    }
+    // Fallback: branch controller without value (shouldn't happen but be defensive)
+    return null;
+  }
+
+  // Config-driven: marker trigger = default (no expression)
+  if (config.trigger.kind === "marker") {
+    return { kind: "default" };
+  }
+
+  return null;
 }
 
 // -----------------------------------------------------------------------------
@@ -127,6 +171,9 @@ export function collectControllers(
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
     const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config);
 
+    // Build switch branch info for case/default-case controllers
+    const branch = buildSwitchBranchInfo(config, proto.props);
+
     const nextLayer: HydrateTemplateControllerIR[] = [];
     for (const inner of current) {
       const def = makeWrapperTemplate(inner, nestedTemplates);
@@ -136,7 +183,7 @@ export function collectControllers(
         def,
         props: proto.props,
         alias: null,
-        branch: null,
+        branch,
         containerless: false,
         loc: toSpan(loc, table.source),
       });
@@ -218,7 +265,11 @@ function buildRightmostController(
 
   // All other controllers just need the template definition
   const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
-  return [createHydrateInstruction(name, def, props, locSpan)];
+
+  // Build switch branch info for case/default-case controllers
+  const branch = buildSwitchBranchInfo(config, props);
+
+  return [createHydrateInstruction(name, def, props, locSpan, branch)];
 }
 
 function buildPropsForConfig(
@@ -252,7 +303,8 @@ function createHydrateInstruction(
   res: string,
   def: TemplateIR,
   props: (PropertyBindingIR | IteratorBindingIR)[],
-  loc: SourceSpan | null
+  loc: SourceSpan | null,
+  branch: ControllerBranchInfo | null = null
 ): HydrateTemplateControllerIR {
   return {
     type: "hydrateTemplateController",
@@ -260,7 +312,7 @@ function createHydrateInstruction(
     def,
     props,
     alias: null,
-    branch: null,
+    branch,
     containerless: false,
     loc,
   };

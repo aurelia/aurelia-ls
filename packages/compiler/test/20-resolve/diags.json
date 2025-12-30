@@ -62,7 +62,8 @@
     "markup": "<template case.bind=\"x\">orphan case</template>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": [
         { "code": "AU0815" }
@@ -73,7 +74,9 @@
     "name": "R-D-15 [default-case] without parent [switch] surfaces AU0815",
     "markup": "<template default-case>orphan default</template>",
     "expect": {
-      "items": [],
+      "items": [
+        { "kind": "branch", "res": "default-case", "branch": "default" }
+      ],
       "diags": [
         { "code": "AU0815" }
       ]
@@ -85,7 +88,9 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "branch", "res": "case", "branch": "case" },
+        { "kind": "branch", "res": "default-case", "branch": "default" }
       ],
       "diags": []
     }
@@ -95,7 +100,9 @@
     "markup": "<div switch.bind=\"x\"><template default-case>one</template><template default-case>two</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "branch", "res": "default-case", "branch": "default" },
+        { "kind": "branch", "res": "default-case", "branch": "default" }
       ],
       "diags": [
         { "code": "AU0816" }
