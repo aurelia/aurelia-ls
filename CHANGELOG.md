@@ -6,6 +6,53 @@ For VS Code extension changelog, see [`packages/vscode/CHANGELOG.md`](packages/v
 
 ---
 
+## 0.2.0
+
+*Compiler hardening: config-driven template controllers and Elm-style error handling.*
+
+### @aurelia-ls/compiler
+
+**Config-driven template controllers:**
+- Unified `ControllerConfig` type with 6 orthogonal axes (trigger, scope, cardinality, relationship, placement, injection)
+- All TC behavior derives from configuration instead of name-based switch statements
+- Custom TCs from `@templateController` receive identical treatment to built-ins
+- Pattern-based frame origins for type inference (works for custom TCs automatically)
+- Consolidated AOT transform: 10 separate functions → single `transformController`
+
+**Elm-style error handling:**
+- `Diagnosed<T>` monad for accumulating diagnostics while producing values
+- `StubMarker` for marking degraded values from error recovery
+- Stub propagation through resolve, bind, and typecheck phases
+- Cascade suppression: stubbed inputs don't generate new diagnostics
+
+**New diagnostics:**
+- `AU0101`: Binding behavior not found
+- `AU0102`: Duplicate binding behavior
+- `AU0103`: Value converter not found
+- `AU0106`: Assignment to `$host`
+- `AU0704`: Invalid `<let>` command
+- `AU0810`: `[else]` without preceding `[if]`
+- `AU0813`: `[then]/[catch]/[pending]` without parent `[promise]`
+- `AU0815`: `[case]/[default-case]` without parent `[switch]`
+- `AU0816`: Multiple `[default-case]` in same switch
+- `AU1102`: Unknown custom element
+- `AU9996`: Conflicting rate-limiters (throttle + debounce)
+
+**Expression utilities:**
+- `tryToInterpIR()` for proper interpolation detection
+- Unified expression walkers with `forEachExprChild` pattern
+- Switch/case branch metadata in IR (symmetric with promise)
+
+### Test Coverage
+
+~2,000 tests passing across all packages, 124 new tests added:
+- 15 Elm-style error propagation tests
+- 11 typecheck integration tests at LS layer
+- 67 typecheck config tests (presets, coercion rules)
+- 31 edge case tests across analysis stages
+
+---
+
 ## 0.1.0
 
 *Initial release of the Aurelia language services core packages.*
