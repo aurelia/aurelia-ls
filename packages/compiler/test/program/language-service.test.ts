@@ -1202,3 +1202,314 @@ describe("typecheck diagnostics integration", () => {
     expect(off.enabled).toBe(false);
   });
 });
+
+// =============================================================================
+// Elm-Style Error Propagation Tests
+// =============================================================================
+// These tests verify the Elm-style error handling architecture:
+// - Errors produce stubs (degraded values) that propagate through the pipeline
+// - Downstream phases see stubs and suppress cascade errors
+// - User sees ONE error at the root cause, not noisy cascades
+//
+// Key principle: If earlier phase failed, later phases should not pile on.
+
+describe("Elm-style error propagation", () => {
+  // Helper to create program and service
+  function createTestHarness() {
+    const program = new DefaultTemplateProgram({
+      vm: {
+        getRootVmTypeExpr() { return "TestVm"; },
+        getSyntheticPrefix() { return "__AU_TTC_"; },
+      },
+      isJs: false,
+    });
+    const service = new DefaultTemplateLanguageService(program, {
+      typescript: { getDiagnostics() { return []; } },
+    });
+    return { program, service };
+  }
+
+  describe("unknown property target → stub propagation", () => {
+    test("unknown property produces resolve error, no typecheck cascade", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/stub-prop.html";
+      // 'nonexistent' is not a valid property on div
+      const markup = "<template><div nonexistent.bind=\"42\"></div></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Should have exactly ONE error from resolve phase
+      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
+
+      // Should have ZERO errors from typecheck (cascade suppressed)
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "typecheck should not cascade on unknown property").toBe(0);
+    });
+
+    test("multiple unknown properties each produce one error, no cascades", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/stub-multi-prop.html";
+      // Two unknown properties
+      const markup = "<template><div foo.bind=\"1\" bar.bind=\"2\"></div></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Each unknown property should produce exactly one resolve error
+      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      expect(resolveErrors.length).toBe(2);
+
+      // No typecheck cascades
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "no typecheck cascades for multiple unknowns").toBe(0);
+    });
+  });
+
+  describe("valid bindings still type-checked after encountering stub", () => {
+    test("valid binding after unknown property still gets type-checked", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/stub-then-valid.html";
+      // First binding: unknown property (stub)
+      // Second binding: valid property with type mismatch
+      const markup = "<template><input unknown.bind=\"1\" disabled.bind=\"'yes'\"></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Should have resolve error for 'unknown'
+      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
+
+      // Should ALSO have typecheck warning for disabled (string → boolean mismatch)
+      // This proves we don't over-suppress - valid targets still get checked
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "valid binding should still be type-checked").toBe(1);
+      expect(typecheckErrors[0]?.code).toBe("AU1302"); // warning in lenient mode
+    });
+
+    test("stub on one element doesn't affect sibling elements", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/stub-sibling.html";
+      // First element: unknown property (stub)
+      // Second element: valid property with type mismatch
+      const markup = `<template>
+        <div unknown.bind="1"></div>
+        <input disabled.bind="'yes'">
+      </template>`;
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Resolve error for unknown
+      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
+
+      // Typecheck error for disabled on SIBLING element
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "sibling element should still be type-checked").toBe(1);
+    });
+  });
+
+  describe("nested scope error containment", () => {
+    test("error in if.bind content doesn't affect outer scope", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/stub-nested-if.html";
+      // Outer: valid binding
+      // Inner (inside if): unknown property
+      const markup = `<template>
+        <input disabled.bind="'outer'">
+        <div if.bind="true">
+          <div unknown.bind="1"></div>
+        </div>
+      </template>`;
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Should have resolve error for inner unknown
+      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
+
+      // Should have typecheck error for outer disabled (not suppressed by inner stub)
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "outer scope type errors not affected by inner stub").toBe(1);
+    });
+
+    test("error in repeat item doesn't cascade within repeat", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/stub-repeat.html";
+      // Unknown property inside repeat - should get ONE error, not per-iteration cascade
+      const markup = `<template>
+        <div repeat.for="item of items">
+          <span unknown.bind="item"></span>
+        </div>
+      </template>`;
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Should have exactly one resolve error for 'unknown'
+      const resolveErrors = diags.compiler.filter((d) =>
+        d.source === "resolve-host" && d.message?.includes("unknown")
+      );
+      expect(resolveErrors.length, "should have one error for unknown property").toBe(1);
+
+      // No typecheck cascades
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "no typecheck cascades in repeat").toBe(0);
+    });
+  });
+
+  describe("error isolation between unrelated bindings", () => {
+    test("type error on one binding doesn't affect unrelated bindings", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/isolated-errors.html";
+      // Two independent type errors - each should produce exactly one diagnostic
+      const markup = `<template>
+        <input disabled.bind="'string1'">
+        <input disabled.bind="'string2'">
+      </template>`;
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Should have exactly 2 typecheck warnings (one per binding)
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "each type error independent").toBe(2);
+      expect(typecheckErrors.every((d) => d.code === "AU1302")).toBe(true);
+    });
+
+    test("mixed valid and invalid bindings on same element", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/mixed-bindings.html";
+      // Same element: one valid (string→string), one invalid (string→boolean)
+      const markup = "<template><input value.bind=\"'text'\" disabled.bind=\"'yes'\"></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // value.bind: string→string is valid, no error
+      // disabled.bind: string→boolean is invalid, one error
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length, "only invalid binding produces error").toBe(1);
+
+      // No resolve errors (both properties are valid targets)
+      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      expect(resolveErrors.length).toBe(0);
+    });
+  });
+
+  describe("diagnostic quality", () => {
+    test("error message is actionable (includes property name)", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/actionable-error.html";
+      const markup = "<template><div nonexistent.bind=\"42\"></div></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+      const error = diags.compiler.find((d) => d.source === "resolve-host");
+
+      expect(error).toBeTruthy();
+      // Error message should mention what couldn't be found
+      expect(error?.message).toMatch(/nonexistent|property|target/i);
+    });
+
+    test("error location points to the binding, not the element", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/error-location.html";
+      // The binding starts after '<template><div '
+      const markup = "<template><div nonexistent.bind=\"42\"></div></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+      const error = diags.compiler.find((d) => d.source === "resolve-host");
+
+      expect(error?.location).toBeTruthy();
+      // Span should be within the binding, not at element start
+      const bindingStart = markup.indexOf("nonexistent");
+      expect(error?.location?.span.start).toBeGreaterThanOrEqual(bindingStart);
+    });
+
+    test("no duplicate diagnostics for same error", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/no-dupes.html";
+      const markup = "<template><div foo.bind=\"1\"></div></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Group diagnostics by message
+      const messageCounts = new Map<string, number>();
+      for (const d of diags.compiler) {
+        const msg = d.message ?? "";
+        messageCounts.set(msg, (messageCounts.get(msg) ?? 0) + 1);
+      }
+
+      // No message should appear more than once
+      for (const [msg, count] of messageCounts) {
+        expect(count, `duplicate diagnostic: "${msg}"`).toBe(1);
+      }
+    });
+  });
+
+  describe("edge cases", () => {
+    test("empty template produces no errors", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/empty.html";
+      const markup = "<template></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+      expect(diags.compiler.length).toBe(0);
+    });
+
+    test("static-only template produces no errors", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/static.html";
+      const markup = "<template><div class=\"foo\">Hello</div></template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+      expect(diags.compiler.length).toBe(0);
+    });
+
+    test("interpolation in text doesn't produce spurious errors", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/interp.html";
+      const markup = "<template>${someValue}</template>";
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+      // Text interpolation accepts any type - no errors expected
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length).toBe(0);
+    });
+
+    test("deeply nested structure with error at leaf", () => {
+      const { program, service } = createTestHarness();
+      const uri = "/app/deep-nest.html";
+      const markup = `<template>
+        <div if.bind="true">
+          <div if.bind="true">
+            <div if.bind="true">
+              <span unknown.bind="1"></span>
+            </div>
+          </div>
+        </div>
+      </template>`;
+      program.upsertTemplate(uri, markup);
+
+      const diags = service.getDiagnostics(uri);
+
+      // Should have exactly one resolve error at the leaf
+      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      expect(resolveErrors.length).toBe(1);
+
+      // No cascades from any level
+      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      expect(typecheckErrors.length).toBe(0);
+    });
+  });
+});
