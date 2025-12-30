@@ -95,9 +95,48 @@ function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
 }
 
+/**
+ * Check if a NodeSem represents a truly unknown custom element.
+ * Custom elements have tags containing '-' (per HTML spec).
+ * When both custom and native are null for such elements, it's unknown.
+ *
+ * Used for stub propagation: we suppress AU1104 for props on unknown
+ * custom elements since the root cause is the missing element, not the prop.
+ *
+ * IMPORTANT: If a resource graph is provided and the element exists in ANY
+ * scope of that graph, it's NOT truly unknown (just out-of-scope), so we
+ * should NOT suppress AU1104 in that case.
+ */
+function isUnknownCustomElement(host: NodeSem, graph?: ResourceGraph | null): boolean {
+  // Not an element or not a custom element tag
+  if (host.kind !== "element" || !host.tag.includes("-")) {
+    return false;
+  }
+
+  // If resolved (custom or native), it's not unknown
+  if (host.custom || host.native) {
+    return false;
+  }
+
+  // If there's a resource graph, check if the element exists in ANY scope
+  // If it does, it's not "truly unknown" - it's just not visible in current scope
+  if (graph) {
+    const tag = host.tag.toLowerCase();
+    for (const scope of Object.values(graph.scopes)) {
+      if (scope.resources?.elements?.[tag]) {
+        return false; // Element exists in graph, not truly unknown
+      }
+    }
+  }
+
+  // Truly unknown custom element
+  return true;
+}
+
 interface ResolverContext {
   readonly lookup: SemanticsLookup;
   readonly diags: SemDiagnostic[];
+  readonly graph?: ResourceGraph | null;
 }
 
 /* ============================================================================
@@ -116,6 +155,7 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
   const ctx: ResolverContext = {
     lookup: createSemanticsLookup(sem, lookupOpts),
     diags,
+    graph: opts?.graph ?? null,
   };
   const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
 
@@ -486,6 +526,11 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
     loc: ins.loc ?? null,
   };
   if (target.kind === "unknown") {
+    // Stub propagation: suppress AU1104 for unknown custom elements.
+    // The root cause is the missing element registration, not individual props.
+    if (isUnknownCustomElement(host, ctx.graph)) {
+      return pure(linked); // No diagnostic - root cause is element, not prop
+    }
     const d = buildDiagnostic({
       code: "AU1104",
       message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
@@ -524,6 +569,10 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
   };
 
   if (target.kind === "unknown") {
+    // Stub propagation: suppress AU1104 for unknown custom elements.
+    if (isUnknownCustomElement(host, ctx.graph)) {
+      return pure(linked);
+    }
     const d = buildDiagnostic({
       code: "AU1104",
       message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
@@ -598,6 +647,10 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
   const { target } = resolvePropertyTarget(host, to, "default", ctx.lookup);
   const linked: LinkedSetProperty = { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
   if (target.kind === "unknown") {
+    // Stub propagation: suppress AU1104 for unknown custom elements.
+    if (isUnknownCustomElement(host, ctx.graph)) {
+      return pure(linked);
+    }
     const d = buildDiagnostic({
       code: "AU1104",
       message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,

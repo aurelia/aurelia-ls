@@ -469,15 +469,14 @@
     }
   },
   {
-    "name": "R-P-46 unknown custom element tag -> property target unknown",
+    "name": "R-P-46 unknown custom element tag -> property target unknown (no AU1104 - stub propagation)",
+    "comment": "AU1104 is suppressed for unknown custom elements (tags with '-') to avoid cascading errors",
     "markup": "<x-unknown bar.bind=\"y\"></x-unknown>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "bar", "target": "unknown", "effectiveMode": "toView" }
       ],
-      "diags": [
-        { "code": "AU1104" }
-      ]
+      "diags": []
     }
   },
   {
