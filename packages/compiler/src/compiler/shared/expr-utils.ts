@@ -6,6 +6,10 @@ import type {
   InterpIR,
   IrModule,
   SourceSpan,
+  IsBindingBehavior,
+  BindingPattern,
+  Interpolation,
+  ForOfStatement,
 } from "../model/ir.js";
 import type { SourceFile } from "../model/source.js";
 import { absoluteSpan, fallbackSpan, resolveSourceSpan, resolveSourceSpanMaybe } from "../model/source.js";
@@ -261,29 +265,429 @@ export function isInterpolation(x: BindingSourceIR): x is InterpIR {
   return (x as InterpIR).kind === "interp";
 }
 
-// TODO: Add utility to extract binding behavior and value converter names from expression AST.
-// Used by 20-resolve for AU0101/AU0103 diagnostics.
-//
-// interface ExprResourceRef {
-//   kind: 'bindingBehavior' | 'valueConverter';
-//   name: string;
-//   span: SourceSpan;
-// }
-//
-// export function extractExprResources(table: readonly ExprTableEntry[]): ExprResourceRef[] {
-//   const refs: ExprResourceRef[] = [];
-//   for (const entry of table) {
-//     walkAst(entry.ast, refs, entry);
-//   }
-//   return refs;
-// }
-//
-// Walk AST nodes, matching $kind === 'BindingBehavior' and $kind === 'ValueConverter'.
-// Extract .name and .span for each. Note: expressions can be nested, so walk recursively.
+/* ============================================================================
+ * Expression Resource Extraction
+ * ============================================================================
+ * Walk expression AST to extract binding behavior and value converter names.
+ * Used by 20-resolve for AU0101/AU0102/AU0103 diagnostics.
+ */
+
+export interface ExprResourceRef {
+  kind: "bindingBehavior" | "valueConverter";
+  name: string;
+  span: SourceSpan;
+  /** The expression ID this ref came from (for duplicate detection) */
+  exprId: ExprId;
+}
+
+export interface HostAssignmentRef {
+  span: SourceSpan;
+  exprId: ExprId;
+}
+
+/**
+ * Extract all binding behavior and value converter references from an expression table.
+ * Returns refs with name, span, and source expression ID for validation.
+ */
+export function extractExprResources(table: readonly ExprTableEntry[]): ExprResourceRef[] {
+  const refs: ExprResourceRef[] = [];
+  for (const entry of table) {
+    walkAst(entry.ast, refs, entry.id);
+  }
+  return refs;
+}
+
+/**
+ * Extract all assignments to `$host` from an expression table.
+ * Used by 20-resolve for AU0106 diagnostics.
+ *
+ * Detects patterns like:
+ * - `$host = x`
+ * - `$host.prop = x`
+ * - `$host[key] = x`
+ */
+export function extractHostAssignments(table: readonly ExprTableEntry[]): HostAssignmentRef[] {
+  const refs: HostAssignmentRef[] = [];
+  for (const entry of table) {
+    walkAstForHostAssign(entry.ast, refs, entry.id);
+  }
+  return refs;
+}
+
+type AstNode = ExprTableEntry["ast"];
+
+/** Walk AST to extract binding behaviors and value converters, using forEachExprChild. */
+function walkAst(node: AstNode | undefined, refs: ExprResourceRef[], exprId: ExprId): void {
+  if (!node || typeof node !== "object") return;
+  const kind = (node as { $kind?: string }).$kind;
+  if (!kind) return;
+
+  // Collect binding behavior / value converter at current node
+  if (kind === "BindingBehavior") {
+    const n = node as { name: string; span: SourceSpan };
+    refs.push({ kind: "bindingBehavior", name: n.name, span: n.span, exprId });
+  } else if (kind === "ValueConverter") {
+    const n = node as { name: string; span: SourceSpan };
+    refs.push({ kind: "valueConverter", name: n.name, span: n.span, exprId });
+  }
+
+  // Recurse into children using the unified walker
+  forEachExprChild(node as WalkableExpr, child => walkAst(child, refs, exprId));
+}
+
+/** Walk AST to find assignments to $host, using forEachExprChild. */
+function walkAstForHostAssign(node: AstNode | undefined, refs: HostAssignmentRef[], exprId: ExprId): void {
+  if (!node || typeof node !== "object") return;
+  const kind = (node as { $kind?: string }).$kind;
+  if (!kind) return;
+
+  // Check for $host assignment at current node
+  if (kind === "Assign") {
+    const n = node as { target: AstNode; span?: SourceSpan };
+    if (isHostTarget(n.target)) {
+      refs.push({ span: n.span ?? { start: 0, end: 0 }, exprId });
+    }
+  }
+
+  // Recurse into children using the unified walker
+  forEachExprChild(node as WalkableExpr, child => walkAstForHostAssign(child, refs, exprId));
+}
+
+/**
+ * Check if an AST node is $host or an access chain rooted at $host.
+ */
+function isHostTarget(node: AstNode | undefined): boolean {
+  if (!node || typeof node !== "object") return false;
+  const kind = (node as { $kind?: string }).$kind;
+  if (!kind) return false;
+
+  // Direct $host access (AccessBoundary represents $host)
+  if (kind === "AccessBoundary") {
+    return true;
+  }
+
+  // AccessScope with name "$host" (in case parser represents it this way)
+  if (kind === "AccessScope") {
+    const n = node as { name: string };
+    return n.name === "$host";
+  }
+
+  // Property/key access on $host (e.g., $host.prop or $host[key])
+  if (kind === "AccessMember" || kind === "AccessKeyed") {
+    const n = node as { object: AstNode };
+    return isHostTarget(n.object);
+  }
+
+  return false;
+}
 
 function firstFileFromSpans(spans: ReadonlyExprIdMap<SourceSpan>): SourceFileId | undefined {
   for (const span of spans.values()) {
     if (span?.file) return span.file;
   }
   return undefined;
+}
+
+/* =============================================================================
+ * Generic Expression Tree Traversal (TypeScript forEachChild pattern)
+ * =============================================================================
+ * Single source of truth for AST structure. All expression walkers should use
+ * these primitives instead of duplicating switch statements.
+ *
+ * Usage:
+ *   function myWalker(node: IsBindingBehavior, acc: MyAcc): void {
+ *     // Process current node
+ *     if (node.$kind === "BindingBehavior") acc.bbs.push(node.name);
+ *     // Recurse into children
+ *     forEachExprChild(node, child => myWalker(child, acc));
+ *   }
+ */
+
+/**
+ * Any expression-like AST node that can be walked.
+ * Includes IsBindingBehavior, Interpolation, and ForOfStatement.
+ */
+export type WalkableExpr = IsBindingBehavior | Interpolation | ForOfStatement;
+
+/**
+ * Visit each immediate child expression of a node.
+ * Does NOT recurse - caller is responsible for recursion if needed.
+ *
+ * This is the single source of truth for expression AST structure.
+ * All walkers should use this instead of duplicating switch statements.
+ */
+export function forEachExprChild(
+  node: WalkableExpr | undefined,
+  cb: (child: IsBindingBehavior) => void,
+): void {
+  if (!node || typeof node !== "object") return;
+  const kind = (node as { $kind?: string }).$kind;
+  if (!kind) return;
+
+  switch (kind) {
+    // === Wrapper expressions ===
+    case "BindingBehavior": {
+      const n = node as { expression: IsBindingBehavior; args?: IsBindingBehavior[] };
+      cb(n.expression);
+      for (const a of n.args ?? []) cb(a);
+      break;
+    }
+    case "ValueConverter": {
+      const n = node as { expression: IsBindingBehavior; args?: IsBindingBehavior[] };
+      cb(n.expression);
+      for (const a of n.args ?? []) cb(a);
+      break;
+    }
+
+    // === Assignment/Conditional ===
+    case "Assign": {
+      const n = node as { target: IsBindingBehavior; value: IsBindingBehavior };
+      cb(n.target);
+      cb(n.value);
+      break;
+    }
+    case "Conditional": {
+      const n = node as { condition: IsBindingBehavior; yes: IsBindingBehavior; no: IsBindingBehavior };
+      cb(n.condition);
+      cb(n.yes);
+      cb(n.no);
+      break;
+    }
+
+    // === Access expressions ===
+    case "AccessMember":
+    case "AccessKeyed": {
+      const n = node as { object: IsBindingBehavior; key?: IsBindingBehavior };
+      cb(n.object);
+      if (n.key) cb(n.key);
+      break;
+    }
+
+    // === Call expressions ===
+    case "CallScope":
+    case "CallGlobal": {
+      const n = node as { args?: IsBindingBehavior[] };
+      for (const a of n.args ?? []) cb(a);
+      break;
+    }
+    case "CallMember":
+    case "CallFunction": {
+      const n = node as { object?: IsBindingBehavior; func?: IsBindingBehavior; args?: IsBindingBehavior[] };
+      if (n.object) cb(n.object);
+      if (n.func) cb(n.func);
+      for (const a of n.args ?? []) cb(a);
+      break;
+    }
+
+    // === Operators ===
+    case "Binary": {
+      const n = node as { left: IsBindingBehavior; right: IsBindingBehavior };
+      cb(n.left);
+      cb(n.right);
+      break;
+    }
+    case "Unary":
+    case "Paren": {
+      const n = node as { expression: IsBindingBehavior };
+      cb(n.expression);
+      break;
+    }
+
+    // === Constructors ===
+    case "New": {
+      const n = node as { func: IsBindingBehavior; args?: IsBindingBehavior[] };
+      cb(n.func);
+      for (const a of n.args ?? []) cb(a);
+      break;
+    }
+
+    // === Literals (with nested expressions) ===
+    case "ArrayLiteral": {
+      const n = node as { elements?: IsBindingBehavior[] };
+      for (const el of n.elements ?? []) cb(el);
+      break;
+    }
+    case "ObjectLiteral": {
+      const n = node as { values?: IsBindingBehavior[] };
+      for (const v of n.values ?? []) cb(v);
+      break;
+    }
+
+    // === Templates ===
+    case "Template": {
+      const n = node as { expressions?: IsBindingBehavior[] };
+      for (const e of n.expressions ?? []) cb(e);
+      break;
+    }
+    case "TaggedTemplate": {
+      const n = node as { func: IsBindingBehavior; expressions?: IsBindingBehavior[] };
+      cb(n.func);
+      for (const e of n.expressions ?? []) cb(e);
+      break;
+    }
+
+    // === Interpolation ===
+    case "Interpolation": {
+      const n = node as { expressions?: IsBindingBehavior[] };
+      for (const e of n.expressions ?? []) cb(e);
+      break;
+    }
+
+    // === ForOfStatement (iterator header) ===
+    case "ForOfStatement": {
+      const n = node as { iterable: IsBindingBehavior };
+      cb(n.iterable);
+      // Note: declaration is a BindingPattern, use forEachPatternChild for that
+      break;
+    }
+
+    // === Arrow function ===
+    case "ArrowFunction": {
+      const n = node as { body: IsBindingBehavior };
+      cb(n.body);
+      break;
+    }
+
+    // === Destructuring assignment ===
+    case "DestructuringAssignment": {
+      const n = node as { source: IsBindingBehavior };
+      cb(n.source);
+      // Note: pattern is a BindingPattern, use forEachPatternChild for that
+      break;
+    }
+
+    // === Terminal nodes (no children) ===
+    case "AccessScope":
+    case "AccessThis":
+    case "AccessBoundary":
+    case "AccessGlobal":
+    case "PrimitiveLiteral":
+    case "Custom":
+    case "BadExpression":
+      break;
+
+    // === Binding patterns (handled by forEachPatternChild) ===
+    case "BindingIdentifier":
+    case "BindingPatternDefault":
+    case "BindingPatternHole":
+    case "ArrayBindingPattern":
+    case "ObjectBindingPattern":
+      break;
+
+    default:
+      // Unknown node type - skip silently for forward compatibility
+      break;
+  }
+}
+
+/**
+ * Visit each immediate child pattern of a binding pattern.
+ * Does NOT recurse - caller is responsible for recursion if needed.
+ *
+ * This is the single source of truth for binding pattern structure.
+ */
+export function forEachPatternChild(
+  pattern: BindingPattern | undefined,
+  cb: (child: BindingPattern) => void,
+): void {
+  if (!pattern || typeof pattern !== "object") return;
+  const kind = (pattern as { $kind?: string }).$kind;
+  if (!kind) return;
+
+  switch (kind) {
+    case "BindingPatternDefault": {
+      const p = pattern as { target: BindingPattern };
+      cb(p.target);
+      break;
+    }
+    case "ArrayBindingPattern": {
+      const p = pattern as { elements?: BindingPattern[]; rest?: BindingPattern | null };
+      for (const el of p.elements ?? []) cb(el);
+      if (p.rest) cb(p.rest);
+      break;
+    }
+    case "ObjectBindingPattern": {
+      const p = pattern as { properties?: Array<{ value: BindingPattern }>; rest?: BindingPattern | null };
+      for (const prop of p.properties ?? []) cb(prop.value);
+      if (p.rest) cb(p.rest);
+      break;
+    }
+    // Terminal patterns (no children)
+    case "BindingIdentifier":
+    case "BindingPatternHole":
+    case "BadExpression":
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * Recursively walk all expression children (depth-first).
+ * Convenience wrapper when you don't need control over recursion.
+ */
+export function walkExprTree(
+  node: WalkableExpr | undefined,
+  visit: (node: IsBindingBehavior) => void,
+): void {
+  if (!node) return;
+  // Visit current node (cast is safe for terminal check)
+  visit(node as IsBindingBehavior);
+  // Recurse into children
+  forEachExprChild(node, child => walkExprTree(child, visit));
+}
+
+/**
+ * Recursively walk all pattern children (depth-first).
+ * Convenience wrapper when you don't need control over recursion.
+ */
+export function walkPatternTree(
+  pattern: BindingPattern | undefined,
+  visit: (pattern: BindingPattern) => void,
+): void {
+  if (!pattern) return;
+  visit(pattern);
+  forEachPatternChild(pattern, child => walkPatternTree(child, visit));
+}
+
+/**
+ * Collect all binding names from a pattern (destructuring).
+ * Single implementation used by bind, plan, type-analysis.
+ */
+export function collectBindingNames(pattern: BindingPattern | undefined): string[] {
+  const names: string[] = [];
+  walkPatternTree(pattern, p => {
+    if ((p as { $kind?: string }).$kind === "BindingIdentifier") {
+      const name = (p as { name?: string }).name;
+      if (name) names.push(name);
+    }
+  });
+  return names;
+}
+
+/**
+ * BadExpression node type (for return type of findBadInPattern).
+ */
+export interface BadExpressionNode {
+  $kind: "BadExpression";
+  span?: SourceSpan;
+  message?: string;
+}
+
+/**
+ * Find the first BadExpression in a pattern tree (for error reporting).
+ * Returns the full BadExpression node for span/message access.
+ */
+export function findBadInPattern(pattern: BindingPattern | undefined): BadExpressionNode | null {
+  if (!pattern) return null;
+  const kind = (pattern as { $kind?: string }).$kind;
+  if (kind === "BadExpression") {
+    return pattern as unknown as BadExpressionNode;
+  }
+  // Check children
+  let found: BadExpressionNode | null = null;
+  forEachPatternChild(pattern, child => {
+    if (!found) found = findBadInPattern(child);
+  });
+  return found;
 }

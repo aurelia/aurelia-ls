@@ -227,29 +227,26 @@ function collectNestedFromElementTree(
 
 /**
  * Get all templates from a controller.
- * Different controller types have different template properties.
+ * Config-driven: uses ctrl.branches for child branch controllers.
  */
 function getControllerTemplates(ctrl: PlanController): PlanNode[] {
-  switch (ctrl.kind) {
-    case "repeat":
-    case "with":
-    case "portal":
-    case "if":
-    case "else":
-    case "case":
-    case "default-case":
-      return [ctrl.template];
-    case "switch":
-      // cases array includes both case and default-case controllers
-      return ctrl.cases.map(c => c.template);
-    case "promise": {
-      const promiseTemplates: PlanNode[] = [];
-      if (ctrl.pendingTemplate) promiseTemplates.push(ctrl.pendingTemplate);
-      if (ctrl.thenTemplate) promiseTemplates.push(ctrl.thenTemplate);
-      if (ctrl.catchTemplate) promiseTemplates.push(ctrl.catchTemplate);
-      return promiseTemplates;
+  const templates: PlanNode[] = [];
+
+  // Main template (most controllers have one)
+  if (ctrl.template) {
+    templates.push(ctrl.template);
+  }
+
+  // Child branch templates (switch cases, promise branches)
+  if (ctrl.branches) {
+    for (const branch of ctrl.branches) {
+      if (branch.template) {
+        templates.push(branch.template);
+      }
     }
   }
+
+  return templates;
 }
 
 /* =============================================================================

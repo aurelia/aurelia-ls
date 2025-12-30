@@ -148,20 +148,13 @@ interface AotBinding {
 }
 
 interface AotController {
-  kind: string;
+  resource: string;
   frameId: number;
   template?: AotNode;
   locals?: string[];
   contextuals?: string[];
-  cases?: Array<{ template?: AotNode }>;
-  defaultTemplate?: AotNode;
-  pendingTemplate?: AotNode;
-  thenTemplate?: AotNode;
-  catchTemplate?: AotNode;
-  thenLocal?: string;
-  catchLocal?: string;
-  targetExprId?: string;
-  targetSelector?: string;
+  branches?: AotController[];  // Unified: cases, default, pending, then, catch all become branches
+  exprId?: string;
 }
 
 function reducePlanIntent(plan: AotPlan): AotPlanIntent {
@@ -246,18 +239,14 @@ function walkNode(
         if (ctrl.template) {
           walkNode(ctrl.template, nodes, bindings, controllers);
         }
-        // Promise branches
-        if (ctrl.kind === "promise") {
-          if (ctrl.pendingTemplate) walkNode(ctrl.pendingTemplate, nodes, bindings, controllers);
-          if (ctrl.thenTemplate) walkNode(ctrl.thenTemplate, nodes, bindings, controllers);
-          if (ctrl.catchTemplate) walkNode(ctrl.catchTemplate, nodes, bindings, controllers);
-        }
-        // Switch cases
-        if (ctrl.kind === "switch") {
-          for (const c of ctrl.cases ?? []) {
-            if (c.template) walkNode(c.template, nodes, bindings, controllers);
+        // Recurse into branches (unified: switch cases, promise branches, etc.)
+        if (ctrl.branches) {
+          for (const branch of ctrl.branches) {
+            controllers.push(reduceController(branch));
+            if (branch.template) {
+              walkNode(branch.template, nodes, bindings, controllers);
+            }
           }
-          if (ctrl.defaultTemplate) walkNode(ctrl.defaultTemplate, nodes, bindings, controllers);
         }
       }
 
@@ -315,27 +304,42 @@ function reduceBinding(b: AotBinding): BindingIntent {
 }
 
 function reduceController(ctrl: AotController): ControllerIntent {
-  const base = { kind: ctrl.kind, frameId: ctrl.frameId };
-  switch (ctrl.kind) {
+  const base = { kind: ctrl.resource, frameId: ctrl.frameId };
+  switch (ctrl.resource) {
     case "repeat":
       return { ...base, locals: ctrl.locals, contextuals: ctrl.contextuals };
     case "if":
     case "else":
     case "with":
+    case "case":
+    case "default-case":
+    case "pending":
+    case "then":
+    case "catch":
       return base;
-    case "switch":
-      return { ...base, caseCount: ctrl.cases?.length ?? 0, hasDefault: !!ctrl.defaultTemplate };
-    case "promise":
+    case "switch": {
+      // Count case branches and check for default-case
+      const cases = ctrl.branches?.filter(b => b.resource === "case") ?? [];
+      const hasDefault = ctrl.branches?.some(b => b.resource === "default-case") ?? false;
+      return { ...base, caseCount: cases.length, hasDefault };
+    }
+    case "promise": {
+      const hasPending = ctrl.branches?.some(b => b.resource === "pending") ?? false;
+      const hasThen = ctrl.branches?.some(b => b.resource === "then") ?? false;
+      const hasCatch = ctrl.branches?.some(b => b.resource === "catch") ?? false;
+      const thenBranch = ctrl.branches?.find(b => b.resource === "then");
+      const catchBranch = ctrl.branches?.find(b => b.resource === "catch");
       return {
         ...base,
-        hasPending: !!ctrl.pendingTemplate,
-        hasThen: !!ctrl.thenTemplate,
-        hasCatch: !!ctrl.catchTemplate,
-        thenLocal: ctrl.thenLocal,
-        catchLocal: ctrl.catchLocal,
+        hasPending,
+        hasThen,
+        hasCatch,
+        thenLocal: thenBranch?.locals?.[0],
+        catchLocal: catchBranch?.locals?.[0],
       };
+    }
     case "portal":
-      return { ...base, hasTargetExpr: !!ctrl.targetExprId, targetSelector: ctrl.targetSelector };
+      return { ...base, hasTargetExpr: !!ctrl.exprId };
     default:
       return base;
   }

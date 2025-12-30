@@ -22,14 +22,9 @@ import type {
   AttrRes,
   DomElement,
   DomProp,
-  RepeatController,
-  SimpleController,
-  PromiseController,
-  SwitchController,
-  PortalController,
-  LinkingController,
   Bindable,
   TypeRef,
+  ControllerConfig,
 } from "../../language/registry.js";
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 
@@ -50,19 +45,24 @@ import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 export type SemDiagCode =
   // ─── Expression Resource Errors (AU01xx) ───────────────────────────────────
   // These match runtime error codes for consistency.
-  // TODO: AU0101 - Binding behavior not found (walk exprTable, check against registry + ResourceGraph)
-  // TODO: AU0102 - Duplicate binding behavior (same behavior applied twice in expression)
-  // TODO: AU0103 - Value converter not found (walk exprTable, check against registry + ResourceGraph)
+  | "AU0101" // Binding behavior not found
+  | "AU0102" // Duplicate binding behavior (same behavior applied twice in expression)
+  | "AU0103" // Value converter not found
+  | "AU0106" // Assignment to $host is not allowed
+
+  // ─── Binding Behavior Usage Errors (AU99xx) ───────────────────────────────
+  | "AU9996" // Conflicting rate-limit behaviors (throttle + debounce on same binding)
 
   // ─── Template Structure Errors (AU08xx) ────────────────────────────────────
-  // TODO: AU0810 - [else] without preceding [if] (check sibling controller ordering)
-  // TODO: AU0813 - [then]/[catch]/[pending] without parent [promise] (validate branch context)
-  // TODO: AU0815 - [case]/[default-case] without parent [switch] (validate branch context)
-  // TODO: AU0816 - Multiple [default-case] in same switch (validate uniqueness)
+  // Branch validation: sibling and parent relationships
+  | "AU0810" // [else] without preceding [if]
+  | "AU0813" // [then]/[catch]/[pending] without parent [promise]
+  | "AU0815" // [case]/[default-case] without parent [switch]
+  | "AU0816" // Multiple [default-case] in same switch
 
   // ─── Host Semantics Errors (AU11xx) ────────────────────────────────────────
   | "AU1101" // Unknown controller
-  | "AU1102" // Unknown element/attribute resource (reserved; currently unused)
+  | "AU1102" // Unknown custom element (root cause for cascade suppression)
   | "AU1103" // Unknown event
   | "AU1104" // Property target not found on host
   | "AU1105" // Repeat missing iterator binding (reserved)
@@ -277,12 +277,23 @@ export interface IteratorAuxSpec {
  * - `branch` carries branch shape for promise/switch when applicable.
  * - `containerless` mirrors IR (useful for emit).
  */
+/**
+ * Linked bindable types for template controller props.
+ * Matches IR ControllerBindableIR after resolution.
+ */
+export type LinkedControllerBindable =
+  | LinkedPropertyBinding
+  | LinkedIteratorBinding
+  | LinkedSetProperty
+  | LinkedAttributeBinding;
+
 export interface LinkedHydrateTemplateController extends BaseLinked {
   kind: "hydrateTemplateController";
-  res: "repeat" | "with" | "promise" | "if" | "else" | "switch" | "portal" | "case" | "default-case";
+  /** Controller name (built-in like "repeat", "if", or custom TC name). */
+  res: string;
   def: TemplateIR;
   controller: ControllerSem;
-  props: (LinkedPropertyBinding | LinkedIteratorBinding)[];
+  props: LinkedControllerBindable[];
   containerless?: boolean;
   branch?: ControllerBranch | null;
 }
@@ -318,13 +329,23 @@ export type TargetSem =
  * Controller resolution
  * =========================== */
 
-export type ControllerSem =
-  | { res: "repeat";  spec: RepeatController }
-  | { res: "with";    spec: SimpleController<"with"> }
-  | { res: "promise"; spec: PromiseController }
-  | { res: "if";      spec: SimpleController<"if"> }
-  | { res: "else";    spec: LinkingController<"else", "if"> }
-  | { res: "switch";  spec: SwitchController }
-  | { res: "case";    spec: LinkingController<"case", "switch"> }
-  | { res: "default-case"; spec: LinkingController<"default-case", "switch"> }
-  | { res: "portal";  spec: PortalController };
+/**
+ * Resolved controller semantics.
+ *
+ * Uses the unified ControllerConfig for all controllers (built-in and custom).
+ * The config provides:
+ * - trigger: what causes rendering (value, iterator, branch, marker)
+ * - scope: how scope behaves (reuse, overlay)
+ * - props: bindable properties
+ * - injects: scope-injected variables (contextuals, alias)
+ * - branches: valid child/sibling controllers
+ * - linksTo: parent controller for branch controllers
+ *
+ * When a controller is unknown, the config will be a stub (check with isStub()).
+ */
+export interface ControllerSem {
+  /** Controller name (e.g., "repeat", "if", or custom TC name). */
+  res: string;
+  /** Unified configuration defining controller behavior. */
+  config: ControllerConfig;
+}

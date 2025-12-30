@@ -166,5 +166,132 @@
         { "res": "note", "alias": null, "props": [ "value" ] }
       ]
     }
+  },
+  {
+    "name": "LR-07 multi-binding with escaped semicolon in value",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "nav": {
+            "kind": "attribute",
+            "name": "nav",
+            "isTemplateController": false,
+            "bindables": {
+              "route": { "name": "route", "mode": "toView" },
+              "params": { "name": "params", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div nav=\"route: page\\;extra; params.bind: x\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "code": "x", "command": "bind" }
+      ],
+      "attributes": [
+        { "res": "nav", "alias": null, "props": [ "route", "params" ] }
+      ]
+    }
+  },
+  {
+    "name": "LR-08 multi-binding detection skips escaped colon in key",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "nav": {
+            "kind": "attribute",
+            "name": "nav",
+            "isTemplateController": false,
+            "bindables": {
+              "route": { "name": "route", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div nav=\"foo\\:: bar; route: home\"></div>",
+    "expect": {
+      "expressions": [],
+      "attributes": [
+        { "res": "nav", "alias": null, "props": [ "route" ] }
+      ]
+    }
+  },
+  {
+    "name": "LR-09 interpolation before colon is not multi-binding",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "nav": {
+            "kind": "attribute",
+            "name": "nav",
+            "isTemplateController": false,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div nav=\"${x}: not a colon binding\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "nav", "code": "x" }
+      ],
+      "attributes": [
+        { "res": "nav", "alias": null, "props": [ "value" ] }
+      ]
+    }
+  },
+  {
+    "name": "LR-10 multi-binding with interpolation in value",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "nav": {
+            "kind": "attribute",
+            "name": "nav",
+            "isTemplateController": false,
+            "bindables": {
+              "route": { "name": "route", "mode": "toView" },
+              "title": { "name": "title", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div nav=\"route: home; title: Go to ${page}\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "title", "code": "page" }
+      ],
+      "attributes": [
+        { "res": "nav", "alias": null, "props": [ "route", "title" ] }
+      ]
+    }
+  },
+  {
+    "name": "LR-11 custom attribute with no bindables (fallback to null path)",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "marker": {
+            "kind": "attribute",
+            "name": "marker",
+            "isTemplateController": false,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<div marker=\"some-value\"></div>",
+    "expect": {
+      "expressions": [],
+      "attributes": [
+        { "res": "marker", "alias": null, "props": [] }
+      ]
+    }
   }
 ]

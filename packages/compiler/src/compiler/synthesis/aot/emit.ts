@@ -238,6 +238,7 @@ class EmitContext {
 
   /**
    * Emit a template controller.
+   * Config-driven: uses ctrl.resource instead of hardcoded kind.
    */
   private emitController(
     ctrl: PlanController,
@@ -248,7 +249,7 @@ class EmitContext {
     // Use array length as the template index (relative to sibling nested templates)
     const templateIndex = nestedTemplates.length;
     // Use global counter for unique naming
-    const templateName = `${ctrl.kind}_${this.nestedTemplateIndex++}`;
+    const templateName = `${ctrl.resource}_${this.nestedTemplateIndex++}`;
 
     // Build nested definition from the controller's template
     const nestedDef = this.emitControllerTemplate(ctrl, hostNode, templateName);
@@ -257,7 +258,7 @@ class EmitContext {
     // Create the hydrate instruction for this controller
     const hydrateCtrl: SerializedHydrateTemplateController = {
       type: INSTRUCTION_TYPE.hydrateTemplateController,
-      resource: ctrl.kind,
+      resource: ctrl.resource,
       templateIndex,
       instructions: this.emitControllerBindings(ctrl),
     };
@@ -271,6 +272,7 @@ class EmitContext {
 
   /**
    * Emit the nested template for a controller.
+   * Config-driven: uses ctrl.branches for child branch controllers.
    *
    * Nested templates need local target indices (starting from 0), but the plan
    * uses global indices. This method emits with global indices, then compacts
@@ -291,58 +293,22 @@ class EmitContext {
       this.emitNode(template, innerInstructions, innerNested);
     }
 
-    // Handle controller-specific nested templates (else, cases, etc.)
+    // Handle child branch controllers (switch cases, promise branches, etc.)
     this.emitControllerBranches(ctrl, innerNested);
 
-    // Special handling for switch: emit case/default-case as instructions
-    if (ctrl.kind === "switch") {
-      for (let i = 0; i < ctrl.cases.length; i++) {
-        const caseBranch = ctrl.cases[i]!;
-        // Each case gets a row with its hydrateTemplateController instruction
+    // Emit branch instructions when we have child branches
+    if (ctrl.branches && ctrl.branches.length > 0) {
+      for (let i = 0; i < ctrl.branches.length; i++) {
+        const branchCtrl = ctrl.branches[i]!;
+        // Each branch gets a row with its hydrateTemplateController instruction
         const row: SerializedInstruction[] = [];
-        const caseInstruction: SerializedHydrateTemplateController = {
+        const branchInstruction: SerializedHydrateTemplateController = {
           type: INSTRUCTION_TYPE.hydrateTemplateController,
-          resource: caseBranch.kind,
+          resource: branchCtrl.resource,
           templateIndex: i, // Index into innerNested
-          instructions: this.emitControllerBindings(caseBranch),
+          instructions: this.emitControllerBindings(branchCtrl),
         };
-        row.push(caseInstruction);
-        innerInstructions.push(row);
-      }
-    }
-
-    // Special handling for promise: emit pending/then/catch as instructions
-    // Each branch is a separate controller with its own template
-    if (ctrl.kind === "promise") {
-      let branchIndex = 0;
-      if (ctrl.pendingTemplate) {
-        const row: SerializedInstruction[] = [];
-        row.push({
-          type: INSTRUCTION_TYPE.hydrateTemplateController,
-          resource: "pending",
-          templateIndex: branchIndex++,
-          instructions: [], // pending has no bindings
-        } satisfies SerializedHydrateTemplateController);
-        innerInstructions.push(row);
-      }
-      if (ctrl.thenTemplate) {
-        const row: SerializedInstruction[] = [];
-        row.push({
-          type: INSTRUCTION_TYPE.hydrateTemplateController,
-          resource: "then",
-          templateIndex: branchIndex++,
-          instructions: [], // local variable is handled by the TC, not via binding
-        } satisfies SerializedHydrateTemplateController);
-        innerInstructions.push(row);
-      }
-      if (ctrl.catchTemplate) {
-        const row: SerializedInstruction[] = [];
-        row.push({
-          type: INSTRUCTION_TYPE.hydrateTemplateController,
-          resource: "catch",
-          templateIndex: branchIndex++,
-          instructions: [], // local variable is handled by the TC, not via binding
-        } satisfies SerializedHydrateTemplateController);
+        row.push(branchInstruction);
         innerInstructions.push(row);
       }
     }
@@ -403,143 +369,82 @@ class EmitContext {
   }
 
   /**
-   * Emit controller-specific branches (else, cases, then/catch, etc.).
+   * Emit controller-specific branches (cases, then/catch, etc.).
+   * Config-driven: uses ctrl.branches for child branch controllers.
    */
   private emitControllerBranches(
     ctrl: PlanController,
     nestedTemplates: SerializedDefinition[],
   ): void {
-    switch (ctrl.kind) {
-      case "if":
-      case "else":
-      case "case":
-      case "default-case":
-        // These are separate controllers, no additional branches to emit here
-        // Their templates are handled by the main template emit
-        break;
-      case "switch":
-        for (const caseBranch of ctrl.cases ?? []) {
-          if (caseBranch.template) {
-            const prefix = caseBranch.kind === "case" ? "case" : "default";
-            const branchIndex = this.nestedTemplateIndex++;
-            nestedTemplates.push(
-              this.emitDefinition(caseBranch.template, `${prefix}_${branchIndex}`),
-            );
-          }
-        }
-        break;
-      case "promise":
-        if (ctrl.pendingTemplate) {
-          const pendingIndex = this.nestedTemplateIndex++;
-          nestedTemplates.push(
-            this.emitDefinition(ctrl.pendingTemplate, `pending_${pendingIndex}`),
-          );
-        }
-        if (ctrl.thenTemplate) {
-          const thenIndex = this.nestedTemplateIndex++;
-          nestedTemplates.push(
-            this.emitDefinition(ctrl.thenTemplate, `then_${thenIndex}`),
-          );
-        }
-        if (ctrl.catchTemplate) {
-          const catchIndex = this.nestedTemplateIndex++;
-          nestedTemplates.push(
-            this.emitDefinition(ctrl.catchTemplate, `catch_${catchIndex}`),
-          );
-        }
-        break;
+    // Child branches are stored in ctrl.branches when config.branches.relationship === "child"
+    if (ctrl.branches && ctrl.branches.length > 0) {
+      for (const branchCtrl of ctrl.branches) {
+        const branchIndex = this.nestedTemplateIndex++;
+        nestedTemplates.push(
+          this.emitDefinition(branchCtrl.template, `${branchCtrl.resource}_${branchIndex}`),
+        );
+      }
     }
   }
 
   /**
    * Emit bindings for a controller (its own bindable properties).
+   * Config-driven: uses ctrl.config.trigger to determine binding type.
    */
   private emitControllerBindings(ctrl: PlanController): SerializedInstruction[] {
     const result: SerializedInstruction[] = [];
+    const { config } = ctrl;
 
-    switch (ctrl.kind) {
-      case "repeat": {
-        // repeat uses an iteratorBinding with ForOfStatement
-        if (ctrl.iteratorExprId) {
+    switch (config.trigger.kind) {
+      case "iterator": {
+        // Iterator trigger: emit iteratorBinding with ForOfStatement
+        if (ctrl.exprId) {
           const iteratorBinding: SerializedIteratorBinding = {
             type: INSTRUCTION_TYPE.iteratorBinding,
-            to: "items",
-            exprId: ctrl.iteratorExprId,
+            to: config.trigger.prop,
+            exprId: ctrl.exprId,
           };
-          // Include key expression for efficient diffing
-          if (ctrl.keyExprId) {
-            iteratorBinding.aux = [{ name: "key", exprId: ctrl.keyExprId }];
+          // Include auxiliary expressions (key, etc.)
+          if (ctrl.auxExprs && ctrl.auxExprs.length > 0) {
+            iteratorBinding.aux = ctrl.auxExprs.map(aux => ({
+              name: aux.name,
+              exprId: aux.exprId,
+            }));
           }
           result.push(iteratorBinding);
         }
         break;
       }
-      case "if":
-        if (ctrl.conditionExprId) {
+
+      case "value": {
+        // Value trigger: emit propertyBinding to the trigger prop
+        if (ctrl.exprId) {
+          result.push({
+            type: INSTRUCTION_TYPE.propertyBinding,
+            to: config.trigger.prop,
+            exprId: ctrl.exprId,
+            mode: BINDING_MODE.toView,
+          } satisfies SerializedPropertyBinding);
+        }
+        break;
+      }
+
+      case "branch": {
+        // Branch trigger: may have a value binding (case) or not (pending, else)
+        // Branch triggers bind to "value" (case.bind="x" -> value property)
+        if (ctrl.exprId) {
           result.push({
             type: INSTRUCTION_TYPE.propertyBinding,
             to: "value",
-            exprId: ctrl.conditionExprId,
+            exprId: ctrl.exprId,
             mode: BINDING_MODE.toView,
           } satisfies SerializedPropertyBinding);
         }
         break;
-      case "with":
-        if (ctrl.valueExprId) {
-          result.push({
-            type: INSTRUCTION_TYPE.propertyBinding,
-            to: "value",
-            exprId: ctrl.valueExprId,
-            mode: BINDING_MODE.toView,
-          } satisfies SerializedPropertyBinding);
-        }
-        break;
-      case "switch":
-        if (ctrl.valueExprId) {
-          result.push({
-            type: INSTRUCTION_TYPE.propertyBinding,
-            to: "value",
-            exprId: ctrl.valueExprId,
-            mode: BINDING_MODE.toView,
-          } satisfies SerializedPropertyBinding);
-        }
-        break;
-      case "promise":
-        if (ctrl.valueExprId) {
-          result.push({
-            type: INSTRUCTION_TYPE.propertyBinding,
-            to: "value",
-            exprId: ctrl.valueExprId,
-            mode: BINDING_MODE.toView,
-          } satisfies SerializedPropertyBinding);
-        }
-        break;
-      case "portal":
-        if (ctrl.targetExprId) {
-          result.push({
-            type: INSTRUCTION_TYPE.propertyBinding,
-            to: "target",
-            exprId: ctrl.targetExprId,
-            mode: BINDING_MODE.toView,
-          } satisfies SerializedPropertyBinding);
-        }
-        break;
-      case "else":
-        // else has no bindings - it links to preceding if at runtime via Else.link()
-        break;
-      case "case":
-        // case has a value binding for the case expression
-        if (ctrl.valueExprId) {
-          result.push({
-            type: INSTRUCTION_TYPE.propertyBinding,
-            to: "value",
-            exprId: ctrl.valueExprId,
-            mode: BINDING_MODE.toView,
-          } satisfies SerializedPropertyBinding);
-        }
-        break;
-      case "default-case":
-        // default-case has no bindings - it links to switch at runtime via DefaultCase.link()
+      }
+
+      case "marker":
+        // Marker trigger: no bindings (else, default-case)
         break;
     }
 
@@ -726,25 +631,15 @@ function toBindingModeValue(mode: BindingMode): BindingModeValue {
 
 /**
  * Get the main template from a controller.
- * Different controller types have different template properties.
+ * Config-driven: controllers with child branches don't have a single main template.
  */
 function getControllerMainTemplate(ctrl: PlanController): PlanNode | undefined {
-  switch (ctrl.kind) {
-    case "repeat":
-    case "with":
-    case "portal":
-    case "if":
-    case "else":
-    case "case":
-    case "default-case":
-      return ctrl.template;
-    case "switch":
-      // Switch doesn't have a single main template - cases are child controllers
-      return undefined;
-    case "promise":
-      // Promise doesn't have a single main template - branches are child controllers
-      return undefined;
+  // Controllers with child branches (switch, promise) don't have a single main template
+  // Their branches are processed separately
+  if (ctrl.config.branches?.relationship === "child" && ctrl.branches && ctrl.branches.length > 0) {
+    return undefined;
   }
+  return ctrl.template;
 }
 
 /**

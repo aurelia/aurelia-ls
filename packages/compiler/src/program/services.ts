@@ -1,6 +1,6 @@
 // Model imports (via barrel)
-import type { SourceFileId, NormalizedPath, SourceSpan, SpanLike } from "../compiler/model/index.js";
-import { resolveSourceSpan, spanEquals, spanLength } from "../compiler/model/index.js";
+import type { NormalizedPath, SourceFileId, SourceSpan } from "../compiler/model/index.js";
+import { resolveSourceSpan, spanLength } from "../compiler/model/index.js";
 
 // Shared imports (via barrel)
 import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/shared/index.js";
@@ -934,7 +934,8 @@ function mapCompilerDiagnostic(
 }
 
 function isTypecheckMismatch(diag: CompilerDiagnostic): diag is TypecheckDiagnostic {
-  return diag.code === "AU1301" && diag.source === "typecheck";
+  // AU1301 = error, AU1302 = warning, AU1303 = info (all are type mismatches)
+  return (diag.code === "AU1301" || diag.code === "AU1302" || diag.code === "AU1303") && diag.source === "typecheck";
 }
 
 function lookupQuickInfoType(
@@ -1004,7 +1005,8 @@ function mapTypeScriptDiagnostic(
   typeNames: TypeNameMap,
 ): TemplateLanguageDiagnostic {
   const overlaySpan = tsSpan(diag, overlay.file);
-  const overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
+  // Note: We intentionally do NOT use overlayLocation - the overlay file is an internal implementation detail.
+  const _overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
   const provenanceHit = overlaySpan ? provenance.projectGeneratedSpan(overlay.uri, overlaySpan) : null;
   const mappedLocation = provenanceHit ? provenanceHitToDocumentSpan(provenanceHit) : null;
 
@@ -1061,15 +1063,6 @@ function tsSpan(
   const start = diag.start;
   const len = diag.length ?? 0;
   return resolveSourceSpan({ start, end: start + len }, file);
-}
-
-function sameLocation(a: DocumentSpan, b: DocumentSpan): boolean {
-  if (a.uri !== b.uri) return false;
-  return spanEquals(stripMetadata(a.span), stripMetadata(b.span));
-}
-
-function stripMetadata(span: SpanLike): SpanLike {
-  return { start: span.start, end: span.end };
 }
 
 function flattenTsMessage(msg: string | TsMessageChain | undefined): string {

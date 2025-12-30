@@ -82,5 +82,48 @@
         { "name": "foo", "toBindingContext": false, "hasValue": true }
       ]
     }
+  },
+  {
+    "name": "LL-08 static let value is currently dropped (no interpolation, no command)",
+    "markup": "<let foo=\"bar\"></let>",
+    "expect": {
+      "lets": [],
+      "expressions": []
+    }
+  },
+  {
+    "name": "LL-09 invalid let command (.trigger) emits AU0704",
+    "markup": "<let foo.trigger=\"bar\"></let>",
+    "expect": {
+      "lets": [],
+      "expressions": [],
+      "diags": [{ "code": "AU0704" }]
+    }
+  },
+  {
+    "name": "LL-10 invalid let command (.capture) emits AU0704",
+    "markup": "<let foo.capture=\"bar\"></let>",
+    "expect": {
+      "lets": [],
+      "expressions": [],
+      "diags": [{ "code": "AU0704" }]
+    }
+  },
+  {
+    "name": "LL-11 valid let commands do not emit diagnostics",
+    "markup": "<let a.bind=\"x\" b.to-view=\"y\" c.one-time=\"z\"></let>",
+    "expect": {
+      "lets": [
+        { "name": "a", "toBindingContext": false, "hasValue": true },
+        { "name": "b", "toBindingContext": false, "hasValue": true },
+        { "name": "c", "toBindingContext": false, "hasValue": true }
+      ],
+      "expressions": [
+        { "kind": "letValue", "on": "a", "code": "x", "command": "bind" },
+        { "kind": "letValue", "on": "b", "code": "y", "command": "bind" },
+        { "kind": "letValue", "on": "c", "code": "z", "command": "bind" }
+      ],
+      "diags": []
+    }
   }
 ]

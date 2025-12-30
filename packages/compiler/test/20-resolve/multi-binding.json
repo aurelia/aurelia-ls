@@ -149,6 +149,9 @@
     "expect": {
       "items": [
         { "kind": "prop", "to": "route", "target": "bindable", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU0103" }
       ]
     }
   },

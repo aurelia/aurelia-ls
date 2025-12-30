@@ -109,8 +109,8 @@ function buildFrameTypeExpr(
   const localKeysUnion = localEntries.length > 0 ? localEntries.map(([k]) => `'${escapeKey(k)}'`).join(" | ") : "never";
   const localsType = localEntries.length > 0 ? `{ ${localEntries.map(([n, t]) => `${safeProp(n)}: ${t}`).join("; ")} }` : "{}";
 
-  // Overlay object (with) if present
-  const overlayObj = frame.overlay?.kind === "with" && hints?.overlayBase ? hints.overlayBase : null;
+  // Overlay object (value overlay) if present
+  const overlayObj = frame.overlay?.kind === "value" && hints?.overlayBase ? hints.overlayBase : null;
 
   // Root after overlay shadow:  Omit<VM, keyof Overlay>
   const rootAfterOverlay = overlayObj != null ? `Omit<${wrap(rootVm)}, keyof ${wrap(overlayObj)}>` : wrap(rootVm);

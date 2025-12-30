@@ -1,6 +1,6 @@
 {
   "name": "@aurelia-ls/resolution",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "type": "module",
   "main": "./out/index.js",
   "types": "./out/index.d.ts",

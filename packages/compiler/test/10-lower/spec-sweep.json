@@ -37,7 +37,7 @@
         { "kind": "letValue", "on": "foo", "code": "'literal'", "command": "bind" },
         { "kind": "letValue", "on": "bar", "code": "barVal", "command": "bind" },
         { "kind": "letValue", "on": "baz", "code": "bazVal", "command": "bind" },
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "item of items; key: item.id" },
         { "kind": "attrInterpolation", "on": "class", "code": "dyn" },
         { "kind": "attrInterpolation", "on": "style", "code": "color" },
         { "kind": "ref", "on": "element", "code": "sectionRef" },
@@ -57,6 +57,8 @@
         { "name": "repeat" },
         { "name": "if" },
         { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" },
         { "name": "with" }
       ],
       "lets": [

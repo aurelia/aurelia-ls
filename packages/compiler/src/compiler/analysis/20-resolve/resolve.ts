@@ -28,13 +28,16 @@ import type {
   BindingMode,
   NodeId,
   InstructionIR,
+  InstructionRow,
   SetPropertyIR,
   HydrateElementIR,
   HydrateAttributeIR,
   ElementBindableIR,
+  AttributeBindableIR,
+  SourceSpan,
 } from "../../model/ir.js";
 
-import { createSemanticsLookup, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
+import { createSemanticsLookup, getControllerConfig, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
 import type { Semantics } from "../../language/registry.js";
 import type { ResourceCollections, ResourceGraph, ResourceScopeId } from "../../language/resource-graph.js";
 
@@ -79,14 +82,62 @@ import {
   resolveIteratorAuxSpec,
 } from "./resolution-helpers.js";
 import { resolveNodeSem } from "./node-semantics.js";
+import {
+  type Diagnosed,
+  pure,
+  diag,
+  withStub,
+  DiagnosticAccumulator,
+} from "../../shared/diagnosed.js";
+import { buildDiagnostic } from "../../shared/diagnostics.js";
+import { extractExprResources, extractHostAssignments } from "../../shared/expr-utils.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
 }
 
+/**
+ * Check if a NodeSem represents a truly unknown custom element.
+ * Custom elements have tags containing '-' (per HTML spec).
+ * When both custom and native are null for such elements, it's unknown.
+ *
+ * Used for stub propagation: we suppress AU1104 for props on unknown
+ * custom elements since the root cause is the missing element, not the prop.
+ *
+ * IMPORTANT: If a resource graph is provided and the element exists in ANY
+ * scope of that graph, it's NOT truly unknown (just out-of-scope), so we
+ * should NOT suppress AU1104 in that case.
+ */
+function isUnknownCustomElement(host: NodeSem, graph?: ResourceGraph | null): boolean {
+  // Not an element or not a custom element tag
+  if (host.kind !== "element" || !host.tag.includes("-")) {
+    return false;
+  }
+
+  // If resolved (custom or native), it's not unknown
+  if (host.custom || host.native) {
+    return false;
+  }
+
+  // If there's a resource graph, check if the element exists in ANY scope
+  // If it does, it's not "truly unknown" - it's just not visible in current scope
+  if (graph) {
+    const tag = host.tag.toLowerCase();
+    for (const scope of Object.values(graph.scopes)) {
+      if (scope.resources?.elements?.[tag]) {
+        return false; // Element exists in graph, not truly unknown
+      }
+    }
+  }
+
+  // Truly unknown custom element
+  return true;
+}
+
 interface ResolverContext {
   readonly lookup: SemanticsLookup;
   readonly diags: SemDiagnostic[];
+  readonly graph?: ResourceGraph | null;
 }
 
 /* ============================================================================
@@ -105,16 +156,21 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
   const ctx: ResolverContext = {
     lookup: createSemanticsLookup(sem, lookupOpts),
     diags,
+    graph: opts?.graph ?? null,
   };
   const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
 
-  // TODO: Validate expression resources (AU01xx diagnostics)
-  // Walk ir.exprTable to extract binding behaviors and value converters from AST.
-  // Check each against ctx.lookup (registry + ResourceGraph).
-  // Emit AU0101 for unknown binding behaviors, AU0103 for unknown value converters.
-  // See: BindingBehaviorExpression.$kind === 'BindingBehavior' with .name
-  //      ValueConverterExpression.$kind === 'ValueConverter' with .name
-  // validateExpressionResources(ir.exprTable, ctx);
+  // Validate branch controller relationships on ROOT template only.
+  // Nested templates (controller defs) are validated via validateNestedIrRows during recursion.
+  // ir.templates[0] is always the root; others are nested templates for controllers.
+  if (templates[0]) {
+    validateBranchControllers(templates[0].rows, ctx);
+  }
+
+  // Validate expression resources (AU01xx diagnostics)
+  if (ir.exprTable) {
+    validateExpressionResources(ir.exprTable, ctx);
+  }
 
   return {
     version: "aurelia-linked@1",
@@ -139,13 +195,260 @@ function buildLookupOpts(opts: ResolveHostOptions): SemanticsLookupOptions {
 function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
   const idToNode = new Map<NodeId, DOMNode>();
   indexDom(t.dom, idToNode);
+
+  // Validate unknown custom elements across the entire DOM tree.
+  // This emits AU1102 for any custom element tag that isn't registered.
+  validateUnknownElements(t.dom, ctx);
+
   const rows: LinkedRow[] = t.rows.map((row) => {
     const dom = idToNode.get(row.target);
     const nodeSem = resolveNodeSem(dom, ctx.lookup);
     const linkedInstrs = row.instructions.map((i) => linkInstruction(i, nodeSem, ctx));
     return { target: row.target, node: nodeSem, instructions: linkedInstrs };
   });
+
   return { dom: t.dom, rows, name: t.name! };
+}
+
+/* ============================================================================
+ * Expression Resource Validation
+ * ============================================================================ */
+
+/**
+ * Validates binding behaviors and value converters referenced in expressions.
+ *
+ * Error codes:
+ * - AU0101: Binding behavior not found in registry
+ * - AU0102: Duplicate binding behavior in same expression
+ * - AU0103: Value converter not found in registry
+ * - AU0106: Assignment to $host is not allowed
+ * - AU9996: Conflicting rate-limit behaviors (throttle + debounce)
+ */
+function validateExpressionResources(
+  exprTable: NonNullable<IrModule["exprTable"]>,
+  ctx: ResolverContext,
+): void {
+  // Check for $host assignments (AU0106)
+  const hostAssignments = extractHostAssignments(exprTable);
+  for (const ref of hostAssignments) {
+    pushDiag(
+      ctx.diags,
+      "AU0106",
+      "Assignment to $host is not allowed.",
+      ref.span,
+    );
+  }
+
+  const refs = extractExprResources(exprTable);
+
+  // Group refs by exprId for duplicate detection
+  const byExpr = new Map<typeof refs[0]["exprId"], typeof refs>();
+  for (const ref of refs) {
+    const list = byExpr.get(ref.exprId) ?? [];
+    list.push(ref);
+    byExpr.set(ref.exprId, list);
+  }
+
+  // Rate-limit behaviors that conflict with each other
+  const RATE_LIMIT_BEHAVIORS = new Set(["throttle", "debounce"]);
+
+  // Check each expression for duplicates and unknown resources
+  for (const [, exprRefs] of byExpr) {
+    const seenBehaviors = new Set<string>();
+    // Track unique rate-limiters for conflict detection (different behaviors only)
+    const seenRateLimiters = new Map<string, SourceSpan>();
+
+    for (const ref of exprRefs) {
+      if (ref.kind === "bindingBehavior") {
+        // Check for duplicate
+        if (seenBehaviors.has(ref.name)) {
+          pushDiag(
+            ctx.diags,
+            "AU0102",
+            `Binding behavior '${ref.name}' applied more than once in the same expression.`,
+            ref.span,
+          );
+        } else {
+          seenBehaviors.add(ref.name);
+        }
+
+        // Check if registered
+        if (!ctx.lookup.sem.resources.bindingBehaviors[ref.name]) {
+          pushDiag(
+            ctx.diags,
+            "AU0101",
+            `Binding behavior '${ref.name}' not found.`,
+            ref.span,
+          );
+        }
+
+        // Track unique rate-limiters for conflict detection
+        if (RATE_LIMIT_BEHAVIORS.has(ref.name) && !seenRateLimiters.has(ref.name)) {
+          seenRateLimiters.set(ref.name, ref.span);
+        }
+      } else {
+        // valueConverter
+        if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
+          pushDiag(
+            ctx.diags,
+            "AU0103",
+            `Value converter '${ref.name}' not found.`,
+            ref.span,
+          );
+        }
+      }
+    }
+
+    // Check for conflicting rate-limiters (AU9996)
+    // Only triggers when DIFFERENT rate-limiters are used (e.g., throttle + debounce)
+    if (seenRateLimiters.size > 1) {
+      const names = [...seenRateLimiters.keys()].join(" and ");
+      // Report on the second rate-limiter (the conflict)
+      const entries = [...seenRateLimiters.entries()];
+      const conflicting = entries[1]!;
+      pushDiag(
+        ctx.diags,
+        "AU9996",
+        `Conflicting rate-limit behaviors: ${names} cannot be used together on the same binding.`,
+        conflicting[1],
+      );
+    }
+  }
+}
+
+/**
+ * Validates branch controller relationships (sibling and child).
+ *
+ * - Sibling relationship (else→if): preceding row must have parent controller
+ * - Child relationship (then→promise): must be inside parent controller's def
+ *
+ * Error codes:
+ * - AU0810: [else] without preceding [if]
+ * - AU0813: [then]/[catch]/[pending] without parent [promise]
+ * - AU0815: [case]/[default-case] without parent [switch]
+ */
+function validateBranchControllers(
+  rows: LinkedRow[],
+  ctx: ResolverContext,
+  parentController: string | null = null,
+): void {
+  let prevRowControllers: string[] = [];
+
+  for (const row of rows) {
+    const currentRowControllers: string[] = [];
+
+    for (const ins of row.instructions) {
+      if (ins.kind === "hydrateTemplateController") {
+        currentRowControllers.push(ins.res);
+
+        // Check if this controller requires a parent (sibling or child relationship)
+        const config = ins.controller.config;
+        if (config.linksTo) {
+          const parentConfig = getControllerConfig(config.linksTo);
+          const relationship = parentConfig?.branches?.relationship;
+
+          if (relationship === "sibling") {
+            // Sibling relationship: parent must be in the previous row
+            if (!prevRowControllers.includes(config.linksTo)) {
+              const code = config.linksTo === "if" ? "AU0810" : "AU0815";
+              const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          } else if (relationship === "child") {
+            // Child relationship: must be inside parent controller's def
+            if (parentController !== config.linksTo) {
+              const code = config.linksTo === "promise" ? "AU0813" : "AU0815";
+              const msg = `[${ins.res}] without parent [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          }
+        }
+
+        // Recursively validate nested def (raw IR rows)
+        if (ins.def?.rows) {
+          validateNestedIrRows(ins.def.rows, ctx, ins.res);
+        }
+      }
+    }
+
+    prevRowControllers = currentRowControllers;
+  }
+}
+
+/**
+ * Validates branch controllers in nested IR rows (unlinked).
+ * Used to check child relationships (then/catch inside promise, case inside switch).
+ *
+ * Error codes:
+ * - AU0816: Multiple marker controllers in same parent (e.g., [default-case] in [switch])
+ *
+ * Note: Marker controllers (trigger.kind="marker") are presence-based and implicitly unique.
+ * This check is CONFIG-DRIVEN: any userland marker controller gets the same validation.
+ */
+function validateNestedIrRows(
+  rows: InstructionRow[],
+  ctx: ResolverContext,
+  parentController: string,
+): void {
+  let prevRowControllers: string[] = [];
+
+  // Track uniqueness for marker-triggered controllers (presence-based, only one per parent).
+  // This is CONFIG-DRIVEN: any controller with trigger.kind="marker" is implicitly unique.
+  // Example: default-case can only appear once per switch.
+  const markerCounts = new Map<string, number>();
+
+  for (const row of rows) {
+    const currentRowControllers: string[] = [];
+
+    for (const ins of row.instructions) {
+      if (ins.type === "hydrateTemplateController") {
+        currentRowControllers.push(ins.res);
+
+        // Get config for this controller
+        const config = getControllerConfig(ins.res);
+        if (config?.linksTo) {
+          const parentConfig = getControllerConfig(config.linksTo);
+          const relationship = parentConfig?.branches?.relationship;
+
+          if (relationship === "sibling") {
+            // Sibling relationship: parent must be in the previous row
+            if (!prevRowControllers.includes(config.linksTo)) {
+              const code = config.linksTo === "if" ? "AU0810" : "AU0815";
+              const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          } else if (relationship === "child") {
+            // Child relationship: must be inside parent controller's def
+            if (parentController !== config.linksTo) {
+              const code = config.linksTo === "promise" ? "AU0813" : "AU0815";
+              const msg = `[${ins.res}] without parent [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          }
+        }
+
+        // Uniqueness check for marker-triggered controllers (config-driven).
+        // Marker controllers are presence-based (no value), so duplicates are invalid.
+        // AU0816: Multiple [X] in same [parent]
+        if (config?.trigger.kind === "marker" && config.linksTo === parentController) {
+          const count = (markerCounts.get(ins.res) ?? 0) + 1;
+          markerCounts.set(ins.res, count);
+          if (count === 2) {
+            // Emit diagnostic on the second occurrence
+            pushDiag(ctx.diags, "AU0816", `Multiple [${ins.res}] in same [${parentController}]`, ins.loc);
+          }
+          // For 3+, we don't emit more diagnostics (one per parent is enough)
+        }
+
+        // Recursively validate nested def
+        if (ins.def?.rows) {
+          validateNestedIrRows(ins.def.rows, ctx, ins.res);
+        }
+      }
+    }
+
+    prevRowControllers = currentRowControllers;
+  }
 }
 
 function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
@@ -163,20 +466,58 @@ function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
   }
 }
 
+/**
+ * Walk the DOM tree to emit AU1102 for truly unknown custom elements.
+ * This catches elements that have no instruction rows (no bindings).
+ *
+ * TODO: For auto-import, the resolution package should track a third layer:
+ * resources that exist in the project or dependencies but aren't registered.
+ * That would enable suggestions like "Did you mean to import 'x-widget'?"
+ */
+function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
+  if (n.kind === "element") {
+    const nodeSem = resolveNodeSem(n, ctx.lookup);
+    if (nodeSem.kind === "element" && isUnknownCustomElement(nodeSem, ctx.graph)) {
+      pushDiag(
+        ctx.diags,
+        "AU1102",
+        `Unknown custom element '<${nodeSem.tag}>'.`,
+        n.loc,
+      );
+    }
+  }
+
+  // Recurse into children
+  if (n.kind === "element" || n.kind === "template") {
+    for (const c of n.children) {
+      validateUnknownElements(c, ctx);
+    }
+  }
+}
+
 /* ============================================================================
  * Instruction linking
  * ============================================================================ */
 
+/**
+ * Helper to extract value from Diagnosed<T> and merge diagnostics into context.
+ * This bridges Elm-style internal functions with the imperative boundary.
+ */
+function merge<T>(diagnosed: Diagnosed<T>, ctx: ResolverContext): T {
+  ctx.diags.push(...diagnosed.diagnostics as SemDiagnostic[]);
+  return diagnosed.value;
+}
+
 function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext): LinkedInstruction {
   switch (ins.type) {
     case "propertyBinding":
-      return linkPropertyBinding(ins, host, ctx);
+      return merge(linkPropertyBinding(ins, host, ctx), ctx);
     case "attributeBinding":
-      return linkAttributeBinding(ins, host, ctx);
+      return merge(linkAttributeBinding(ins, host, ctx), ctx);
     case "stylePropertyBinding":
       return linkStylePropertyBinding(ins);
     case "listenerBinding":
-      return linkListenerBinding(ins, host, ctx);
+      return merge(linkListenerBinding(ins, host, ctx), ctx);
     case "refBinding":
       return linkRefBinding(ins);
     case "textBinding":
@@ -184,7 +525,7 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
     case "setAttribute":
       return linkSetAttribute(ins);
     case "setProperty":
-      return linkSetProperty(ins, host, ctx);
+      return merge(linkSetProperty(ins, host, ctx), ctx);
     case "setClassAttribute":
       return linkSetClassAttribute(ins);
     case "setStyleAttribute":
@@ -194,11 +535,12 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
     case "hydrateAttribute":
       return linkHydrateAttribute(ins, host, ctx);
     case "iteratorBinding":
-      return linkIteratorBinding(ins, ctx);
+      return merge(linkIteratorBinding(ins, ctx), ctx);
     case "hydrateTemplateController":
       return linkHydrateTemplateController(ins, host, ctx);
     case "hydrateLetElement":
       return linkHydrateLetElement(ins);
+    /* c8 ignore next 2 -- type exhaustiveness guard */
     default:
       return assertUnreachable(ins as never);
   }
@@ -206,14 +548,11 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
 
 /* ---- PropertyBinding ---- */
 
-function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: ResolverContext): LinkedPropertyBinding {
+function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedPropertyBinding> {
   // Normalize against naming/perTag/DOM overrides before resolving targets.
   const to = normalizePropLikeName(host, ins.to, ctx.lookup);
   const { target, effectiveMode } = resolvePropertyTarget(host, to, ins.mode, ctx.lookup);
-  if (target.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1104", `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
-  }
-  return {
+  const linked: LinkedPropertyBinding = {
     kind: "propertyBinding",
     to,
     from: ins.from,
@@ -222,31 +561,41 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
     target,
     loc: ins.loc ?? null,
   };
+  if (target.kind === "unknown") {
+    // Stub propagation: suppress AU1104 for unknown custom elements.
+    // The root cause is the missing element registration, not individual props.
+    if (isUnknownCustomElement(host, ctx.graph)) {
+      return pure(linked); // No diagnostic - root cause is element, not prop
+    }
+    const d = buildDiagnostic({
+      code: "AU1104",
+      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
+  }
+  return pure(linked);
 }
 
 /* ---- AttributeBinding (interpolation on attr) ---- */
 
-function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: ResolverContext): LinkedAttributeBinding {
+function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedAttributeBinding> {
   // Preserve data-* / aria-* authored forms: never camelCase or map to props.
   if (ctx.lookup.hasPreservedPrefix(ins.attr)) {
-    return {
+    return pure({
       kind: "attributeBinding",
       attr: ins.attr,
       to: ins.attr,
       from: ins.from,
       target: { kind: "attribute", attr: ins.attr },
       loc: ins.loc ?? null,
-    };
+    });
   }
 
   const to = normalizeAttrToProp(host, ins.attr, ctx.lookup);
   const target = resolveAttrTarget(host, to);
-
-  if (target.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1104", `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
-  }
-
-  return {
+  const linked: LinkedAttributeBinding = {
     kind: "attributeBinding",
     attr: ins.attr,
     to,
@@ -254,6 +603,22 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
     target,
     loc: ins.loc ?? null,
   };
+
+  if (target.kind === "unknown") {
+    // Stub propagation: suppress AU1104 for unknown custom elements.
+    if (isUnknownCustomElement(host, ctx.graph)) {
+      return pure(linked);
+    }
+    const d = buildDiagnostic({
+      code: "AU1104",
+      message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
+  }
+
+  return pure(linked);
 }
 
 /* ---- StylePropertyBinding ---- */
@@ -264,14 +629,11 @@ function linkStylePropertyBinding(ins: StylePropertyBindingIR): LinkedStylePrope
 
 /* ---- ListenerBinding ---- */
 
-function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: ResolverContext): LinkedListenerBinding {
+function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedListenerBinding> {
   const tag = host.kind === "element" ? host.tag : null;
   const eventRes = ctx.lookup.event(ins.to, tag ?? undefined);
   const eventType = eventRes.type;
-  if (eventType.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1103", `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`, ins.loc);
-  }
-  return {
+  const linked: LinkedListenerBinding = {
     kind: "listenerBinding",
     to: ins.to,
     from: ins.from,
@@ -280,6 +642,16 @@ function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: Resolve
     modifier: ins.modifier ?? null,
     loc: ins.loc ?? null,
   };
+  if (eventType.kind === "unknown") {
+    const d = buildDiagnostic({
+      code: "AU1103",
+      message: `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
+  }
+  return pure(linked);
 }
 
 /* ---- RefBinding ---- */
@@ -306,13 +678,24 @@ function linkSetStyleAttribute(ins: SetStyleAttributeIR): LinkedSetStyleAttribut
   return { kind: "setStyleAttribute", value: ins.value, loc: ins.loc ?? null };
 }
 
-function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext): LinkedSetProperty {
+function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedSetProperty> {
   const to = normalizePropLikeName(host, ins.to, ctx.lookup);
   const { target } = resolvePropertyTarget(host, to, "default", ctx.lookup);
+  const linked: LinkedSetProperty = { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
   if (target.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1104", `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
+    // Stub propagation: suppress AU1104 for unknown custom elements.
+    if (isUnknownCustomElement(host, ctx.graph)) {
+      return pure(linked);
+    }
+    const d = buildDiagnostic({
+      code: "AU1104",
+      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
   }
-  return { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
+  return pure(linked);
 }
 
 function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateElement {
@@ -343,20 +726,21 @@ function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: Resol
 function linkElementBindable(ins: ElementBindableIR, host: NodeSem, ctx: ResolverContext): LinkedElementBindable {
   switch (ins.type) {
     case "propertyBinding":
-      return linkPropertyBinding(ins, host, ctx);
+      return merge(linkPropertyBinding(ins, host, ctx), ctx);
     case "attributeBinding":
-      return linkAttributeBinding(ins, host, ctx);
+      return merge(linkAttributeBinding(ins, host, ctx), ctx);
     case "stylePropertyBinding":
       return linkStylePropertyBinding(ins);
     case "setProperty":
-      return linkSetProperty(ins, host, ctx);
+      return merge(linkSetProperty(ins, host, ctx), ctx);
+    /* c8 ignore next 2 -- type exhaustiveness guard */
     default:
       return assertUnreachable(ins as never);
   }
 }
 
 function linkAttributeBindable(
-  ins: ElementBindableIR,
+  ins: AttributeBindableIR,
   attr: AttrResRef | null,
 ): LinkedElementBindable {
   switch (ins.type) {
@@ -391,8 +775,6 @@ function linkAttributeBindable(
         loc: ins.loc ?? null,
       };
     }
-    case "stylePropertyBinding":
-      return linkStylePropertyBinding(ins);
     case "setProperty": {
       const bindable = attr ? resolveAttrBindable(attr, ins.to) : null;
       const target: TargetSem = bindable
@@ -406,23 +788,29 @@ function linkAttributeBindable(
         loc: ins.loc ?? null,
       };
     }
-    default:
-      return assertUnreachable(ins as never);
   }
 }
 
 /* ---- IteratorBinding (repeat) ---- */
 
-function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): LinkedIteratorBinding {
-  const normalizedTo = ctx.lookup.sem.resources.controllers.repeat.iteratorProp;
+function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Diagnosed<LinkedIteratorBinding> {
+  // Get iterator prop from repeat controller config (config-driven)
+  const repeatConfig = ctx.lookup.sem.resources.controllers["repeat"];
+  const normalizedTo = repeatConfig?.trigger.kind === "iterator" ? repeatConfig.trigger.prop : "items";
   const aux: LinkedIteratorBinding["aux"] = [];
+  const acc = new DiagnosticAccumulator();
 
   if (ins.props?.length) {
     for (const p of ins.props) {
       const authoredMode: BindingMode = p.command === "bind" ? "toView" : "default";
       const spec = resolveIteratorAuxSpec(ctx.lookup, p.to, authoredMode);
       if (!spec) {
-        pushDiag(ctx.diags, "AU1106", `Unknown repeat option '${p.to}'.`, p.loc);
+        acc.push(buildDiagnostic({
+          code: "AU1106",
+          message: `Unknown repeat option '${p.to}'.`,
+          span: p.loc,
+          source: "resolve-host",
+        }));
       }
       if (!p.from && p.value == null) continue;
       const from: LinkedIteratorBinding["aux"][number]["from"] = p.from ?? {
@@ -434,13 +822,18 @@ function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Link
     }
   }
 
-  return {
+  const linked: LinkedIteratorBinding = {
     kind: "iteratorBinding",
     to: normalizedTo,
     forOf: ins.forOf,
     aux,
     loc: ins.loc ?? null,
   };
+  // If there were diagnostics, mark the result as a stub
+  if (acc.diagnostics.length > 0) {
+    return acc.wrap(withStub(linked, { diagnostic: acc.diagnostics[0]!, span: ins.loc ?? undefined }));
+  }
+  return acc.wrap(linked);
 }
 
 /* ---- HydrateTemplateController ---- */
@@ -450,14 +843,14 @@ function linkHydrateTemplateController(
   host: NodeSem,
   ctx: ResolverContext,
 ): LinkedHydrateTemplateController {
-  const ctrlSem = resolveControllerSem(ctx.lookup, ins.res, ctx.diags, ins.loc);
+  // Resolve controller semantics (returns Diagnosed)
+  const ctrlSem = merge(resolveControllerSem(ctx.lookup, ins.res, ins.loc), ctx);
 
   // Map controller props
   const props = ins.props.map((p) => {
     if (p.type === "iteratorBinding") {
-      const iter = linkIteratorBinding(p, ctx);
-      iter.to = ctx.lookup.sem.resources.controllers.repeat.iteratorProp; // ensure parity with spec
-      return iter;
+      // linkIteratorBinding now returns Diagnosed
+      return merge(linkIteratorBinding(p, ctx), ctx);
     } else if (p.type === "propertyBinding") {
       const to = normalizePropLikeName(host, p.to, ctx.lookup);
       const target: TargetSem = {
@@ -476,7 +869,41 @@ function linkHydrateTemplateController(
         loc: p.loc ?? null,
       };
       return linked;
+    } else if (p.type === "setProperty") {
+      // Literal value - matches runtime SetPropertyInstruction
+      const to = normalizePropLikeName(host, p.to, ctx.lookup);
+      const target: TargetSem = {
+        kind: "controller.prop",
+        controller: ctrlSem,
+        bindable: resolveControllerBindable(ctrlSem, to),
+      };
+      const linked: LinkedSetProperty = {
+        kind: "setProperty",
+        to,
+        value: p.value,
+        target,
+        loc: p.loc ?? null,
+      };
+      return linked;
+    } else if (p.type === "attributeBinding") {
+      // Interpolation binding on controller prop
+      const to = normalizePropLikeName(host, p.to, ctx.lookup);
+      const target: TargetSem = {
+        kind: "controller.prop",
+        controller: ctrlSem,
+        bindable: resolveControllerBindable(ctrlSem, to),
+      };
+      const linked: LinkedAttributeBinding = {
+        kind: "attributeBinding",
+        attr: p.attr,
+        to,
+        from: p.from,
+        target,
+        loc: p.loc ?? null,
+      };
+      return linked;
     } else {
+      /* c8 ignore next -- type exhaustiveness guard */
       return assertUnreachable(p as never);
     }
   });
@@ -498,6 +925,7 @@ function linkHydrateTemplateController(
       case "default":
         branch = { kind: "default" };
         break;
+      /* c8 ignore next 2 -- type exhaustiveness guard */
       default:
         assertUnreachable(ins.branch);
     }

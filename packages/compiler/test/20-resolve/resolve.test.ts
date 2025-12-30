@@ -10,7 +10,12 @@ import {
   DEFAULT_SEMANTICS as DEFAULT,
   resolveHost,
   materializeResourcesForScope,
+  createSemanticsLookup,
 } from "@aurelia-ls/compiler";
+
+// Internal import for direct unit testing of resolveControllerSem
+import { resolveControllerSem } from "../../src/compiler/analysis/20-resolve/resolution-helpers.js";
+import { isStub } from "../../src/compiler/shared/diagnosed.js";
 
 const dirname = getDirname(import.meta.url);
 
@@ -28,6 +33,7 @@ interface ResolveItem {
   capture?: boolean;
   modifier?: string;
   value?: unknown;
+  branch?: string; // Branch kind: "then" | "catch" | "pending" | "case" | "default"
 }
 
 interface DiagExpect {
@@ -216,6 +222,63 @@ describe("Resolve (20) - Resource Graph", () => {
   });
 });
 
+describe("Resolve (20) - Controller Diagnostics", () => {
+  test("resolveControllerSem returns AU1101 for unknown controller", () => {
+    const lookup = createSemanticsLookup(DEFAULT);
+    const result = resolveControllerSem(lookup, "unknown-tc", null);
+
+    // Should have diagnostic
+    expect(result.diagnostics.length > 0).toBe(true);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("AU1101");
+    expect(result.diagnostics[0]?.message).toContain("unknown-tc");
+
+    // Should return stub config
+    expect(isStub(result.value.config)).toBe(true);
+    expect(result.value.res).toBe("unknown-tc");
+  });
+
+  test("resolveControllerSem returns success for built-in controller", () => {
+    const lookup = createSemanticsLookup(DEFAULT);
+    const result = resolveControllerSem(lookup, "if", null);
+
+    // Should not have diagnostic
+    expect(result.diagnostics.length).toBe(0);
+
+    // Should return proper config
+    expect(isStub(result.value.config)).toBe(false);
+    expect(result.value.res).toBe("if");
+    expect(result.value.config.name).toBe("if");
+  });
+
+  test("resolveControllerSem returns success for custom template controller", () => {
+    const customSem = deepMergeSemantics(DEFAULT, {
+      resources: {
+        attributes: {
+          "my-tc": {
+            kind: "attribute",
+            name: "my-tc",
+            isTemplateController: true,
+            bindables: { value: { name: "value" } },
+            primary: "value",
+          },
+        },
+      },
+    });
+
+    const lookup = createSemanticsLookup(customSem);
+    const result = resolveControllerSem(lookup, "my-tc", null);
+
+    // Should not have diagnostic
+    expect(result.diagnostics.length).toBe(0);
+
+    // Should return proper config
+    expect(isStub(result.value.config)).toBe(false);
+    expect(result.value.res).toBe("my-tc");
+    expect(result.value.config.name).toBe("my-tc");
+  });
+});
+
 // --- Intent Reduction ---
 
 interface LinkedModule {
@@ -338,6 +401,14 @@ function visitTemplate(
                 pushBindingItem(items, p);
               }
             }
+          }
+          // Emit branch metadata if present (case, default, then, catch, pending)
+          if (ins.branch) {
+            items.push({
+              kind: "branch",
+              res: ins.res,
+              branch: ins.branch.kind,
+            });
           }
           if (ins.def) visit(ins.def);
           break;

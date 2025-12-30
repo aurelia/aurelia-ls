@@ -469,14 +469,15 @@
     }
   },
   {
-    "name": "R-P-46 unknown custom element tag -> property target unknown",
+    "name": "R-P-46 unknown custom element -> AU1102 root cause, AU1104 suppressed",
+    "comment": "AU1102 is the root cause; AU1104 is suppressed via stub propagation to avoid cascading errors",
     "markup": "<x-unknown bar.bind=\"y\"></x-unknown>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "bar", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "AU1102" }
       ]
     }
   },

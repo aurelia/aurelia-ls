@@ -24,7 +24,7 @@ export interface Semantics {
   resources: {
     elements: Record<string, ElementRes>;
     attributes: Record<string, AttrRes>;
-    controllers: Controllers;
+    controllers: Record<string, ControllerConfig>;
     valueConverters: Record<string, ValueConverterSig>;
     bindingBehaviors: Record<string, BindingBehaviorSig>;
   };
@@ -116,48 +116,7 @@ export type ScopeBehavior =
   | "overlay"; // Scope.fromParent(parent, overlayValue) — repeat/with/promise (NOT a boundary)
 // NOTE: Custom *elements* are boundaries (see ElementRes.boundary).
 
-/** Built-in controllers with Aurelia scope semantics captured. */
-export interface Controllers {
-  repeat: RepeatController;
-  with: SimpleController<"with">;
-  promise: PromiseController;
-  if: SimpleController<"if">;
-  switch: SwitchController;
-  portal: PortalController; // evaluates in parent scope; content teleported
-  else: LinkingController<"else", "if">; // links to preceding if controller
-  case: CaseController; // switch branch with value
-  "default-case": DefaultCaseController; // switch default branch
-}
-
-/* ---- Case controller ----
- * Branch of switch; matches against switch value.
- * - Can have single value or array of values (fall-through).
- */
-export interface CaseController {
-  kind: "controller";
-  res: "case";
-  scope: "reuse"; // evaluates in same scope as switch
-  props: Record<string, Bindable>; // { value, fallThrough }
-  linksTo: "switch";
-}
-
-/* ---- Default-case controller ----
- * Default branch of switch; activates when no case matches.
- */
-export interface DefaultCaseController {
-  kind: "controller";
-  res: "default-case";
-  scope: "reuse"; // evaluates in same scope as switch
-  props: Record<string, Bindable>; // { fallThrough }
-  linksTo: "switch";
-}
-
-/* ---- repeat (iterator) ----
- * Header:  repeat.for="LHS of RHS[; tailOptions]"
- * - Contextuals: $index, $first, $last, $even, $odd, $length, $middle
- * - Tail options (e.g., `key`) are **not bindables**: they belong to the header (mode-less).
- *   Treat them as `header options` so the linker/analysis never conflates them with component props.
- */
+/** Iterator tail prop spec (for repeat header options like 'key'). */
 export interface IteratorTailPropSpec {
   name: string;                                   // option name (e.g., 'key')
   type?: TypeRef;                                 // analysis hint
@@ -166,76 +125,346 @@ export interface IteratorTailPropSpec {
   doc?: string;
 }
 
-export interface RepeatController {
-  kind: "controller";
-  res: "repeat";
-  scope: ScopeBehavior;                           // 'overlay' (new override context; not a boundary)
-  /** Canonical iterator prop; IR `IteratorBindingIR.to` is normalized to this. */
-  iteratorProp: string;                           // usually 'items'
-  /** Header options (NOT bindables). */
+/* =======================
+ * Unified Controller Configuration
+ * =======================
+ *
+ * Config-driven system for template controllers. All controllers (built-in and custom)
+ * are described by configuration primitives across 6 orthogonal axes:
+ *
+ * 1. Trigger Kind - what causes rendering (value, iterator, branch, marker)
+ * 2. Scope Behavior - how scope is affected (reuse, overlay)
+ * 3. Cardinality - how many times content renders (zero-one, zero-many, one-of-n, one)
+ * 4. Relationship - relation to other controllers (standalone, sibling, child)
+ * 5. DOM Placement - where content goes (in-place, teleported)
+ * 6. Injection Pattern - what variables are introduced (none, contextuals, alias)
+ *
+ * See `.claude/docs/controller-config-design.md` for full design rationale.
+ */
+
+/** What causes the controller to render its content. */
+export type ControllerTrigger =
+  | { kind: "value"; prop: string }                // Single expression: if, with, switch, promise, portal
+  | { kind: "iterator"; prop: string; command?: string }  // Collection iteration: repeat
+  | { kind: "branch"; parent: string }             // Linked to parent: else, case, then, catch, pending
+  | { kind: "marker" };                            // Presence-based: default-case
+
+/** How many times the controller's content can render. */
+export type ControllerCardinality =
+  | "zero-one"    // Conditional (0 or 1): if, else, case, pending
+  | "zero-many"   // Collection (0 to N): repeat
+  | "one-of-n"    // Exactly one branch: switch
+  | "one";        // Always once: with, portal
+
+/** Where the rendered content is placed. */
+export type ControllerPlacement =
+  | "in-place"    // Render at declaration site (all except portal)
+  | "teleported"; // Render at different location (portal)
+
+/** Valid child/sibling branch controllers. */
+export interface ControllerBranches {
+  /** Valid branch names for this controller. */
+  names: readonly string[];
+  /** Where to look for branches. */
+  relationship: "sibling" | "child";
+}
+
+/** Variables injected into scope by the controller. */
+export interface ControllerInjects {
+  /** Fixed variable names derived from iteration state (repeat contextuals). */
+  contextuals?: readonly string[];
+  /** User-named variable bound to a value (with, then, catch). */
+  alias?: {
+    /** Property name the alias binds to. */
+    prop: string;
+    /** Default name if user doesn't specify. */
+    defaultName: string;
+  };
+}
+
+/**
+ * Unified configuration for template controllers.
+ * Captures all semantic variations through orthogonal primitives.
+ *
+ * This interface supports both built-in controllers (if, repeat, etc.)
+ * and custom template controllers discovered via @templateController decorator.
+ */
+export interface ControllerConfig {
+  /** Canonical name (kebab-case). */
+  name: string;
+
+  // ===== Core Axes =====
+
+  /** What causes rendering. */
+  trigger: ControllerTrigger;
+
+  /** How scope behaves: 'reuse' (parent scope) or 'overlay' (new context). */
+  scope: ScopeBehavior;
+
+  /** How many times content renders (for type inference). */
+  cardinality?: ControllerCardinality;
+
+  /** Where content is placed. */
+  placement?: ControllerPlacement;
+
+  // ===== Relationships =====
+
+  /** Valid child/sibling branch controllers (for parent controllers like if, switch, promise). */
+  branches?: ControllerBranches;
+
+  /** Parent controller this links to (for branch controllers like else, case, then). */
+  linksTo?: string;
+
+  // ===== Scope Injection =====
+
+  /** Variables injected into scope. */
+  injects?: ControllerInjects;
+
+  // ===== Properties =====
+
+  /** Bindable properties. */
+  props?: Record<string, Bindable>;
+
+  /** Iterator tail props (repeat-specific: key, contextual). */
   tailProps?: Record<string, IteratorTailPropSpec>;
-  /** Contextual vars added to override context. */
-  contextuals: readonly [
-    "$index", "$first", "$last", "$even", "$odd", "$length", "$middle"
-  ];
 }
 
-/* ---- Simple value controllers (with/if) ----
- * - with: overlay scope (expressions see overlay object as `$this`).
- * - if:   reuse parent scope (no overlay/boundary).
+/**
+ * Built-in controller configurations.
+ * These define the complete semantics for all Aurelia template controllers.
  */
-export interface SimpleController<R extends "with" | "if"> {
-  kind: "controller";
-  res: R;
-  scope: ScopeBehavior;                           // 'overlay' for with, 'reuse' for if
-  props: Record<string, Bindable>;                // typically { value }
+export const BUILTIN_CONTROLLER_CONFIGS: Record<string, ControllerConfig> = {
+  // ===== Standalone Controllers =====
+
+  if: {
+    name: "if",
+    trigger: { kind: "value", prop: "value" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    branches: { names: ["else"], relationship: "sibling" },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "ts", name: "boolean" } },
+      cache: { name: "cache", mode: "default", type: { kind: "ts", name: "boolean" } },
+    },
+  },
+
+  repeat: {
+    name: "repeat",
+    trigger: { kind: "iterator", prop: "items", command: "for" },
+    scope: "overlay",
+    cardinality: "zero-many",
+    injects: {
+      contextuals: ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"],
+    },
+    tailProps: {
+      key: { name: "key", accepts: ["bind", null] },
+      contextual: { name: "contextual", accepts: ["bind", null] },
+    },
+  },
+
+  with: {
+    name: "with",
+    trigger: { kind: "value", prop: "value" },
+    scope: "overlay",
+    cardinality: "one",
+    injects: {
+      alias: { prop: "value", defaultName: "$this" },
+    },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "unknown" } },
+    },
+  },
+
+  switch: {
+    name: "switch",
+    trigger: { kind: "value", prop: "value" },
+    scope: "reuse",
+    cardinality: "one-of-n",
+    branches: { names: ["case", "default-case"], relationship: "child" },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "unknown" } },
+    },
+  },
+
+  /**
+   * Promise template controller.
+   *
+   * INTENTIONAL DIVERGENCE FROM RUNTIME:
+   * In the Aurelia runtime, promise/then/catch/pending all share ONE viewScope created by promise.
+   * In our AOT model, we give then/catch their own overlay frames (children of promise).
+   *
+   * This is intentional and acceptable for type-checking because:
+   * 1. The branches are mutually exclusive - only one is active at a time
+   * 2. Separate frames correctly isolate what's visible in each branch (then has `res`, catch has `err`)
+   * 3. This is actually STRICTER than runtime - we catch errors like accessing `data` in catch branch
+   * 4. $parent navigation still works: promise frame has no overlay properties, so inherited props are visible
+   *
+   * The tradeoff is a minor $parent type difference: runtime's $parent from then goes directly to
+   * promise's parent, while ours goes to the promise frame first. In practice, the visible properties
+   * are identical since promise has no overlay.
+   *
+   * See: aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts
+   */
+  promise: {
+    name: "promise",
+    trigger: { kind: "value", prop: "value" },
+    scope: "overlay",
+    cardinality: "one",
+    branches: { names: ["then", "catch", "pending"], relationship: "child" },
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "ts", name: "Promise<unknown>" } },
+    },
+  },
+
+  portal: {
+    name: "portal",
+    trigger: { kind: "value", prop: "target" },
+    scope: "reuse",
+    cardinality: "one",
+    placement: "teleported",
+    props: {
+      target: { name: "target", mode: "default", type: { kind: "ts", name: "string | Element | null" } },
+      strict: { name: "strict", mode: "default", type: { kind: "ts", name: "boolean" } },
+      renderContext: { name: "renderContext", mode: "default", type: { kind: "ts", name: "Document | ShadowRoot" } },
+    },
+  },
+
+  // ===== Branch Controllers =====
+
+  else: {
+    name: "else",
+    trigger: { kind: "branch", parent: "if" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "if",
+  },
+
+  case: {
+    name: "case",
+    trigger: { kind: "branch", parent: "switch" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "switch",
+    props: {
+      value: { name: "value", mode: "default", type: { kind: "unknown" } },
+      fallThrough: { name: "fallThrough", mode: "default", type: { kind: "ts", name: "boolean" } },
+    },
+  },
+
+  "default-case": {
+    name: "default-case",
+    trigger: { kind: "marker" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "switch",
+    props: {
+      fallThrough: { name: "fallThrough", mode: "default", type: { kind: "ts", name: "boolean" } },
+    },
+  },
+
+  // pending reuses promise's scope (no alias injected) - matches runtime
+  pending: {
+    name: "pending",
+    trigger: { kind: "branch", parent: "promise" },
+    scope: "reuse",
+    cardinality: "zero-one",
+    linksTo: "promise",
+  },
+
+  // then/catch use "overlay" to get their own frames for type isolation (see promise comment above)
+  then: {
+    name: "then",
+    trigger: { kind: "branch", parent: "promise" },
+    scope: "overlay", // intentional: isolates `then` alias for stricter type-checking
+    cardinality: "zero-one",
+    linksTo: "promise",
+    injects: {
+      alias: { prop: "value", defaultName: "data" }, // typed as Awaited<T> in type-analysis.ts
+    },
+  },
+
+  catch: {
+    name: "catch",
+    trigger: { kind: "branch", parent: "promise" },
+    scope: "overlay", // intentional: isolates `catch` alias for stricter type-checking
+    cardinality: "zero-one",
+    linksTo: "promise",
+    injects: {
+      alias: { prop: "value", defaultName: "error" }, // typed as `any` in type-analysis.ts
+    },
+  },
+};
+
+/**
+ * Stub controller config for degraded/unknown controllers.
+ * Used when a template controller is referenced but not found.
+ *
+ * - Uses 'overlay' scope to be maximally permissive for binding analysis
+ * - Named "__stub__" to clearly indicate it's not a real controller
+ * - Downstream code can check isStub() to detect degraded values
+ */
+export const STUB_CONTROLLER_CONFIG: ControllerConfig = {
+  name: "__stub__",
+  trigger: { kind: "value", prop: "value" },
+  scope: "overlay",
+  cardinality: "zero-one",
+};
+
+/**
+ * Look up a controller config by name.
+ * Returns the built-in config, or undefined if not found.
+ */
+export function getControllerConfig(name: string): ControllerConfig | undefined {
+  return BUILTIN_CONTROLLER_CONFIGS[name];
 }
 
-/* ---- Promise controller ----
- * - overlay scope; branch templates (then/catch) may introduce a *local* alias.
- * - Alias is surfaced via IR meta; ScopeGraph materializes it.
+/**
+ * Check if a controller config represents a branch controller.
+ * Branch controllers link to a parent (else→if, case→switch, then→promise).
  */
-export interface PromiseController {
-  kind: "controller";
-  res: "promise";
-  scope: ScopeBehavior;                           // 'overlay'
-  props: Record<string, Bindable>;                // { value }
-  branches: readonly ("then" | "catch" | "pending")[];
-  branchAllowsAlias: boolean;                     // applies to then/catch (pending has no alias)
+export function isBranchController(config: ControllerConfig): boolean {
+  return config.trigger.kind === "branch" || config.trigger.kind === "marker";
 }
 
-/* ---- Switch controller ----
- * - reuse scope; branches ('case'/'default') evaluate in same scope.
+/**
+ * Check if a controller config creates an overlay scope.
+ * Overlay scopes inject new variables or change the binding context.
  */
-export interface SwitchController {
-  kind: "controller";
-  res: "switch";
-  scope: ScopeBehavior;                           // 'reuse'
-  props: Record<string, Bindable>;                // { value }
-  branches: readonly ("case" | "default")[];
+export function isOverlayController(config: ControllerConfig): boolean {
+  return config.scope === "overlay";
 }
 
-/* ---- Portal controller ----
- * - Moves content to a different host; *expressions evaluate in parent scope*.
- * - No overlay, no boundary: pure 'reuse'. `$parent` keeps working from the portal site.
+/**
+ * Get the primary trigger property name for a controller.
+ * Returns the prop name for value/iterator triggers, undefined for branch/marker.
  */
-export interface PortalController {
-  kind: "controller";
-  res: "portal";
-  scope: ScopeBehavior;                           // 'reuse'
-  props: Record<string, Bindable>;                // { value } carries target/flag if authored
+export function getTriggerProp(config: ControllerConfig): string | undefined {
+  if (config.trigger.kind === "value" || config.trigger.kind === "iterator") {
+    return config.trigger.prop;
+  }
+  return undefined;
 }
 
-/* ---- Linking controller (else) ----
- * - A linking controller attaches to a preceding controller (e.g., else → if).
- * - Processed as a normal controller during lowering, then linked in a post-pass.
- * - After linking, standalone `else` controllers are absorbed into their parent's `elseDef`.
+/**
+ * Create a default ControllerConfig for a custom template controller.
+ * Used when resolution discovers a custom TC via @templateController decorator.
+ *
+ * @param name - Controller name (kebab-case)
+ * @param primaryBindable - Optional primary bindable property name
+ * @returns Default ControllerConfig for custom TC
  */
-export interface LinkingController<R extends string, L extends string> {
-  kind: "linking-controller";
-  res: R;
-  linksTo: L;                                     // controller this links to
-  scope: ScopeBehavior;                           // inherits from parent controller
+export function createCustomControllerConfig(
+  name: string,
+  primaryBindable?: string | null,
+  bindables?: Record<string, Bindable>
+): ControllerConfig {
+  return {
+    name,
+    trigger: { kind: "value", prop: primaryBindable ?? "value" },
+    scope: "overlay", // Standard TC behavior: creates overlay scope
+    cardinality: "zero-one",
+    props: bindables,
+  };
 }
 
 /* =======================
@@ -331,10 +560,10 @@ export interface TwoWayDefaults {
 }
 
 /**
- * Single place to describe controller keys.
+ * Union of all built-in controller names.
  * Useful for cross-module helpers and lookups.
  */
-export type ControllerName = keyof Controllers;
+export type ControllerName = keyof typeof BUILTIN_CONTROLLER_CONFIGS;
 
 /* =======================
  * Default registry
@@ -455,106 +684,16 @@ export const DEFAULT: Semantics = {
     },
 
     /* ---- Built-in template controllers ----
-     * - 'repeat'/'with'/'promise' create an *overlay* scope (not a boundary).
-     * - 'if'/'switch'/'portal' *reuse* the parent scope.
-     * - 'repeat' tail options (e.g., 'key') are *not bindables*; they live on the header.
-     * - Promise branches may declare a local alias (ScopeGraph binds it from IR meta).
+     * All controller semantics are defined via BUILTIN_CONTROLLER_CONFIGS.
+     * See ControllerConfig for the 6-axis unified design.
      */
-    controllers: {
-      repeat: {
-        kind: "controller",
-        res: "repeat",
-        scope: "overlay",
-        iteratorProp: "items",
-        tailProps: {
-          // Supports "key: expr" and "key.bind='expr'".
-          key: { name: "key", type: { kind: "unknown" }, accepts: ["bind", null], doc: "Stable key for keyed repeat" },
-        },
-        contextuals: ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"],
-      },
-
-      with: {
-        kind: "controller",
-        res: "with",
-        scope: "overlay",
-        props: { value: { name: "value", type: { kind: "unknown" }, mode: "default", doc: "Overlay object" } },
-      },
-
-      promise: {
-        kind: "controller",
-        res: "promise",
-        scope: "overlay",
-        props: { value: { name: "value", type: { kind: "ts", name: "Promise<unknown>" }, mode: "default", doc: "Promise to await" } },
-        branches: ["then", "catch", "pending"],
-        branchAllowsAlias: true, // applies to then/catch (pending has no alias)
-      },
-
-      if: {
-        kind: "controller",
-        res: "if",
-        scope: "reuse",
-        props: { value: { name: "value", type: { kind: "ts", name: "boolean" }, mode: "default", doc: "Condition" } },
-      },
-
-      switch: {
-        kind: "controller",
-        res: "switch",
-        scope: "reuse",
-        props: { value: { name: "value", type: { kind: "ts", name: "unknown" }, mode: "default", doc: "Discriminant value" } },
-        branches: ["case", "default"],
-      },
-
-      portal: {
-        kind: "controller",
-        res: "portal",
-        scope: "reuse", // expressions inside portal evaluate in the *parent* scope
-        props: {
-          target:          { name: "target",          type: { kind: "ts", name: "string | Element | null | undefined" }, mode: "default", primary: true, doc: "Target element or CSS selector" },
-          position:        { name: "position",        type: { kind: "ts", name: "InsertPosition" },         mode: "toView",  doc: "Insert position: beforeend, afterbegin, beforebegin, afterend" },
-          renderContext:   { name: "renderContext",   type: { kind: "ts", name: "string | Element | null | undefined" }, mode: "toView",  doc: "Context element/selector for target query" },
-          strict:          { name: "strict",          type: { kind: "ts", name: "boolean" },                mode: "toView",  doc: "Throw error if target not found" },
-          activating:      { name: "activating",      type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked before activation" },
-          activated:       { name: "activated",       type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked after activation" },
-          deactivating:    { name: "deactivating",    type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked before deactivation" },
-          deactivated:     { name: "deactivated",     type: { kind: "ts", name: "PortalLifecycleCallback" }, mode: "toView",  doc: "Callback invoked after deactivation" },
-          callbackContext: { name: "callbackContext", type: { kind: "unknown" },                            mode: "toView",  doc: "Context object passed to lifecycle callbacks" },
-        },
-      },
-
-      else: {
-        kind: "linking-controller",
-        res: "else",
-        linksTo: "if",
-        scope: "reuse", // inherits from parent if controller
-      },
-
-      case: {
-        kind: "controller",
-        res: "case",
-        scope: "reuse", // evaluates in same scope as switch
-        props: {
-          value: { name: "value", type: { kind: "unknown" }, mode: "default", primary: true, doc: "Case value to match" },
-          fallThrough: { name: "fallThrough", type: { kind: "ts", name: "boolean" }, mode: "toView", doc: "Continue to next case" },
-        },
-        linksTo: "switch",
-      },
-
-      "default-case": {
-        kind: "controller",
-        res: "default-case",
-        scope: "reuse", // evaluates in same scope as switch
-        props: {
-          fallThrough: { name: "fallThrough", type: { kind: "ts", name: "boolean" }, mode: "toView", doc: "Continue to next case" },
-        },
-        linksTo: "switch",
-      },
-    },
+    controllers: BUILTIN_CONTROLLER_CONFIGS,
 
     /* ---- Value converters & binding behaviors ----
      * Analysis treats VCs as identity unless configured; BBs don't change static shapes in MVP.
      */
     valueConverters: {
-      identity: { name: "identity", in: { kind: "unknown" }, out: { kind: "unknown" } },
+      sanitize: { name: "sanitize", in: { kind: "ts", name: "string" }, out: { kind: "ts", name: "string | null" } },
     },
     bindingBehaviors: {
       // Rate limiting behaviors
@@ -790,7 +929,7 @@ export interface SemanticsLookup {
   attribute(name: string): AttrRes | null;
 
   /** Resolve a template controller by canonical name. */
-  controller<TName extends ControllerName>(name: TName): Controllers[TName] | null;
+  controller(name: string): ControllerConfig | null;
 
   /** Resolve a native DOM element entry (tag is normalized to lowercase). */
   domElement(tag: string): DomElement | null;

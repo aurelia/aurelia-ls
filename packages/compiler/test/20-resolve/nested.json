@@ -5,12 +5,25 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "catch", "branch": "catch" },
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" },
-        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" },
-        { "kind": "event", "to": "click", "type": "MouseEvent" },
         { "kind": "event", "to": "click", "type": "MouseEvent" }
+      ]
+    }
+  },
+  {
+    "name": "R-N-02 promise with pending branch resolved",
+    "markup": "<div promise.bind=\"p\"><template pending>Loading...</template><template then>Done</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "pending", "branch": "pending" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" }
       ]
     }
   }

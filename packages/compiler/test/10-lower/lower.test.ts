@@ -9,12 +9,18 @@ import { diffByKey } from "../_helpers/test-utils.js";
 
 import { lowerDocument } from "@aurelia-ls/compiler";
 
+interface DiagIntent {
+  code: string;
+  messageContains?: string;
+}
+
 interface LowerIntent {
   expressions: ExpressionIntent[];
   controllers: ControllerIntent[];
   lets: LetIntent[];
   elements: ElementIntent[];
   attributes: AttributeIntent[];
+  diags: DiagIntent[];
 }
 
 interface ExpressionIntent {
@@ -60,6 +66,8 @@ interface LowerDiff {
   extraElements: string[];
   missingAttributes: string[];
   extraAttributes: string[];
+  missingDiags: string[];
+  extraDiags: string[];
 }
 
 type LowerExpect = Partial<LowerIntent>;
@@ -70,7 +78,7 @@ runVectorTests<LowerExpect, LowerIntent, LowerDiff>({
   execute: (v: TestVector, ctx: CompilerContext) =>
     reduceIrToLowerIntent(lowerDocument(v.markup, lowerOpts(ctx))),
   compare: compareLowerIntent,
-  categories: ["expressions", "controllers", "lets", "elements", "attributes"],
+  categories: ["expressions", "controllers", "lets", "elements", "attributes", "diags"],
 });
 
 // --- Intent Reduction ---
@@ -222,7 +230,17 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
           out.controllers.push(ctrl);
           for (const p of ins.props ?? []) {
             if (p.type === "iteratorBinding") {
-              out.expressions.push({ kind: "iterator" });
+              out.expressions.push({ kind: "iterator", code: p.forOf?.code });
+              // Handle repeat tail props (key.bind, etc.)
+              for (const tailProp of p.props ?? []) {
+                if (tailProp.type === "multiAttr" && tailProp.command) {
+                  out.expressions.push({
+                    kind: "propCommand",
+                    code: tailProp.from?.code,
+                    command: tailProp.command,
+                  });
+                }
+              }
             } else if (p.type === "propertyBinding") {
               const isControllerValue =
                 p.to === "value" ||
@@ -292,8 +310,14 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
   }
 }
 
+interface IrDiag {
+  code: string;
+  message: string;
+}
+
 interface IrModule {
   templates?: TemplateIr[];
+  diags?: IrDiag[];
 }
 
 function reduceIrToLowerIntent(irModule: IrModule): LowerIntent {
@@ -303,9 +327,14 @@ function reduceIrToLowerIntent(irModule: IrModule): LowerIntent {
     lets: [],
     elements: [],
     attributes: [],
+    diags: [],
   };
   const root = irModule.templates?.[0];
   if (root) reduceTemplate(root, out);
+  // Reduce diagnostics
+  for (const d of irModule.diags ?? []) {
+    out.diags.push({ code: d.code });
+  }
   return out;
 }
 
@@ -318,6 +347,7 @@ function compareLowerIntent(actual: LowerIntent, expected: Partial<LowerIntent>)
     `${e.res ?? ""}|${e.containerless ? 1 : 0}|${(e.props ?? []).join(",")}`;
   const keyAttr = (e: AttributeIntent) =>
     `${e.res ?? ""}|${e.alias ?? ""}|${(e.props ?? []).join(",")}`;
+  const keyDiag = (d: DiagIntent) => d.code;
 
   const { missing: missingExpressions, extra: extraExpressions } = diffByKey(
     actual.expressions,
@@ -344,6 +374,11 @@ function compareLowerIntent(actual: LowerIntent, expected: Partial<LowerIntent>)
     expected.attributes,
     keyAttr
   );
+  const { missing: missingDiags, extra: extraDiags } = diffByKey(
+    actual.diags,
+    expected.diags,
+    keyDiag
+  );
 
   return {
     missingExpressions,
@@ -356,5 +391,7 @@ function compareLowerIntent(actual: LowerIntent, expected: Partial<LowerIntent>)
     extraElements,
     missingAttributes,
     extraAttributes,
+    missingDiags,
+    extraDiags,
   };
 }

@@ -21,11 +21,27 @@ import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
 import { exprIdMapGet, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { buildScopeLookup } from "../shared/scope-lookup.js";
+import { isStub } from "../../shared/diagnosed.js";
+import {
+  type TypecheckConfig,
+  type TypecheckSeverity,
+  type BindingContext,
+  resolveTypecheckConfig,
+  checkTypeCompatibility,
+} from "./config.js";
 
-export type TypecheckDiagnostic = CompilerDiagnostic<"AU1301"> & {
+// Re-export config types for consumers
+export type { TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./config.js";
+export { resolveTypecheckConfig, DEFAULT_TYPECHECK_CONFIG, TYPECHECK_PRESETS, checkTypeCompatibility } from "./config.js";
+
+/** Diagnostic codes for typecheck phase */
+export type TypecheckDiagCode = "AU1301" | "AU1302" | "AU1303";
+
+export type TypecheckDiagnostic = CompilerDiagnostic<TypecheckDiagCode> & {
   exprId?: ExprId;
   expected?: string;
   actual?: string;
+  severity: TypecheckSeverity;
 };
 
 export interface TypecheckModule {
@@ -33,6 +49,8 @@ export interface TypecheckModule {
   inferredByExpr: ExprIdMap<string>;
   expectedByExpr: ExprIdMap<string>;
   diags: TypecheckDiagnostic[];
+  /** The resolved config used for this typecheck run */
+  config: TypecheckConfig;
 }
 
 export interface TypecheckOptions {
@@ -40,20 +58,47 @@ export interface TypecheckOptions {
   scope: ScopeModule;
   ir: IrModule;
   rootVmType: string;
+  /** Optional typecheck configuration. Uses lenient defaults if not provided. */
+  config?: Partial<TypecheckConfig>;
 }
 
 /** Phase 40: derive expected + inferred types and surface lightweight diagnostics. */
 export function typecheck(opts: TypecheckOptions): TypecheckModule {
-  const expectedByExpr = collectExpectedTypes(opts.linked);
+  const config = resolveTypecheckConfig(opts.config);
+
+  // Early exit if type checking is disabled
+  if (!config.enabled) {
+    return {
+      version: "aurelia-typecheck@1",
+      inferredByExpr: new Map(),
+      expectedByExpr: new Map(),
+      diags: [],
+      config,
+    };
+  }
+
+  const expectedInfo = collectExpectedTypes(opts.linked);
   const inferredByExpr = collectInferredTypes(opts);
   const exprSpanIndex = buildExprSpanIndex(opts.ir);
-  const diags = collectDiagnostics(expectedByExpr, inferredByExpr, exprSpanIndex.spans);
+  const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config);
 
-  return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags };
+  // Extract just the types for the module output (without context)
+  const expectedByExpr: ExprIdMap<string> = new Map();
+  for (const [id, info] of expectedInfo.entries()) {
+    expectedByExpr.set(id, info.type);
+  }
+
+  return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags, config };
 }
 
-function collectExpectedTypes(linked: LinkedSemanticsModule): ExprIdMap<string> {
-  const expectedByExpr: ExprIdMap<string> = new Map();
+/** Expected type info with binding context for coercion rules. */
+interface ExpectedTypeInfo {
+  type: string;
+  context: BindingContext;
+}
+
+function collectExpectedTypes(linked: LinkedSemanticsModule): ExprIdMap<ExpectedTypeInfo> {
+  const expectedByExpr: ExprIdMap<ExpectedTypeInfo> = new Map();
   for (const t of linked.templates ?? []) {
     for (const row of t.rows ?? []) {
       for (const ins of row.instructions ?? []) {
@@ -93,63 +138,82 @@ function collectInferredTypes(opts: TypecheckOptions): ExprIdMap<string> {
 }
 
 function collectDiagnostics(
-  expected: ReadonlyExprIdMap<string>,
+  expected: ReadonlyExprIdMap<ExpectedTypeInfo>,
   inferred: ReadonlyExprIdMap<string>,
   spans: ReadonlyExprIdMap<SourceSpan>,
+  config: TypecheckConfig,
 ): TypecheckDiagnostic[] {
   const diags: TypecheckDiagnostic[] = [];
-  for (const [id, expectedType] of expected.entries()) {
+
+  for (const [id, expectedInfo] of expected.entries()) {
     const actual = exprIdMapGet(inferred, id);
     if (!actual) continue;
-    if (!shouldReportMismatch(expectedType, actual)) continue;
-    const span = exprIdMapGet(spans, id) ?? null;
-    diags.push({
-      exprId: id,
-      expected: expectedType,
+
+    const result = checkTypeCompatibility(
       actual,
-      ...buildDiagnostic({
-        code: "AU1301",
-        message: `Type mismatch: expected ${expectedType}, got ${actual}`,
-        span,
-        source: "typecheck",
-      }),
+      expectedInfo.type,
+      expectedInfo.context,
+      config,
+    );
+
+    // Skip if compatible or severity is off
+    if (result.compatible || result.severity === "off") continue;
+
+    const span = exprIdMapGet(spans, id) ?? null;
+    const code = severityToCode(result.severity);
+    const message = result.reason ?? `Type mismatch: expected ${expectedInfo.type}, got ${actual}`;
+
+    const diag = buildDiagnostic({
+      code,
+      message,
+      span,
+      source: "typecheck",
+      severity: result.severity,
+    });
+
+    diags.push({
+      ...diag,
+      exprId: id,
+      expected: expectedInfo.type,
+      actual,
+      severity: result.severity,
     });
   }
+
   return diags;
 }
 
-function shouldReportMismatch(expected: string, actual: string): boolean {
-  const e = normalizeType(expected);
-  const a = normalizeType(actual);
-  if (e === "unknown" || e === "any" || a === "unknown" || a === "any") return false;
-   if (e === "Function" && isFunctionLike(actual)) return false;
-  return e !== a;
+/**
+ * Map severity to diagnostic code.
+ * AU1301 = error, AU1302 = warning, AU1303 = info
+ */
+function severityToCode(severity: TypecheckSeverity): TypecheckDiagCode {
+  switch (severity) {
+    case "error": return "AU1301";
+    case "warning": return "AU1302";
+    case "info": return "AU1303";
+    default: return "AU1301";
+  }
 }
 
-function normalizeType(t: string): string {
-  return t.replace(/[\s()]/g, "");
-}
-
-function isFunctionLike(type: string): boolean {
-  const t = type.replace(/\s+/g, "");
-  if (/\bFunction\b/i.test(type)) return true;
-  if (t.includes("=>")) return true;
-  if (t.startsWith("ReturnType<") || t.includes("ReturnType<")) return true;
-  return false;
-}
-
-function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<string>): void {
+function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTypeInfo>): void {
   switch (ins.kind) {
     case "propertyBinding":
+      recordExpected(ins.from, targetType(ins.target), contextFromTarget(ins.target), expected, ins.target);
+      break;
     case "attributeBinding":
+      recordExpected(ins.from, targetType(ins.target), "dom.attribute", expected, ins.target);
+      break;
     case "stylePropertyBinding":
-      recordExpected(ins.from, targetType(ins.target), expected);
+      recordExpected(ins.from, targetType(ins.target), "style.property", expected, ins.target);
       break;
     case "listenerBinding":
-      recordExpected(ins.from, "Function", expected);
+      // Listeners don't have a resolvable target type - just check function
+      recordExpected(ins.from, "Function", "dom.property", expected);
       break;
     case "textBinding":
-      recordExpected(ins.from, "unknown", expected);
+      // Text bindings accept anything (coerced to string) - no type constraint
+      recordExpected(ins.from, "unknown", "dom.property", expected);
       break;
     case "hydrateElement":
     case "hydrateAttribute":
@@ -157,39 +221,108 @@ function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<string>): 
       break;
     case "hydrateTemplateController": {
       for (const p of ins.props ?? []) {
-        if (p.kind === "iteratorBinding") {
-          expected.set(p.forOf.astId, "Iterable<unknown>");
-          for (const aux of p.aux) recordExpected(aux.from, targetType(aux.spec?.type ?? undefined), expected);
-        } else {
-          recordExpected(p.from, targetType(p.target), expected);
+        switch (p.kind) {
+          case "iteratorBinding":
+            // Iterator source must be iterable (skip if stubbed)
+            if (!isStub(p.forOf)) {
+              expected.set(p.forOf.astId, { type: "Iterable<unknown>", context: "component.bindable" });
+            }
+            for (const aux of p.aux) {
+              recordExpected(aux.from, targetType(aux.spec?.type ?? undefined), "component.bindable", expected);
+            }
+            break;
+          case "propertyBinding":
+          case "attributeBinding":
+            recordExpected(p.from, targetType(p.target), "component.bindable", expected, p.target);
+            break;
+          case "setProperty":
+            // Literal value - no expression to type-check
+            break;
         }
       }
       break;
     }
     case "hydrateLetElement":
-      for (const lb of ins.instructions ?? []) recordExpected(lb.from, "unknown", expected);
+      // Let bindings are inferred - no expected type constraint
+      for (const lb of ins.instructions ?? []) recordExpected(lb.from, "unknown", "template.local", expected);
       break;
     default:
       break;
   }
 }
 
-function recordLinkedBindable(b: LinkedElementBindable, expected: ExprIdMap<string>): void {
+function recordLinkedBindable(b: LinkedElementBindable, expected: ExprIdMap<ExpectedTypeInfo>): void {
   switch (b.kind) {
     case "propertyBinding":
+      recordExpected(b.from, targetType(b.target), contextFromTarget(b.target), expected, b.target);
+      break;
     case "attributeBinding":
+      recordExpected(b.from, targetType(b.target), "dom.attribute", expected, b.target);
+      break;
     case "stylePropertyBinding":
-      recordExpected(b.from, targetType(b.target), expected);
+      recordExpected(b.from, targetType(b.target), "style.property", expected, b.target);
       break;
     default:
       break;
   }
 }
 
-function recordExpected(src: BindingSourceIR | ExprRef | InterpIR, type: string | null | undefined, expected: ExprIdMap<string>): void {
+/**
+ * Record expected type for an expression, with cascade suppression.
+ *
+ * Skips recording if:
+ * - No type information available
+ * - Source expression is stubbed (parser/earlier phase error)
+ * - Target is degraded (resolution failed)
+ */
+function recordExpected(
+  src: BindingSourceIR | ExprRef | InterpIR,
+  type: string | null | undefined,
+  context: BindingContext,
+  expected: ExprIdMap<ExpectedTypeInfo>,
+  target?: TargetSem | TypeRef | { kind: "style" },
+): void {
+  // Skip if no type info
   if (!type) return;
+
+  // Cascade suppression: skip stubbed sources (earlier phase error)
+  if (isStub(src)) return;
+
+  // Cascade suppression: skip if target resolution failed
+  if (isUnknownTarget(target)) return;
+
   const ids = exprIdsOf(src);
-  for (const id of ids) expected.set(id, type);
+  for (const id of ids) expected.set(id, { type, context });
+}
+
+/**
+ * Check if a target represents a failed resolution (cascade suppression).
+ * When target.kind === "unknown", the resolve phase already emitted a diagnostic.
+ */
+function isUnknownTarget(target: TargetSem | TypeRef | { kind: "style" } | undefined): boolean {
+  if (!target) return false;
+  if (typeof target !== "object") return false;
+  return (target as { kind?: string }).kind === "unknown";
+}
+
+/**
+ * Determine binding context from the target semantic.
+ */
+function contextFromTarget(target: TargetSem | TypeRef | { kind: "style" } | undefined): BindingContext {
+  if (!target) return "unknown";
+  if (isTypeRef(target)) return "unknown";
+  switch (target.kind) {
+    case "element.bindable":
+    case "attribute.bindable":
+    case "controller.prop":
+      return "component.bindable";
+    case "element.nativeProp":
+      return "dom.property";
+    case "style":
+      return "style.property";
+    default:
+      return "unknown";
+  }
 }
 
 function targetType(target: TargetSem | TypeRef | { kind: "style" } | undefined): string | null {

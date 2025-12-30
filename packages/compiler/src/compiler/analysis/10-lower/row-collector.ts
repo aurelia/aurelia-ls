@@ -45,15 +45,19 @@ export function collectRows(
 
         if (!ctrlRows.length) {
           if (tag === "template") {
-            collectRows(
-              (n as P5Template).content,
-              ids,
-              attrParser,
-              table,
-              nestedTemplates,
-              rows,
-              sem
-            );
+            // Skip promise branch templates - their content is handled by injectPromiseBranchesIntoDef
+            const isPromiseBranch = findAttr(n, "then") || findAttr(n, "catch") || findAttr(n, "pending");
+            if (!isPromiseBranch) {
+              collectRows(
+                (n as P5Template).content,
+                ids,
+                attrParser,
+                table,
+                nestedTemplates,
+                rows,
+                sem
+              );
+            }
           } else {
             collectRows(n, ids, attrParser, table, nestedTemplates, rows, sem);
           }

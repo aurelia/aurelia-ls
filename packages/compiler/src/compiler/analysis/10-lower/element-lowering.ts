@@ -1,6 +1,15 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { AttrRes, Semantics } from "../../language/registry.js";
 import type {
+  AttrRes,
+  ControllerConfig,
+  Semantics,
+} from "../../language/registry.js";
+import {
+  BUILTIN_CONTROLLER_CONFIGS,
+  createCustomControllerConfig,
+} from "../../language/registry.js";
+import type {
+  AttributeBindableIR,
   ElementBindableIR,
   HydrateAttributeIR,
   HydrateElementIR,
@@ -51,7 +60,7 @@ function hasInlineBindings(value: string): boolean {
 
 /**
  * Parses multi-binding syntax: "prop1: value1; prop2.bind: expr; prop3: ${interp}"
- * Returns an array of ElementBindableIR instructions.
+ * Returns an array of AttributeBindableIR instructions (narrower type for custom attrs).
  */
 function parseMultiBindings(
   raw: string,
@@ -60,8 +69,8 @@ function parseMultiBindings(
   loc: P5Loc,
   valueLoc: P5Loc,
   table: ExprTable
-): ElementBindableIR[] {
-  const props: ElementBindableIR[] = [];
+): AttributeBindableIR[] {
+  const props: AttributeBindableIR[] = [];
   const len = raw.length;
   let start = 0;
 
@@ -166,7 +175,7 @@ export function lowerElementAttributes(
     loc: P5Loc,
     valueLoc: P5Loc,
     command: string | null
-  ) => {
+  ): void => {
     const to = camelCase(target);
     if (command) {
       sink.push({
@@ -273,7 +282,7 @@ export function lowerElementAttributes(
         s.command === null &&
         hasInlineBindings(raw);
 
-      let props: ElementBindableIR[];
+      let props: AttributeBindableIR[];
       if (isMultiBinding) {
         props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table);
       } else {
@@ -361,21 +370,89 @@ export function lowerElementAttributes(
   return { instructions, containerless };
 }
 
+/**
+ * @deprecated Use ControllerConfig.name instead. Retained for backward compatibility.
+ */
 export type ControllerName = keyof Semantics["resources"]["controllers"];
 
+/**
+ * Resolve an attribute to its controller configuration.
+ *
+ * Resolution order:
+ * 1. Built-in controller configs (if, repeat, with, etc.)
+ * 2. Custom template controllers in attributes (via @templateController decorator)
+ * 3. Legacy controllers in sem.resources.controllers (for backward compat)
+ *
+ * Note: Branch controllers (else, case, then, catch, pending, default-case) are NOT
+ * resolved here. They are only valid as children/siblings of their parent controller
+ * and are detected by specialized code (detectPromiseBranch, etc.).
+ *
+ * @returns ControllerConfig if the attribute is a template controller, null otherwise
+ */
 export function resolveControllerAttr(
   s: { target: string; command: string | null },
   sem: Semantics
-): ControllerName | null {
-  const controller = sem.resources.controllers[s.target as ControllerName];
-  if (!controller) return null;
-  if (s.target === "repeat") return s.command === "for" ? "repeat" : null;
-  return s.target as ControllerName;
+): ControllerConfig | null {
+  const target = s.target;
+
+  // 1. Check built-in controller configs first
+  const builtin = BUILTIN_CONTROLLER_CONFIGS[target];
+  if (builtin) {
+    // Promise branch controllers (then, catch, pending) are NOT resolved here.
+    // They are detected by detectPromiseBranch() which handles the special
+    // branch injection logic. Other branch controllers (else, case, default-case)
+    // ARE resolved here and handled normally by collectControllers().
+    if (builtin.linksTo === "promise") {
+      return null;
+    }
+
+    // Special case: repeat requires "for" command
+    if (target === "repeat") {
+      return s.command === "for" ? builtin : null;
+    }
+    return builtin;
+  }
+
+  // 2. Check custom TCs in attributes (discovered via @templateController decorator)
+  const customAttr = sem.resources.attributes[target];
+  if (customAttr?.isTemplateController) {
+    // Create a config for this custom TC
+    return createCustomControllerConfig(
+      customAttr.name,
+      customAttr.primary,
+      customAttr.bindables
+    );
+  }
+
+  // 3. Legacy fallback: check sem.resources.controllers
+  // This maintains backward compatibility with existing code that adds to controllers directly
+  const legacyController = sem.resources.controllers[target];
+  if (legacyController) {
+    // For legacy controllers, create a minimal config
+    // The toControllerConfig() function handles full conversion if needed
+    if (target === "repeat") {
+      return s.command === "for" ? BUILTIN_CONTROLLER_CONFIGS["repeat"]! : null;
+    }
+    return BUILTIN_CONTROLLER_CONFIGS[target] ?? null;
+  }
+
+  return null;
 }
 
+/**
+ * Check if an attribute is a template controller.
+ */
 export function isControllerAttr(
   s: { target: string; command: string | null },
   sem: Semantics
 ): boolean {
   return resolveControllerAttr(s, sem) !== null;
+}
+
+/**
+ * Get the controller name from a resolved config.
+ * Helper for code that still uses string-based controller names.
+ */
+export function getControllerName(config: ControllerConfig): ControllerName {
+  return config.name;
 }

@@ -53,7 +53,7 @@
         { "name": "with" }
       ],
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "i of ii" },
         { "kind": "controllerValue", "command": "bind", "code": "if" },
         { "kind": "controllerValue", "command": "bind", "code": "with" }
       ]
@@ -85,7 +85,7 @@
         { "name": "with" }
       ],
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "i of items" },
         { "kind": "controllerValue", "command": "bind", "code": "cond" },
         { "kind": "controllerValue", "command": "bind", "code": "ctx" }
       ]
@@ -101,7 +101,9 @@
     "markup": "<div promise><template then=\"r\"><span>${a}</span></template><template catch><span>${b}</span></template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -146,7 +148,8 @@
     "markup": "<div promise.bind=\"p\"><template then><b>${a}</b></template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -159,7 +162,8 @@
     "markup": "<div promise><template catch><i>${e}</i></template></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -283,7 +287,7 @@
         { "name": "repeat" }
       ],
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "i of items" },
         { "kind": "text", "code": "i" }
       ]
     }
@@ -293,7 +297,10 @@
     "markup": "<div promise.bind=\"p\"><span then.from-view=\"data\">${data.toUpperCase()}</span><i catch.from-view=\"err\">${err}</i><span pending>loading</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" },
+        { "name": "pending" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -307,7 +314,9 @@
     "markup": "<div promise.bind=\"p\"><span then=\"d\">${d}</span><b catch=\"e\">${e}</b></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -321,7 +330,9 @@
     "markup": "<div promise><span then>${a}</span><span catch>${b}</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -335,7 +346,9 @@
     "markup": "<div promise.bind=\"p\"><template then=\"x\"><em>${x}</em></template><span catch.from-view=\"y\">${y}</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" },
+        { "name": "catch" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "p" },
@@ -364,7 +377,7 @@
     "markup": "<template repeat.for=\"item of items\">${item}</template>",
     "expect": {
       "expressions": [
-        { "kind": "iterator" },
+        { "kind": "iterator", "code": "item of items" },
         { "kind": "text", "code": "item" }
       ],
       "controllers": [
@@ -391,7 +404,8 @@
     "markup": "<div promise><span then=\"a ${b}\">${b}</span></div>",
     "expect": {
       "controllers": [
-        { "name": "promise" }
+        { "name": "promise" },
+        { "name": "then" }
       ],
       "expressions": [
         { "kind": "controllerValue", "command": "bind", "code": "promise" },
@@ -497,5 +511,165 @@
         { "kind": "controllerValue", "command": "bind", "code": "b" }
       ]
     }
+  },
+  {
+    "name": "LC-37 promise with template pending branch",
+    "markup": "<div promise.bind=\"p\"><template pending>Loading...</template><template then=\"r\">${r}</template></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" },
+        { "name": "pending" },
+        { "name": "then" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "r" }
+      ]
+    }
+  },
+  {
+    "name": "LC-38 promise with all three template branches",
+    "markup": "<div promise.bind=\"p\"><template pending>Wait...</template><template then=\"v\">${v}</template><template catch=\"e\">${e}</template></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" },
+        { "name": "pending" },
+        { "name": "then" },
+        { "name": "catch" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "v" },
+        { "kind": "text", "code": "e" }
+      ]
+    }
+  },
+  {
+    "name": "LC-39 case combined with if (case not rightmost)",
+    "markup": "<div switch.bind=\"x\"><span case=\"1\" if.bind=\"show\">content</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "switch" },
+        { "name": "case" },
+        { "name": "if" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" },
+        { "kind": "controllerValue", "command": "bind", "code": "\"1\"" },
+        { "kind": "controllerValue", "command": "bind", "code": "show" }
+      ]
+    }
+  },
+  {
+    "name": "LC-40 default-case combined with if (default-case not rightmost)",
+    "markup": "<div switch.bind=\"x\"><span default-case if.bind=\"show\">fallback</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "switch" },
+        { "name": "default-case" },
+        { "name": "if" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "x" },
+        { "kind": "controllerValue", "command": "bind", "code": "show" }
+      ]
+    }
+  },
+  {
+    "name": "LC-41 promise then with interpolation (attributeBinding marker)",
+    "markup": "<div promise.bind=\"p\"><span then=\"val${x}\">${x}</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "promise" },
+        { "name": "then" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "p" },
+        { "kind": "text", "code": "x" }
+      ]
+    }
+  },
+  {
+    "name": "LC-42 repeat with key.bind tail option",
+    "markup": "<div repeat.for=\"item of items; key.bind: item.id\"></div>",
+    "expect": {
+      "controllers": [
+        { "name": "repeat" }
+      ],
+      "expressions": [
+        { "kind": "iterator", "code": "item of items; key.bind: item.id" },
+        { "kind": "propCommand", "command": "bind", "code": "item.id" }
+      ]
+    }
+  },
+  {
+    "name": "LC-43 else combined with repeat (else not rightmost)",
+    "markup": "<div if.bind=\"a\">A</div><div else repeat.for=\"x of xs\">B</div>",
+    "expect": {
+      "controllers": [
+        { "name": "if" },
+        { "name": "else" },
+        { "name": "repeat" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "a" },
+        { "kind": "iterator", "code": "x of xs" }
+      ]
+    }
+  },
+  {
+    "name": "LC-44 custom template controller via isTemplateController attribute",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "my-tc": {
+            "kind": "attribute",
+            "name": "my-tc",
+            "isTemplateController": true,
+            "bindables": {
+              "value": { "name": "value" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div my-tc.bind=\"ctx\"><span>content</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "my-tc" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "ctx" }
+      ]
+    }
+  },
+  {
+    "name": "LC-45 custom TC with literal value (no command)",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "custom-if": {
+            "kind": "attribute",
+            "name": "custom-if",
+            "isTemplateController": true,
+            "bindables": {
+              "value": { "name": "value" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div custom-if=\"true\"><span>shown</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "custom-if" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "true" }
+      ]
+    },
+    "_comment": "For LSP, TC values are treated as expressions for scope resolution. Note: runtime uses SetPropertyInstruction for literals."
   }
 ]

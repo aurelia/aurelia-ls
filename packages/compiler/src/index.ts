@@ -41,11 +41,11 @@ export type {
   Bindable,
   ValueConverterSig,
   BindingBehaviorSig,
-  Controllers,
-  RepeatController,
-  PromiseController,
-  SwitchController,
-  PortalController,
+  ControllerConfig,
+  ControllerTrigger,
+  ControllerBranches,
+  ControllerInjects,
+  ControllerName,
   ScopeBehavior,
   DomSchema,
   DomElement,
@@ -131,19 +131,27 @@ export type {
   PlanCustomElement,
   PlanCustomAttr,
   PlanController,
-  PlanRepeatController,
-  PlanIfController,
-  PlanWithController,
-  PlanSwitchController,
-  PlanPromiseController,
-  PlanPortalController,
+  PlanAuxExpr,
   PlanExpression,
   PlanScope,
 } from "./compiler/index.js";
 
 // Analysis (for build tools)
-export { lowerDocument, resolveHost, bindScopes, typecheck, planOverlay, emitOverlay, emitMappedExpression } from "./compiler/index.js";
-export type { BuildIrOptions } from "./compiler/index.js";
+export {
+  lowerDocument,
+  resolveHost,
+  bindScopes,
+  typecheck,
+  planOverlay,
+  emitOverlay,
+  emitMappedExpression,
+  // Typecheck configuration
+  resolveTypecheckConfig,
+  checkTypeCompatibility,
+  DEFAULT_TYPECHECK_CONFIG,
+  TYPECHECK_PRESETS,
+} from "./compiler/index.js";
+export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./compiler/index.js";
 export type {
   // Linked semantics (for semantic tokens, etc.)
   LinkedSemanticsModule,

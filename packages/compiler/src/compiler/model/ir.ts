@@ -14,6 +14,7 @@
 import type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
 import type { Origin, Provenance } from "./origin.js";
 import type { SourceSpan, TextSpan } from "./span.js";
+import type { CompilerDiagnostic } from "./diagnostics.js";
 
 export type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
 export type { SourceSpan, TextSpan } from "./span.js";
@@ -233,6 +234,17 @@ export type ElementBindableIR =
   | StylePropertyBindingIR
   | MultiAttrIR;
 
+/**
+ * Bindable types that can appear in custom attribute props.
+ * Narrower than ElementBindableIR because lowering only produces these three
+ * types for custom attributes (via lowerBindable/parseMultiBindings).
+ * StylePropertyBindingIR goes on element tail, MultiAttrIR is for repeat tail.
+ */
+export type AttributeBindableIR =
+  | PropertyBindingIR
+  | SetPropertyIR
+  | AttributeBindingIR;
+
 export type ControllerBindableIR =
   | PropertyBindingIR
   | SetPropertyIR
@@ -259,7 +271,7 @@ export interface HydrateElementIR {
 export interface HydrateAttributeIR {
   type: 'hydrateAttribute';
   res: string;
-  props: ElementBindableIR[];
+  props: AttributeBindableIR[];
   alias?: string | null;
   data?: Record<string, string | null>;
   loc?: SourceSpan | null;
@@ -267,7 +279,18 @@ export interface HydrateAttributeIR {
 
 /* ---- Template controllers & branches ---- */
 
-export type TemplateControllerRes = 'repeat' | 'with' | 'if' | 'else' | 'switch' | 'promise' | 'portal' | 'case' | 'default-case';
+/**
+ * Built-in template controller resource names.
+ * Custom template controllers can use any string name.
+ */
+export type BuiltinTemplateControllerRes = 'repeat' | 'with' | 'if' | 'else' | 'switch' | 'promise' | 'portal' | 'case' | 'default-case';
+
+/**
+ * Template controller resource name.
+ * Includes built-in controllers plus any custom TC name (string).
+ */
+export type TemplateControllerRes = BuiltinTemplateControllerRes | (string & {});
+
 export type TemplateControllerAlias = 'then' | 'catch' | 'case' | 'default';
 
 export type ControllerBranchInfo =
@@ -280,7 +303,7 @@ export type ControllerBranchInfo =
 // For promise/switch, branch alias/local is represented structurally via `branch`.
 export interface HydrateTemplateControllerIR {
   type: 'hydrateTemplateController';
-  res: TemplateControllerRes; // e.g., 'repeat', 'if', 'with', 'promise', 'switch', 'portal'
+  res: TemplateControllerRes; // e.g., 'repeat', 'if', 'with', or custom TC name
   def: TemplateIR;            // nested template/view
   props: ControllerBindableIR[];
   alias?: TemplateControllerAlias | null; // branch alias when applicable (informational)
@@ -327,12 +350,33 @@ export interface InstructionRow {
  * Module & Template
  * =========================== */
 
+/* ===========================
+ * IR Diagnostics
+ * =========================== */
+
+/**
+ * IR-level diagnostic codes (lowering phase).
+ *
+ * Code ranges:
+ * - AU07xx: Template compilation errors (matches runtime template-compiler)
+ */
+export type IrDiagCode =
+  | "AU0704"; // Invalid <let> command (must be bind/to-view/one-time/two-way/from-view)
+
+export type IrDiagnostic = CompilerDiagnostic<IrDiagCode>;
+
+/* ===========================
+ * Module container
+ * =========================== */
+
 /** Root-level compiled unit: templates + shared expression table. */
 export interface IrModule {
   version: 'aurelia-ir@1';
   templates: TemplateIR[];
   /** Optional shared sidecar for dev/LSP; can be stripped for shipping. */
   exprTable?: ExprTableEntry[];
+  /** Optional diagnostics from lowering phase. */
+  diags?: IrDiagnostic[];
   name?: string;
   meta?: Record<string, unknown>;
 }

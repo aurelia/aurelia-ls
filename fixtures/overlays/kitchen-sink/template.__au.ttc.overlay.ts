@@ -34,14 +34,16 @@ __au$access<__AU_TTC_T0_F1>(o => o.item.ok);
 __au$access<__AU_TTC_T0_F1>(o => o.ifBlock);
 __au$access<__AU_TTC_T0_F1>(o => o.item.cardClass);
 __au$access<__AU_TTC_T0_F1>(o => o.item.detail);
+__au$access<__AU_TTC_T0_F1>(o => "ready");
 type __AU_TTC_T0_F2 = (Omit<(Omit<(__AU_TTC_VM), keyof (NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['detail'])>), 'baz' | 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle' | 'name'>) & (Omit<(NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['detail']), 'baz' | 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle' | 'name'>) & { baz: NonNullable<(__AU_TTC_VM)>['qux']; item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean; name: NonNullable<(__AU_TTC_VM)>['displayName'] } & { $parent: (Omit<(__AU_TTC_VM), 'baz' | 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux']; item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & { $this: (NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['detail']) };
 __au$access<__AU_TTC_T0_F2>(o => o.displayName);
 __au$access<__AU_TTC_T0_F2>(o => o.state);
-__au$access<__AU_TTC_T0_F2>(o => "ready");
 __au$access<__AU_TTC_T0_F2>(o => o.status);
 __au$access<__AU_TTC_T0_F2>(o => o.fallback);
-type __AU_TTC_T0_F3 = (Omit<(__AU_TTC_VM), 'baz' | 'res' | 'err'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux']; res: Awaited<NonNullable<(__AU_TTC_VM)>['result']>; err: any } & { $parent: (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {};
-__au$access<__AU_TTC_T0_F3>(o => o.res.value);
-__au$access<__AU_TTC_T0_F3>(o => o.err.message);
+type __AU_TTC_T0_F3 = (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {};
+type __AU_TTC_T0_F4 = (Omit<(__AU_TTC_VM), 'baz' | 'res'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux']; res: Awaited<NonNullable<(__AU_TTC_VM)>['result']> } & { $parent: (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {};
+__au$access<__AU_TTC_T0_F4>(o => o.res.value);
+type __AU_TTC_T0_F5 = (Omit<(__AU_TTC_VM), 'baz' | 'err'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux']; err: any } & { $parent: (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: (Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {};
+__au$access<__AU_TTC_T0_F5>(o => o.err.message);
 
 export {}

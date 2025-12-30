@@ -32,10 +32,17 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
 
   const root: TemplateIR = { dom: domRoot, rows, name: opts.name! };
 
-  return {
+  const result: IrModule = {
     version: "aurelia-ir@1",
     templates: [root, ...nestedTemplates],
     exprTable: table.entries,
     name: opts.name!,
   };
+
+  // Include diagnostics if any were collected
+  if (table.diags.length > 0) {
+    result.diags = table.diags;
+  }
+
+  return result;
 }

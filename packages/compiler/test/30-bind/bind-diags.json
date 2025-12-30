@@ -5,15 +5,15 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:with@1", "parent": "root", "kind": "overlay", "overlay": "with", "origin": "with" }
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
       ],
       "locals": [
-        { "frame": "overlay:with@1", "kind": "let", "name": "a" }
+        { "frame": "overlay:valueOverlay@1", "kind": "let", "name": "a" }
       ],
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
-        { "kind": "expr", "code": "x", "frame": "overlay:with@1" },
-        { "kind": "expr", "code": "y", "frame": "overlay:with@1" }
+        { "kind": "expr", "code": "x", "frame": "overlay:valueOverlay@1" },
+        { "kind": "expr", "code": "y", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": [
         { "code": "AU1202" }
@@ -26,7 +26,7 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [],
       "exprs": [
@@ -43,7 +43,7 @@
     "expect": {
       "frames": [
         { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
-        { "label": "overlay:repeat@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "repeat" }
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
       ],
       "locals": [],
       "exprs": [
@@ -68,6 +68,274 @@
       "diags": [
         { "code": "AU1203" }
       ]
+    }
+  },
+  {
+    "name": "DG-05 iterator local conflicts with let name -> AU1202",
+    "markup": "<ul repeat.for=\"item of items\"><let item.bind=\"other\"></let></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "other", "frame": "overlay:iterator@1" }
+      ],
+      "diags": [
+        { "code": "AU1202" }
+      ]
+    }
+  },
+  {
+    "name": "DG-06 invalid expression in listener context surfaces AU1203",
+    "markup": "<button click.trigger=\"handle(\"></button>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "handle(", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1203" }
+      ]
+    }
+  },
+  {
+    "name": "DG-07 invalid expression in interpolation surfaces AU1203",
+    "markup": "<div>${foo(}</div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "foo(", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1203" }
+      ]
+    }
+  },
+  {
+    "name": "DG-08 object destructuring with default value extracts name correctly",
+    "markup": "<ul repeat.for=\"{x = 5} of items\"><li>${x}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "x" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "x", "frame": "overlay:iterator@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "DG-09 array destructuring with default value extracts name correctly",
+    "markup": "<ul repeat.for=\"[a = 1, b = 2] of items\"><li>${a}-${b}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "a" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "b" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "b", "frame": "overlay:iterator@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "DG-10 deeply nested destructuring extracts all names",
+    "markup": "<ul repeat.for=\"{a: {b: {c}}} of items\"><li>${c}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "c" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "c", "frame": "overlay:iterator@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "DG-11 mixed array/object destructuring extracts all names",
+    "markup": "<ul repeat.for=\"[{x}, [y, z]] of items\"><li>${x}-${y}-${z}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "x" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "y" },
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "z" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "x", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "y", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "z", "frame": "overlay:iterator@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "DG-12 multiple expression errors accumulate",
+    "markup": "<div title.bind=\"foo(\" class.bind=\"bar[\"></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "foo(", "frame": "root" },
+        { "kind": "expr", "code": "bar[", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1203" },
+        { "code": "AU1203" }
+      ]
+    }
+  },
+  {
+    "name": "DG-13 let shadowing contextual variable -> AU1202",
+    "markup": "<ul repeat.for=\"i of items\"><let $index.bind=\"0\"></let></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "i" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "0", "frame": "overlay:iterator@1" }
+      ],
+      "diags": [
+        { "code": "AU1202" }
+      ]
+    }
+  },
+  {
+    "name": "DG-14 invalid expression in controller value surfaces AU1203",
+    "markup": "<div if.bind=\"foo(\"></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "foo(", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1203" }
+      ]
+    }
+  },
+  {
+    "name": "DG-15 invalid expression in repeat collection surfaces AU1201",
+    "markup": "<ul repeat.for=\"i of items[\"></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" }
+      ],
+      "diags": [
+        { "code": "AU1201" }
+      ]
+    }
+  },
+  {
+    "name": "DG-16 object destructuring with renamed property extracts alias",
+    "markup": "<ul repeat.for=\"{x: renamed} of items\"><li>${renamed}</li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "renamed" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "renamed", "frame": "overlay:iterator@1" }
+      ],
+      "diags": []
     }
   }
 ]
