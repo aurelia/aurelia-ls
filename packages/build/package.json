@@ -30,22 +30,17 @@
     }
   },
   "dependencies": {
-    "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/resolution": "workspace:*",
-    "@aurelia-ls/transform": "workspace:*",
-    "@aurelia/kernel": "file:../../aurelia/packages/kernel",
-    "@aurelia/metadata": "file:../../aurelia/packages/metadata",
-    "@aurelia/platform": "file:../../aurelia/packages/platform",
-    "@aurelia/platform-browser": "file:../../aurelia/packages/platform-browser",
-    "@aurelia/runtime": "file:../../aurelia/packages/runtime",
-    "@aurelia/runtime-html": "file:../../aurelia/packages/runtime-html",
-    "@aurelia/router": "file:../../aurelia/packages/router",
-    "@aurelia/expression-parser": "file:../../aurelia/packages/expression-parser",
-    "@aurelia/template-compiler": "file:../../aurelia/packages/template-compiler",
-    "jsdom": "^25.0.1"
+    "@aurelia-ls/ssr": "workspace:*",
+    "@aurelia-ls/ssg": "workspace:*",
+    "@aurelia-ls/vite-plugin": "workspace:*"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
+    "jsdom": "^25.0.1",
+    "@aurelia/kernel": "file:../../aurelia/packages/kernel",
+    "@aurelia/platform-browser": "file:../../aurelia/packages/platform-browser",
+    "@aurelia/runtime-html": "file:../../aurelia/packages/runtime-html",
+    "@aurelia/router": "file:../../aurelia/packages/router",
     "vite": "^6.0.0"
   }
 }

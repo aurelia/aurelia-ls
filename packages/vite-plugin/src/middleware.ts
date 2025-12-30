@@ -13,8 +13,7 @@
 
 import type { Connect, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { AotCompileResult } from "../aot.js";
-import { renderWithComponents } from "../ssr/render.js";
+import { renderWithComponents, type AotCompileResult } from "@aurelia-ls/ssr";
 import type { ISSRManifest } from "@aurelia/runtime-html";
 import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
 import { loadProjectComponents } from "./loader.js";
@@ -250,4 +249,3 @@ window.__AU_SSR_SCOPE__=${JSON.stringify(manifest.manifest)};
 
   return html;
 }
-

@@ -17,8 +17,7 @@
 import type { ViteDevServer } from "vite";
 import { readFile } from "node:fs/promises";
 import type { ResolutionContext } from "./types.js";
-import type { ComponentClass } from "../ssr/patch.js";
-import { compileWithAot, type AotCompileResult } from "../aot.js";
+import { compileWithAot, type AotCompileResult, type ComponentClass } from "@aurelia-ls/ssr";
 
 /**
  * A loaded component with its class and compiled template.

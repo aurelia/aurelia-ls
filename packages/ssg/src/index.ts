@@ -10,5 +10,19 @@
  * - expandPath() - Dynamic path expansion
  */
 
-// TODO: Move exports from @aurelia-ls/build/ssg here
-export {};
+export type {
+  SSGOptions,
+  ResolvedSSGOptions,
+  SSGResult,
+  SSGError,
+  ExpandedRoute,
+} from "./types.js";
+
+export {
+  generateStaticSite,
+  createStaticPathsResolver,
+  expandPath,
+  collectStaticRoutes,
+  type RenderFn,
+  type StaticPathsResolver,
+} from "./generator.js";

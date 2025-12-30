@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "@aurelia/vite-plugin": "workspace:*",
-    "@aurelia-ls/build": "workspace:*",
+    "@aurelia-ls/vite-plugin": "workspace:*",
     "typescript": "^5.4.0",
     "vite": "^6.0.0"
   }

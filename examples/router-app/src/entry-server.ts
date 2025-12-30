@@ -11,7 +11,7 @@
  *                    const { html } = await handler.render('/about')
  */
 
-import { createSSRHandler } from '@aurelia-ls/build';
+import { createSSRHandler } from '@aurelia-ls/ssr';
 import { Registration, IContainer } from '@aurelia/kernel';
 import { AppTask } from 'aurelia';
 import {

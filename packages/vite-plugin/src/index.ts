@@ -26,5 +26,30 @@
  * ```
  */
 
-// TODO: Move exports from @aurelia-ls/build/vite here
-export {};
+// Main plugin export
+export { aureliaSSR } from "./plugin.js";
+
+// Component loading utilities
+export {
+  loadProjectComponents,
+  loadComponent,
+  type LoadedComponent,
+  type LoadProjectComponentsResult,
+} from "./loader.js";
+
+// Type exports
+export type {
+  AureliaSSRPluginOptions,
+  StateProvider,
+  ResolvedSSROptions,
+  ResolutionContext,
+} from "./types.js";
+
+// Re-export SSG types for convenience
+export type {
+  SSGOptions,
+  ResolvedSSGOptions,
+  SSGResult,
+  SSGError,
+  ExpandedRoute,
+} from "@aurelia-ls/ssg";

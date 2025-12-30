@@ -1,74 +1,17 @@
 /**
- * @aurelia-ls/build - Build tools and SSR for Aurelia
+ * @aurelia-ls/build - DEPRECATED
  *
- * This package provides:
- * - Server-side rendering (SSR) for Aurelia templates
- * - AOT compilation utilities
- * - Build tool integrations (Vite) [in progress]
+ * This package has been split into focused packages:
+ * - @aurelia-ls/ssr - SSR rendering core
+ * - @aurelia-ls/ssg - Static site generation
+ * - @aurelia-ls/vite-plugin - Vite integration
  *
- * Key principle: Components define their own state naturally. No external
- * state injection - parent-child communication happens via bindables.
+ * This re-export layer exists for backward compatibility.
+ * Migrate to the new packages for future development.
  */
 
-// SSR Core
-export * from "./ssr/index.js";
+// Re-export everything from @aurelia-ls/ssr
+export * from "@aurelia-ls/ssr";
 
-// SSR Handler (production entry point)
-export {
-  createSSRHandler,
-  isSSRHandler,
-  type SSRHandler,
-  type SSRHandlerConfig,
-  type SSRRenderOptions,
-  type SSRResult,
-} from "./ssr/handler.js";
-
-// Re-export compile functions from compiler for convenience
-export {
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  emitTemplate,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
-  type AotPlanModule,
-  type AotCodeResult,
-  type SerializedDefinition,
-  type TemplateEmitResult,
-  type Semantics,
-  type ResourceGraph,
-  type ResourceScopeId,
-} from "@aurelia-ls/compiler";
-
-// AOT compilation API
-export {
-  compileWithAot,
-  compileAndRenderAot,
-  type AotCompileOptions,
-  type AotCompileResult,
-  type CompileAndRenderAotOptions,
-  type CompileAndRenderAotResult,
-} from "./aot.js";
-
-// SSG (Static Site Generation) - still in progress
-export {
-  generateStaticSite,
-  createStaticPathsResolver,
-  expandPath,
-  collectStaticRoutes,
-  type SSGOptions,
-  type ResolvedSSGOptions,
-  type SSGResult,
-  type SSGError,
-  type ExpandedRoute,
-  type RenderFn,
-  type StaticPathsResolver,
-} from "./ssg/index.js";
-
-// Runtime re-exports for SSR consumers
-export { DI, Registration } from "@aurelia/kernel";
-export { Aurelia, IPlatform, StandardConfiguration, CustomElement } from "@aurelia/runtime-html";
-export type { IInstruction } from "@aurelia/template-compiler";
+// Re-export everything from @aurelia-ls/ssg
+export * from "@aurelia-ls/ssg";

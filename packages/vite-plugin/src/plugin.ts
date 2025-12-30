@@ -9,7 +9,7 @@
  * ```typescript
  * import { defineConfig } from 'vite';
  * import aurelia from '@aurelia/vite-plugin';
- * import { aureliaSSR } from '@aurelia-ls/build/vite';
+ * import { aureliaSSR } from '@aurelia-ls/vite-plugin';
  *
  * export default defineConfig({
  *   plugins: [
@@ -33,12 +33,11 @@ import {
   analyzeEntryPoint,
   type ResourceDefinition,
 } from "@aurelia-ls/transform";
+import { compileWithAot, isSSRHandler, type SSRHandler } from "@aurelia-ls/ssr";
+import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
-import { compileWithAot } from "../aot.js";
-import { generateStaticSite, type SSGResult } from "../ssg/index.js";
-import { isSSRHandler, type SSRHandler } from "../ssr/handler.js";
 import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
 import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 

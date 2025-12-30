@@ -18,7 +18,10 @@
     "@aurelia-ls/compiler": "workspace:*",
     "@aurelia-ls/resolution": "workspace:*",
     "@aurelia-ls/transform": "workspace:*",
-    "@aurelia-ls/ssr": "workspace:*"
+    "@aurelia-ls/ssr": "workspace:*",
+    "@aurelia-ls/ssg": "workspace:*",
+    "@aurelia/kernel": "file:../../aurelia/packages/kernel",
+    "@aurelia/runtime-html": "file:../../aurelia/packages/runtime-html"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0",

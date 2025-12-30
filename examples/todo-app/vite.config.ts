@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import aurelia from '@aurelia/vite-plugin';
-import { aureliaSSR } from '@aurelia-ls/build/vite';
+import { aureliaSSR } from '@aurelia-ls/vite-plugin';
 
 // Custom HTML shell for SSR with hydration support
 // <!--ssr-state--> is replaced with serialized state for client hydration
