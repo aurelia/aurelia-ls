@@ -13,18 +13,17 @@
  * ============================================================================= */
 
 import type {
-  ExprId,
-  NodeId,
-  FrameId,
-  SourceSpan,
-  ExprTableEntry,
   BindingSourceIR,
-  TemplateNode,
+  CommentNode,
   DOMNode,
   ElementNode,
+  ExprId,
+  ExprTableEntry,
+  FrameId,
+  NodeId,
+  SourceSpan,
+  TemplateNode,
   TextNode,
-  CommentNode,
-  BindingIdentifierOrPattern,
 } from "../../model/index.js";
 
 import type { ScopeModule, ScopeTemplate, ScopeFrame, ScopeSymbol } from "../../model/symbols.js";
@@ -79,8 +78,6 @@ import type {
   PlanLocal,
   PlanLocalSource,
 } from "./types.js";
-
-import { getControllerConfig } from "../../language/registry.js";
 
 /* =============================================================================
  * Public API

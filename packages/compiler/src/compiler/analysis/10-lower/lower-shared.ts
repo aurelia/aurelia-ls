@@ -1,7 +1,6 @@
 import type { DefaultTreeAdapterMap, Token } from "parse5";
 
 import type {
-  AnyBindingExpression,
   BindingMode,
   ExprId,
   ExprRef,

@@ -28,7 +28,6 @@ import {
   type BindingContext,
   resolveTypecheckConfig,
   checkTypeCompatibility,
-  DEFAULT_TYPECHECK_CONFIG,
 } from "./config.js";
 
 // Re-export config types for consumers

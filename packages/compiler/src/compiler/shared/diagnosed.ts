@@ -146,9 +146,9 @@ export function require<T>(
   if (value == null) {
     const d = mkDiag();
     const stubbed = typeof fallback === "object" && fallback !== null
-      ? withStub(fallback as T & object, { diagnostic: d })
+      ? withStub(fallback, { diagnostic: d })
       : fallback;
-    return diag(d, stubbed as T);
+    return diag(d, stubbed);
   }
   return pure(value);
 }
@@ -167,9 +167,9 @@ export function lookup<V>(
   if (value === undefined) {
     const d = mkDiag();
     const stubbed = typeof fallback === "object" && fallback !== null
-      ? withStub(fallback as V & object, { diagnostic: d })
+      ? withStub(fallback, { diagnostic: d })
       : fallback;
-    return diag(d, stubbed as V);
+    return diag(d, stubbed);
   }
   return pure(value);
 }

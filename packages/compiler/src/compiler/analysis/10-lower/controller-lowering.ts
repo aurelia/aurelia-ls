@@ -1,9 +1,7 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ControllerConfig, Semantics } from "../../language/registry.js";
-import { getTriggerProp } from "../../language/registry.js";
 import type {
-  AttributeBindingIR,
   ControllerBindableIR,
   ControllerBranchInfo,
   ExprRef,
@@ -11,11 +9,10 @@ import type {
   InstructionIR,
   IteratorBindingIR,
   MultiAttrIR,
-  PropertyBindingIR,
-  SetPropertyIR,
-  TemplateIR,
   NodeId,
+  PropertyBindingIR,
   SourceSpan,
+  TemplateIR,
 } from "../../model/ir.js";
 import { resolveControllerAttr } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Loc, P5Node, P5Template } from "./lower-shared.js";

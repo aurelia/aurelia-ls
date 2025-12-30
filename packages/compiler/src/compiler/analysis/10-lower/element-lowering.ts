@@ -426,7 +426,7 @@ export function resolveControllerAttr(
 
   // 3. Legacy fallback: check sem.resources.controllers
   // This maintains backward compatibility with existing code that adds to controllers directly
-  const legacyController = sem.resources.controllers[target as ControllerName];
+  const legacyController = sem.resources.controllers[target];
   if (legacyController) {
     // For legacy controllers, create a minimal config
     // The toControllerConfig() function handles full conversion if needed
@@ -454,5 +454,5 @@ export function isControllerAttr(
  * Helper for code that still uses string-based controller names.
  */
 export function getControllerName(config: ControllerConfig): ControllerName {
-  return config.name as ControllerName;
+  return config.name;
 }
