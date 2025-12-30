@@ -137,8 +137,21 @@ export type {
 } from "./compiler/index.js";
 
 // Analysis (for build tools)
-export { lowerDocument, resolveHost, bindScopes, typecheck, planOverlay, emitOverlay, emitMappedExpression } from "./compiler/index.js";
-export type { BuildIrOptions } from "./compiler/index.js";
+export {
+  lowerDocument,
+  resolveHost,
+  bindScopes,
+  typecheck,
+  planOverlay,
+  emitOverlay,
+  emitMappedExpression,
+  // Typecheck configuration
+  resolveTypecheckConfig,
+  checkTypeCompatibility,
+  DEFAULT_TYPECHECK_CONFIG,
+  TYPECHECK_PRESETS,
+} from "./compiler/index.js";
+export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./compiler/index.js";
 export type {
   // Linked semantics (for semantic tokens, etc.)
   LinkedSemanticsModule,

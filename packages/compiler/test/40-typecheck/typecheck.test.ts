@@ -57,6 +57,9 @@ runVectorTests<TypecheckExpect, TypecheckIntent, TypecheckDiff>({
       scope,
       ir,
       rootVmType: v.rootVmType ?? "RootVm",
+      // Use "standard" preset for tests to get full error detection
+      // (default is "lenient" for better user experience)
+      config: { preset: "standard" },
     });
     return reduceTypecheckIntent({ ir, tc });
   },

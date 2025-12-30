@@ -52,7 +52,20 @@ export type {
 export { bindScopes } from "./30-bind/bind.js";
 
 // Stage 40: Typecheck (ScopeModule -> TypecheckModule)
-export { typecheck, type TypecheckOptions, type TypecheckModule, type TypecheckDiagnostic } from "./40-typecheck/typecheck.js";
+export {
+  typecheck,
+  resolveTypecheckConfig,
+  checkTypeCompatibility,
+  DEFAULT_TYPECHECK_CONFIG,
+  TYPECHECK_PRESETS,
+  type TypecheckOptions,
+  type TypecheckModule,
+  type TypecheckDiagnostic,
+  type TypecheckConfig,
+  type TypecheckSeverity,
+  type BindingContext,
+  type TypeCompatibilityResult,
+} from "./40-typecheck/typecheck.js";
 
 // Shared analysis utilities
 export { buildScopeLookup, type ScopeLookup } from "./shared/scope-lookup.js";

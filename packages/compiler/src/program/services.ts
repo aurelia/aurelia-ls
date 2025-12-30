@@ -934,7 +934,8 @@ function mapCompilerDiagnostic(
 }
 
 function isTypecheckMismatch(diag: CompilerDiagnostic): diag is TypecheckDiagnostic {
-  return diag.code === "AU1301" && diag.source === "typecheck";
+  // AU1301 = error, AU1302 = warning, AU1303 = info (all are type mismatches)
+  return (diag.code === "AU1301" || diag.code === "AU1302" || diag.code === "AU1303") && diag.source === "typecheck";
 }
 
 function lookupQuickInfoType(

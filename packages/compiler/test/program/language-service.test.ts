@@ -198,7 +198,7 @@ test("TypeScript diagnostics replace overlay aliases with VM display names", () 
   }
 });
 
-test("suppresses AU1301 when TypeScript confirms matching type", () => {
+test("suppresses typecheck mismatch when TypeScript confirms matching type", () => {
   const program = new DefaultTemplateProgram({
     vm: {
       getRootVmTypeExpr() { return "MyVm"; },
@@ -213,6 +213,7 @@ test("suppresses AU1301 when TypeScript confirms matching type", () => {
   program.upsertTemplate(uri, markup);
 
   const compilation = program.getCompilation(uri);
+
   const mappingEntry = compilation.mapping.entries[0];
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
 
@@ -234,7 +235,7 @@ test("suppresses AU1301 when TypeScript confirms matching type", () => {
 
   const diags = service.getDiagnostics(uri);
   expect(quickInfoHits > 0, "should consult TypeScript quick info for typecheck mismatches").toBeTruthy();
-  expect(diags.compiler.length, "matching types should suppress AU1301 noise").toBe(0);
+  expect(diags.compiler.length, "matching types should suppress typecheck noise").toBe(0);
   expect(diags.all.length, "no diagnostics should remain when types align").toBe(0);
 });
 
