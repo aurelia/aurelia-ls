@@ -245,5 +245,64 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "R-D-40 unknown custom element surfaces AU1102",
+    "markup": "<my-widget></my-widget>",
+    "expect": {
+      "items": [],
+      "diags": [
+        { "code": "AU1102" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-41 unknown custom element with multiple props -> AU1102 only (AU1104 suppressed)",
+    "comment": "Root cause is unknown element; property errors are cascading and suppressed",
+    "markup": "<my-widget foo.bind=\"a\" bar.bind=\"b\" baz.bind=\"c\"></my-widget>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" },
+        { "kind": "prop", "to": "bar", "target": "unknown", "effectiveMode": "toView" },
+        { "kind": "prop", "to": "baz", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1102" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-42 native element (no dash) with unknown prop still surfaces AU1104",
+    "comment": "Native elements don't trigger AU1102 since they're not custom elements",
+    "markup": "<div unknownprop.bind=\"x\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "unknownprop", "target": "unknown", "effectiveMode": "toView" }
+      ],
+      "diags": [
+        { "code": "AU1104" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-43 registered custom element has no AU1102",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-component": {
+            "kind": "element",
+            "name": "my-component",
+            "bindables": { "value": { "name": "value" } }
+          }
+        }
+      }
+    },
+    "markup": "<my-component value.bind=\"x\"></my-component>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
   }
 ]

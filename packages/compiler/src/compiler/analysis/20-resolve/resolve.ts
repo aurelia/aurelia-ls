@@ -194,6 +194,11 @@ function buildLookupOpts(opts: ResolveHostOptions): SemanticsLookupOptions {
 function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
   const idToNode = new Map<NodeId, DOMNode>();
   indexDom(t.dom, idToNode);
+
+  // Validate unknown custom elements across the entire DOM tree.
+  // This emits AU1102 for any custom element tag that isn't registered.
+  validateUnknownElements(t.dom, ctx);
+
   const rows: LinkedRow[] = t.rows.map((row) => {
     const dom = idToNode.get(row.target);
     const nodeSem = resolveNodeSem(dom, ctx.lookup);
@@ -457,6 +462,35 @@ function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
       break;
     default:
       break;
+  }
+}
+
+/**
+ * Walk the DOM tree to emit AU1102 for truly unknown custom elements.
+ * This catches elements that have no instruction rows (no bindings).
+ *
+ * TODO: For auto-import, the resolution package should track a third layer:
+ * resources that exist in the project or dependencies but aren't registered.
+ * That would enable suggestions like "Did you mean to import 'x-widget'?"
+ */
+function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
+  if (n.kind === "element") {
+    const nodeSem = resolveNodeSem(n, ctx.lookup);
+    if (nodeSem.kind === "element" && isUnknownCustomElement(nodeSem, ctx.graph)) {
+      pushDiag(
+        ctx.diags,
+        "AU1102",
+        `Unknown custom element '<${nodeSem.tag}>'.`,
+        n.loc,
+      );
+    }
+  }
+
+  // Recurse into children
+  if (n.kind === "element" || n.kind === "template") {
+    for (const c of n.children) {
+      validateUnknownElements(c, ctx);
+    }
   }
 }
 

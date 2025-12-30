@@ -62,7 +62,7 @@ export type SemDiagCode =
 
   // ─── Host Semantics Errors (AU11xx) ────────────────────────────────────────
   | "AU1101" // Unknown controller
-  | "AU1102" // Unknown element/attribute resource (reserved; currently unused)
+  | "AU1102" // Unknown custom element (root cause for cascade suppression)
   | "AU1103" // Unknown event
   | "AU1104" // Property target not found on host
   | "AU1105" // Repeat missing iterator binding (reserved)
