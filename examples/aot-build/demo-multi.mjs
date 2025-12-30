@@ -28,11 +28,11 @@ const args = process.argv.slice(2);
 const shouldEmit = args.includes("--emit") || args.includes("-e");
 
 // Import from local packages
-const buildPath = pathToFileURL(resolve(rootDir, "packages/build/out/index.js")).href;
+const ssrPath = pathToFileURL(resolve(rootDir, "packages/ssr/out/index.js")).href;
 const transformPath = pathToFileURL(resolve(rootDir, "packages/transform/out/index.js")).href;
 const resolutionPath = pathToFileURL(resolve(rootDir, "packages/resolution/out/index.js")).href;
 
-const { compileWithAot } = await import(buildPath);
+const { compileWithAot } = await import(ssrPath);
 const { transform } = await import(transformPath);
 const { resolve: runResolution } = await import(resolutionPath);
 

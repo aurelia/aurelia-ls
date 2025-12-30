@@ -22,11 +22,11 @@ const packagesRoot = resolve(projectRoot, '../..');
 
 // Import the transform package dynamically (from workspace)
 const transformPath = pathToFileURL(resolve(packagesRoot, 'packages/transform/out/index.js')).href;
-const buildPath = pathToFileURL(resolve(packagesRoot, 'packages/build/out/index.js')).href;
+const ssrPath = pathToFileURL(resolve(packagesRoot, 'packages/ssr/out/index.js')).href;
 const resolutionPath = pathToFileURL(resolve(packagesRoot, 'packages/resolution/out/index.js')).href;
 
 const { transform } = await import(transformPath);
-const { compileWithAot } = await import(buildPath);
+const { compileWithAot } = await import(ssrPath);
 const { resolve: runResolution } = await import(resolutionPath);
 
 console.log('='.repeat(60));

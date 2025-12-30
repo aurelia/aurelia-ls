@@ -15,7 +15,8 @@
     "preview": "npx serve dist"
   },
   "dependencies": {
-    "@aurelia-ls/build": "workspace:*",
+    "@aurelia-ls/vite-plugin": "workspace:*",
+    "@aurelia-ls/ssr": "workspace:*",
     "@aurelia/expression-parser": "*",
     "@aurelia/kernel": "*",
     "@aurelia/metadata": "*",

@@ -1,0 +1,38 @@
+{
+  "name": "@aurelia-ls/vite-plugin",
+  "version": "0.2.0",
+  "description": "Vite plugin for Aurelia with AOT compilation and SSR",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aurelia-ls/compiler": "workspace:*",
+    "@aurelia-ls/resolution": "workspace:*",
+    "@aurelia-ls/transform": "workspace:*",
+    "@aurelia-ls/ssr": "workspace:*",
+    "@aurelia-ls/ssg": "workspace:*",
+    "@aurelia/kernel": "file:../../aurelia/packages/kernel",
+    "@aurelia/runtime-html": "file:../../aurelia/packages/runtime-html"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

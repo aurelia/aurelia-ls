@@ -1,6 +1,7 @@
 {
   "name": "@aurelia-ls/resolution",
   "version": "0.2.0",
+  "description": "Resource discovery and dependency graph for Aurelia 2 projects",
   "type": "module",
   "main": "./out/index.js",
   "types": "./out/index.d.ts",

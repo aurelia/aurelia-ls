@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import aureliaPlugin from '@aurelia/vite-plugin';
-import { aureliaSSR } from '@aurelia-ls/build/vite';
+import { aureliaSSR } from '@aurelia-ls/vite-plugin';
 import { Registration, IContainer } from '@aurelia/kernel';
 import { AppTask } from 'aurelia';
 import {

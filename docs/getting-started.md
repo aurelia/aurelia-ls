@@ -64,7 +64,7 @@ npm test
 # Specific package
 npm run test:compiler
 npm run test:resolution
-npm run test:build-ssr
+npm run test:ssr
 ```
 
 ## VS Code Extension

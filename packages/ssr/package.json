@@ -1,0 +1,41 @@
+{
+  "name": "@aurelia-ls/ssr",
+  "version": "0.2.0",
+  "description": "Server-side rendering for Aurelia applications",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aurelia-ls/compiler": "workspace:*",
+    "@aurelia/kernel": "file:../../aurelia/packages/kernel",
+    "@aurelia/metadata": "file:../../aurelia/packages/metadata",
+    "@aurelia/platform": "file:../../aurelia/packages/platform",
+    "@aurelia/platform-browser": "file:../../aurelia/packages/platform-browser",
+    "@aurelia/runtime": "file:../../aurelia/packages/runtime",
+    "@aurelia/runtime-html": "file:../../aurelia/packages/runtime-html",
+    "@aurelia/expression-parser": "file:../../aurelia/packages/expression-parser",
+    "@aurelia/template-compiler": "file:../../aurelia/packages/template-compiler",
+    "jsdom": "^25.0.1"
+  },
+  "peerDependencies": {
+    "@aurelia/router": "*"
+  },
+  "peerDependenciesMeta": {
+    "@aurelia/router": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@aurelia/router": "file:../../aurelia/packages/router"
+  }
+}

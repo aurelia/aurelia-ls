@@ -11,6 +11,7 @@
     "url": "https://github.com/aurelia/aurelia-ls"
   },
   "scripts": {
+    "build": "tsc -b",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },

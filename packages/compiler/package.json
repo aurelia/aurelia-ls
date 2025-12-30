@@ -1,6 +1,7 @@
 {
   "name": "@aurelia-ls/compiler",
   "version": "0.2.0",
+  "description": "Ahead-of-time template compiler for Aurelia 2",
   "type": "module",
   "main": "./out/index.js",
   "types": "./out/index.d.ts",

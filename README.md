@@ -50,7 +50,9 @@ The demo shows server-rendered HTML with client hydration. View source to see th
 | `@aurelia-ls/compiler` | Template analysis and AOT code generation |
 | `@aurelia-ls/resolution` | Resource discovery from TypeScript sources |
 | `@aurelia-ls/transform` | Injects compiled artifacts into source files |
-| `@aurelia-ls/build` | SSR runtime and Vite plugin |
+| `@aurelia-ls/vite-plugin` | Vite integration for dev server and builds |
+| `@aurelia-ls/ssr` | Server-side rendering core |
+| `@aurelia-ls/ssg` | Static site generation |
 | `@aurelia-ls/language-server` | Language Server Protocol implementation |
 | `aurelia-2` | VS Code extension ([marketplace](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2)) |
 

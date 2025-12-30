@@ -19,7 +19,7 @@
     "@aurelia/runtime-html": "*",
     "@aurelia/expression-parser": "*",
     "@aurelia/template-compiler": "*",
-    "@aurelia-ls/build": "workspace:*"
+    "@aurelia-ls/vite-plugin": "workspace:*"
   },
   "devDependencies": {
     "@aurelia/vite-plugin": "*",
