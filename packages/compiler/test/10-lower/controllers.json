@@ -616,5 +616,60 @@
         { "kind": "iterator", "code": "x of xs" }
       ]
     }
+  },
+  {
+    "name": "LC-44 custom template controller via isTemplateController attribute",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "my-tc": {
+            "kind": "attribute",
+            "name": "my-tc",
+            "isTemplateController": true,
+            "bindables": {
+              "value": { "name": "value" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div my-tc.bind=\"ctx\"><span>content</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "my-tc" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "ctx" }
+      ]
+    }
+  },
+  {
+    "name": "LC-45 custom TC with literal value (no command)",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "custom-if": {
+            "kind": "attribute",
+            "name": "custom-if",
+            "isTemplateController": true,
+            "bindables": {
+              "value": { "name": "value" }
+            },
+            "primary": "value"
+          }
+        }
+      }
+    },
+    "markup": "<div custom-if=\"true\"><span>shown</span></div>",
+    "expect": {
+      "controllers": [
+        { "name": "custom-if" }
+      ],
+      "expressions": [
+        { "kind": "controllerValue", "command": "bind", "code": "true" }
+      ]
+    },
+    "_comment": "For LSP, TC values are treated as expressions for scope resolution. Note: runtime uses SetPropertyInstruction for literals."
   }
 ]

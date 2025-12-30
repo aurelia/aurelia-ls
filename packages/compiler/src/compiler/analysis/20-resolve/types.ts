@@ -277,13 +277,23 @@ export interface IteratorAuxSpec {
  * - `branch` carries branch shape for promise/switch when applicable.
  * - `containerless` mirrors IR (useful for emit).
  */
+/**
+ * Linked bindable types for template controller props.
+ * Matches IR ControllerBindableIR after resolution.
+ */
+export type LinkedControllerBindable =
+  | LinkedPropertyBinding
+  | LinkedIteratorBinding
+  | LinkedSetProperty
+  | LinkedAttributeBinding;
+
 export interface LinkedHydrateTemplateController extends BaseLinked {
   kind: "hydrateTemplateController";
   /** Controller name (built-in like "repeat", "if", or custom TC name). */
   res: string;
   def: TemplateIR;
   controller: ControllerSem;
-  props: (LinkedPropertyBinding | LinkedIteratorBinding)[];
+  props: LinkedControllerBindable[];
   containerless?: boolean;
   branch?: ControllerBranch | null;
 }

@@ -869,6 +869,39 @@ function linkHydrateTemplateController(
         loc: p.loc ?? null,
       };
       return linked;
+    } else if (p.type === "setProperty") {
+      // Literal value - matches runtime SetPropertyInstruction
+      const to = normalizePropLikeName(host, p.to, ctx.lookup);
+      const target: TargetSem = {
+        kind: "controller.prop",
+        controller: ctrlSem,
+        bindable: resolveControllerBindable(ctrlSem, to),
+      };
+      const linked: LinkedSetProperty = {
+        kind: "setProperty",
+        to,
+        value: p.value,
+        target,
+        loc: p.loc ?? null,
+      };
+      return linked;
+    } else if (p.type === "attributeBinding") {
+      // Interpolation binding on controller prop
+      const to = normalizePropLikeName(host, p.to, ctx.lookup);
+      const target: TargetSem = {
+        kind: "controller.prop",
+        controller: ctrlSem,
+        bindable: resolveControllerBindable(ctrlSem, to),
+      };
+      const linked: LinkedAttributeBinding = {
+        kind: "attributeBinding",
+        attr: p.attr,
+        to,
+        from: p.from,
+        target,
+        loc: p.loc ?? null,
+      };
+      return linked;
     } else {
       /* c8 ignore next -- type exhaustiveness guard */
       return assertUnreachable(p as never);

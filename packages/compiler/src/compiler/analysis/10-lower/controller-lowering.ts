@@ -3,6 +3,8 @@ import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ControllerConfig, Semantics } from "../../language/registry.js";
 import { getTriggerProp } from "../../language/registry.js";
 import type {
+  AttributeBindingIR,
+  ControllerBindableIR,
   ControllerBranchInfo,
   ExprRef,
   HydrateTemplateControllerIR,
@@ -10,13 +12,14 @@ import type {
   IteratorBindingIR,
   MultiAttrIR,
   PropertyBindingIR,
+  SetPropertyIR,
   TemplateIR,
   NodeId,
   SourceSpan,
 } from "../../model/ir.js";
 import { resolveControllerAttr } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Loc, P5Node, P5Template } from "./lower-shared.js";
-import { attrLoc, attrValueLoc, findAttr, parseRepeatTailProps, toExprRef, toSpan } from "./lower-shared.js";
+import { attrLoc, attrValueLoc, findAttr, parseRepeatTailProps, toBindingSource, toExprRef, toMode, toSpan, tryToInterpIR } from "./lower-shared.js";
 import type { RowCollector } from "./template-builders.js";
 import {
   makeWrapperTemplate,
@@ -54,7 +57,7 @@ function isExprRef(source: PropertyBindingIR["from"]): source is ExprRef {
  */
 function buildSwitchBranchInfo(
   config: ControllerConfig,
-  props: (PropertyBindingIR | IteratorBindingIR)[]
+  props: ControllerBindableIR[]
 ): ControllerBranchInfo | null {
   // Only handle switch branch controllers
   if (config.linksTo !== "switch") return null;
@@ -120,21 +123,64 @@ function buildLiteralOrBindingProps(
   };
 }
 
-function buildPropertyProps(
+/**
+ * Build value props for a template controller.
+ *
+ * For LSP/type-checking purposes, template controllers need expression bindings
+ * to resolve scope types. This differs from runtime behavior (which uses
+ * SetPropertyInstruction for literals) but is necessary for IDE features.
+ *
+ * Behavior:
+ * 1. With binding command → PropertyBindingIR with resolved mode
+ * 2. No command + interpolation → AttributeBindingIR with InterpIR
+ * 3. No command + no interpolation → PropertyBindingIR with value as expression
+ *    (empty value uses controller name, e.g., `<div if>` → expression "if")
+ */
+function buildValueProps(
   raw: string,
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
   propName: string,
-  controllerName: string
-): PropertyBindingIR {
+  controllerName: string,
+  command: string | null
+): ControllerBindableIR {
+  const locSpan = toSpan(loc, table.source);
   const exprText = raw.length === 0 ? controllerName : raw;
+
+  // Case 1: Has binding command (e.g., if.bind="expr")
+  if (command) {
+    return {
+      type: "propertyBinding",
+      to: propName,
+      from: toBindingSource(exprText, valueLoc, table, "IsProperty"),
+      mode: toMode(command, controllerName),
+      loc: locSpan,
+    };
+  }
+
+  // Case 2: No command - check for interpolation
+  const interp = tryToInterpIR(raw, valueLoc, table);
+  if (interp) {
+    return {
+      type: "attributeBinding",
+      attr: controllerName,
+      to: propName,
+      from: interp,
+      loc: locSpan,
+    };
+  }
+
+  // Case 3: No command, no interpolation → PropertyBinding
+  // Treat value as expression for scope resolution (needed for LSP type-checking).
+  // Note: Runtime uses SetPropertyInstruction for literals, but we need
+  // expression semantics to resolve types in templates like `<div with="obj">`.
   return {
     type: "propertyBinding",
     to: propName,
-    from: toExprRef(exprText, valueLoc, table, "IsProperty"),
+    from: toBindingSource(exprText, valueLoc, table, "IsProperty"),
     mode: "default",
-    loc: toSpan(loc, table.source),
+    loc: locSpan,
   };
 }
 
@@ -200,7 +246,7 @@ export function collectControllers(
 
 type ControllerPrototype = {
   res: string;
-  props: (PropertyBindingIR | IteratorBindingIR)[];
+  props: ControllerBindableIR[];
 };
 
 function buildControllerPrototype(
@@ -231,7 +277,7 @@ function buildControllerPrototype(
       return { res: name, props: [] };
 
     case "value":
-      return { res: name, props: [buildPropertyProps(raw, valueLoc, loc, table, trigger.prop, name)] };
+      return { res: name, props: [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, s.command)] };
   }
 }
 
@@ -279,7 +325,7 @@ function buildPropsForConfig(
   loc: P5Loc,
   table: ExprTable,
   command: string | null
-): (PropertyBindingIR | IteratorBindingIR)[] {
+): ControllerBindableIR[] {
   const trigger = config.trigger;
   const name = config.name;
 
@@ -295,14 +341,14 @@ function buildPropsForConfig(
       }
       return [];
     case "value":
-      return [buildPropertyProps(raw, valueLoc, loc, table, trigger.prop, name)];
+      return [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, command)];
   }
 }
 
 function createHydrateInstruction(
   res: string,
   def: TemplateIR,
-  props: (PropertyBindingIR | IteratorBindingIR)[],
+  props: ControllerBindableIR[],
   loc: SourceSpan | null,
   branch: ControllerBranchInfo | null = null
 ): HydrateTemplateControllerIR {

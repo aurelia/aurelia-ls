@@ -146,26 +146,45 @@ export function toBindingSource(
   return toExprRef(val, loc, table, exprKind);
 }
 
+/**
+ * Try to parse text as interpolation. Returns null if no interpolation found.
+ *
+ * Matches runtime pattern (template-compiler.ts:1072):
+ * `expr = context._exprParser.parse(attrValue, etInterpolation);`
+ * where null means literal value, non-null means interpolation.
+ */
+export function tryToInterpIR(
+  text: string,
+  loc: P5Loc | null,
+  table: ExprTable
+): InterpIR | null {
+  const split = extractInterpolationSegments(text);
+  if (!split) return null;
+
+  const exprs: ExprRef[] = [];
+  const locStart = loc?.startOffset ?? 0;
+  for (const { span, code } of split.expressions) {
+    const exprLoc: P5Loc | null = loc
+      ? { ...loc, startOffset: locStart + span.start, endOffset: locStart + span.end }
+      : null;
+    exprs.push(table.add(code, exprLoc, "IsProperty"));
+  }
+
+  return { kind: "interp", parts: split.parts, exprs, loc: toSpan(loc, table.source) };
+}
+
+/**
+ * Parse text as interpolation. If no interpolation found, returns InterpIR
+ * with the text as a single literal part (no expressions).
+ *
+ * Use `tryToInterpIR` when you need to distinguish literals from interpolations.
+ */
 export function toInterpIR(
   text: string,
   loc: P5Loc | null,
   table: ExprTable
 ): InterpIR {
-  const split = extractInterpolationSegments(text);
-  const parts = split ? split.parts : [text];
-  const exprs: ExprRef[] = [];
-
-  if (split) {
-    const locStart = loc?.startOffset ?? 0;
-    for (const { span, code } of split.expressions) {
-      const exprLoc: P5Loc | null = loc
-        ? { ...loc, startOffset: locStart + span.start, endOffset: locStart + span.end }
-        : null;
-      exprs.push(table.add(code, exprLoc, "IsProperty"));
-    }
-  }
-
-  return { kind: "interp", parts, exprs, loc: toSpan(loc, table.source) };
+  return tryToInterpIR(text, loc, table) ?? { kind: "interp", parts: [text], exprs: [], loc: toSpan(loc, table.source) };
 }
 
 export function toExprRef(

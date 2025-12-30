@@ -204,6 +204,13 @@ function walkRows(
                 exprToFrame.set(p.forOf.astId, propFrame); // header evaluated in outer frame
                 for (const a of p.aux) mapBindingSource(a.from, propFrame, exprToFrame, badCtx);
                 break;
+              case "setProperty":
+                // Literal value - no expressions to map
+                break;
+              case "attributeBinding":
+                // Interpolation binding on controller prop
+                mapBindingSource(p.from, propFrame, exprToFrame, badCtx);
+                break;
               /* c8 ignore next 2 -- type exhaustiveness guard */
               default:
                 assertUnreachable(p);

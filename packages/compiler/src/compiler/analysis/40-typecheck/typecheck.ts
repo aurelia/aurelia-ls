@@ -157,11 +157,18 @@ function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<string>): 
       break;
     case "hydrateTemplateController": {
       for (const p of ins.props ?? []) {
-        if (p.kind === "iteratorBinding") {
-          expected.set(p.forOf.astId, "Iterable<unknown>");
-          for (const aux of p.aux) recordExpected(aux.from, targetType(aux.spec?.type ?? undefined), expected);
-        } else {
-          recordExpected(p.from, targetType(p.target), expected);
+        switch (p.kind) {
+          case "iteratorBinding":
+            expected.set(p.forOf.astId, "Iterable<unknown>");
+            for (const aux of p.aux) recordExpected(aux.from, targetType(aux.spec?.type ?? undefined), expected);
+            break;
+          case "propertyBinding":
+          case "attributeBinding":
+            recordExpected(p.from, targetType(p.target), expected);
+            break;
+          case "setProperty":
+            // Literal value - no expression to type-check
+            break;
         }
       }
       break;
