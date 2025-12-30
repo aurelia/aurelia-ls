@@ -63,15 +63,24 @@ HTML Template
           └──────┬──────┘
                  ▼
           ┌─────────────┐
-          │    Build    │
-          │ (SSR/Vite)  │
-          └─────────────┘
+          │ Vite Plugin │◄── User entry point
+          │  (dev/build)│
+          └──────┬──────┘
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+  ┌───────────┐    ┌───────────┐
+  │    SSR    │    │    SSG    │
+  │ (render)  │    │ (static)  │
+  └───────────┘    └───────────┘
 ```
 
 - **Resolution** — Discovers Aurelia resources (custom elements, value converters, etc.) from TypeScript source files
 - **Compiler** — Compiles HTML templates through the analysis pipeline
 - **Transform** — Injects compiled artifacts into TypeScript source as `static $au` properties
-- **Build** — Provides SSR rendering and Vite plugin integration
+- **Vite Plugin** — User-facing package for Vite dev server and production builds
+- **SSR** — Server-side rendering with JSDOM and manifest recording
+- **SSG** — Static site generation (optional, for pre-rendering routes at build time)
 
 ## SSR Model
 
@@ -84,7 +93,7 @@ This differs from virtual DOM frameworks (React, Vue) which diff and patch. Aure
 
 ## IDE Integration
 
-The language server (`@aurelia-ls/server`) uses the compiler's analysis stages to provide:
+The language server (`@aurelia-ls/language-server`) uses the compiler's analysis stages to provide:
 
 - **Completions** — Suggests bindables, custom elements, expressions
 - **Diagnostics** — Reports binding errors, unknown elements
