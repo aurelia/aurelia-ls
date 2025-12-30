@@ -81,6 +81,13 @@ import {
   resolveIteratorAuxSpec,
 } from "./resolution-helpers.js";
 import { resolveNodeSem } from "./node-semantics.js";
+import {
+  type Diagnosed,
+  pure,
+  diag,
+  DiagnosticAccumulator,
+} from "../../shared/diagnosed.js";
+import { buildDiagnostic } from "../../shared/diagnostics.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
@@ -312,16 +319,25 @@ function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
  * Instruction linking
  * ============================================================================ */
 
+/**
+ * Helper to extract value from Diagnosed<T> and merge diagnostics into context.
+ * This bridges Elm-style internal functions with the imperative boundary.
+ */
+function merge<T>(diagnosed: Diagnosed<T>, ctx: ResolverContext): T {
+  ctx.diags.push(...diagnosed.diagnostics as SemDiagnostic[]);
+  return diagnosed.value;
+}
+
 function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext): LinkedInstruction {
   switch (ins.type) {
     case "propertyBinding":
-      return linkPropertyBinding(ins, host, ctx);
+      return merge(linkPropertyBinding(ins, host, ctx), ctx);
     case "attributeBinding":
-      return linkAttributeBinding(ins, host, ctx);
+      return merge(linkAttributeBinding(ins, host, ctx), ctx);
     case "stylePropertyBinding":
       return linkStylePropertyBinding(ins);
     case "listenerBinding":
-      return linkListenerBinding(ins, host, ctx);
+      return merge(linkListenerBinding(ins, host, ctx), ctx);
     case "refBinding":
       return linkRefBinding(ins);
     case "textBinding":
@@ -329,7 +345,7 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
     case "setAttribute":
       return linkSetAttribute(ins);
     case "setProperty":
-      return linkSetProperty(ins, host, ctx);
+      return merge(linkSetProperty(ins, host, ctx), ctx);
     case "setClassAttribute":
       return linkSetClassAttribute(ins);
     case "setStyleAttribute":
@@ -339,7 +355,7 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
     case "hydrateAttribute":
       return linkHydrateAttribute(ins, host, ctx);
     case "iteratorBinding":
-      return linkIteratorBinding(ins, ctx);
+      return merge(linkIteratorBinding(ins, ctx), ctx);
     case "hydrateTemplateController":
       return linkHydrateTemplateController(ins, host, ctx);
     case "hydrateLetElement":
@@ -351,14 +367,11 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
 
 /* ---- PropertyBinding ---- */
 
-function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: ResolverContext): LinkedPropertyBinding {
+function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedPropertyBinding> {
   // Normalize against naming/perTag/DOM overrides before resolving targets.
   const to = normalizePropLikeName(host, ins.to, ctx.lookup);
   const { target, effectiveMode } = resolvePropertyTarget(host, to, ins.mode, ctx.lookup);
-  if (target.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1104", `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
-  }
-  return {
+  const linked: LinkedPropertyBinding = {
     kind: "propertyBinding",
     to,
     from: ins.from,
@@ -367,31 +380,36 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
     target,
     loc: ins.loc ?? null,
   };
+  if (target.kind === "unknown") {
+    const d = buildDiagnostic({
+      code: "AU1104",
+      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, linked);
+  }
+  return pure(linked);
 }
 
 /* ---- AttributeBinding (interpolation on attr) ---- */
 
-function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: ResolverContext): LinkedAttributeBinding {
+function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedAttributeBinding> {
   // Preserve data-* / aria-* authored forms: never camelCase or map to props.
   if (ctx.lookup.hasPreservedPrefix(ins.attr)) {
-    return {
+    return pure({
       kind: "attributeBinding",
       attr: ins.attr,
       to: ins.attr,
       from: ins.from,
       target: { kind: "attribute", attr: ins.attr },
       loc: ins.loc ?? null,
-    };
+    });
   }
 
   const to = normalizeAttrToProp(host, ins.attr, ctx.lookup);
   const target = resolveAttrTarget(host, to);
-
-  if (target.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1104", `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
-  }
-
-  return {
+  const linked: LinkedAttributeBinding = {
     kind: "attributeBinding",
     attr: ins.attr,
     to,
@@ -399,6 +417,18 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
     target,
     loc: ins.loc ?? null,
   };
+
+  if (target.kind === "unknown") {
+    const d = buildDiagnostic({
+      code: "AU1104",
+      message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, linked);
+  }
+
+  return pure(linked);
 }
 
 /* ---- StylePropertyBinding ---- */
@@ -409,14 +439,11 @@ function linkStylePropertyBinding(ins: StylePropertyBindingIR): LinkedStylePrope
 
 /* ---- ListenerBinding ---- */
 
-function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: ResolverContext): LinkedListenerBinding {
+function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedListenerBinding> {
   const tag = host.kind === "element" ? host.tag : null;
   const eventRes = ctx.lookup.event(ins.to, tag ?? undefined);
   const eventType = eventRes.type;
-  if (eventType.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1103", `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`, ins.loc);
-  }
-  return {
+  const linked: LinkedListenerBinding = {
     kind: "listenerBinding",
     to: ins.to,
     from: ins.from,
@@ -425,6 +452,16 @@ function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: Resolve
     modifier: ins.modifier ?? null,
     loc: ins.loc ?? null,
   };
+  if (eventType.kind === "unknown") {
+    const d = buildDiagnostic({
+      code: "AU1103",
+      message: `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, linked);
+  }
+  return pure(linked);
 }
 
 /* ---- RefBinding ---- */
@@ -451,13 +488,20 @@ function linkSetStyleAttribute(ins: SetStyleAttributeIR): LinkedSetStyleAttribut
   return { kind: "setStyleAttribute", value: ins.value, loc: ins.loc ?? null };
 }
 
-function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext): LinkedSetProperty {
+function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedSetProperty> {
   const to = normalizePropLikeName(host, ins.to, ctx.lookup);
   const { target } = resolvePropertyTarget(host, to, "default", ctx.lookup);
+  const linked: LinkedSetProperty = { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
   if (target.kind === "unknown") {
-    pushDiag(ctx.diags, "AU1104", `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`, ins.loc);
+    const d = buildDiagnostic({
+      code: "AU1104",
+      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      span: ins.loc,
+      source: "resolve-host",
+    });
+    return diag(d, linked);
   }
-  return { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
+  return pure(linked);
 }
 
 function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateElement {
@@ -488,13 +532,13 @@ function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: Resol
 function linkElementBindable(ins: ElementBindableIR, host: NodeSem, ctx: ResolverContext): LinkedElementBindable {
   switch (ins.type) {
     case "propertyBinding":
-      return linkPropertyBinding(ins, host, ctx);
+      return merge(linkPropertyBinding(ins, host, ctx), ctx);
     case "attributeBinding":
-      return linkAttributeBinding(ins, host, ctx);
+      return merge(linkAttributeBinding(ins, host, ctx), ctx);
     case "stylePropertyBinding":
       return linkStylePropertyBinding(ins);
     case "setProperty":
-      return linkSetProperty(ins, host, ctx);
+      return merge(linkSetProperty(ins, host, ctx), ctx);
     default:
       return assertUnreachable(ins as never);
   }
@@ -558,18 +602,24 @@ function linkAttributeBindable(
 
 /* ---- IteratorBinding (repeat) ---- */
 
-function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): LinkedIteratorBinding {
+function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Diagnosed<LinkedIteratorBinding> {
   // Get iterator prop from repeat controller config (config-driven)
   const repeatConfig = ctx.lookup.sem.resources.controllers["repeat"];
   const normalizedTo = repeatConfig?.trigger.kind === "iterator" ? repeatConfig.trigger.prop : "items";
   const aux: LinkedIteratorBinding["aux"] = [];
+  const acc = new DiagnosticAccumulator();
 
   if (ins.props?.length) {
     for (const p of ins.props) {
       const authoredMode: BindingMode = p.command === "bind" ? "toView" : "default";
       const spec = resolveIteratorAuxSpec(ctx.lookup, p.to, authoredMode);
       if (!spec) {
-        pushDiag(ctx.diags, "AU1106", `Unknown repeat option '${p.to}'.`, p.loc);
+        acc.push(buildDiagnostic({
+          code: "AU1106",
+          message: `Unknown repeat option '${p.to}'.`,
+          span: p.loc,
+          source: "resolve-host",
+        }));
       }
       if (!p.from && p.value == null) continue;
       const from: LinkedIteratorBinding["aux"][number]["from"] = p.from ?? {
@@ -581,13 +631,14 @@ function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Link
     }
   }
 
-  return {
+  const linked: LinkedIteratorBinding = {
     kind: "iteratorBinding",
     to: normalizedTo,
     forOf: ins.forOf,
     aux,
     loc: ins.loc ?? null,
   };
+  return acc.wrap(linked);
 }
 
 /* ---- HydrateTemplateController ---- */
@@ -598,16 +649,13 @@ function linkHydrateTemplateController(
   ctx: ResolverContext,
 ): LinkedHydrateTemplateController {
   // Resolve controller semantics (returns Diagnosed)
-  const ctrlSemDiagnosed = resolveControllerSem(ctx.lookup, ins.res, ins.loc);
-  ctx.diags.push(...ctrlSemDiagnosed.diagnostics as SemDiagnostic[]);
-  const ctrlSem = ctrlSemDiagnosed.value;
+  const ctrlSem = merge(resolveControllerSem(ctx.lookup, ins.res, ins.loc), ctx);
 
   // Map controller props
   const props = ins.props.map((p) => {
     if (p.type === "iteratorBinding") {
-      const iter = linkIteratorBinding(p, ctx);
-      // iter.to is already set by linkIteratorBinding (config-driven)
-      return iter;
+      // linkIteratorBinding now returns Diagnosed
+      return merge(linkIteratorBinding(p, ctx), ctx);
     } else if (p.type === "propertyBinding") {
       const to = normalizePropLikeName(host, p.to, ctx.lookup);
       const target: TargetSem = {
