@@ -53,6 +53,7 @@ import { buildDiagnostic } from "../../shared/diagnostics.js";
 import { exprIdsOf } from "../../shared/expr-utils.js";
 import { normalizeSpanMaybe } from "../../model/span.js";
 import type { Origin, Provenance } from "../../model/origin.js";
+import { isStub } from "../../shared/diagnosed.js";
 
 function assertUnreachable(_x: never): never { throw new Error("unreachable"); }
 
@@ -301,6 +302,14 @@ function populateControllerFrame(
   forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
   diags: ScopeDiagnostic[],
 ): void {
+  // === Stub Propagation ===
+  // If the controller config is a stub (from AU1101 unknown controller in resolve),
+  // we can't reliably extract iterator/value bindings or set up scope correctly.
+  // Skip gracefully — the root cause diagnostic was already emitted in resolve.
+  if (isStub(config)) {
+    return;
+  }
+
   const span = ins.loc ?? null;
 
   // === Iterator Pattern ===
