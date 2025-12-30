@@ -1,13 +1,13 @@
 // Model imports (via barrel)
-import type { ExprId, NodeId, SourceFileId, SourceSpan } from "../compiler/model/index.js";
-import { spanContainsOffset, spanEquals, spanLength, resolveSourceSpan } from "../compiler/model/index.js";
+import type { ExprId, NodeId, SourceFileId, SourceSpan } from "../model/index.js";
+import { spanContainsOffset, spanEquals, spanLength, resolveSourceSpan } from "../model/index.js";
 
 // Synthesis imports (via barrel)
 import type {
   TemplateMappingArtifact,
   TemplateMappingEntry,
   TemplateMappingSegment,
-} from "../compiler/synthesis/index.js";
+} from "../synthesis/index.js";
 
 // Program layer imports
 import type { DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";

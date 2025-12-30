@@ -5,26 +5,26 @@ import {
   type TemplateCompilation,
   type TemplateDiagnostics,
   type StageMetaSnapshot,
-} from "../compiler/facade.js";
+} from "../facade.js";
 
 // Model imports (via barrel)
-import type { NormalizedPath } from "../compiler/model/index.js";
+import type { NormalizedPath } from "../model/index.js";
 
 // Language imports (via barrel)
-import { DEFAULT as SEM_DEFAULT, type Semantics, type ResourceGraph, type ResourceScopeId } from "../compiler/language/index.js";
+import { DEFAULT as SEM_DEFAULT, type Semantics, type ResourceGraph, type ResourceScopeId } from "../language/index.js";
 
 // Parsing imports (via barrel)
-import type { AttributeParser, IExpressionParser } from "../compiler/parsing/index.js";
+import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
 
 // Shared imports (via barrel)
-import type { VmReflection } from "../compiler/shared/index.js";
+import type { VmReflection } from "../shared/index.js";
 
 // Pipeline imports (via barrel)
-import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../compiler/pipeline/index.js";
-import { stableHash } from "../compiler/pipeline/index.js";
+import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../pipeline/index.js";
+import { stableHash } from "../pipeline/index.js";
 
 // Synthesis imports (via barrel)
-import type { TemplateMappingArtifact, TemplateQueryFacade } from "../compiler/synthesis/index.js";
+import type { TemplateMappingArtifact, TemplateQueryFacade } from "../synthesis/index.js";
 
 // Program layer imports
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";

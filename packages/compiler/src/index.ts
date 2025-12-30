@@ -6,14 +6,11 @@
 // === Prelude ===
 export { PRELUDE_TS } from "./prelude.js";
 
-// === Compiler (via barrel) ===
-// Re-export selected compiler APIs for external consumers.
+// === Facade ===
+export { compileTemplate } from "./facade.js";
+export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./facade.js";
 
-// Facade
-export { compileTemplate } from "./compiler/index.js";
-export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./compiler/index.js";
-
-// Parsing
+// === Parsing ===
 export {
   getExpressionParser,
   rebaseExpressionSpans,
@@ -27,12 +24,12 @@ export {
   AttributeParser,
   createDefaultSyntax,
   registerBuiltins,
-} from "./compiler/index.js";
-export type { ExpressionParseContext, IExpressionParser, Token } from "./compiler/index.js";
+} from "./parsing/index.js";
+export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
 
-// Language / Semantics
-export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./compiler/index.js";
-export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources } from "./compiler/index.js";
+// === Language / Semantics ===
+export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
+export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources } from "./language/index.js";
 
 // Resource definitions (for resolution package and external tooling)
 export type {
@@ -54,17 +51,18 @@ export type {
   Naming,
   TwoWayDefaults,
   TypeRef,
-} from "./compiler/index.js";
+} from "./language/index.js";
 
-// Synthesis (Overlay)
+// === Synthesis (Overlay) ===
 export {
   computeOverlayBaseName,
   overlayFilename,
   overlayPath,
-} from "./compiler/index.js";
+  planOverlay,
+  emitOverlay,
+  emitMappedExpression,
+} from "./synthesis/index.js";
 export type {
-  VmReflection,
-  SynthesisOptions,
   TemplateMappingArtifact,
   TemplateMappingEntry,
   TemplateMappingSegment,
@@ -73,9 +71,12 @@ export type {
   TemplateBindableInfo,
   TemplateNodeInfo,
   TemplateControllerInfo,
-} from "./compiler/index.js";
+} from "./synthesis/index.js";
 
-// Synthesis (AOT) - for build tools
+// VmReflection and SynthesisOptions are from shared (cross-cutting)
+export type { VmReflection, SynthesisOptions } from "./shared/index.js";
+
+// === Synthesis (AOT) ===
 export {
   planAot,
   emitAotCode,
@@ -85,13 +86,13 @@ export {
   // Constants for transform package
   INSTRUCTION_TYPE,
   BINDING_MODE,
-} from "./compiler/index.js";
-export type { InstructionTypeCode, BindingModeValue } from "./compiler/index.js";
+} from "./synthesis/index.js";
+export type { InstructionTypeCode, BindingModeValue } from "./synthesis/index.js";
 export type {
   TemplateEmitResult,
   TemplateEmitOptions,
   NestedTemplateHtmlNode,
-} from "./compiler/index.js";
+} from "./synthesis/index.js";
 export type {
   AotPlanModule,
   AotPlanOptions,
@@ -134,24 +135,21 @@ export type {
   PlanAuxExpr,
   PlanExpression,
   PlanScope,
-} from "./compiler/index.js";
+} from "./synthesis/index.js";
 
-// Analysis (for build tools)
+// === Analysis ===
 export {
   lowerDocument,
   resolveHost,
   bindScopes,
   typecheck,
-  planOverlay,
-  emitOverlay,
-  emitMappedExpression,
   // Typecheck configuration
   resolveTypecheckConfig,
   checkTypeCompatibility,
   DEFAULT_TYPECHECK_CONFIG,
   TYPECHECK_PRESETS,
-} from "./compiler/index.js";
-export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./compiler/index.js";
+} from "./analysis/index.js";
+export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {
   // Linked semantics (for semantic tokens, etc.)
   LinkedSemanticsModule,
@@ -162,16 +160,16 @@ export type {
   LinkedPropertyBinding,
   LinkedListenerBinding,
   LinkedHydrateTemplateController,
-} from "./compiler/index.js";
+} from "./analysis/index.js";
 
-// Shared Infrastructure
-export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./compiler/index.js";
-export type { CompilerDiagnostic, ExprSpanIndex } from "./compiler/index.js";
+// === Shared Infrastructure ===
+export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./shared/index.js";
+export type { CompilerDiagnostic, ExprSpanIndex } from "./shared/index.js";
 
-// Pipeline
-export type { StageKey, StageArtifactMeta } from "./compiler/index.js";
+// === Pipeline ===
+export type { StageKey, StageArtifactMeta } from "./pipeline/index.js";
 
-// Model (Foundation)
+// === Model (Foundation) ===
 export {
   spanContainsOffset,
   spanLength,
@@ -189,8 +187,8 @@ export {
   toSourceFileId,
   provenanceSpan,
   preferOrigin,
-} from "./compiler/index.js";
-export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode } from "./compiler/index.js";
+} from "./model/index.js";
+export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode } from "./model/index.js";
 
 // IR types (DOM tree)
 export type {
@@ -202,7 +200,7 @@ export type {
   BaseNode,
   Attr,
   NodeId,
-} from "./compiler/index.js";
+} from "./model/index.js";
 
 // Expression AST types (for evaluation)
 export type {
@@ -229,7 +227,7 @@ export type {
   TemplateExpression,
   BindingIdentifier,
   ExprTableEntry,
-} from "./compiler/index.js";
+} from "./model/index.js";
 
 // === Program ===
 export * from "./program/index.js";

@@ -1,5 +1,5 @@
-import type { SourceSpan } from "../compiler/model/span.js";
-import type { ExprId, NodeId, FrameId, UriString } from "../compiler/model/identity.js";
+import type { SourceSpan } from "../model/span.js";
+import type { ExprId, NodeId, FrameId, UriString } from "../model/identity.js";
 
 /**
  * Program-layer primitives. These deliberately alias existing brands so we do

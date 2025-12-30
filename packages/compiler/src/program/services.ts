@@ -1,21 +1,21 @@
 // Model imports (via barrel)
-import type { NormalizedPath, SourceFileId, SourceSpan } from "../compiler/model/index.js";
-import { resolveSourceSpan, spanLength } from "../compiler/model/index.js";
+import type { NormalizedPath, SourceFileId, SourceSpan } from "../model/index.js";
+import { resolveSourceSpan, spanLength } from "../model/index.js";
 
 // Shared imports (via barrel)
-import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../compiler/shared/index.js";
+import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../shared/index.js";
 
 // Pipeline imports (via barrel)
-import { stableHash } from "../compiler/pipeline/index.js";
+import { stableHash } from "../pipeline/index.js";
 
 // Analysis imports (via barrel)
-import type { TypecheckDiagnostic } from "../compiler/analysis/index.js";
+import type { TypecheckDiagnostic } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
-import type { TemplateBindableInfo, TemplateQueryFacade, TemplateMappingArtifact } from "../compiler/synthesis/index.js";
+import type { TemplateBindableInfo, TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/index.js";
 
 // Compiler facade
-import type { TemplateCompilation } from "../compiler/facade.js";
+import type { TemplateCompilation } from "../facade.js";
 
 // Program layer imports
 import type { DocumentSnapshot, DocumentUri, TemplateExprId } from "./primitives.js";

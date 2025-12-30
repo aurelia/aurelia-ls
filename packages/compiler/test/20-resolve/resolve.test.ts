@@ -14,8 +14,8 @@ import {
 } from "@aurelia-ls/compiler";
 
 // Internal import for direct unit testing of resolveControllerSem
-import { resolveControllerSem } from "../../src/compiler/analysis/20-resolve/resolution-helpers.js";
-import { isStub } from "../../src/compiler/shared/diagnosed.js";
+import { resolveControllerSem } from "../../src/analysis/20-resolve/resolution-helpers.js";
+import { isStub } from "../../src/shared/diagnosed.js";
 
 const dirname = getDirname(import.meta.url);
 
