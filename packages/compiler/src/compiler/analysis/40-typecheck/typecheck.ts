@@ -21,6 +21,7 @@ import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
 import { exprIdMapGet, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { buildScopeLookup } from "../shared/scope-lookup.js";
+import { isStub } from "../../shared/diagnosed.js";
 import {
   type TypecheckConfig,
   type TypecheckSeverity,
@@ -199,18 +200,20 @@ function severityToCode(severity: TypecheckSeverity): TypecheckDiagCode {
 function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTypeInfo>): void {
   switch (ins.kind) {
     case "propertyBinding":
-      recordExpected(ins.from, targetType(ins.target), contextFromTarget(ins.target), expected);
+      recordExpected(ins.from, targetType(ins.target), contextFromTarget(ins.target), expected, ins.target);
       break;
     case "attributeBinding":
-      recordExpected(ins.from, targetType(ins.target), "dom.attribute", expected);
+      recordExpected(ins.from, targetType(ins.target), "dom.attribute", expected, ins.target);
       break;
     case "stylePropertyBinding":
-      recordExpected(ins.from, targetType(ins.target), "style.property", expected);
+      recordExpected(ins.from, targetType(ins.target), "style.property", expected, ins.target);
       break;
     case "listenerBinding":
+      // Listeners don't have a resolvable target type - just check function
       recordExpected(ins.from, "Function", "dom.property", expected);
       break;
     case "textBinding":
+      // Text bindings accept anything (coerced to string) - no type constraint
       recordExpected(ins.from, "unknown", "dom.property", expected);
       break;
     case "hydrateElement":
@@ -221,14 +224,17 @@ function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTy
       for (const p of ins.props ?? []) {
         switch (p.kind) {
           case "iteratorBinding":
-            expected.set(p.forOf.astId, { type: "Iterable<unknown>", context: "component.bindable" });
+            // Iterator source must be iterable (skip if stubbed)
+            if (!isStub(p.forOf)) {
+              expected.set(p.forOf.astId, { type: "Iterable<unknown>", context: "component.bindable" });
+            }
             for (const aux of p.aux) {
               recordExpected(aux.from, targetType(aux.spec?.type ?? undefined), "component.bindable", expected);
             }
             break;
           case "propertyBinding":
           case "attributeBinding":
-            recordExpected(p.from, targetType(p.target), "component.bindable", expected);
+            recordExpected(p.from, targetType(p.target), "component.bindable", expected, p.target);
             break;
           case "setProperty":
             // Literal value - no expression to type-check
@@ -238,6 +244,7 @@ function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTy
       break;
     }
     case "hydrateLetElement":
+      // Let bindings are inferred - no expected type constraint
       for (const lb of ins.instructions ?? []) recordExpected(lb.from, "unknown", "template.local", expected);
       break;
     default:
@@ -248,28 +255,55 @@ function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTy
 function recordLinkedBindable(b: LinkedElementBindable, expected: ExprIdMap<ExpectedTypeInfo>): void {
   switch (b.kind) {
     case "propertyBinding":
-      recordExpected(b.from, targetType(b.target), contextFromTarget(b.target), expected);
+      recordExpected(b.from, targetType(b.target), contextFromTarget(b.target), expected, b.target);
       break;
     case "attributeBinding":
-      recordExpected(b.from, targetType(b.target), "dom.attribute", expected);
+      recordExpected(b.from, targetType(b.target), "dom.attribute", expected, b.target);
       break;
     case "stylePropertyBinding":
-      recordExpected(b.from, targetType(b.target), "style.property", expected);
+      recordExpected(b.from, targetType(b.target), "style.property", expected, b.target);
       break;
     default:
       break;
   }
 }
 
+/**
+ * Record expected type for an expression, with cascade suppression.
+ *
+ * Skips recording if:
+ * - No type information available
+ * - Source expression is stubbed (parser/earlier phase error)
+ * - Target is degraded (resolution failed)
+ */
 function recordExpected(
   src: BindingSourceIR | ExprRef | InterpIR,
   type: string | null | undefined,
   context: BindingContext,
   expected: ExprIdMap<ExpectedTypeInfo>,
+  target?: TargetSem | TypeRef | { kind: "style" },
 ): void {
+  // Skip if no type info
   if (!type) return;
+
+  // Cascade suppression: skip stubbed sources (earlier phase error)
+  if (isStub(src)) return;
+
+  // Cascade suppression: skip if target resolution failed
+  if (isUnknownTarget(target)) return;
+
   const ids = exprIdsOf(src);
   for (const id of ids) expected.set(id, { type, context });
+}
+
+/**
+ * Check if a target represents a failed resolution (cascade suppression).
+ * When target.kind === "unknown", the resolve phase already emitted a diagnostic.
+ */
+function isUnknownTarget(target: TargetSem | TypeRef | { kind: "style" } | undefined): boolean {
+  if (!target) return false;
+  if (typeof target !== "object") return false;
+  return (target as { kind?: string }).kind === "unknown";
 }
 
 /**

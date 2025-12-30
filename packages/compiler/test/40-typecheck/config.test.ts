@@ -318,6 +318,74 @@ describe("TYPECHECK_PRESETS", () => {
 });
 
 /**
+ * Cascade suppression tests.
+ *
+ * When earlier phases (resolve) fail, typecheck should NOT produce additional
+ * type diagnostics that would just be noise on top of the root error.
+ */
+describe("cascade suppression", () => {
+  const opts = {
+    attrParser: DEFAULT_SYNTAX,
+    exprParser: getExpressionParser(),
+    file: "test.html",
+    name: "test",
+    sem: DEFAULT_SEMANTICS,
+  };
+
+  test("no type diagnostic when target.kind === 'unknown' (resolve failed)", () => {
+    // Bind to a property that doesn't exist on the element
+    // This will produce a resolve error (AU1104) but should NOT produce a type error
+    const markup = '<div nonexistent.bind="42"></div>';
+
+    const ir = lowerDocument(markup, opts);
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+    const scope = bindScopes(linked);
+    const tc = typecheck({
+      linked,
+      scope,
+      ir,
+      rootVmType: "RootVm",
+      config: { preset: "standard" },
+    });
+
+    // The linked instruction should have target.kind === "unknown"
+    const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
+    expect(ins?.kind).toBe("propertyBinding");
+    expect((ins as { target?: { kind?: string } })?.target?.kind).toBe("unknown");
+
+    // No type diagnostics should be produced (cascade suppression)
+    expect(tc.diags).toHaveLength(0);
+
+    // The expression should NOT be in expectedByExpr (skipped due to unknown target)
+    expect(tc.expectedByExpr.size).toBe(0);
+  });
+
+  test("type diagnostic still produced for valid targets", () => {
+    // Bind a string to a boolean property - should produce type error
+    const markup = '<input disabled.bind="\'yes\'">';
+
+    const ir = lowerDocument(markup, opts);
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+    const scope = bindScopes(linked);
+    const tc = typecheck({
+      linked,
+      scope,
+      ir,
+      rootVmType: "RootVm",
+      config: { preset: "standard" },
+    });
+
+    // Target should be resolved (not unknown)
+    const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
+    expect((ins as { target?: { kind?: string } })?.target?.kind).not.toBe("unknown");
+
+    // Should produce a type mismatch diagnostic
+    expect(tc.diags.length).toBeGreaterThan(0);
+    expect(tc.diags[0]?.code).toBe("AU1301");
+  });
+});
+
+/**
  * Style binding syntax documentation tests.
  *
  * Aurelia style bindings use the PART.PART pattern where the second PART is the command:
