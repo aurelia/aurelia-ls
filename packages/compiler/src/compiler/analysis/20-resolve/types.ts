@@ -50,10 +50,11 @@ export type SemDiagCode =
   // TODO: AU0103 - Value converter not found (walk exprTable, check against registry + ResourceGraph)
 
   // ─── Template Structure Errors (AU08xx) ────────────────────────────────────
-  // TODO: AU0810 - [else] without preceding [if] (check sibling controller ordering)
-  // TODO: AU0813 - [then]/[catch]/[pending] without parent [promise] (validate branch context)
-  // TODO: AU0815 - [case]/[default-case] without parent [switch] (validate branch context)
-  // TODO: AU0816 - Multiple [default-case] in same switch (validate uniqueness)
+  // Branch validation: sibling and parent relationships
+  | "AU0810" // [else] without preceding [if]
+  | "AU0813" // [then]/[catch]/[pending] without parent [promise]
+  | "AU0815" // [case]/[default-case] without parent [switch]
+  | "AU0816" // Multiple [default-case] in same switch
 
   // ─── Host Semantics Errors (AU11xx) ────────────────────────────────────────
   | "AU1101" // Unknown controller

@@ -28,13 +28,15 @@ import type {
   BindingMode,
   NodeId,
   InstructionIR,
+  InstructionRow,
   SetPropertyIR,
   HydrateElementIR,
   HydrateAttributeIR,
   ElementBindableIR,
+  SourceSpan,
 } from "../../model/ir.js";
 
-import { createSemanticsLookup, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
+import { createSemanticsLookup, getControllerConfig, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
 import type { Semantics } from "../../language/registry.js";
 import type { ResourceCollections, ResourceGraph, ResourceScopeId } from "../../language/resource-graph.js";
 
@@ -108,6 +110,13 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
   };
   const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
 
+  // Validate branch controller relationships on ROOT template only.
+  // Nested templates (controller defs) are validated via validateNestedIrRows during recursion.
+  // ir.templates[0] is always the root; others are nested templates for controllers.
+  if (templates[0]) {
+    validateBranchControllers(templates[0].rows, ctx);
+  }
+
   // TODO: Validate expression resources (AU01xx diagnostics)
   // Walk ir.exprTable to extract binding behaviors and value converters from AST.
   // Check each against ctx.lookup (registry + ResourceGraph).
@@ -145,7 +154,139 @@ function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
     const linkedInstrs = row.instructions.map((i) => linkInstruction(i, nodeSem, ctx));
     return { target: row.target, node: nodeSem, instructions: linkedInstrs };
   });
+
   return { dom: t.dom, rows, name: t.name! };
+}
+
+/**
+ * Validates branch controller relationships (sibling and child).
+ *
+ * - Sibling relationship (else→if): preceding row must have parent controller
+ * - Child relationship (then→promise): must be inside parent controller's def
+ *
+ * Error codes:
+ * - AU0810: [else] without preceding [if]
+ * - AU0813: [then]/[catch]/[pending] without parent [promise]
+ * - AU0815: [case]/[default-case] without parent [switch]
+ */
+function validateBranchControllers(
+  rows: LinkedRow[],
+  ctx: ResolverContext,
+  parentController: string | null = null,
+): void {
+  let prevRowControllers: string[] = [];
+
+  for (const row of rows) {
+    const currentRowControllers: string[] = [];
+
+    for (const ins of row.instructions) {
+      if (ins.kind === "hydrateTemplateController") {
+        currentRowControllers.push(ins.res);
+
+        // Check if this controller requires a parent (sibling or child relationship)
+        const config = ins.controller.config;
+        if (config.linksTo) {
+          const parentConfig = getControllerConfig(config.linksTo);
+          const relationship = parentConfig?.branches?.relationship;
+
+          if (relationship === "sibling") {
+            // Sibling relationship: parent must be in the previous row
+            if (!prevRowControllers.includes(config.linksTo)) {
+              const code = config.linksTo === "if" ? "AU0810" : "AU0815";
+              const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          } else if (relationship === "child") {
+            // Child relationship: must be inside parent controller's def
+            if (parentController !== config.linksTo) {
+              const code = config.linksTo === "promise" ? "AU0813" : "AU0815";
+              const msg = `[${ins.res}] without parent [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          }
+        }
+
+        // Recursively validate nested def (raw IR rows)
+        if (ins.def?.rows) {
+          validateNestedIrRows(ins.def.rows, ctx, ins.res);
+        }
+      }
+    }
+
+    prevRowControllers = currentRowControllers;
+  }
+}
+
+/**
+ * Validates branch controllers in nested IR rows (unlinked).
+ * Used to check child relationships (then/catch inside promise, case inside switch).
+ *
+ * Error codes:
+ * - AU0816: Multiple [default-case] in same switch
+ */
+function validateNestedIrRows(
+  rows: InstructionRow[],
+  ctx: ResolverContext,
+  parentController: string,
+): void {
+  let prevRowControllers: string[] = [];
+
+  // Track cardinality for controllers with "zero-one" constraint (e.g., default-case)
+  let defaultCaseCount = 0;
+  let firstDefaultCaseLoc: SourceSpan | null = null;
+
+  for (const row of rows) {
+    const currentRowControllers: string[] = [];
+
+    for (const ins of row.instructions) {
+      if (ins.type === "hydrateTemplateController") {
+        currentRowControllers.push(ins.res);
+
+        // Get config for this controller
+        const config = getControllerConfig(ins.res);
+        if (config?.linksTo) {
+          const parentConfig = getControllerConfig(config.linksTo);
+          const relationship = parentConfig?.branches?.relationship;
+
+          if (relationship === "sibling") {
+            // Sibling relationship: parent must be in the previous row
+            if (!prevRowControllers.includes(config.linksTo)) {
+              const code = config.linksTo === "if" ? "AU0810" : "AU0815";
+              const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          } else if (relationship === "child") {
+            // Child relationship: must be inside parent controller's def
+            if (parentController !== config.linksTo) {
+              const code = config.linksTo === "promise" ? "AU0813" : "AU0815";
+              const msg = `[${ins.res}] without parent [${config.linksTo}]`;
+              pushDiag(ctx.diags, code, msg, ins.loc);
+            }
+          }
+        }
+
+        // Track cardinality for default-case (zero-one constraint)
+        // AU0816: Multiple [default-case] in same switch
+        if (ins.res === "default-case" && parentController === "switch") {
+          defaultCaseCount++;
+          if (defaultCaseCount === 1) {
+            firstDefaultCaseLoc = ins.loc ?? null;
+          } else if (defaultCaseCount === 2) {
+            // Emit diagnostic on the second occurrence, pointing to it
+            pushDiag(ctx.diags, "AU0816", "Multiple [default-case] in same [switch]", ins.loc);
+          }
+          // For 3+, we don't emit more diagnostics (one per switch is enough)
+        }
+
+        // Recursively validate nested def
+        if (ins.def?.rows) {
+          validateNestedIrRows(ins.def.rows, ctx, ins.res);
+        }
+      }
+    }
+
+    prevRowControllers = currentRowControllers;
+  }
 }
 
 function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {

@@ -10,5 +10,94 @@
         { "code": "AU1106" }
       ]
     }
+  },
+  {
+    "name": "R-D-10 [else] without preceding [if] surfaces AU0810",
+    "markup": "<div else>orphan else</div>",
+    "expect": {
+      "items": [],
+      "diags": [
+        { "code": "AU0810" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-11 [else] after non-if sibling surfaces AU0810",
+    "markup": "<div repeat.for=\"i of items\">loop</div><div else>wrong parent</div>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ],
+      "diags": [
+        { "code": "AU0810" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-12 valid [if]/[else] pair has no diagnostics",
+    "markup": "<div if.bind=\"x\">yes</div><div else>no</div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-13 valid [promise]/[then]/[catch] has no diagnostics",
+    "markup": "<div promise.bind=\"p\"><template then>resolved</template><template catch>error</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-14 [case] without parent [switch] surfaces AU0815",
+    "markup": "<template case.bind=\"x\">orphan case</template>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ],
+      "diags": [
+        { "code": "AU0815" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-15 [default-case] without parent [switch] surfaces AU0815",
+    "markup": "<template default-case>orphan default</template>",
+    "expect": {
+      "items": [],
+      "diags": [
+        { "code": "AU0815" }
+      ]
+    }
+  },
+  {
+    "name": "R-D-16 valid [switch]/[case]/[default-case] has no diagnostics",
+    "markup": "<div switch.bind=\"x\"><template case.bind=\"1\">one</template><template default-case>other</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-D-17 multiple [default-case] in same switch surfaces AU0816",
+    "markup": "<div switch.bind=\"x\"><template default-case>one</template><template default-case>two</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
+      ],
+      "diags": [
+        { "code": "AU0816" }
+      ]
+    }
   }
 ]
