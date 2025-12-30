@@ -70,6 +70,8 @@
     "test:language-server:cov": "pnpm -w build && vitest run packages/language-server --coverage",
     "test:vscode": "pnpm -w build && vitest run packages/vscode",
     "test:vscode:cov": "pnpm -w build && vitest run packages/vscode --coverage",
+    "test:vite-plugin": "pnpm -w build && vitest run packages/vite-plugin",
+    "test:vite-plugin:cov": "pnpm -w build && vitest run packages/vite-plugin --coverage",
     "dump:overlay": "pnpm -w build && node scripts/dump-overlays.mjs",
     "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test"
   },
