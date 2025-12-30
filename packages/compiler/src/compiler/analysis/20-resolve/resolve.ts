@@ -85,6 +85,7 @@ import {
   type Diagnosed,
   pure,
   diag,
+  withStub,
   DiagnosticAccumulator,
 } from "../../shared/diagnosed.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
@@ -387,7 +388,7 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
       span: ins.loc,
       source: "resolve-host",
     });
-    return diag(d, linked);
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
   }
   return pure(linked);
 }
@@ -425,7 +426,7 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
       span: ins.loc,
       source: "resolve-host",
     });
-    return diag(d, linked);
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
   }
 
   return pure(linked);
@@ -459,7 +460,7 @@ function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: Resolve
       span: ins.loc,
       source: "resolve-host",
     });
-    return diag(d, linked);
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
   }
   return pure(linked);
 }
@@ -499,7 +500,7 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
       span: ins.loc,
       source: "resolve-host",
     });
-    return diag(d, linked);
+    return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
   }
   return pure(linked);
 }
@@ -638,6 +639,10 @@ function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Diag
     aux,
     loc: ins.loc ?? null,
   };
+  // If there were diagnostics, mark the result as a stub
+  if (acc.diagnostics.length > 0) {
+    return acc.wrap(withStub(linked, { diagnostic: acc.diagnostics[0]!, span: ins.loc ?? undefined }));
+  }
   return acc.wrap(linked);
 }
 
