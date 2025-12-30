@@ -14,6 +14,7 @@
 import type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
 import type { Origin, Provenance } from "./origin.js";
 import type { SourceSpan, TextSpan } from "./span.js";
+import type { CompilerDiagnostic } from "./diagnostics.js";
 
 export type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
 export type { SourceSpan, TextSpan } from "./span.js";
@@ -338,12 +339,33 @@ export interface InstructionRow {
  * Module & Template
  * =========================== */
 
+/* ===========================
+ * IR Diagnostics
+ * =========================== */
+
+/**
+ * IR-level diagnostic codes (lowering phase).
+ *
+ * Code ranges:
+ * - AU07xx: Template compilation errors (matches runtime template-compiler)
+ */
+export type IrDiagCode =
+  | "AU0704"; // Invalid <let> command (must be bind/to-view/one-time/two-way/from-view)
+
+export type IrDiagnostic = CompilerDiagnostic<IrDiagCode>;
+
+/* ===========================
+ * Module container
+ * =========================== */
+
 /** Root-level compiled unit: templates + shared expression table. */
 export interface IrModule {
   version: 'aurelia-ir@1';
   templates: TemplateIR[];
   /** Optional shared sidecar for dev/LSP; can be stripped for shipping. */
   exprTable?: ExprTableEntry[];
+  /** Optional diagnostics from lowering phase. */
+  diags?: IrDiagnostic[];
   name?: string;
   meta?: Record<string, unknown>;
 }

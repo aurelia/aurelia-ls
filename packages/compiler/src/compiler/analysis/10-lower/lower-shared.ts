@@ -7,6 +7,8 @@ import type {
   ExprRef,
   ExprTableEntry,
   InterpIR,
+  IrDiagCode,
+  IrDiagnostic,
   SourceSpan,
 } from "../../model/ir.js";
 import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/expression-parser.js";
@@ -40,6 +42,7 @@ export function isComment(n: P5Node): n is DefaultTreeAdapterMap["commentNode"] 
 
 export class ExprTable {
   public entries: ExprTableEntry[] = [];
+  public diags: IrDiagnostic[] = [];
   private readonly seen = new Map<string, ExprId>();
 
   public constructor(
@@ -47,6 +50,16 @@ export class ExprTable {
     public readonly source: SourceFile,
     public readonly sourceText: string,
   ) {}
+
+  public addDiag(code: IrDiagCode, message: string, loc: P5Loc | null): void {
+    this.diags.push({
+      code,
+      message,
+      source: "lower",
+      severity: "error",
+      span: toSpan(loc, this.source),
+    });
+  }
 
   public add(code: string, loc: P5Loc | null, expressionType: ExpressionType): ExprRef {
     const start = loc?.startOffset ?? 0;

@@ -67,8 +67,14 @@ function compileLet(
       continue;
     }
 
-    // Any other command (e.g., .one-time, .to-view, .trigger) is invalid - silently skip
-    // Runtime would throw AU0704 here
+    // Any other command (e.g., .trigger, .capture) is invalid for <let>
+    // Emit AU0704: Invalid <let> command
+    const loc = attrLoc(el, a.name);
+    table.addDiag(
+      "AU0704",
+      `Invalid command '.${s.command}' on <let>. Only bind, to-view, one-time, two-way, from-view are allowed.`,
+      loc
+    );
   }
   return { instructions: out, toBindingContext };
 }
