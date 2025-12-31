@@ -148,8 +148,8 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
     expect(bindSpan?.duration).toBeGreaterThan(0n);
 
     // Verify attributes were set
-    expect(lowerSpan?.attributes.has("lower.html_length")).toBe(true);
-    expect(bindSpan?.attributes.has("bind.frame_count")).toBe(true);
+    expect(lowerSpan?.attributes.has("lower.htmlLength")).toBe(true);
+    expect(bindSpan?.attributes.has("bind.frameCount")).toBe(true);
   });
 
   test("traces events throughout pipeline", () => {
@@ -222,7 +222,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
 
     // Should have template metrics (using CompilerAttributes constants)
     expect(lowerSpan?.attributes.has(CompilerAttributes.ROW_COUNT)).toBe(true);
-    expect(lowerSpan?.attributes.has("lower.html_length")).toBe(true);
+    expect(lowerSpan?.attributes.has("lower.htmlLength")).toBe(true);
   });
 });
 
