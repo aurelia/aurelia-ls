@@ -19,7 +19,7 @@ import {
   type ICustomElementController,
   type ISSRManifest,
 } from "@aurelia/runtime-html";
-import { NOOP_TRACE, type CompileTrace } from "@aurelia-ls/compiler";
+import { NOOP_TRACE, debug, type CompileTrace } from "@aurelia-ls/compiler";
 import { recordManifest } from "./manifest-recorder.js";
 import { createServerPlatform, getDocument, type SSRRequestContext } from "./platform.js";
 import {
@@ -156,6 +156,12 @@ export async function render(
       "ssr.render.url": options.request?.url ?? "/",
     });
 
+    debug.ssr("render.start", {
+      component: RootComponent.name ?? "anonymous",
+      url: options.request?.url ?? "/",
+      childCount: options.childComponents?.length ?? 0,
+    });
+
     trace.event("ssr.render.setup");
     const platform = createServerPlatform({ request: options.request });
     const doc = getDocument(platform);
@@ -193,6 +199,7 @@ export async function render(
 
     // Create host element and render
     trace.event("ssr.render.aureliaStart");
+    debug.ssr("render.aurelia.starting");
     const host = doc.createElement("div");
     doc.body.appendChild(host);
 
@@ -200,6 +207,7 @@ export async function render(
     au.app({ host, component: RootComponent });
     await au.start();
     trace.event("ssr.render.aureliaStarted");
+    debug.ssr("render.aurelia.started");
 
     // Sync DOM properties to attributes for proper HTML serialization
     syncPropertiesForSSR(host);
@@ -229,6 +237,11 @@ export async function render(
     // Cleanup
     trace.event("ssr.render.stop");
     await au.stop(true);
+
+    debug.ssr("render.complete", {
+      htmlLength: html.length,
+      rootComponent: manifest.root,
+    });
 
     trace.setAttribute("ssr.render.htmlLength", html.length);
 

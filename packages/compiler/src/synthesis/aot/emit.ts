@@ -47,6 +47,7 @@ import type { ExprId, BindingMode } from "../../model/index.js";
 
 import type { CompileTrace } from "../../shared/index.js";
 import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
+import { debug } from "../../shared/debug.js";
 
 export interface AotEmitOptions {
   /** Template name (for the definition) */
@@ -85,6 +86,12 @@ export function emitAotCode(
       "aot.emit.targetCount": plan.targetCount,
       "aot.emit.stripSpans": options.stripSpans ?? false,
       "aot.emit.deduplicate": options.deduplicateExpressions ?? false,
+    });
+
+    debug.aot("emit.start", {
+      name: plan.name ?? options.name ?? "template",
+      targetCount: plan.targetCount,
+      exprCount: plan.expressions.length,
     });
 
     const ctx = new EmitContext(plan, options);
@@ -280,6 +287,13 @@ class EmitContext {
     const templateIndex = nestedTemplates.length;
     // Use global counter for unique naming
     const templateName = `${ctrl.resource}_${this.nestedTemplateIndex++}`;
+
+    debug.aot("emit.controller", {
+      resource: ctrl.resource,
+      templateIndex,
+      templateName,
+      targetIndex: ctrl.targetIndex,
+    });
 
     // Build nested definition from the controller's template
     const nestedDef = this.emitControllerTemplate(ctrl, hostNode, templateName);

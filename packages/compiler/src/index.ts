@@ -187,6 +187,15 @@ export {
   JSONExporter,
   createJSONExporter,
 } from "./shared/index.js";
+
+// === Debug Channels ===
+export {
+  debug,
+  refreshDebugChannels,
+  configureDebug,
+  isDebugEnabled,
+} from "./shared/index.js";
+export type { Debug, DebugChannel, DebugData, DebugConfig } from "./shared/index.js";
 export type {
   Span,
   SpanEvent,

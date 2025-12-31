@@ -48,6 +48,7 @@ import type {
 
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
 import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
+import { debug } from "../../shared/debug.js";
 
 import type {
   AotPlanModule,
@@ -108,6 +109,7 @@ export function planAot(
 
     if (!rootTemplate || !rootScopeTemplate) {
       // Empty template
+      debug.aot("plan.empty", { path: options.templateFilePath });
       trace.event("aot.plan.empty");
       return {
         version: "aurelia-aot-plan@1",
@@ -118,6 +120,11 @@ export function planAot(
         name: options.templateFilePath,
       };
     }
+
+    debug.aot("plan.start", {
+      path: options.templateFilePath,
+      templateCount: linked.templates.length,
+    });
 
     // Build scope entries from ScopeModule
     trace.event("aot.plan.buildScopes");
@@ -921,6 +928,12 @@ function transformController(
   const { config } = ins.controller;
   const frameId = findControllerFrame(ins, currentFrame, ctx);
   const nestedLinked = ctx.getLinkedTemplate(ins.def.dom);
+
+  debug.aot("plan.controller", {
+    resource: ins.res,
+    trigger: config.trigger.kind,
+    hasNestedTemplate: !!nestedLinked,
+  });
 
   // For controllers with child branches (switch, promise), we collect branches separately
   // and don't transform the nested template normally

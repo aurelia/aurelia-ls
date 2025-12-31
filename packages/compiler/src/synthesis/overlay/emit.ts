@@ -3,6 +3,7 @@ import type { ExprId } from "../../model/ir.js";
 import { offsetSpan, spanFromBounds, type TextSpan } from "../../model/span.js";
 import type { CompileTrace } from "../../shared/index.js";
 import { NOOP_TRACE } from "../../shared/index.js";
+import { debug } from "../../shared/debug.js";
 
 /**
  * Emit a compact overlay:
@@ -38,6 +39,11 @@ export function emitOverlay(
       "overlay.emit.templateCount": plan.templates.length,
     });
 
+    debug.overlay("emit.start", {
+      isJs,
+      templateCount: plan.templates.length,
+    });
+
     const out: string[] = [];
     const mapping: OverlayEmitMappingEntry[] = [];
     let offset = 0; // track length of out.join("\n") as we build
@@ -61,6 +67,10 @@ export function emitOverlay(
     let totalLambdas = 0;
 
     for (const template of plan.templates) {
+      debug.overlay("emit.template", {
+        name: template.vmType?.alias ?? "anonymous",
+        frameCount: template.frames.length,
+      });
       if (template.vmType?.alias && template.vmType?.typeExpr) {
         if (!isJs) {
           const aliasLine = `type ${template.vmType.alias} = ${template.vmType.typeExpr};`;
@@ -74,6 +84,11 @@ export function emitOverlay(
       }
       for (const f of template.frames) {
         totalFrames++;
+        debug.overlay("emit.frame", {
+          frameId: f.frame,
+          typeName: f.typeName,
+          lambdaCount: f.lambdas.length,
+        });
         if (!isJs) {
           out.push(`type ${f.typeName} = ${f.typeExpr};`);
           offset += out[out.length - 1]!.length + 1;

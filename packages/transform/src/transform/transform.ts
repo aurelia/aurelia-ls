@@ -5,7 +5,7 @@
  */
 
 import type { AotCodeResult } from "@aurelia-ls/compiler";
-import { NOOP_TRACE } from "@aurelia-ls/compiler";
+import { NOOP_TRACE, debug } from "@aurelia-ls/compiler";
 import type { ResourceDefinition } from "../model/types.js";
 import { emitStaticAu } from "../emit/index.js";
 import { findClassByName, detectDeclarationForm } from "../ts/analyze.js";
@@ -64,18 +64,31 @@ export function transform(options: TransformOptions): TransformResult {
       "transform.sourceLength": source.length,
     });
 
+    debug.transform("start", {
+      filePath,
+      className: resource.className,
+      resourceName: resource.name,
+      resourceKind: resource.kind,
+    });
+
     const warnings: TransformWarning[] = [];
 
     // Find the class to transform
     trace.event("transform.findClass");
     const classInfo = findClassByName(source, resource.className);
     if (!classInfo) {
+      debug.transform("class.notFound", { className: resource.className });
       throw new TransformError(
         `Class "${resource.className}" not found in source`,
         TransformErrorCode.CLASS_NOT_FOUND,
         filePath
       );
     }
+
+    debug.transform("class.found", {
+      className: resource.className,
+      hasDecorator: classInfo.decorators.length > 0,
+    });
 
     // Detect original declaration form
     const declForm = detectDeclarationForm(classInfo, resource.className);
@@ -102,6 +115,11 @@ export function transform(options: TransformOptions): TransformResult {
     trace.setAttributes({
       "transform.dependencyCount": dependencies.length,
       "transform.bindableCount": bindables.length,
+    });
+
+    debug.transform("extracted", {
+      dependencies: dependencies.length,
+      bindables: bindables.length,
     });
 
     // Emit the AOT artifacts
@@ -212,6 +230,12 @@ export function transform(options: TransformOptions): TransformResult {
       "transform.editCount": allEdits.length,
       "transform.warningCount": warnings.length,
       "transform.outputLength": transformedCode.length,
+    });
+
+    debug.transform("complete", {
+      editCount: allEdits.length,
+      warningCount: warnings.length,
+      outputLength: transformedCode.length,
     });
 
     // Build result

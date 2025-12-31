@@ -30,6 +30,7 @@ import {
   checkTypeCompatibility,
 } from "./config.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { debug } from "../../shared/debug.js";
 
 // Re-export config types for consumers
 export type { TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./config.js";
@@ -80,6 +81,7 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
 
     // Early exit if type checking is disabled
     if (!config.enabled) {
+      debug.typecheck("disabled", { reason: "config.enabled=false" });
       trace.event("typecheck.disabled");
       return {
         version: "aurelia-typecheck@1",
@@ -90,15 +92,19 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
       };
     }
 
+    debug.typecheck("start", { rootVmType: opts.rootVmType });
+
     // Collect expected types from linked semantics
     trace.event("typecheck.collect_expected_start");
     const expectedInfo = collectExpectedTypes(opts.linked);
     trace.event("typecheck.collect_expected_complete", { count: expectedInfo.size });
+    debug.typecheck("expected.collected", { count: expectedInfo.size });
 
     // Collect inferred types from expression ASTs
     trace.event("typecheck.collect_inferred_start");
     const inferredByExpr = collectInferredTypes(opts);
     trace.event("typecheck.collect_inferred_complete", { count: inferredByExpr.size });
+    debug.typecheck("inferred.collected", { count: inferredByExpr.size });
 
     // Build span index and collect diagnostics
     trace.event("typecheck.diagnostics_start");
@@ -192,6 +198,14 @@ function collectDiagnostics(
 
     // Skip if compatible or severity is off
     if (result.compatible || result.severity === "off") continue;
+
+    debug.typecheck("mismatch", {
+      exprId: id,
+      expected: expectedInfo.type,
+      actual,
+      severity: result.severity,
+      context: expectedInfo.context,
+    });
 
     const span = exprIdMapGet(spans, id) ?? null;
     const code = severityToCode(result.severity);
