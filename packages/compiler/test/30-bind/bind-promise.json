@@ -100,5 +100,127 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "PR-06 promise with pending branch only - pending uses promiseValue overlay directly",
+    "comment": "pending branch doesn't create its own promiseBranch overlay - expressions eval in promiseValue",
+    "markup": "<div promise.bind=\"p\"><template pending>Loading ${msg}...</template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promiseValue@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "promiseValue" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "p" },
+        { "kind": "expr", "frame": "overlay:promiseValue@1", "code": "msg" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-07 promise inside repeat - iterator overlay wraps promise overlays",
+    "markup": "<div repeat.for=\"item of items\"><div promise.bind=\"item.task\"><template then=\"data\">${data}</template></div></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" },
+        { "label": "overlay:promiseValue@2", "parent": "overlay:iterator@1", "kind": "overlay", "overlay": null, "origin": "promiseValue" },
+        { "label": "overlay:promiseBranch@3", "parent": "overlay:promiseValue@2", "kind": "overlay", "overlay": null, "origin": "promiseBranch" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:promiseBranch@3", "kind": "alias", "name": "data" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "frame": "overlay:iterator@1", "code": "item.task" },
+        { "kind": "expr", "frame": "overlay:promiseBranch@3", "code": "data" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-08 repeat inside promise then branch - iterator inside promise branch",
+    "markup": "<div promise.bind=\"fetchItems\"><template then=\"items\"><ul repeat.for=\"item of items\"><li>${item}</li></ul></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promiseValue@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "promiseValue" },
+        { "label": "overlay:promiseBranch@2", "parent": "overlay:promiseValue@1", "kind": "overlay", "overlay": null, "origin": "promiseBranch" },
+        { "label": "overlay:iterator@3", "parent": "overlay:promiseBranch@2", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:promiseBranch@2", "kind": "alias", "name": "items" },
+        { "frame": "overlay:iterator@3", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "fetchItems" },
+        { "kind": "forOfHeader", "frame": "overlay:promiseBranch@2" },
+        { "kind": "expr", "frame": "overlay:iterator@3", "code": "item" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-09 promise with all three branches - pending, then, catch",
+    "comment": "pending doesn't create overlay, then and catch do",
+    "markup": "<div promise.bind=\"task\"><template pending>${loadingMsg}</template><template then=\"data\">${data}</template><template catch=\"err\">${err}</template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promiseValue@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "promiseValue" },
+        { "label": "overlay:promiseBranch@2", "parent": "overlay:promiseValue@1", "kind": "overlay", "overlay": null, "origin": "promiseBranch" },
+        { "label": "overlay:promiseBranch@3", "parent": "overlay:promiseValue@1", "kind": "overlay", "overlay": null, "origin": "promiseBranch" }
+      ],
+      "locals": [
+        { "frame": "overlay:promiseBranch@2", "kind": "alias", "name": "data" },
+        { "frame": "overlay:promiseBranch@3", "kind": "alias", "name": "err" }
+      ],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "task" },
+        { "kind": "expr", "frame": "overlay:promiseValue@1", "code": "loadingMsg" },
+        { "kind": "expr", "frame": "overlay:promiseBranch@2", "code": "data" },
+        { "kind": "expr", "frame": "overlay:promiseBranch@3", "code": "err" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "PR-10 nested promise - promise inside promise then branch",
+    "markup": "<div promise.bind=\"outer\"><template then=\"innerP\"><div promise.bind=\"innerP\"><template then=\"val\">${val}</template></div></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:promiseValue@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "promiseValue" },
+        { "label": "overlay:promiseBranch@2", "parent": "overlay:promiseValue@1", "kind": "overlay", "overlay": null, "origin": "promiseBranch" },
+        { "label": "overlay:promiseValue@3", "parent": "overlay:promiseBranch@2", "kind": "overlay", "overlay": null, "origin": "promiseValue" },
+        { "label": "overlay:promiseBranch@4", "parent": "overlay:promiseValue@3", "kind": "overlay", "overlay": null, "origin": "promiseBranch" }
+      ],
+      "locals": [
+        { "frame": "overlay:promiseBranch@2", "kind": "alias", "name": "innerP" },
+        { "frame": "overlay:promiseBranch@4", "kind": "alias", "name": "val" }
+      ],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "outer" },
+        { "kind": "expr", "frame": "overlay:promiseBranch@2", "code": "innerP" },
+        { "kind": "expr", "frame": "overlay:promiseBranch@4", "code": "val" }
+      ],
+      "diags": []
+    }
   }
 ]

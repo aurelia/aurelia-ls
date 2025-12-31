@@ -1,0 +1,205 @@
+[
+  {
+    "name": "B-SW-01 switch with multiple static cases - expressions in root frame",
+    "markup": "<div switch.bind=\"status\"><template case=\"active\">${activeMsg}</template><template case=\"inactive\">${inactiveMsg}</template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "status", "frame": "root" },
+        { "kind": "expr", "code": "\"active\"", "frame": "root" },
+        { "kind": "expr", "code": "activeMsg", "frame": "root" },
+        { "kind": "expr", "code": "\"inactive\"", "frame": "root" },
+        { "kind": "expr", "code": "inactiveMsg", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-02 switch with case.bind dynamic - all expressions in root frame",
+    "markup": "<div switch.bind=\"code\"><template case.bind=\"errorCode\">${errorMsg}</template><template default-case>${defaultMsg}</template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "code", "frame": "root" },
+        { "kind": "expr", "code": "errorCode", "frame": "root" },
+        { "kind": "expr", "code": "errorMsg", "frame": "root" },
+        { "kind": "expr", "code": "defaultMsg", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-03 repeat inside switch case - repeat creates iterator overlay",
+    "markup": "<div switch.bind=\"mode\"><template case=\"list\"><ul repeat.for=\"item of items\">${item}</ul></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "expr", "code": "mode", "frame": "root" },
+        { "kind": "expr", "code": "\"list\"", "frame": "root" },
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "item", "frame": "overlay:iterator@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-04 with inside switch case - with creates value overlay",
+    "markup": "<div switch.bind=\"mode\"><template case=\"detail\"><section with.bind=\"user\">${name}</section></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "mode", "frame": "root" },
+        { "kind": "expr", "code": "\"detail\"", "frame": "root" },
+        { "kind": "expr", "code": "user", "frame": "root" },
+        { "kind": "expr", "code": "name", "frame": "overlay:valueOverlay@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-05 repeat > switch > case - switch inside repeat uses iterator overlay",
+    "comment": "switch.bind references item (in overlay), but static case values stay in root frame",
+    "markup": "<div repeat.for=\"item of items\"><div switch.bind=\"item.status\"><template case=\"on\">On</template><template case=\"off\">Off</template></div></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "item.status", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "\"on\"", "frame": "root" },
+        { "kind": "expr", "code": "\"off\"", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-06 switch + repeat on same element - multiple TCs share scope",
+    "comment": "switch.bind references s (in overlay), case value is static (in root), $index is contextual (in overlay)",
+    "markup": "<div repeat.for=\"s of statuses\" switch.bind=\"s\"><template case=\"a\">${$index}</template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "s" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "code": "s", "frame": "overlay:iterator@1" },
+        { "kind": "expr", "code": "\"a\"", "frame": "root" },
+        { "kind": "expr", "code": "$index", "frame": "overlay:iterator@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-07 nested switch - inner switch inside case of outer switch",
+    "markup": "<div switch.bind=\"outer\"><template case=\"a\"><div switch.bind=\"inner\"><template case=\"x\">${innerX}</template></div></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "outer", "frame": "root" },
+        { "kind": "expr", "code": "\"a\"", "frame": "root" },
+        { "kind": "expr", "code": "inner", "frame": "root" },
+        { "kind": "expr", "code": "\"x\"", "frame": "root" },
+        { "kind": "expr", "code": "innerX", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-08 switch with event binding in case",
+    "markup": "<div switch.bind=\"mode\"><template case=\"edit\"><button click.trigger=\"save()\">Save</button></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "mode", "frame": "root" },
+        { "kind": "expr", "code": "\"edit\"", "frame": "root" },
+        { "kind": "expr", "code": "save()", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-09 switch with property binding in case",
+    "markup": "<div switch.bind=\"type\"><template case=\"input\"><input value.bind=\"inputValue\"></template></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "type", "frame": "root" },
+        { "kind": "expr", "code": "\"input\"", "frame": "root" },
+        { "kind": "expr", "code": "inputValue", "frame": "root" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "B-SW-10 switch with wrapper elements between switch and case",
+    "comment": "Native elements don't block case visibility to switch",
+    "markup": "<div switch.bind=\"status\"><div class=\"container\"><div class=\"inner\"><template case=\"a\">${a}</template></div></div></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "status", "frame": "root" },
+        { "kind": "expr", "code": "\"a\"", "frame": "root" },
+        { "kind": "expr", "code": "a", "frame": "root" }
+      ],
+      "diags": []
+    }
+  }
+]

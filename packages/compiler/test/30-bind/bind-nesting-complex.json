@@ -72,5 +72,129 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "NX-03 3-level if nesting - if reuses parent scope, all expressions in root",
+    "comment": "if.bind doesn't create overlays - all expressions evaluate in root frame",
+    "markup": "<div if.bind=\"a\"><div if.bind=\"b\"><div if.bind=\"c\">${msg}</div></div></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "a" },
+        { "kind": "expr", "frame": "root", "code": "b" },
+        { "kind": "expr", "frame": "root", "code": "c" },
+        { "kind": "expr", "frame": "root", "code": "msg" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "NX-04 if > repeat > if - inner if reuses repeat overlay",
+    "markup": "<div if.bind=\"show\"><ul repeat.for=\"item of items\"><li if.bind=\"item.visible\">${item.name}</li></ul></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "show" },
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "frame": "overlay:iterator@1", "code": "item.visible" },
+        { "kind": "expr", "frame": "overlay:iterator@1", "code": "item.name" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "NX-05 if/else chains - else branch shares scope with if",
+    "markup": "<div if.bind=\"mode==='a'\">${msgA}</div><div else if.bind=\"mode==='b'\">${msgB}</div><div else>${msgC}</div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "mode==='a'" },
+        { "kind": "expr", "frame": "root", "code": "msgA" },
+        { "kind": "expr", "frame": "root", "code": "mode==='b'" },
+        { "kind": "expr", "frame": "root", "code": "msgB" },
+        { "kind": "expr", "frame": "root", "code": "msgC" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "NX-06 repeat > switch > case - switch inside repeat uses iterator overlay",
+    "comment": "switch + case reuse scope, so they use the iterator overlay; static case values stay in root",
+    "markup": "<ul repeat.for=\"item of items\"><li switch.bind=\"item.type\"><template case=\"a\">${item.a}</template><template case=\"b\">${item.b}</template><template default-case>${item.other}</template></li></ul>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:iterator@1", "parent": "root", "kind": "overlay", "overlay": null, "origin": "iterator" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@1", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "forOfHeader", "frame": "root" },
+        { "kind": "expr", "frame": "overlay:iterator@1", "code": "item.type" },
+        { "kind": "expr", "frame": "root", "code": "\"a\"" },
+        { "kind": "expr", "frame": "overlay:iterator@1", "code": "item.a" },
+        { "kind": "expr", "frame": "root", "code": "\"b\"" },
+        { "kind": "expr", "frame": "overlay:iterator@1", "code": "item.b" },
+        { "kind": "expr", "frame": "overlay:iterator@1", "code": "item.other" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "NX-07 with > repeat > with - deeply nested value overlays",
+    "markup": "<section with.bind=\"ctx1\"><ul repeat.for=\"item of items\"><li with.bind=\"item.detail\">${name} - ${$index}</li></ul></section>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" },
+        { "label": "overlay:iterator@2", "parent": "overlay:valueOverlay@1", "kind": "overlay", "overlay": null, "origin": "iterator" },
+        { "label": "overlay:valueOverlay@3", "parent": "overlay:iterator@2", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
+      ],
+      "locals": [
+        { "frame": "overlay:iterator@2", "kind": "iteratorLocal", "name": "item" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$index" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$first" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$last" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$even" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$odd" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$length" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$middle" }
+      ],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "ctx1" },
+        { "kind": "forOfHeader", "frame": "overlay:valueOverlay@1" },
+        { "kind": "expr", "frame": "overlay:iterator@2", "code": "item.detail" },
+        { "kind": "expr", "frame": "overlay:valueOverlay@3", "code": "name" },
+        { "kind": "expr", "frame": "overlay:valueOverlay@3", "code": "$index" }
+      ],
+      "diags": []
+    }
   }
 ]
