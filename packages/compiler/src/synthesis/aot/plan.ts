@@ -211,6 +211,12 @@ class PlanningContext {
       // This handles cases where elseDef.dom references might not be in the WeakMap
       result = this.linked.templates.find(t => t.dom === dom);
     }
+    // DEBUG: Log when template is not found
+    if (!result) {
+      console.log("[DEBUG getLinkedTemplate] NOT FOUND for dom.id:", dom.id);
+      console.log("[DEBUG getLinkedTemplate] linked.templates count:", this.linked.templates.length);
+      console.log("[DEBUG getLinkedTemplate] linked.templates ids:", this.linked.templates.map(t => t.dom.id));
+    }
     return result;
   }
 
@@ -936,12 +942,13 @@ function transformController(
   });
 
   // For controllers with child branches (switch, promise), we collect branches separately
-  // and don't transform the nested template normally
+  // but still need to transform the nested template to get markers for branch positions
   const hasChildBranches = config.branches?.relationship === "child";
 
-  // Transform the nested template (unless this controller has child branches)
-  // Controllers with child branches process their children via collectChildBranches
-  const template = (nestedLinked && !hasChildBranches)
+  // Transform the nested template to get markers
+  // For child branches (switch, promise), this produces markers for each branch position
+  // For other controllers, this produces the full nested content
+  const template = nestedLinked
     ? transformNestedTemplate(nestedLinked, instructionsByTarget, frameId, ctx)
     : createEmptyFragment();
 

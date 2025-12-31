@@ -86,6 +86,8 @@ export interface NestedDefinition {
   name: string;
   /** Whether compilation is needed (always false for AOT) */
   needsCompile: false;
+  /** Nested template definitions (for controllers with branches like switch/promise) */
+  nestedTemplates?: NestedDefinition[];
 }
 
 /**
@@ -129,6 +131,8 @@ export function translateInstructions(
       instructions: nestedResult.instructions,
       name: nested?.name ?? `nested-${i}`,
       needsCompile: false,
+      // Include nested definitions (for branches like switch/case, promise/then/catch)
+      nestedTemplates: nestedResult.nestedDefs.length > 0 ? nestedResult.nestedDefs : undefined,
     });
   }
 
@@ -310,8 +314,16 @@ function translateHydrateTemplateController(
     throw new Error(`Missing nested template at index ${ins.templateIndex}`);
   }
 
-  // Translate nested instructions
-  const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, ctx));
+  // Create a nested context for translating this controller's instructions.
+  // The templateIndex values in nestedDef.instructions reference nestedDef.nestedTemplates,
+  // not the top-level ctx.nestedDefs.
+  const nestedCtx: TranslationContext = {
+    exprMap: ctx.exprMap,
+    nestedDefs: nestedDef.nestedTemplates ?? [],
+  };
+
+  // Translate nested instructions using the nested context
+  const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, nestedCtx));
 
   // Build the element definition for the template controller
   const def = {
