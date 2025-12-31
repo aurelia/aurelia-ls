@@ -44,6 +44,7 @@ import {
 } from "@aurelia/expression-parser";
 import {
   INSTRUCTION_TYPE,
+  debug,
   type SerializedDefinition,
   type SerializedInstruction,
   type SerializedExpression,
@@ -133,6 +134,13 @@ export function translateInstructions(
       needsCompile: false,
       // Include nested definitions (for branches like switch/case, promise/then/catch)
       nestedTemplates: nestedResult.nestedDefs.length > 0 ? nestedResult.nestedDefs : undefined,
+    });
+    debug.ssr("translate.nested", {
+      index: i,
+      name: nested?.name,
+      htmlLength: htmlNode?.html?.length ?? 0,
+      instructionRows: nested?.instructions?.length ?? 0,
+      childNestedCount: nestedResult.nestedDefs.length,
     });
   }
 
@@ -321,6 +329,15 @@ function translateHydrateTemplateController(
     exprMap: ctx.exprMap,
     nestedDefs: nestedDef.nestedTemplates ?? [],
   };
+
+  debug.ssr("translate.controller", {
+    resource: ins.resource,
+    templateIndex: ins.templateIndex,
+    templateName: nestedDef.name,
+    templateHtmlLength: nestedDef.template.length,
+    nestedDefsCount: nestedCtx.nestedDefs.length,
+    instructionCount: ins.instructions.length,
+  });
 
   // Translate nested instructions using the nested context
   const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, nestedCtx));

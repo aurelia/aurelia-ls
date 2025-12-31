@@ -1036,6 +1036,11 @@ function transformController(
     const branches = collectChildBranches(nestedLinked, frameId, ctx);
     if (branches.length > 0) {
       result.branches = branches;
+      debug.aot("plan.branches", {
+        parent: ins.res,
+        branchCount: branches.length,
+        branchResources: branches.map(b => b.resource),
+      });
     }
   }
 

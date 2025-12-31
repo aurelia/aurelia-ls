@@ -22,6 +22,7 @@ import type {
   PlanController,
   PlanStaticAttr,
 } from "./types.js";
+import { debug } from "../../shared/debug.js";
 
 /* =============================================================================
  * Public API
@@ -225,11 +226,21 @@ function collectNestedFromElementTree(
         const branchNested = collectNestedFromNodeTree(branchCtrl.template, branchCtx);
         nested.push({ html: branchHtml, nested: branchNested });
       }
+      debug.aot("emit.nestedHtml.branches", {
+        controller: ctrl.resource,
+        branchCount: ctrl.branches.length,
+        branchHtmlLengths: nested.map(n => n.html.length),
+      });
     } else {
       // No branches - collect nested templates from within the main template
       nested.push(...collectNestedFromNodeTree(ctrl.template, nestedCtx));
     }
 
+    debug.aot("emit.nestedHtml", {
+      controller: ctrl.resource,
+      htmlLength: html.length,
+      nestedCount: nested.length,
+    });
     results.push({ html, nested });
   }
 
