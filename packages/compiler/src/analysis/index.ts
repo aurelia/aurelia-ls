@@ -49,7 +49,7 @@ export type {
 } from "./20-resolve/types.js";
 
 // Stage 30: Bind (LinkedSemantics -> ScopeModule)
-export { bindScopes } from "./30-bind/bind.js";
+export { bindScopes, type BindScopesOptions } from "./30-bind/bind.js";
 
 // Stage 40: Typecheck (ScopeModule -> TypecheckModule)
 export {

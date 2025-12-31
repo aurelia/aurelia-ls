@@ -91,6 +91,7 @@ import {
 } from "../../shared/diagnosed.js";
 import { buildDiagnostic } from "../../shared/diagnostics.js";
 import { extractExprResources, extractHostAssignments } from "../../shared/expr-utils.js";
+import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
@@ -148,36 +149,71 @@ export interface ResolveHostOptions {
   resources?: ResourceCollections;
   graph?: ResourceGraph | null;
   scope?: ResourceScopeId | null;
+  /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
+  trace?: CompileTrace;
 }
 
 export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOptions): LinkedSemanticsModule {
-  const diags: SemDiagnostic[] = [];
-  const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
-  const ctx: ResolverContext = {
-    lookup: createSemanticsLookup(sem, lookupOpts),
-    diags,
-    graph: opts?.graph ?? null,
-  };
-  const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
+  const trace = opts?.trace ?? NOOP_TRACE;
 
-  // Validate branch controller relationships on ROOT template only.
-  // Nested templates (controller defs) are validated via validateNestedIrRows during recursion.
-  // ir.templates[0] is always the root; others are nested templates for controllers.
-  if (templates[0]) {
-    validateBranchControllers(templates[0].rows, ctx);
-  }
+  return trace.span("resolve.host", () => {
+    trace.setAttributes({
+      [CompilerAttributes.TEMPLATE]: ir.name ?? "<unknown>",
+      "resolve.template_count": ir.templates.length,
+      "resolve.expr_count": ir.exprTable?.length ?? 0,
+    });
 
-  // Validate expression resources (AU01xx diagnostics)
-  if (ir.exprTable) {
-    validateExpressionResources(ir.exprTable, ctx);
-  }
+    const diags: SemDiagnostic[] = [];
+    const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
+    const ctx: ResolverContext = {
+      lookup: createSemanticsLookup(sem, lookupOpts),
+      diags,
+      graph: opts?.graph ?? null,
+    };
 
-  return {
-    version: "aurelia-linked@1",
-    templates,
-    exprTable: ir.exprTable ?? [], // passthrough for Analysis/tooling
-    diags,
-  };
+    // Link all templates
+    trace.event("resolve.templates_start");
+    const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
+    trace.event("resolve.templates_complete", { count: templates.length });
+
+    // Validate branch controller relationships on ROOT template only.
+    // Nested templates (controller defs) are validated via validateNestedIrRows during recursion.
+    // ir.templates[0] is always the root; others are nested templates for controllers.
+    if (templates[0]) {
+      trace.event("resolve.validate_branches_start");
+      validateBranchControllers(templates[0].rows, ctx);
+      trace.event("resolve.validate_branches_complete");
+    }
+
+    // Validate expression resources (AU01xx diagnostics)
+    if (ir.exprTable) {
+      trace.event("resolve.validate_expr_resources_start");
+      validateExpressionResources(ir.exprTable, ctx);
+      trace.event("resolve.validate_expr_resources_complete");
+    }
+
+    // Count linked instructions
+    let instrCount = 0;
+    for (const t of templates) {
+      for (const r of t.rows) {
+        instrCount += r.instructions.length;
+      }
+    }
+
+    // Record output metrics
+    trace.setAttributes({
+      [CompilerAttributes.INSTR_COUNT]: instrCount,
+      [CompilerAttributes.DIAG_COUNT]: diags.length,
+      [CompilerAttributes.DIAG_ERROR_COUNT]: diags.filter(d => d.code.startsWith("AU11") || d.code.startsWith("AU01")).length,
+    });
+
+    return {
+      version: "aurelia-linked@1",
+      templates,
+      exprTable: ir.exprTable ?? [], // passthrough for Analysis/tooling
+      diags,
+    };
+  });
 }
 
 /* ============================================================================
