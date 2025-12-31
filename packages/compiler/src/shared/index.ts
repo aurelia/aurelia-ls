@@ -59,3 +59,43 @@ export {
   // Imperative helper
   DiagnosticAccumulator,
 } from "./diagnosed.js";
+
+// Instrumentation (CompileTrace)
+export {
+  // Core types
+  type Span,
+  type SpanEvent,
+  type AttributeValue,
+  type AttributeMap,
+  type ReadonlyAttributeMap,
+  type CompileTrace,
+  type TraceExporter,
+  type CreateTraceOptions,
+  type CompilerAttributeKey,
+  // Semantic attribute keys
+  CompilerAttributes,
+  // No-op implementations (zero cost when disabled)
+  NOOP_SPAN,
+  NOOP_TRACE,
+  // Factory
+  createTrace,
+  // Utilities
+  nowNanos,
+  formatDuration,
+} from "./trace.js";
+
+// Trace Exporters
+export {
+  // No-op exporter
+  NOOP_EXPORTER,
+  // Console exporter (dev debugging)
+  ConsoleExporter,
+  createConsoleExporter,
+  type ConsoleExporterOptions,
+  // Collecting exporter (testing)
+  CollectingExporter,
+  createCollectingExporter,
+  // Multi-exporter (fan-out)
+  MultiExporter,
+  createMultiExporter,
+} from "./trace-exporters.js";
