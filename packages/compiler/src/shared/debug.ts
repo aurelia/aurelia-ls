@@ -159,7 +159,12 @@ function formatValue(value: unknown, depth: number): string {
     }
     return `{...}`;
   }
-  return String(value);
+  // Fallback for primitives - use JSON.stringify to avoid [object Object]
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
 }
 
 /**

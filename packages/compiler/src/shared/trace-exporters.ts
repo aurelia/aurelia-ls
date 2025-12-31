@@ -242,7 +242,12 @@ export class ConsoleExporter implements TraceExporter {
     if (Array.isArray(value)) {
       return `[${value.length}]`;
     }
-    return String(value);
+    // Fallback - use JSON.stringify to avoid [object Object]
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "[unserializable]";
+    }
   }
 }
 
@@ -280,10 +285,13 @@ export class CollectingExporter implements TraceExporter {
     this.events.push({ span, event });
   }
 
-  async flush(): Promise<void> {}
+  flush(): Promise<void> {
+    return Promise.resolve();
+  }
 
-  async shutdown(): Promise<void> {
+  shutdown(): Promise<void> {
     this.clear();
+    return Promise.resolve();
   }
 
   /** Clear all collected data */
@@ -507,12 +515,14 @@ export class JSONExporter implements TraceExporter {
     }
   }
 
-  async flush(): Promise<void> {
+  flush(): Promise<void> {
     // Nothing to flush (in-memory)
+    return Promise.resolve();
   }
 
-  async shutdown(): Promise<void> {
+  shutdown(): Promise<void> {
     this.clear();
+    return Promise.resolve();
   }
 
   /**

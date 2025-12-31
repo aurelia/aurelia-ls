@@ -11,7 +11,7 @@
 
 import type { OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment } from "./types.js";
 import type { VmReflection, SynthesisOptions } from "../../shared/index.js";
-import { NOOP_TRACE, CompilerAttributes, debug } from "../../shared/index.js";
+import { NOOP_TRACE, debug } from "../../shared/index.js";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
