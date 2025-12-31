@@ -98,4 +98,12 @@ export {
   // Multi-exporter (fan-out)
   MultiExporter,
   createMultiExporter,
+  // JSON exporter (build analysis)
+  JSONExporter,
+  createJSONExporter,
+  type JSONExporterOptions,
+  type SerializedSpan,
+  type SerializedEvent,
+  type SerializedTrace,
+  type TraceSummary,
 } from "./trace-exporters.js";

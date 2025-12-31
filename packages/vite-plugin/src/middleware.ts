@@ -17,6 +17,7 @@ import { renderWithComponents, type AotCompileResult } from "@aurelia-ls/ssr";
 import type { ISSRManifest } from "@aurelia/runtime-html";
 import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
 import { loadProjectComponents } from "./loader.js";
+import { createRequestTrace } from "./trace.js";
 
 /**
  * Create SSR middleware for Vite dev server.
@@ -59,6 +60,13 @@ export function createSSRMiddleware(
       return next();
     }
 
+    // Create request trace if tracing is enabled
+    const requestTrace = options.trace.enabled
+      ? createRequestTrace(url, options.trace, {
+          info: (msg) => server.config.logger.info(msg),
+        })
+      : null;
+
     try {
       // Wait for resolution to complete on first request
       if (!resolutionReady && getResolutionPromise) {
@@ -83,10 +91,12 @@ export function createSSRMiddleware(
       if (resolution) {
         // NEW FLOW: Use real component classes with child component support
         // Components are loaded and patched ONCE by the loader (cached)
+        requestTrace?.trace.event("ssr.loadComponents");
         const { root, children } = await loadProjectComponents(
           server,
           resolution,
           options.entry,
+          requestTrace?.trace,
         );
 
         if (!root) {
@@ -95,6 +105,7 @@ export function createSSRMiddleware(
 
         // Render with real classes (classes have $au from transform hook)
         // Pass request context for URL-aware rendering (routing)
+        requestTrace?.trace.event("ssr.render");
         const renderResult = await renderWithComponents(root.ComponentClass, {
           childComponents: children.map((c) => c.ComponentClass),
           ssr: {
@@ -105,8 +116,10 @@ export function createSSRMiddleware(
             baseHref: options.baseHref,
           },
           register: options.register,
+          trace: requestTrace?.trace,
         });
 
+        requestTrace?.trace.event("ssr.injectShell");
         html = injectIntoShell(
           options.htmlShell,
           renderResult.html,
@@ -132,6 +145,9 @@ export function createSSRMiddleware(
       server.config.logger.info(`[aurelia-ssr] Rendered ${url}${renderMode}`, {
         timestamp: true,
       });
+
+      // Finish request trace
+      requestTrace?.finish();
     } catch (error) {
       // Fix stack trace for better debugging
       server.ssrFixStacktrace(error as Error);

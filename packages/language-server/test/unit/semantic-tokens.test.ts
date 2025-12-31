@@ -404,6 +404,28 @@ describe("extractTokens", () => {
  * =========================== */
 
 describe("handleSemanticTokensFull", () => {
+  // Import NOOP_TRACE for mock context
+  const NOOP_TRACE = {
+    span: (_name: string, fn: () => unknown) => fn(),
+    spanAsync: async (_name: string, fn: () => Promise<unknown>) => fn(),
+    event: () => {},
+    setAttribute: () => {},
+    setAttributes: () => {},
+    rootSpan: () => ({
+      end: () => {},
+      name: "root",
+      spanId: "mock",
+      traceId: "mock",
+      startTime: 0n,
+      endTime: null,
+      duration: null,
+      parent: null,
+      children: [],
+      attributes: new Map(),
+      events: [],
+    }),
+  };
+
   function createMockContext(overrides: Record<string, unknown> = {}) {
     return {
       logger: {
@@ -412,6 +434,7 @@ describe("handleSemanticTokensFull", () => {
         error: vi.fn(),
         warn: vi.fn(),
       },
+      trace: NOOP_TRACE,
       ensureProgramDocument: vi.fn(),
       workspace: {
         program: {

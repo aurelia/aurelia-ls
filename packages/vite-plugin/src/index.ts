@@ -43,6 +43,9 @@ export type {
   StateProvider,
   ResolvedSSROptions,
   ResolutionContext,
+  TraceOptions,
+  TraceOutput,
+  ResolvedTraceOptions,
 } from "./types.js";
 
 // Re-export SSG types for convenience

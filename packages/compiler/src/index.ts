@@ -184,6 +184,8 @@ export {
   createCollectingExporter,
   MultiExporter,
   createMultiExporter,
+  JSONExporter,
+  createJSONExporter,
 } from "./shared/index.js";
 export type {
   Span,
@@ -196,6 +198,11 @@ export type {
   CreateTraceOptions,
   CompilerAttributeKey,
   ConsoleExporterOptions,
+  JSONExporterOptions,
+  SerializedSpan,
+  SerializedEvent,
+  SerializedTrace,
+  TraceSummary,
 } from "./shared/index.js";
 
 // === Pipeline ===

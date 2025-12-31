@@ -1215,53 +1215,65 @@ export function handleSemanticTokensFull(
   ctx: ServerContext,
   params: SemanticTokensParams
 ): SemanticTokens | null {
-  try {
-    const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-    if (!doc) {
+  return ctx.trace.span("lsp.semanticTokens", () => {
+    try {
+      ctx.trace.setAttribute("lsp.semanticTokens.uri", params.textDocument.uri);
+
+      const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+      if (!doc) {
+        return null;
+      }
+
+      const canonical = canonicalDocumentUri(doc.uri);
+      const compilation = ctx.workspace.program.getCompilation(canonical.uri);
+
+      if (!compilation?.linked?.templates?.length) {
+        return null;
+      }
+
+      // Use source store text (not doc.getText) to match compiler's loc offsets.
+      // VS Code normalizes CRLF→LF in TextDocument, but source store preserves original.
+      const snap = ctx.workspace.sources.get(canonical.uri);
+      const text = snap?.text ?? doc.getText();
+      const template = compilation.linked.templates[0];
+      if (!template) return null;
+
+      ctx.trace.event("lsp.semanticTokens.extract");
+      const nodeMap = buildNodeMap(template.dom);
+      const elementTokens = extractTokens(text, template.rows, nodeMap);
+
+      // Extract expression tokens if we have expression data
+      const exprTable = compilation.exprTable ?? [];
+      const exprSpans = compilation.exprSpans ?? new Map();
+      const exprTokens = extractExpressionTokens(text, exprTable, exprSpans);
+
+      // Extract binding command tokens (.bind, .trigger, etc.)
+      const commandTokens = extractBindingCommandTokens(text, template.rows);
+
+      // Extract interpolation delimiter tokens (${ and })
+      const delimiterTokens = extractInterpolationDelimiterTokens(text, template.rows);
+
+      // Merge all tokens
+      const tokens = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens];
+
+      if (tokens.length === 0) {
+        return null;
+      }
+
+      ctx.trace.setAttributes({
+        "lsp.semanticTokens.count": tokens.length,
+        "lsp.semanticTokens.elementCount": elementTokens.length,
+        "lsp.semanticTokens.exprCount": exprTokens.length,
+        "lsp.semanticTokens.commandCount": commandTokens.length,
+      });
+
+      const encoded = encodeTokens(tokens);
+      return {
+        data: encoded,
+      };
+    } catch (e) {
+      ctx.logger.error(`[semanticTokens] failed for ${params.textDocument.uri}: ${formatError(e)}`);
       return null;
     }
-
-    const canonical = canonicalDocumentUri(doc.uri);
-    const compilation = ctx.workspace.program.getCompilation(canonical.uri);
-
-    if (!compilation?.linked?.templates?.length) {
-      return null;
-    }
-
-    // Use source store text (not doc.getText) to match compiler's loc offsets.
-    // VS Code normalizes CRLF→LF in TextDocument, but source store preserves original.
-    const snap = ctx.workspace.sources.get(canonical.uri);
-    const text = snap?.text ?? doc.getText();
-    const template = compilation.linked.templates[0];
-    if (!template) return null;
-
-    const nodeMap = buildNodeMap(template.dom);
-    const elementTokens = extractTokens(text, template.rows, nodeMap);
-
-    // Extract expression tokens if we have expression data
-    const exprTable = compilation.exprTable ?? [];
-    const exprSpans = compilation.exprSpans ?? new Map();
-    const exprTokens = extractExpressionTokens(text, exprTable, exprSpans);
-
-    // Extract binding command tokens (.bind, .trigger, etc.)
-    const commandTokens = extractBindingCommandTokens(text, template.rows);
-
-    // Extract interpolation delimiter tokens (${ and })
-    const delimiterTokens = extractInterpolationDelimiterTokens(text, template.rows);
-
-    // Merge all tokens
-    const tokens = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens];
-
-    if (tokens.length === 0) {
-      return null;
-    }
-
-    const encoded = encodeTokens(tokens);
-    return {
-      data: encoded,
-    };
-  } catch (e) {
-    ctx.logger.error(`[semanticTokens] failed for ${params.textDocument.uri}: ${formatError(e)}`);
-    return null;
-  }
+  });
 }

@@ -371,3 +371,296 @@ export class MultiExporter implements TraceExporter {
 export function createMultiExporter(exporters: TraceExporter[]): MultiExporter {
   return new MultiExporter(exporters);
 }
+
+// =============================================================================
+// JSON Exporter (for build analysis)
+// =============================================================================
+
+/**
+ * Options for JSONExporter.
+ */
+export interface JSONExporterOptions {
+  /**
+   * Minimum span duration to include (in nanoseconds).
+   * Spans shorter than this are filtered out.
+   * Default: 0 (include all spans)
+   */
+  minDuration?: bigint;
+
+  /**
+   * Whether to include events in output.
+   * Default: true
+   */
+  includeEvents?: boolean;
+
+  /**
+   * Whether to include span hierarchy (parent/children).
+   * Default: true
+   */
+  includeHierarchy?: boolean;
+
+  /**
+   * Pretty-print JSON with indentation.
+   * Default: false (compact)
+   */
+  pretty?: boolean;
+}
+
+/**
+ * Serializable span data for JSON export.
+ */
+export interface SerializedSpan {
+  name: string;
+  spanId: string;
+  traceId: string;
+  parentSpanId: string | null;
+  startTime: string; // bigint as string
+  endTime: string | null;
+  durationMs: number | null;
+  durationFormatted: string | null;
+  attributes: Record<string, unknown>;
+  events?: SerializedEvent[];
+  children?: string[]; // spanIds
+}
+
+/**
+ * Serializable event data for JSON export.
+ */
+export interface SerializedEvent {
+  name: string;
+  timestamp: string;
+  attributes: Record<string, unknown>;
+}
+
+/**
+ * Complete trace data for JSON export.
+ */
+export interface SerializedTrace {
+  traceId: string;
+  startTime: string;
+  endTime: string | null;
+  totalDurationMs: number | null;
+  spanCount: number;
+  eventCount: number;
+  spans: SerializedSpan[];
+}
+
+/**
+ * Exporter that collects spans and can serialize to JSON.
+ * Useful for build analysis, CI integration, and debugging.
+ *
+ * @example
+ * const exporter = createJSONExporter({ pretty: true });
+ * const trace = createTrace({ name: "build", exporter });
+ *
+ * // ... run compilation ...
+ *
+ * // Get JSON data
+ * const json = exporter.toJSON();
+ * fs.writeFileSync("trace.json", json);
+ *
+ * // Or get structured data
+ * const data = exporter.getData();
+ */
+export class JSONExporter implements TraceExporter {
+  private readonly options: Required<JSONExporterOptions>;
+  private readonly spans: Span[] = [];
+  private readonly events: Array<{ span: Span; event: SpanEvent }> = [];
+  private traceId: string | null = null;
+  private startTime: bigint | null = null;
+  private endTime: bigint | null = null;
+
+  constructor(options: JSONExporterOptions = {}) {
+    this.options = {
+      minDuration: options.minDuration ?? 0n,
+      includeEvents: options.includeEvents ?? true,
+      includeHierarchy: options.includeHierarchy ?? true,
+      pretty: options.pretty ?? false,
+    };
+  }
+
+  onSpanStart(span: Span): void {
+    // Track trace start time from root span
+    if (span.parent === null) {
+      this.traceId = span.traceId;
+      this.startTime = span.startTime;
+    }
+  }
+
+  onSpanEnd(span: Span): void {
+    // Filter by minimum duration
+    if (span.duration !== null && span.duration < this.options.minDuration) {
+      return;
+    }
+
+    this.spans.push(span);
+
+    // Track trace end time from root span
+    if (span.parent === null) {
+      this.endTime = span.endTime;
+    }
+  }
+
+  onEvent(span: Span, event: SpanEvent): void {
+    if (this.options.includeEvents) {
+      this.events.push({ span, event });
+    }
+  }
+
+  async flush(): Promise<void> {
+    // Nothing to flush (in-memory)
+  }
+
+  async shutdown(): Promise<void> {
+    this.clear();
+  }
+
+  /**
+   * Clear all collected data.
+   */
+  clear(): void {
+    this.spans.length = 0;
+    this.events.length = 0;
+    this.traceId = null;
+    this.startTime = null;
+    this.endTime = null;
+  }
+
+  /**
+   * Get structured trace data.
+   */
+  getData(): SerializedTrace {
+    const serializedSpans: SerializedSpan[] = this.spans.map((span) => {
+      const durationMs = span.duration !== null
+        ? Number(span.duration) / 1_000_000
+        : null;
+
+      const serialized: SerializedSpan = {
+        name: span.name,
+        spanId: span.spanId,
+        traceId: span.traceId,
+        parentSpanId: span.parent?.spanId ?? null,
+        startTime: span.startTime.toString(),
+        endTime: span.endTime?.toString() ?? null,
+        durationMs,
+        durationFormatted: span.duration !== null ? formatDuration(span.duration) : null,
+        attributes: Object.fromEntries(span.attributes),
+      };
+
+      // Add events for this span
+      if (this.options.includeEvents) {
+        const spanEvents = this.events
+          .filter((e) => e.span.spanId === span.spanId)
+          .map((e) => ({
+            name: e.event.name,
+            timestamp: e.event.timestamp.toString(),
+            attributes: Object.fromEntries(e.event.attributes),
+          }));
+        if (spanEvents.length > 0) {
+          serialized.events = spanEvents;
+        }
+      }
+
+      // Add children
+      if (this.options.includeHierarchy) {
+        const childIds = span.children.map((c) => c.spanId);
+        if (childIds.length > 0) {
+          serialized.children = childIds;
+        }
+      }
+
+      return serialized;
+    });
+
+    const totalDurationMs = this.startTime !== null && this.endTime !== null
+      ? Number(this.endTime - this.startTime) / 1_000_000
+      : null;
+
+    return {
+      traceId: this.traceId ?? "unknown",
+      startTime: this.startTime?.toString() ?? "0",
+      endTime: this.endTime?.toString() ?? null,
+      totalDurationMs,
+      spanCount: this.spans.length,
+      eventCount: this.events.length,
+      spans: serializedSpans,
+    };
+  }
+
+  /**
+   * Get JSON string representation of the trace.
+   */
+  toJSON(): string {
+    const data = this.getData();
+    return this.options.pretty
+      ? JSON.stringify(data, null, 2)
+      : JSON.stringify(data);
+  }
+
+  /**
+   * Get a summary of the trace (useful for logging).
+   */
+  getSummary(): TraceSummary {
+    const data = this.getData();
+
+    // Calculate stats by span name
+    const byName = new Map<string, { count: number; totalMs: number; maxMs: number }>();
+    for (const span of data.spans) {
+      const existing = byName.get(span.name);
+      const durationMs = span.durationMs ?? 0;
+      if (existing) {
+        existing.count++;
+        existing.totalMs += durationMs;
+        existing.maxMs = Math.max(existing.maxMs, durationMs);
+      } else {
+        byName.set(span.name, { count: 1, totalMs: durationMs, maxMs: durationMs });
+      }
+    }
+
+    // Sort by total time descending
+    const topSpans = [...byName.entries()]
+      .sort((a, b) => b[1].totalMs - a[1].totalMs)
+      .slice(0, 10)
+      .map(([name, stats]) => ({
+        name,
+        count: stats.count,
+        totalMs: Math.round(stats.totalMs * 100) / 100,
+        avgMs: Math.round((stats.totalMs / stats.count) * 100) / 100,
+        maxMs: Math.round(stats.maxMs * 100) / 100,
+      }));
+
+    return {
+      traceId: data.traceId,
+      totalDurationMs: data.totalDurationMs !== null
+        ? Math.round(data.totalDurationMs * 100) / 100
+        : null,
+      spanCount: data.spanCount,
+      eventCount: data.eventCount,
+      topSpans,
+    };
+  }
+}
+
+/**
+ * Summary of a trace for quick analysis.
+ */
+export interface TraceSummary {
+  traceId: string;
+  totalDurationMs: number | null;
+  spanCount: number;
+  eventCount: number;
+  topSpans: Array<{
+    name: string;
+    count: number;
+    totalMs: number;
+    avgMs: number;
+    maxMs: number;
+  }>;
+}
+
+/**
+ * Create a JSON exporter for build analysis.
+ */
+export function createJSONExporter(options?: JSONExporterOptions): JSONExporter {
+  return new JSONExporter(options);
+}

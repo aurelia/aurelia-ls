@@ -6,8 +6,12 @@ import {
   PRELUDE_TS,
   canonicalDocumentUri,
   deriveTemplatePaths,
+  createTrace,
+  createConsoleExporter,
+  NOOP_TRACE,
   type DocumentUri,
   type OverlayBuildArtifact,
+  type CompileTrace,
 } from "@aurelia-ls/compiler";
 import type { PathUtils } from "./services/paths.js";
 import type { OverlayFs } from "./services/overlay-fs.js";
@@ -39,6 +43,7 @@ export interface ServerContext {
   readonly tsService: TsService;
   readonly tsAdapter: TsServicesAdapter;
   readonly vmReflection: VmReflectionService;
+  readonly trace: CompileTrace;
 
   // Mutable state
   workspaceRoot: string | null;
@@ -86,6 +91,27 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     vmReflection,
   } = init;
 
+  // Create trace if AURELIA_TRACE is enabled
+  const traceEnabled = process.env["AURELIA_TRACE"] === "1" ||
+                       process.env["AURELIA_TRACE"] === "true" ||
+                       process.env["AURELIA_LS_TRACE"] === "1" ||
+                       process.env["AURELIA_LS_TRACE"] === "true";
+
+  const trace: CompileTrace = traceEnabled
+    ? createTrace({
+        name: "language-server",
+        exporter: createConsoleExporter({
+          minDuration: 1_000_000n, // 1ms minimum
+          logEvents: false, // Too noisy for LSP
+          prefix: "[aurelia-ls-trace]",
+        }),
+      })
+    : NOOP_TRACE;
+
+  if (traceEnabled) {
+    logger.info("[trace] Tracing enabled via AURELIA_TRACE environment variable");
+  }
+
   // Mutable state - set during onInitialize
   let workspaceRoot: string | null = null;
   let projectIndex: AureliaProjectIndex;
@@ -129,16 +155,21 @@ export function createServerContext(init: ServerContextInit): ServerContext {
       return;
     }
 
-    lastSyncTime = now;
-    projectIndex.refresh();
-    const updated = workspace.reconfigure({
-      program: workspaceProgramOptions(),
-      language: { typescript: tsAdapter },
-      fingerprint: projectIndex.currentFingerprint(),
+    trace.span("lsp.syncWorkspaceWithIndex", () => {
+      lastSyncTime = now;
+      trace.event("lsp.sync.refresh");
+      projectIndex.refresh();
+      trace.event("lsp.sync.reconfigure");
+      const updated = workspace.reconfigure({
+        program: workspaceProgramOptions(),
+        language: { typescript: tsAdapter },
+        fingerprint: projectIndex.currentFingerprint(),
+      });
+      if (updated) {
+        logger.info(`[workspace] reconfigured fingerprint=${workspace.fingerprint}`);
+        trace.setAttribute("lsp.sync.updated", true);
+      }
     });
-    if (updated) {
-      logger.info(`[workspace] reconfigured fingerprint=${workspace.fingerprint}`);
-    }
   }
 
   function lookupText(uri: DocumentUri): string | null {
@@ -168,15 +199,19 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   }
 
   function materializeOverlay(uri: DocumentUri | string): OverlayBuildArtifact | null {
-    const canonical = canonicalDocumentUri(uri);
-    vmReflection.setActiveTemplate(canonical.path);
-    if (!workspace.snapshot(canonical.uri)) {
-      const doc = ensureProgramDocument(uri);
-      if (!doc) return null;
-    }
-    const artifact = workspace.buildService.getOverlay(canonical.uri);
-    tsService.upsertOverlay(artifact.overlay.path, artifact.overlay.text);
-    return artifact;
+    return trace.span("lsp.materializeOverlay", () => {
+      const canonical = canonicalDocumentUri(uri);
+      trace.setAttribute("lsp.overlay.uri", canonical.uri);
+      vmReflection.setActiveTemplate(canonical.path);
+      if (!workspace.snapshot(canonical.uri)) {
+        const doc = ensureProgramDocument(uri);
+        if (!doc) return null;
+      }
+      trace.event("lsp.overlay.build");
+      const artifact = workspace.buildService.getOverlay(canonical.uri);
+      tsService.upsertOverlay(artifact.overlay.path, artifact.overlay.text);
+      return artifact;
+    });
   }
 
   function overlayPathOptions(): { isJs: boolean; overlayBaseName?: string } {
@@ -194,6 +229,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     tsService,
     tsAdapter,
     vmReflection,
+    trace,
 
     get workspaceRoot() { return workspaceRoot; },
     set workspaceRoot(v) { workspaceRoot = v; },
