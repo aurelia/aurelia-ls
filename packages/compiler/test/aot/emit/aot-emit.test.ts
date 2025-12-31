@@ -73,7 +73,8 @@ interface InstructionIntent {
 
 interface NestedIntent {
   name: string;
-  instructions: InstructionIntent[];
+  instructions?: InstructionIntent[];
+  nested?: NestedIntent[];
 }
 
 interface EmitIntent {
@@ -93,6 +94,7 @@ interface EmitDiff {
   }>;
   missingNested: string[];
   extraNested: string[];
+  nestedMismatches: string[];
   countMismatches: string[];
 }
 
@@ -138,13 +140,38 @@ function runPipeline(markup: string, ctx: CompilerContext): unknown {
 }
 
 // Reduce emit result to testable intent
+interface NestedTemplateResult {
+  name: string;
+  instructions: unknown[][];
+  nestedTemplates?: NestedTemplateResult[];
+}
+
 interface EmitResult {
   definition: {
     instructions: unknown[][];
-    nestedTemplates: Array<{ name: string; instructions: unknown[][] }>;
+    nestedTemplates: NestedTemplateResult[];
     targetCount: number;
   };
   expressions: unknown[];
+}
+
+function reduceNestedTemplate(t: NestedTemplateResult): NestedIntent {
+  const result: NestedIntent = {
+    name: t.name,
+  };
+
+  // Only include instructions if there are any
+  const instructions = flattenInstructions(t.instructions);
+  if (instructions.length > 0) {
+    result.instructions = instructions;
+  }
+
+  // Recursively process nested templates
+  if (t.nestedTemplates && t.nestedTemplates.length > 0) {
+    result.nested = t.nestedTemplates.map(reduceNestedTemplate);
+  }
+
+  return result;
 }
 
 function reduceEmitIntent(result: EmitResult): EmitIntent {
@@ -152,10 +179,7 @@ function reduceEmitIntent(result: EmitResult): EmitIntent {
 
   return {
     instructions: flattenInstructions(definition.instructions),
-    nested: definition.nestedTemplates.map((t) => ({
-      name: t.name,
-      instructions: flattenInstructions(t.instructions),
-    })),
+    nested: definition.nestedTemplates.map(reduceNestedTemplate),
     targetCount: definition.targetCount,
     exprCount: expressions.length,
   };
@@ -252,6 +276,60 @@ function reduceInstruction(inst, targetIdx) {
   }
 }
 
+// Compare nested templates recursively
+function compareNestedTemplates(
+  actual: NestedIntent[],
+  expected: NestedIntent[],
+  path: string = ""
+): { mismatches: string[] } {
+  const mismatches: string[] = [];
+
+  // Build maps for efficient lookup
+  const actualMap = new Map(actual.map((n) => [n.name, n]));
+  const expectedMap = new Map(expected.map((n) => [n.name, n]));
+
+  // Check for missing/extra templates at this level
+  for (const exp of expected) {
+    const act = actualMap.get(exp.name);
+    const nestedPath = path ? `${path} > ${exp.name}` : exp.name;
+
+    if (!act) {
+      mismatches.push(`missing nested template: ${nestedPath}`);
+      continue;
+    }
+
+    // Compare instructions if expected specifies them
+    if (exp.instructions && exp.instructions.length > 0) {
+      const actInsts = act.instructions ?? [];
+      const { missing, extra } = diffByKey(actInsts, exp.instructions, instructionKey);
+
+      for (const m of missing) {
+        mismatches.push(`${nestedPath}: missing instruction ${instructionKey(m)}`);
+      }
+      for (const e of extra) {
+        mismatches.push(`${nestedPath}: extra instruction ${instructionKey(e)}`);
+      }
+    }
+
+    // Recursively compare nested templates
+    if (exp.nested && exp.nested.length > 0) {
+      const actNested = act.nested ?? [];
+      const nestedResult = compareNestedTemplates(actNested, exp.nested, nestedPath);
+      mismatches.push(...nestedResult.mismatches);
+    }
+  }
+
+  // Check for extra templates not in expected
+  for (const act of actual) {
+    if (!expectedMap.has(act.name)) {
+      const nestedPath = path ? `${path} > ${act.name}` : act.name;
+      mismatches.push(`extra nested template: ${nestedPath}`);
+    }
+  }
+
+  return { mismatches };
+}
+
 // Compare emit intents
 function compareEmitIntent(actual, expected, orderSensitive = false) {
   let missingInstructions = [];
@@ -287,8 +365,12 @@ function compareEmitIntent(actual, expected, orderSensitive = false) {
     extraInstructions = result.extra;
   }
 
+  // Compare nested templates (names only for backward compatibility)
   const { missing: missingNested, extra: extraNested } =
     diffByKey(actual.nested ?? [], expected.nested ?? [], (n) => n.name);
+
+  // Deep comparison of nested template structure
+  const nestedComparison = compareNestedTemplates(actual.nested ?? [], expected.nested ?? []);
 
   // Compare counts
   const countMismatches = [];
@@ -305,6 +387,7 @@ function compareEmitIntent(actual, expected, orderSensitive = false) {
     orderMismatches,
     missingNested,
     extraNested,
+    nestedMismatches: nestedComparison.mismatches,
     countMismatches,
   };
 }
@@ -381,6 +464,7 @@ describe("AOT Emit (aot:emit)", () => {
         (diff.orderMismatches?.length ?? 0) > 0 ||
         diff.missingNested.length > 0 ||
         diff.extraNested.length > 0 ||
+        diff.nestedMismatches.length > 0 ||
         diff.countMismatches.length > 0;
 
       if (anyMismatch) {
@@ -416,6 +500,12 @@ describe("AOT Emit (aot:emit)", () => {
         `Nested template mismatch.` +
         fmtList("missing", diff.missingNested) +
         fmtList("extra", diff.extraNested)
+      ).toBeTruthy();
+
+      // Deep nested template structure verification
+      expect(
+        diff.nestedMismatches.length === 0,
+        `Nested structure mismatch:\n  ${diff.nestedMismatches.join("\n  ")}`
       ).toBeTruthy();
 
       expect(

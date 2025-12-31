@@ -1,0 +1,310 @@
+[
+  {
+    "name": "AOT-SW-01: switch with case containing text binding",
+    "markup": "<template switch.bind=\"status\"><span case=\"active\">${activeMsg}</span><span case=\"inactive\">${inactiveMsg}</span></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 5,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "case_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "case_2",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-SW-02: switch with case containing property binding",
+    "markup": "<template switch.bind=\"type\"><div case=\"a\" title.bind=\"titleA\">A</div><div case=\"b\" title.bind=\"titleB\">B</div></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 5,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "case_1",
+              "instructions": [
+                { "type": "propertyBinding", "target": 0, "to": "title", "mode": "toView" }
+              ]
+            },
+            {
+              "name": "case_2",
+              "instructions": [
+                { "type": "propertyBinding", "target": 0, "to": "title", "mode": "toView" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-SW-03: switch with default-case containing binding",
+    "markup": "<template switch.bind=\"mode\"><span case=\"edit\">${editLabel}</span><span default-case>${defaultLabel}</span></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 4,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "default-case", "templateIndex": 1, "propCount": 0 }
+          ],
+          "nested": [
+            {
+              "name": "case_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "default-case_2",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-SW-04: switch with case containing event listener",
+    "markup": "<template switch.bind=\"state\"><button case=\"ready\" click.trigger=\"go()\">Go</button><button case=\"busy\" disabled>Wait</button></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 4,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "case_1",
+              "instructions": [
+                { "type": "listenerBinding", "target": 0, "to": "click", "capture": false }
+              ]
+            },
+            {
+              "name": "case_2",
+              "instructions": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-SW-05: nested switch inside case",
+    "markup": "<template switch.bind=\"outer\"><template case=\"a\"><div switch.bind=\"inner\"><span case=\"x\">${x}</span><span case=\"y\">${y}</span></div></template></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 7,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "case_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "switch_2",
+                  "instructions": [
+                    { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+                    { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+                  ],
+                  "nested": [
+                    {
+                      "name": "case_3",
+                      "instructions": [
+                        { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                      ]
+                    },
+                    {
+                      "name": "case_4",
+                      "instructions": [
+                        { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-SW-06: switch inside repeat with bindings in case",
+    "markup": "<ul repeat.for=\"item of items\"><li switch.bind=\"item.type\"><span case=\"a\">${item.a}</span><span case=\"b\">${item.b}</span></li></ul>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 6,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "repeat_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "switch_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+                { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "case_2",
+                  "instructions": [
+                    { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                  ]
+                },
+                {
+                  "name": "case_3",
+                  "instructions": [
+                    { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-SW-07: switch with three cases plus default",
+    "markup": "<template switch.bind=\"level\"><span case=\"low\">${lowMsg}</span><span case=\"med\">${medMsg}</span><span case=\"high\">${highMsg}</span><span default-case>${unknownMsg}</span></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 8,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 2, "resource": "case", "templateIndex": 2, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 3, "resource": "default-case", "templateIndex": 3, "propCount": 0 }
+          ],
+          "nested": [
+            {
+              "name": "case_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "case_2",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "case_3",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "default-case_4",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-SW-08: dynamic case value with binding inside",
+    "markup": "<template switch.bind=\"selection\"><span case.bind=\"optionA\">${msgA}</span><span case.bind=\"optionB\">${msgB}</span></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 5,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "switch", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "switch_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "case", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "case", "templateIndex": 1, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "case_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "case_2",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
