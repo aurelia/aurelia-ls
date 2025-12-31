@@ -82,7 +82,7 @@ describe("SSR Edge Cases: Empty Collections", () => {
 // =============================================================================
 
 describe("SSR Edge Cases: Null/Undefined Values", () => {
-  it("handles undefined interpolation gracefully", async () => {
+  it("renders 'undefined' text for undefined interpolation", async () => {
     const TestApp = createComponent(
       "test-app",
       '<span>${missingValue}</span>',
@@ -91,12 +91,13 @@ describe("SSR Edge Cases: Null/Undefined Values", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
-    // Should render without crashing
+    // Aurelia renders undefined values as "undefined" text
+    // NOTE: This may be undesirable UX - consider rendering empty string instead
     expect(result.html).toContain("<span");
-    // Undefined typically renders as empty string
+    expect(result.html).toContain("undefined");
   });
 
-  it("handles null interpolation gracefully", async () => {
+  it("renders 'null' text for null interpolation", async () => {
     const TestApp = createComponent(
       "test-app",
       '<span>${nullValue}</span>',
@@ -105,7 +106,10 @@ describe("SSR Edge Cases: Null/Undefined Values", () => {
 
     const result = await compileAndRenderAot(TestApp);
 
+    // Aurelia renders null values as "null" text
+    // NOTE: This may be undesirable UX - consider rendering empty string instead
     expect(result.html).toContain("<span");
+    expect(result.html).toContain("null");
   });
 
   it("handles undefined in if.bind", async () => {
@@ -121,37 +125,34 @@ describe("SSR Edge Cases: Null/Undefined Values", () => {
     expect(result.html).not.toContain(">Has value<");
   });
 
-  it("handles null in repeat.for", async () => {
+  it("treats null as empty collection in repeat.for", async () => {
     const TestApp = createComponent(
       "test-app",
       '<div repeat.for="item of items">${item}</div>',
       { items: null },
     );
 
-    // This might throw or render empty - the key is it shouldn't crash the test
-    try {
-      const result = await compileAndRenderAot(TestApp);
-      // If it doesn't throw, it should not have items rendered
-      expect(result.html).toBeTruthy();
-    } catch {
-      // Acceptable - null is not a valid iterable
-    }
+    // Aurelia treats null/undefined as empty collection - renders markers only
+    const result = await compileAndRenderAot(TestApp);
+
+    // Should have hydration markers but no div content
+    expect(result.html).toContain("<!--au-->");
+    expect(result.html).not.toContain("<div");
   });
 
-  it("handles nested undefined access", async () => {
+  it("renders 'undefined' for nested undefined access", async () => {
     const TestApp = createComponent(
       "test-app",
       '<span>${user.profile.name}</span>',
       { user: {} }, // profile is undefined
     );
 
-    // Should not crash
-    try {
-      const result = await compileAndRenderAot(TestApp);
-      expect(result.html).toContain("<span");
-    } catch {
-      // Acceptable - runtime may throw on undefined property access
-    }
+    // Aurelia's expression evaluator returns undefined, which renders as "undefined" text
+    // NOTE: This may be undesirable UX - consider rendering empty string instead
+    const result = await compileAndRenderAot(TestApp);
+
+    expect(result.html).toContain("<span");
+    expect(result.html).toContain("undefined");
   });
 });
 

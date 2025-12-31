@@ -205,25 +205,24 @@ describe("AOT Compilation: Result Structure", () => {
 // =============================================================================
 
 describe("AOT Error Handling", () => {
-  test("handles undefined state property gracefully", async () => {
-    // Access to undefined should not throw, just render undefined/empty
+  test("renders 'undefined' text for undefined state property", async () => {
     const TestApp = createComponent("test-app", "<div>${missing}</div>", {});
 
     const result = await compileAndRenderAot(TestApp);
 
-    // Should render without crashing
-    expect(result.html).toContain("<div");
+    // Aurelia renders undefined values as "undefined" text
+    expect(result.html).toContain("undefined");
   });
 
-  test("handles null state value", async () => {
+  test("renders 'null' text for null state value", async () => {
     const TestApp = createComponent("test-app", "<div>${value}</div>", {
       value: null,
     });
 
     const result = await compileAndRenderAot(TestApp);
 
-    // Should render without crashing
-    expect(result.html).toContain("<div");
+    // Aurelia renders null values as "null" text
+    expect(result.html).toContain("null");
   });
 });
 
@@ -427,5 +426,37 @@ describe("AOT Template Controllers", () => {
     // Should render correctly
     expect(result.html).toContain("First");
     expect(result.html).toContain("Second");
+  });
+});
+
+// =============================================================================
+// AOT SSR with String Markup Input
+// =============================================================================
+
+describe("AOT SSR: String Markup Input", () => {
+  test("accepts string markup instead of component class", async () => {
+    const result = await compileAndRenderAot(
+      "<div>Hello from string markup</div>",
+      { name: "string-app" },
+    );
+
+    expect(result.html).toContain("Hello from string markup");
+    expect(result.aot).toBeDefined();
+    expect(result.manifest).toBeDefined();
+  });
+
+  test("uses provided name for string markup component", async () => {
+    const result = await compileAndRenderAot(
+      "<span>${greeting}</span>",
+      { name: "greeting-app" },
+    );
+
+    expect(result.manifest.root).toBe("greeting-app");
+  });
+
+  test("uses default name when not provided for string markup", async () => {
+    const result = await compileAndRenderAot("<div>Default</div>");
+
+    expect(result.manifest.root).toBe("generated-app");
   });
 });

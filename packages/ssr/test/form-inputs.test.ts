@@ -243,8 +243,14 @@ describe("Form Inputs SSR: Select", () => {
     const dom = new JSDOM(result.html);
     const options = dom.window.document.querySelectorAll("option");
 
-    // The UK option should be selected
-    expect(result.html).toContain("United Kingdom");
+    // Verify the UK option has the selected attribute
+    const usOption = dom.window.document.querySelector('option[value="us"]');
+    const ukOption = dom.window.document.querySelector('option[value="uk"]');
+    const caOption = dom.window.document.querySelector('option[value="ca"]');
+
+    expect(usOption?.hasAttribute("selected")).toBe(false);
+    expect(ukOption?.hasAttribute("selected")).toBe(true);
+    expect(caOption?.hasAttribute("selected")).toBe(false);
 
     dom.window.close();
   });
