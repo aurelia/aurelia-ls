@@ -1,6 +1,6 @@
 import type ts from "typescript";
 import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, CompileTrace } from "@aurelia-ls/compiler";
-import { normalizePathForId, NOOP_TRACE } from "@aurelia-ls/compiler";
+import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
 import type { SourceFacts } from "./extraction/types.js";
 import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
 import type { RegistrationIntent } from "./registration/types.js";
@@ -111,11 +111,14 @@ export function resolve(
       "resolution.sourceFileCount": sourceFileCount,
     });
 
+    debug.resolution("start", { sourceFileCount });
+
     // Layer 1: Extraction
     log.info("[resolution] extracting facts...");
     trace.event("resolution.extraction.start");
     const facts = extractAllFacts(program);
     trace.event("resolution.extraction.done", { factCount: facts.size });
+    debug.resolution("extraction.complete", { factCount: facts.size });
 
     // Layer 2: Inference
     log.info("[resolution] resolving candidates...");
@@ -123,6 +126,10 @@ export function resolve(
     const pipeline = createResolverPipeline(config?.conventions);
     const { candidates, diagnostics: resolverDiags } = pipeline.resolve(facts);
     trace.event("resolution.inference.done", { candidateCount: candidates.length });
+    debug.resolution("inference.complete", {
+      candidateCount: candidates.length,
+      diagnosticCount: resolverDiags.length,
+    });
 
     // Layer 3: Registration Analysis
     log.info("[resolution] analyzing registration...");
@@ -130,6 +137,7 @@ export function resolve(
     const analyzer = createRegistrationAnalyzer();
     const intents = analyzer.analyze(candidates, facts, program);
     trace.event("resolution.registration.done", { intentCount: intents.length });
+    debug.resolution("registration.complete", { intentCount: intents.length });
 
     // Layer 4: Scope Construction
     log.info("[resolution] building resource graph...");
@@ -141,11 +149,17 @@ export function resolve(
     const localCount = intents.filter((i) => i.kind === "local").length;
     const unknownCount = intents.filter((i) => i.kind === "unknown").length;
 
+    debug.resolution("scope.complete", { globalCount, localCount, unknownCount });
+
     // Layer 5: Template Discovery
     log.info("[resolution] discovering templates...");
     trace.event("resolution.templates.start");
     const { templates, inlineTemplates } = discoverTemplates(intents, program, resourceGraph);
     trace.event("resolution.templates.done", {
+      externalCount: templates.length,
+      inlineCount: inlineTemplates.length,
+    });
+    debug.resolution("templates.complete", {
       externalCount: templates.length,
       inlineCount: inlineTemplates.length,
     });

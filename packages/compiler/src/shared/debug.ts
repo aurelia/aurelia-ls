@@ -195,6 +195,7 @@ export function refreshDebugChannels(): void {
   debug.overlay = createChannel("overlay");
   debug.ssr = createChannel("ssr");
   debug.transform = createChannel("transform");
+  debug.resolution = createChannel("resolution");
 }
 
 /**
@@ -248,6 +249,9 @@ export const debug = {
 
   /** Source transform (TS manipulation) */
   transform: createChannel("transform"),
+
+  /** Resource discovery (project-level resolution) */
+  resolution: createChannel("resolution"),
 };
 
 /** Type for the debug object */

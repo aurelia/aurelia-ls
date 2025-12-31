@@ -479,6 +479,13 @@ describe("all debug channels", () => {
     expect(messages[0]).toContain("[transform.start]");
     restore();
   });
+
+  test("resolution channel outputs correctly", () => {
+    const { messages, restore } = captureOutput();
+    debug.resolution("start", { sourceFileCount: 10 });
+    expect(messages[0]).toContain("[resolution.start]");
+    restore();
+  });
 });
 
 // =============================================================================
