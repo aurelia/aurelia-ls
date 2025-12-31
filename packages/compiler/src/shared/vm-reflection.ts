@@ -3,6 +3,8 @@
 // This interface decouples the compiler from concrete TypeScript/VM state.
 // Passed through facade/pipeline options and consumed by synthesis stages.
 
+import type { CompileTrace } from "./trace.js";
+
 /**
  * Injected by the caller; keeps synthesis stages decoupled from TS/compiler state.
  * Both overlay and runtime synthesis use this interface to understand the VM.
@@ -27,4 +29,6 @@ export interface SynthesisOptions {
   vm: VmReflection;
   /** Optional override for synthetic prefix (falls back to vm.getSyntheticPrefix()). */
   syntheticPrefix?: string;
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }

@@ -19,6 +19,7 @@ import {
   type ICustomElementController,
   type ISSRManifest,
 } from "@aurelia/runtime-html";
+import { NOOP_TRACE, type CompileTrace } from "@aurelia-ls/compiler";
 import { recordManifest } from "./manifest-recorder.js";
 import { createServerPlatform, getDocument, type SSRRequestContext } from "./platform.js";
 import {
@@ -84,6 +85,9 @@ export interface RenderOptions {
    * Useful for post-render analysis like manifest recording.
    */
   beforeStop?: (rootController: ICustomElementController, host: Element) => void;
+
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }
 
 /**
@@ -143,75 +147,93 @@ export async function render(
   RootComponent: ComponentClass,
   options: RenderOptions = {},
 ): Promise<RenderResult> {
-  const platform = createServerPlatform({ request: options.request });
-  const doc = getDocument(platform);
+  const trace = options.trace ?? NOOP_TRACE;
 
-  // Clear cached definitions for all components BEFORE rendering.
-  // The runtime caches definitions on the Type, and we need fresh
-  // definitions each render to match the patched $au.
-  CustomElement.clearDefinition(RootComponent);
-  if (options.childComponents) {
-    for (const ChildComponent of options.childComponents) {
-      CustomElement.clearDefinition(ChildComponent);
+  return trace.spanAsync("ssr.render", async () => {
+    trace.setAttributes({
+      "ssr.render.childCount": options.childComponents?.length ?? 0,
+      "ssr.render.hasCustomRegister": !!options.register,
+      "ssr.render.url": options.request?.url ?? "/",
+    });
+
+    trace.event("ssr.render.setup");
+    const platform = createServerPlatform({ request: options.request });
+    const doc = getDocument(platform);
+
+    // Clear cached definitions for all components BEFORE rendering.
+    // The runtime caches definitions on the Type, and we need fresh
+    // definitions each render to match the patched $au.
+    CustomElement.clearDefinition(RootComponent);
+    if (options.childComponents) {
+      for (const ChildComponent of options.childComponents) {
+        CustomElement.clearDefinition(ChildComponent);
+      }
     }
-  }
 
-  // Create DI container
-  const container = DI.createContainer();
-  container.register(
-    StandardConfiguration,
-    Registration.instance(IPlatform, platform),
-    Registration.instance(ISSRContext, { preserveMarkers: true }),
-  );
+    // Create DI container
+    const container = DI.createContainer();
+    container.register(
+      StandardConfiguration,
+      Registration.instance(IPlatform, platform),
+      Registration.instance(ISSRContext, { preserveMarkers: true }),
+    );
 
-  // Call custom registration hook (for router, etc.)
-  if (options.register) {
-    const requestContext: SSRRequestContext = options.request ?? { url: "/", baseHref: "/" };
-    options.register(container, requestContext);
-  }
-
-  // Register child components
-  if (options.childComponents) {
-    for (const ChildComponent of options.childComponents) {
-      container.register(ChildComponent);
+    // Call custom registration hook (for router, etc.)
+    if (options.register) {
+      const requestContext: SSRRequestContext = options.request ?? { url: "/", baseHref: "/" };
+      options.register(container, requestContext);
     }
-  }
 
-  // Create host element and render
-  const host = doc.createElement("div");
-  doc.body.appendChild(host);
+    // Register child components
+    if (options.childComponents) {
+      for (const ChildComponent of options.childComponents) {
+        container.register(ChildComponent);
+      }
+    }
 
-  const au = new Aurelia(container);
-  au.app({ host, component: RootComponent });
-  await au.start();
+    // Create host element and render
+    trace.event("ssr.render.aureliaStart");
+    const host = doc.createElement("div");
+    doc.body.appendChild(host);
 
-  // Sync DOM properties to attributes for proper HTML serialization
-  syncPropertiesForSSR(host);
+    const au = new Aurelia(container);
+    au.app({ host, component: RootComponent });
+    await au.start();
+    trace.event("ssr.render.aureliaStarted");
 
-  // Get the root controller for manifest recording
-  const rootController = (au.root as unknown as { controller: ICustomElementController }).controller;
+    // Sync DOM properties to attributes for proper HTML serialization
+    syncPropertiesForSSR(host);
 
-  // Record tree-based manifest from controller tree
-  const manifest = recordManifest(rootController);
+    // Get the root controller for manifest recording
+    const rootController = (au.root as unknown as { controller: ICustomElementController }).controller;
 
-  // Call beforeStop callback if provided (for post-render analysis)
-  if (options.beforeStop) {
-    options.beforeStop(rootController, host);
-  }
+    // Record tree-based manifest from controller tree
+    trace.event("ssr.render.manifest");
+    const manifest = recordManifest(rootController);
 
-  // Process output
-  let html: string;
-  if (options.ssr) {
-    const processed = processSSROutput(host, options.ssr);
-    html = processed.html;
-  } else {
-    html = host.innerHTML;
-  }
+    // Call beforeStop callback if provided (for post-render analysis)
+    if (options.beforeStop) {
+      options.beforeStop(rootController, host);
+    }
 
-  // Cleanup
-  await au.stop(true);
+    // Process output
+    trace.event("ssr.render.process");
+    let html: string;
+    if (options.ssr) {
+      const processed = processSSROutput(host, options.ssr);
+      html = processed.html;
+    } else {
+      html = host.innerHTML;
+    }
 
-  return { html, manifest };
+    // Cleanup
+    trace.event("ssr.render.stop");
+    await au.stop(true);
+
+    trace.setAttribute("ssr.render.htmlLength", html.length);
+
+    return { html, manifest };
+  });
 }
 
 // Re-export for backwards compatibility during transition

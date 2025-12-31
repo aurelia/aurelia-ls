@@ -47,6 +47,7 @@ import type {
 } from "../../analysis/index.js";
 
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
+import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
 
 import type {
   AotPlanModule,
@@ -91,38 +92,58 @@ export function planAot(
   scope: ScopeModule,
   options: AotPlanOptions,
 ): AotPlanModule {
-  const ctx = new PlanningContext(linked, scope, options);
+  const trace = options.trace ?? NOOP_TRACE;
 
-  // Only process the root template (nested templates are handled via controllers)
-  const rootTemplate = linked.templates[0];
-  const rootScopeTemplate = scope.templates[0];
+  return trace.span("aot.plan", () => {
+    trace.setAttributes({
+      [CompilerAttributes.TEMPLATE]: options.templateFilePath,
+      "aot.plan.templateCount": linked.templates.length,
+    });
 
-  if (!rootTemplate || !rootScopeTemplate) {
-    // Empty template
+    const ctx = new PlanningContext(linked, scope, options);
+
+    // Only process the root template (nested templates are handled via controllers)
+    const rootTemplate = linked.templates[0];
+    const rootScopeTemplate = scope.templates[0];
+
+    if (!rootTemplate || !rootScopeTemplate) {
+      // Empty template
+      trace.event("aot.plan.empty");
+      return {
+        version: "aurelia-aot-plan@1",
+        root: createEmptyFragment(),
+        expressions: [],
+        scopes: [],
+        targetCount: 0,
+        name: options.templateFilePath,
+      };
+    }
+
+    // Build scope entries from ScopeModule
+    trace.event("aot.plan.buildScopes");
+    const scopes = buildPlanScopes(rootScopeTemplate, ctx);
+
+    // Transform root template
+    trace.event("aot.plan.transformTemplate");
+    const root = transformTemplate(rootTemplate, rootScopeTemplate, ctx);
+
+    const expressions = ctx.getExpressions();
+
+    trace.setAttributes({
+      [CompilerAttributes.EXPR_COUNT]: expressions.length,
+      "aot.plan.scopeCount": scopes.length,
+      "aot.plan.targetCount": ctx.targetCount,
+    });
+
     return {
       version: "aurelia-aot-plan@1",
-      root: createEmptyFragment(),
-      expressions: [],
-      scopes: [],
-      targetCount: 0,
-      name: options.templateFilePath,
+      root,
+      expressions,
+      scopes,
+      targetCount: ctx.targetCount,
+      name: rootTemplate.name ?? options.templateFilePath,
     };
-  }
-
-  // Build scope entries from ScopeModule
-  const scopes = buildPlanScopes(rootScopeTemplate, ctx);
-
-  // Transform root template
-  const root = transformTemplate(rootTemplate, rootScopeTemplate, ctx);
-
-  return {
-    version: "aurelia-aot-plan@1",
-    root,
-    expressions: ctx.getExpressions(),
-    scopes,
-    targetCount: ctx.targetCount,
-    name: rootTemplate.name ?? options.templateFilePath,
-  };
+  });
 }
 
 /* =============================================================================

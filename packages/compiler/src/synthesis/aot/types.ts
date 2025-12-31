@@ -722,6 +722,8 @@ export interface AotMappingEntry {
  * PLANNING OPTIONS
  * ============================================================================= */
 
+import type { CompileTrace } from "../../shared/index.js";
+
 /**
  * Options for AOT plan generation.
  */
@@ -731,4 +733,7 @@ export interface AotPlanOptions {
 
   /** Include source locations in plan nodes */
   includeLocations?: boolean;
+
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }

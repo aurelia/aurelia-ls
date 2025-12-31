@@ -1,6 +1,6 @@
 import type ts from "typescript";
-import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId } from "@aurelia-ls/compiler";
-import { normalizePathForId } from "@aurelia-ls/compiler";
+import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, CompileTrace } from "@aurelia-ls/compiler";
+import { normalizePathForId, NOOP_TRACE } from "@aurelia-ls/compiler";
 import type { SourceFacts } from "./extraction/types.js";
 import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
 import type { RegistrationIntent } from "./registration/types.js";
@@ -22,6 +22,8 @@ export interface ResolutionConfig {
   baseSemantics?: Semantics;
   /** Default scope for resources */
   defaultScope?: ResourceScopeId | null;
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }
 
 /**
@@ -100,47 +102,78 @@ export function resolve(
   config?: ResolutionConfig,
   logger?: Logger,
 ): ResolutionResult {
+  const trace = config?.trace ?? NOOP_TRACE;
   const log = logger ?? nullLogger;
 
-  // Layer 1: Extraction
-  log.info("[resolution] extracting facts...");
-  const facts = extractAllFacts(program);
+  return trace.span("resolution.resolve", () => {
+    const sourceFileCount = program.getSourceFiles().length;
+    trace.setAttributes({
+      "resolution.sourceFileCount": sourceFileCount,
+    });
 
-  // Layer 2: Inference
-  log.info("[resolution] resolving candidates...");
-  const pipeline = createResolverPipeline(config?.conventions);
-  const { candidates, diagnostics: resolverDiags } = pipeline.resolve(facts);
+    // Layer 1: Extraction
+    log.info("[resolution] extracting facts...");
+    trace.event("resolution.extraction.start");
+    const facts = extractAllFacts(program);
+    trace.event("resolution.extraction.done", { factCount: facts.size });
 
-  // Layer 3: Registration Analysis
-  log.info("[resolution] analyzing registration...");
-  const analyzer = createRegistrationAnalyzer();
-  const intents = analyzer.analyze(candidates, facts, program);
+    // Layer 2: Inference
+    log.info("[resolution] resolving candidates...");
+    trace.event("resolution.inference.start");
+    const pipeline = createResolverPipeline(config?.conventions);
+    const { candidates, diagnostics: resolverDiags } = pipeline.resolve(facts);
+    trace.event("resolution.inference.done", { candidateCount: candidates.length });
 
-  // Layer 4: Scope Construction
-  log.info("[resolution] building resource graph...");
-  const resourceGraph = buildResourceGraph(intents, config?.baseSemantics, config?.defaultScope);
+    // Layer 3: Registration Analysis
+    log.info("[resolution] analyzing registration...");
+    trace.event("resolution.registration.start");
+    const analyzer = createRegistrationAnalyzer();
+    const intents = analyzer.analyze(candidates, facts, program);
+    trace.event("resolution.registration.done", { intentCount: intents.length });
 
-  const globalCount = intents.filter((i) => i.kind === "global").length;
-  const localCount = intents.filter((i) => i.kind === "local").length;
-  const unknownCount = intents.filter((i) => i.kind === "unknown").length;
+    // Layer 4: Scope Construction
+    log.info("[resolution] building resource graph...");
+    trace.event("resolution.scope.start");
+    const resourceGraph = buildResourceGraph(intents, config?.baseSemantics, config?.defaultScope);
+    trace.event("resolution.scope.done");
 
-  // Layer 5: Template Discovery
-  log.info("[resolution] discovering templates...");
-  const { templates, inlineTemplates } = discoverTemplates(intents, program, resourceGraph);
+    const globalCount = intents.filter((i) => i.kind === "global").length;
+    const localCount = intents.filter((i) => i.kind === "local").length;
+    const unknownCount = intents.filter((i) => i.kind === "unknown").length;
 
-  log.info(
-    `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${unknownCount} unknown), ${templates.length} external + ${inlineTemplates.length} inline templates`,
-  );
+    // Layer 5: Template Discovery
+    log.info("[resolution] discovering templates...");
+    trace.event("resolution.templates.start");
+    const { templates, inlineTemplates } = discoverTemplates(intents, program, resourceGraph);
+    trace.event("resolution.templates.done", {
+      externalCount: templates.length,
+      inlineCount: inlineTemplates.length,
+    });
 
-  return {
-    resourceGraph,
-    candidates,
-    intents,
-    templates,
-    inlineTemplates,
-    diagnostics: resolverDiags.map(toDiagnostic),
-    facts,
-  };
+    log.info(
+      `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${unknownCount} unknown), ${templates.length} external + ${inlineTemplates.length} inline templates`,
+    );
+
+    trace.setAttributes({
+      "resolution.candidateCount": candidates.length,
+      "resolution.globalCount": globalCount,
+      "resolution.localCount": localCount,
+      "resolution.unknownCount": unknownCount,
+      "resolution.templateCount": templates.length,
+      "resolution.inlineTemplateCount": inlineTemplates.length,
+      "resolution.diagnosticCount": resolverDiags.length,
+    });
+
+    return {
+      resourceGraph,
+      candidates,
+      intents,
+      templates,
+      inlineTemplates,
+      diagnostics: resolverDiags.map(toDiagnostic),
+      facts,
+    };
+  });
 }
 
 function toDiagnostic(d: ResolverDiagnostic): ResolutionDiagnostic {
