@@ -16,6 +16,7 @@
 
 import type { ViteDevServer } from "vite";
 import { readFile } from "node:fs/promises";
+import type { CompileTrace } from "@aurelia-ls/compiler";
 import type { ResolutionContext } from "./types.js";
 import { compileWithAot, type AotCompileResult, type ComponentClass } from "@aurelia-ls/ssr";
 
@@ -181,6 +182,7 @@ export async function loadProjectComponents(
   vite: ViteDevServer,
   resolution: ResolutionContext,
   rootTemplatePath: string,
+  trace?: CompileTrace,
 ): Promise<LoadProjectComponentsResult> {
   const components = new Map<string, LoadedComponent>();
   let root: LoadedComponent | null = null;
@@ -202,6 +204,8 @@ export async function loadProjectComponents(
       }
 
       // Cache miss - load and compile
+      trace?.event("loader.compile", { component: templateInfo.resourceName });
+
       // Read template HTML
       const templateHtml = await readFile(templateInfo.templatePath, "utf-8");
 
@@ -212,6 +216,7 @@ export async function loadProjectComponents(
         semantics: resolution.semantics,
         resourceGraph: resolution.resourceGraph,
         resourceScope: templateInfo.scopeId,
+        trace,
       });
 
       // Load the component class via Vite's SSR module loader
@@ -297,6 +302,7 @@ export async function loadComponent(
   vite: ViteDevServer,
   resolution: ResolutionContext,
   templatePath: string,
+  trace?: CompileTrace,
 ): Promise<LoadedComponent | null> {
   // Check cache first
   const cached = componentCache.get(templatePath);
@@ -325,6 +331,7 @@ export async function loadComponent(
       semantics: resolution.semantics,
       resourceGraph: resolution.resourceGraph,
       resourceScope: templateInfo.scopeId,
+      trace,
     });
 
     // Load class

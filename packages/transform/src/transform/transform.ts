@@ -5,6 +5,7 @@
  */
 
 import type { AotCodeResult } from "@aurelia-ls/compiler";
+import { NOOP_TRACE, debug } from "@aurelia-ls/compiler";
 import type { ResourceDefinition } from "../model/types.js";
 import { emitStaticAu } from "../emit/index.js";
 import { findClassByName, detectDeclarationForm } from "../ts/analyze.js";
@@ -49,159 +50,213 @@ export function transform(options: TransformOptions): TransformResult {
     indent = "  ",
     removeDecorators = true,
     includeComments = true,
+    trace: optTrace,
   } = options;
 
-  const warnings: TransformWarning[] = [];
+  const trace = optTrace ?? NOOP_TRACE;
 
-  // Find the class to transform
-  const classInfo = findClassByName(source, resource.className);
-  if (!classInfo) {
-    throw new TransformError(
-      `Class "${resource.className}" not found in source`,
-      TransformErrorCode.CLASS_NOT_FOUND,
-      filePath
+  return trace.span("transform", () => {
+    trace.setAttributes({
+      "transform.filePath": filePath,
+      "transform.className": resource.className,
+      "transform.resourceName": resource.name,
+      "transform.resourceKind": resource.kind,
+      "transform.sourceLength": source.length,
+    });
+
+    debug.transform("start", {
+      filePath,
+      className: resource.className,
+      resourceName: resource.name,
+      resourceKind: resource.kind,
+    });
+
+    const warnings: TransformWarning[] = [];
+
+    // Find the class to transform
+    trace.event("transform.findClass");
+    const classInfo = findClassByName(source, resource.className);
+    if (!classInfo) {
+      debug.transform("class.notFound", { className: resource.className });
+      throw new TransformError(
+        `Class "${resource.className}" not found in source`,
+        TransformErrorCode.CLASS_NOT_FOUND,
+        filePath
+      );
+    }
+
+    debug.transform("class.found", {
+      className: resource.className,
+      hasDecorator: classInfo.decorators.length > 0,
+    });
+
+    // Detect original declaration form
+    const declForm = detectDeclarationForm(classInfo, resource.className);
+    const originalForm = declForm.form;
+    trace.setAttribute("transform.originalForm", originalForm);
+
+    // Determine resource type for emit
+    const resourceType = getResourceType(resource);
+
+    // Extract dependencies from decorator config
+    trace.event("transform.extractDeps");
+    const extractedDeps = extractDependencies(source, classInfo);
+    const dependencies = extractedDeps.map(dep => {
+      if (dep.type === "identifier") {
+        return dep.name;
+      } else {
+        // Dynamic expressions are emitted as-is
+        return dep.expression;
+      }
+    });
+
+    // Extract bindables from @bindable property decorators
+    const bindables = extractBindables(source, classInfo);
+    trace.setAttributes({
+      "transform.dependencyCount": dependencies.length,
+      "transform.bindableCount": bindables.length,
+    });
+
+    debug.transform("extracted", {
+      dependencies: dependencies.length,
+      bindables: bindables.length,
+    });
+
+    // Emit the AOT artifacts
+    trace.event("transform.emit");
+    const emitResult = emitStaticAu(aot, {
+      name: resource.name,
+      className: resource.className,
+      type: resourceType as "custom-element" | "custom-attribute",
+      template,
+      nestedHtmlTree,
+      dependencies,
+      bindables,
+      indent,
+      includeComments,
+    });
+
+    // Generate injection edits
+    trace.event("transform.generateEdits");
+    const injectionResult = generateInjectionEdits(source, classInfo, {
+      className: resource.className,
+      artifactCode: emitResult.combined,
+      definitionVar: emitResult.definitionVar,
+      removeDecorator: removeDecorators,
+      removeBindableDecorators: removeDecorators,
+    });
+
+    // Add injection warnings
+    for (const warning of injectionResult.warnings) {
+      warnings.push({
+        code: "TRANSFORM_INFO",
+        message: warning,
+        file: filePath,
+      });
+    }
+
+    // Build list of import specifiers to remove based on what decorators were removed
+    const unusedImports: string[] = [];
+
+    // Check if a class decorator was removed (e.g., @customElement)
+    const removedDecoratorWarning = injectionResult.warnings.find(w =>
+      w.includes("Removed @") && w.includes("decorator")
     );
-  }
-
-  // Detect original declaration form
-  const declForm = detectDeclarationForm(classInfo, resource.className);
-  const originalForm = declForm.form;
-
-  // Determine resource type for emit
-  const resourceType = getResourceType(resource);
-
-  // Extract dependencies from decorator config
-  const extractedDeps = extractDependencies(source, classInfo);
-  const dependencies = extractedDeps.map(dep => {
-    if (dep.type === "identifier") {
-      return dep.name;
-    } else {
-      // Dynamic expressions are emitted as-is
-      return dep.expression;
+    if (removedDecoratorWarning) {
+      // Extract decorator name from warning message
+      const match = removedDecoratorWarning.match(/Removed @(\w+)/);
+      if (match?.[1]) {
+        unusedImports.push(match[1]);
+      }
     }
-  });
 
-  // Extract bindables from @bindable property decorators
-  const bindables = extractBindables(source, classInfo);
-
-  // Emit the AOT artifacts
-  const emitResult = emitStaticAu(aot, {
-    name: resource.name,
-    className: resource.className,
-    type: resourceType as "custom-element" | "custom-attribute",
-    template,
-    nestedHtmlTree,
-    dependencies,
-    bindables,
-    indent,
-    includeComments,
-  });
-
-  // Generate injection edits
-  const injectionResult = generateInjectionEdits(source, classInfo, {
-    className: resource.className,
-    artifactCode: emitResult.combined,
-    definitionVar: emitResult.definitionVar,
-    removeDecorator: removeDecorators,
-    removeBindableDecorators: removeDecorators,
-  });
-
-  // Add injection warnings
-  for (const warning of injectionResult.warnings) {
-    warnings.push({
-      code: "TRANSFORM_INFO",
-      message: warning,
-      file: filePath,
-    });
-  }
-
-  // Build list of import specifiers to remove based on what decorators were removed
-  const unusedImports: string[] = [];
-
-  // Check if a class decorator was removed (e.g., @customElement)
-  const removedDecoratorWarning = injectionResult.warnings.find(w =>
-    w.includes("Removed @") && w.includes("decorator")
-  );
-  if (removedDecoratorWarning) {
-    // Extract decorator name from warning message
-    const match = removedDecoratorWarning.match(/Removed @(\w+)/);
-    if (match?.[1]) {
-      unusedImports.push(match[1]);
-    }
-  }
-
-  // Check if @bindable decorators were removed
-  const bindableRemovalWarning = injectionResult.warnings.find(w =>
-    w.includes("@bindable decorator")
-  );
-  if (bindableRemovalWarning) {
-    unusedImports.push("bindable");
-
-    // If any bindables used BindingMode, that import is also now unused
-    const usedBindingMode = bindables.some(b => b.mode !== undefined);
-    if (usedBindingMode) {
-      unusedImports.push("BindingMode");
-    }
-  }
-
-  // Generate import cleanup edits
-  const importCleanupResult = generateImportCleanupEdits(source, unusedImports);
-
-  // Combine all edits
-  const allEdits = [...injectionResult.edits, ...importCleanupResult.edits];
-
-  // Add import cleanup warnings
-  if (importCleanupResult.removedSpecifiers.length > 0) {
-    warnings.push({
-      code: "TRANSFORM_INFO",
-      message: `Removed unused imports: ${importCleanupResult.removedSpecifiers.join(", ")}`,
-      file: filePath,
-    });
-  }
-
-  // Validate edits don't conflict
-  if (!validateEdits(allEdits)) {
-    throw new TransformError(
-      "Generated edits have overlapping spans",
-      TransformErrorCode.EDIT_CONFLICT,
-      filePath
+    // Check if @bindable decorators were removed
+    const bindableRemovalWarning = injectionResult.warnings.find(w =>
+      w.includes("@bindable decorator")
     );
-  }
+    if (bindableRemovalWarning) {
+      unusedImports.push("bindable");
 
-  // Apply edits to source
-  const transformedCode = applyEdits(source, allEdits);
+      // If any bindables used BindingMode, that import is also now unused
+      const usedBindingMode = bindables.some(b => b.mode !== undefined);
+      if (usedBindingMode) {
+        unusedImports.push("BindingMode");
+      }
+    }
 
-  // Build metadata
-  const meta: TransformMeta = {
-    className: resource.className,
-    resourceName: resource.name,
-    resourceType,
-    prefix: emitResult.prefix,
-    expressionTableVar: emitResult.expressionTableVar,
-    definitionVar: emitResult.definitionVar,
-    expressionCount: aot.expressions.length,
-    instructionRowCount: aot.definition.instructions.length,
-    originalForm,
-  };
+    // Generate import cleanup edits
+    trace.event("transform.cleanupImports");
+    const importCleanupResult = generateImportCleanupEdits(source, unusedImports);
 
-  // Build result
-  const result: TransformResult = {
-    code: transformedCode,
-    edits: allEdits,
-    warnings,
-    meta,
-  };
+    // Combine all edits
+    const allEdits = [...injectionResult.edits, ...importCleanupResult.edits];
 
-  // TODO: Add source map generation when sourceMap option is enabled
-  if (options.sourceMap) {
-    warnings.push({
-      code: "TRANSFORM_SOURCEMAP_NOT_IMPLEMENTED",
-      message: "Source map generation is not yet implemented",
-      file: filePath,
+    // Add import cleanup warnings
+    if (importCleanupResult.removedSpecifiers.length > 0) {
+      warnings.push({
+        code: "TRANSFORM_INFO",
+        message: `Removed unused imports: ${importCleanupResult.removedSpecifiers.join(", ")}`,
+        file: filePath,
+      });
+    }
+
+    // Validate edits don't conflict
+    if (!validateEdits(allEdits)) {
+      throw new TransformError(
+        "Generated edits have overlapping spans",
+        TransformErrorCode.EDIT_CONFLICT,
+        filePath
+      );
+    }
+
+    // Apply edits to source
+    trace.event("transform.applyEdits");
+    const transformedCode = applyEdits(source, allEdits);
+
+    // Build metadata
+    const meta: TransformMeta = {
+      className: resource.className,
+      resourceName: resource.name,
+      resourceType,
+      prefix: emitResult.prefix,
+      expressionTableVar: emitResult.expressionTableVar,
+      definitionVar: emitResult.definitionVar,
+      expressionCount: aot.expressions.length,
+      instructionRowCount: aot.definition.instructions.length,
+      originalForm,
+    };
+
+    trace.setAttributes({
+      "transform.editCount": allEdits.length,
+      "transform.warningCount": warnings.length,
+      "transform.outputLength": transformedCode.length,
     });
-  }
 
-  return result;
+    debug.transform("complete", {
+      editCount: allEdits.length,
+      warningCount: warnings.length,
+      outputLength: transformedCode.length,
+    });
+
+    // Build result
+    const result: TransformResult = {
+      code: transformedCode,
+      edits: allEdits,
+      warnings,
+      meta,
+    };
+
+    // TODO: Add source map generation when sourceMap option is enabled
+    if (options.sourceMap) {
+      warnings.push({
+        code: "TRANSFORM_SOURCEMAP_NOT_IMPLEMENTED",
+        message: "Source map generation is not yet implemented",
+        file: filePath,
+      });
+    }
+
+    return result;
+  });
 }
 
 /* =============================================================================

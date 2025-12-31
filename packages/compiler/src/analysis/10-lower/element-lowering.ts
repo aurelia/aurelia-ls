@@ -4,6 +4,7 @@ import type {
   ControllerConfig,
   Semantics,
 } from "../../language/registry.js";
+import { debug } from "../../shared/debug.js";
 import {
   BUILTIN_CONTROLLER_CONFIGS,
   createCustomControllerConfig,
@@ -163,6 +164,13 @@ export function lowerElementAttributes(
   const elementDef = resolveElementDef(effectiveTag, sem);
   const containerless = !!elementDef?.containerless || !!findAttr(el, "containerless");
 
+  debug.lower("element.start", {
+    tag: authoredTag,
+    effectiveTag: effectiveTag !== authoredTag ? effectiveTag : undefined,
+    isCustomElement: !!elementDef,
+    attrCount: attrs.length,
+  });
+
   const hydrateElementProps: ElementBindableIR[] = [];
   const hydrateAttributes: HydrateAttributeIR[] = [];
   const tail: InstructionIR[] = [];
@@ -216,6 +224,7 @@ export function lowerElementAttributes(
     if (isControllerAttr(s, sem)) continue;
 
     if (s.command === "trigger" || s.command === "capture") {
+      debug.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
       tail.push({
         type: "listenerBinding",
         to: s.target,
@@ -269,12 +278,14 @@ export function lowerElementAttributes(
 
     const bindable = elementDef?.bindables[camelCase(s.target)];
     if (bindable) {
+      debug.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
       lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command);
       continue;
     }
 
     const attrDef = resolveAttrDef(s.target, sem);
     if (attrDef && !attrDef.isTemplateController) {
+      debug.lower("attr.customAttribute", { attr: a.name, customAttr: attrDef.name });
       // Check for multi-binding syntax: attr="prop1: val; prop2.bind: expr"
       // Multi-binding requires: no noMultiBindings flag, no command on the attr, and colon before interpolation
       const isMultiBinding =
@@ -307,6 +318,7 @@ export function lowerElementAttributes(
     }
 
     if (s.command) {
+      debug.lower("attr.binding", { attr: a.name, target: s.target, command: s.command });
       tail.push({
         type: "propertyBinding",
         to: camelCase(s.target),
@@ -318,6 +330,7 @@ export function lowerElementAttributes(
     }
 
     if (raw.includes("${")) {
+      debug.lower("attr.interpolation", { attr: a.name, value: raw });
       tail.push({
         type: "attributeBinding",
         attr: a.name,

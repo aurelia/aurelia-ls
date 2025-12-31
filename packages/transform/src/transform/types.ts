@@ -4,7 +4,7 @@
  * Core types for the transformation pipeline.
  */
 
-import type { AotCodeResult, NestedTemplateHtmlNode } from "@aurelia-ls/compiler";
+import type { AotCodeResult, NestedTemplateHtmlNode, CompileTrace } from "@aurelia-ls/compiler";
 import type { ResourceDefinition } from "../model/types.js";
 import type { TypedSourceEdit } from "../ts/types.js";
 
@@ -45,6 +45,9 @@ export interface TransformOptions {
 
   /** Source map options */
   sourceMap?: SourceMapOptions | boolean;
+
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }
 
 /**

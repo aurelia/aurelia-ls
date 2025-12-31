@@ -54,40 +54,85 @@ import { exprIdsOf, collectBindingNames, findBadInPattern } from "../../shared/e
 import { normalizeSpanMaybe } from "../../model/span.js";
 import type { Origin, Provenance } from "../../model/origin.js";
 import { isStub } from "../../shared/diagnosed.js";
+import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { debug } from "../../shared/debug.js";
 
 function assertUnreachable(_x: never): never { throw new Error("unreachable"); }
+
+/* =============================================================================
+ * Options
+ * ============================================================================= */
+
+export interface BindScopesOptions {
+  /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
+  trace?: CompileTrace;
+}
 
 /* =============================================================================
  * Public API
  * ============================================================================= */
 
-export function bindScopes(linked: LinkedSemanticsModule): ScopeModule {
-  const diags: ScopeDiagnostic[] = [];
-  const templates: ScopeTemplate[] = [];
+export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptions): ScopeModule {
+  const trace = opts?.trace ?? NOOP_TRACE;
 
-  // Index ForOf entries once
-  const exprIndex: ExprIdMap<ExprTableEntry> = new Map();
-  const forOfIndex: ExprIdMap<ForOfStatement | BadExpression> = new Map();
-  for (const e of linked.exprTable ?? []) {
-    exprIndex.set(e.id, e);
-    if (e.expressionType === 'IsIterator') {
-      forOfIndex.set(e.id, e.ast);
+  return trace.span("bind.scopes", () => {
+    trace.setAttributes({
+      [CompilerAttributes.TEMPLATE]: linked.templates[0]?.name ?? "<unknown>",
+      "bind.templateCount": linked.templates.length,
+      "bind.exprCount": linked.exprTable?.length ?? 0,
+    });
+
+    const diags: ScopeDiagnostic[] = [];
+    const templates: ScopeTemplate[] = [];
+
+    // Index ForOf entries once
+    trace.event("bind.indexExprs.start");
+    const exprIndex: ExprIdMap<ExprTableEntry> = new Map();
+    const forOfIndex: ExprIdMap<ForOfStatement | BadExpression> = new Map();
+    for (const e of linked.exprTable ?? []) {
+      exprIndex.set(e.id, e);
+      if (e.expressionType === 'IsIterator') {
+        forOfIndex.set(e.id, e.ast);
+      }
     }
-  }
-  const reportedBadExprs = new Set<ExprId>();
+    trace.event("bind.indexExprs.complete", { exprCount: exprIndex.size, forOfCount: forOfIndex.size });
+    const reportedBadExprs = new Set<ExprId>();
 
-  // Map raw TemplateIR roots → LinkedTemplate (identity preserved by resolve-host)
-  const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
-  for (const t of linked.templates) domToLinked.set(t.dom, t);
+    // Map raw TemplateIR roots → LinkedTemplate (identity preserved by resolve-host)
+    const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
+    for (const t of linked.templates) domToLinked.set(t.dom, t);
 
-  // Only the module's *root template* produces a ScopeTemplate; nested templates
-  // are traversed via controller defs while staying inside the same frame tree.
-  const roots: LinkedTemplate[] = linked.templates.length > 0 ? [linked.templates[0]!] : [];
-  for (const t of roots) {
-    templates.push(buildTemplateScopes(t, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs));
-  }
+    // Only the module's *root template* produces a ScopeTemplate; nested templates
+    // are traversed via controller defs while staying inside the same frame tree.
+    trace.event("bind.buildScopes.start");
+    const roots: LinkedTemplate[] = linked.templates.length > 0 ? [linked.templates[0]!] : [];
+    for (const t of roots) {
+      templates.push(buildTemplateScopes(t, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs));
+    }
+    trace.event("bind.buildScopes.complete");
 
-  return { version: "aurelia-scope@1", templates, diags };
+    // Count frames and symbols
+    let frameCount = 0;
+    let symbolCount = 0;
+    let exprMappingCount = 0;
+    for (const t of templates) {
+      frameCount += t.frames.length;
+      for (const f of t.frames) {
+        symbolCount += f.symbols.length;
+      }
+      exprMappingCount += t.exprToFrame.size;
+    }
+
+    // Record output metrics
+    trace.setAttributes({
+      "bind.frameCount": frameCount,
+      "bind.symbolCount": symbolCount,
+      "bind.exprMappingCount": exprMappingCount,
+      [CompilerAttributes.DIAG_COUNT]: diags.length,
+    });
+
+    return { version: "aurelia-scope@1", templates, diags };
+  });
 }
 
 /* =============================================================================
@@ -268,13 +313,18 @@ function enterControllerFrame(
   frames: ScopeFrame[],
   frameIds: FrameIdAllocator,
 ): FrameId {
-  switch (ctrl.controller.config.scope) {
+  const scope = ctrl.controller.config.scope;
+  debug.bind("frame.enter", { controller: ctrl.res, scope, currentFrame: current });
+
+  switch (scope) {
     case "overlay": {
       const id = frameIds.allocate();
+      debug.bind("frame.create", { controller: ctrl.res, frameId: id, parent: current });
       frames.push({ id, parent: current, kind: "overlay", overlay: null, symbols: [], origin: null, letValueExprs: null });
       return id;
     }
     case "reuse":
+      debug.bind("frame.reuse", { controller: ctrl.res, frameId: current });
       return current;
     default:
       // Future scopes (e.g., 'isolate') — keep traversal alive in MVP.

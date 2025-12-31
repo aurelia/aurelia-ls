@@ -17,12 +17,15 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
+  NOOP_TRACE,
+  CompilerAttributes,
   type AotPlanModule,
   type AotCodeResult,
   type Semantics,
   type ResourceGraph,
   type ResourceScopeId,
   type NestedTemplateHtmlNode,
+  type CompileTrace,
 } from "@aurelia-ls/compiler";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./instruction-translator.js";
@@ -59,6 +62,8 @@ export interface AotCompileOptions {
    * @default true
    */
   deduplicateExpressions?: boolean;
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }
 
 export interface AotCompileResult {
@@ -109,64 +114,89 @@ export function compileWithAot(
   markup: string,
   options: AotCompileOptions = {},
 ): AotCompileResult {
-  const templatePath = options.templatePath ?? "template.html";
-  const name = options.name ?? "template";
-  const semantics = options.semantics ?? DEFAULT_SEMANTICS;
+  const trace = options.trace ?? NOOP_TRACE;
 
-  // 1. Run AOT compiler analysis pipeline
-  const exprParser = getExpressionParser();
+  return trace.span("ssr.compileWithAot", () => {
+    const templatePath = options.templatePath ?? "template.html";
+    const name = options.name ?? "template";
+    const semantics = options.semantics ?? DEFAULT_SEMANTICS;
 
-  const ir = lowerDocument(markup, {
-    attrParser: DEFAULT_SYNTAX,
-    exprParser,
-    file: templatePath,
-    name,
-    sem: semantics,
-  });
+    trace.setAttributes({
+      [CompilerAttributes.TEMPLATE]: templatePath,
+      "ssr.compile.name": name,
+      "ssr.compile.markupLength": markup.length,
+    });
 
-  // Build resolve options for resource graph support
-  const resolveOpts = options.resourceGraph
-    ? { graph: options.resourceGraph, scope: options.resourceScope ?? null }
-    : undefined;
+    // 1. Run AOT compiler analysis pipeline
+    trace.event("ssr.compile.analysis.start");
+    const exprParser = getExpressionParser();
 
-  const linked = resolveHost(ir, semantics, resolveOpts);
-  const scoped = bindScopes(linked);
+    const ir = lowerDocument(markup, {
+      attrParser: DEFAULT_SYNTAX,
+      exprParser,
+      file: templatePath,
+      name,
+      sem: semantics,
+      trace,
+    });
 
-  // 2. Build AOT plan
-  const plan = planAot(linked, scoped, {
-    templateFilePath: templatePath,
-  });
+    // Build resolve options for resource graph support
+    const resolveOpts = options.resourceGraph
+      ? { graph: options.resourceGraph, scope: options.resourceScope ?? null }
+      : undefined;
 
-  // 3. Emit serialized instructions
-  const stripSpans = options.stripSpans ?? true; // Default to stripping for smaller output
-  const deduplicateExpressions = options.deduplicateExpressions ?? true; // Default to deduplication
-  const codeResult = emitAotCode(plan, { name, stripSpans, deduplicateExpressions });
+    const linked = resolveHost(ir, semantics, { ...resolveOpts, trace });
+    const scoped = bindScopes(linked, { trace });
+    trace.event("ssr.compile.analysis.done");
 
-  // 4. Emit template HTML with markers
-  const templateResult = emitTemplate(plan);
+    // 2. Build AOT plan
+    trace.event("ssr.compile.plan.start");
+    const plan = planAot(linked, scoped, {
+      templateFilePath: templatePath,
+      trace,
+    });
+    trace.event("ssr.compile.plan.done");
 
-  // 5. Emit nested template HTML (for template controllers)
-  const nestedHtmlTree = collectNestedTemplateHtmlTree(plan);
+    // 3. Emit serialized instructions
+    trace.event("ssr.compile.emit.start");
+    const stripSpans = options.stripSpans ?? true; // Default to stripping for smaller output
+    const deduplicateExpressions = options.deduplicateExpressions ?? true; // Default to deduplication
+    const codeResult = emitAotCode(plan, { name, stripSpans, deduplicateExpressions, trace });
 
-  // 6. Translate to Aurelia runtime format
-  const { instructions, nestedDefs } = translateInstructions(
-    codeResult.definition.instructions,
-    codeResult.expressions,
-    codeResult.definition.nestedTemplates,
-    nestedHtmlTree,
-  );
+    // 4. Emit template HTML with markers
+    const templateResult = emitTemplate(plan);
 
-  return {
-    template: templateResult.html,
-    instructions,
-    nestedDefs,
-    targetCount: codeResult.definition.targetCount,
-    raw: {
-      plan,
-      codeResult,
+    // 5. Emit nested template HTML (for template controllers)
+    const nestedHtmlTree = collectNestedTemplateHtmlTree(plan);
+    trace.event("ssr.compile.emit.done");
+
+    // 6. Translate to Aurelia runtime format
+    trace.event("ssr.compile.translate");
+    const { instructions, nestedDefs } = translateInstructions(
+      codeResult.definition.instructions,
+      codeResult.expressions,
+      codeResult.definition.nestedTemplates,
       nestedHtmlTree,
-    },
-  };
+    );
+
+    trace.setAttributes({
+      "ssr.compile.targetCount": codeResult.definition.targetCount,
+      "ssr.compile.instructionCount": instructions.length,
+      "ssr.compile.nestedCount": nestedDefs.length,
+    });
+
+    return {
+      template: templateResult.html,
+      instructions,
+      nestedDefs,
+      targetCount: codeResult.definition.targetCount,
+      raw: {
+        plan,
+        codeResult,
+        nestedHtmlTree,
+      },
+    };
+  });
 }
 
 /* =============================================================================
@@ -186,6 +216,8 @@ export interface CompileAndRenderAotOptions {
   resourceScope?: ResourceScopeId | null;
   /** SSR post-processing options */
   ssr?: SSRProcessOptions;
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }
 
 export interface CompileAndRenderAotResult {
@@ -231,58 +263,75 @@ export async function compileAndRenderAot(
   ComponentOrMarkup: ComponentClass | string,
   options: CompileAndRenderAotOptions = {},
 ): Promise<CompileAndRenderAotResult> {
-  let Component: ComponentClass;
+  const trace = options.trace ?? NOOP_TRACE;
 
-  if (typeof ComponentOrMarkup === "string") {
-    // Generate component from markup
-    const template = ComponentOrMarkup;
-    const name = options.name ?? "generated-app";
-    Component = class GeneratedApp {
-      static $au = {
-        type: "custom-element",
-        name,
-        template,
-      };
-    } as unknown as ComponentClass;
-  } else {
-    Component = ComponentOrMarkup;
-  }
+  return trace.spanAsync("ssr.compileAndRenderAot", async () => {
+    let Component: ComponentClass;
 
-  // Get template from component
-  const template = Component.$au?.template;
-  if (typeof template !== "string") {
-    throw new Error(
-      `compileAndRenderAot requires component to have string $au.template. ` +
-      `Got: ${typeof template}`
-    );
-  }
+    if (typeof ComponentOrMarkup === "string") {
+      // Generate component from markup
+      const template = ComponentOrMarkup;
+      const name = options.name ?? "generated-app";
+      Component = class GeneratedApp {
+        static $au = {
+          type: "custom-element",
+          name,
+          template,
+        };
+      } as unknown as ComponentClass;
+      trace.setAttribute("ssr.render.fromMarkup", true);
+    } else {
+      Component = ComponentOrMarkup;
+      trace.setAttribute("ssr.render.fromMarkup", false);
+    }
 
-  // Determine component name (kebab-case element name)
-  const componentName = Component.$au?.name ?? options.name ?? getComponentName(Component);
+    // Get template from component
+    const template = Component.$au?.template;
+    if (typeof template !== "string") {
+      throw new Error(
+        `compileAndRenderAot requires component to have string $au.template. ` +
+        `Got: ${typeof template}`
+      );
+    }
 
-  // Compile with AOT
-  const aot = compileWithAot(template, {
-    name: componentName,
-    templatePath: options.templatePath,
-    semantics: options.semantics,
-    resourceGraph: options.resourceGraph,
-    resourceScope: options.resourceScope,
+    // Determine component name (kebab-case element name)
+    const componentName = Component.$au?.name ?? options.name ?? getComponentName(Component);
+    trace.setAttribute("ssr.render.componentName", componentName);
+
+    // Compile with AOT
+    trace.event("ssr.render.compile");
+    const aot = compileWithAot(template, {
+      name: componentName,
+      templatePath: options.templatePath,
+      semantics: options.semantics,
+      resourceGraph: options.resourceGraph,
+      resourceScope: options.resourceScope,
+      trace,
+    });
+
+    // Patch the component with compiled definition
+    trace.event("ssr.render.patch");
+    patchComponentDefinition(Component, aot, { name: componentName });
+
+    // Render
+    trace.event("ssr.render.render");
+    const renderOptions: RenderOptions = {
+      trace,
+    };
+    if (options.ssr) {
+      renderOptions.ssr = options.ssr;
+    }
+
+    const renderResult = await render(Component, renderOptions);
+
+    trace.setAttributes({
+      "ssr.render.htmlLength": renderResult.html.length,
+    });
+
+    return {
+      html: renderResult.html,
+      aot,
+      manifest: renderResult.manifest,
+    };
   });
-
-  // Patch the component with compiled definition
-  patchComponentDefinition(Component, aot, { name: componentName });
-
-  // Render
-  const renderOptions: RenderOptions = {};
-  if (options.ssr) {
-    renderOptions.ssr = options.ssr;
-  }
-
-  const renderResult = await render(Component, renderOptions);
-
-  return {
-    html: renderResult.html,
-    aot,
-    manifest: renderResult.manifest,
-  };
 }

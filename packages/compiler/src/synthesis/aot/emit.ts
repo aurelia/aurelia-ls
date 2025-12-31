@@ -45,6 +45,10 @@ import type { ExprId, BindingMode } from "../../model/index.js";
  * Public API
  * ============================================================================= */
 
+import type { CompileTrace } from "../../shared/index.js";
+import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
+import { debug } from "../../shared/debug.js";
+
 export interface AotEmitOptions {
   /** Template name (for the definition) */
   name?: string;
@@ -62,6 +66,9 @@ export interface AotEmitOptions {
    * @default false
    */
   deduplicateExpressions?: boolean;
+
+  /** Optional trace for instrumentation */
+  trace?: CompileTrace;
 }
 
 /**
@@ -71,30 +78,60 @@ export function emitAotCode(
   plan: AotPlanModule,
   options: AotEmitOptions = {},
 ): AotCodeResult {
-  const ctx = new EmitContext(plan, options);
-  let definition = ctx.emitDefinition(plan.root, options.name ?? "template");
-  let expressions = ctx.getExpressions();
+  const trace = options.trace ?? NOOP_TRACE;
 
-  // Apply expression deduplication if requested
-  if (options.deduplicateExpressions) {
-    const { dedupedExpressions, exprIdRemap } = deduplicateExpressionTable(
-      expressions,
-      options.stripSpans ?? false,
-    );
+  return trace.span("aot.emit", () => {
+    trace.setAttributes({
+      [CompilerAttributes.TEMPLATE]: plan.name ?? options.name ?? "template",
+      "aot.emit.targetCount": plan.targetCount,
+      "aot.emit.stripSpans": options.stripSpans ?? false,
+      "aot.emit.deduplicate": options.deduplicateExpressions ?? false,
+    });
 
-    // Remap ExprIds in the definition
-    if (exprIdRemap.size > 0) {
-      definition = remapDefinitionExprIds(definition, exprIdRemap);
+    debug.aot("emit.start", {
+      name: plan.name ?? options.name ?? "template",
+      targetCount: plan.targetCount,
+      exprCount: plan.expressions.length,
+    });
+
+    const ctx = new EmitContext(plan, options);
+
+    trace.event("aot.emit.definition");
+    let definition = ctx.emitDefinition(plan.root, options.name ?? "template");
+    let expressions = ctx.getExpressions();
+
+    // Apply expression deduplication if requested
+    if (options.deduplicateExpressions) {
+      trace.event("aot.emit.deduplicate", { exprCount: expressions.length });
+      const { dedupedExpressions, exprIdRemap } = deduplicateExpressionTable(
+        expressions,
+        options.stripSpans ?? false,
+      );
+
+      // Remap ExprIds in the definition
+      if (exprIdRemap.size > 0) {
+        definition = remapDefinitionExprIds(definition, exprIdRemap);
+      }
+
+      trace.setAttributes({
+        "aot.emit.dedupedCount": dedupedExpressions.length,
+        "aot.emit.remappedCount": exprIdRemap.size,
+      });
+
+      expressions = dedupedExpressions;
     }
 
-    expressions = dedupedExpressions;
-  }
+    trace.setAttributes({
+      [CompilerAttributes.EXPR_COUNT]: expressions.length,
+      [CompilerAttributes.INSTR_COUNT]: definition.instructions.length,
+    });
 
-  return {
-    definition,
-    expressions,
-    mapping: ctx.getMapping(),
-  };
+    return {
+      definition,
+      expressions,
+      mapping: ctx.getMapping(),
+    };
+  });
 }
 
 /* =============================================================================
@@ -250,6 +287,13 @@ class EmitContext {
     const templateIndex = nestedTemplates.length;
     // Use global counter for unique naming
     const templateName = `${ctrl.resource}_${this.nestedTemplateIndex++}`;
+
+    debug.aot("emit.controller", {
+      resource: ctrl.resource,
+      templateIndex,
+      templateName,
+      targetIndex: ctrl.targetIndex,
+    });
 
     // Build nested definition from the controller's template
     const nestedDef = this.emitControllerTemplate(ctrl, hostNode, templateName);

@@ -6,7 +6,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { IContainer } from "@aurelia/kernel";
-import type { ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/compiler";
+import type { ResourceGraph, ResourceScopeId, Semantics, CompileTrace } from "@aurelia-ls/compiler";
 import type { ResolutionResult, TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 import type { SSGOptions, ResolvedSSGOptions } from "@aurelia-ls/ssg";
@@ -154,6 +154,106 @@ export interface AureliaSSRPluginOptions {
    * ```
    */
   register?: (container: IContainer, request: SSRRequestContext) => void;
+
+  /**
+   * Enable compilation tracing for performance analysis and debugging.
+   *
+   * When enabled, traces template compilation, SSR rendering, and resolution.
+   * Useful for:
+   * - Performance profiling during development
+   * - Build analysis in CI/CD pipelines
+   * - Debugging slow compilations
+   *
+   * Can also be enabled via AURELIA_TRACE environment variable.
+   *
+   * @example
+   * ```typescript
+   * // Enable console tracing (default)
+   * trace: true
+   *
+   * // Enable with custom options
+   * trace: {
+   *   output: 'console',
+   *   minDuration: 1, // Only log spans > 1ms
+   * }
+   *
+   * // Write JSON trace to file
+   * trace: {
+   *   output: 'json',
+   *   file: 'aurelia-trace.json',
+   * }
+   * ```
+   */
+  trace?: boolean | TraceOptions;
+}
+
+/**
+ * Trace output destination.
+ */
+export type TraceOutput = "console" | "json" | "silent";
+
+/**
+ * Options for compilation tracing.
+ */
+export interface TraceOptions {
+  /**
+   * Where to output trace data.
+   * - 'console': Log to terminal with colors (default)
+   * - 'json': Write to JSON file
+   * - 'silent': Collect but don't output (for programmatic access)
+   *
+   * @default 'console'
+   */
+  output?: TraceOutput;
+
+  /**
+   * Minimum span duration (in milliseconds) to include in output.
+   * Shorter spans are filtered out to reduce noise.
+   *
+   * @default 0 (include all)
+   */
+  minDuration?: number;
+
+  /**
+   * File path for JSON output (when output='json').
+   * Relative to project root.
+   *
+   * @default 'aurelia-trace.json'
+   */
+  file?: string;
+
+  /**
+   * Whether to include events in output.
+   * Events are point-in-time markers within spans.
+   *
+   * @default true
+   */
+  includeEvents?: boolean;
+
+  /**
+   * Log a summary after each request (dev mode) or build (prod mode).
+   *
+   * @default true
+   */
+  summary?: boolean;
+}
+
+/**
+ * Resolved trace options with defaults applied.
+ */
+export interface ResolvedTraceOptions {
+  /** Whether tracing is enabled */
+  enabled: boolean;
+  /** Output destination */
+  output: TraceOutput;
+  /** Minimum duration threshold in nanoseconds */
+  minDurationNs: bigint;
+  /** JSON output file path (absolute) */
+  file: string | null;
+  /** Include events in output */
+  includeEvents: boolean;
+  /** Log summary after requests/builds */
+  summary: boolean;
 }
 
 /**
@@ -179,6 +279,8 @@ export interface ResolvedSSROptions {
   routeTree: RouteTree | null;
   /** SSR entry point path (resolved, or null if not configured) */
   ssrEntry: string | null;
+  /** Trace options */
+  trace: ResolvedTraceOptions;
 }
 
 /**

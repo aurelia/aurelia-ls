@@ -8,7 +8,8 @@ import type { Semantics, ResourceGraph, ResourceScopeId } from "../language/inde
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
 
 // Shared imports (via barrel)
-import type { VmReflection, SynthesisOptions } from "../shared/index.js";
+import type { VmReflection, SynthesisOptions, CompileTrace } from "../shared/index.js";
+import { NOOP_TRACE, CompilerAttributes } from "../shared/index.js";
 
 // Analysis imports (via barrel)
 import type { LinkedSemanticsModule, TypecheckModule } from "../analysis/index.js";
@@ -77,6 +78,12 @@ export interface PipelineOptions {
     includeLocations?: boolean;
   };
   analyze?: SynthesisOptions;
+  /**
+   * Optional trace context for instrumentation.
+   * When provided, stage execution is wrapped in spans with timing and cache metrics.
+   * Use NOOP_TRACE (the default) for zero overhead when tracing is disabled.
+   */
+  trace?: CompileTrace;
   // TODO(productize): optional typecheck-only product settings (diagnostics gating, severity levels).
 }
 
@@ -174,6 +181,7 @@ export class PipelineSession {
   #cacheEnabled: boolean;
   #persistCache: StageCache | null;
   #options: PipelineOptions;
+  #trace: CompileTrace;
 
   constructor(
     stages: Map<StageKey, StageDefinition<StageKey>>,
@@ -185,6 +193,7 @@ export class PipelineSession {
     this.#results = new Map<StageKey, unknown>();
     this.#meta = new Map<StageKey, StageArtifactMeta>();
     this.#cacheEnabled = options.cache?.enabled ?? true;
+    this.#trace = options.trace ?? NOOP_TRACE;
     const persist = options.cache?.persist ?? false;
     this.#persistCache = this.#cacheEnabled && persist ? new FileStageCache(options.cache?.dir ?? createDefaultCacheDir()) : null;
 
@@ -216,55 +225,79 @@ export class PipelineSession {
 
   run<K extends StageKey>(key: K): StageOutputs[K] {
     const memo = this.peek(key);
-    if (memo) return memo;
+    if (memo) {
+      this.#trace.event("stage.memoHit", { [CompilerAttributes.STAGE]: key });
+      return memo;
+    }
+
     const def = this.#stages.get(key);
     if (!def) throw new Error(`Unknown stage '${key}'`);
 
-    // Ensure deps are resolved before computing fingerprint.
-    for (const dep of def.deps) this.run(dep);
-    const ctx = new StageContext(
-      this.#options,
-      <S extends StageKey>(k: S) => this.run(k),
-      <S extends StageKey>(k: S) => this.#meta.get(k),
-    );
+    // Wrap the entire stage execution in a trace span
+    return this.#trace.span(`stage:${key}`, () => {
+      this.#trace.setAttribute(CompilerAttributes.STAGE, key);
 
-    const depMeta = def.deps.map((d) => {
-      const m = this.#meta.get(d);
-      if (!m) throw new Error(`Missing metadata for dependency '${d}' required by '${key}'`);
-      return { key: m.key, version: m.version, artifactHash: m.artifactHash };
-    });
-    const fingerprint = def.fingerprint(ctx);
-    const cacheKey = stableHash({ key, version: def.version, deps: depMeta, input: fingerprint });
+      // Ensure deps are resolved before computing fingerprint.
+      for (const dep of def.deps) this.run(dep);
+      const ctx = new StageContext(
+        this.#options,
+        <S extends StageKey>(k: S) => this.run(k),
+        <S extends StageKey>(k: S) => this.#meta.get(k),
+      );
 
-    if (this.#cacheEnabled && this.#persistCache) {
-      const cached = this.#persistCache.load<StageOutputs[K]>(cacheKey);
-      if (cached && cached.meta.version === def.version) {
-        const meta: StageArtifactMeta = {
-          key,
-          version: def.version,
-          cacheKey,
-          artifactHash: cached.meta.artifactHash,
-          fromCache: true,
-          source: "cache",
-        };
-        this.#meta.set(key, meta);
-        this.#results.set(key, cached.artifact);
-        return cached.artifact;
+      const depMeta = def.deps.map((d) => {
+        const m = this.#meta.get(d);
+        if (!m) throw new Error(`Missing metadata for dependency '${d}' required by '${key}'`);
+        return { key: m.key, version: m.version, artifactHash: m.artifactHash };
+      });
+      const fingerprint = def.fingerprint(ctx);
+      const cacheKey = stableHash({ key, version: def.version, deps: depMeta, input: fingerprint });
+      this.#trace.setAttribute(CompilerAttributes.CACHE_KEY, cacheKey);
+
+      if (this.#cacheEnabled && this.#persistCache) {
+        const cached = this.#persistCache.load<StageOutputs[K]>(cacheKey);
+        if (cached && cached.meta.version === def.version) {
+          this.#trace.event("cache.persistentHit");
+          this.#trace.setAttributes({
+            [CompilerAttributes.CACHE_HIT]: true,
+            [CompilerAttributes.CACHE_SOURCE]: "cache",
+            [CompilerAttributes.ARTIFACT_HASH]: cached.meta.artifactHash,
+          });
+          const meta: StageArtifactMeta = {
+            key,
+            version: def.version,
+            cacheKey,
+            artifactHash: cached.meta.artifactHash,
+            fromCache: true,
+            source: "cache",
+          };
+          this.#meta.set(key, meta);
+          this.#results.set(key, cached.artifact);
+          return cached.artifact;
+        }
       }
-    }
 
-    const out = def.run(ctx) as StageOutputs[K];
-    const artifactHash = stableHash(out);
-    const meta: StageArtifactMeta = { key, version: def.version, cacheKey, artifactHash, fromCache: false, source: "run" };
-    this.#meta.set(key, meta);
-    this.#results.set(key, out);
+      // Execute the stage
+      this.#trace.setAttributes({
+        [CompilerAttributes.CACHE_HIT]: false,
+        [CompilerAttributes.CACHE_SOURCE]: "run",
+      });
 
-    if (this.#cacheEnabled && this.#persistCache) {
-      const entry: StageCacheEntry = { meta: { ...meta, fromCache: false }, artifact: out };
-      this.#persistCache.store(cacheKey, entry);
-    }
+      const out = def.run(ctx) as StageOutputs[K];
+      const artifactHash = stableHash(out);
+      this.#trace.setAttribute(CompilerAttributes.ARTIFACT_HASH, artifactHash);
 
-    return out;
+      const meta: StageArtifactMeta = { key, version: def.version, cacheKey, artifactHash, fromCache: false, source: "run" };
+      this.#meta.set(key, meta);
+      this.#results.set(key, out);
+
+      if (this.#cacheEnabled && this.#persistCache) {
+        const entry: StageCacheEntry = { meta: { ...meta, fromCache: false }, artifact: out };
+        this.#persistCache.store(cacheKey, entry);
+      }
+
+      return out;
+    });
   }
 }
 

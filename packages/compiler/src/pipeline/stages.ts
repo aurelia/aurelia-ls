@@ -140,6 +140,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         attrParser,
         exprParser,
         sem,
+        trace: options.trace,
       });
     },
   });
@@ -162,6 +163,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         resources: scoped.resources,
         graph: ctx.options.resourceGraph ?? null,
         scope: scoped.scopeId,
+        trace: ctx.options.trace,
       });
     },
   });
@@ -175,7 +177,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     },
     run(ctx) {
       const linked = ctx.require("20-resolve");
-      return bindScopes(linked);
+      return bindScopes(linked, { trace: ctx.options.trace });
     },
   });
 
@@ -196,7 +198,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       const vm = assertOption(ctx.options.vm, "vm");
       // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
-      return typecheck({ linked, scope, ir, rootVmType: rootVm });
+      return typecheck({ linked, scope, ir, rootVmType: rootVm, trace: ctx.options.trace });
     },
   });
 

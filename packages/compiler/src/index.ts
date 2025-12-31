@@ -166,6 +166,54 @@ export type {
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./shared/index.js";
 export type { CompilerDiagnostic, ExprSpanIndex } from "./shared/index.js";
 
+// === Instrumentation (Tracing) ===
+export {
+  // Core primitives
+  createTrace,
+  NOOP_TRACE,
+  NOOP_SPAN,
+  CompilerAttributes,
+  // Utilities
+  nowNanos,
+  formatDuration,
+  // Exporters
+  NOOP_EXPORTER,
+  ConsoleExporter,
+  createConsoleExporter,
+  CollectingExporter,
+  createCollectingExporter,
+  MultiExporter,
+  createMultiExporter,
+  JSONExporter,
+  createJSONExporter,
+} from "./shared/index.js";
+
+// === Debug Channels ===
+export {
+  debug,
+  refreshDebugChannels,
+  configureDebug,
+  isDebugEnabled,
+} from "./shared/index.js";
+export type { Debug, DebugChannel, DebugData, DebugConfig } from "./shared/index.js";
+export type {
+  Span,
+  SpanEvent,
+  AttributeValue,
+  AttributeMap,
+  ReadonlyAttributeMap,
+  CompileTrace,
+  TraceExporter,
+  CreateTraceOptions,
+  CompilerAttributeKey,
+  ConsoleExporterOptions,
+  JSONExporterOptions,
+  SerializedSpan,
+  SerializedEvent,
+  SerializedTrace,
+  TraceSummary,
+} from "./shared/index.js";
+
 // === Pipeline ===
 export type { StageKey, StageArtifactMeta } from "./pipeline/index.js";
 

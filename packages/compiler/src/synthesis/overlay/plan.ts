@@ -11,6 +11,7 @@
 
 import type { OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment } from "./types.js";
 import type { VmReflection, SynthesisOptions } from "../../shared/index.js";
+import { NOOP_TRACE, debug } from "../../shared/index.js";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -37,21 +38,55 @@ function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 /* ===================================================================================== */
 
 export function plan(linked: LinkedSemanticsModule, scope: ScopeModule, opts: SynthesisOptions): OverlayPlanModule {
-  const exprIndex = indexExprTable(linked.exprTable as readonly ExprTableEntry[] | undefined);
-  const templates: TemplateOverlayPlan[] = [];
+  const trace = opts.trace ?? NOOP_TRACE;
 
-  /**
-   * IMPORTANT:
-   * - Bind already models nested template expressions inside the **first (root) template**.
-   * - So we only analyze/emit for the root scope template.
-   */
-  const roots: ScopeTemplate[] = scope.templates.length > 0 ? [scope.templates[0]!] : [];
-  for (let ti = 0; ti < roots.length; ti++) {
-    const st = roots[ti]!;
-    templates.push(analyzeTemplate(st, exprIndex, ti, opts));
-  }
+  return trace.span("overlay.plan", () => {
+    trace.setAttributes({
+      "overlay.plan.templateCount": scope.templates.length,
+    });
 
-  return { templates };
+    debug.overlay("plan.start", {
+      templateCount: scope.templates.length,
+    });
+
+    const exprIndex = indexExprTable(linked.exprTable as readonly ExprTableEntry[] | undefined);
+    const templates: TemplateOverlayPlan[] = [];
+
+    /**
+     * IMPORTANT:
+     * - Bind already models nested template expressions inside the **first (root) template**.
+     * - So we only analyze/emit for the root scope template.
+     */
+    const roots: ScopeTemplate[] = scope.templates.length > 0 ? [scope.templates[0]!] : [];
+    for (let ti = 0; ti < roots.length; ti++) {
+      const st = roots[ti]!;
+      trace.event("overlay.plan.template", { index: ti, frameCount: st.frames.length });
+      templates.push(analyzeTemplate(st, exprIndex, ti, opts));
+    }
+
+    // Count total frames and lambdas
+    let totalFrames = 0;
+    let totalLambdas = 0;
+    for (const t of templates) {
+      totalFrames += t.frames.length;
+      for (const f of t.frames) {
+        totalLambdas += f.lambdas.length;
+      }
+    }
+
+    trace.setAttributes({
+      "overlay.plan.frameCount": totalFrames,
+      "overlay.plan.lambdaCount": totalLambdas,
+    });
+
+    debug.overlay("plan.complete", {
+      templateCount: templates.length,
+      frameCount: totalFrames,
+      lambdaCount: totalLambdas,
+    });
+
+    return { templates };
+  });
 }
 
 /* ===================================================================================== */
@@ -70,6 +105,12 @@ function analyzeTemplate(
   const prefix = (opts.syntheticPrefix ?? vm.getSyntheticPrefix?.()) || "__AU_TTC_";
   const vmType = buildVmTypeInfo(vm, prefix);
   const rootTypeRef = vmType.alias;
+
+  debug.overlay("plan.template", {
+    name: st.name,
+    templateIndex,
+    frameCount: st.frames.length,
+  });
 
   // Stable per-frame alias names up front (root-first order already)
   const typeAliasByFrame = new Map<FrameId, string>();

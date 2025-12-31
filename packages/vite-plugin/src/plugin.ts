@@ -26,7 +26,7 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { normalizePathForId } from "@aurelia-ls/compiler";
+import { normalizePathForId, type CompileTrace } from "@aurelia-ls/compiler";
 import {
   transform,
   transformEntryPoint,
@@ -38,7 +38,8 @@ import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
-import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext } from "./types.js";
+import { resolveTraceOptions, createBuildTrace, type ManagedTrace } from "./trace.js";
+import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext, ResolvedTraceOptions } from "./types.js";
 import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 
 /**
@@ -85,6 +86,7 @@ function transformComponent(
   templateInfo: TemplateInfo,
   resolutionContext: ResolutionContext,
   config: ResolvedConfig,
+  trace?: CompileTrace,
 ): { code: string; map: null } | null {
   try {
     // Read the template HTML
@@ -97,6 +99,7 @@ function transformComponent(
       semantics: resolutionContext.semantics,
       resourceGraph: resolutionContext.resourceGraph,
       resourceScope: templateInfo.scopeId,
+      trace,
     });
 
     // Build resource definition for transform
@@ -119,6 +122,7 @@ function transformComponent(
       nestedHtmlTree: aot.raw.nestedHtmlTree,
       removeDecorators: true,
       includeComments: true,
+      trace,
     });
 
     config.logger.info(
@@ -227,6 +231,8 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
   let resolutionContext: ResolutionContext | null = null;
   let resolutionPromise: Promise<ResolutionContext | null> | null = null;
   let routeTree: RouteTree | null = null;
+  let traceOptions: ResolvedTraceOptions;
+  let buildTrace: ManagedTrace | null = null;
 
   /**
    * Pre-plugin: Rewrites .html imports to virtual files in production builds.
@@ -336,6 +342,12 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
         ? resolve(config.root, options.ssrEntry)
         : null;
 
+      // Resolve trace options
+      traceOptions = resolveTraceOptions(options.trace, config.root);
+      if (traceOptions.enabled) {
+        config.logger.info(`[aurelia-ssr] Tracing enabled (output: ${traceOptions.output})`);
+      }
+
       // Build resolved options with defaults (resolution context added later)
       resolvedOptions = {
         entry,
@@ -350,6 +362,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
         ssg: resolvedSSG,
         routeTree: null, // Will be set after route discovery
         ssrEntry,
+        trace: traceOptions,
       };
 
       config.logger.info(
@@ -472,6 +485,18 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
     },
 
     /**
+     * Called at the start of the build.
+     */
+    buildStart() {
+      // Create build trace for production builds
+      if (resolvedConfig.command === "build" && traceOptions.enabled) {
+        buildTrace = createBuildTrace(traceOptions, {
+          info: (msg) => resolvedConfig.logger.info(msg),
+        });
+      }
+    },
+
+    /**
      * Transform TypeScript files to inject AOT-compiled $au definitions.
      *
      * This hook intercepts component source files and:
@@ -515,9 +540,12 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
         (t) => t.componentPath === normalizedPath,
       );
 
+      // Get trace for this transform (build trace or undefined for dev)
+      const trace = buildTrace?.trace;
+
       // If this is an Aurelia component with external template, transform it
       if (templateInfo) {
-        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig);
+        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig, trace);
       }
 
       // Check if this is an entry point file (contains Aurelia initialization)
@@ -719,6 +747,25 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
             `[aurelia-ssr] Expanded ${expanded.parameterizedRoute.fullPath} → ${expanded.staticPaths.length} pages`,
           );
         }
+      }
+
+      // Finish build trace after SSG
+      if (buildTrace) {
+        buildTrace.finish();
+        buildTrace = null;
+      }
+    },
+
+    /**
+     * Called when the build ends (before closeBundle).
+     * Used to finish traces when SSG is not enabled.
+     */
+    buildEnd() {
+      // Finish build trace if SSG is not enabled
+      // (SSG-enabled builds finish trace in closeBundle after SSG completes)
+      if (buildTrace && !resolvedOptions.ssg.enabled) {
+        buildTrace.finish();
+        buildTrace = null;
       }
     },
   };

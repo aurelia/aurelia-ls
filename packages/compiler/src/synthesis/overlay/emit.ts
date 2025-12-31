@@ -1,6 +1,9 @@
 import type { OverlayLambdaSegment, OverlayPlanModule } from "./types.js";
 import type { ExprId } from "../../model/ir.js";
 import { offsetSpan, spanFromBounds, type TextSpan } from "../../model/span.js";
+import type { CompileTrace } from "../../shared/index.js";
+import { NOOP_TRACE } from "../../shared/index.js";
+import { debug } from "../../shared/debug.js";
 
 /**
  * Emit a compact overlay:
@@ -24,77 +27,115 @@ export interface OverlayEmitResult {
   mapping: OverlayEmitMappingEntry[];
 }
 
-export function emitOverlay(plan: OverlayPlanModule, { isJs }: { isJs: boolean }): OverlayEmitResult {
-  const out: string[] = [];
-  const mapping: OverlayEmitMappingEntry[] = [];
-  let offset = 0; // track length of out.join("\n") as we build
+export function emitOverlay(
+  plan: OverlayPlanModule,
+  { isJs, trace }: { isJs: boolean; trace?: CompileTrace },
+): OverlayEmitResult {
+  const t = trace ?? NOOP_TRACE;
 
-  // Helpers to make value converters / binding behaviors TS-safe.
-  const helpers = isJs
-    ? [
-        "/** @template T @param {T} value @returns {T} */ const __au_vc = (value, _name, ..._args) => value;",
-        "/** @template T @param {T} value @returns {T} */ const __au_bb = (value, _name, ..._args) => value;",
-      ]
-    : [
-        "function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
-        "function __au_bb<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
-      ];
-  for (const line of helpers) {
-    out.push(line);
-    offset += line.length + 1;
-  }
+  return t.span("overlay.emit", () => {
+    t.setAttributes({
+      "overlay.emit.isJs": isJs,
+      "overlay.emit.templateCount": plan.templates.length,
+    });
 
-  for (const t of plan.templates) {
-    if (t.vmType?.alias && t.vmType?.typeExpr) {
-      if (!isJs) {
-        const aliasLine = `type ${t.vmType.alias} = ${t.vmType.typeExpr};`;
-        out.push(aliasLine);
-        offset += aliasLine.length + 1;
-      } else {
-        const aliasLine = `/** @typedef {${t.vmType.typeExpr}} ${t.vmType.alias} */`;
-        out.push(aliasLine);
-        offset += aliasLine.length + 1;
-      }
+    debug.overlay("emit.start", {
+      isJs,
+      templateCount: plan.templates.length,
+    });
+
+    const out: string[] = [];
+    const mapping: OverlayEmitMappingEntry[] = [];
+    let offset = 0; // track length of out.join("\n") as we build
+
+    // Helpers to make value converters / binding behaviors TS-safe.
+    const helpers = isJs
+      ? [
+          "/** @template T @param {T} value @returns {T} */ const __au_vc = (value, _name, ..._args) => value;",
+          "/** @template T @param {T} value @returns {T} */ const __au_bb = (value, _name, ..._args) => value;",
+        ]
+      : [
+          "function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
+          "function __au_bb<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
+        ];
+    for (const line of helpers) {
+      out.push(line);
+      offset += line.length + 1;
     }
-    for (const f of t.frames) {
-      if (!isJs) {
-        out.push(`type ${f.typeName} = ${f.typeExpr};`);
-        offset += out[out.length - 1]!.length + 1;
-        const typeRef = f.frame === 0 ? f.typeExpr : f.typeName;
-        for (const l of f.lambdas) {
-          const line = `__au$access<${typeRef}>(${l.lambda});`;
-          const lambdaStart = line.lastIndexOf("(") + 1; // point at lambda start
-          const start = offset + lambdaStart;
-          const span = spanFromBounds(start, start + l.lambda.length);
-          mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start) });
-          out.push(line);
-          offset += line.length + 1;
+
+    let totalFrames = 0;
+    let totalLambdas = 0;
+
+    for (const template of plan.templates) {
+      debug.overlay("emit.template", {
+        name: template.vmType?.alias ?? "anonymous",
+        frameCount: template.frames.length,
+      });
+      if (template.vmType?.alias && template.vmType?.typeExpr) {
+        if (!isJs) {
+          const aliasLine = `type ${template.vmType.alias} = ${template.vmType.typeExpr};`;
+          out.push(aliasLine);
+          offset += aliasLine.length + 1;
+        } else {
+          const aliasLine = `/** @typedef {${template.vmType.typeExpr}} ${template.vmType.alias} */`;
+          out.push(aliasLine);
+          offset += aliasLine.length + 1;
         }
-      } else {
-        // JS flavor: JSDoc on the arrow function parameter (supported by TS checkJs).
-        const withJSDocParam = (lambda: string) => {
-          const idx = lambda.indexOf("=>");
-          const head = lambda.slice(0, idx).trim();  // "o"
-          const tail = lambda.slice(idx).trim();     // "=> <expr>"
-          return `/** @param {${f.typeExpr}} ${head} */ (${head}) ${tail}`;
-        };
-        for (const l of f.lambdas) {
-        const lambdaWithDoc = withJSDocParam(l.lambda);
-        const line = `__au$access(${lambdaWithDoc});`;
-        const lambdaStart = line.lastIndexOf("(") + 1;
-        const start = offset + lambdaStart;
-        const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan);
-        const span = spanFromBounds(start, start + lambdaWithDoc.length);
-        mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start, shift) });
-        out.push(line);
-        offset += line.length + 1;
       }
+      for (const f of template.frames) {
+        totalFrames++;
+        debug.overlay("emit.frame", {
+          frameId: f.frame,
+          typeName: f.typeName,
+          lambdaCount: f.lambdas.length,
+        });
+        if (!isJs) {
+          out.push(`type ${f.typeName} = ${f.typeExpr};`);
+          offset += out[out.length - 1]!.length + 1;
+          const typeRef = f.frame === 0 ? f.typeExpr : f.typeName;
+          for (const l of f.lambdas) {
+            totalLambdas++;
+            const line = `__au$access<${typeRef}>(${l.lambda});`;
+            const lambdaStart = line.lastIndexOf("(") + 1; // point at lambda start
+            const start = offset + lambdaStart;
+            const span = spanFromBounds(start, start + l.lambda.length);
+            mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start) });
+            out.push(line);
+            offset += line.length + 1;
+          }
+        } else {
+          // JS flavor: JSDoc on the arrow function parameter (supported by TS checkJs).
+          const withJSDocParam = (lambda: string) => {
+            const idx = lambda.indexOf("=>");
+            const head = lambda.slice(0, idx).trim();  // "o"
+            const tail = lambda.slice(idx).trim();     // "=> <expr>"
+            return `/** @param {${f.typeExpr}} ${head} */ (${head}) ${tail}`;
+          };
+          for (const l of f.lambdas) {
+            totalLambdas++;
+            const lambdaWithDoc = withJSDocParam(l.lambda);
+            const line = `__au$access(${lambdaWithDoc});`;
+            const lambdaStart = line.lastIndexOf("(") + 1;
+            const start = offset + lambdaStart;
+            const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan);
+            const span = spanFromBounds(start, start + lambdaWithDoc.length);
+            mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start, shift) });
+            out.push(line);
+            offset += line.length + 1;
+          }
+        }
       }
     }
-  }
 
-  const text = `${out.join("\n")}\n`;
-  return { text, mapping };
+    t.setAttributes({
+      "overlay.emit.frameCount": totalFrames,
+      "overlay.emit.lambdaCount": totalLambdas,
+      "overlay.emit.mappingCount": mapping.length,
+    });
+
+    const text = `${out.join("\n")}\n`;
+    return { text, mapping };
+  });
 }
 
 function mapSegments(segments: readonly OverlayLambdaSegment[] | undefined, lambdaStart: number, spanShift = 0): OverlayEmitSegment[] | undefined {
@@ -136,11 +177,13 @@ function arrowBodyStart(lambda: string): number {
  * - eol: line ending to use in the output (default: '\n')
  * - banner: optional banner comment at the top of the file
  * - filename: suggested filename (auto-chosen when omitted)
+ * - trace: optional trace for instrumentation
  */
 export interface EmitOptions {
   eol?: "\n" | "\r\n";
   banner?: string;
   filename?: string;
+  trace?: CompileTrace;
 }
 
 export interface EmitResult {
@@ -161,7 +204,7 @@ export function emitOverlayFile(
   opts: EmitOptions & { isJs: boolean }
 ): EmitResult {
   const eol = opts.eol ?? "\n";
-  const { text, mapping } = emitOverlay(plan, { isJs: opts.isJs });
+  const { text, mapping } = emitOverlay(plan, { isJs: opts.isJs, trace: opts.trace });
   const adjustedMapping = eol === "\n" ? mapping : adjustMappingForEol(mapping, text, eol);
   const body = text.replace(/\n/g, eol);
   const banner = opts.banner ? `${opts.banner}${eol}` : "";

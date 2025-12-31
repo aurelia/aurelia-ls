@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import ts from "typescript";
-import { DEFAULT_SEMANTICS, normalizePathForId, type BindingMode, type ResourceScopeId, type Semantics, type Bindable } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, normalizePathForId, type BindingMode, type ResourceScopeId, type Semantics, type Bindable, type CompileTrace } from "@aurelia-ls/compiler";
 import { resolve, buildRouteTree, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RegistrationIntent, type RouteTree } from "@aurelia-ls/resolution";
 import type { ResolutionContext } from "./types.js";
 
@@ -32,11 +32,13 @@ interface Logger {
  *
  * @param tsconfigPath - Absolute path to tsconfig.json
  * @param logger - Logger for output
+ * @param trace - Optional compile trace
  * @returns Resolution context or null if resolution fails
  */
 export async function createResolutionContext(
   tsconfigPath: string,
   logger: Logger,
+  trace?: CompileTrace,
 ): Promise<ResolutionContext | null> {
   // Dynamically import TypeScript (peer dependency)
   let ts: typeof import("typescript");
@@ -85,7 +87,7 @@ export async function createResolutionContext(
     error: (msg: string) => logger.error(msg),
   };
 
-  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS }, resolutionLogger);
+  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace }, resolutionLogger);
 
   // Log resolution results
   const globalCount = result.intents.filter((i: RegistrationIntent) => i.kind === "global").length;

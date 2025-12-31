@@ -29,6 +29,8 @@ import {
   resolveTypecheckConfig,
   checkTypeCompatibility,
 } from "./config.js";
+import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { debug } from "../../shared/debug.js";
 
 // Re-export config types for consumers
 export type { TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./config.js";
@@ -60,35 +62,73 @@ export interface TypecheckOptions {
   rootVmType: string;
   /** Optional typecheck configuration. Uses lenient defaults if not provided. */
   config?: Partial<TypecheckConfig>;
+  /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
+  trace?: CompileTrace;
 }
 
 /** Phase 40: derive expected + inferred types and surface lightweight diagnostics. */
 export function typecheck(opts: TypecheckOptions): TypecheckModule {
-  const config = resolveTypecheckConfig(opts.config);
+  const trace = opts.trace ?? NOOP_TRACE;
 
-  // Early exit if type checking is disabled
-  if (!config.enabled) {
-    return {
-      version: "aurelia-typecheck@1",
-      inferredByExpr: new Map(),
-      expectedByExpr: new Map(),
-      diags: [],
-      config,
-    };
-  }
+  return trace.span("typecheck", () => {
+    const config = resolveTypecheckConfig(opts.config);
 
-  const expectedInfo = collectExpectedTypes(opts.linked);
-  const inferredByExpr = collectInferredTypes(opts);
-  const exprSpanIndex = buildExprSpanIndex(opts.ir);
-  const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config);
+    trace.setAttributes({
+      [CompilerAttributes.TEMPLATE]: opts.linked.templates[0]?.name ?? "<unknown>",
+      "typecheck.enabled": config.enabled,
+      "typecheck.rootVm": opts.rootVmType,
+    });
 
-  // Extract just the types for the module output (without context)
-  const expectedByExpr: ExprIdMap<string> = new Map();
-  for (const [id, info] of expectedInfo.entries()) {
-    expectedByExpr.set(id, info.type);
-  }
+    // Early exit if type checking is disabled
+    if (!config.enabled) {
+      debug.typecheck("disabled", { reason: "config.enabled=false" });
+      trace.event("typecheck.disabled");
+      return {
+        version: "aurelia-typecheck@1",
+        inferredByExpr: new Map(),
+        expectedByExpr: new Map(),
+        diags: [],
+        config,
+      };
+    }
 
-  return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags, config };
+    debug.typecheck("start", { rootVmType: opts.rootVmType });
+
+    // Collect expected types from linked semantics
+    trace.event("typecheck.collectExpected.start");
+    const expectedInfo = collectExpectedTypes(opts.linked);
+    trace.event("typecheck.collectExpected.complete", { count: expectedInfo.size });
+    debug.typecheck("expected.collected", { count: expectedInfo.size });
+
+    // Collect inferred types from expression ASTs
+    trace.event("typecheck.collectInferred.start");
+    const inferredByExpr = collectInferredTypes(opts);
+    trace.event("typecheck.collectInferred.complete", { count: inferredByExpr.size });
+    debug.typecheck("inferred.collected", { count: inferredByExpr.size });
+
+    // Build span index and collect diagnostics
+    trace.event("typecheck.diagnostics.start");
+    const exprSpanIndex = buildExprSpanIndex(opts.ir);
+    const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config);
+    trace.event("typecheck.diagnostics.complete", { count: diags.length });
+
+    // Extract just the types for the module output (without context)
+    const expectedByExpr: ExprIdMap<string> = new Map();
+    for (const [id, info] of expectedInfo.entries()) {
+      expectedByExpr.set(id, info.type);
+    }
+
+    // Record output metrics
+    trace.setAttributes({
+      "typecheck.expectedCount": expectedByExpr.size,
+      "typecheck.inferredCount": inferredByExpr.size,
+      [CompilerAttributes.DIAG_COUNT]: diags.length,
+      [CompilerAttributes.DIAG_ERROR_COUNT]: diags.filter(d => d.severity === "error").length,
+      [CompilerAttributes.DIAG_WARNING_COUNT]: diags.filter(d => d.severity === "warning").length,
+    });
+
+    return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags, config };
+  });
 }
 
 /** Expected type info with binding context for coercion rules. */
@@ -158,6 +198,14 @@ function collectDiagnostics(
 
     // Skip if compatible or severity is off
     if (result.compatible || result.severity === "off") continue;
+
+    debug.typecheck("mismatch", {
+      exprId: id,
+      expected: expectedInfo.type,
+      actual,
+      severity: result.severity,
+      context: expectedInfo.context,
+    });
 
     const span = exprIdMapGet(spans, id) ?? null;
     const code = severityToCode(result.severity);
