@@ -76,7 +76,7 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
     trace.setAttributes({
       [CompilerAttributes.TEMPLATE]: opts.linked.templates[0]?.name ?? "<unknown>",
       "typecheck.enabled": config.enabled,
-      "typecheck.root_vm": opts.rootVmType,
+      "typecheck.rootVm": opts.rootVmType,
     });
 
     // Early exit if type checking is disabled
@@ -95,22 +95,22 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
     debug.typecheck("start", { rootVmType: opts.rootVmType });
 
     // Collect expected types from linked semantics
-    trace.event("typecheck.collect_expected_start");
+    trace.event("typecheck.collectExpected.start");
     const expectedInfo = collectExpectedTypes(opts.linked);
-    trace.event("typecheck.collect_expected_complete", { count: expectedInfo.size });
+    trace.event("typecheck.collectExpected.complete", { count: expectedInfo.size });
     debug.typecheck("expected.collected", { count: expectedInfo.size });
 
     // Collect inferred types from expression ASTs
-    trace.event("typecheck.collect_inferred_start");
+    trace.event("typecheck.collectInferred.start");
     const inferredByExpr = collectInferredTypes(opts);
-    trace.event("typecheck.collect_inferred_complete", { count: inferredByExpr.size });
+    trace.event("typecheck.collectInferred.complete", { count: inferredByExpr.size });
     debug.typecheck("inferred.collected", { count: inferredByExpr.size });
 
     // Build span index and collect diagnostics
-    trace.event("typecheck.diagnostics_start");
+    trace.event("typecheck.diagnostics.start");
     const exprSpanIndex = buildExprSpanIndex(opts.ir);
     const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config);
-    trace.event("typecheck.diagnostics_complete", { count: diags.length });
+    trace.event("typecheck.diagnostics.complete", { count: diags.length });
 
     // Extract just the types for the module output (without context)
     const expectedByExpr: ExprIdMap<string> = new Map();
@@ -120,8 +120,8 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
 
     // Record output metrics
     trace.setAttributes({
-      "typecheck.expected_count": expectedByExpr.size,
-      "typecheck.inferred_count": inferredByExpr.size,
+      "typecheck.expectedCount": expectedByExpr.size,
+      "typecheck.inferredCount": inferredByExpr.size,
       [CompilerAttributes.DIAG_COUNT]: diags.length,
       [CompilerAttributes.DIAG_ERROR_COUNT]: diags.filter(d => d.severity === "error").length,
       [CompilerAttributes.DIAG_WARNING_COUNT]: diags.filter(d => d.severity === "warning").length,

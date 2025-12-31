@@ -27,13 +27,13 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
   return trace.span("lower.document", () => {
     trace.setAttributes({
       [CompilerAttributes.TEMPLATE]: opts.name ?? opts.file ?? "<unknown>",
-      "lower.html_length": html.length,
+      "lower.htmlLength": html.length,
     });
 
     // Parse HTML with parse5
-    trace.event("lower.parse_start");
+    trace.event("lower.parse.start");
     const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
-    trace.event("lower.parse_complete");
+    trace.event("lower.parse.complete");
 
     const sem = opts.sem ?? DEFAULT_SEMANTICS;
     const source = resolveSourceFile(opts.file ?? opts.name ?? "");
@@ -42,15 +42,15 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const nestedTemplates: TemplateIR[] = [];
 
     // Build DOM tree
-    trace.event("lower.dom_start");
+    trace.event("lower.dom.start");
     const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source);
-    trace.event("lower.dom_complete");
+    trace.event("lower.dom.complete");
 
     // Collect instruction rows
-    trace.event("lower.rows_start");
+    trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
     collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, sem);
-    trace.event("lower.rows_complete");
+    trace.event("lower.rows.complete");
 
     const root: TemplateIR = { dom: domRoot, rows, name: opts.name! };
 
@@ -71,7 +71,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
       [CompilerAttributes.NODE_COUNT]: countNodes(domRoot),
       [CompilerAttributes.EXPR_COUNT]: table.entries.length,
       [CompilerAttributes.ROW_COUNT]: rows.length,
-      "lower.template_count": result.templates.length,
+      "lower.templateCount": result.templates.length,
       [CompilerAttributes.DIAG_COUNT]: result.diags?.length ?? 0,
     });
 

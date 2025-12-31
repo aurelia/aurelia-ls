@@ -226,7 +226,7 @@ export class PipelineSession {
   run<K extends StageKey>(key: K): StageOutputs[K] {
     const memo = this.peek(key);
     if (memo) {
-      this.#trace.event("stage.memo_hit", { [CompilerAttributes.STAGE]: key });
+      this.#trace.event("stage.memoHit", { [CompilerAttributes.STAGE]: key });
       return memo;
     }
 
@@ -257,7 +257,7 @@ export class PipelineSession {
       if (this.#cacheEnabled && this.#persistCache) {
         const cached = this.#persistCache.load<StageOutputs[K]>(cacheKey);
         if (cached && cached.meta.version === def.version) {
-          this.#trace.event("cache.persistent_hit");
+          this.#trace.event("cache.persistentHit");
           this.#trace.setAttributes({
             [CompilerAttributes.CACHE_HIT]: true,
             [CompilerAttributes.CACHE_SOURCE]: "cache",

@@ -159,8 +159,8 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
   return trace.span("resolve.host", () => {
     trace.setAttributes({
       [CompilerAttributes.TEMPLATE]: ir.name ?? "<unknown>",
-      "resolve.template_count": ir.templates.length,
-      "resolve.expr_count": ir.exprTable?.length ?? 0,
+      "resolve.templateCount": ir.templates.length,
+      "resolve.exprCount": ir.exprTable?.length ?? 0,
     });
 
     const diags: SemDiagnostic[] = [];
@@ -172,24 +172,24 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
     };
 
     // Link all templates
-    trace.event("resolve.templates_start");
+    trace.event("resolve.templates.start");
     const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
-    trace.event("resolve.templates_complete", { count: templates.length });
+    trace.event("resolve.templates.complete", { count: templates.length });
 
     // Validate branch controller relationships on ROOT template only.
     // Nested templates (controller defs) are validated via validateNestedIrRows during recursion.
     // ir.templates[0] is always the root; others are nested templates for controllers.
     if (templates[0]) {
-      trace.event("resolve.validate_branches_start");
+      trace.event("resolve.validateBranches.start");
       validateBranchControllers(templates[0].rows, ctx);
-      trace.event("resolve.validate_branches_complete");
+      trace.event("resolve.validateBranches.complete");
     }
 
     // Validate expression resources (AU01xx diagnostics)
     if (ir.exprTable) {
-      trace.event("resolve.validate_expr_resources_start");
+      trace.event("resolve.validateExprResources.start");
       validateExpressionResources(ir.exprTable, ctx);
-      trace.event("resolve.validate_expr_resources_complete");
+      trace.event("resolve.validateExprResources.complete");
     }
 
     // Count linked instructions

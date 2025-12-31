@@ -174,8 +174,8 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
     expect(lowerEvents.length).toBeGreaterThan(0);
 
     // Verify specific events exist
-    const parseStart = exporter.findEvents("lower.parse_start");
-    const parseComplete = exporter.findEvents("lower.parse_complete");
+    const parseStart = exporter.findEvents("lower.parse.start");
+    const parseComplete = exporter.findEvents("lower.parse.complete");
     expect(parseStart.length).toBe(1);
     expect(parseComplete.length).toBe(1);
   });

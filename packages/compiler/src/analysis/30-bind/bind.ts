@@ -78,15 +78,15 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
   return trace.span("bind.scopes", () => {
     trace.setAttributes({
       [CompilerAttributes.TEMPLATE]: linked.templates[0]?.name ?? "<unknown>",
-      "bind.template_count": linked.templates.length,
-      "bind.expr_count": linked.exprTable?.length ?? 0,
+      "bind.templateCount": linked.templates.length,
+      "bind.exprCount": linked.exprTable?.length ?? 0,
     });
 
     const diags: ScopeDiagnostic[] = [];
     const templates: ScopeTemplate[] = [];
 
     // Index ForOf entries once
-    trace.event("bind.index_exprs_start");
+    trace.event("bind.indexExprs.start");
     const exprIndex: ExprIdMap<ExprTableEntry> = new Map();
     const forOfIndex: ExprIdMap<ForOfStatement | BadExpression> = new Map();
     for (const e of linked.exprTable ?? []) {
@@ -95,7 +95,7 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
         forOfIndex.set(e.id, e.ast);
       }
     }
-    trace.event("bind.index_exprs_complete", { expr_count: exprIndex.size, forof_count: forOfIndex.size });
+    trace.event("bind.indexExprs.complete", { exprCount: exprIndex.size, forOfCount: forOfIndex.size });
     const reportedBadExprs = new Set<ExprId>();
 
     // Map raw TemplateIR roots → LinkedTemplate (identity preserved by resolve-host)
@@ -104,12 +104,12 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
 
     // Only the module's *root template* produces a ScopeTemplate; nested templates
     // are traversed via controller defs while staying inside the same frame tree.
-    trace.event("bind.build_scopes_start");
+    trace.event("bind.buildScopes.start");
     const roots: LinkedTemplate[] = linked.templates.length > 0 ? [linked.templates[0]!] : [];
     for (const t of roots) {
       templates.push(buildTemplateScopes(t, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs));
     }
-    trace.event("bind.build_scopes_complete");
+    trace.event("bind.buildScopes.complete");
 
     // Count frames and symbols
     let frameCount = 0;
@@ -125,9 +125,9 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
 
     // Record output metrics
     trace.setAttributes({
-      "bind.frame_count": frameCount,
-      "bind.symbol_count": symbolCount,
-      "bind.expr_mapping_count": exprMappingCount,
+      "bind.frameCount": frameCount,
+      "bind.symbolCount": symbolCount,
+      "bind.exprMappingCount": exprMappingCount,
       [CompilerAttributes.DIAG_COUNT]: diags.length,
     });
 
