@@ -1,6 +1,7 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ControllerConfig, Semantics } from "../../language/registry.js";
+import { debug } from "../../shared/debug.js";
 import type {
   ControllerBindableIR,
   ControllerBranchInfo,
@@ -197,9 +198,24 @@ export function collectControllers(
   for (const a of el.attrs ?? []) {
     const s = attrParser.parse(a.name, a.value ?? "");
     const config = resolveControllerAttr(s, sem);
-    if (config) candidates.push({ a, s, config });
+    if (config) {
+      debug.lower("controller.candidate", {
+        element: el.nodeName,
+        attr: a.name,
+        value: a.value,
+        controller: config.name,
+        trigger: config.trigger.kind,
+      });
+      candidates.push({ a, s, config });
+    }
   }
   if (!candidates.length) return [];
+
+  debug.lower("controller.collect", {
+    element: el.nodeName,
+    count: candidates.length,
+    controllers: candidates.map(c => c.config.name),
+  });
 
   const rightmost = candidates[candidates.length - 1];
   if (!rightmost) return [];
@@ -257,6 +273,13 @@ function buildControllerPrototype(
   const raw = a.value ?? "";
   const name = config.name;
   const trigger = config.trigger;
+
+  debug.lower("controller.prototype", {
+    name,
+    trigger: trigger.kind,
+    raw,
+    command: s.command,
+  });
 
   switch (trigger.kind) {
     case "marker":

@@ -55,6 +55,7 @@ import { normalizeSpanMaybe } from "../../model/span.js";
 import type { Origin, Provenance } from "../../model/origin.js";
 import { isStub } from "../../shared/diagnosed.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { debug } from "../../shared/debug.js";
 
 function assertUnreachable(_x: never): never { throw new Error("unreachable"); }
 
@@ -312,13 +313,18 @@ function enterControllerFrame(
   frames: ScopeFrame[],
   frameIds: FrameIdAllocator,
 ): FrameId {
-  switch (ctrl.controller.config.scope) {
+  const scope = ctrl.controller.config.scope;
+  debug.bind("frame.enter", { controller: ctrl.res, scope, currentFrame: current });
+
+  switch (scope) {
     case "overlay": {
       const id = frameIds.allocate();
+      debug.bind("frame.create", { controller: ctrl.res, frameId: id, parent: current });
       frames.push({ id, parent: current, kind: "overlay", overlay: null, symbols: [], origin: null, letValueExprs: null });
       return id;
     }
     case "reuse":
+      debug.bind("frame.reuse", { controller: ctrl.res, frameId: current });
       return current;
     default:
       // Future scopes (e.g., 'isolate') — keep traversal alive in MVP.

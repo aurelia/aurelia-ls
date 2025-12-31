@@ -7,6 +7,7 @@ import {
   STUB_CONTROLLER_CONFIG,
   createCustomControllerConfig,
 } from "../../language/registry.js";
+import { debug } from "../../shared/debug.js";
 import type {
   AttrResRef,
   ControllerSem,
@@ -41,6 +42,7 @@ export function resolvePropertyTarget(
   if (host.kind === "element" && host.custom) {
     const bindable = host.custom.def.bindables[to];
     if (bindable) {
+      debug.resolve("target.bindable", { to, element: host.custom.def.name, bindable: bindable.name });
       const target: TargetSem = { kind: "element.bindable", element: host.custom, bindable };
       const effectiveMode = resolveEffectiveMode(mode, target, host, lookup, to);
       return { target, effectiveMode };
@@ -50,12 +52,14 @@ export function resolvePropertyTarget(
   if (host.kind === "element" && host.native) {
     const domProp = host.native.def.props[to];
     if (domProp) {
+      debug.resolve("target.nativeProp", { to, tag: host.tag });
       const target: TargetSem = { kind: "element.nativeProp", element: host.native, prop: domProp };
       const effectiveMode = resolveEffectiveMode(mode, target, host, lookup, to);
       return { target, effectiveMode };
     }
   }
   // 3) Unknown target
+  debug.resolve("target.unknown", { to, hostKind: host.kind, tag: host.kind === "element" ? host.tag : undefined });
   const target: TargetSem = { kind: "unknown", reason: host.kind === "element" ? "no-prop" : "no-element" };
   const effectiveMode = resolveEffectiveMode(mode, target, host, lookup, to);
   return { target, effectiveMode };
@@ -94,12 +98,14 @@ export function resolveControllerSem(
   // 1. Check built-in controller configs
   const builtinConfig = getControllerConfig(res);
   if (builtinConfig) {
+    debug.resolve("controller.builtin", { name: res, trigger: builtinConfig.trigger.kind });
     return pure({ res, config: builtinConfig });
   }
 
   // 2. Check custom TCs in attributes (discovered via @templateController decorator)
   const customAttr = lookup.attribute(res);
   if (customAttr?.isTemplateController) {
+    debug.resolve("controller.custom", { name: res, primary: customAttr.primary });
     const customConfig = createCustomControllerConfig(
       customAttr.name,
       customAttr.primary,
@@ -109,6 +115,7 @@ export function resolveControllerSem(
   }
 
   // 3. Unknown controller - return stub + diagnostic
+  debug.resolve("controller.unknown", { name: res });
   const diagnostic = buildDiagnostic({
     code: "AU1101" as SemDiagCode,
     message: `Unknown template controller '${res}'.`,

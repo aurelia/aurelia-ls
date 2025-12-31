@@ -107,3 +107,15 @@ export {
   type SerializedTrace,
   type TraceSummary,
 } from "./trace-exporters.js";
+
+// Debug Channels (decision/data visibility)
+export {
+  debug,
+  refreshDebugChannels,
+  configureDebug,
+  isDebugEnabled,
+  type Debug,
+  type DebugChannel,
+  type DebugData,
+  type DebugConfig,
+} from "./debug.js";
