@@ -11,7 +11,7 @@
 
 import type { OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment } from "./types.js";
 import type { VmReflection, SynthesisOptions } from "../../shared/index.js";
-import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
+import { NOOP_TRACE, CompilerAttributes, debug } from "../../shared/index.js";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -45,6 +45,10 @@ export function plan(linked: LinkedSemanticsModule, scope: ScopeModule, opts: Sy
       "overlay.plan.templateCount": scope.templates.length,
     });
 
+    debug.overlay("plan.start", {
+      templateCount: scope.templates.length,
+    });
+
     const exprIndex = indexExprTable(linked.exprTable as readonly ExprTableEntry[] | undefined);
     const templates: TemplateOverlayPlan[] = [];
 
@@ -75,6 +79,12 @@ export function plan(linked: LinkedSemanticsModule, scope: ScopeModule, opts: Sy
       "overlay.plan.lambdaCount": totalLambdas,
     });
 
+    debug.overlay("plan.complete", {
+      templateCount: templates.length,
+      frameCount: totalFrames,
+      lambdaCount: totalLambdas,
+    });
+
     return { templates };
   });
 }
@@ -95,6 +105,12 @@ function analyzeTemplate(
   const prefix = (opts.syntheticPrefix ?? vm.getSyntheticPrefix?.()) || "__AU_TTC_";
   const vmType = buildVmTypeInfo(vm, prefix);
   const rootTypeRef = vmType.alias;
+
+  debug.overlay("plan.template", {
+    name: st.name,
+    templateIndex,
+    frameCount: st.frames.length,
+  });
 
   // Stable per-frame alias names up front (root-first order already)
   const typeAliasByFrame = new Map<FrameId, string>();
