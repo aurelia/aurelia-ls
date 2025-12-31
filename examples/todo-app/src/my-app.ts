@@ -47,10 +47,6 @@ export class MyAppCustomElement {
     }
   }
 
-  public toggleTodo(todo: Todo): void {
-    todo.completed = !todo.completed;
-  }
-
   public removeTodo(todo: Todo): void {
     const index = this.todos.indexOf(todo);
     if (index > -1) {
