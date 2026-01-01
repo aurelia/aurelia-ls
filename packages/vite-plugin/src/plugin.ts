@@ -350,6 +350,11 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         config.logger.info(`[aurelia-ssr] Tracing enabled (output: ${traceOptions.output})`);
       }
 
+      // Resolve register module path (relative to project root)
+      const register = ssrOptions.register
+        ? resolve(config.root, ssrOptions.register)
+        : null;
+
       // Build plugin state with defaults
       pluginState = {
         entry,
@@ -360,7 +365,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         htmlShell: ssrOptions.htmlShell ?? DEFAULT_HTML_SHELL,
         resolution: null, // Will be set after async initialization
         baseHref: ssrOptions.baseHref ?? "/",
-        register: ssrOptions.register,
+        register,
         ssg: resolvedSSG,
         routeTree: null, // Will be set after route discovery
         ssrEntry,

@@ -9,7 +9,6 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import type { IContainer } from "@aurelia/kernel";
 import type { ResourceGraph, ResourceScopeId, Semantics, CompileTrace } from "@aurelia-ls/compiler";
 import type { ResolutionResult, TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
@@ -301,23 +300,21 @@ export interface SSROptions {
   ssrEntry?: string;
 
   /**
-   * Hook to register DI services before rendering.
+   * Path to a module that exports a `register` function for DI services.
    *
-   * @param container - The DI container to register services into
-   * @param request - Request context (URL, baseHref)
+   * The module is loaded via Vite's ssrLoadModule, ensuring all Aurelia
+   * imports use the same module instances as the SSR renderer.
    *
-   * @example
+   * The module should export:
    * ```typescript
-   * register: (container, req) => {
-   *   container.register(
-   *     Registration.instance(ILocationManager, new ServerLocationManager(req.url))
-   *   );
+   * export function register(container: IContainer, request: SSRRequestContext): void {
+   *   container.register(...);
    * }
    * ```
    *
-   * @see {@link https://aurelia.io/docs/ssr/di | DI in SSR} — TODO: docs not yet published
+   * @example './src/ssr-register.ts'
    */
-  register?: (container: IContainer, request: SSRRequestContext) => void;
+  register?: string;
 
   /**
    * Manifest configuration.
@@ -1049,7 +1046,8 @@ export interface ResolvedSSRConfig {
   htmlShell: string;
   baseHref: string;
   ssrEntry: string | null;
-  register?: (container: IContainer, request: SSRRequestContext) => void;
+  /** Path to module with register export */
+  register: string | null;
   manifest: Required<SSRManifestOptions>;
   hydration: Required<SSRHydrationOptions>;
 }
@@ -1157,8 +1155,8 @@ export interface PluginState {
   resolution: ResolutionContext | null;
   /** Base href for routing */
   baseHref: string;
-  /** DI registration hook */
-  register?: (container: IContainer, request: SSRRequestContext) => void;
+  /** Path to registration module */
+  register: string | null;
   /** Resolved SSG options */
   ssg: ResolvedSSGOptions;
   /** Discovered route tree */

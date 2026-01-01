@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import ts from "typescript";
 import { DEFAULT_SEMANTICS, normalizePathForId, type BindingMode, type ResourceScopeId, type Semantics, type Bindable, type CompileTrace } from "@aurelia-ls/compiler";
-import { resolve, buildRouteTree, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RegistrationIntent, type RouteTree } from "@aurelia-ls/resolution";
+import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RegistrationIntent, type RouteTree } from "@aurelia-ls/resolution";
 import type { ResolutionContext } from "./types.js";
 
 /**
@@ -87,7 +87,11 @@ export async function createResolutionContext(
     error: (msg: string) => logger.error(msg),
   };
 
-  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace }, resolutionLogger);
+  // Create file system context for sibling-file convention detection
+  // This enables discovery of foo.ts + foo.html as a custom element without @customElement decorator
+  const fileSystem = createNodeFileSystem({ root: basePath });
+
+  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace, fileSystem }, resolutionLogger);
 
   // Log resolution results
   const globalCount = result.intents.filter((i: RegistrationIntent) => i.kind === "global").length;
