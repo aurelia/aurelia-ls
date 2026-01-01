@@ -292,7 +292,6 @@ export const ALL_DEBUG_CHANNELS: readonly DebugChannel[] = [
 export const DEFAULT_DEBUG_OPTIONS: ResolvedDebugOptions = {
   channels: [],
   trace: DEFAULT_TRACE_OPTIONS,
-  timing: false,
   dumpArtifacts: false,
 };
 
@@ -682,7 +681,6 @@ export function normalizeDebugOptions(
   return {
     channels: normalizeDebugChannels(options.channels),
     trace: normalizeTraceOptions(options.trace, projectRoot),
-    timing: options.timing ?? DEFAULT_DEBUG_OPTIONS.timing,
     dumpArtifacts:
       options.dumpArtifacts === true
         ? `${projectRoot}/.aurelia-debug/`

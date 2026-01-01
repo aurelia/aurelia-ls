@@ -39,6 +39,12 @@ export type {
   ExpandedRoute,
 } from "@aurelia-ls/ssg";
 
+// Local imports for internal use
+import type {
+  SSGOptions,
+  ResolvedSSGOptions,
+} from "@aurelia-ls/ssg";
+
 /**
  * Re-export directory convention types from resolution package.
  */
@@ -54,21 +60,14 @@ export type {
 
 /**
  * State provider function for SSR.
- * Called for each SSR request to provide component state.
+ *
+ * Note: For production deployments, consider defining state in `ssrEntry.ts`
+ * as a `getSSRState()` export. This allows the same code to run in both
+ * Vite dev server and production adapters.
  *
  * @param url - The parsed request URL
  * @param req - The raw HTTP request object
  * @returns Component state object (sync or async)
- *
- * @example
- * ```typescript
- * state: async (url) => {
- *   const user = await fetchUser(url.pathname);
- *   return { user, path: url.pathname };
- * }
- * ```
- *
- * @see {@link https://aurelia.io/docs/ssr/state | State Management} — TODO: docs not yet published
  */
 export type StateProvider = (
   url: URL,
@@ -78,11 +77,15 @@ export type StateProvider = (
 // ============================================================================
 // Development Mode Options
 // ============================================================================
+//
+// NOTE: These options are ASPIRATIONAL. Not yet implemented.
+//
 
 /**
  * Hot Module Replacement configuration.
  *
- * @see {@link https://aurelia.io/docs/vite/hmr | HMR Documentation} — TODO: docs not yet published
+ * @future Not yet implemented.
+ * Requires component cache invalidation and state preservation strategy.
  */
 export interface HMROptions {
   /**
@@ -114,7 +117,8 @@ export interface HMROptions {
  *
  * Inspired by Svelte Inspector and Vue Devtools.
  *
- * @see {@link https://aurelia.io/docs/vite/inspector | Inspector Documentation} — TODO: docs not yet published
+ * @future Not yet implemented. Requires provenance integration
+ * (source location tracking through template compilation).
  */
 export interface InspectorOptions {
   /**
@@ -171,6 +175,8 @@ export interface InspectorOptions {
  * Error overlay configuration.
  * Controls how compilation errors are displayed in the browser.
  *
+ * @future Not yet implemented. Vite's built-in error overlay works for now.
+ *
  * @see {@link https://aurelia.io/docs/vite/errors | Error Handling} — TODO: docs not yet published
  */
 export interface ErrorOverlayOptions {
@@ -206,6 +212,8 @@ export interface ErrorOverlayOptions {
 /**
  * Development mode options.
  * These settings only apply during `vite dev`.
+ *
+ * @future Not yet implemented. All sub-options are aspirational.
  *
  * @see {@link https://aurelia.io/docs/vite/development | Development Guide} — TODO: docs not yet published
  */
@@ -245,12 +253,16 @@ export interface DevOptions {
 // ============================================================================
 // Build Mode Options
 // ============================================================================
+//
+// NOTE: These options are ASPIRATIONAL. The plugin does not currently use them.
+// Use Vite's native build options or ecosystem plugins (rollup-plugin-visualizer).
+//
 
 /**
  * Bundle analyzer configuration.
  * Generates reports about bundle composition.
  *
- * @see {@link https://aurelia.io/docs/vite/bundle-analysis | Bundle Analysis} — TODO: docs not yet published
+ * @future Use `rollup-plugin-visualizer` from Vite ecosystem instead.
  */
 export interface BundleAnalyzerOptions {
   /**
@@ -285,6 +297,8 @@ export interface BundleAnalyzerOptions {
 /**
  * Production build options.
  * These settings only apply during `vite build`.
+ *
+ * @future Not yet implemented. Use Vite's native build options.
  *
  * @see {@link https://aurelia.io/docs/vite/production | Production Guide} — TODO: docs not yet published
  */
@@ -340,6 +354,8 @@ export interface BuildOptions {
  * SSR manifest configuration.
  * Controls how the hydration manifest is generated and embedded.
  *
+ * @future These options are not yet wired. Manifest is always inline JSON.
+ *
  * @see {@link https://aurelia.io/docs/ssr/manifest | Manifest Documentation} — TODO: docs not yet published
  */
 export interface SSRManifestOptions {
@@ -355,6 +371,7 @@ export interface SSRManifestOptions {
    * Compress manifest data.
    * Uses a compact binary format instead of JSON.
    *
+   * @future Not yet implemented.
    * @default false
    */
   compress?: boolean;
@@ -363,6 +380,7 @@ export interface SSRManifestOptions {
    * Include debug information in manifest.
    * Adds component names and source locations for debugging.
    *
+   * @future Not yet implemented.
    * @default false (true in dev)
    */
   debug?: boolean;
@@ -372,15 +390,20 @@ export interface SSRManifestOptions {
  * SSR hydration configuration.
  * Controls client-side hydration behavior.
  *
+ * @future These options are not yet wired. Hydration is always eager.
+ *
  * @see {@link https://aurelia.io/docs/ssr/hydration | Hydration Documentation} — TODO: docs not yet published
  */
 export interface SSRHydrationOptions {
   /**
    * Hydration strategy.
-   * - 'eager': Hydrate entire page immediately
+   * - 'eager': Hydrate entire page immediately (currently implemented)
    * - 'lazy': Hydrate components as they enter viewport
    * - 'idle': Hydrate during browser idle time
    * - 'interaction': Hydrate on first user interaction
+   *
+   * @future Strategies other than 'eager' require Aurelia-specific design.
+   * Aurelia's manifest-based hydration differs from React's Suspense model.
    *
    * @default 'eager'
    */
@@ -391,6 +414,7 @@ export interface SSRHydrationOptions {
    * Forces hydration after timeout even if strategy hasn't triggered.
    * Set to 0 to disable timeout.
    *
+   * @future Not yet implemented.
    * @default 10000
    */
   timeout?: number;
@@ -399,6 +423,7 @@ export interface SSRHydrationOptions {
    * Validate DOM during hydration.
    * Logs warnings if server HTML doesn't match expected structure.
    *
+   * @future Not yet implemented.
    * @default true (in dev)
    */
   validate?: boolean;
@@ -407,6 +432,9 @@ export interface SSRHydrationOptions {
 /**
  * SSR streaming configuration.
  * Controls HTTP streaming behavior for SSR responses.
+ *
+ * @future Streaming SSR is not yet implemented.
+ * Aurelia's synchronous component rendering would need architectural changes.
  *
  * @see {@link https://aurelia.io/docs/ssr/streaming | Streaming Documentation} — TODO: docs not yet published
  */
@@ -438,6 +466,11 @@ export interface SSRStreamingOptions {
 /**
  * Server-Side Rendering options.
  *
+ * Implemented: `enabled`, `state`, `stripMarkers`, `include`, `exclude`,
+ * `htmlShell`, `baseHref`, `ssrEntry`, `register`.
+ *
+ * Future: `manifest`, `hydration`, `streaming` sub-options.
+ *
  * @see {@link https://aurelia.io/docs/ssr | SSR Documentation} — TODO: docs not yet published
  */
 export interface SSROptions {
@@ -449,10 +482,11 @@ export interface SSROptions {
   enabled?: boolean;
 
   /**
-   * State provider function.
-   * Called for each SSR request to provide initial component state.
+   * State provider function for request-scoped data (session, feature flags).
    *
-   * @default () => ({})
+   * Note: For production deployments, consider defining this in `ssrEntry.ts`
+   * as a `getSSRState()` export instead. This allows the same code to run
+   * in both Vite dev server and production adapters.
    */
   state?: StateProvider;
 
@@ -680,6 +714,8 @@ export interface ExplicitResourceConfig {
 /**
  * Third-party resource configuration.
  *
+ * @future Auto-scanning is not yet implemented. Use `resources` for explicit declarations.
+ *
  * @see {@link https://aurelia.io/docs/vite/third-party | Third-Party Resources} — TODO: docs not yet published
  */
 export interface ThirdPartyOptions {
@@ -687,6 +723,7 @@ export interface ThirdPartyOptions {
    * Auto-scan node_modules for Aurelia resources.
    * Looks for packages with `aurelia` in their package.json.
    *
+   * @future Not yet implemented.
    * @default false
    */
   scan?: boolean;
@@ -694,6 +731,7 @@ export interface ThirdPartyOptions {
   /**
    * Specific packages to scan for resources.
    *
+   * @future Not yet implemented.
    * @example ['@aurelia-ui/components', 'aurelia-table']
    */
   packages?: string[];
@@ -701,6 +739,8 @@ export interface ThirdPartyOptions {
   /**
    * Explicit resource declarations.
    * Use for packages that don't expose metadata.
+   *
+   * Note: This is the recommended approach for declaring third-party resources.
    */
   resources?: ExplicitResourceConfig;
 }
@@ -764,6 +804,9 @@ export interface TemplatePairingOptions {
 
 /**
  * Stylesheet pairing configuration.
+ *
+ * @future Stylesheet auto-discovery is not yet implemented.
+ * Aurelia currently uses explicit `shadowCSS()` and `cssModules()` APIs.
  */
 export interface StylesheetPairingOptions {
   /**
@@ -863,6 +906,11 @@ export interface ConventionOptions {
 // ============================================================================
 // Compiler Options
 // ============================================================================
+//
+// NOTE: Most compiler options are handled internally. Only `strict` and
+// `deprecationWarnings` are intended for user configuration.
+// Template extensions are detected automatically from conventions.
+//
 
 /**
  * Template compiler configuration.
@@ -895,6 +943,9 @@ export interface CompilerOptions {
   /**
    * Custom attribute aliases.
    * Map alternative names to canonical attribute names.
+   *
+   * @future Attribute aliases are not yet implemented.
+   * Would require changes to the lowering stage.
    *
    * @example
    * ```typescript
@@ -1012,13 +1063,6 @@ export interface DebugOptions {
    * @default false
    */
   trace?: boolean | TraceOptions;
-
-  /**
-   * Log compilation timing for each file.
-   *
-   * @default false
-   */
-  timing?: boolean;
 
   /**
    * Write intermediate compilation artifacts to disk.
@@ -1279,7 +1323,7 @@ export interface AureliaPluginOptions {
    *
    * @default false
    */
-  ssg?: boolean | import("@aurelia-ls/ssg").SSGOptions;
+  ssg?: boolean | SSGOptions;
 
   // ---------------------------------------------------------------------------
   // Configuration
@@ -1478,7 +1522,7 @@ export interface ResolvedSSROptions {
   /** DI registration hook */
   register?: (container: IContainer, request: SSRRequestContext) => void;
   /** SSG options */
-  ssg: import("@aurelia-ls/ssg").ResolvedSSGOptions;
+  ssg: ResolvedSSGOptions;
   /** Discovered route tree (when ssg.enabled and tsconfig provided) */
   routeTree: RouteTree | null;
   /** SSR entry point path (resolved, or null if not configured) */
@@ -1510,7 +1554,6 @@ export interface ResolvedConventionOptions {
 export interface ResolvedDebugOptions {
   channels: DebugChannel[];
   trace: ResolvedTraceOptions;
-  timing: boolean;
   dumpArtifacts: string | false;
 }
 
@@ -1536,7 +1579,7 @@ export interface ResolvedAureliaOptions {
   ssr: ResolvedSSRConfig;
 
   /** Resolved SSG options */
-  ssg: import("@aurelia-ls/ssg").ResolvedSSGOptions;
+  ssg: ResolvedSSGOptions;
 
   /** Resolved convention options */
   conventions: ResolvedConventionOptions;
@@ -1586,7 +1629,7 @@ export interface AureliaSSRPluginOptions {
   exclude?: string[];
   htmlShell?: string;
   baseHref?: string;
-  ssg?: import("@aurelia-ls/ssg").SSGOptions;
+  ssg?: SSGOptions;
   ssrEntry?: string;
   register?: (container: IContainer, request: SSRRequestContext) => void;
   trace?: boolean | TraceOptions;
