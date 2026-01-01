@@ -10,7 +10,7 @@
  * ```
  */
 
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath, CompileTrace } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "./context.js";
 import { getBaseName, getExtension, getDirectory } from "./context.js";
 import type {
@@ -19,7 +19,7 @@ import type {
   PairingDetection,
 } from "./types.js";
 import type { SiblingFileFact } from "../extraction/types.js";
-import { debug } from "@aurelia-ls/compiler";
+import { debug, NOOP_TRACE } from "@aurelia-ls/compiler";
 
 // ============================================================================
 // Core Detection
@@ -276,6 +276,14 @@ export interface FilePairOptions {
 // ============================================================================
 
 /**
+ * Options for batch sibling detection.
+ */
+export interface SiblingBatchOptions extends SiblingDetectionOptions {
+  /** Optional trace for performance instrumentation */
+  readonly trace?: CompileTrace;
+}
+
+/**
  * Detect siblings for multiple source files.
  *
  * More efficient than calling detectSiblings individually
@@ -283,24 +291,31 @@ export interface FilePairOptions {
  *
  * @param sourcePaths - Paths to source files
  * @param fileSystem - File system context
- * @param options - Detection options
+ * @param options - Detection options (including optional trace)
  * @returns Map from source path to siblings
  */
 export function detectSiblingsBatch(
   sourcePaths: readonly string[],
   fileSystem: FileSystemContext,
-  options?: SiblingDetectionOptions,
+  options?: SiblingBatchOptions,
 ): Map<string, SiblingFile[]> {
-  const results = new Map<string, SiblingFile[]>();
+  const trace = options?.trace ?? NOOP_TRACE;
 
-  for (const sourcePath of sourcePaths) {
-    const siblings = detectSiblings(sourcePath, fileSystem, options);
-    if (siblings.length > 0) {
-      results.set(sourcePath, siblings);
+  return trace.span("sibling.detectBatch", () => {
+    const results = new Map<string, SiblingFile[]>();
+
+    for (const sourcePath of sourcePaths) {
+      const siblings = detectSiblings(sourcePath, fileSystem, options);
+      if (siblings.length > 0) {
+        results.set(sourcePath, siblings);
+      }
     }
-  }
 
-  return results;
+    trace.setAttribute("sibling.batch.sourceCount", sourcePaths.length);
+    trace.setAttribute("sibling.batch.withSiblings", results.size);
+
+    return results;
+  });
 }
 
 /**

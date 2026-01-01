@@ -5,7 +5,7 @@
  * This layer provides file system awareness that pure AST analysis cannot.
  */
 
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath, CompileTrace } from "@aurelia-ls/compiler";
 
 // ============================================================================
 // Sibling Detection
@@ -247,12 +247,15 @@ export interface ProjectScannerOptions {
 
   /** Whether to detect orphans */
   readonly detectOrphans?: boolean;
+
+  /** Optional trace for performance instrumentation */
+  readonly trace?: CompileTrace;
 }
 
 /**
  * Default scanner options.
  */
-export const DEFAULT_SCANNER_OPTIONS: Omit<Required<ProjectScannerOptions>, "root"> = {
+export const DEFAULT_SCANNER_OPTIONS: Omit<Required<ProjectScannerOptions>, "root" | "trace"> = {
   sourcePatterns: ["**/*.ts", "**/*.js", "**/*.tsx", "**/*.jsx"],
   templatePatterns: ["**/*.html"],
   exclude: ["node_modules", "dist", ".git", "coverage"],

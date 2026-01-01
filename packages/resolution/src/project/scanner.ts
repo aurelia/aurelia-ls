@@ -7,8 +7,8 @@
  */
 
 import type ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
-import { normalizePathForId, debug } from "@aurelia-ls/compiler";
+import type { NormalizedPath, CompileTrace } from "@aurelia-ls/compiler";
+import { normalizePathForId, debug, NOOP_TRACE } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "./context.js";
 import { getBaseName, getExtension, getDirectory, getFileType, createProjectFile } from "./context.js";
 import type {
@@ -133,7 +133,7 @@ export function createProjectScanner(
   options: ProjectScannerOptions,
 ): ProjectScanner {
   // Merge with defaults
-  const opts: Required<ProjectScannerOptions> = {
+  const opts: Required<Omit<ProjectScannerOptions, "trace">> & { trace: CompileTrace } = {
     root: options.root,
     sourcePatterns: options.sourcePatterns ?? ["**/*.ts", "**/*.js", "**/*.tsx", "**/*.jsx"],
     templatePatterns: options.templatePatterns ?? ["**/*.html"],
@@ -141,7 +141,10 @@ export function createProjectScanner(
     conventions: options.conventions ?? [],
     detectPairs: options.detectPairs ?? true,
     detectOrphans: options.detectOrphans ?? true,
+    trace: options.trace ?? NOOP_TRACE,
   };
+
+  const trace = opts.trace;
 
   // Cached results
   let sourceFiles: ProjectFile[] | null = null;
@@ -165,101 +168,110 @@ export function createProjectScanner(
   function scanSourceFiles(): ProjectFile[] {
     if (sourceFiles !== null) return sourceFiles;
 
-    debug.resolution("scanner.source.start", { patterns: opts.sourcePatterns });
+    return trace.span("scanner.source", () => {
+      debug.resolution("scanner.source.start", { patterns: opts.sourcePatterns });
 
-    const files: ProjectFile[] = [];
+      const files: ProjectFile[] = [];
 
-    for (const pattern of opts.sourcePatterns) {
-      const matches = fileSystem.glob(pattern, {
-        cwd: opts.root,
-        ignore: [...opts.exclude],
-        absolute: true,
-      });
+      for (const pattern of opts.sourcePatterns) {
+        const matches = fileSystem.glob(pattern, {
+          cwd: opts.root,
+          ignore: [...opts.exclude],
+          absolute: true,
+        });
 
-      for (const match of matches) {
-        const normalized = fileSystem.normalizePath(match);
-        const baseName = getBaseName(normalized);
-        const extension = getExtension(normalized);
-        const directory = fileSystem.normalizePath(getDirectory(normalized));
-        const type = getFileType(extension);
+        for (const match of matches) {
+          const normalized = fileSystem.normalizePath(match);
+          const baseName = getBaseName(normalized);
+          const extension = getExtension(normalized);
+          const directory = fileSystem.normalizePath(getDirectory(normalized));
+          const type = getFileType(extension);
 
-        if (type === "source") {
-          files.push(createProjectFile(normalized, baseName, extension, directory));
+          if (type === "source") {
+            files.push(createProjectFile(normalized, baseName, extension, directory));
+          }
         }
       }
-    }
 
-    debug.resolution("scanner.source.done", { count: files.length });
+      debug.resolution("scanner.source.done", { count: files.length });
+      trace.setAttribute("scanner.source.count", files.length);
 
-    sourceFiles = files;
-    return files;
+      sourceFiles = files;
+      return files;
+    });
   }
 
   function scanTemplateFiles(): ProjectFile[] {
     if (templateFiles !== null) return templateFiles;
 
-    debug.resolution("scanner.template.start", { patterns: opts.templatePatterns });
+    return trace.span("scanner.template", () => {
+      debug.resolution("scanner.template.start", { patterns: opts.templatePatterns });
 
-    const files: ProjectFile[] = [];
+      const files: ProjectFile[] = [];
 
-    for (const pattern of opts.templatePatterns) {
-      const matches = fileSystem.glob(pattern, {
-        cwd: opts.root,
-        ignore: [...opts.exclude],
-        absolute: true,
-      });
+      for (const pattern of opts.templatePatterns) {
+        const matches = fileSystem.glob(pattern, {
+          cwd: opts.root,
+          ignore: [...opts.exclude],
+          absolute: true,
+        });
 
-      for (const match of matches) {
-        const normalized = fileSystem.normalizePath(match);
-        const baseName = getBaseName(normalized);
-        const extension = getExtension(normalized);
-        const directory = fileSystem.normalizePath(getDirectory(normalized));
-        const type = getFileType(extension);
+        for (const match of matches) {
+          const normalized = fileSystem.normalizePath(match);
+          const baseName = getBaseName(normalized);
+          const extension = getExtension(normalized);
+          const directory = fileSystem.normalizePath(getDirectory(normalized));
+          const type = getFileType(extension);
 
-        if (type === "template") {
-          files.push(createProjectFile(normalized, baseName, extension, directory));
+          if (type === "template") {
+            files.push(createProjectFile(normalized, baseName, extension, directory));
+          }
         }
       }
-    }
 
-    debug.resolution("scanner.template.done", { count: files.length });
+      debug.resolution("scanner.template.done", { count: files.length });
+      trace.setAttribute("scanner.template.count", files.length);
 
-    templateFiles = files;
-    return files;
+      templateFiles = files;
+      return files;
+    });
   }
 
   function scanStylesheetFiles(): ProjectFile[] {
     if (stylesheetFiles !== null) return stylesheetFiles;
 
-    debug.resolution("scanner.stylesheet.start", {});
+    return trace.span("scanner.stylesheet", () => {
+      debug.resolution("scanner.stylesheet.start", {});
 
-    const files: ProjectFile[] = [];
-    const stylePatterns = ["**/*.css", "**/*.scss", "**/*.sass", "**/*.less"];
+      const files: ProjectFile[] = [];
+      const stylePatterns = ["**/*.css", "**/*.scss", "**/*.sass", "**/*.less"];
 
-    for (const pattern of stylePatterns) {
-      const matches = fileSystem.glob(pattern, {
-        cwd: opts.root,
-        ignore: [...opts.exclude],
-        absolute: true,
-      });
+      for (const pattern of stylePatterns) {
+        const matches = fileSystem.glob(pattern, {
+          cwd: opts.root,
+          ignore: [...opts.exclude],
+          absolute: true,
+        });
 
-      for (const match of matches) {
-        const normalized = fileSystem.normalizePath(match);
-        const baseName = getBaseName(normalized);
-        const extension = getExtension(normalized);
-        const directory = fileSystem.normalizePath(getDirectory(normalized));
-        const type = getFileType(extension);
+        for (const match of matches) {
+          const normalized = fileSystem.normalizePath(match);
+          const baseName = getBaseName(normalized);
+          const extension = getExtension(normalized);
+          const directory = fileSystem.normalizePath(getDirectory(normalized));
+          const type = getFileType(extension);
 
-        if (type === "stylesheet") {
-          files.push(createProjectFile(normalized, baseName, extension, directory));
+          if (type === "stylesheet") {
+            files.push(createProjectFile(normalized, baseName, extension, directory));
+          }
         }
       }
-    }
 
-    debug.resolution("scanner.stylesheet.done", { count: files.length });
+      debug.resolution("scanner.stylesheet.done", { count: files.length });
+      trace.setAttribute("scanner.stylesheet.count", files.length);
 
-    stylesheetFiles = files;
-    return files;
+      stylesheetFiles = files;
+      return files;
+    });
   }
 
   function computeFilePairs(): FilePair[] {
@@ -269,54 +281,65 @@ export function createProjectScanner(
       return filePairs;
     }
 
-    debug.resolution("scanner.pairs.start", {});
+    return trace.span("scanner.pairs", () => {
+      debug.resolution("scanner.pairs.start", {});
 
-    const sources = scanSourceFiles();
-    const pairs: FilePair[] = [];
+      const sources = scanSourceFiles();
+      const pairs: FilePair[] = [];
 
-    for (const source of sources) {
-      const pair = buildFilePair(source.path, fileSystem, {
-        templateExtensions: [".html"],
-        styleExtensions: [".css", ".scss"],
+      for (const source of sources) {
+        const pair = buildFilePair(source.path, fileSystem, {
+          templateExtensions: [".html"],
+          styleExtensions: [".css", ".scss"],
+        });
+        pairs.push(pair);
+      }
+
+      const withTemplate = pairs.filter((p) => p.template).length;
+      const withStylesheet = pairs.filter((p) => p.stylesheet).length;
+
+      debug.resolution("scanner.pairs.done", {
+        total: pairs.length,
+        withTemplate,
+        withStylesheet,
       });
-      pairs.push(pair);
-    }
+      trace.setAttribute("scanner.pairs.total", pairs.length);
+      trace.setAttribute("scanner.pairs.withTemplate", withTemplate);
+      trace.setAttribute("scanner.pairs.withStylesheet", withStylesheet);
 
-    debug.resolution("scanner.pairs.done", {
-      total: pairs.length,
-      withTemplate: pairs.filter((p) => p.template).length,
-      withStylesheet: pairs.filter((p) => p.stylesheet).length,
+      filePairs = pairs;
+      return pairs;
     });
-
-    filePairs = pairs;
-    return pairs;
   }
 
   function computeConventionMatches(): Map<NormalizedPath, DirectoryMatch> {
     if (conventionMatches !== null) return conventionMatches;
 
-    debug.resolution("scanner.conventions.start", { count: opts.conventions.length });
+    return trace.span("scanner.conventions", () => {
+      debug.resolution("scanner.conventions.start", { count: opts.conventions.length });
 
-    const matches = new Map<NormalizedPath, DirectoryMatch>();
+      const matches = new Map<NormalizedPath, DirectoryMatch>();
 
-    if (opts.conventions.length === 0) {
+      if (opts.conventions.length === 0) {
+        conventionMatches = matches;
+        return matches;
+      }
+
+      const sources = scanSourceFiles();
+
+      for (const source of sources) {
+        const match = matchDirectoryConventions(source.path, opts.root, opts.conventions);
+        if (match) {
+          matches.set(source.path, match);
+        }
+      }
+
+      debug.resolution("scanner.conventions.done", { matchCount: matches.size });
+      trace.setAttribute("scanner.conventions.matchCount", matches.size);
+
       conventionMatches = matches;
       return matches;
-    }
-
-    const sources = scanSourceFiles();
-
-    for (const source of sources) {
-      const match = matchDirectoryConventions(source.path, opts.root, opts.conventions);
-      if (match) {
-        matches.set(source.path, match);
-      }
-    }
-
-    debug.resolution("scanner.conventions.done", { matchCount: matches.size });
-
-    conventionMatches = matches;
-    return matches;
+    });
   }
 
   function computeOrphans(): { orphanTemplates: ProjectFile[]; sourcesWithoutTemplates: ProjectFile[] } {
@@ -330,32 +353,36 @@ export function createProjectScanner(
       return { orphanTemplates, sourcesWithoutTemplates };
     }
 
-    debug.resolution("scanner.orphans.start", {});
+    return trace.span("scanner.orphans", () => {
+      debug.resolution("scanner.orphans.start", {});
 
-    const sources = scanSourceFiles();
-    const templates = scanTemplateFiles();
+      const sources = scanSourceFiles();
+      const templates = scanTemplateFiles();
 
-    const orphanPaths = findOrphanTemplates(
-      templates.map((t) => t.path),
-      sources.map((s) => s.path),
-      fileSystem,
-    );
+      const orphanPaths = findOrphanTemplates(
+        templates.map((t) => t.path),
+        sources.map((s) => s.path),
+        fileSystem,
+      );
 
-    const withoutTemplatePaths = findSourcesWithoutTemplates(
-      sources.map((s) => s.path),
-      templates.map((t) => t.path),
-      fileSystem,
-    );
+      const withoutTemplatePaths = findSourcesWithoutTemplates(
+        sources.map((s) => s.path),
+        templates.map((t) => t.path),
+        fileSystem,
+      );
 
-    orphanTemplates = templates.filter((t) => orphanPaths.includes(t.path));
-    sourcesWithoutTemplates = sources.filter((s) => withoutTemplatePaths.includes(s.path));
+      orphanTemplates = templates.filter((t) => orphanPaths.includes(t.path));
+      sourcesWithoutTemplates = sources.filter((s) => withoutTemplatePaths.includes(s.path));
 
-    debug.resolution("scanner.orphans.done", {
-      orphanTemplates: orphanTemplates.length,
-      sourcesWithoutTemplates: sourcesWithoutTemplates.length,
+      debug.resolution("scanner.orphans.done", {
+        orphanTemplates: orphanTemplates.length,
+        sourcesWithoutTemplates: sourcesWithoutTemplates.length,
+      });
+      trace.setAttribute("scanner.orphans.orphanTemplates", orphanTemplates.length);
+      trace.setAttribute("scanner.orphans.sourcesWithoutTemplates", sourcesWithoutTemplates.length);
+
+      return { orphanTemplates, sourcesWithoutTemplates };
     });
-
-    return { orphanTemplates, sourcesWithoutTemplates };
   }
 
   return {
