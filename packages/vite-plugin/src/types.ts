@@ -1371,33 +1371,6 @@ export interface ResolvedSSRConfig {
   streaming: Required<SSRStreamingOptions>;
 }
 
-/**
- * Legacy resolved options type.
- * This is the CURRENT type used by plugin.ts and middleware.ts.
- * Will be deprecated once the plugin is migrated to the new architecture.
- */
-export interface ResolvedSSROptions {
-  entry: string;
-  state: StateProvider;
-  stripMarkers: boolean;
-  include: string[];
-  exclude: string[];
-  htmlShell: string;
-  /** Resolution context (when tsconfig is provided) */
-  resolution: ResolutionContext | null;
-  /** Base href for routing */
-  baseHref: string;
-  /** DI registration hook */
-  register?: (container: IContainer, request: SSRRequestContext) => void;
-  /** SSG options */
-  ssg: ResolvedSSGOptions;
-  /** Discovered route tree (when ssg.enabled and tsconfig provided) */
-  routeTree: RouteTree | null;
-  /** SSR entry point path (resolved, or null if not configured) */
-  ssrEntry: string | null;
-  /** Trace options */
-  trace: ResolvedTraceOptions;
-}
 
 /**
  * Resolved convention options with defaults applied.
@@ -1475,34 +1448,40 @@ export interface ResolvedAureliaOptions {
 }
 
 // ============================================================================
-// Legacy Types (Deprecated)
+// Internal Plugin State
 // ============================================================================
 
 /**
- * @deprecated Use `AureliaPluginOptions` instead.
- * This type is preserved for backwards compatibility.
+ * Internal plugin state used by plugin.ts and middleware.ts.
+ * Flat structure for convenience - derived from AureliaPluginOptions.
  *
- * Migration:
- * ```typescript
- * // Before
- * aureliaSSR({ entry: './src/my-app.html', stripMarkers: true })
- *
- * // After
- * aurelia({ entry: './src/my-app.html', ssr: { stripMarkers: true } })
- * ```
+ * NOT exported from package - use AureliaPluginOptions for public API.
  */
-export interface AureliaSSRPluginOptions {
-  entry?: string;
-  tsconfig?: string;
-  state?: StateProvider;
-  stripMarkers?: boolean;
-  include?: string[];
-  exclude?: string[];
-  htmlShell?: string;
-  baseHref?: string;
-  ssg?: SSGOptions;
-  ssrEntry?: string;
+export interface PluginState {
+  /** Entry template path */
+  entry: string;
+  /** State provider */
+  state: StateProvider;
+  /** Strip hydration markers */
+  stripMarkers: boolean;
+  /** Routes to include */
+  include: string[];
+  /** Routes to exclude */
+  exclude: string[];
+  /** HTML shell template */
+  htmlShell: string;
+  /** Resolution context (when tsconfig provided) */
+  resolution: ResolutionContext | null;
+  /** Base href for routing */
+  baseHref: string;
+  /** DI registration hook */
   register?: (container: IContainer, request: SSRRequestContext) => void;
-  trace?: boolean | TraceOptions;
+  /** Resolved SSG options */
+  ssg: ResolvedSSGOptions;
+  /** Discovered route tree */
+  routeTree: RouteTree | null;
+  /** SSR entry point path */
+  ssrEntry: string | null;
+  /** Trace options */
+  trace: ResolvedTraceOptions;
 }
-

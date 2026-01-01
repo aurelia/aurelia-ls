@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
-import aurelia from '@aurelia/vite-plugin';
-import { aureliaSSR } from '@aurelia-ls/vite-plugin';
+import { aurelia } from '@aurelia-ls/vite-plugin';
 
 // Custom HTML shell for SSR with hydration support
 // <!--ssr-state--> is replaced with serialized state for client hydration
@@ -32,13 +31,12 @@ export default defineConfig({
   },
   plugins: [
     aurelia({
-      useDev: true,
-    }),
-    aureliaSSR({
       entry: './src/my-app.html',
-      tsconfig: './tsconfig.json', // Required for resource resolution
-      stripMarkers: false, // Keep markers for client hydration
-      htmlShell: ssrShell,
+      tsconfig: './tsconfig.json',
+      ssr: {
+        stripMarkers: false, // Keep markers for client hydration
+        htmlShell: ssrShell,
+      },
     }),
   ],
 });

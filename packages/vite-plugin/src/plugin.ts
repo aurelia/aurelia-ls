@@ -1,22 +1,19 @@
 /**
- * Aurelia SSR Vite Plugin
+ * Aurelia Vite Plugin
  *
- * A Vite plugin that provides server-side rendering for Aurelia applications
- * during development. Add this plugin to your vite.config.ts alongside
- * @aurelia/vite-plugin.
+ * Complete build plugin for Aurelia applications with AOT compilation, SSR, and SSG.
+ * This plugin replaces @aurelia/vite-plugin and @aurelia/plugin-conventions.
  *
  * @example
  * ```typescript
  * import { defineConfig } from 'vite';
- * import aurelia from '@aurelia/vite-plugin';
- * import { aureliaSSR } from '@aurelia-ls/vite-plugin';
+ * import { aurelia } from '@aurelia-ls/vite-plugin';
  *
  * export default defineConfig({
  *   plugins: [
- *     aurelia({ useDev: true }),
- *     aureliaSSR({
+ *     aurelia({
  *       entry: './src/my-app.html',
- *       state: async (url) => ({ path: url.pathname }),
+ *       ssr: true,
  *     }),
  *   ],
  * });
@@ -39,7 +36,7 @@ import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
 import { resolveTraceOptions, createBuildTrace, type ManagedTrace } from "./trace.js";
-import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext, ResolvedTraceOptions } from "./types.js";
+import type { AureliaPluginOptions, PluginState, ResolutionContext, ResolvedTraceOptions } from "./types.js";
 import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 
 /**
@@ -225,9 +222,9 @@ const HTML_IMPORT_REGEX = /(from\s+|import\s+)(['"])([^'"]+\.html)\2/g;
  * @param options - Plugin configuration options
  * @returns Array of Vite plugins (pre for import rewriting, post for SSR)
  */
-export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
+export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
   let resolvedConfig: ResolvedConfig;
-  let resolvedOptions: ResolvedSSROptions;
+  let pluginState: PluginState;
   let resolutionContext: ResolutionContext | null = null;
   let resolutionPromise: Promise<ResolutionContext | null> | null = null;
   let routeTree: RouteTree | null = null;
@@ -303,7 +300,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
   const mainPlugin: Plugin = {
     name: "aurelia-ssr",
 
-    // Run after other plugins (like @aurelia/vite-plugin)
+    // Run after other plugins
     enforce: "post",
 
     /**
@@ -325,40 +322,45 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
         );
       }
 
-      // Resolve SSG options
-      const ssgOptions = options.ssg ?? {};
+      // Normalize SSR options (boolean | object | undefined → object)
+      const ssrOptions = typeof options.ssr === "object" ? options.ssr : {};
+      const ssrEnabled = options.ssr === true || (typeof options.ssr === "object" && options.ssr.enabled !== false);
+
+      // Normalize SSG options (boolean | object | undefined → object)
+      const ssgInput = typeof options.ssg === "object" ? options.ssg : {};
+      const ssgEnabled = options.ssg === true || (typeof options.ssg === "object" && ssgInput.enabled !== false);
       const resolvedSSG = {
-        enabled: ssgOptions.enabled ?? false,
-        entryPoints: ssgOptions.entryPoints ?? [],
-        outDir: ssgOptions.outDir ?? ".",
-        fallback: ssgOptions.fallback ?? "404.html",
-        additionalRoutes: ssgOptions.additionalRoutes,
-        onBeforeRender: ssgOptions.onBeforeRender,
-        onAfterRender: ssgOptions.onAfterRender,
+        enabled: ssgEnabled,
+        entryPoints: ssgInput.entryPoints ?? [],
+        outDir: ssgInput.outDir ?? ".",
+        fallback: ssgInput.fallback ?? "404.html",
+        additionalRoutes: ssgInput.additionalRoutes,
+        onBeforeRender: ssgInput.onBeforeRender,
+        onAfterRender: ssgInput.onAfterRender,
       };
 
       // Resolve SSR entry point path
-      const ssrEntry = options.ssrEntry
-        ? resolve(config.root, options.ssrEntry)
+      const ssrEntry = ssrOptions.ssrEntry
+        ? resolve(config.root, ssrOptions.ssrEntry)
         : null;
 
-      // Resolve trace options
-      traceOptions = resolveTraceOptions(options.trace, config.root);
+      // Resolve trace options (from debug.trace)
+      traceOptions = resolveTraceOptions(options.debug?.trace, config.root);
       if (traceOptions.enabled) {
         config.logger.info(`[aurelia-ssr] Tracing enabled (output: ${traceOptions.output})`);
       }
 
-      // Build resolved options with defaults (resolution context added later)
-      resolvedOptions = {
+      // Build plugin state with defaults
+      pluginState = {
         entry,
-        state: options.state ?? (() => ({})),
-        stripMarkers: options.stripMarkers ?? false,
-        include: options.include ?? ["**"],
-        exclude: options.exclude ?? DEFAULT_EXCLUDE,
-        htmlShell: options.htmlShell ?? DEFAULT_HTML_SHELL,
+        state: ssrOptions.state ?? (() => ({})),
+        stripMarkers: ssrOptions.stripMarkers ?? false,
+        include: ssrOptions.include ?? ["**"],
+        exclude: ssrOptions.exclude ?? DEFAULT_EXCLUDE,
+        htmlShell: ssrOptions.htmlShell ?? DEFAULT_HTML_SHELL,
         resolution: null, // Will be set after async initialization
-        baseHref: options.baseHref ?? "/",
-        register: options.register,
+        baseHref: ssrOptions.baseHref ?? "/",
+        register: ssrOptions.register,
         ssg: resolvedSSG,
         routeTree: null, // Will be set after route discovery
         ssrEntry,
@@ -389,14 +391,14 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
         // Start async resolution (will complete before first request)
         resolutionPromise = createResolutionContext(tsconfigPath, logger).then((ctx) => {
           resolutionContext = ctx;
-          resolvedOptions.resolution = ctx;
+          pluginState.resolution = ctx;
           if (ctx) {
             config.logger.info("[aurelia-ssr] Resource resolution ready");
 
             // Discover routes if SSG is enabled
             if (resolvedSSG.enabled) {
               routeTree = discoverRoutes(tsconfigPath, resolvedSSG.entryPoints, logger);
-              resolvedOptions.routeTree = routeTree;
+              pluginState.routeTree = routeTree;
               if (routeTree) {
                 config.logger.info(
                   `[aurelia-ssr] Route discovery: ${routeTree.allStaticPaths.length} static, ` +
@@ -524,7 +526,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       // Wait for resolution context if not yet ready
       if (resolutionPromise && !resolutionContext) {
         resolutionContext = await resolutionPromise;
-        resolvedOptions.resolution = resolutionContext;
+        pluginState.resolution = resolutionContext;
       }
 
       // No resolution context - can't determine component templates
@@ -566,7 +568,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       // Add middleware directly (before Vite's internal middleware)
       // The middleware will wait for resolution if needed
       server.middlewares.use(
-        createSSRMiddleware(server, resolvedOptions, () => resolutionPromise),
+        createSSRMiddleware(server, pluginState, () => resolutionPromise),
       );
 
       server.config.logger.info(
@@ -637,7 +639,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       }
 
       // Check if SSG is enabled
-      if (!resolvedOptions.ssg.enabled) {
+      if (!pluginState.ssg.enabled) {
         return;
       }
 
@@ -660,18 +662,18 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       // Calculate output directory
       const outDir = join(
         resolvedConfig.build.outDir,
-        resolvedOptions.ssg.outDir,
+        pluginState.ssg.outDir,
       );
 
       // Try to load SSR handler from built output
       let ssrHandler: SSRHandler | null = null;
 
-      if (resolvedOptions.ssrEntry) {
+      if (pluginState.ssrEntry) {
         try {
           // The SSR entry should be built to dist/server/entry-server.js
           // We use the same output dir structure as the client build
           const serverOutDir = join(resolvedConfig.build.outDir, "..", "server");
-          const entryBasename = resolvedOptions.ssrEntry.split(/[\\/]/).pop()!.replace(/\.ts$/, ".js");
+          const entryBasename = pluginState.ssrEntry.split(/[\\/]/).pop()!.replace(/\.ts$/, ".js");
           const handlerPath = join(serverOutDir, entryBasename);
 
           resolvedConfig.logger.info(`[aurelia-ssr] Loading SSR handler from: ${handlerPath}`);
@@ -722,7 +724,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       // Generate static site
       const result: SSGResult = await generateStaticSite(
         routeTree,
-        resolvedOptions.ssg,
+        pluginState.ssg,
         outDir,
         render,
         resolveStaticPaths,
@@ -763,7 +765,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
     buildEnd() {
       // Finish build trace if SSG is not enabled
       // (SSG-enabled builds finish trace in closeBundle after SSG completes)
-      if (buildTrace && !resolvedOptions.ssg.enabled) {
+      if (buildTrace && !pluginState.ssg.enabled) {
         buildTrace.finish();
         buildTrace = null;
       }

@@ -1,24 +1,23 @@
 /**
- * @aurelia-ls/vite-plugin - Vite plugin for Aurelia with AOT compilation and SSR
+ * @aurelia-ls/vite-plugin - Complete Aurelia build plugin
  *
- * This is the primary user-facing package for building Aurelia applications
- * with Vite. It provides:
+ * This package replaces @aurelia/vite-plugin and @aurelia/plugin-conventions.
+ * It provides:
  * - AOT compilation of templates
  * - SSR dev server middleware
  * - Production build with SSR support
  * - Static site generation (SSG)
+ * - Convention-based resource discovery
  *
  * @example
  * ```typescript
  * // vite.config.ts
  * import { defineConfig } from 'vite';
- * import aurelia from '@aurelia/vite-plugin';
- * import { aureliaSSR } from '@aurelia-ls/vite-plugin';
+ * import { aurelia } from '@aurelia-ls/vite-plugin';
  *
  * export default defineConfig({
  *   plugins: [
- *     aurelia({ useDev: true }),
- *     aureliaSSR({
+ *     aurelia({
  *       entry: './src/my-app.html',
  *       ssr: true,
  *     }),
@@ -36,7 +35,7 @@
  *     hydration: { strategy: 'lazy' },
  *   },
  *   conventions: {
- *     naming: { elementSuffixes: ['CustomElement', 'Component'] },
+ *     suffixes: { element: ['CustomElement', 'Component'] },
  *   },
  * });
  * ```
@@ -48,7 +47,7 @@
 // Main Plugin Export
 // =============================================================================
 
-export { aureliaSSR } from "./plugin.js";
+export { aurelia } from "./plugin.js";
 
 // =============================================================================
 // Config Helpers
@@ -127,9 +126,6 @@ export {
   isSSREnabled,
   isSSGEnabled,
 
-  // Legacy migration
-  migrateLegacyOptions,
-
   // Context type
   type NormalizeOptionsContext,
 } from "./defaults.js";
@@ -145,9 +141,6 @@ export type {
 
   // Core types
   StateProvider,
-
-  // Legacy (deprecated)
-  AureliaSSRPluginOptions,
 } from "./types.js";
 
 // =============================================================================
@@ -182,7 +175,6 @@ export type {
   SSRHydrationOptions,
   SSRStreamingOptions,
   ResolvedSSRConfig,
-  ResolvedSSROptions, // Legacy type for existing plugin code
   ResolutionContext,
 } from "./types.js";
 

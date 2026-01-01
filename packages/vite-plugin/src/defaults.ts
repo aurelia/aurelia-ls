@@ -13,7 +13,6 @@
 import type {
   // User-facing types
   AureliaPluginOptions,
-  AureliaSSRPluginOptions,
   AureliaConfig,
   DevOptions,
   BuildOptions,
@@ -722,40 +721,6 @@ export function normalizeOptions(
     debug: normalizeDebugOptions(opts.debug, context.root),
     experimental: { ...DEFAULT_EXPERIMENTAL_OPTIONS, ...opts.experimental },
     hooks: { ...DEFAULT_HOOKS, ...opts.hooks },
-  };
-}
-
-// ============================================================================
-// Legacy Migration
-// ============================================================================
-
-/**
- * Migrate legacy AureliaSSRPluginOptions to new AureliaPluginOptions format.
- *
- * @deprecated This function will be removed in a future version.
- */
-export function migrateLegacyOptions(
-  legacy: AureliaSSRPluginOptions,
-): AureliaPluginOptions {
-  return {
-    entry: legacy.entry,
-    tsconfig: legacy.tsconfig,
-    ssr: {
-      state: legacy.state,
-      stripMarkers: legacy.stripMarkers,
-      include: legacy.include,
-      exclude: legacy.exclude,
-      htmlShell: legacy.htmlShell,
-      baseHref: legacy.baseHref,
-      ssrEntry: legacy.ssrEntry,
-      register: legacy.register,
-    },
-    ssg: legacy.ssg,
-    debug: legacy.trace
-      ? {
-          trace: legacy.trace,
-        }
-      : undefined,
   };
 }
 

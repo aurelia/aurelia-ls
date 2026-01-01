@@ -15,7 +15,7 @@ import type { Connect, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderWithComponents, type AotCompileResult } from "@aurelia-ls/ssr";
 import type { ISSRManifest } from "@aurelia/runtime-html";
-import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
+import type { PluginState, ResolutionContext } from "./types.js";
 import { loadProjectComponents } from "./loader.js";
 import { createRequestTrace } from "./trace.js";
 
@@ -32,7 +32,7 @@ import { createRequestTrace } from "./trace.js";
  */
 export function createSSRMiddleware(
   server: ViteDevServer,
-  options: ResolvedSSROptions,
+  options: PluginState,
   getResolutionPromise?: () => Promise<ResolutionContext | null> | null,
 ): Connect.NextHandleFunction {
   // Track if resolution has been awaited
