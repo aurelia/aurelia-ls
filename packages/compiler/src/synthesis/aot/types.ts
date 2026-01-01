@@ -655,21 +655,21 @@ export interface SerializedSetAttribute {
 
 export interface SerializedHydrateElement {
   type: typeof INSTRUCTION_TYPE.hydrateElement;
-  resource: string;
+  res: string;
   instructions: SerializedInstruction[];
   containerless?: boolean;
 }
 
 export interface SerializedHydrateAttribute {
   type: typeof INSTRUCTION_TYPE.hydrateAttribute;
-  resource: string;
+  res: string;
   alias?: string;
   instructions: SerializedInstruction[];
 }
 
 export interface SerializedHydrateTemplateController {
   type: typeof INSTRUCTION_TYPE.hydrateTemplateController;
-  resource: string;
+  res: string;
   templateIndex: number;
   instructions: SerializedInstruction[];
 }

@@ -290,7 +290,7 @@ function translateHydrateElement(
 
   return {
     type: itHydrateElement,
-    res: ins.resource,
+    res: ins.res,
     props,
     projections: null,
     containerless: ins.containerless ?? false,
@@ -306,7 +306,7 @@ function translateHydrateAttribute(
   const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, ctx));
   return {
     type: itHydrateAttribute,
-    res: ins.resource,
+    res: ins.res,
     alias: ins.alias,
     props,
   } as HydrateAttributeInstruction;
@@ -331,7 +331,7 @@ function translateHydrateTemplateController(
   };
 
   debug.ssr("translate.controller", {
-    resource: ins.resource,
+    resource: ins.res,
     templateIndex: ins.templateIndex,
     templateName: nestedDef.name,
     templateHtmlLength: nestedDef.template.length,
@@ -354,7 +354,7 @@ function translateHydrateTemplateController(
   return {
     type: itHydrateTemplateController,
     def,
-    res: ins.resource,
+    res: ins.res,
     alias: void 0,
     props,
   } as HydrateTemplateController;

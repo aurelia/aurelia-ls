@@ -557,9 +557,11 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
 
       // Check if this is an entry point file (contains Aurelia initialization)
       // Only transform entry points in production builds for tree-shaking
-      if (resolvedConfig.command === "build") {
-        return transformEntryPointIfNeeded(code, id, resolvedConfig);
-      }
+      // TODO: Entry point transform disabled - third-party deps need runtime compilation
+      // Re-enable when third-party AOT compilation is implemented
+      // if (resolvedConfig.command === "build") {
+      //   return transformEntryPointIfNeeded(code, id, resolvedConfig);
+      // }
 
       return null;
     },

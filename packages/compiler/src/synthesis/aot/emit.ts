@@ -302,7 +302,7 @@ class EmitContext {
     // Create the hydrate instruction for this controller
     const hydrateCtrl: SerializedHydrateTemplateController = {
       type: INSTRUCTION_TYPE.hydrateTemplateController,
-      resource: ctrl.resource,
+      res: ctrl.resource,
       templateIndex,
       instructions: this.emitControllerBindings(ctrl),
     };
@@ -348,7 +348,7 @@ class EmitContext {
         const row: SerializedInstruction[] = [];
         const branchInstruction: SerializedHydrateTemplateController = {
           type: INSTRUCTION_TYPE.hydrateTemplateController,
-          resource: branchCtrl.resource,
+          res: branchCtrl.resource,
           templateIndex: i, // Index into innerNested
           instructions: this.emitControllerBindings(branchCtrl),
         };
@@ -581,7 +581,7 @@ class EmitContext {
 
     const result: SerializedHydrateElement = {
       type: INSTRUCTION_TYPE.hydrateElement,
-      resource: ce.resource,
+      res: ce.resource,
       instructions,
     };
     if (ce.containerless) {
@@ -617,7 +617,7 @@ class EmitContext {
 
     const result: SerializedHydrateAttribute = {
       type: INSTRUCTION_TYPE.hydrateAttribute,
-      resource: ca.resource,
+      res: ca.resource,
       instructions,
     };
     if (ca.alias !== undefined) {
