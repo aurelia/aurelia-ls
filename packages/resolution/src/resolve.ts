@@ -6,6 +6,7 @@ import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js
 import type { RegistrationIntent } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
+import type { FileSystemContext } from "./project/context.js";
 import { extractAllFacts } from "./extraction/extractor.js";
 import { createResolverPipeline } from "./inference/resolver-pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
@@ -24,6 +25,25 @@ export interface ResolutionConfig {
   defaultScope?: ResourceScopeId | null;
   /** Optional trace for instrumentation */
   trace?: CompileTrace;
+  /**
+   * File system context for sibling detection.
+   *
+   * When provided, enables the sibling-file convention:
+   * `foo.ts` + `foo.html` as adjacent files → custom element "foo"
+   */
+  fileSystem?: FileSystemContext;
+  /**
+   * Template extensions to look for as siblings.
+   * Only used when fileSystem is provided.
+   * @default ['.html']
+   */
+  templateExtensions?: readonly string[];
+  /**
+   * Style extensions to look for as siblings.
+   * Only used when fileSystem is provided.
+   * @default ['.css', '.scss']
+   */
+  styleExtensions?: readonly string[];
 }
 
 /**
@@ -111,12 +131,17 @@ export function resolve(
       "resolution.sourceFileCount": sourceFileCount,
     });
 
-    debug.resolution("start", { sourceFileCount });
+    debug.resolution("start", { sourceFileCount, hasFileSystem: !!config?.fileSystem });
 
-    // Layer 1: Extraction
+    // Layer 0 + 1: File Discovery + Extraction
+    // When fileSystem is provided, extraction also detects sibling files
     log.info("[resolution] extracting facts...");
     trace.event("resolution.extraction.start");
-    const facts = extractAllFacts(program);
+    const facts = extractAllFacts(program, {
+      fileSystem: config?.fileSystem,
+      templateExtensions: config?.templateExtensions,
+      styleExtensions: config?.styleExtensions,
+    });
     trace.event("resolution.extraction.done", { factCount: facts.size });
     debug.resolution("extraction.complete", { factCount: facts.size });
 

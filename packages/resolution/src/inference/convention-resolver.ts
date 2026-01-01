@@ -1,4 +1,4 @@
-import type { SourceFacts, ClassFacts, BindableMemberFact, ImportFact } from "../extraction/types.js";
+import type { SourceFacts, ClassFacts, BindableMemberFact, ImportFact, SiblingFileFact } from "../extraction/types.js";
 import type { ResolverResult, ResourceCandidate, BindableSpec } from "./types.js";
 import type { ConventionConfig } from "../conventions/types.js";
 import {
@@ -15,18 +15,22 @@ import { debug } from "@aurelia-ls/compiler";
  * Resolve resource candidates from file/class naming conventions.
  * This is the lowest-priority resolver.
  *
- * Handles two convention types:
+ * Handles three convention types:
  *
  * 1. **Suffix conventions** (class name determines resource type):
  *    - MyCustomElement → custom element "my"
  *    - DateFormatValueConverter → value converter "dateFormat"
  *    - DebounceBindingBehavior → binding behavior "debounce"
  *
- * 2. **Template-pairing conventions** (HTML import determines custom element):
+ * 2. **Template-import convention** (HTML import determines custom element):
  *    - `import template from './foo.html'` + class `Foo` → custom element "foo"
  *    - Class name must match file name (e.g., CortexDevices in cortex-devices.ts)
  *
- * See docs/aurelia-conventions.md for the full specification.
+ * 3. **Sibling-file convention** (adjacent .html file determines custom element):
+ *    - `foo.ts` + `foo.html` as siblings + class `Foo` → custom element "foo"
+ *    - Requires FileSystemContext during extraction
+ *
+ * See docs/file-discovery-design.md for the sibling convention specification.
  */
 export function resolveFromConventions(
   facts: SourceFacts,
@@ -42,12 +46,20 @@ export function resolveFromConventions(
 
   const candidates: ResourceCandidate[] = [];
 
-  // Find template imports for template-pairing convention
+  // Find template imports for template-import convention
   const templateImports = findTemplateImports(facts.imports, effectiveConfig);
   debug.resolution("convention.templateImports", {
     path: facts.path,
     count: templateImports.length,
     imports: templateImports.map((i) => i.moduleSpecifier),
+  });
+
+  // Find sibling templates for sibling-file convention
+  const siblingTemplates = findSiblingTemplates(facts.siblingFiles);
+  debug.resolution("convention.siblingTemplates", {
+    path: facts.path,
+    count: siblingTemplates.length,
+    siblings: siblingTemplates.map((s) => s.path),
   });
 
   for (const cls of facts.classes) {
@@ -58,36 +70,60 @@ export function resolveFromConventions(
       continue;
     }
 
-    // Try suffix-based convention first
-    const candidate = resolveClassByConvention(cls, facts.path, effectiveConfig);
-    if (candidate) {
+    // Try suffix-based convention first (highest priority for conventions)
+    const suffixCandidate = resolveClassByConvention(cls, facts.path, effectiveConfig);
+    if (suffixCandidate) {
       debug.resolution("convention.suffix.match", {
         className: cls.name,
-        resourceName: candidate.name,
-        kind: candidate.kind,
+        resourceName: suffixCandidate.name,
+        kind: suffixCandidate.kind,
       });
-      candidates.push(candidate);
+      candidates.push(suffixCandidate);
       continue;
     }
 
-    // Try template-pairing convention if suffix didn't match
-    const templateCandidate = resolveClassByTemplatePairing(
+    // Try template-import convention (explicit import takes precedence)
+    const templateImportCandidate = resolveClassByTemplatePairing(
       cls,
       facts.path,
       templateImports,
       effectiveConfig,
     );
-    if (templateCandidate) {
+    if (templateImportCandidate) {
       debug.resolution("convention.templatePairing.match", {
         className: cls.name,
-        resourceName: templateCandidate.name,
+        resourceName: templateImportCandidate.name,
         templateImport: templateImports[0]?.moduleSpecifier,
       });
-      candidates.push(templateCandidate);
+      candidates.push(templateImportCandidate);
+      continue;
+    }
+
+    // Try sibling-file convention (no import needed, just adjacent files)
+    const siblingCandidate = resolveClassBySiblingFile(
+      cls,
+      facts.path,
+      siblingTemplates,
+      effectiveConfig,
+    );
+    if (siblingCandidate) {
+      debug.resolution("convention.siblingFile.match", {
+        className: cls.name,
+        resourceName: siblingCandidate.name,
+        siblingPath: siblingTemplates[0]?.path,
+      });
+      candidates.push(siblingCandidate);
     }
   }
 
   return { candidates, diagnostics: [] };
+}
+
+/**
+ * Find sibling template files from sibling facts.
+ */
+function findSiblingTemplates(siblings: readonly SiblingFileFact[]): SiblingFileFact[] {
+  return siblings.filter((s) => s.extension === ".html" || s.extension === ".htm");
 }
 
 /**
@@ -364,4 +400,122 @@ function resolveClassByTemplatePairing(
     resolver: "convention",
     boundary: true,
   };
+}
+
+// ============================================================================
+// Sibling-File Convention Support
+// ============================================================================
+
+/**
+ * Resolve a class to a custom element by sibling-file convention.
+ *
+ * This handles the Aurelia convention where:
+ * - A source file `foo.ts` has a sibling `foo.html`
+ * - The class name matches the file name (e.g., `Foo` in `foo.ts`)
+ * - Result: custom element with name derived from file name
+ *
+ * This convention does NOT require an import statement - the files just
+ * need to be adjacent with matching base names.
+ */
+function resolveClassBySiblingFile(
+  cls: ClassFacts,
+  sourcePath: string,
+  siblingTemplates: readonly SiblingFileFact[],
+  config: ConventionConfig,
+): ResourceCandidate | null {
+  // Must have at least one sibling template
+  if (siblingTemplates.length === 0) {
+    return null;
+  }
+
+  // Get expected resource name from file path (kebab-case)
+  const fileBaseName = getBaseName(sourcePath);
+  const expectedResourceName = toKebabCase(fileBaseName);
+
+  // Check if class name matches file name (allowing for case/hyphen differences)
+  // Also allow conventional suffixes like CustomElement
+  if (!classMatchesFileNameForSibling(cls.name, fileBaseName)) {
+    debug.resolution("convention.siblingFile.noMatch", {
+      className: cls.name,
+      fileBaseName,
+    });
+    return null;
+  }
+
+  // Find a matching sibling template (same base name as the source file)
+  const matchingSibling = siblingTemplates.find((sib) => {
+    return isKindOfSame(sib.baseName, fileBaseName);
+  });
+
+  if (!matchingSibling) {
+    debug.resolution("convention.siblingFile.noTemplateMatch", {
+      className: cls.name,
+      fileBaseName,
+      siblingTemplates: siblingTemplates.map((s) => s.path),
+    });
+    return null;
+  }
+
+  // Build bindable specs from @bindable members
+  const bindables = buildBindableSpecs(cls.bindableMembers);
+
+  // Create custom element candidate
+  return {
+    kind: "element",
+    name: expectedResourceName,
+    source: sourcePath as import("@aurelia-ls/compiler").NormalizedPath,
+    className: cls.name,
+    aliases: [],
+    bindables,
+    confidence: "inferred",
+    resolver: "convention",
+    boundary: true,
+  };
+}
+
+/**
+ * Check if a class name matches a file name for sibling convention.
+ *
+ * Allows:
+ * - Exact match after case normalization: `foo.ts` → `Foo`
+ * - Kebab-to-Pascal: `foo-bar.ts` → `FooBar`
+ * - With CustomElement suffix: `foo.ts` → `FooCustomElement`
+ * - With Element suffix: `foo.ts` → `FooElement`
+ */
+function classMatchesFileNameForSibling(className: string, fileBaseName: string): boolean {
+  // Normalize file base name to expected class name
+  const expectedClassName = toPascalCase(fileBaseName);
+
+  // Exact match
+  if (className === expectedClassName) {
+    return true;
+  }
+
+  // Match with CustomElement suffix
+  if (className === expectedClassName + "CustomElement") {
+    return true;
+  }
+
+  // Match with Element suffix
+  if (className === expectedClassName + "Element") {
+    return true;
+  }
+
+  // Also check using isKindOfSame for more flexible matching
+  return isKindOfSame(className, expectedClassName);
+}
+
+/**
+ * Convert a kebab-case or mixed-case name to PascalCase.
+ */
+function toPascalCase(name: string): string {
+  // Split on hyphens, underscores, or camelCase boundaries
+  const parts = name.split(/[-_]|(?<=[a-z])(?=[A-Z])/);
+
+  return parts
+    .map((part) => {
+      if (part.length === 0) return "";
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join("");
 }
