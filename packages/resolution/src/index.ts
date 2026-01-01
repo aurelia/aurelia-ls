@@ -106,8 +106,8 @@ export type {
   FilePairOptions,
   // Project Scanner
   ProjectScanner,
-  // Directory Conventions
-  DirectoryConventionConfig,
+  // Directory Conventions (internal)
+  DirectoryConventionListConfig,
   ConventionBuilder,
 } from "./project/index.js";
 
@@ -137,17 +137,33 @@ export type { RegistrationIntent, RegistrationEvidence, ImportGraph, Registratio
 export { buildResourceGraph } from "./scope/index.js";
 
 // === Conventions ===
-export type { ConventionConfig, SuffixConfig, FilePatternConfig } from "./conventions/index.js";
+export type {
+  // Core config
+  ConventionConfig,
+  SuffixConfig,
+  FilePatternConfig,
+  // Directory conventions (user-friendly)
+  DirectoryConventionConfig,
+  DirectoryRule,
+  DirectoryScopeKind,
+  // File pairing
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
+} from "./conventions/index.js";
 export {
   // Decorator names (used by transform package)
   DECORATOR_NAMES,
   RESOURCE_DECORATOR_NAMES,
-  // Suffix patterns
+  // Suffix patterns and defaults
   DEFAULT_CONVENTION_CONFIG,
   DEFAULT_SUFFIXES,
   // Functions
   getResourceTypeFromClassName,
   stripResourceSuffix,
+  // Normalization (user-friendly → internal)
+  normalizeScope,
+  normalizeDirectoryRule,
+  normalizeDirectoryConventions,
 } from "./conventions/index.js";
 
 // === Utilities ===

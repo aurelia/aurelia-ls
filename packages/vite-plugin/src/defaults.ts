@@ -18,7 +18,6 @@ import type {
   DevOptions,
   BuildOptions,
   SSROptions,
-  ConventionOptions,
   CompilerOptions,
   DebugOptions,
   ExperimentalOptions,
@@ -30,10 +29,6 @@ import type {
   SSRManifestOptions,
   SSRHydrationOptions,
   SSRStreamingOptions,
-  NamingConventionOptions,
-  DirectoryConventionOptions,
-  TemplatePairingOptions,
-  StylesheetPairingOptions,
   ThirdPartyOptions,
   TraceOptions,
   DebugChannel,
@@ -48,6 +43,17 @@ import type {
   StateProvider,
 } from "./types.js";
 import type { ResolvedSSGOptions } from "@aurelia-ls/ssg";
+import type {
+  ConventionConfig,
+  SuffixConfig,
+  DirectoryConventionConfig,
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
+} from "@aurelia-ls/resolution";
+import {
+  DEFAULT_CONVENTION_CONFIG,
+  DEFAULT_SUFFIXES,
+} from "@aurelia-ls/resolution";
 
 // ============================================================================
 // Default Values
@@ -193,28 +199,16 @@ export const DEFAULT_SSG_OPTIONS: ResolvedSSGOptions = {
 };
 
 /**
- * Default naming convention options.
- */
-export const DEFAULT_NAMING_OPTIONS: Required<NamingConventionOptions> = {
-  elementSuffixes: ["CustomElement"],
-  attributeSuffixes: ["CustomAttribute"],
-  valueConverterSuffixes: ["ValueConverter"],
-  bindingBehaviorSuffixes: ["BindingBehavior"],
-};
-
-/**
  * Default template pairing options.
  */
-export const DEFAULT_TEMPLATE_PAIRING_OPTIONS: Required<TemplatePairingOptions> = {
-  extensions: [".html"],
+export const DEFAULT_TEMPLATE_PAIRING_OPTIONS: TemplatePairingConfig = {
   preferSibling: false,
 };
 
 /**
  * Default stylesheet pairing options.
  */
-export const DEFAULT_STYLESHEET_PAIRING_OPTIONS: Required<StylesheetPairingOptions> = {
-  extensions: [".css", ".scss"],
+export const DEFAULT_STYLESHEET_PAIRING_OPTIONS: StylesheetPairingConfig = {
   injection: "shadow",
 };
 
@@ -236,16 +230,23 @@ export const DEFAULT_THIRD_PARTY_OPTIONS: Required<Omit<ThirdPartyOptions, "reso
 
 /**
  * Default convention options.
+ *
+ * Uses DEFAULT_CONVENTION_CONFIG from resolution as the base,
+ * plus vite-plugin specific thirdParty options.
  */
 export const DEFAULT_CONVENTION_OPTIONS: ResolvedConventionOptions = {
-  enabled: true,
-  naming: DEFAULT_NAMING_OPTIONS,
-  directories: {
-    rules: undefined,
-    replaceDefaults: false,
+  enabled: DEFAULT_CONVENTION_CONFIG.enabled ?? true,
+  config: {
+    enabled: DEFAULT_CONVENTION_CONFIG.enabled ?? true,
+    suffixes: DEFAULT_SUFFIXES,
+    filePatterns: DEFAULT_CONVENTION_CONFIG.filePatterns ?? {},
+    viewModelExtensions: DEFAULT_CONVENTION_CONFIG.viewModelExtensions ?? [".ts", ".js"],
+    templateExtensions: DEFAULT_CONVENTION_CONFIG.templateExtensions ?? [".html"],
+    styleExtensions: DEFAULT_CONVENTION_CONFIG.styleExtensions ?? [".css", ".scss"],
+    directories: {},
+    templatePairing: DEFAULT_TEMPLATE_PAIRING_OPTIONS,
+    stylesheetPairing: DEFAULT_STYLESHEET_PAIRING_OPTIONS,
   },
-  templatePairing: DEFAULT_TEMPLATE_PAIRING_OPTIONS,
-  stylesheetPairing: DEFAULT_STYLESHEET_PAIRING_OPTIONS,
   thirdParty: DEFAULT_THIRD_PARTY_OPTIONS,
 };
 
@@ -525,60 +526,48 @@ export function normalizeSSGOptions(
 }
 
 /**
- * Normalize naming convention options.
- */
-export function normalizeNamingOptions(
-  options: NamingConventionOptions | undefined,
-): Required<NamingConventionOptions> {
-  if (!options) {
-    return { ...DEFAULT_NAMING_OPTIONS };
-  }
-  return {
-    elementSuffixes: options.elementSuffixes ?? DEFAULT_NAMING_OPTIONS.elementSuffixes,
-    attributeSuffixes: options.attributeSuffixes ?? DEFAULT_NAMING_OPTIONS.attributeSuffixes,
-    valueConverterSuffixes:
-      options.valueConverterSuffixes ?? DEFAULT_NAMING_OPTIONS.valueConverterSuffixes,
-    bindingBehaviorSuffixes:
-      options.bindingBehaviorSuffixes ?? DEFAULT_NAMING_OPTIONS.bindingBehaviorSuffixes,
-  };
-}
-
-/**
  * Normalize convention options.
+ *
+ * Converts user-provided ConventionConfig (from resolution package)
+ * to the internal ResolvedConventionOptions structure.
  */
 export function normalizeConventionOptions(
-  options: ConventionOptions | undefined,
+  options: ConventionConfig | undefined,
+  thirdParty?: ThirdPartyOptions,
 ): ResolvedConventionOptions {
   if (!options) {
     return { ...DEFAULT_CONVENTION_OPTIONS };
   }
+
+  const defaultConfig = DEFAULT_CONVENTION_OPTIONS.config;
+
   return {
-    enabled: options.enabled ?? DEFAULT_CONVENTION_OPTIONS.enabled,
-    naming: normalizeNamingOptions(options.naming),
-    directories: {
-      rules: options.directories?.rules,
-      replaceDefaults: options.directories?.replaceDefaults ?? false,
-    },
-    templatePairing: {
-      extensions:
-        options.templatePairing?.extensions ?? DEFAULT_TEMPLATE_PAIRING_OPTIONS.extensions,
-      preferSibling:
-        options.templatePairing?.preferSibling ?? DEFAULT_TEMPLATE_PAIRING_OPTIONS.preferSibling,
-    },
-    stylesheetPairing: {
-      extensions:
-        options.stylesheetPairing?.extensions ?? DEFAULT_STYLESHEET_PAIRING_OPTIONS.extensions,
-      injection:
-        options.stylesheetPairing?.injection ?? DEFAULT_STYLESHEET_PAIRING_OPTIONS.injection,
+    enabled: options.enabled ?? true,
+    config: {
+      enabled: options.enabled ?? true,
+      suffixes: options.suffixes ?? defaultConfig.suffixes,
+      filePatterns: options.filePatterns ?? defaultConfig.filePatterns,
+      viewModelExtensions: options.viewModelExtensions ?? defaultConfig.viewModelExtensions,
+      templateExtensions: options.templateExtensions ?? defaultConfig.templateExtensions,
+      styleExtensions: options.styleExtensions ?? defaultConfig.styleExtensions,
+      directories: options.directories ?? defaultConfig.directories,
+      templatePairing: {
+        preferSibling:
+          options.templatePairing?.preferSibling ?? DEFAULT_TEMPLATE_PAIRING_OPTIONS.preferSibling,
+      },
+      stylesheetPairing: {
+        injection:
+          options.stylesheetPairing?.injection ?? DEFAULT_STYLESHEET_PAIRING_OPTIONS.injection,
+      },
     },
     thirdParty: {
-      scan: options.thirdParty?.scan ?? DEFAULT_THIRD_PARTY_OPTIONS.scan,
-      packages: options.thirdParty?.packages ?? DEFAULT_THIRD_PARTY_OPTIONS.packages,
+      scan: thirdParty?.scan ?? DEFAULT_THIRD_PARTY_OPTIONS.scan,
+      packages: thirdParty?.packages ?? DEFAULT_THIRD_PARTY_OPTIONS.packages,
       resources: {
-        elements: options.thirdParty?.resources?.elements ?? {},
-        attributes: options.thirdParty?.resources?.attributes ?? {},
-        valueConverters: options.thirdParty?.resources?.valueConverters ?? [],
-        bindingBehaviors: options.thirdParty?.resources?.bindingBehaviors ?? [],
+        elements: thirdParty?.resources?.elements ?? {},
+        attributes: thirdParty?.resources?.attributes ?? {},
+        valueConverters: thirdParty?.resources?.valueConverters ?? [],
+        bindingBehaviors: thirdParty?.resources?.bindingBehaviors ?? [],
       },
     },
   };
@@ -728,7 +717,7 @@ export function normalizeOptions(
     build: normalizeBuildOptions(opts.build),
     ssr: normalizeSSROptions(opts.ssr, isDev),
     ssg: normalizeSSGOptions(opts.ssg),
-    conventions: normalizeConventionOptions(opts.conventions),
+    conventions: normalizeConventionOptions(opts.conventions, opts.thirdParty),
     compiler: normalizeCompilerOptions(opts.compiler),
     debug: normalizeDebugOptions(opts.debug, context.root),
     experimental: { ...DEFAULT_EXPERIMENTAL_OPTIONS, ...opts.experimental },

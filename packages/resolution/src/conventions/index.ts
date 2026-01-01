@@ -1,5 +1,18 @@
-export type { ConventionConfig, SuffixConfig, FilePatternConfig } from "./types.js";
+// Types
+export type {
+  ConventionConfig,
+  SuffixConfig,
+  FilePatternConfig,
+  // Directory conventions (user-friendly)
+  DirectoryConventionConfig,
+  DirectoryRule,
+  DirectoryScopeKind,
+  // File pairing
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
+} from "./types.js";
 
+// Defaults and naming utilities
 export {
   // Decorator names
   DECORATOR_NAMES,
@@ -15,3 +28,10 @@ export {
   getResourceTypeFromClassName,
   stripResourceSuffix,
 } from "./aurelia-defaults.js";
+
+// Normalization (user-friendly → internal)
+export {
+  normalizeScope,
+  normalizeDirectoryRule,
+  normalizeDirectoryConventions,
+} from "./normalize.js";

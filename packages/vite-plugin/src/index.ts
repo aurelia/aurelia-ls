@@ -86,7 +86,6 @@ export {
   DEFAULT_SSR_STREAMING_OPTIONS,
   DEFAULT_SSR_OPTIONS,
   DEFAULT_SSG_OPTIONS,
-  DEFAULT_NAMING_OPTIONS,
   DEFAULT_TEMPLATE_PAIRING_OPTIONS,
   DEFAULT_STYLESHEET_PAIRING_OPTIONS,
   DEFAULT_THIRD_PARTY_OPTIONS,
@@ -116,7 +115,6 @@ export {
   normalizeSSRManifestOptions,
   normalizeSSRHydrationOptions,
   normalizeSSRStreamingOptions,
-  normalizeNamingOptions,
   normalizeDebugChannels,
 
   // Config file support
@@ -192,12 +190,19 @@ export type {
 // Type Exports - Convention Options
 // =============================================================================
 
+// Convention types are now defined in @aurelia-ls/resolution (canonical source)
+// and re-exported from types.ts for convenience
 export type {
-  ConventionOptions,
-  NamingConventionOptions,
-  DirectoryConventionOptions,
-  TemplatePairingOptions,
-  StylesheetPairingOptions,
+  // From resolution (re-exported)
+  ConventionConfig,
+  SuffixConfig,
+  FilePatternConfig,
+  DirectoryConventionConfig,
+  DirectoryRule,
+  DirectoryScopeKind,
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
+  // vite-plugin specific
   ThirdPartyOptions,
   ExplicitResourceConfig,
   ExplicitElementConfig,
@@ -239,21 +244,5 @@ export type {
 // Type Re-exports from Lower Packages
 // =============================================================================
 
-// SSG types
-export type {
-  SSGOptions,
-  ResolvedSSGOptions,
-  SSGResult,
-  SSGError,
-  ExpandedRoute,
-} from "@aurelia-ls/ssg";
-
-// Convention types from resolution package
-export type {
-  ConventionConfig,
-  SuffixConfig,
-  FilePatternConfig,
-  DirectoryConvention,
-  DirectoryScope,
-  DirectoryMatch,
-} from "./types.js";
+// SSG types (additional, not duplicated from types.ts re-exports)
+// Note: ConventionConfig, SuffixConfig, etc. are already re-exported from types.ts

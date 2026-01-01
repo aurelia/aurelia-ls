@@ -21,11 +21,34 @@ import type { SSRRequestContext } from "@aurelia-ls/ssr";
 /**
  * Re-export convention types from resolution package.
  * Users can import these directly from vite-plugin for convenience.
+ *
+ * ConventionConfig is the canonical type for all convention configuration.
+ * See resolution package for the authoritative definitions.
  */
 export type {
+  // Core convention config
   ConventionConfig,
   SuffixConfig,
   FilePatternConfig,
+  // Directory conventions (user-friendly)
+  DirectoryConventionConfig,
+  DirectoryRule,
+  DirectoryScopeKind,
+  // File pairing
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
+  // Internal types (for advanced use)
+  DirectoryConvention,
+  DirectoryScope,
+  DirectoryMatch,
+} from "@aurelia-ls/resolution";
+
+// Local imports for internal use
+import type {
+  ConventionConfig,
+  DirectoryConventionConfig,
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
 } from "@aurelia-ls/resolution";
 
 /**
@@ -44,15 +67,6 @@ import type {
   SSGOptions,
   ResolvedSSGOptions,
 } from "@aurelia-ls/ssg";
-
-/**
- * Re-export directory convention types from resolution package.
- */
-export type {
-  DirectoryConvention,
-  DirectoryScope,
-  DirectoryMatch,
-} from "@aurelia-ls/resolution";
 
 // ============================================================================
 // Core Types
@@ -745,163 +759,9 @@ export interface ThirdPartyOptions {
   resources?: ExplicitResourceConfig;
 }
 
-/**
- * Directory convention configuration.
- * Controls how directory structure affects resource scoping.
- *
- * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
- */
-export interface DirectoryConventionOptions {
-  /**
-   * Custom directory conventions.
-   * Merged with (or replaces) default conventions.
-   *
-   * @example
-   * ```typescript
-   * rules: [
-   *   { pattern: 'src/shared/**', scope: 'global', priority: 10 },
-   *   { pattern: 'src/features/**', scope: 'local', priority: 5 },
-   * ]
-   * ```
-   */
-  rules?: Array<{
-    pattern: string;
-    scope: "global" | "local" | "router";
-    priority?: number;
-    description?: string;
-  }>;
-
-  /**
-   * Replace default conventions instead of merging.
-   *
-   * @default false
-   */
-  replaceDefaults?: boolean;
-}
-
-/**
- * Template pairing configuration.
- * Controls how templates are associated with components.
- *
- * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
- */
-export interface TemplatePairingOptions {
-  /**
-   * File extensions to recognize as templates.
-   *
-   * @default ['.html']
-   */
-  extensions?: string[];
-
-  /**
-   * Prefer sibling file over import when both exist.
-   * When false, explicit `import template from './foo.html'` wins.
-   *
-   * @default false
-   */
-  preferSibling?: boolean;
-}
-
-/**
- * Stylesheet pairing configuration.
- *
- * @future Stylesheet auto-discovery is not yet implemented.
- * Aurelia currently uses explicit `shadowCSS()` and `cssModules()` APIs.
- */
-export interface StylesheetPairingOptions {
-  /**
-   * File extensions to recognize as component stylesheets.
-   *
-   * @default ['.css', '.scss']
-   */
-  extensions?: string[];
-
-  /**
-   * Inject styles into component's shadow DOM or document.
-   *
-   * @default 'shadow'
-   */
-  injection?: "shadow" | "document" | "none";
-}
-
-/**
- * Naming convention configuration.
- * Controls how class names map to resource types.
- *
- * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
- */
-export interface NamingConventionOptions {
-  /**
-   * Suffixes that identify custom elements.
-   *
-   * @default ['CustomElement']
-   *
-   * @example ['CustomElement', 'Component']
-   */
-  elementSuffixes?: string[];
-
-  /**
-   * Suffixes that identify custom attributes.
-   *
-   * @default ['CustomAttribute']
-   */
-  attributeSuffixes?: string[];
-
-  /**
-   * Suffixes that identify value converters.
-   *
-   * @default ['ValueConverter']
-   */
-  valueConverterSuffixes?: string[];
-
-  /**
-   * Suffixes that identify binding behaviors.
-   *
-   * @default ['BindingBehavior']
-   */
-  bindingBehaviorSuffixes?: string[];
-}
-
-/**
- * Convention configuration.
- * Controls how Aurelia discovers and classifies resources.
- *
- * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
- */
-export interface ConventionOptions {
-  /**
-   * Enable convention-based discovery.
-   * When false, only explicitly decorated resources are recognized.
-   *
-   * @default true
-   */
-  enabled?: boolean;
-
-  /**
-   * Naming conventions (class suffixes).
-   */
-  naming?: NamingConventionOptions;
-
-  /**
-   * Directory conventions (scoping by location).
-   */
-  directories?: DirectoryConventionOptions;
-
-  /**
-   * Template pairing conventions.
-   */
-  templatePairing?: TemplatePairingOptions;
-
-  /**
-   * Stylesheet pairing conventions.
-   */
-  stylesheetPairing?: StylesheetPairingOptions;
-
-  /**
-   * Third-party resource configuration.
-   */
-  thirdParty?: ThirdPartyOptions;
-}
+// NOTE: Convention types (ConventionConfig, DirectoryConventionConfig, etc.)
+// are now defined in @aurelia-ls/resolution and re-exported above.
+// This ensures a single source of truth for convention configuration.
 
 // ============================================================================
 // Compiler Options
@@ -1332,8 +1192,16 @@ export interface AureliaPluginOptions {
   /**
    * Convention configuration.
    * Controls resource discovery and classification.
+   *
+   * Uses ConventionConfig from resolution package (canonical type).
    */
-  conventions?: ConventionOptions;
+  conventions?: ConventionConfig;
+
+  /**
+   * Third-party resource configuration.
+   * Declare external Aurelia resources from npm packages.
+   */
+  thirdParty?: ThirdPartyOptions;
 
   /**
    * Compiler configuration.
@@ -1533,16 +1401,19 @@ export interface ResolvedSSROptions {
 
 /**
  * Resolved convention options with defaults applied.
+ *
+ * This is the internal resolved form. Input uses ConventionConfig from resolution.
  */
 export interface ResolvedConventionOptions {
+  /** Whether conventions are enabled */
   enabled: boolean;
-  naming: Required<NamingConventionOptions>;
-  directories: {
-    rules: DirectoryConventionOptions["rules"];
-    replaceDefaults: boolean;
+  /** Resolved ConventionConfig from resolution (with defaults applied) */
+  config: Required<Omit<ConventionConfig, "directories" | "templatePairing" | "stylesheetPairing">> & {
+    directories: DirectoryConventionConfig;
+    templatePairing: TemplatePairingConfig;
+    stylesheetPairing: StylesheetPairingConfig;
   };
-  templatePairing: Required<TemplatePairingOptions>;
-  stylesheetPairing: Required<StylesheetPairingOptions>;
+  /** Third-party resources (not part of ConventionConfig) */
   thirdParty: Required<Omit<ThirdPartyOptions, "resources">> & {
     resources: ExplicitResourceConfig;
   };

@@ -101,7 +101,7 @@ export type { ProjectScanner } from "./scanner.js";
 export { createProjectScanner, createProjectScannerFromProgram } from "./scanner.js";
 
 // === Directory Conventions ===
-export type { DirectoryConventionConfig, ConventionBuilder } from "./directory-conventions.js";
+export type { DirectoryConventionListConfig, ConventionBuilder } from "./directory-conventions.js";
 export {
   DEFAULT_CONVENTIONS,
   matchDirectoryConventions,

@@ -220,13 +220,17 @@ function matchesPattern(path: string, pattern: string): boolean {
 }
 
 // ============================================================================
-// Convention Configuration
+// Convention Configuration (Internal)
 // ============================================================================
 
 /**
- * Options for configuring directory conventions.
+ * Internal options for configuring directory conventions.
+ *
+ * This is the lower-level internal config that works with DirectoryConvention[]
+ * (which use discriminated union scopes). For user-facing configuration,
+ * see DirectoryConventionConfig in conventions/types.ts.
  */
-export interface DirectoryConventionConfig {
+export interface DirectoryConventionListConfig {
   /**
    * Whether to use default conventions.
    * @default true
@@ -256,7 +260,7 @@ export interface DirectoryConventionConfig {
  * @param config - Convention configuration
  * @returns Effective conventions list
  */
-export function buildConventionList(config?: DirectoryConventionConfig): DirectoryConvention[] {
+export function buildConventionList(config?: DirectoryConventionListConfig): DirectoryConvention[] {
   const useDefaults = config?.useDefaults ?? true;
   const additional = config?.additional ?? [];
   const overrides = config?.overrides ?? [];
