@@ -91,15 +91,19 @@ export type StateProvider = (
 // ============================================================================
 // Development Mode Options
 // ============================================================================
-//
-// NOTE: These options are ASPIRATIONAL. Not yet implemented.
-//
 
 /**
  * Hot Module Replacement configuration.
  *
- * @future Not yet implemented.
- * Requires component cache invalidation and state preservation strategy.
+ * Parity with @aurelia/vite-plugin: The runtime plugin has complex HMR
+ * that preserves component state across hot reloads (~120 lines of injected code).
+ *
+ * @status NOT YET IMPLEMENTED in @aurelia-ls/vite-plugin.
+ * Currently falls back to full page reload on template changes.
+ * Implementation requires: component cache invalidation, state serialization,
+ * and integration with Aurelia's Controller lifecycle.
+ *
+ * @see aurelia/packages-tooling/vite-plugin/src/index.ts getHmrCode()
  */
 export interface HMROptions {
   /**
@@ -125,240 +129,6 @@ export interface HMROptions {
   log?: boolean;
 }
 
-/**
- * Component inspector configuration.
- * Enables click-to-source functionality in development.
- *
- * Inspired by Svelte Inspector and Vue Devtools.
- *
- * @future Not yet implemented. Requires provenance integration
- * (source location tracking through template compilation).
- */
-export interface InspectorOptions {
-  /**
-   * Enable the component inspector.
-   *
-   * @default true (in dev mode)
-   */
-  enabled?: boolean;
-
-  /**
-   * Keyboard shortcut to toggle inspector.
-   * Uses Mousetrap-style key notation.
-   *
-   * @default 'ctrl+shift+i'
-   *
-   * @example 'meta+shift+c' // Cmd+Shift+C on macOS
-   */
-  toggleKeyCombo?: string;
-
-  /**
-   * Show component boundaries on hover.
-   *
-   * @default true
-   */
-  showBoundaries?: boolean;
-
-  /**
-   * Open file in editor when component is clicked.
-   * Set to false to only show component info.
-   *
-   * @default true
-   */
-  openInEditor?: boolean;
-
-  /**
-   * Editor URL pattern for opening files.
-   * Supports placeholders: {file}, {line}, {column}
-   *
-   * @default 'vscode://file/{file}:{line}:{column}'
-   *
-   * @example
-   * ```typescript
-   * // WebStorm
-   * 'webstorm://open?file={file}&line={line}&column={column}'
-   *
-   * // Cursor
-   * 'cursor://file/{file}:{line}:{column}'
-   * ```
-   */
-  editorUrl?: string;
-}
-
-/**
- * Error overlay configuration.
- * Controls how compilation errors are displayed in the browser.
- *
- * @future Not yet implemented. Vite's built-in error overlay works for now.
- *
- * @see {@link https://aurelia.io/docs/vite/errors | Error Handling} — TODO: docs not yet published
- */
-export interface ErrorOverlayOptions {
-  /**
-   * Enable the error overlay.
-   *
-   * @default true
-   */
-  enabled?: boolean;
-
-  /**
-   * Show Elm-style error messages with context and suggestions.
-   *
-   * @default true
-   */
-  elmStyle?: boolean;
-
-  /**
-   * Include source code snippets in error display.
-   *
-   * @default true
-   */
-  showSource?: boolean;
-
-  /**
-   * Include stack traces in error display.
-   *
-   * @default false
-   */
-  showStack?: boolean;
-}
-
-/**
- * Development mode options.
- * These settings only apply during `vite dev`.
- *
- * @future Not yet implemented. All sub-options are aspirational.
- *
- * @see {@link https://aurelia.io/docs/vite/development | Development Guide} — TODO: docs not yet published
- */
-export interface DevOptions {
-  /**
-   * Hot Module Replacement configuration.
-   * Set to false to disable HMR entirely.
-   *
-   * @default true
-   */
-  hmr?: boolean | HMROptions;
-
-  /**
-   * Component inspector configuration.
-   * Set to false to disable the inspector.
-   *
-   * @default true
-   */
-  inspector?: boolean | InspectorOptions;
-
-  /**
-   * Error overlay configuration.
-   * Set to false to disable the overlay (errors go to console only).
-   *
-   * @default true
-   */
-  errorOverlay?: boolean | ErrorOverlayOptions;
-
-  /**
-   * Clear console on HMR update.
-   *
-   * @default false
-   */
-  clearScreen?: boolean;
-}
-
-// ============================================================================
-// Build Mode Options
-// ============================================================================
-//
-// NOTE: These options are ASPIRATIONAL. The plugin does not currently use them.
-// Use Vite's native build options or ecosystem plugins (rollup-plugin-visualizer).
-//
-
-/**
- * Bundle analyzer configuration.
- * Generates reports about bundle composition.
- *
- * @future Use `rollup-plugin-visualizer` from Vite ecosystem instead.
- */
-export interface BundleAnalyzerOptions {
-  /**
-   * Enable bundle analysis.
-   *
-   * @default false
-   */
-  enabled?: boolean;
-
-  /**
-   * Output format for the analysis report.
-   *
-   * @default 'html'
-   */
-  format?: "html" | "json" | "stats";
-
-  /**
-   * Output file path (relative to build output).
-   *
-   * @default 'bundle-analysis.html'
-   */
-  outputFile?: string;
-
-  /**
-   * Open the report in browser after build.
-   *
-   * @default false
-   */
-  openReport?: boolean;
-}
-
-/**
- * Production build options.
- * These settings only apply during `vite build`.
- *
- * @future Not yet implemented. Use Vite's native build options.
- *
- * @see {@link https://aurelia.io/docs/vite/production | Production Guide} — TODO: docs not yet published
- */
-export interface BuildOptions {
-  /**
-   * Build target environment.
-   *
-   * @default 'browser'
-   */
-  target?: "browser" | "node" | "edge";
-
-  /**
-   * Generate source maps.
-   * - true: Generate external source maps
-   * - 'inline': Inline source maps in bundles
-   * - 'hidden': Generate but don't link (for error reporting services)
-   * - false: No source maps
-   *
-   * @default true
-   */
-  sourcemaps?: boolean | "inline" | "hidden";
-
-  /**
-   * Minify compiled templates.
-   * Removes whitespace and comments from template output.
-   *
-   * @default true
-   */
-  minifyTemplates?: boolean;
-
-  /**
-   * Bundle analyzer configuration.
-   * Set to true to enable with defaults.
-   *
-   * @default false
-   */
-  analyze?: boolean | BundleAnalyzerOptions;
-
-  /**
-   * Strip development-only code from bundles.
-   * Removes debug logging, dev checks, etc.
-   *
-   * @default true
-   */
-  stripDevCode?: boolean;
-}
 
 // ============================================================================
 // SSR Options
@@ -404,20 +174,18 @@ export interface SSRManifestOptions {
  * SSR hydration configuration.
  * Controls client-side hydration behavior.
  *
- * @future These options are not yet wired. Hydration is always eager.
- *
- * @see {@link https://aurelia.io/docs/ssr/hydration | Hydration Documentation} — TODO: docs not yet published
+ * @status Currently only 'eager' strategy is implemented.
+ * Aurelia's manifest-based hydration re-executes components on the client
+ * (unlike React's reconciliation), so alternative strategies require
+ * Aurelia-specific design work.
  */
 export interface SSRHydrationOptions {
   /**
    * Hydration strategy.
-   * - 'eager': Hydrate entire page immediately (currently implemented)
-   * - 'lazy': Hydrate components as they enter viewport
-   * - 'idle': Hydrate during browser idle time
-   * - 'interaction': Hydrate on first user interaction
-   *
-   * @future Strategies other than 'eager' require Aurelia-specific design.
-   * Aurelia's manifest-based hydration differs from React's Suspense model.
+   * - 'eager': Hydrate entire page immediately (IMPLEMENTED)
+   * - 'lazy': Hydrate components as they enter viewport (NOT IMPLEMENTED)
+   * - 'idle': Hydrate during browser idle time (NOT IMPLEMENTED)
+   * - 'interaction': Hydrate on first user interaction (NOT IMPLEMENTED)
    *
    * @default 'eager'
    */
@@ -428,7 +196,7 @@ export interface SSRHydrationOptions {
    * Forces hydration after timeout even if strategy hasn't triggered.
    * Set to 0 to disable timeout.
    *
-   * @future Not yet implemented.
+   * @status Not yet implemented.
    * @default 10000
    */
   timeout?: number;
@@ -437,53 +205,19 @@ export interface SSRHydrationOptions {
    * Validate DOM during hydration.
    * Logs warnings if server HTML doesn't match expected structure.
    *
-   * @future Not yet implemented.
+   * @status Not yet implemented.
    * @default true (in dev)
    */
   validate?: boolean;
 }
 
 /**
- * SSR streaming configuration.
- * Controls HTTP streaming behavior for SSR responses.
- *
- * @future Streaming SSR is not yet implemented.
- * Aurelia's synchronous component rendering would need architectural changes.
- *
- * @see {@link https://aurelia.io/docs/ssr/streaming | Streaming Documentation} — TODO: docs not yet published
- */
-export interface SSRStreamingOptions {
-  /**
-   * Enable streaming SSR.
-   * Sends HTML chunks as they're rendered instead of buffering.
-   *
-   * @default false
-   */
-  enabled?: boolean;
-
-  /**
-   * Minimum chunk size before flushing (bytes).
-   *
-   * @default 16384 (16KB)
-   */
-  chunkSize?: number;
-
-  /**
-   * Timeout for first byte (milliseconds).
-   * Falls back to non-streaming if exceeded.
-   *
-   * @default 5000
-   */
-  firstByteTimeout?: number;
-}
-
-/**
  * Server-Side Rendering options.
  *
- * Implemented: `enabled`, `state`, `stripMarkers`, `include`, `exclude`,
+ * IMPLEMENTED: `enabled`, `state`, `stripMarkers`, `include`, `exclude`,
  * `htmlShell`, `baseHref`, `ssrEntry`, `register`.
  *
- * Future: `manifest`, `hydration`, `streaming` sub-options.
+ * PARTIAL: `manifest` (inline only), `hydration` (eager only).
  *
  * @see {@link https://aurelia.io/docs/ssr | SSR Documentation} — TODO: docs not yet published
  */
@@ -598,13 +332,6 @@ export interface SSROptions {
    * @default { strategy: 'eager' }
    */
   hydration?: SSRHydrationOptions;
-
-  /**
-   * Streaming configuration.
-   *
-   * @default { enabled: false }
-   */
-  streaming?: SSRStreamingOptions;
 }
 
 // ============================================================================
@@ -940,45 +667,16 @@ export interface DebugOptions {
 /**
  * Experimental features.
  * These APIs are unstable and may change without notice.
- *
- * @see {@link https://aurelia.io/docs/vite/experimental | Experimental Features} — TODO: docs not yet published
  */
 export interface ExperimentalOptions {
-  /**
-   * Enable bundle optimization analysis.
-   * Analyzes template usage to enable tree-shaking.
-   *
-   * @experimental
-   * @default false
-   */
-  bundleOptimization?: boolean;
-
   /**
    * Enable incremental compilation.
    * Caches compilation results for faster rebuilds.
    *
-   * @experimental
+   * @status Not yet implemented. Requires compilation cache design.
    * @default false
    */
   incrementalCompilation?: boolean;
-
-  /**
-   * Enable partial hydration.
-   * Only hydrates interactive components, leaving static content as-is.
-   *
-   * @experimental
-   * @default false
-   */
-  partialHydration?: boolean;
-
-  /**
-   * Enable React Server Components-style architecture.
-   * Marks components as server-only or client-only.
-   *
-   * @experimental
-   * @default false
-   */
-  serverComponents?: boolean;
 }
 
 // ============================================================================
@@ -1077,6 +775,9 @@ export interface PluginHooks {
 /**
  * Aurelia Vite plugin options.
  *
+ * This plugin supersedes @aurelia/vite-plugin and @aurelia/plugin-conventions.
+ * It provides AOT compilation, SSR, SSG, and convention-based resource discovery.
+ *
  * @example
  * ```typescript
  * // Minimal configuration (auto-detects entry)
@@ -1092,28 +793,17 @@ export interface PluginHooks {
  * aurelia({
  *   entry: './src/my-app.html',
  *   tsconfig: './tsconfig.json',
- *
- *   dev: {
- *     inspector: true,
- *     hmr: { preserveState: true },
- *   },
- *
- *   build: {
- *     sourcemaps: true,
- *     analyze: true,
- *   },
+ *   useDev: true,  // Use Aurelia dev bundles
  *
  *   ssr: {
- *     streaming: { enabled: true },
- *     hydration: { strategy: 'lazy' },
+ *     htmlShell: customShell,
+ *     register: (container, req) => { ... },
  *   },
  *
- *   conventions: {
- *     thirdParty: {
- *       resources: {
- *         elements: {
- *           'date-picker': { bindables: { value: { mode: 'two-way' } } }
- *         }
+ *   thirdParty: {
+ *     resources: {
+ *       elements: {
+ *         'date-picker': { bindables: { value: { mode: 'two-way' } } }
  *       }
  *     }
  *   },
@@ -1150,20 +840,27 @@ export interface AureliaPluginOptions {
   tsconfig?: string;
 
   // ---------------------------------------------------------------------------
-  // Mode-Specific
+  // Development
   // ---------------------------------------------------------------------------
 
   /**
-   * Development mode options.
-   * Only applies during `vite dev`.
+   * Use Aurelia development bundles.
+   * Adds 'development' to Vite's resolve.conditions.
+   *
+   * Parity with @aurelia/vite-plugin `useDev` option.
+   *
+   * @default true in dev mode, false in production
    */
-  dev?: DevOptions;
+  useDev?: boolean;
 
   /**
-   * Production build options.
-   * Only applies during `vite build`.
+   * Hot Module Replacement configuration.
+   * Set to false to disable HMR entirely.
+   *
+   * @status NOT YET IMPLEMENTED. See HMROptions for details.
+   * @default true
    */
-  build?: BuildOptions;
+  hmr?: boolean | HMROptions;
 
   // ---------------------------------------------------------------------------
   // Features
@@ -1332,29 +1029,16 @@ export interface ResolutionContext {
 }
 
 /**
- * Resolved dev options with defaults applied.
+ * Resolved HMR options with defaults applied.
  */
-export interface ResolvedDevOptions {
-  hmr: Required<HMROptions>;
-  inspector: Required<InspectorOptions>;
-  errorOverlay: Required<ErrorOverlayOptions>;
-  clearScreen: boolean;
-}
-
-/**
- * Resolved build options with defaults applied.
- */
-export interface ResolvedBuildOptions {
-  target: "browser" | "node" | "edge";
-  sourcemaps: boolean | "inline" | "hidden";
-  minifyTemplates: boolean;
-  analyze: Required<BundleAnalyzerOptions>;
-  stripDevCode: boolean;
+export interface ResolvedHMROptions {
+  enabled: boolean;
+  preserveState: boolean;
+  log: boolean;
 }
 
 /**
  * Resolved SSR-specific options with defaults applied.
- * This is the NEW type for just SSR configuration within ResolvedAureliaOptions.
  */
 export interface ResolvedSSRConfig {
   enabled: boolean;
@@ -1368,7 +1052,6 @@ export interface ResolvedSSRConfig {
   register?: (container: IContainer, request: SSRRequestContext) => void;
   manifest: Required<SSRManifestOptions>;
   hydration: Required<SSRHydrationOptions>;
-  streaming: Required<SSRStreamingOptions>;
 }
 
 
@@ -1413,11 +1096,11 @@ export interface ResolvedAureliaOptions {
   /** tsconfig path (null if not provided) */
   tsconfig: string | null;
 
-  /** Resolved dev options */
-  dev: ResolvedDevOptions;
+  /** Use development bundles */
+  useDev: boolean;
 
-  /** Resolved build options */
-  build: ResolvedBuildOptions;
+  /** Resolved HMR options */
+  hmr: ResolvedHMROptions;
 
   /** Resolved SSR options */
   ssr: ResolvedSSRConfig;

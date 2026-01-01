@@ -73,16 +73,10 @@ export {
 export {
   // Default option values
   DEFAULT_HMR_OPTIONS,
-  DEFAULT_INSPECTOR_OPTIONS,
-  DEFAULT_ERROR_OVERLAY_OPTIONS,
-  DEFAULT_DEV_OPTIONS,
-  DEFAULT_BUNDLE_ANALYZER_OPTIONS,
-  DEFAULT_BUILD_OPTIONS,
   DEFAULT_STATE_PROVIDER,
   DEFAULT_HTML_SHELL,
   DEFAULT_SSR_MANIFEST_OPTIONS,
   DEFAULT_SSR_HYDRATION_OPTIONS,
-  DEFAULT_SSR_STREAMING_OPTIONS,
   DEFAULT_SSR_OPTIONS,
   DEFAULT_SSG_OPTIONS,
   DEFAULT_TEMPLATE_PAIRING_OPTIONS,
@@ -99,8 +93,6 @@ export {
 
   // Normalization functions
   normalizeOptions,
-  normalizeDevOptions,
-  normalizeBuildOptions,
   normalizeSSROptions,
   normalizeSSGOptions,
   normalizeConventionOptions,
@@ -108,12 +100,8 @@ export {
   normalizeDebugOptions,
   normalizeTraceOptions,
   normalizeHMROptions,
-  normalizeInspectorOptions,
-  normalizeErrorOverlayOptions,
-  normalizeBundleAnalyzerOptions,
   normalizeSSRManifestOptions,
   normalizeSSRHydrationOptions,
-  normalizeSSRStreamingOptions,
   normalizeDebugChannels,
 
   // Config file support
@@ -148,21 +136,8 @@ export type {
 // =============================================================================
 
 export type {
-  DevOptions,
   HMROptions,
-  InspectorOptions,
-  ErrorOverlayOptions,
-  ResolvedDevOptions,
-} from "./types.js";
-
-// =============================================================================
-// Type Exports - Build Options
-// =============================================================================
-
-export type {
-  BuildOptions,
-  BundleAnalyzerOptions,
-  ResolvedBuildOptions,
+  ResolvedHMROptions,
 } from "./types.js";
 
 // =============================================================================
@@ -173,7 +148,6 @@ export type {
   SSROptions,
   SSRManifestOptions,
   SSRHydrationOptions,
-  SSRStreamingOptions,
   ResolvedSSRConfig,
   ResolutionContext,
 } from "./types.js";

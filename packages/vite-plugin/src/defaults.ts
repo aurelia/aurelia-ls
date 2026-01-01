@@ -14,27 +14,20 @@ import type {
   // User-facing types
   AureliaPluginOptions,
   AureliaConfig,
-  DevOptions,
-  BuildOptions,
   SSROptions,
   CompilerOptions,
   DebugOptions,
   ExperimentalOptions,
   PluginHooks,
   HMROptions,
-  InspectorOptions,
-  ErrorOverlayOptions,
-  BundleAnalyzerOptions,
   SSRManifestOptions,
   SSRHydrationOptions,
-  SSRStreamingOptions,
   ThirdPartyOptions,
   TraceOptions,
   DebugChannel,
   // Resolved types
   ResolvedAureliaOptions,
-  ResolvedDevOptions,
-  ResolvedBuildOptions,
+  ResolvedHMROptions,
   ResolvedSSRConfig,
   ResolvedConventionOptions,
   ResolvedDebugOptions,
@@ -61,62 +54,10 @@ import {
 /**
  * Default HMR options.
  */
-export const DEFAULT_HMR_OPTIONS: Required<HMROptions> = {
+export const DEFAULT_HMR_OPTIONS: ResolvedHMROptions = {
   enabled: true,
   preserveState: true,
   log: false,
-};
-
-/**
- * Default inspector options.
- */
-export const DEFAULT_INSPECTOR_OPTIONS: Required<InspectorOptions> = {
-  enabled: true,
-  toggleKeyCombo: "ctrl+shift+i",
-  showBoundaries: true,
-  openInEditor: true,
-  editorUrl: "vscode://file/{file}:{line}:{column}",
-};
-
-/**
- * Default error overlay options.
- */
-export const DEFAULT_ERROR_OVERLAY_OPTIONS: Required<ErrorOverlayOptions> = {
-  enabled: true,
-  elmStyle: true,
-  showSource: true,
-  showStack: false,
-};
-
-/**
- * Default development options.
- */
-export const DEFAULT_DEV_OPTIONS: ResolvedDevOptions = {
-  hmr: DEFAULT_HMR_OPTIONS,
-  inspector: DEFAULT_INSPECTOR_OPTIONS,
-  errorOverlay: DEFAULT_ERROR_OVERLAY_OPTIONS,
-  clearScreen: false,
-};
-
-/**
- * Default bundle analyzer options.
- */
-export const DEFAULT_BUNDLE_ANALYZER_OPTIONS: Required<BundleAnalyzerOptions> = {
-  enabled: false,
-  format: "html",
-  outputFile: "bundle-analysis.html",
-  openReport: false,
-};
-
-/**
- * Default build options.
- */
-export const DEFAULT_BUILD_OPTIONS: ResolvedBuildOptions = {
-  target: "browser",
-  sourcemaps: true,
-  minifyTemplates: true,
-  analyze: DEFAULT_BUNDLE_ANALYZER_OPTIONS,
-  stripDevCode: true,
 };
 
 /**
@@ -158,15 +99,6 @@ export const DEFAULT_SSR_HYDRATION_OPTIONS: Required<SSRHydrationOptions> = {
 };
 
 /**
- * Default SSR streaming options.
- */
-export const DEFAULT_SSR_STREAMING_OPTIONS: Required<SSRStreamingOptions> = {
-  enabled: false,
-  chunkSize: 16384,
-  firstByteTimeout: 5000,
-};
-
-/**
  * Default SSR options.
  */
 export const DEFAULT_SSR_OPTIONS: ResolvedSSRConfig = {
@@ -181,7 +113,6 @@ export const DEFAULT_SSR_OPTIONS: ResolvedSSRConfig = {
   register: undefined,
   manifest: DEFAULT_SSR_MANIFEST_OPTIONS,
   hydration: DEFAULT_SSR_HYDRATION_OPTIONS,
-  streaming: DEFAULT_SSR_STREAMING_OPTIONS,
 };
 
 /**
@@ -299,10 +230,7 @@ export const DEFAULT_DEBUG_OPTIONS: ResolvedDebugOptions = {
  * Default experimental options (all disabled).
  */
 export const DEFAULT_EXPERIMENTAL_OPTIONS: ExperimentalOptions = {
-  bundleOptimization: false,
   incrementalCompilation: false,
-  partialHydration: false,
-  serverComponents: false,
 };
 
 /**
@@ -334,97 +262,6 @@ export function normalizeHMROptions(
   };
 }
 
-/**
- * Normalize inspector options.
- */
-export function normalizeInspectorOptions(
-  options: boolean | InspectorOptions | undefined,
-): Required<InspectorOptions> {
-  if (options === undefined || options === true) {
-    return { ...DEFAULT_INSPECTOR_OPTIONS };
-  }
-  if (options === false) {
-    return { ...DEFAULT_INSPECTOR_OPTIONS, enabled: false };
-  }
-  return {
-    enabled: options.enabled ?? DEFAULT_INSPECTOR_OPTIONS.enabled,
-    toggleKeyCombo: options.toggleKeyCombo ?? DEFAULT_INSPECTOR_OPTIONS.toggleKeyCombo,
-    showBoundaries: options.showBoundaries ?? DEFAULT_INSPECTOR_OPTIONS.showBoundaries,
-    openInEditor: options.openInEditor ?? DEFAULT_INSPECTOR_OPTIONS.openInEditor,
-    editorUrl: options.editorUrl ?? DEFAULT_INSPECTOR_OPTIONS.editorUrl,
-  };
-}
-
-/**
- * Normalize error overlay options.
- */
-export function normalizeErrorOverlayOptions(
-  options: boolean | ErrorOverlayOptions | undefined,
-): Required<ErrorOverlayOptions> {
-  if (options === undefined || options === true) {
-    return { ...DEFAULT_ERROR_OVERLAY_OPTIONS };
-  }
-  if (options === false) {
-    return { ...DEFAULT_ERROR_OVERLAY_OPTIONS, enabled: false };
-  }
-  return {
-    enabled: options.enabled ?? DEFAULT_ERROR_OVERLAY_OPTIONS.enabled,
-    elmStyle: options.elmStyle ?? DEFAULT_ERROR_OVERLAY_OPTIONS.elmStyle,
-    showSource: options.showSource ?? DEFAULT_ERROR_OVERLAY_OPTIONS.showSource,
-    showStack: options.showStack ?? DEFAULT_ERROR_OVERLAY_OPTIONS.showStack,
-  };
-}
-
-/**
- * Normalize dev options.
- */
-export function normalizeDevOptions(options: DevOptions | undefined): ResolvedDevOptions {
-  if (!options) {
-    return { ...DEFAULT_DEV_OPTIONS };
-  }
-  return {
-    hmr: normalizeHMROptions(options.hmr),
-    inspector: normalizeInspectorOptions(options.inspector),
-    errorOverlay: normalizeErrorOverlayOptions(options.errorOverlay),
-    clearScreen: options.clearScreen ?? DEFAULT_DEV_OPTIONS.clearScreen,
-  };
-}
-
-/**
- * Normalize bundle analyzer options.
- */
-export function normalizeBundleAnalyzerOptions(
-  options: boolean | BundleAnalyzerOptions | undefined,
-): Required<BundleAnalyzerOptions> {
-  if (options === undefined || options === false) {
-    return { ...DEFAULT_BUNDLE_ANALYZER_OPTIONS };
-  }
-  if (options === true) {
-    return { ...DEFAULT_BUNDLE_ANALYZER_OPTIONS, enabled: true };
-  }
-  return {
-    enabled: options.enabled ?? true, // If object provided, assume enabled
-    format: options.format ?? DEFAULT_BUNDLE_ANALYZER_OPTIONS.format,
-    outputFile: options.outputFile ?? DEFAULT_BUNDLE_ANALYZER_OPTIONS.outputFile,
-    openReport: options.openReport ?? DEFAULT_BUNDLE_ANALYZER_OPTIONS.openReport,
-  };
-}
-
-/**
- * Normalize build options.
- */
-export function normalizeBuildOptions(options: BuildOptions | undefined): ResolvedBuildOptions {
-  if (!options) {
-    return { ...DEFAULT_BUILD_OPTIONS };
-  }
-  return {
-    target: options.target ?? DEFAULT_BUILD_OPTIONS.target,
-    sourcemaps: options.sourcemaps ?? DEFAULT_BUILD_OPTIONS.sourcemaps,
-    minifyTemplates: options.minifyTemplates ?? DEFAULT_BUILD_OPTIONS.minifyTemplates,
-    analyze: normalizeBundleAnalyzerOptions(options.analyze),
-    stripDevCode: options.stripDevCode ?? DEFAULT_BUILD_OPTIONS.stripDevCode,
-  };
-}
 
 /**
  * Normalize SSR manifest options.
@@ -451,19 +288,6 @@ export function normalizeSSRHydrationOptions(
     strategy: options?.strategy ?? DEFAULT_SSR_HYDRATION_OPTIONS.strategy,
     timeout: options?.timeout ?? DEFAULT_SSR_HYDRATION_OPTIONS.timeout,
     validate: options?.validate ?? isDev, // Default to true in dev mode
-  };
-}
-
-/**
- * Normalize SSR streaming options.
- */
-export function normalizeSSRStreamingOptions(
-  options: SSRStreamingOptions | undefined,
-): Required<SSRStreamingOptions> {
-  return {
-    enabled: options?.enabled ?? DEFAULT_SSR_STREAMING_OPTIONS.enabled,
-    chunkSize: options?.chunkSize ?? DEFAULT_SSR_STREAMING_OPTIONS.chunkSize,
-    firstByteTimeout: options?.firstByteTimeout ?? DEFAULT_SSR_STREAMING_OPTIONS.firstByteTimeout,
   };
 }
 
@@ -497,7 +321,6 @@ export function normalizeSSROptions(
     register: options.register,
     manifest: normalizeSSRManifestOptions(options.manifest, isDev),
     hydration: normalizeSSRHydrationOptions(options.hydration, isDev),
-    streaming: normalizeSSRStreamingOptions(options.streaming),
   };
 }
 
@@ -712,8 +535,8 @@ export function normalizeOptions(
   return {
     entry: opts.entry ?? "./src/my-app.html",
     tsconfig: opts.tsconfig ?? null,
-    dev: normalizeDevOptions(opts.dev),
-    build: normalizeBuildOptions(opts.build),
+    useDev: opts.useDev ?? isDev, // Default: true in dev, false in production
+    hmr: normalizeHMROptions(opts.hmr),
     ssr: normalizeSSROptions(opts.ssr, isDev),
     ssg: normalizeSSGOptions(opts.ssg),
     conventions: normalizeConventionOptions(opts.conventions, opts.thirdParty),
@@ -822,8 +645,6 @@ export function mergeConfigs(
     ...fileConfig,
     ...inlineConfig,
     // Merge nested objects
-    dev: { ...fileConfig.dev, ...inlineConfig.dev },
-    build: { ...fileConfig.build, ...inlineConfig.build },
     ssr:
       typeof inlineConfig.ssr === "boolean" || typeof fileConfig.ssr === "boolean"
         ? inlineConfig.ssr ?? fileConfig.ssr
