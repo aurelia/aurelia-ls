@@ -1,7 +1,11 @@
 /**
- * Vite SSR Plugin Types
+ * Aurelia Vite Plugin - Type Definitions
  *
- * Type definitions for the Aurelia SSR Vite plugin.
+ * This file defines the public API surface for configuring the Aurelia Vite plugin.
+ * Types are organized by concern and designed for progressive disclosure:
+ * simple boolean flags expand to detailed object configurations.
+ *
+ * @module @aurelia-ls/vite-plugin
  */
 
 import type { IncomingMessage } from "node:http";
@@ -9,7 +13,44 @@ import type { IContainer } from "@aurelia/kernel";
 import type { ResourceGraph, ResourceScopeId, Semantics, CompileTrace } from "@aurelia-ls/compiler";
 import type { ResolutionResult, TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
-import type { SSGOptions, ResolvedSSGOptions } from "@aurelia-ls/ssg";
+
+// ============================================================================
+// Re-exports from Lower Packages
+// ============================================================================
+
+/**
+ * Re-export convention types from resolution package.
+ * Users can import these directly from vite-plugin for convenience.
+ */
+export type {
+  ConventionConfig,
+  SuffixConfig,
+  FilePatternConfig,
+} from "@aurelia-ls/resolution";
+
+/**
+ * Re-export SSG types from ssg package.
+ */
+export type {
+  SSGOptions,
+  ResolvedSSGOptions,
+  SSGResult,
+  SSGError,
+  ExpandedRoute,
+} from "@aurelia-ls/ssg";
+
+/**
+ * Re-export directory convention types from resolution package.
+ */
+export type {
+  DirectoryConvention,
+  DirectoryScope,
+  DirectoryMatch,
+} from "@aurelia-ls/resolution";
+
+// ============================================================================
+// Core Types
+// ============================================================================
 
 /**
  * State provider function for SSR.
@@ -26,37 +67,386 @@ import type { SSGOptions, ResolvedSSGOptions } from "@aurelia-ls/ssg";
  *   return { user, path: url.pathname };
  * }
  * ```
+ *
+ * @see {@link https://aurelia.io/docs/ssr/state | State Management} — TODO: docs not yet published
  */
 export type StateProvider = (
   url: URL,
   req: IncomingMessage,
 ) => Record<string, unknown> | Promise<Record<string, unknown>>;
 
+// ============================================================================
+// Development Mode Options
+// ============================================================================
+
 /**
- * Configuration options for the Aurelia SSR Vite plugin.
+ * Hot Module Replacement configuration.
+ *
+ * @see {@link https://aurelia.io/docs/vite/hmr | HMR Documentation} — TODO: docs not yet published
  */
-export interface AureliaSSRPluginOptions {
+export interface HMROptions {
   /**
-   * Entry template path for the Aurelia application.
-   * Should point to the main component's HTML template.
+   * Enable HMR for Aurelia components.
    *
-   * @example './src/my-app.html'
-   * @default './src/my-app.html'
+   * @default true
    */
-  entry?: string;
+  enabled?: boolean;
 
   /**
-   * Path to tsconfig.json for TypeScript project.
-   * Required for resource resolution (discovering custom elements, etc.).
+   * Preserve component state during HMR updates.
+   * When true, component properties are preserved across hot reloads.
    *
-   * When provided, the plugin will:
-   * - Parse the TypeScript project to discover Aurelia resources
-   * - Build a ResourceGraph for template compilation
-   * - Enable user-defined components in SSR output
-   *
-   * @example './tsconfig.json'
+   * @default true
    */
-  tsconfig?: string;
+  preserveState?: boolean;
+
+  /**
+   * Log HMR events to console.
+   *
+   * @default false
+   */
+  log?: boolean;
+}
+
+/**
+ * Component inspector configuration.
+ * Enables click-to-source functionality in development.
+ *
+ * Inspired by Svelte Inspector and Vue Devtools.
+ *
+ * @see {@link https://aurelia.io/docs/vite/inspector | Inspector Documentation} — TODO: docs not yet published
+ */
+export interface InspectorOptions {
+  /**
+   * Enable the component inspector.
+   *
+   * @default true (in dev mode)
+   */
+  enabled?: boolean;
+
+  /**
+   * Keyboard shortcut to toggle inspector.
+   * Uses Mousetrap-style key notation.
+   *
+   * @default 'ctrl+shift+i'
+   *
+   * @example 'meta+shift+c' // Cmd+Shift+C on macOS
+   */
+  toggleKeyCombo?: string;
+
+  /**
+   * Show component boundaries on hover.
+   *
+   * @default true
+   */
+  showBoundaries?: boolean;
+
+  /**
+   * Open file in editor when component is clicked.
+   * Set to false to only show component info.
+   *
+   * @default true
+   */
+  openInEditor?: boolean;
+
+  /**
+   * Editor URL pattern for opening files.
+   * Supports placeholders: {file}, {line}, {column}
+   *
+   * @default 'vscode://file/{file}:{line}:{column}'
+   *
+   * @example
+   * ```typescript
+   * // WebStorm
+   * 'webstorm://open?file={file}&line={line}&column={column}'
+   *
+   * // Cursor
+   * 'cursor://file/{file}:{line}:{column}'
+   * ```
+   */
+  editorUrl?: string;
+}
+
+/**
+ * Error overlay configuration.
+ * Controls how compilation errors are displayed in the browser.
+ *
+ * @see {@link https://aurelia.io/docs/vite/errors | Error Handling} — TODO: docs not yet published
+ */
+export interface ErrorOverlayOptions {
+  /**
+   * Enable the error overlay.
+   *
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Show Elm-style error messages with context and suggestions.
+   *
+   * @default true
+   */
+  elmStyle?: boolean;
+
+  /**
+   * Include source code snippets in error display.
+   *
+   * @default true
+   */
+  showSource?: boolean;
+
+  /**
+   * Include stack traces in error display.
+   *
+   * @default false
+   */
+  showStack?: boolean;
+}
+
+/**
+ * Development mode options.
+ * These settings only apply during `vite dev`.
+ *
+ * @see {@link https://aurelia.io/docs/vite/development | Development Guide} — TODO: docs not yet published
+ */
+export interface DevOptions {
+  /**
+   * Hot Module Replacement configuration.
+   * Set to false to disable HMR entirely.
+   *
+   * @default true
+   */
+  hmr?: boolean | HMROptions;
+
+  /**
+   * Component inspector configuration.
+   * Set to false to disable the inspector.
+   *
+   * @default true
+   */
+  inspector?: boolean | InspectorOptions;
+
+  /**
+   * Error overlay configuration.
+   * Set to false to disable the overlay (errors go to console only).
+   *
+   * @default true
+   */
+  errorOverlay?: boolean | ErrorOverlayOptions;
+
+  /**
+   * Clear console on HMR update.
+   *
+   * @default false
+   */
+  clearScreen?: boolean;
+}
+
+// ============================================================================
+// Build Mode Options
+// ============================================================================
+
+/**
+ * Bundle analyzer configuration.
+ * Generates reports about bundle composition.
+ *
+ * @see {@link https://aurelia.io/docs/vite/bundle-analysis | Bundle Analysis} — TODO: docs not yet published
+ */
+export interface BundleAnalyzerOptions {
+  /**
+   * Enable bundle analysis.
+   *
+   * @default false
+   */
+  enabled?: boolean;
+
+  /**
+   * Output format for the analysis report.
+   *
+   * @default 'html'
+   */
+  format?: "html" | "json" | "stats";
+
+  /**
+   * Output file path (relative to build output).
+   *
+   * @default 'bundle-analysis.html'
+   */
+  outputFile?: string;
+
+  /**
+   * Open the report in browser after build.
+   *
+   * @default false
+   */
+  openReport?: boolean;
+}
+
+/**
+ * Production build options.
+ * These settings only apply during `vite build`.
+ *
+ * @see {@link https://aurelia.io/docs/vite/production | Production Guide} — TODO: docs not yet published
+ */
+export interface BuildOptions {
+  /**
+   * Build target environment.
+   *
+   * @default 'browser'
+   */
+  target?: "browser" | "node" | "edge";
+
+  /**
+   * Generate source maps.
+   * - true: Generate external source maps
+   * - 'inline': Inline source maps in bundles
+   * - 'hidden': Generate but don't link (for error reporting services)
+   * - false: No source maps
+   *
+   * @default true
+   */
+  sourcemaps?: boolean | "inline" | "hidden";
+
+  /**
+   * Minify compiled templates.
+   * Removes whitespace and comments from template output.
+   *
+   * @default true
+   */
+  minifyTemplates?: boolean;
+
+  /**
+   * Bundle analyzer configuration.
+   * Set to true to enable with defaults.
+   *
+   * @default false
+   */
+  analyze?: boolean | BundleAnalyzerOptions;
+
+  /**
+   * Strip development-only code from bundles.
+   * Removes debug logging, dev checks, etc.
+   *
+   * @default true
+   */
+  stripDevCode?: boolean;
+}
+
+// ============================================================================
+// SSR Options
+// ============================================================================
+
+/**
+ * SSR manifest configuration.
+ * Controls how the hydration manifest is generated and embedded.
+ *
+ * @see {@link https://aurelia.io/docs/ssr/manifest | Manifest Documentation} — TODO: docs not yet published
+ */
+export interface SSRManifestOptions {
+  /**
+   * Embed manifest inline in HTML.
+   * When false, manifest is loaded as separate file.
+   *
+   * @default true
+   */
+  inline?: boolean;
+
+  /**
+   * Compress manifest data.
+   * Uses a compact binary format instead of JSON.
+   *
+   * @default false
+   */
+  compress?: boolean;
+
+  /**
+   * Include debug information in manifest.
+   * Adds component names and source locations for debugging.
+   *
+   * @default false (true in dev)
+   */
+  debug?: boolean;
+}
+
+/**
+ * SSR hydration configuration.
+ * Controls client-side hydration behavior.
+ *
+ * @see {@link https://aurelia.io/docs/ssr/hydration | Hydration Documentation} — TODO: docs not yet published
+ */
+export interface SSRHydrationOptions {
+  /**
+   * Hydration strategy.
+   * - 'eager': Hydrate entire page immediately
+   * - 'lazy': Hydrate components as they enter viewport
+   * - 'idle': Hydrate during browser idle time
+   * - 'interaction': Hydrate on first user interaction
+   *
+   * @default 'eager'
+   */
+  strategy?: "eager" | "lazy" | "idle" | "interaction";
+
+  /**
+   * Timeout for hydration (milliseconds).
+   * Forces hydration after timeout even if strategy hasn't triggered.
+   * Set to 0 to disable timeout.
+   *
+   * @default 10000
+   */
+  timeout?: number;
+
+  /**
+   * Validate DOM during hydration.
+   * Logs warnings if server HTML doesn't match expected structure.
+   *
+   * @default true (in dev)
+   */
+  validate?: boolean;
+}
+
+/**
+ * SSR streaming configuration.
+ * Controls HTTP streaming behavior for SSR responses.
+ *
+ * @see {@link https://aurelia.io/docs/ssr/streaming | Streaming Documentation} — TODO: docs not yet published
+ */
+export interface SSRStreamingOptions {
+  /**
+   * Enable streaming SSR.
+   * Sends HTML chunks as they're rendered instead of buffering.
+   *
+   * @default false
+   */
+  enabled?: boolean;
+
+  /**
+   * Minimum chunk size before flushing (bytes).
+   *
+   * @default 16384 (16KB)
+   */
+  chunkSize?: number;
+
+  /**
+   * Timeout for first byte (milliseconds).
+   * Falls back to non-streaming if exceeded.
+   *
+   * @default 5000
+   */
+  firstByteTimeout?: number;
+}
+
+/**
+ * Server-Side Rendering options.
+ *
+ * @see {@link https://aurelia.io/docs/ssr | SSR Documentation} — TODO: docs not yet published
+ */
+export interface SSROptions {
+  /**
+   * Enable SSR.
+   *
+   * @default true (when SSROptions object is provided)
+   */
+  enabled?: boolean;
 
   /**
    * State provider function.
@@ -69,6 +459,7 @@ export interface AureliaSSRPluginOptions {
   /**
    * Strip `<!--au-->` hydration markers from output.
    * When true, produces clean HTML without Aurelia-specific comments.
+   * Note: Disabling markers also disables client hydration.
    *
    * @default false
    */
@@ -78,8 +469,9 @@ export interface AureliaSSRPluginOptions {
    * Routes to include for SSR rendering.
    * Glob patterns that match request paths.
    *
-   * @example ['/', '/app/**', '/dashboard/**']
    * @default ['**'] (all routes)
+   *
+   * @example ['/', '/app/**', '/dashboard/**']
    */
   include?: string[];
 
@@ -87,8 +479,9 @@ export interface AureliaSSRPluginOptions {
    * Routes to exclude from SSR rendering.
    * Glob patterns that match request paths to skip.
    *
-   * @example ['/api/**', '/static/**']
    * @default ['/api/**', '/@vite/**', '/@fs/**', '/__vite_ping']
+   *
+   * @example ['/api/**', '/static/**']
    */
   exclude?: string[];
 
@@ -116,76 +509,422 @@ export interface AureliaSSRPluginOptions {
   baseHref?: string;
 
   /**
-   * Static Site Generation options.
-   * When enabled, generates static HTML pages for all discovered routes.
-   */
-  ssg?: SSGOptions;
-
-  /**
    * SSR entry point for production builds.
-   * Path to the file that exports an SSR handler (created with createSSRHandler).
-   *
-   * When specified, the plugin will:
-   * 1. Build the SSR entry point for Node.js
-   * 2. Use it for SSG generation (if enabled)
+   * Path to the file that exports an SSR handler.
    *
    * @example './src/entry-server.ts'
+   *
+   * @see {@link https://aurelia.io/docs/ssr/entry-point | Entry Point Guide} — TODO: docs not yet published
    */
   ssrEntry?: string;
 
   /**
    * Hook to register DI services before rendering.
    *
-   * **Note:** This is a naive first-pass API. In a real app, the client's `main.ts`
-   * registers things on `Aurelia.register()`. Ideally, SSR would mirror that
-   * automatically, but the boundaries aren't clean. For now, use this to manually
-   * register whatever your client app registers that isn't already handled.
-   * This API will likely evolve.
-   *
    * @param container - The DI container to register services into
-   * @param request - Request context (URL, baseHref) for URL-aware services like router
+   * @param request - Request context (URL, baseHref)
    *
    * @example
    * ```typescript
    * register: (container, req) => {
-   *   const locationManager = new ServerLocationManager(req.url, req.baseHref);
-   *   container.register(Registration.instance(ILocationManager, locationManager));
+   *   container.register(
+   *     Registration.instance(ILocationManager, new ServerLocationManager(req.url))
+   *   );
    * }
    * ```
+   *
+   * @see {@link https://aurelia.io/docs/ssr/di | DI in SSR} — TODO: docs not yet published
    */
   register?: (container: IContainer, request: SSRRequestContext) => void;
 
   /**
-   * Enable compilation tracing for performance analysis and debugging.
+   * Manifest configuration.
    *
-   * When enabled, traces template compilation, SSR rendering, and resolution.
-   * Useful for:
-   * - Performance profiling during development
-   * - Build analysis in CI/CD pipelines
-   * - Debugging slow compilations
+   * @default { inline: true }
+   */
+  manifest?: SSRManifestOptions;
+
+  /**
+   * Hydration configuration.
    *
-   * Can also be enabled via AURELIA_TRACE environment variable.
+   * @default { strategy: 'eager' }
+   */
+  hydration?: SSRHydrationOptions;
+
+  /**
+   * Streaming configuration.
+   *
+   * @default { enabled: false }
+   */
+  streaming?: SSRStreamingOptions;
+}
+
+// ============================================================================
+// Convention Options
+// ============================================================================
+
+/**
+ * Explicit resource declaration for third-party packages.
+ * Use when packages don't expose Aurelia metadata.
+ *
+ * @see {@link https://aurelia.io/docs/vite/third-party | Third-Party Resources} — TODO: docs not yet published
+ */
+export interface ExplicitElementConfig {
+  /**
+   * Bindable properties with optional binding modes.
    *
    * @example
    * ```typescript
-   * // Enable console tracing (default)
-   * trace: true
-   *
-   * // Enable with custom options
-   * trace: {
-   *   output: 'console',
-   *   minDuration: 1, // Only log spans > 1ms
-   * }
-   *
-   * // Write JSON trace to file
-   * trace: {
-   *   output: 'json',
-   *   file: 'aurelia-trace.json',
+   * bindables: {
+   *   value: { mode: 'two-way' },
+   *   items: {},  // default mode
    * }
    * ```
    */
-  trace?: boolean | TraceOptions;
+  bindables?: Record<string, { mode?: "one-time" | "to-view" | "from-view" | "two-way" }>;
+
+  /**
+   * Element renders without a wrapper element.
+   *
+   * @default false
+   */
+  containerless?: boolean;
+
+  /**
+   * Element uses shadow DOM.
+   *
+   * @default false
+   */
+  shadowOptions?: { mode: "open" | "closed" } | null;
 }
+
+/**
+ * Explicit custom attribute declaration.
+ */
+export interface ExplicitAttributeConfig {
+  /**
+   * Bindable properties.
+   */
+  bindables?: Record<string, { mode?: "one-time" | "to-view" | "from-view" | "two-way" }>;
+
+  /**
+   * Attribute is a template controller (like if, repeat).
+   *
+   * @default false
+   */
+  isTemplateController?: boolean;
+
+  /**
+   * Disable multi-binding syntax for this attribute.
+   * When true, `attr="foo:bar"` is not parsed as `foo` binding with value `bar`.
+   *
+   * @default false
+   */
+  noMultiBindings?: boolean;
+}
+
+/**
+ * Explicit resource declarations.
+ * Manually declare resources from packages that don't expose Aurelia metadata.
+ */
+export interface ExplicitResourceConfig {
+  /**
+   * Custom elements by tag name.
+   *
+   * @example
+   * ```typescript
+   * elements: {
+   *   'date-picker': {
+   *     bindables: { value: { mode: 'two-way' }, format: {} }
+   *   }
+   * }
+   * ```
+   */
+  elements?: Record<string, ExplicitElementConfig>;
+
+  /**
+   * Custom attributes by name.
+   *
+   * @example
+   * ```typescript
+   * attributes: {
+   *   'tooltip': {
+   *     bindables: { content: {}, position: {} }
+   *   }
+   * }
+   * ```
+   */
+  attributes?: Record<string, ExplicitAttributeConfig>;
+
+  /**
+   * Value converters by name.
+   *
+   * @example
+   * ```typescript
+   * valueConverters: ['currency', 'date', 'number']
+   * ```
+   */
+  valueConverters?: string[];
+
+  /**
+   * Binding behaviors by name.
+   *
+   * @example
+   * ```typescript
+   * bindingBehaviors: ['throttle', 'debounce']
+   * ```
+   */
+  bindingBehaviors?: string[];
+}
+
+/**
+ * Third-party resource configuration.
+ *
+ * @see {@link https://aurelia.io/docs/vite/third-party | Third-Party Resources} — TODO: docs not yet published
+ */
+export interface ThirdPartyOptions {
+  /**
+   * Auto-scan node_modules for Aurelia resources.
+   * Looks for packages with `aurelia` in their package.json.
+   *
+   * @default false
+   */
+  scan?: boolean;
+
+  /**
+   * Specific packages to scan for resources.
+   *
+   * @example ['@aurelia-ui/components', 'aurelia-table']
+   */
+  packages?: string[];
+
+  /**
+   * Explicit resource declarations.
+   * Use for packages that don't expose metadata.
+   */
+  resources?: ExplicitResourceConfig;
+}
+
+/**
+ * Directory convention configuration.
+ * Controls how directory structure affects resource scoping.
+ *
+ * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
+ */
+export interface DirectoryConventionOptions {
+  /**
+   * Custom directory conventions.
+   * Merged with (or replaces) default conventions.
+   *
+   * @example
+   * ```typescript
+   * rules: [
+   *   { pattern: 'src/shared/**', scope: 'global', priority: 10 },
+   *   { pattern: 'src/features/**', scope: 'local', priority: 5 },
+   * ]
+   * ```
+   */
+  rules?: Array<{
+    pattern: string;
+    scope: "global" | "local" | "router";
+    priority?: number;
+    description?: string;
+  }>;
+
+  /**
+   * Replace default conventions instead of merging.
+   *
+   * @default false
+   */
+  replaceDefaults?: boolean;
+}
+
+/**
+ * Template pairing configuration.
+ * Controls how templates are associated with components.
+ *
+ * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
+ */
+export interface TemplatePairingOptions {
+  /**
+   * File extensions to recognize as templates.
+   *
+   * @default ['.html']
+   */
+  extensions?: string[];
+
+  /**
+   * Prefer sibling file over import when both exist.
+   * When false, explicit `import template from './foo.html'` wins.
+   *
+   * @default false
+   */
+  preferSibling?: boolean;
+}
+
+/**
+ * Stylesheet pairing configuration.
+ */
+export interface StylesheetPairingOptions {
+  /**
+   * File extensions to recognize as component stylesheets.
+   *
+   * @default ['.css', '.scss']
+   */
+  extensions?: string[];
+
+  /**
+   * Inject styles into component's shadow DOM or document.
+   *
+   * @default 'shadow'
+   */
+  injection?: "shadow" | "document" | "none";
+}
+
+/**
+ * Naming convention configuration.
+ * Controls how class names map to resource types.
+ *
+ * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
+ */
+export interface NamingConventionOptions {
+  /**
+   * Suffixes that identify custom elements.
+   *
+   * @default ['CustomElement']
+   *
+   * @example ['CustomElement', 'Component']
+   */
+  elementSuffixes?: string[];
+
+  /**
+   * Suffixes that identify custom attributes.
+   *
+   * @default ['CustomAttribute']
+   */
+  attributeSuffixes?: string[];
+
+  /**
+   * Suffixes that identify value converters.
+   *
+   * @default ['ValueConverter']
+   */
+  valueConverterSuffixes?: string[];
+
+  /**
+   * Suffixes that identify binding behaviors.
+   *
+   * @default ['BindingBehavior']
+   */
+  bindingBehaviorSuffixes?: string[];
+}
+
+/**
+ * Convention configuration.
+ * Controls how Aurelia discovers and classifies resources.
+ *
+ * @see {@link https://aurelia.io/docs/vite/conventions | Convention Documentation} — TODO: docs not yet published
+ */
+export interface ConventionOptions {
+  /**
+   * Enable convention-based discovery.
+   * When false, only explicitly decorated resources are recognized.
+   *
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Naming conventions (class suffixes).
+   */
+  naming?: NamingConventionOptions;
+
+  /**
+   * Directory conventions (scoping by location).
+   */
+  directories?: DirectoryConventionOptions;
+
+  /**
+   * Template pairing conventions.
+   */
+  templatePairing?: TemplatePairingOptions;
+
+  /**
+   * Stylesheet pairing conventions.
+   */
+  stylesheetPairing?: StylesheetPairingOptions;
+
+  /**
+   * Third-party resource configuration.
+   */
+  thirdParty?: ThirdPartyOptions;
+}
+
+// ============================================================================
+// Compiler Options
+// ============================================================================
+
+/**
+ * Template compiler configuration.
+ *
+ * @see {@link https://aurelia.io/docs/vite/compiler | Compiler Configuration} — TODO: docs not yet published
+ */
+export interface CompilerOptions {
+  /**
+   * Enable strict mode.
+   * Reports additional warnings as errors.
+   *
+   * @default false
+   */
+  strict?: boolean;
+
+  /**
+   * Template file extensions to process.
+   *
+   * @default ['.html']
+   */
+  templateExtensions?: string[];
+
+  /**
+   * Warn on deprecated syntax or patterns.
+   *
+   * @default true
+   */
+  deprecationWarnings?: boolean;
+
+  /**
+   * Custom attribute aliases.
+   * Map alternative names to canonical attribute names.
+   *
+   * @example
+   * ```typescript
+   * attributeAliases: {
+   *   'ng-if': 'if',  // Support Angular-style syntax
+   *   'v-show': 'show',
+   * }
+   * ```
+   */
+  attributeAliases?: Record<string, string>;
+}
+
+// ============================================================================
+// Debug Options
+// ============================================================================
+
+/**
+ * Debug channel names.
+ * Enable specific channels to see detailed logging.
+ */
+export type DebugChannel =
+  | "lower"      // 10-lower: element/attr classification
+  | "resolve"    // 20-resolve: binding resolution
+  | "bind"       // 30-bind: scope frame creation
+  | "typecheck"  // 40-typecheck: type inference
+  | "aot"        // AOT synthesis
+  | "overlay"    // LSP overlay synthesis
+  | "ssr"        // SSR rendering
+  | "transform"  // Transform edits
+  | "resolution"; // Resource discovery
 
 /**
  * Trace output destination.
@@ -193,50 +932,457 @@ export interface AureliaSSRPluginOptions {
 export type TraceOutput = "console" | "json" | "silent";
 
 /**
- * Options for compilation tracing.
+ * Performance tracing configuration.
+ *
+ * @see {@link https://aurelia.io/docs/vite/debugging | Debugging Guide} — TODO: docs not yet published
  */
 export interface TraceOptions {
   /**
+   * Enable tracing.
+   *
+   * @default false
+   */
+  enabled?: boolean;
+
+  /**
    * Where to output trace data.
-   * - 'console': Log to terminal with colors (default)
+   * - 'console': Log to terminal with colors
    * - 'json': Write to JSON file
-   * - 'silent': Collect but don't output (for programmatic access)
+   * - 'silent': Collect but don't output
    *
    * @default 'console'
    */
   output?: TraceOutput;
 
   /**
-   * Minimum span duration (in milliseconds) to include in output.
-   * Shorter spans are filtered out to reduce noise.
+   * Minimum span duration (ms) to include in output.
    *
    * @default 0 (include all)
    */
   minDuration?: number;
 
   /**
-   * File path for JSON output (when output='json').
-   * Relative to project root.
+   * File path for JSON output.
    *
    * @default 'aurelia-trace.json'
    */
   file?: string;
 
   /**
-   * Whether to include events in output.
-   * Events are point-in-time markers within spans.
+   * Include events in output.
    *
    * @default true
    */
   includeEvents?: boolean;
 
   /**
-   * Log a summary after each request (dev mode) or build (prod mode).
+   * Log summary after each request/build.
    *
    * @default true
    */
   summary?: boolean;
 }
+
+/**
+ * Debug and diagnostics configuration.
+ *
+ * @see {@link https://aurelia.io/docs/vite/debugging | Debugging Guide} — TODO: docs not yet published
+ */
+export interface DebugOptions {
+  /**
+   * Enable debug channels.
+   * Pass true to enable all, or an array of specific channels.
+   *
+   * @default false
+   *
+   * @example
+   * ```typescript
+   * // Enable specific channels
+   * channels: ['lower', 'resolve', 'bind']
+   *
+   * // Enable all channels
+   * channels: true
+   * ```
+   */
+  channels?: boolean | DebugChannel[];
+
+  /**
+   * Performance tracing configuration.
+   *
+   * @default false
+   */
+  trace?: boolean | TraceOptions;
+
+  /**
+   * Log compilation timing for each file.
+   *
+   * @default false
+   */
+  timing?: boolean;
+
+  /**
+   * Write intermediate compilation artifacts to disk.
+   * Useful for debugging compilation issues.
+   *
+   * @default false
+   */
+  dumpArtifacts?: boolean | string; // true = '.aurelia-debug/', string = custom path
+}
+
+// ============================================================================
+// Experimental Options
+// ============================================================================
+
+/**
+ * Experimental features.
+ * These APIs are unstable and may change without notice.
+ *
+ * @see {@link https://aurelia.io/docs/vite/experimental | Experimental Features} — TODO: docs not yet published
+ */
+export interface ExperimentalOptions {
+  /**
+   * Enable bundle optimization analysis.
+   * Analyzes template usage to enable tree-shaking.
+   *
+   * @experimental
+   * @default false
+   */
+  bundleOptimization?: boolean;
+
+  /**
+   * Enable incremental compilation.
+   * Caches compilation results for faster rebuilds.
+   *
+   * @experimental
+   * @default false
+   */
+  incrementalCompilation?: boolean;
+
+  /**
+   * Enable partial hydration.
+   * Only hydrates interactive components, leaving static content as-is.
+   *
+   * @experimental
+   * @default false
+   */
+  partialHydration?: boolean;
+
+  /**
+   * Enable React Server Components-style architecture.
+   * Marks components as server-only or client-only.
+   *
+   * @experimental
+   * @default false
+   */
+  serverComponents?: boolean;
+}
+
+// ============================================================================
+// Plugin Hooks
+// ============================================================================
+
+/**
+ * Context passed to plugin hooks.
+ */
+export interface HookContext {
+  /** Resolved plugin options */
+  readonly options: ResolvedAureliaOptions;
+
+  /** Vite mode ('development' | 'production') */
+  readonly mode: string;
+
+  /** Vite command ('serve' | 'build') */
+  readonly command: "serve" | "build";
+
+  /** Resolution context (when tsconfig provided) */
+  readonly resolution: ResolutionContext | null;
+}
+
+/**
+ * Plugin lifecycle hooks.
+ * For advanced customization of the compilation pipeline.
+ *
+ * @see {@link https://aurelia.io/docs/vite/hooks | Plugin Hooks} — TODO: docs not yet published
+ */
+export interface PluginHooks {
+  /**
+   * Called after options are resolved.
+   * Can modify resolved options.
+   */
+  onConfigResolved?: (context: HookContext) => void | Promise<void>;
+
+  /**
+   * Called before compiling a template.
+   * Return false to skip compilation.
+   */
+  onBeforeCompile?: (
+    templatePath: string,
+    context: HookContext,
+  ) => boolean | void | Promise<boolean | void>;
+
+  /**
+   * Called after compiling a template.
+   * Can modify the compilation result.
+   */
+  onAfterCompile?: (
+    templatePath: string,
+    result: { html: string; instructions: unknown },
+    context: HookContext,
+  ) => void | Promise<void>;
+
+  /**
+   * Called before transforming a TypeScript file.
+   */
+  onBeforeTransform?: (
+    filePath: string,
+    context: HookContext,
+  ) => boolean | void | Promise<boolean | void>;
+
+  /**
+   * Called after transforming a TypeScript file.
+   */
+  onAfterTransform?: (
+    filePath: string,
+    result: { code: string; map?: unknown },
+    context: HookContext,
+  ) => void | Promise<void>;
+
+  /**
+   * Called before SSR rendering.
+   */
+  onBeforeSSR?: (
+    url: string,
+    context: HookContext,
+  ) => void | Promise<void>;
+
+  /**
+   * Called after SSR rendering.
+   * Can modify the rendered HTML.
+   */
+  onAfterSSR?: (
+    url: string,
+    result: { html: string },
+    context: HookContext,
+  ) => void | Promise<void>;
+}
+
+// ============================================================================
+// Main Plugin Options
+// ============================================================================
+
+/**
+ * Aurelia Vite plugin options.
+ *
+ * @example
+ * ```typescript
+ * // Minimal configuration (auto-detects entry)
+ * aurelia()
+ *
+ * // Basic SSR
+ * aurelia({
+ *   entry: './src/my-app.html',
+ *   ssr: true,
+ * })
+ *
+ * // Full configuration
+ * aurelia({
+ *   entry: './src/my-app.html',
+ *   tsconfig: './tsconfig.json',
+ *
+ *   dev: {
+ *     inspector: true,
+ *     hmr: { preserveState: true },
+ *   },
+ *
+ *   build: {
+ *     sourcemaps: true,
+ *     analyze: true,
+ *   },
+ *
+ *   ssr: {
+ *     streaming: { enabled: true },
+ *     hydration: { strategy: 'lazy' },
+ *   },
+ *
+ *   conventions: {
+ *     thirdParty: {
+ *       resources: {
+ *         elements: {
+ *           'date-picker': { bindables: { value: { mode: 'two-way' } } }
+ *         }
+ *       }
+ *     }
+ *   },
+ *
+ *   debug: {
+ *     channels: ['lower', 'resolve'],
+ *     trace: true,
+ *   },
+ * })
+ * ```
+ *
+ * @see {@link https://aurelia.io/docs/vite | Vite Plugin Documentation} — TODO: docs not yet published
+ */
+export interface AureliaPluginOptions {
+  // ---------------------------------------------------------------------------
+  // Core
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Entry template path for the Aurelia application.
+   * Auto-detected if not provided (looks for src/my-app.html, src/app.html).
+   *
+   * @example './src/my-app.html'
+   */
+  entry?: string;
+
+  /**
+   * Path to tsconfig.json for TypeScript project.
+   * Required for resource resolution (discovering custom elements).
+   * Auto-detected if not provided.
+   *
+   * @example './tsconfig.json'
+   */
+  tsconfig?: string;
+
+  // ---------------------------------------------------------------------------
+  // Mode-Specific
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Development mode options.
+   * Only applies during `vite dev`.
+   */
+  dev?: DevOptions;
+
+  /**
+   * Production build options.
+   * Only applies during `vite build`.
+   */
+  build?: BuildOptions;
+
+  // ---------------------------------------------------------------------------
+  // Features
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Server-Side Rendering options.
+   * Set to true to enable with defaults.
+   *
+   * @default false
+   */
+  ssr?: boolean | SSROptions;
+
+  /**
+   * Static Site Generation options.
+   * Set to true to enable with defaults.
+   *
+   * @default false
+   */
+  ssg?: boolean | import("@aurelia-ls/ssg").SSGOptions;
+
+  // ---------------------------------------------------------------------------
+  // Configuration
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Convention configuration.
+   * Controls resource discovery and classification.
+   */
+  conventions?: ConventionOptions;
+
+  /**
+   * Compiler configuration.
+   * Controls template compilation behavior.
+   */
+  compiler?: CompilerOptions;
+
+  // ---------------------------------------------------------------------------
+  // Diagnostics
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Debug and diagnostics configuration.
+   */
+  debug?: DebugOptions;
+
+  // ---------------------------------------------------------------------------
+  // Advanced
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Experimental features.
+   * APIs may change without notice.
+   */
+  experimental?: ExperimentalOptions;
+
+  /**
+   * Plugin lifecycle hooks.
+   * For advanced customization.
+   */
+  hooks?: PluginHooks;
+}
+
+// ============================================================================
+// Config File Types
+// ============================================================================
+
+/**
+ * Aurelia configuration object.
+ * Can be exported from `aurelia.config.js` or `aurelia.config.ts`.
+ *
+ * @example
+ * ```typescript
+ * // aurelia.config.ts
+ * import { defineConfig } from '@aurelia-ls/vite-plugin';
+ *
+ * export default defineConfig({
+ *   conventions: {
+ *     naming: {
+ *       elementSuffixes: ['CustomElement', 'Component'],
+ *     },
+ *   },
+ * });
+ * ```
+ *
+ * @see {@link https://aurelia.io/docs/vite/config-file | Config File} — TODO: docs not yet published
+ */
+export interface AureliaConfig extends AureliaPluginOptions {
+  /**
+   * Extend another configuration.
+   * Path to another aurelia.config.js or package name.
+   *
+   * @example
+   * ```typescript
+   * extends: '@company/aurelia-config'
+   * ```
+   */
+  extends?: string;
+}
+
+/**
+ * Helper to define Aurelia configuration with type checking.
+ * Use in `aurelia.config.ts`.
+ *
+ * @example
+ * ```typescript
+ * import { defineConfig } from '@aurelia-ls/vite-plugin';
+ *
+ * export default defineConfig({
+ *   ssr: true,
+ *   conventions: {
+ *     naming: { elementSuffixes: ['CustomElement', 'Component'] }
+ *   }
+ * });
+ * ```
+ */
+export function defineConfig(config: AureliaConfig): AureliaConfig {
+  return config;
+}
+
+// ============================================================================
+// Resolved Types (Internal)
+// ============================================================================
 
 /**
  * Resolved trace options with defaults applied.
@@ -257,33 +1403,6 @@ export interface ResolvedTraceOptions {
 }
 
 /**
- * Resolved options with defaults applied.
- * Used internally by the plugin.
- */
-export interface ResolvedSSROptions {
-  entry: string;
-  state: StateProvider;
-  stripMarkers: boolean;
-  include: string[];
-  exclude: string[];
-  htmlShell: string;
-  /** Resolution context (when tsconfig is provided) */
-  resolution: ResolutionContext | null;
-  /** Base href for routing */
-  baseHref: string;
-  /** DI registration hook */
-  register?: (container: IContainer, request: SSRRequestContext) => void;
-  /** SSG options */
-  ssg: ResolvedSSGOptions;
-  /** Discovered route tree (when ssg.enabled and tsconfig provided) */
-  routeTree: RouteTree | null;
-  /** SSR entry point path (resolved, or null if not configured) */
-  ssrEntry: string | null;
-  /** Trace options */
-  trace: ResolvedTraceOptions;
-}
-
-/**
  * Resolution context containing discovered resources.
  * Created when tsconfig is provided to the plugin.
  */
@@ -299,3 +1418,177 @@ export interface ResolutionContext {
   /** Lookup scope for a template path */
   getScopeForTemplate(templatePath: string): ResourceScopeId;
 }
+
+/**
+ * Resolved dev options with defaults applied.
+ */
+export interface ResolvedDevOptions {
+  hmr: Required<HMROptions>;
+  inspector: Required<InspectorOptions>;
+  errorOverlay: Required<ErrorOverlayOptions>;
+  clearScreen: boolean;
+}
+
+/**
+ * Resolved build options with defaults applied.
+ */
+export interface ResolvedBuildOptions {
+  target: "browser" | "node" | "edge";
+  sourcemaps: boolean | "inline" | "hidden";
+  minifyTemplates: boolean;
+  analyze: Required<BundleAnalyzerOptions>;
+  stripDevCode: boolean;
+}
+
+/**
+ * Resolved SSR-specific options with defaults applied.
+ * This is the NEW type for just SSR configuration within ResolvedAureliaOptions.
+ */
+export interface ResolvedSSRConfig {
+  enabled: boolean;
+  state: StateProvider;
+  stripMarkers: boolean;
+  include: string[];
+  exclude: string[];
+  htmlShell: string;
+  baseHref: string;
+  ssrEntry: string | null;
+  register?: (container: IContainer, request: SSRRequestContext) => void;
+  manifest: Required<SSRManifestOptions>;
+  hydration: Required<SSRHydrationOptions>;
+  streaming: Required<SSRStreamingOptions>;
+}
+
+/**
+ * Legacy resolved options type.
+ * This is the CURRENT type used by plugin.ts and middleware.ts.
+ * Will be deprecated once the plugin is migrated to the new architecture.
+ */
+export interface ResolvedSSROptions {
+  entry: string;
+  state: StateProvider;
+  stripMarkers: boolean;
+  include: string[];
+  exclude: string[];
+  htmlShell: string;
+  /** Resolution context (when tsconfig is provided) */
+  resolution: ResolutionContext | null;
+  /** Base href for routing */
+  baseHref: string;
+  /** DI registration hook */
+  register?: (container: IContainer, request: SSRRequestContext) => void;
+  /** SSG options */
+  ssg: import("@aurelia-ls/ssg").ResolvedSSGOptions;
+  /** Discovered route tree (when ssg.enabled and tsconfig provided) */
+  routeTree: RouteTree | null;
+  /** SSR entry point path (resolved, or null if not configured) */
+  ssrEntry: string | null;
+  /** Trace options */
+  trace: ResolvedTraceOptions;
+}
+
+/**
+ * Resolved convention options with defaults applied.
+ */
+export interface ResolvedConventionOptions {
+  enabled: boolean;
+  naming: Required<NamingConventionOptions>;
+  directories: {
+    rules: DirectoryConventionOptions["rules"];
+    replaceDefaults: boolean;
+  };
+  templatePairing: Required<TemplatePairingOptions>;
+  stylesheetPairing: Required<StylesheetPairingOptions>;
+  thirdParty: Required<Omit<ThirdPartyOptions, "resources">> & {
+    resources: ExplicitResourceConfig;
+  };
+}
+
+/**
+ * Resolved debug options with defaults applied.
+ */
+export interface ResolvedDebugOptions {
+  channels: DebugChannel[];
+  trace: ResolvedTraceOptions;
+  timing: boolean;
+  dumpArtifacts: string | false;
+}
+
+/**
+ * Fully resolved plugin options.
+ * All optional fields have defaults applied, booleans expanded to objects.
+ * Used internally by the plugin.
+ */
+export interface ResolvedAureliaOptions {
+  /** Entry template path */
+  entry: string;
+
+  /** tsconfig path (null if not provided) */
+  tsconfig: string | null;
+
+  /** Resolved dev options */
+  dev: ResolvedDevOptions;
+
+  /** Resolved build options */
+  build: ResolvedBuildOptions;
+
+  /** Resolved SSR options */
+  ssr: ResolvedSSRConfig;
+
+  /** Resolved SSG options */
+  ssg: import("@aurelia-ls/ssg").ResolvedSSGOptions;
+
+  /** Resolved convention options */
+  conventions: ResolvedConventionOptions;
+
+  /** Resolved compiler options */
+  compiler: Required<CompilerOptions>;
+
+  /** Resolved debug options */
+  debug: ResolvedDebugOptions;
+
+  /** Experimental options (as-is, no expansion) */
+  experimental: ExperimentalOptions;
+
+  /** Plugin hooks (as-is) */
+  hooks: PluginHooks;
+
+  /** Resolution context (when tsconfig provided) */
+  resolution: ResolutionContext | null;
+
+  /** Discovered route tree (when ssg enabled) */
+  routeTree: RouteTree | null;
+}
+
+// ============================================================================
+// Legacy Types (Deprecated)
+// ============================================================================
+
+/**
+ * @deprecated Use `AureliaPluginOptions` instead.
+ * This type is preserved for backwards compatibility.
+ *
+ * Migration:
+ * ```typescript
+ * // Before
+ * aureliaSSR({ entry: './src/my-app.html', stripMarkers: true })
+ *
+ * // After
+ * aurelia({ entry: './src/my-app.html', ssr: { stripMarkers: true } })
+ * ```
+ */
+export interface AureliaSSRPluginOptions {
+  entry?: string;
+  tsconfig?: string;
+  state?: StateProvider;
+  stripMarkers?: boolean;
+  include?: string[];
+  exclude?: string[];
+  htmlShell?: string;
+  baseHref?: string;
+  ssg?: import("@aurelia-ls/ssg").SSGOptions;
+  ssrEntry?: string;
+  register?: (container: IContainer, request: SSRRequestContext) => void;
+  trace?: boolean | TraceOptions;
+}
+
