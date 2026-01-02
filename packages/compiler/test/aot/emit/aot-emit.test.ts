@@ -243,7 +243,7 @@ function reduceInstruction(inst, targetIdx) {
     case "hydrateElement":
       return {
         ...base,
-        resource: inst.resource,
+        resource: inst.res,
         propCount: inst.instructions.length,
         containerless: inst.containerless ?? false,
       };
@@ -251,7 +251,7 @@ function reduceInstruction(inst, targetIdx) {
     case "hydrateAttribute":
       return {
         ...base,
-        resource: inst.resource,
+        resource: inst.res,
         alias: inst.alias,
         propCount: inst.instructions.length,
       };
@@ -259,7 +259,7 @@ function reduceInstruction(inst, targetIdx) {
     case "hydrateTemplateController":
       return {
         ...base,
-        resource: inst.resource,
+        resource: inst.res,
         templateIndex: inst.templateIndex,
         propCount: inst.instructions.length,
       };
@@ -267,7 +267,7 @@ function reduceInstruction(inst, targetIdx) {
     case "hydrateLetElement":
       return {
         ...base,
-        bindingCount: inst.bindings.length,
+        bindingCount: inst.instructions.length,
         toBindingContext: inst.toBindingContext,
       };
 

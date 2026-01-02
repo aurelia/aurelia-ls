@@ -364,7 +364,8 @@ function translateHydrateLetElement(
   ins: SerializedHydrateLetElement,
   ctx: TranslationContext,
 ): HydrateLetElementInstruction {
-  const bindings = ins.bindings.map((b: SerializedLetBinding) => {
+  // ins.instructions now matches the runtime's expected field name
+  const letBindings = ins.instructions.map((b: SerializedLetBinding) => {
     const expr = getExpr(ctx.exprMap, b.exprId) as IsBindingBehavior | Interpolation;
     return {
       type: itLetBinding,
@@ -374,7 +375,7 @@ function translateHydrateLetElement(
   });
   return {
     type: itHydrateLetElement,
-    instructions: bindings,
+    instructions: letBindings,
     toBindingContext: ins.toBindingContext,
   } as HydrateLetElementInstruction;
 }

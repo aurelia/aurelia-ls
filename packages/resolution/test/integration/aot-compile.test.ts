@@ -292,7 +292,7 @@ function reduceInstruction(inst, targetIdx, exprCodeMap) {
       return {
         kind: "let",
         target: targetIdx,
-        bindings: inst.bindings.map((b) => ({
+        bindings: inst.instructions.map((b) => ({
           to: b.to,
           expr: getExpr(b.exprId),
         })),
