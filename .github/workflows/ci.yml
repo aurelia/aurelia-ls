@@ -68,9 +68,7 @@ jobs:
             aurelia/packages/runtime-html/dist
             aurelia/packages/template-compiler/dist
             aurelia/packages/testing/dist
-            aurelia/packages-tooling/plugin-conventions/dist
-            aurelia/packages-tooling/vite-plugin/dist
-          key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**', 'aurelia/packages-tooling/*/src/**') }}
+          key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**') }}
           restore-keys: |
             aurelia-build-
 
@@ -191,9 +189,7 @@ jobs:
             aurelia/packages/runtime-html/dist
             aurelia/packages/template-compiler/dist
             aurelia/packages/testing/dist
-            aurelia/packages-tooling/plugin-conventions/dist
-            aurelia/packages-tooling/vite-plugin/dist
-          key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**', 'aurelia/packages-tooling/*/src/**') }}
+          key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**') }}
           restore-keys: |
             aurelia-build-
 

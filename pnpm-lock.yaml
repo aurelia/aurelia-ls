@@ -18,8 +18,6 @@ overrides:
   '@aurelia/router': link:aurelia/packages/router
   '@aurelia/route-recognizer': link:aurelia/packages/route-recognizer
   '@aurelia/testing': link:aurelia/packages/testing
-  '@aurelia/vite-plugin': link:aurelia/packages-tooling/vite-plugin
-  '@aurelia/plugin-conventions': link:aurelia/packages-tooling/plugin-conventions
 
 importers:
 
