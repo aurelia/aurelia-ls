@@ -676,8 +676,8 @@ export interface SerializedHydrateTemplateController {
 
 export interface SerializedHydrateLetElement {
   type: typeof INSTRUCTION_TYPE.hydrateLetElement;
-  /** Let bindings - named 'instructions' to match Aurelia's HydrateLetElementInstruction */
-  instructions: SerializedLetBinding[];
+  /** Let bindings - wire format uses 'bindings', runtime translateInstruction converts to 'instructions' */
+  bindings: SerializedLetBinding[];
   toBindingContext: boolean;
 }
 

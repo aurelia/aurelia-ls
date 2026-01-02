@@ -49,7 +49,7 @@ const issueDetail__e = [
         ]
       },
       fallbackSpan: {
-        file: "issue-tracker/src/pages/issue-detail.html"
+        file: "playground/issue-tracker/src/pages/issue-detail.html"
       }
     }
   },

@@ -236,13 +236,13 @@ describe("Instruction: hydrateLetElement", () => {
     expect(letEl).toBeDefined();
     expect(letEl!.type).toBe(INSTRUCTION_TYPE.hydrateLetElement);
     expect(letEl!.toBindingContext).toBe(false);
-    expect(letEl!.instructions.length).toBe(1);
-    expect(letEl!.instructions[0]!.to).toBe("computed");
-    expect(letEl!.instructions[0]!.exprId).toBeDefined();
+    expect(letEl!.bindings.length).toBe(1);
+    expect(letEl!.bindings[0]!.to).toBe("computed");
+    expect(letEl!.bindings[0]!.exprId).toBeDefined();
 
     // Verify expression
     const expr = aot.raw.codeResult.expressions.find(
-      (e) => e.id === letEl!.instructions[0]!.exprId,
+      (e) => e.id === letEl!.bindings[0]!.exprId,
     );
     expect(expr).toBeDefined();
     expect(expr!.ast.$kind).toBe("Binary");
@@ -276,7 +276,7 @@ describe("Instruction: hydrateLetElement", () => {
 
     expect(letEl).toBeDefined();
     // AOT preserves kebab-case; Aurelia runtime converts to camelCase
-    expect(letEl!.instructions[0]!.to).toBe("full-name");
+    expect(letEl!.bindings[0]!.to).toBe("full-name");
   });
 
   it("emits hydrateLetElement with multiple bindings", () => {
@@ -291,9 +291,9 @@ describe("Instruction: hydrateLetElement", () => {
     );
 
     expect(letEl).toBeDefined();
-    expect(letEl!.instructions.length).toBe(3);
+    expect(letEl!.bindings.length).toBe(3);
 
-    const names = letEl!.instructions.map((b) => b.to).sort();
+    const names = letEl!.bindings.map((b) => b.to).sort();
     expect(names).toEqual(["a", "b", "c"]);
   });
 });

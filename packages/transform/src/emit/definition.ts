@@ -543,11 +543,11 @@ function emitHydrateLetElement(
   ctx: InstructionEmitContext
 ): string {
   // Each let binding needs type: itLetBinding (101) per Aurelia's LetBindingInstruction
-  const letBindings = instr.instructions.map(b => {
+  const letBindings = instr.bindings.map(b => {
     const exprRef = resolveExprRef(ctx.exprPrefix, b.exprId, ctx.exprIndexMap);
     return `{ type: ${INSTRUCTION_TYPE.letBinding}, to: "${b.to}", from: ${exprRef} }`;
   });
-  // Runtime expects 'instructions' field, not 'bindings'
+  // Runtime expects 'instructions' field in HydrateLetElementInstruction
   return `{ type: ${INSTRUCTION_TYPE.hydrateLetElement}, instructions: [${letBindings.join(", ")}], toBindingContext: ${instr.toBindingContext} }`;
 }
 

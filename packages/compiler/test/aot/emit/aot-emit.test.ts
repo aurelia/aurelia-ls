@@ -267,7 +267,7 @@ function reduceInstruction(inst, targetIdx) {
     case "hydrateLetElement":
       return {
         ...base,
-        bindingCount: inst.instructions.length,
+        bindingCount: inst.bindings.length,
         toBindingContext: inst.toBindingContext,
       };
 

@@ -630,14 +630,14 @@ class EmitContext {
    * Emit hydrate instruction for a let element.
    */
   private emitHydrateLetElement(le: PlanLetElement): SerializedHydrateLetElement {
-    const instructions: SerializedLetBinding[] = le.bindings.map(b => ({
+    const bindings: SerializedLetBinding[] = le.bindings.map(b => ({
       to: b.to,
       exprId: b.exprId,
     }));
 
     return {
       type: INSTRUCTION_TYPE.hydrateLetElement,
-      instructions,
+      bindings,
       toBindingContext: le.toBindingContext,
     };
   }
@@ -1013,7 +1013,7 @@ function remapInstructionExprIds(
     case INSTRUCTION_TYPE.hydrateLetElement:
       return {
         ...inst,
-        instructions: inst.instructions.map(b => ({ ...b, exprId: remapId(b.exprId) })),
+        bindings: inst.bindings.map(b => ({ ...b, exprId: remapId(b.exprId) })),
       };
 
     case INSTRUCTION_TYPE.setProperty:
