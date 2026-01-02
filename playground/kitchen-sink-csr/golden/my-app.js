@@ -1,7 +1,7 @@
-import { Home } from "./pages/home";
-import { About } from "./pages/about";
-import { Users } from "./pages/users";
-import { User } from "./pages/user";
+import { Home } from "./pages/home.js";
+import { About } from "./pages/about.js";
+import { Users } from "./pages/users.js";
+import { User } from "./pages/user.js";
 const myApp__e = [
   /* 0 */
   // Binary
@@ -308,11 +308,12 @@ class MyApp {
   // Register child components as dependencies
   static dependencies = [Home, About, Users, User];
   // Static routes configuration
+  // Use `id` for the load attribute: load="home" matches id: "home"
   static routes = [
-    { path: "", component: Home, title: "Home" },
-    { path: "about", component: About, title: "About" },
-    { path: "users", component: Users, title: "Users" },
-    { path: "user/:id", component: User, title: "User" }
+    { id: "home", path: "", component: Home, title: "Home" },
+    { id: "about", path: "about", component: About, title: "About" },
+    { id: "users", path: "users", component: Users, title: "Users" },
+    { id: "user", path: "user/:id", component: User, title: "User" }
   ];
   // Basic bindings
   title = "Kitchen Sink";

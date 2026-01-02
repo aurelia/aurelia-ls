@@ -14,7 +14,7 @@
 
 import { describe, test, expect } from "vitest";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
-import { resolve, basename, dirname } from "node:path";
+import { resolve, basename, dirname, join } from "node:path";
 import { transformSync } from "esbuild";
 
 // AOT pipeline imports
@@ -37,20 +37,28 @@ const SKIP_FILES = new Set(["main.ts"]);
 // =============================================================================
 
 /**
- * Finds all TypeScript component files in src/ that have a paired .html template.
+ * Recursively finds all TypeScript component files that have a paired .html template.
+ * Returns paths relative to SRC_DIR (e.g., "my-app.ts", "pages/home.ts").
  */
-function findComponentFiles(): string[] {
-  const files = readdirSync(SRC_DIR).filter(f => f.endsWith(".ts"));
+function findComponentFiles(dir: string = SRC_DIR, prefix: string = ""): string[] {
+  const entries = readdirSync(dir, { withFileTypes: true });
   const components: string[] = [];
 
-  for (const file of files) {
-    if (SKIP_FILES.has(file)) continue;
+  for (const entry of entries) {
+    const relativePath = prefix ? join(prefix, entry.name) : entry.name;
 
-    // Check for paired .html file
-    const htmlFile = file.replace(/\.ts$/, ".html");
-    const htmlPath = resolve(SRC_DIR, htmlFile);
-    if (existsSync(htmlPath)) {
-      components.push(file);
+    if (entry.isDirectory()) {
+      // Recurse into subdirectories
+      components.push(...findComponentFiles(resolve(dir, entry.name), relativePath));
+    } else if (entry.name.endsWith(".ts")) {
+      if (SKIP_FILES.has(entry.name)) continue;
+
+      // Check for paired .html file
+      const htmlFile = entry.name.replace(/\.ts$/, ".html");
+      const htmlPath = resolve(dir, htmlFile);
+      if (existsSync(htmlPath)) {
+        components.push(relativePath);
+      }
     }
   }
 
@@ -60,9 +68,11 @@ function findComponentFiles(): string[] {
 /**
  * Derives the class name from a component file name.
  * my-app.ts -> MyApp
+ * pages/home.ts -> Home
  */
-function deriveClassName(fileName: string): string {
-  const baseName = fileName.replace(/\.ts$/, "");
+function deriveClassName(filePath: string): string {
+  // Get just the filename without path or extension
+  const baseName = basename(filePath).replace(/\.ts$/, "");
   return baseName
     .split("-")
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
@@ -72,9 +82,28 @@ function deriveClassName(fileName: string): string {
 /**
  * Derives the resource name from a component file name.
  * my-app.ts -> my-app
+ * pages/home.ts -> home
  */
-function deriveResourceName(fileName: string): string {
-  return fileName.replace(/\.ts$/, "");
+function deriveResourceName(filePath: string): string {
+  return basename(filePath).replace(/\.ts$/, "");
+}
+
+/**
+ * Fixes TypeScript/JavaScript import paths to use .js extension.
+ * Converts: import { X } from "./foo" -> import { X } from "./foo.js"
+ */
+function fixImportExtensions(code: string): string {
+  // Match import statements with relative paths that don't have extensions
+  return code.replace(
+    /(from\s+["'])(\.[^"']+)(["'])/g,
+    (match, prefix, path, suffix) => {
+      // Skip if already has extension
+      if (path.endsWith(".js") || path.endsWith(".ts") || path.endsWith(".json")) {
+        return match;
+      }
+      return `${prefix}${path}.js${suffix}`;
+    }
+  );
 }
 
 /**
@@ -117,15 +146,6 @@ function compileComponent(fileName: string): string {
 }
 
 /**
- * Ensures the golden directory exists.
- */
-function ensureGoldenDir(): void {
-  if (!existsSync(GOLDEN_DIR)) {
-    mkdirSync(GOLDEN_DIR, { recursive: true });
-  }
-}
-
-/**
  * Reads a golden file, or returns null if it doesn't exist.
  */
 function readGolden(fileName: string): string | null {
@@ -137,11 +157,14 @@ function readGolden(fileName: string): string | null {
 }
 
 /**
- * Writes a golden file.
+ * Writes a golden file, creating subdirectories as needed.
  */
-function writeGolden(fileName: string, content: string): void {
-  ensureGoldenDir();
-  const goldenPath = resolve(GOLDEN_DIR, fileName);
+function writeGolden(filePath: string, content: string): void {
+  const goldenPath = resolve(GOLDEN_DIR, filePath);
+  const goldenDir = dirname(goldenPath);
+  if (!existsSync(goldenDir)) {
+    mkdirSync(goldenDir, { recursive: true });
+  }
   writeFileSync(goldenPath, content, "utf-8");
 }
 
@@ -177,30 +200,30 @@ describe("Layer 0: AOT Output", () => {
     return;
   }
 
-  for (const fileName of components) {
-    const resourceName = deriveResourceName(fileName);
-    const jsFileName = toJsFileName(fileName);
+  for (const filePath of components) {
+    const resourceName = deriveResourceName(filePath);
+    const jsFilePath = toJsFileName(filePath);
 
     test(`${resourceName} AOT output matches golden`, () => {
       // Compile the component (produces TypeScript with $au)
-      const tsOutput = compileComponent(fileName);
-      // Transpile to JavaScript
-      const jsOutput = transpileToJs(tsOutput, fileName);
+      const tsOutput = compileComponent(filePath);
+      // Transpile to JavaScript and fix import extensions
+      const jsOutput = fixImportExtensions(transpileToJs(tsOutput, filePath));
 
       if (GENERATE_EXPECTED) {
         // Generate mode: write the output as the new golden
-        writeGolden(jsFileName, jsOutput);
-        console.log(`  Generated: golden/${jsFileName}`);
+        writeGolden(jsFilePath, jsOutput);
+        console.log(`  Generated: golden/${jsFilePath}`);
         return;
       }
 
       // Comparison mode: read golden and compare
-      const expectedOutput = readGolden(jsFileName);
+      const expectedOutput = readGolden(jsFilePath);
 
       if (expectedOutput === null) {
         // No golden exists yet - fail with helpful message
         throw new Error(
-          `No golden file exists for ${jsFileName}.\n` +
+          `No golden file exists for ${jsFilePath}.\n` +
           `Run with GENERATE_EXPECTED=1 to create it:\n` +
           `  GENERATE_EXPECTED=1 npm test -- --test-name-pattern "Layer 0"`
         );
@@ -220,10 +243,8 @@ describe("Layer 0: AOT Output", () => {
 
     const source = readFileSync(mainPath, "utf-8");
     const result = transformSimpleEntryPoint(source, mainPath);
-    // Transpile to JavaScript and fix imports to use .js
-    let jsOutput = transpileToJs(result.code, "main.ts");
-    // Fix import to reference .js file
-    jsOutput = jsOutput.replace(/from "\.\/my-app"/g, 'from "./my-app.js"');
+    // Transpile to JavaScript and fix import extensions
+    const jsOutput = fixImportExtensions(transpileToJs(result.code, "main.ts"));
 
     if (GENERATE_EXPECTED) {
       writeGolden("main.js", jsOutput);

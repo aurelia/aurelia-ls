@@ -15,11 +15,12 @@ export class MyApp {
   static dependencies = [Home, About, Users, User];
 
   // Static routes configuration
+  // Use `id` for the load attribute: load="home" matches id: "home"
   static routes = [
-    { path: "", component: Home, title: "Home" },
-    { path: "about", component: About, title: "About" },
-    { path: "users", component: Users, title: "Users" },
-    { path: "user/:id", component: User, title: "User" },
+    { id: "home", path: "", component: Home, title: "Home" },
+    { id: "about", path: "about", component: About, title: "About" },
+    { id: "users", path: "users", component: Users, title: "Users" },
+    { id: "user", path: "user/:id", component: User, title: "User" },
   ];
 
   // Basic bindings
