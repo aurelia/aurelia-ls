@@ -1,14 +1,17 @@
 /**
- * Hydration E2E Tests
+ * Hydration Integration Tests (JSDOM)
  *
- * Full end-to-end tests covering:
+ * Integration tests for the SSR → Hydration pipeline using JSDOM.
+ * Tests the machinery, not real browser behavior.
+ *
+ * Covers:
  * 1. AOT compilation
  * 2. SSR rendering with manifest recording
  * 3. Client-side hydration using Aurelia.hydrate()
  * 4. DOM adoption verification (no double render)
  * 5. Post-hydration reactivity
  *
- * These tests simulate the exact flow: Server → HTML+Manifest → Client Hydrate
+ * For real browser E2E tests, see playground/
  */
 
 import { test, describe, expect } from "vitest";

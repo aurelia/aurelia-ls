@@ -1,0 +1,6 @@
+{
+  "name": "basic-hydration",
+  "private": true,
+  "type": "module",
+  "description": "Minimal SSR + hydration test fixture"
+}

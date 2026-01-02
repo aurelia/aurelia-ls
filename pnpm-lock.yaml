@@ -49,9 +49,15 @@ importers:
       globals:
         specifier: ^15.12.0
         version: 15.15.0
+      playwright:
+        specifier: ^1.49.1
+        version: 1.57.0
       typescript:
         specifier: ^5.5.4
         version: 5.9.3
+      vite:
+        specifier: ^6.0.3
+        version: 6.4.1(@types/node@22.19.1)(tsx@4.21.0)
       vitest:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@22.19.1)(jsdom@25.0.1)(tsx@4.21.0)
@@ -76,9 +82,6 @@ importers:
       '@aurelia-ls/vite-plugin':
         specifier: workspace:*
         version: link:../../packages/vite-plugin
-      '@aurelia/vite-plugin':
-        specifier: link:../../aurelia/packages-tooling/vite-plugin
-        version: link:../../aurelia/packages-tooling/vite-plugin
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
@@ -128,9 +131,6 @@ importers:
         specifier: link:../../aurelia/packages/aurelia
         version: link:../../aurelia/packages/aurelia
     devDependencies:
-      '@aurelia/vite-plugin':
-        specifier: link:../../aurelia/packages-tooling/vite-plugin
-        version: link:../../aurelia/packages-tooling/vite-plugin
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.1
@@ -180,9 +180,6 @@ importers:
         specifier: link:../../aurelia/packages/aurelia
         version: link:../../aurelia/packages/aurelia
     devDependencies:
-      '@aurelia/vite-plugin':
-        specifier: link:../../aurelia/packages-tooling/vite-plugin
-        version: link:../../aurelia/packages-tooling/vite-plugin
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.1
@@ -1414,6 +1411,11 @@ packages:
     resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
     engines: {node: '>= 6'}
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -1684,6 +1686,16 @@ packages:
   picomatch@4.0.3:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
+
+  playwright-core@1.57.0:
+    resolution: {integrity: sha512-agTcKlMw/mjBWOnD6kFZttAAGHgi/Nw0CZ2o6JqWSbMlI219lAFLZZCyqByTsvVAJq5XA5H8cA6PrvBRpBWEuQ==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.57.0:
+    resolution: {integrity: sha512-ilYQj1s8sr2ppEJ2YVadYBN0Mb3mdo9J0wQ+UuDhzYqURwSoW4n1Xs5vs7ORwgDGmyEh33tRMeS8KhdkMoLXQw==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   postcss@8.5.6:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
@@ -2957,6 +2969,9 @@ snapshots:
       hasown: 2.0.2
       mime-types: 2.1.35
 
+  fsevents@2.3.2:
+    optional: true
+
   fsevents@2.3.3:
     optional: true
 
@@ -3229,6 +3244,14 @@ snapshots:
   picomatch@2.3.1: {}
 
   picomatch@4.0.3: {}
+
+  playwright-core@1.57.0: {}
+
+  playwright@1.57.0:
+    dependencies:
+      playwright-core: 1.57.0
+    optionalDependencies:
+      fsevents: 2.3.2
 
   postcss@8.5.6:
     dependencies:

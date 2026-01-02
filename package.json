@@ -72,12 +72,15 @@
     "test:vscode:cov": "pnpm -w build && vitest run packages/vscode --coverage",
     "test:vite-plugin": "pnpm -w build && vitest run packages/vite-plugin",
     "test:vite-plugin:cov": "pnpm -w build && vitest run packages/vite-plugin --coverage",
+    "test:playground": "pnpm -w build && vitest run --config playground/vitest.config.ts",
+    "test:playground:watch": "pnpm -w build && vitest --config playground/vitest.config.ts",
     "dump:overlay": "pnpm -w build && node scripts/dump-overlays.mjs",
     "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^22.5.4",
+    "playwright": "^1.49.1",
     "@types/vscode": "^1.90.0",
     "@typescript-eslint/eslint-plugin": "^8.47.0",
     "@typescript-eslint/parser": "^8.47.0",
@@ -85,6 +88,7 @@
     "eslint": "^9.39.1",
     "globals": "^15.12.0",
     "typescript": "^5.5.4",
+    "vite": "^6.0.3",
     "vitest": "^4.0.16"
   }
 }

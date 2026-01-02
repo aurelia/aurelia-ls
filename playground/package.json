@@ -1,0 +1,27 @@
+{
+  "name": "@aurelia-ls/playground",
+  "private": true,
+  "type": "module",
+  "description": "E2E test fixtures for Aurelia Language Server",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1",
+    "vite": "^6.0.3",
+    "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "aurelia": "*",
+    "@aurelia/kernel": "*",
+    "@aurelia/metadata": "*",
+    "@aurelia/platform": "*",
+    "@aurelia/platform-browser": "*",
+    "@aurelia/runtime": "*",
+    "@aurelia/runtime-html": "*",
+    "@aurelia/expression-parser": "*",
+    "@aurelia/template-compiler": "*",
+    "@aurelia-ls/vite-plugin": "workspace:*"
+  }
+}
