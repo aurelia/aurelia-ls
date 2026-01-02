@@ -1,10 +1,9 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
-import { aurelia } from "../../packages/vite-plugin/out/index.js";
+import { aurelia } from "@aurelia-ls/vite-plugin";
 
 // Resolve paths relative to this config file
 const aureliaRoot = resolve(import.meta.dirname, "../../aurelia/packages");
-const packagesRoot = resolve(import.meta.dirname, "../../packages");
 
 const ssrShell = `<!DOCTYPE html>
 <html>
@@ -27,7 +26,7 @@ export default defineConfig({
   resolve: {
     conditions: ["development"],
     alias: {
-      // Aurelia runtime packages
+      // Aurelia runtime packages (from submodule)
       aurelia: resolve(aureliaRoot, "aurelia"),
       "@aurelia/kernel": resolve(aureliaRoot, "kernel"),
       "@aurelia/metadata": resolve(aureliaRoot, "metadata"),
@@ -39,12 +38,7 @@ export default defineConfig({
       "@aurelia/template-compiler": resolve(aureliaRoot, "template-compiler"),
       "@aurelia/router": resolve(aureliaRoot, "router"),
       "@aurelia/route-recognizer": resolve(aureliaRoot, "route-recognizer"),
-      // Aurelia LS packages
-      "@aurelia-ls/ssr": resolve(packagesRoot, "ssr/out/index.js"),
-      "@aurelia-ls/compiler": resolve(packagesRoot, "compiler/out/index.js"),
-      "@aurelia-ls/resolution": resolve(packagesRoot, "resolution/out/index.js"),
-      "@aurelia-ls/transform": resolve(packagesRoot, "transform/out/index.js"),
-      "@aurelia-ls/vite-plugin": resolve(packagesRoot, "vite-plugin/out/index.js"),
+      // @aurelia-ls/* packages resolve via workspace dependencies
     },
   },
   plugins: [
