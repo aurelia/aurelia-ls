@@ -4,6 +4,7 @@ import { ExpressionParser } from "@aurelia/expression-parser";
 import { TemplateCompiler } from "@aurelia/template-compiler";
 import { Aurelia, IPlatform, NodeObserverLocator, DefaultResources, DefaultBindingSyntax, DefaultBindingLanguage, DefaultRenderers } from "@aurelia/runtime-html";
 import { BrowserPlatform } from "@aurelia/platform-browser";
+import { RouterConfiguration } from "@aurelia/router";
 import { MyApp } from "./my-app.js";
 const AotConfiguration = {
   register(container) {
@@ -27,5 +28,5 @@ function createAotAurelia() {
   );
   return new Aurelia(container);
 }
-createAotAurelia().app({ host: document.body, component: MyApp }).start();
+createAotAurelia().register(RouterConfiguration).app({ host: document.body, component: MyApp }).start();
 ;

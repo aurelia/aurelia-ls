@@ -1,4 +1,8 @@
 import Aurelia from "aurelia";
+import { RouterConfiguration } from "@aurelia/router";
 import { MyApp } from "./my-app";
 
-Aurelia.app(MyApp).start();
+Aurelia
+  .register(RouterConfiguration)
+  .app(MyApp)
+  .start();

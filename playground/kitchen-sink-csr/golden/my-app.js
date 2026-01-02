@@ -1,3 +1,7 @@
+import { Home } from "./pages/home";
+import { About } from "./pages/about";
+import { Users } from "./pages/users";
+import { User } from "./pages/user";
 const myApp__e = [
   /* 0 */
   // Binary
@@ -215,7 +219,7 @@ const myApp__def_6 = {
 const myApp__def_3 = {
   name: "switch_3",
   type: "custom-element",
-  template: "<div>\n      <!--au--><!--au-start--><!--au-end-->\n      <!--au--><!--au-start--><!--au-end-->\n      <!--au--><!--au-start--><!--au-end-->\n    </div>",
+  template: "<div>\n        <!--au--><!--au-start--><!--au-end-->\n        <!--au--><!--au-start--><!--au-end-->\n        <!--au--><!--au-start--><!--au-end-->\n      </div>",
   instructions: [
     /* target 0 */
     [
@@ -235,56 +239,64 @@ const myApp__def_3 = {
 const myApp_$au = {
   type: "custom-element",
   name: "my-app",
-  template: '<div class="kitchen-sink">\n  <!-- Basic interpolation -->\n  <h1 data-testid="title"><!--au--> </h1>\n  <p data-testid="message"><!--au--> </p>\n\n  <!-- Property binding + event handler -->\n  <section data-testid="counter-section">\n    <span data-testid="count"><!--au--> </span>\n    <!--au--><button data-testid="increment">+</button>\n    <!--au--><button data-testid="decrement">-</button>\n  </section>\n\n  <!-- if/else -->\n  <section data-testid="if-section">\n    <!--au--><button data-testid="toggle">Toggle</button>\n    <!--au--><!--au-start--><!--au-end-->\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- repeat.for with array -->\n  <section data-testid="repeat-section">\n    <!--au--><button data-testid="add-item">Add Item</button>\n    <ul data-testid="items-list">\n      <!--au--><!--au-start--><!--au-end-->\n    </ul>\n  </section>\n\n  <!-- ref binding -->\n  <section data-testid="ref-section">\n    <!--au--><input data-testid="ref-input" ref="inputRef">\n    <!--au--><button data-testid="focus-btn">Focus</button>\n  </section>\n\n  <!-- switch/case -->\n  <section data-testid="switch-section">\n    <!--au--><button data-testid="cycle-status">Cycle</button>\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- let element (computed values) -->\n  <section data-testid="let-section">\n    <!--au--><let></let>\n    <span data-testid="computed-value"><!--au--> </span>\n  </section>\n\n</div>\n',
+  template: '<div class="kitchen-sink">\n  <!-- Navigation -->\n  <header data-testid="header">\n    <h1 data-testid="title"><!--au--> </h1>\n    <nav data-testid="nav">\n      <!--au--><a data-testid="nav-home" load="home">Home</a>\n      <!--au--><a data-testid="nav-about" load="about">About</a>\n      <!--au--><a data-testid="nav-users" load="users">Users</a>\n    </nav>\n  </header>\n\n  <!-- Router viewport -->\n  <main data-testid="main">\n    <!--au--><au-viewport></au-viewport>\n  </main>\n\n  <hr>\n\n  <!-- Feature demos (kept inline for golden testing) -->\n  <section class="features" data-testid="features-section">\n    <h2>Feature Demos</h2>\n\n    <!-- Basic interpolation -->\n    <p data-testid="message"><!--au--> </p>\n\n    <!-- Property binding + event handler -->\n    <section data-testid="counter-section">\n      <span data-testid="count"><!--au--> </span>\n      <!--au--><button data-testid="increment">+</button>\n      <!--au--><button data-testid="decrement">-</button>\n    </section>\n\n    <!-- if/else -->\n    <section data-testid="if-section">\n      <!--au--><button data-testid="toggle">Toggle</button>\n      <!--au--><!--au-start--><!--au-end-->\n      <!--au--><!--au-start--><!--au-end-->\n    </section>\n\n    <!-- repeat.for with array -->\n    <section data-testid="repeat-section">\n      <!--au--><button data-testid="add-item">Add Item</button>\n      <ul data-testid="items-list">\n        <!--au--><!--au-start--><!--au-end-->\n      </ul>\n    </section>\n\n    <!-- ref binding -->\n    <section data-testid="ref-section">\n      <!--au--><input data-testid="ref-input" ref="inputRef">\n      <!--au--><button data-testid="focus-btn">Focus</button>\n    </section>\n\n    <!-- switch/case -->\n    <section data-testid="switch-section">\n      <!--au--><button data-testid="cycle-status">Cycle</button>\n      <!--au--><!--au-start--><!--au-end-->\n    </section>\n\n    <!-- let element (computed values) -->\n    <section data-testid="let-section">\n      <!--au--><let></let>\n      <span data-testid="computed-value"><!--au--> </span>\n    </section>\n  </section>\n</div>\n',
   instructions: [
     /* target 0 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [myApp__e[1]], isMulti: false, firstExpression: myApp__e[1] } }
     ],
     /* target 1 */
+    [{ type: 1, res: "load", props: [{ type: 10, value: "home", to: "route" }] }],
+    /* target 2 */
+    [{ type: 1, res: "load", props: [{ type: 10, value: "about", to: "route" }] }],
+    /* target 3 */
+    [{ type: 1, res: "load", props: [{ type: 10, value: "users", to: "route" }] }],
+    /* target 4 */
+    [{ type: 0, res: "au-viewport", props: [] }],
+    /* target 5 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [myApp__e[2]], isMulti: false, firstExpression: myApp__e[2] } }
     ],
-    /* target 2 */
+    /* target 6 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["Count: ", ""], expressions: [myApp__e[3]], isMulti: false, firstExpression: myApp__e[3] } }
     ],
-    /* target 3 */
+    /* target 7 */
     [{ type: 31, from: myApp__e[4], to: "click", capture: false }],
-    /* target 4 */
+    /* target 8 */
     [{ type: 31, from: myApp__e[5], to: "click", capture: false }],
-    /* target 5 */
+    /* target 9 */
     [{ type: 31, from: myApp__e[6], to: "click", capture: false }],
-    /* target 6 */
+    /* target 10 */
     [
       { type: 2, def: myApp__def_0, res: "if", props: [{ type: 12, from: myApp__e[7], to: "value", mode: 2 }] }
     ],
-    /* target 7 */
+    /* target 11 */
     [{ type: 2, def: myApp__def_1, res: "else", props: [] }],
-    /* target 8 */
+    /* target 12 */
     [{ type: 31, from: myApp__e[8], to: "click", capture: false }],
-    /* target 9 */
+    /* target 13 */
     [
       { type: 2, def: myApp__def_2, res: "repeat", props: [{ forOf: myApp__e[10], to: "items", props: [], type: 15 }] }
     ],
-    /* target 10 */
+    /* target 14 */
     [
       { type: 14, from: myApp__e[11], to: "element" },
       { type: 12, from: myApp__e[12], to: "value", mode: 6 }
     ],
-    /* target 11 */
+    /* target 15 */
     [{ type: 31, from: myApp__e[13], to: "click", capture: false }],
-    /* target 12 */
+    /* target 16 */
     [{ type: 31, from: myApp__e[14], to: "click", capture: false }],
-    /* target 13 */
+    /* target 17 */
     [
       { type: 2, def: myApp__def_3, res: "switch", props: [{ type: 12, from: myApp__e[18], to: "value", mode: 2 }] }
     ],
-    /* target 14 */
+    /* target 18 */
     [
       { type: 3, instructions: [{ type: 13, to: "computed", from: myApp__e[0] }], toBindingContext: false }
     ],
-    /* target 15 */
+    /* target 19 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["Doubled: ", ""], expressions: [myApp__e[19]], isMulti: false, firstExpression: myApp__e[19] } }
     ]
@@ -293,6 +305,15 @@ const myApp_$au = {
 };
 class MyApp {
   static $au = myApp_$au;
+  // Register child components as dependencies
+  static dependencies = [Home, About, Users, User];
+  // Static routes configuration
+  static routes = [
+    { path: "", component: Home, title: "Home" },
+    { path: "about", component: About, title: "About" },
+    { path: "users", component: Users, title: "Users" },
+    { path: "user/:id", component: User, title: "User" }
+  ];
   // Basic bindings
   title = "Kitchen Sink";
   message = "Hello, Aurelia!";

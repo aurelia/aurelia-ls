@@ -239,7 +239,7 @@ function reduceInstruction(inst, targetIdx, exprCodeMap) {
       return {
         kind: "element",
         target: targetIdx,
-        tag: inst.resource,
+        tag: inst.res,
         bindings: inst.instructions.map((i) => reduceNestedBinding(i, exprCodeMap)),
         containerless: inst.containerless || false,
       };
@@ -248,7 +248,7 @@ function reduceInstruction(inst, targetIdx, exprCodeMap) {
       return {
         kind: "attribute",
         target: targetIdx,
-        name: inst.resource,
+        name: inst.res,
         alias: inst.alias || null,
         bindings: inst.instructions.map((i) => reduceNestedBinding(i, exprCodeMap)),
       };
@@ -257,7 +257,7 @@ function reduceInstruction(inst, targetIdx, exprCodeMap) {
       return {
         kind: "controller",
         target: targetIdx,
-        name: inst.resource,
+        name: inst.res,
         template: inst.templateIndex,
         bindings: inst.instructions.map((i) => reduceNestedBinding(i, exprCodeMap)),
       };

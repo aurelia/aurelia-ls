@@ -1,11 +1,27 @@
 /**
  * Kitchen Sink CSR Test App
  *
- * Exercises all major AOT-compiled features in CSR mode.
+ * Exercises all major AOT-compiled features in CSR mode including routing.
  * If it works here, AOT emit is correct. If it fails in SSR but works here,
  * the bug is in hydration.
  */
+import { Home } from "./pages/home";
+import { About } from "./pages/about";
+import { Users } from "./pages/users";
+import { User } from "./pages/user";
+
 export class MyApp {
+  // Register child components as dependencies
+  static dependencies = [Home, About, Users, User];
+
+  // Static routes configuration
+  static routes = [
+    { path: "", component: Home, title: "Home" },
+    { path: "about", component: About, title: "About" },
+    { path: "users", component: Users, title: "Users" },
+    { path: "user/:id", component: User, title: "User" },
+  ];
+
   // Basic bindings
   title = "Kitchen Sink";
   message = "Hello, Aurelia!";

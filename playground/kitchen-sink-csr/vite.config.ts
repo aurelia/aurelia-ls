@@ -23,6 +23,8 @@ export default defineConfig({
       "@aurelia/runtime-html": resolve(aureliaRoot, "runtime-html"),
       "@aurelia/expression-parser": resolve(aureliaRoot, "expression-parser"),
       "@aurelia/template-compiler": resolve(aureliaRoot, "template-compiler"),
+      "@aurelia/router": resolve(aureliaRoot, "router"),
+      "@aurelia/route-recognizer": resolve(aureliaRoot, "route-recognizer"),
       // @aurelia-ls/* packages resolve via workspace dependencies
     },
   },

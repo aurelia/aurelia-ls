@@ -1,0 +1,20 @@
+<div class="page user-page" data-testid="user-page">
+  <h2>User Details</h2>
+
+  <div if.bind="isLoading" data-testid="user-loading">Loading...</div>
+
+  <div else data-testid="user-details">
+    <dl>
+      <dt>ID</dt>
+      <dd data-testid="user-id">${id}</dd>
+
+      <dt>Name</dt>
+      <dd data-testid="user-name">${name}</dd>
+
+      <dt>Role</dt>
+      <dd data-testid="user-role">${role}</dd>
+    </dl>
+
+    <a load="users" data-testid="back-link">Back to Users</a>
+  </div>
+</div>
