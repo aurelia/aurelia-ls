@@ -7,6 +7,7 @@
 
 import { createServer, type ViteDevServer } from "vite";
 import { chromium, type Browser, type Page } from "playwright";
+import { dirname } from "node:path";
 
 export interface TestContext {
   server: ViteDevServer;
@@ -15,33 +16,64 @@ export interface TestContext {
   url: string;
 }
 
+// Counter for generating unique ports per test file
+let portCounter = 0;
+
 /**
  * Start a Vite dev server for the given config file.
  */
 export async function startServer(configFile: string): Promise<ViteDevServer> {
+  // Use a unique high port for each test to avoid conflicts
+  // Start from a random base to avoid conflicts across test runs
+  const basePort = 15000 + (process.pid % 5000);
+  const port = basePort + portCounter++;
+
+  // Root should be the directory containing the config file
+  const root = dirname(configFile);
+
   const server = await createServer({
     configFile,
+    root,
     server: {
-      // Use a random available port to avoid conflicts
-      port: 0,
-      strictPort: false,
+      port,
+      strictPort: false, // Will find next available if taken
+      host: "127.0.0.1", // Bind to IPv4 explicitly for Playwright compatibility
     },
     logLevel: "silent",
   });
 
   await server.listen();
+
+  // Give Vite time to fully initialize (plugin async setup)
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
   return server;
 }
 
 /**
  * Get the URL for a running Vite dev server.
+ * Uses httpServer.address() directly since resolvedUrls may not reflect
+ * the actual assigned port when port: 0 is used.
  */
 export function getServerUrl(server: ViteDevServer): string {
-  const info = server.resolvedUrls;
-  if (!info?.local?.[0]) {
-    throw new Error("Server has no local URL");
+  // Use httpServer.address() for the actual port
+  const httpServer = server.httpServer;
+  if (httpServer) {
+    const address = httpServer.address();
+    if (address && typeof address === "object") {
+      const port = address.port;
+      // Use 127.0.0.1 explicitly to avoid IPv6/IPv4 resolution issues
+      return `http://127.0.0.1:${port}/`;
+    }
   }
-  return info.local[0];
+
+  // Fallback to resolvedUrls
+  const info = server.resolvedUrls;
+  if (info?.local?.[0]) {
+    return info.local[0];
+  }
+
+  throw new Error("Server has no local URL");
 }
 
 /**

@@ -23,7 +23,7 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { normalizePathForId, type CompileTrace } from "@aurelia-ls/compiler";
+import { normalizePathForId, debug, type CompileTrace } from "@aurelia-ls/compiler";
 import {
   transform,
   transformEntryPoint,
@@ -230,6 +230,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
   let routeTree: RouteTree | null = null;
   let traceOptions: ResolvedTraceOptions;
   let buildTrace: ManagedTrace | null = null;
+  let ssrEnabled = false; // Whether SSR middleware should be registered
 
   /**
    * Pre-plugin: Rewrites .html imports to virtual files in production builds.
@@ -324,7 +325,8 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
 
       // Normalize SSR options (boolean | object | undefined → object)
       const ssrOptions = typeof options.ssr === "object" ? options.ssr : {};
-      const ssrEnabled = options.ssr === true || (typeof options.ssr === "object" && options.ssr.enabled !== false);
+      // Set closure variable - SSR is enabled if explicitly true or object without enabled:false
+      ssrEnabled = options.ssr === true || (typeof options.ssr === "object" && options.ssr.enabled !== false);
 
       // Normalize SSG options (boolean | object | undefined → object)
       const ssgInput = typeof options.ssg === "object" ? options.ssg : {};
@@ -371,6 +373,15 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         ssrEntry,
         trace: traceOptions,
       };
+
+      // Debug: log plugin configuration
+      debug.vite("config.resolved", {
+        entry,
+        root: config.root,
+        ssrEnabled,
+        ssgEnabled: resolvedSSG.enabled,
+        command: config.command,
+      });
 
       config.logger.info(
         `[aurelia-ssr] Configured with entry: ${entry}`,
@@ -570,8 +581,25 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
      * Add SSR middleware to dev server.
      * Middleware is added directly (not returning a function) so it runs
      * BEFORE Vite's built-in HTML handling.
+     * Only registers middleware when SSR is enabled.
      */
     configureServer(server) {
+      // Debug: log server configuration for troubleshooting
+      const addr = server.httpServer?.address();
+      const port = addr && typeof addr === "object" ? addr.port : undefined;
+      debug.vite("server.configure", {
+        root: server.config.root,
+        ssrEnabled,
+        port,
+        configFile: server.config.configFile,
+      });
+
+      // Skip SSR middleware if SSR is not enabled
+      if (!ssrEnabled) {
+        server.config.logger.info("[aurelia-ssr] SSR disabled, serving CSR");
+        return;
+      }
+
       // Add middleware directly (before Vite's internal middleware)
       // The middleware will wait for resolution if needed
       server.middlewares.use(

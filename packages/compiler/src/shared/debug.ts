@@ -201,6 +201,7 @@ export function refreshDebugChannels(): void {
   debug.ssr = createChannel("ssr");
   debug.transform = createChannel("transform");
   debug.resolution = createChannel("resolution");
+  debug.vite = createChannel("vite");
 }
 
 /**
@@ -257,6 +258,9 @@ export const debug = {
 
   /** Resource discovery (project-level resolution) */
   resolution: createChannel("resolution"),
+
+  /** Vite plugin lifecycle (server config, middleware, build) */
+  vite: createChannel("vite"),
 };
 
 /** Type for the debug object */
