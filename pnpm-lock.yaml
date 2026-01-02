@@ -198,6 +198,28 @@ importers:
       parse5:
         specifier: ^8.0.0
         version: 8.0.0
+    devDependencies:
+      '@aurelia-ls/ssr':
+        specifier: workspace:*
+        version: link:../ssr
+      '@aurelia-ls/transform':
+        specifier: workspace:*
+        version: link:../transform
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
+      '@aurelia/platform-browser':
+        specifier: link:../../aurelia/packages/platform-browser
+        version: link:../../aurelia/packages/platform-browser
+      '@aurelia/runtime-html':
+        specifier: link:../../aurelia/packages/runtime-html
+        version: link:../../aurelia/packages/runtime-html
+      '@types/jsdom':
+        specifier: ^21.1.7
+        version: 21.1.7
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
 
   packages/language-server:
     dependencies:
@@ -333,6 +355,58 @@ importers:
       esbuild:
         specifier: ^0.24.0
         version: 0.24.2
+
+  playground:
+    dependencies:
+      '@aurelia-ls/ssr':
+        specifier: workspace:*
+        version: link:../packages/ssr
+      '@aurelia-ls/transform':
+        specifier: workspace:*
+        version: link:../packages/transform
+      '@aurelia-ls/vite-plugin':
+        specifier: workspace:*
+        version: link:../packages/vite-plugin
+      '@aurelia/expression-parser':
+        specifier: link:../aurelia/packages/expression-parser
+        version: link:../aurelia/packages/expression-parser
+      '@aurelia/kernel':
+        specifier: link:../aurelia/packages/kernel
+        version: link:../aurelia/packages/kernel
+      '@aurelia/metadata':
+        specifier: link:../aurelia/packages/metadata
+        version: link:../aurelia/packages/metadata
+      '@aurelia/platform':
+        specifier: link:../aurelia/packages/platform
+        version: link:../aurelia/packages/platform
+      '@aurelia/platform-browser':
+        specifier: link:../aurelia/packages/platform-browser
+        version: link:../aurelia/packages/platform-browser
+      '@aurelia/runtime':
+        specifier: link:../aurelia/packages/runtime
+        version: link:../aurelia/packages/runtime
+      '@aurelia/runtime-html':
+        specifier: link:../aurelia/packages/runtime-html
+        version: link:../aurelia/packages/runtime-html
+      '@aurelia/template-compiler':
+        specifier: link:../aurelia/packages/template-compiler
+        version: link:../aurelia/packages/template-compiler
+      aurelia:
+        specifier: link:../aurelia/packages/aurelia
+        version: link:../aurelia/packages/aurelia
+    devDependencies:
+      esbuild:
+        specifier: ^0.24.0
+        version: 0.24.2
+      playwright:
+        specifier: ^1.49.1
+        version: 1.57.0
+      vite:
+        specifier: ^6.0.3
+        version: 6.4.1(@types/node@22.19.1)(tsx@4.21.0)
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@types/node@22.19.1)(jsdom@25.0.1)(tsx@4.21.0)
 
 packages:
 

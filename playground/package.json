@@ -5,9 +5,11 @@
   "description": "E2E test fixtures for Aurelia Language Server",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "serve:golden:kitchen-sink-csr": "vite kitchen-sink-csr/golden --open"
   },
   "devDependencies": {
+    "esbuild": "^0.24.0",
     "playwright": "^1.49.1",
     "vite": "^6.0.3",
     "vitest": "^4.0.16"
@@ -22,6 +24,8 @@
     "@aurelia/runtime-html": "*",
     "@aurelia/expression-parser": "*",
     "@aurelia/template-compiler": "*",
-    "@aurelia-ls/vite-plugin": "workspace:*"
+    "@aurelia-ls/vite-plugin": "workspace:*",
+    "@aurelia-ls/ssr": "workspace:*",
+    "@aurelia-ls/transform": "workspace:*"
   }
 }
