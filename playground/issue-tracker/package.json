@@ -6,28 +6,23 @@
   "description": "Issue Tracker - Aurelia 2 AOT test app exercising full API surface with i18n",
   "scripts": {
     "start": "vite",
-    "build": "vite build",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "build": "vite build"
   },
   "dependencies": {
-    "@aurelia/i18n": "workspace:*",
-    "@aurelia/kernel": "workspace:*",
-    "@aurelia/expression-parser": "workspace:*",
-    "@aurelia/runtime": "workspace:*",
-    "@aurelia/runtime-html": "workspace:*",
-    "@aurelia/template-compiler": "workspace:*",
-    "@aurelia/platform": "workspace:*",
-    "@aurelia/platform-browser": "workspace:*",
-    "@aurelia/router": "workspace:*"
+    "aurelia": "*",
+    "@aurelia/expression-parser": "*",
+    "@aurelia/i18n": "*",
+    "@aurelia/kernel": "*",
+    "@aurelia/platform": "*",
+    "@aurelia/platform-browser": "*",
+    "@aurelia/router": "*",
+    "@aurelia/runtime": "*",
+    "@aurelia/runtime-html": "*",
+    "@aurelia/template-compiler": "*"
   },
   "devDependencies": {
     "@aurelia-ls/ssr": "workspace:*",
     "@aurelia-ls/transform": "workspace:*",
-    "@aurelia-ls/vite-plugin": "workspace:*",
-    "esbuild": "^0.24.0",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.3",
-    "vitest": "^2.1.8"
+    "@aurelia-ls/vite-plugin": "workspace:*"
   }
 }

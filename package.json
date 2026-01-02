@@ -3,7 +3,9 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "playground"
+    "examples/*",
+    "playground",
+    "playground/*"
   ],
   "engines": {
     "node": ">=18.17 <23"
@@ -25,7 +27,8 @@
       "@aurelia/fetch-client": "link:aurelia/packages/fetch-client",
       "@aurelia/router": "link:aurelia/packages/router",
       "@aurelia/route-recognizer": "link:aurelia/packages/route-recognizer",
-      "@aurelia/testing": "link:aurelia/packages/testing"
+      "@aurelia/testing": "link:aurelia/packages/testing",
+      "@aurelia/i18n": "link:aurelia/packages/i18n"
     }
   },
   "scripts": {

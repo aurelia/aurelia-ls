@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aurelia/kernel": "workspace:*",
-    "@aurelia/runtime-html": "workspace:*",
-    "@aurelia/template-compiler": "workspace:*",
-    "aurelia": "workspace:*"
+    "@aurelia/kernel": "*",
+    "@aurelia/runtime-html": "*",
+    "@aurelia/template-compiler": "*",
+    "aurelia": "*"
   },
   "devDependencies": {
     "@aurelia-ls/vite-plugin": "workspace:*",

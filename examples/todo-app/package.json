@@ -11,17 +11,17 @@
   },
   "dependencies": {
     "aurelia": "*",
+    "@aurelia/expression-parser": "*",
     "@aurelia/kernel": "*",
     "@aurelia/metadata": "*",
     "@aurelia/platform": "*",
     "@aurelia/platform-browser": "*",
     "@aurelia/runtime": "*",
     "@aurelia/runtime-html": "*",
-    "@aurelia/expression-parser": "*",
-    "@aurelia/template-compiler": "*",
-    "@aurelia-ls/vite-plugin": "workspace:*"
+    "@aurelia/template-compiler": "*"
   },
   "devDependencies": {
+    "@aurelia-ls/vite-plugin": "workspace:*",
     "@types/node": "^22.10.2",
     "tslib": "^2.8.1",
     "typescript": "^5.7.2",
