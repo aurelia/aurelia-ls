@@ -1,0 +1,195 @@
+[
+  {
+    "name": "RP-BT-001 switch with cases - only parent gets targetIndex",
+    "markup": "<div switch.bind=\"x\"><span case=\"a\">A</span><span case=\"b\">B</span></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "content": "A" },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "content": "B" }
+      ],
+      "controllers": [
+        { "kind": "switch", "frameId": 0, "hasTarget": true, "caseCount": 2, "hasDefault": false },
+        { "kind": "case", "frameId": 0, "hasTarget": false },
+        { "kind": "case", "frameId": 0, "hasTarget": false }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-BT-002 switch with default-case - branches have no targetIndex",
+    "markup": "<div switch.bind=\"x\"><span case=\"a\">A</span><span default-case>default</span></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "content": "A" },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "content": "default" }
+      ],
+      "controllers": [
+        { "kind": "switch", "frameId": 0, "hasTarget": true, "caseCount": 1, "hasDefault": true },
+        { "kind": "case", "frameId": 0, "hasTarget": false },
+        { "kind": "default-case", "frameId": 0, "hasTarget": false }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-BT-003 switch with bindings inside cases - targets allocated in correct scope",
+    "markup": "<div switch.bind=\"x\"><span case=\"a\">${a}</span><span case=\"b\">${b}</span></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "controllers": [
+        { "kind": "switch", "frameId": 0, "hasTarget": true, "caseCount": 2, "hasDefault": false },
+        { "kind": "case", "frameId": 0, "hasTarget": false },
+        { "kind": "case", "frameId": 0, "hasTarget": false }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-BT-004 promise with then - only parent gets targetIndex",
+    "markup": "<div promise.bind=\"p\"><span then.from-view=\"v\">${v}</span></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "controllers": [
+        { "kind": "promise", "frameId": 1, "hasTarget": true, "hasPending": false, "hasThen": true, "hasCatch": false, "thenLocal": "v" },
+        { "kind": "then", "frameId": 2, "hasTarget": false }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 2 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
+        { "frameId": 1, "parentFrameId": 0, "kind": "promise", "locals": [], "overrideContext": [] },
+        { "frameId": 2, "parentFrameId": 1, "kind": "promise", "locals": ["alias:v"], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-BT-005 promise with pending/then/catch - branches have no targetIndex",
+    "markup": "<div promise.bind=\"p\"><span pending>loading</span><span then.from-view=\"v\">${v}</span><span catch.from-view=\"e\">${e}</span></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "content": "loading" },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "text", "interpolation": true, "parts": 2, "exprs": 1, "hasTarget": true }
+      ],
+      "controllers": [
+        { "kind": "promise", "frameId": 1, "hasTarget": true, "hasPending": true, "hasThen": true, "hasCatch": true, "thenLocal": "v", "catchLocal": "e" },
+        { "kind": "pending", "frameId": 1, "hasTarget": false },
+        { "kind": "then", "frameId": 2, "hasTarget": false },
+        { "kind": "catch", "frameId": 3, "hasTarget": false }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 2 },
+        { "kind": "AccessScope", "frameId": 3 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
+        { "frameId": 1, "parentFrameId": 0, "kind": "promise", "locals": [], "overrideContext": [] },
+        { "frameId": 2, "parentFrameId": 1, "kind": "promise", "locals": ["alias:v"], "overrideContext": [] },
+        { "frameId": 3, "parentFrameId": 1, "kind": "promise", "locals": ["alias:e"], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-BT-006 nested switch - each level has correct targetIndex allocation",
+    "markup": "<div switch.bind=\"a\"><span case=\"1\"><b switch.bind=\"b\"><i case=\"x\">X</i><i case=\"y\">Y</i></b></span></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "element", "tag": "b", "hasTarget": false },
+        { "kind": "element", "tag": "i", "hasTarget": false },
+        { "kind": "text", "content": "X" },
+        { "kind": "element", "tag": "i", "hasTarget": false },
+        { "kind": "text", "content": "Y" }
+      ],
+      "controllers": [
+        { "kind": "switch", "frameId": 0, "hasTarget": true, "caseCount": 1, "hasDefault": false },
+        { "kind": "case", "frameId": 0, "hasTarget": false },
+        { "kind": "switch", "frameId": 0, "hasTarget": true, "caseCount": 2, "hasDefault": false },
+        { "kind": "case", "frameId": 0, "hasTarget": false },
+        { "kind": "case", "frameId": 0, "hasTarget": false }
+      ],
+      "expressions": [
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] }
+      ]
+    }
+  },
+  {
+    "name": "RP-BT-007 switch inside repeat - targets scoped correctly",
+    "markup": "<div repeat.for=\"item of items\"><span switch.bind=\"item\"><i case=\"a\">A</i></span></div>",
+    "expect": {
+      "nodes": [
+        { "kind": "element", "tag": "div", "hasTarget": false },
+        { "kind": "element", "tag": "span", "hasTarget": false },
+        { "kind": "element", "tag": "i", "hasTarget": false },
+        { "kind": "text", "content": "A" }
+      ],
+      "controllers": [
+        { "kind": "repeat", "frameId": 1, "hasTarget": true, "locals": ["item"], "contextuals": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] },
+        { "kind": "switch", "frameId": 1, "hasTarget": true, "caseCount": 1, "hasDefault": false },
+        { "kind": "case", "frameId": 1, "hasTarget": false }
+      ],
+      "expressions": [
+        { "kind": "ForOfStatement", "frameId": 0 },
+        { "kind": "AccessScope", "frameId": 1 },
+        { "kind": "PrimitiveLiteral", "frameId": 0 }
+      ],
+      "scopes": [
+        { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
+        { "frameId": 1, "parentFrameId": 0, "kind": "repeat", "locals": ["iterator:item"], "overrideContext": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] }
+      ]
+    }
+  }
+]

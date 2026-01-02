@@ -953,12 +953,18 @@ function transformController(
     : createEmptyFragment();
 
   // Build base result
+  // Child branches (case, then, catch, pending, default) don't need targetIndex because
+  // their position is determined by order in parent's branches array, not by targetIndex.
+  // Sibling branches (else) DO need targetIndex because they're independent DOM elements.
+  // The distinction is encoded in ins.branch: child branches have branch metadata, siblings don't.
+  const isChildBranch = ins.branch !== null;
+
   const result: PlanController = {
     resource: ins.res,
     config,
     frameId,
     template,
-    targetIndex: ctx.allocateTarget(),
+    targetIndex: isChildBranch ? undefined : ctx.allocateTarget(),
   };
 
   if (ins.loc) result.loc = ins.loc;
@@ -1049,23 +1055,53 @@ function transformController(
 
 /**
  * Find the appropriate frame for a controller based on its scope config.
+ *
+ * Overlay-scope controllers create child frames. When multiple overlay frames
+ * share the same parent (e.g., promise's then/catch branches), we disambiguate
+ * by matching the frame's origin.branch against the instruction's branch.kind.
  */
 function findControllerFrame(
   ins: LinkedHydrateTemplateController,
   currentFrame: FrameId,
   ctx: PlanningContext,
 ): FrameId {
-  // For overlay scope controllers, find the child frame
-  if (ins.controller.config.scope === "overlay") {
-    const scopeTemplate = ctx.scope.templates[0];
-    if (scopeTemplate) {
-      const frame = scopeTemplate.frames.find(f =>
-        f.parent === currentFrame && f.kind === "overlay"
-      );
-      if (frame) return frame.id;
-    }
+  // Only overlay-scope controllers create new frames
+  if (ins.controller.config.scope !== "overlay") {
+    return currentFrame;
   }
-  return currentFrame;
+
+  const scopeTemplate = ctx.scope.templates[0];
+  if (!scopeTemplate) {
+    return currentFrame;
+  }
+
+  // Find the overlay frame for this controller
+  const frame = scopeTemplate.frames.find(f =>
+    f.parent === currentFrame &&
+    f.kind === "overlay" &&
+    originMatchesBranch(f.origin, ins.branch?.kind)
+  );
+
+  return frame?.id ?? currentFrame;
+}
+
+/**
+ * Check if a frame's origin matches the expected branch kind.
+ *
+ * If the origin has a `branch` field (e.g., promiseBranch), it must match
+ * the instruction's branch kind. Origins without a branch field match any branch.
+ * This allows disambiguation when multiple overlay frames share a parent.
+ */
+function originMatchesBranch(
+  origin: ScopeFrame["origin"],
+  branchKind: string | undefined,
+): boolean {
+  // If origin has a branch field, require it to match
+  if (origin && "branch" in origin) {
+    return origin.branch === branchKind;
+  }
+  // No branch constraint - any frame matches
+  return true;
 }
 
 /**

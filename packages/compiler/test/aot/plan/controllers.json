@@ -10,7 +10,7 @@
       ],
       "bindings": [],
       "controllers": [
-        { "kind": "if", "frameId": 0 }
+        { "kind": "if", "frameId": 0, "hasTarget": true }
       ],
       "expressions": [
         { "kind": "AccessScope", "frameId": 0 }
@@ -34,8 +34,8 @@
       ],
       "bindings": [],
       "controllers": [
-        { "kind": "if", "frameId": 0 },
-        { "kind": "else", "frameId": 0 }
+        { "kind": "if", "frameId": 0, "hasTarget": true },
+        { "kind": "else", "frameId": 0, "hasTarget": true }
       ],
       "expressions": [
         { "kind": "AccessScope", "frameId": 0 }
@@ -59,8 +59,8 @@
       ],
       "bindings": [],
       "controllers": [
-        { "kind": "if", "frameId": 0 },
-        { "kind": "else", "frameId": 0 }
+        { "kind": "if", "frameId": 0, "hasTarget": true },
+        { "kind": "else", "frameId": 0, "hasTarget": true }
       ],
       "expressions": [
         { "kind": "AccessScope", "frameId": 0 },
@@ -86,8 +86,8 @@
       ],
       "bindings": [],
       "controllers": [
-        { "kind": "if", "frameId": 0 },
-        { "kind": "else", "frameId": 0 }
+        { "kind": "if", "frameId": 0, "hasTarget": true },
+        { "kind": "else", "frameId": 0, "hasTarget": true }
       ],
       "expressions": [
         { "kind": "AccessScope", "frameId": 0 }
@@ -108,7 +108,7 @@
       ],
       "bindings": [],
       "controllers": [
-        { "kind": "repeat", "frameId": 1, "locals": ["item"], "contextuals": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] }
+        { "kind": "repeat", "frameId": 1, "hasTarget": true, "locals": ["item"], "contextuals": ["$index", "$first", "$last", "$even", "$odd", "$length", "$middle"] }
       ],
       "expressions": [
         { "kind": "ForOfStatement", "frameId": 0 },
@@ -131,7 +131,7 @@
       ],
       "bindings": [],
       "controllers": [
-        { "kind": "with", "frameId": 1 }
+        { "kind": "with", "frameId": 1, "hasTarget": true }
       ],
       "expressions": [
         { "kind": "AccessScope", "frameId": 0 },

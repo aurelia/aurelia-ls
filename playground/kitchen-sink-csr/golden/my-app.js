@@ -260,37 +260,29 @@ const myApp_$au = {
       { type: 2, def: myApp__def_0, res: "if", props: [{ type: 12, from: myApp__e[7], to: "value", mode: 2 }] }
     ],
     /* target 7 */
-    [{ type: 2, def: myApp__def_1, res: "else", props: [] }],
-    /* target 8 */
     [{ type: 31, from: myApp__e[8], to: "click", capture: false }],
-    /* target 9 */
+    /* target 8 */
     [
       { type: 2, def: myApp__def_2, res: "repeat", props: [{ forOf: myApp__e[10], to: "items", props: [], type: 15 }] }
     ],
-    /* target 10 */
+    /* target 9 */
     [
       { type: 14, from: myApp__e[11], to: "element" },
       { type: 12, from: myApp__e[12], to: "value", mode: 6 }
     ],
-    /* target 11 */
+    /* target 10 */
     [{ type: 31, from: myApp__e[13], to: "click", capture: false }],
-    /* target 12 */
+    /* target 11 */
     [{ type: 31, from: myApp__e[14], to: "click", capture: false }],
-    /* target 13 */
+    /* target 12 */
     [
       { type: 2, def: myApp__def_3, res: "switch", props: [{ type: 12, from: myApp__e[18], to: "value", mode: 2 }] }
     ],
-    /* target 14 */
-    [],
-    /* target 15 */
-    [],
-    /* target 16 */
-    [],
-    /* target 17 */
+    /* target 13 */
     [
       { type: 3, instructions: [{ type: 13, to: "computed", from: myApp__e[0] }], toBindingContext: false }
     ],
-    /* target 18 */
+    /* target 14 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["Doubled: ", ""], expressions: [myApp__e[19]], isMulti: false, firstExpression: myApp__e[19] } }
     ]
