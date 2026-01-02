@@ -5,18 +5,30 @@ This guide covers setting up the project and running the demos.
 ## Prerequisites
 
 - Node.js 20+
-- npm (or pnpm)
+- pnpm
 
 ## Installation
 
 ```bash
-git clone https://github.com/aurelia/aurelia-ls.git
+git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
-npm install
+
+# Build the Aurelia framework (submodule)
+cd aurelia
+npm ci
 npm run build
+cd ..
+
+# Build aurelia-ls
+pnpm install
+pnpm run build
 ```
 
-The build compiles all packages using TypeScript project references.
+The project uses the Aurelia framework as a git submodule. The `pnpm.overrides` in `package.json` link directly to packages inside `aurelia/`, so the submodule must be built first.
+
+> **Note:** The submodule setup is temporary during development while we work towards full bi-directional compatibility with Aurelia. This allows faster iteration on changes that span both repositories.
+
+The final build compiles all aurelia-ls packages using TypeScript project references.
 
 ## Running the Demos
 
@@ -26,8 +38,8 @@ A simple todo application demonstrating server-side rendering with client hydrat
 
 ```bash
 cd examples/todo-app
-npm install
-npm start
+pnpm install
+pnpm start
 ```
 
 Open http://localhost:5173. The page is server-rendered—view source to see the pre-rendered HTML. The client hydrates without re-rendering, preserving the server output.
@@ -38,8 +50,8 @@ Demonstrates SSR with the Aurelia router:
 
 ```bash
 cd examples/router-app
-npm install
-npm start
+pnpm install
+pnpm start
 ```
 
 Navigate between routes. Each page is server-rendered with the correct content.
@@ -59,12 +71,12 @@ This prints the before/after of source transformation, showing how decorators be
 
 ```bash
 # All tests
-npm test
+pnpm run test
 
 # Specific package
-npm run test:compiler
-npm run test:resolution
-npm run test:ssr
+pnpm run test:compiler
+pnpm run test:resolution
+pnpm run test:ssr
 ```
 
 ## VS Code Extension
@@ -80,7 +92,7 @@ ext install AureliaEffect.aurelia-2
 To test local changes to the extension:
 
 1. Open the project in VS Code
-2. Run `npm run build` to compile the packages
+2. Run `pnpm run build` to compile the packages
 3. Press F5 (or use Run → Start Debugging)
 4. Select "Run Extension (with Hello World workspace)"
 5. A new VS Code window opens with the extension loaded

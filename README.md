@@ -29,15 +29,26 @@ Features:
 
 ```bash
 # Clone and install
-git clone https://github.com/aurelia/aurelia-ls.git
+git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
-npm install
+
+# Build the Aurelia framework (submodule)
+# Note: The submodule is a temporary setup during development while we work
+# towards full bi-directional compatibility with Aurelia. This allows faster
+# iteration on changes that span both repositories.
+cd aurelia
+npm ci
 npm run build
+cd ..
+
+# Build aurelia-ls
+pnpm install
+pnpm run build
 
 # Run the SSR demo
 cd examples/todo-app
-npm install
-npm start
+pnpm install
+pnpm start
 # Open http://localhost:5173
 ```
 
