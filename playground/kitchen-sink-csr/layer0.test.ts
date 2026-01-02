@@ -18,7 +18,8 @@ import { resolve, basename, dirname, join } from "node:path";
 import { transformSync } from "esbuild";
 
 // AOT pipeline imports
-import { compileWithAot, DEFAULT_SEMANTICS } from "@aurelia-ls/ssr";
+// Use compileAot from compiler directly - no SSR dependency needed for CSR-only AOT
+import { compileAot, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 import { transform, transformSimpleEntryPoint } from "@aurelia-ls/transform";
 
 // =============================================================================
@@ -108,6 +109,7 @@ function fixImportExtensions(code: string): string {
 
 /**
  * Compiles a component with AOT and returns the transformed TypeScript source.
+ * Uses compileAot from @aurelia-ls/compiler - SSR-agnostic, no instruction translation.
  */
 function compileComponent(fileName: string): string {
   const tsPath = resolve(SRC_DIR, fileName);
@@ -119,8 +121,8 @@ function compileComponent(fileName: string): string {
   const className = deriveClassName(fileName);
   const resourceName = deriveResourceName(fileName);
 
-  // Compile template with AOT
-  const aot = compileWithAot(template, {
+  // Compile template with AOT (SSR-agnostic - just serialized output)
+  const aot = compileAot(template, {
     templatePath: htmlPath,
     name: resourceName,
     semantics: DEFAULT_SEMANTICS,
@@ -130,14 +132,14 @@ function compileComponent(fileName: string): string {
   const result = transform({
     source,
     filePath: tsPath,
-    aot: aot.raw.codeResult,
+    aot: aot.codeResult,
     resource: {
       kind: "custom-element",
       name: resourceName,
       className,
     },
     template: aot.template,
-    nestedHtmlTree: aot.raw.nestedHtmlTree,
+    nestedHtmlTree: aot.nestedHtmlTree,
     removeDecorators: true,
     includeComments: true,
   });

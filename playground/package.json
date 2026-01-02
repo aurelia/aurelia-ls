@@ -6,8 +6,10 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "generate:golden": "cross-env AURELIA_DEBUG=lower,resolve,bind,typecheck,aot,overlay,ssr,transform,resolution AURELIA_TRACE=1 GENERATE_EXPECTED=1 vitest run --test-name-pattern \"Layer 0\"",
-    "serve:golden:kitchen-sink-csr": "vite kitchen-sink-csr/golden --open"
+    "generate:golden": "cross-env GENERATE_EXPECTED=1 vitest run --test-name-pattern \"Layer 0\"",
+    "generate:golden:debug": "cross-env AURELIA_DEBUG=lower,resolve,bind,typecheck,aot,overlay,ssr,transform,resolution AURELIA_TRACE=1 GENERATE_EXPECTED=1 vitest run --test-name-pattern \"Layer 0\"",
+    "serve:golden:kitchen-sink-csr": "vite kitchen-sink-csr/golden --open",
+    "serve:golden:issue-tracker": "vite issue-tracker/golden --open"
   },
   "devDependencies": {},
   "dependencies": {
@@ -22,6 +24,8 @@
     "@aurelia/template-compiler": "*",
     "@aurelia/router": "*",
     "@aurelia/route-recognizer": "*",
+    "@aurelia/i18n": "*",
+    "@aurelia-ls/compiler": "workspace:*",
     "@aurelia-ls/vite-plugin": "workspace:*",
     "@aurelia-ls/ssr": "workspace:*",
     "@aurelia-ls/transform": "workspace:*"

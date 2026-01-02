@@ -10,6 +10,10 @@ export { PRELUDE_TS } from "./prelude.js";
 export { compileTemplate } from "./facade.js";
 export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./facade.js";
 
+// === AOT Facade (SSR-agnostic) ===
+export { compileAot } from "./facade-aot.js";
+export type { CompileAotOptions, CompileAotResult } from "./facade-aot.js";
+
 // === Parsing ===
 export {
   getExpressionParser,
