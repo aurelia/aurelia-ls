@@ -1,0 +1,19 @@
+<!--
+  Label List Component Template
+
+  Exercises:
+  - repeat.for for iterating labels
+  - style.bind for dynamic background/text colors
+  - Interpolation for label name
+-->
+
+<div class="label-list" data-testid="label-list">
+  <span
+    repeat.for="label of labels"
+    class="label"
+    style="background-color: ${label.color}20; color: ${label.color}; border: 1px solid ${label.color}40;"
+    data-testid="label-${label.id}"
+  >
+    ${label.name}
+  </span>
+</div>

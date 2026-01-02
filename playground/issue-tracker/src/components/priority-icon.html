@@ -1,0 +1,17 @@
+<!--
+  Priority Icon Component Template
+
+  Exercises:
+  - switch.bind for multi-way branching
+  - case for each priority level
+  - if.bind for optional label display
+  - Dynamic class binding based on priority
+-->
+
+<span class="badge badge-${priority}" data-testid="priority-icon" switch.bind="priority">
+  <template case="low">↓</template>
+  <template case="medium">→</template>
+  <template case="high">↑</template>
+  <template case="critical">⚠</template>
+</span>
+<span if.bind="showLabel" t="priority.${priority}" style="margin-left: 0.25rem;"></span>
