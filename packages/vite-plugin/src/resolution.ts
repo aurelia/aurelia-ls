@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import ts from "typescript";
 import { DEFAULT_SEMANTICS, normalizePathForId, type BindingMode, type ResourceScopeId, type Semantics, type Bindable, type CompileTrace } from "@aurelia-ls/compiler";
-import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RegistrationIntent, type RouteTree } from "@aurelia-ls/resolution";
+import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RouteTree } from "@aurelia-ls/resolution";
 import type { ResolutionContext } from "./types.js";
 
 /**
@@ -94,8 +94,8 @@ export async function createResolutionContext(
   const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace, fileSystem }, resolutionLogger);
 
   // Log resolution results
-  const globalCount = result.intents.filter((i: RegistrationIntent) => i.kind === "global").length;
-  const localCount = result.intents.filter((i: RegistrationIntent) => i.kind === "local").length;
+  const globalCount = result.registration.sites.filter(s => s.scope.kind === "global").length;
+  const localCount = result.registration.sites.filter(s => s.scope.kind === "local").length;
   logger.info(`[aurelia-ssr] Resolved ${result.candidates.length} resources (${globalCount} global, ${localCount} local)`);
   logger.info(`[aurelia-ssr] Discovered ${result.templates.length} external + ${result.inlineTemplates.length} inline templates`);
 

@@ -129,6 +129,18 @@ describe("Extraction: explicit-app", () => {
     );
     expect(depNames.includes("PriceTag"), "Should reference PriceTag").toBe(true);
     expect(depNames.includes("StockBadge"), "Should reference StockBadge").toBe(true);
+
+    // Verify provenance (spans) are captured
+    for (const ref of productClass.staticDependencies.references) {
+      if (ref.kind === "identifier") {
+        expect(ref.span, `${ref.name} should have span`).toBeTruthy();
+        expect(typeof ref.span.start, `${ref.name} span.start should be number`).toBe("number");
+        expect(typeof ref.span.end, `${ref.name} span.end should be number`).toBe("number");
+        expect(ref.span.end > ref.span.start, `${ref.name} span.end > span.start`).toBe(true);
+        // resolvedPath is null until WP2 (import resolution)
+        expect(ref.resolvedPath, `${ref.name} resolvedPath should be null until WP2`).toBeNull();
+      }
+    }
   });
 
   it("extracts @bindable members correctly", () => {

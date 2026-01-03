@@ -140,7 +140,12 @@ function parseDependencyArray(expr: ts.ArrayLiteralExpression): DependencyRef[] 
   const refs: DependencyRef[] = [];
   for (const element of expr.elements) {
     if (ts.isIdentifier(element)) {
-      refs.push({ kind: "identifier", name: element.text });
+      refs.push({
+        kind: "identifier",
+        name: element.text,
+        span: { start: element.getStart(), end: element.getEnd() },
+        resolvedPath: null, // Populated by import resolution (WP2)
+      });
     }
     // TODO: Handle spread elements, property access, etc.
   }
@@ -241,7 +246,12 @@ function extractStaticDependencies(node: ts.ClassDeclaration): StaticDependencie
     const references: DependencyRef[] = [];
     for (const element of member.initializer.elements) {
       if (ts.isIdentifier(element)) {
-        references.push({ kind: "identifier", name: element.text });
+        references.push({
+          kind: "identifier",
+          name: element.text,
+          span: { start: element.getStart(), end: element.getEnd() },
+          resolvedPath: null, // Populated by import resolution (WP2)
+        });
       }
       // TODO: Handle imported references (more complex AST analysis needed)
     }

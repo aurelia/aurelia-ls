@@ -235,19 +235,22 @@ describe("Resolution: full pipeline with FileSystemContext", () => {
     expect(inlineOnly!.content).toBe("<div>Inline template</div>");
   });
 
-  it("populates registration intents correctly", () => {
-    // Filter to app-only intents
-    const appIntents = resolutionResult.intents.filter((i) =>
-      i.resource.source.replace(/\\/g, "/").includes("/sibling-app/src/")
+  it("populates registration sites correctly", () => {
+    // Filter to resolved app-only sites
+    const appSites = resolutionResult.registration.sites.filter((s) =>
+      s.resourceRef.kind === "resolved" &&
+      s.resourceRef.resource.source.replace(/\\/g, "/").includes("/sibling-app/src/")
     );
 
-    expect(appIntents.length).toBeGreaterThan(0);
+    expect(appSites.length).toBeGreaterThan(0);
 
     // All should have valid resource definitions
-    for (const intent of appIntents) {
-      expect(intent.resource.name).toBeTruthy();
-      expect(intent.resource.className).toBeTruthy();
-      expect(intent.resource.source).toBeTruthy();
+    for (const site of appSites) {
+      if (site.resourceRef.kind === "resolved") {
+        expect(site.resourceRef.resource.name).toBeTruthy();
+        expect(site.resourceRef.resource.className).toBeTruthy();
+        expect(site.resourceRef.resource.source).toBeTruthy();
+      }
     }
   });
 });

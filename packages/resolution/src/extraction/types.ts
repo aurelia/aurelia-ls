@@ -1,4 +1,4 @@
-import type { NormalizedPath, BindingMode } from "@aurelia-ls/compiler";
+import type { NormalizedPath, BindingMode, TextSpan } from "@aurelia-ls/compiler";
 
 // Re-export BindingMode for consumers of this module
 export type { BindingMode };
@@ -109,10 +109,28 @@ export interface StaticDependenciesFact {
   readonly references: readonly DependencyRef[];
 }
 
-/** Reference in a dependencies array */
+/**
+ * Reference in a dependencies array.
+ *
+ * Includes provenance (span) for diagnostics, refactoring, and ordering.
+ * The resolvedPath is populated by import resolution (WP2); null until then.
+ */
 export type DependencyRef =
-  | { readonly kind: "identifier"; readonly name: string }
-  | { readonly kind: "import"; readonly moduleSpecifier: string; readonly exportName?: string };
+  | {
+      readonly kind: "identifier";
+      readonly name: string;
+      /** Source location of this identifier in the dependencies array */
+      readonly span: TextSpan;
+      /** File path where this class is defined (null until import resolution) */
+      readonly resolvedPath: NormalizedPath | null;
+    }
+  | {
+      readonly kind: "import";
+      readonly moduleSpecifier: string;
+      readonly exportName?: string;
+      /** Source location of this import reference */
+      readonly span: TextSpan;
+    };
 
 /** Bindable member on class (from @bindable decorator) */
 export interface BindableMemberFact {
@@ -140,10 +158,10 @@ export interface RegistrationCallFact {
 
 /** Argument to a .register() call */
 export type RegistrationArgFact =
-  | { readonly kind: "identifier"; readonly name: string }
-  | { readonly kind: "spread"; readonly name: string }
-  | { readonly kind: "arrayLiteral"; readonly elements: readonly RegistrationArgFact[] }
-  | { readonly kind: "unknown" };
+  | { readonly kind: "identifier"; readonly name: string; readonly span: TextSpan }
+  | { readonly kind: "spread"; readonly name: string; readonly span: TextSpan }
+  | { readonly kind: "arrayLiteral"; readonly elements: readonly RegistrationArgFact[]; readonly span: TextSpan }
+  | { readonly kind: "unknown"; readonly span: TextSpan };
 
 /** Source position */
 export interface Position {

@@ -5,13 +5,14 @@
 //
 // Architecture:
 // - File Discovery (Layer 0): File enumeration, sibling detection
-// - Extraction (Layer 1): AST → SourceFacts (with optional sibling info)
+// - Extraction (Layer 1): AST → SourceFacts (with DependencyRef.resolvedPath: null)
+// - Import Resolution (Layer 1.5): Populate DependencyRef.resolvedPath
 // - Inference (Layer 2): SourceFacts → ResourceCandidate[]
-// - Registration (Layer 3): ResourceCandidate[] → RegistrationIntent[]
-// - Scope (Layer 4): RegistrationIntent[] → ResourceGraph
+// - Registration (Layer 3): SourceFacts + ResourceCandidate[] → RegistrationAnalysis
+// - Scope (Layer 4): RegistrationAnalysis → ResourceGraph
 //
 // See docs/resolution-architecture.md for details.
-// See docs/file-discovery-design.md for Layer 0 details.
+// See docs/registration-analysis-design.md for the three-phase model.
 
 // === Re-export compiler types for convenience ===
 export type {
@@ -112,7 +113,7 @@ export type {
 } from "./project/index.js";
 
 // === Extraction (Layer 1) ===
-export { extractAllFacts, extractSourceFacts } from "./extraction/index.js";
+export { extractAllFacts, extractSourceFacts, resolveImports } from "./extraction/index.js";
 export type { ExtractionOptions } from "./extraction/index.js";
 export type {
   SourceFacts,
@@ -123,6 +124,7 @@ export type {
   BindableMemberFact,
   RegistrationCallFact,
   BindingMode,
+  DependencyRef,
 } from "./extraction/index.js";
 
 // === Inference (Layer 2) ===
@@ -131,7 +133,26 @@ export type { ResourceCandidate, BindableSpec, ResolverResult, ResolverDiagnosti
 
 // === Registration (Layer 3) ===
 export { createRegistrationAnalyzer, buildImportGraph } from "./registration/index.js";
-export type { RegistrationIntent, RegistrationEvidence, ImportGraph, RegistrationAnalyzer } from "./registration/index.js";
+export type { RegistrationAnalyzer, ImportGraph } from "./registration/index.js";
+// New registration model (see types.ts for design rationale)
+export type {
+  RegistrationAnalysis,
+  RegistrationSite,
+  RegistrationScope,
+  ResourceRef,
+  RegistrationEvidence,
+  OrphanResource,
+  UnresolvedRegistration,
+  UnresolvedPattern,
+  LocalRegistrationSite,
+  ResolvedRegistrationSite,
+} from "./registration/index.js";
+export {
+  isLocalSite,
+  isGlobalSite,
+  isResolvedSite,
+  isUnresolvedSite,
+} from "./registration/index.js";
 
 // === Scope (Layer 4) ===
 export { buildResourceGraph } from "./scope/index.js";

@@ -3,11 +3,12 @@ import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, Compile
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
 import type { SourceFacts } from "./extraction/types.js";
 import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
-import type { RegistrationIntent } from "./registration/types.js";
+import type { RegistrationAnalysis, RegistrationSite, isLocalSite } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
 import { extractAllFacts } from "./extraction/extractor.js";
+import { resolveImports } from "./extraction/import-resolver.js";
 import { createResolverPipeline } from "./inference/resolver-pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
@@ -54,8 +55,8 @@ export interface ResolutionResult {
   resourceGraph: ResourceGraph;
   /** All resource candidates identified */
   candidates: readonly ResourceCandidate[];
-  /** Registration intents for all candidates */
-  intents: readonly RegistrationIntent[];
+  /** Registration analysis results */
+  registration: RegistrationAnalysis;
   /** External template files (convention-based: foo.ts → foo.html) */
   templates: readonly TemplateInfo[];
   /** Inline templates (string literals in decorators/static $au) */
@@ -112,10 +113,11 @@ export interface ResolutionDiagnostic {
  * Main entry point: run the full resolution pipeline.
  *
  * Pipeline:
- * 1. Extraction: AST → SourceFacts
- * 2. Inference: SourceFacts → ResourceCandidate[]
- * 3. Registration Analysis: ResourceCandidate[] → RegistrationIntent[]
- * 4. Scope Construction: RegistrationIntent[] → ResourceGraph
+ * 1. Extraction: AST → SourceFacts (with DependencyRef.resolvedPath: null)
+ * 2. Import Resolution: Populate DependencyRef.resolvedPath
+ * 3. Inference: SourceFacts → ResourceCandidate[]
+ * 4. Registration Analysis: SourceFacts + ResourceCandidate[] → RegistrationAnalysis
+ * 5. Scope Construction: RegistrationAnalysis → ResourceGraph
  */
 export function resolve(
   program: ts.Program,
@@ -133,17 +135,23 @@ export function resolve(
 
     debug.resolution("start", { sourceFileCount, hasFileSystem: !!config?.fileSystem });
 
-    // Layer 0 + 1: File Discovery + Extraction
-    // When fileSystem is provided, extraction also detects sibling files
+    // Layer 1: Extraction
     log.info("[resolution] extracting facts...");
     trace.event("resolution.extraction.start");
-    const facts = extractAllFacts(program, {
+    const rawFacts = extractAllFacts(program, {
       fileSystem: config?.fileSystem,
       templateExtensions: config?.templateExtensions,
       styleExtensions: config?.styleExtensions,
     });
-    trace.event("resolution.extraction.done", { factCount: facts.size });
-    debug.resolution("extraction.complete", { factCount: facts.size });
+    trace.event("resolution.extraction.done", { factCount: rawFacts.size });
+    debug.resolution("extraction.complete", { factCount: rawFacts.size });
+
+    // Layer 1.5: Import Resolution
+    log.info("[resolution] resolving imports...");
+    trace.event("resolution.importResolution.start");
+    const facts = resolveImports(rawFacts);
+    trace.event("resolution.importResolution.done");
+    debug.resolution("importResolution.complete", { factCount: facts.size });
 
     // Layer 2: Inference
     log.info("[resolution] resolving candidates...");
@@ -160,26 +168,37 @@ export function resolve(
     log.info("[resolution] analyzing registration...");
     trace.event("resolution.registration.start");
     const analyzer = createRegistrationAnalyzer();
-    const intents = analyzer.analyze(candidates, facts, program);
-    trace.event("resolution.registration.done", { intentCount: intents.length });
-    debug.resolution("registration.complete", { intentCount: intents.length });
+    const registration = analyzer.analyze(candidates, facts);
+    trace.event("resolution.registration.done", {
+      siteCount: registration.sites.length,
+      orphanCount: registration.orphans.length,
+      unresolvedCount: registration.unresolved.length,
+    });
+    debug.resolution("registration.complete", {
+      siteCount: registration.sites.length,
+      orphanCount: registration.orphans.length,
+      unresolvedCount: registration.unresolved.length,
+    });
 
     // Layer 4: Scope Construction
     log.info("[resolution] building resource graph...");
     trace.event("resolution.scope.start");
-    const resourceGraph = buildResourceGraph(intents, config?.baseSemantics, config?.defaultScope);
+    const resourceGraph = buildResourceGraph(registration, config?.baseSemantics, config?.defaultScope);
     trace.event("resolution.scope.done");
 
-    const globalCount = intents.filter((i) => i.kind === "global").length;
-    const localCount = intents.filter((i) => i.kind === "local").length;
-    const unknownCount = intents.filter((i) => i.kind === "unknown").length;
+    const globalCount = registration.sites.filter((s) => s.scope.kind === "global").length;
+    const localCount = registration.sites.filter((s) => s.scope.kind === "local").length;
 
-    debug.resolution("scope.complete", { globalCount, localCount, unknownCount });
+    debug.resolution("scope.complete", {
+      globalCount,
+      localCount,
+      orphanCount: registration.orphans.length,
+    });
 
     // Layer 5: Template Discovery
     log.info("[resolution] discovering templates...");
     trace.event("resolution.templates.start");
-    const { templates, inlineTemplates } = discoverTemplates(intents, program, resourceGraph);
+    const { templates, inlineTemplates } = discoverTemplates(registration, program, resourceGraph);
     trace.event("resolution.templates.done", {
       externalCount: templates.length,
       inlineCount: inlineTemplates.length,
@@ -190,14 +209,15 @@ export function resolve(
     });
 
     log.info(
-      `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${unknownCount} unknown), ${templates.length} external + ${inlineTemplates.length} inline templates`,
+      `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
     );
 
     trace.setAttributes({
       "resolution.candidateCount": candidates.length,
       "resolution.globalCount": globalCount,
       "resolution.localCount": localCount,
-      "resolution.unknownCount": unknownCount,
+      "resolution.orphanCount": registration.orphans.length,
+      "resolution.unresolvedCount": registration.unresolved.length,
       "resolution.templateCount": templates.length,
       "resolution.inlineTemplateCount": inlineTemplates.length,
       "resolution.diagnosticCount": resolverDiags.length,
@@ -206,7 +226,7 @@ export function resolve(
     return {
       resourceGraph,
       candidates,
-      intents,
+      registration,
       templates,
       inlineTemplates,
       diagnostics: resolverDiags.map(toDiagnostic),
@@ -244,22 +264,30 @@ interface DiscoveredTemplates {
  * - Otherwise, apply convention (foo.ts → foo.html) and add to templates
  */
 function discoverTemplates(
-  intents: readonly RegistrationIntent[],
+  registration: RegistrationAnalysis,
   program: ts.Program,
   resourceGraph: ResourceGraph,
 ): DiscoveredTemplates {
   const templates: TemplateInfo[] = [];
   const inlineTemplates: InlineTemplateInfo[] = [];
   const sourceFiles = new Set(program.getSourceFiles().map((sf) => normalizePathForId(sf.fileName)));
+  const processedResources = new Set<ResourceCandidate>();
 
-  for (const intent of intents) {
-    const { resource } = intent;
+  for (const site of registration.sites) {
+    // Only process resolved resources
+    if (site.resourceRef.kind !== "resolved") continue;
+
+    const resource = site.resourceRef.resource;
+
+    // Avoid duplicates (a resource may have multiple registration sites)
+    if (processedResources.has(resource)) continue;
+    processedResources.add(resource);
 
     // Only elements have templates
     if (resource.kind !== "element") continue;
 
     const componentPath = resource.source;
-    const scopeId = computeScopeId(intent, resourceGraph);
+    const scopeId = computeScopeId(site, resourceGraph);
 
     // Check for inline template first
     if (resource.inlineTemplate !== undefined) {
@@ -320,14 +348,14 @@ function resolveTemplatePath(
 }
 
 /**
- * Compute the scope ID for a resource based on its registration intent.
+ * Compute the scope ID for a resource based on its registration site.
  */
-function computeScopeId(intent: RegistrationIntent, resourceGraph: ResourceGraph): ResourceScopeId {
-  if (intent.kind === "local" && intent.scope) {
+function computeScopeId(site: RegistrationSite, resourceGraph: ResourceGraph): ResourceScopeId {
+  if (site.scope.kind === "local") {
     // Local scope: "local:{componentPath}"
-    return `local:${intent.scope}` as ResourceScopeId;
+    return `local:${site.scope.owner}` as ResourceScopeId;
   }
 
-  // Global or unknown: use root scope
+  // Global: use root scope
   return resourceGraph.root;
 }

@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractAllFacts } from "@aurelia-ls/resolution";
+import { extractAllFacts, resolveImports } from "@aurelia-ls/resolution";
 import { createResolverPipeline } from "@aurelia-ls/resolution";
-import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
+import { createRegistrationAnalyzer, type RegistrationAnalysis } from "@aurelia-ls/resolution";
 import { buildResourceGraph } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
@@ -52,20 +52,23 @@ function filterAppFacts(facts, appPath) {
 }
 
 /**
- * Run extraction → inference → registration pipeline.
+ * Run extraction → import resolution → inference → registration pipeline.
  */
 function runPipeline(appPath) {
   const program = createProgramFromApp(appPath);
   const allFacts = extractAllFacts(program);
   const appFacts = filterAppFacts(allFacts, appPath);
 
+  // Import resolution phase (populates DependencyRef.resolvedPath)
+  const resolvedFacts = resolveImports(appFacts);
+
   const pipeline = createResolverPipeline();
-  const resolved = pipeline.resolve(appFacts);
+  const resolved = pipeline.resolve(resolvedFacts);
 
   const analyzer = createRegistrationAnalyzer();
-  const intents = analyzer.analyze(resolved.candidates, appFacts, program);
+  const registration = analyzer.analyze(resolved.candidates, resolvedFacts);
 
-  return { program, appFacts, candidates: resolved.candidates, intents };
+  return { program, appFacts: resolvedFacts, candidates: resolved.candidates, registration };
 }
 
 describe("Scope: explicit-app", () => {
@@ -74,10 +77,10 @@ describe("Scope: explicit-app", () => {
 
   beforeAll(() => {
     pipelineResult = runPipeline(EXPLICIT_APP);
-    graph = buildResourceGraph(pipelineResult.intents);
+    graph = buildResourceGraph(pipelineResult.registration);
   });
 
-  it("builds a ResourceGraph from registration intents", () => {
+  it("builds a ResourceGraph from registration analysis", () => {
 
     // Should produce a valid graph
     expect(graph.version).toBe("aurelia-resource-graph@1");

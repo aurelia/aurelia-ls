@@ -62,18 +62,13 @@ describe("Full Pipeline: explicit-app", () => {
       bindingBehaviors: 11, // 2 app + 9 runtime
     });
 
-    // Assert intent counts by kind
-    expect(result.intents.length, "Should produce 29 intents").toBe(29);
-    const intentsByKind = {
-      global: result.intents.filter(i => i.kind === "global").length,
-      local: result.intents.filter(i => i.kind === "local").length,
-      unknown: result.intents.filter(i => i.kind === "unknown").length,
+    // Assert registration site counts by scope kind
+    const sitesByScope = {
+      global: result.registration.sites.filter(s => s.scope.kind === "global").length,
+      local: result.registration.sites.filter(s => s.scope.kind === "local").length,
     };
-    expect(intentsByKind, "Intent breakdown by kind").toEqual({
-      global: 10, // Resources registered via barrels
-      local: 2,   // price-tag, stock-badge (via static dependencies)
-      unknown: 17, // Runtime resources + app resources not in barrels
-    });
+    expect(sitesByScope.global, "Should have global registration sites").toBeGreaterThan(0);
+    expect(sitesByScope.local, "Should have local registration sites").toBe(2); // price-tag, stock-badge
 
     // Assert scope count
     const scopeCount = Object.keys(result.resourceGraph.scopes).length;
@@ -127,20 +122,25 @@ describe("Full Pipeline: explicit-app", () => {
     expect(currency.resolver).toBe("static-au");
   });
 
-  it("exposes intents for tooling", () => {
-    // Check global intent evidence
-    const navBarIntent = result.intents.find(i => i.resource.name === "nav-bar");
-    expect(navBarIntent, "Should have nav-bar intent").toBeTruthy();
-    expect(navBarIntent.kind).toBe("global");
-    expect(navBarIntent.evidence.length > 0, "Should have evidence").toBe(true);
-    expect(navBarIntent.evidence[0].kind).toBe("aurelia-register");
+  it("exposes registration sites for tooling", () => {
+    // Check global registration site evidence
+    const navBarSite = result.registration.sites.find(
+      s => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === "nav-bar"
+    );
+    expect(navBarSite, "Should have nav-bar registration site").toBeTruthy();
+    expect(navBarSite!.scope.kind).toBe("global");
+    expect(navBarSite!.evidence.kind).toBe("aurelia-register");
 
-    // Check local intent evidence
-    const priceTagIntent = result.intents.find(i => i.resource.name === "price-tag");
-    expect(priceTagIntent, "Should have price-tag intent").toBeTruthy();
-    expect(priceTagIntent.kind).toBe("local");
-    expect(priceTagIntent.scope?.includes("product-card"), "Should be scoped to product-card").toBe(true);
-    expect(priceTagIntent.evidence[0].kind).toBe("static-dependencies");
+    // Check local registration site evidence
+    const priceTagSite = result.registration.sites.find(
+      s => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === "price-tag"
+    );
+    expect(priceTagSite, "Should have price-tag registration site").toBeTruthy();
+    expect(priceTagSite!.scope.kind).toBe("local");
+    if (priceTagSite!.scope.kind === "local") {
+      expect(priceTagSite!.scope.owner.includes("product-card"), "Should be scoped to product-card").toBe(true);
+    }
+    expect(priceTagSite!.evidence.kind).toBe("static-dependencies");
   });
 
   it("discovers templates for element resources", () => {

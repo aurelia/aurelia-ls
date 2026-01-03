@@ -13,44 +13,51 @@ import {
   type ValueConverterSig,
   type BindingBehaviorSig,
 } from "@aurelia-ls/compiler";
-import type { RegistrationIntent } from "../registration/types.js";
+import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
 import type { ResourceCandidate, BindableSpec } from "../inference/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
 
 /**
- * Build a ResourceGraph from registration intents.
+ * Build a ResourceGraph from registration analysis.
  *
  * Enforces the two-level scope model:
- * - Global scope: resources with kind="global" or kind="unknown"
- * - Local scopes: resources with kind="local" (one scope per component)
+ * - Global scope: resources registered globally (Aurelia.register, container.register)
+ * - Local scopes: resources registered locally (static dependencies, decorator deps)
+ *
+ * Note: A resource can have multiple registration sites (both global AND local).
+ * This function processes ALL sites, so a resource may appear in multiple scopes.
  */
 export function buildResourceGraph(
-  intents: readonly RegistrationIntent[],
+  registration: RegistrationAnalysis,
   baseSemantics?: Semantics,
   defaultScope?: ResourceScopeId | null,
 ): ResourceGraph {
   const semantics = baseSemantics ?? DEFAULT_SEMANTICS;
 
-  // Separate intents by scope
+  // Separate sites by scope
   const globalResources = createEmptyCollections();
   const localScopes = new Map<string, { className: string; resources: ResourceCollections }>();
 
-  for (const intent of intents) {
-    if (intent.kind === "global" || intent.kind === "unknown") {
+  for (const site of registration.sites) {
+    // Only process resolved resource references
+    if (site.resourceRef.kind !== "resolved") continue;
+
+    const resource = site.resourceRef.resource;
+
+    if (site.scope.kind === "global") {
       // Add to global scope
-      addToCollections(globalResources, intent.resource);
-    } else if (intent.kind === "local" && intent.scope) {
-      // Add to component-local scope
-      const scopeKey = intent.scope;
+      addToCollections(globalResources, resource);
+    } else {
+      // Local scope - use owner path as scope key
+      const scopeKey = site.scope.owner;
       let scopeData = localScopes.get(scopeKey);
       if (!scopeData) {
-        // Find the component class name from evidence
-        const depEvidence = intent.evidence.find((e) => e.kind === "static-dependencies");
-        const className = depEvidence?.kind === "static-dependencies" ? depEvidence.className : "unknown";
+        // Extract class name from evidence if available
+        const className = extractClassNameFromEvidence(site.evidence);
         scopeData = { className, resources: createEmptyCollections() };
         localScopes.set(scopeKey, scopeData);
       }
-      addToCollections(scopeData.resources, intent.resource);
+      addToCollections(scopeData.resources, resource);
     }
   }
 
@@ -248,4 +255,19 @@ function isResourceOverlayEmpty(resources: Partial<ResourceCollections>): boolea
     !resources.valueConverters &&
     !resources.bindingBehaviors
   );
+}
+
+/**
+ * Extract class name from registration evidence.
+ * Local registration evidence types contain the class name of the registering component.
+ */
+function extractClassNameFromEvidence(evidence: RegistrationEvidence): string {
+  if (
+    evidence.kind === "static-dependencies" ||
+    evidence.kind === "static-au-dependencies" ||
+    evidence.kind === "decorator-dependencies"
+  ) {
+    return evidence.className;
+  }
+  return "unknown";
 }
