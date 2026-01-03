@@ -86,6 +86,7 @@ export type PropertyValueFact =
   | { readonly kind: "boolean"; readonly value: boolean }
   | { readonly kind: "stringArray"; readonly values: readonly string[] }
   | { readonly kind: "bindableArray"; readonly bindables: readonly BindableDefFact[] }
+  | { readonly kind: "dependencyArray"; readonly refs: readonly DependencyRef[] }
   | { readonly kind: "identifier"; readonly name: string }
   | { readonly kind: "propertyAccess"; readonly name: string }
   | { readonly kind: "unknown" };
@@ -96,6 +97,7 @@ export interface StaticAuFact {
   readonly name?: string;
   readonly aliases?: readonly string[];
   readonly bindables?: readonly BindableDefFact[];
+  readonly dependencies?: readonly DependencyRef[];
   readonly template?: string;
   readonly containerless?: boolean;
   readonly isTemplateController?: boolean;

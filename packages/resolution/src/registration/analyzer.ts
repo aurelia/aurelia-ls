@@ -1,6 +1,6 @@
 import type ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { SourceFacts, ImportFact, ExportFact } from "../extraction/types.js";
+import type { SourceFacts, ImportFact, ExportFact, DependencyRef, ClassFacts } from "../extraction/types.js";
 import type { ResourceCandidate } from "../inference/types.js";
 import type { RegistrationIntent, RegistrationEvidence, ImportGraph } from "./types.js";
 import { buildImportGraph } from "./import-graph.js";
@@ -177,7 +177,11 @@ function analyzeCandidate(
 }
 
 /**
- * Find if a resource is used in static dependencies of another component.
+ * Find if a resource is used in local dependencies of another component.
+ * Checks all dependency declaration forms:
+ * - static dependencies = [...]
+ * - static $au = { dependencies: [...] }
+ * - @customElement({ dependencies: [...] })
  */
 function findLocalScope(
   candidate: ResourceCandidate,
@@ -188,10 +192,11 @@ function findLocalScope(
     if (path === candidate.source) continue;
 
     for (const cls of fileFacts.classes) {
-      if (!cls.staticDependencies) continue;
+      // Collect all dependency refs from all sources
+      const allDeps = collectAllDependencies(cls);
 
       // Check if candidate's className is referenced
-      for (const ref of cls.staticDependencies.references) {
+      for (const ref of allDeps) {
         if (ref.kind === "identifier" && ref.name === candidate.className) {
           return { component: path, className: cls.name };
         }
@@ -200,6 +205,35 @@ function findLocalScope(
   }
 
   return null;
+}
+
+/**
+ * Collect dependency references from all declaration forms on a class.
+ */
+function collectAllDependencies(cls: ClassFacts): DependencyRef[] {
+  const deps: DependencyRef[] = [];
+
+  // 1. static dependencies = [...]
+  if (cls.staticDependencies) {
+    deps.push(...cls.staticDependencies.references);
+  }
+
+  // 2. static $au = { dependencies: [...] }
+  if (cls.staticAu?.dependencies) {
+    deps.push(...cls.staticAu.dependencies);
+  }
+
+  // 3. @customElement({ dependencies: [...] }) or similar decorators
+  for (const dec of cls.decorators) {
+    if (dec.args?.kind === "object") {
+      const depsProp = dec.args.properties["dependencies"];
+      if (depsProp?.kind === "dependencyArray") {
+        deps.push(...depsProp.refs);
+      }
+    }
+  }
+
+  return deps;
 }
 
 /**
