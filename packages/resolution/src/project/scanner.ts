@@ -11,14 +11,16 @@ import type { NormalizedPath, CompileTrace } from "@aurelia-ls/compiler";
 import { normalizePathForId, debug, NOOP_TRACE } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "./context.js";
 import { getBaseName, getExtension, getDirectory, getFileType, createProjectFile } from "./context.js";
-import type {
-  ProjectFile,
-  ProjectFileType,
-  ProjectStructure,
-  FilePair,
-  DirectoryConvention,
-  DirectoryMatch,
-  ProjectScannerOptions,
+import {
+  DEFAULT_TEMPLATE_EXTENSIONS,
+  DEFAULT_STYLE_EXTENSIONS,
+  type ProjectFile,
+  type ProjectFileType,
+  type ProjectStructure,
+  type FilePair,
+  type DirectoryConvention,
+  type DirectoryMatch,
+  type ProjectScannerOptions,
 } from "./types.js";
 import { buildFilePair, findOrphanTemplates, findSourcesWithoutTemplates } from "./sibling-detector.js";
 import { matchDirectoryConventions } from "./directory-conventions.js";
@@ -289,8 +291,8 @@ export function createProjectScanner(
 
       for (const source of sources) {
         const pair = buildFilePair(source.path, fileSystem, {
-          templateExtensions: [".html"],
-          styleExtensions: [".css", ".scss"],
+          templateExtensions: [...DEFAULT_TEMPLATE_EXTENSIONS],
+          styleExtensions: [...DEFAULT_STYLE_EXTENSIONS],
         });
         pairs.push(pair);
       }

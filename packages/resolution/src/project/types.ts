@@ -79,7 +79,7 @@ export const FILE_EXTENSIONS: Record<ProjectFileType, readonly string[]> = {
  * Default extensions for sibling detection.
  */
 export const DEFAULT_TEMPLATE_EXTENSIONS = [".html"] as const;
-export const DEFAULT_STYLE_EXTENSIONS = [".css", ".scss"] as const;
+export const DEFAULT_STYLE_EXTENSIONS = [".css", ".scss", ".sass", ".less", ".styl"] as const;
 
 // ============================================================================
 // Directory Conventions

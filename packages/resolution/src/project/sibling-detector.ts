@@ -13,10 +13,12 @@
 import type { NormalizedPath, CompileTrace } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "./context.js";
 import { getBaseName, getExtension, getDirectory } from "./context.js";
-import type {
-  SiblingFile,
-  FilePair,
-  PairingDetection,
+import {
+  DEFAULT_TEMPLATE_EXTENSIONS,
+  DEFAULT_STYLE_EXTENSIONS,
+  type SiblingFile,
+  type FilePair,
+  type PairingDetection,
 } from "./types.js";
 import type { SiblingFileFact } from "../extraction/types.js";
 import { debug, NOOP_TRACE } from "@aurelia-ls/compiler";
@@ -211,8 +213,8 @@ export function buildFilePair(
   fileSystem: FileSystemContext,
   options?: FilePairOptions,
 ): FilePair {
-  const templateExtensions = options?.templateExtensions ?? [".html"];
-  const styleExtensions = options?.styleExtensions ?? [".css", ".scss"];
+  const templateExtensions = options?.templateExtensions ?? [...DEFAULT_TEMPLATE_EXTENSIONS];
+  const styleExtensions = options?.styleExtensions ?? [...DEFAULT_STYLE_EXTENSIONS];
 
   const baseName = getBaseName(sourcePath);
   const extension = getExtension(sourcePath);
