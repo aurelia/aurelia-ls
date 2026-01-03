@@ -176,6 +176,7 @@ export {
   canonicalBindableName,
   canonicalAliases,
   canonicalPath,
+  isKindOfSame,
 } from "./util/index.js";
 
 // === Fingerprint ===

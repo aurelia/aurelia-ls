@@ -8,7 +8,8 @@ import {
   DEFAULT_SUFFIXES,
   DEFAULT_TEMPLATE_EXTENSIONS,
 } from "../conventions/aurelia-defaults.js";
-import { toKebabCase, toCamelCase, getBaseName, isKindOfSame } from "../util/naming.js";
+import { toKebabCase, toCamelCase, isKindOfSame } from "../util/naming.js";
+import { getBaseName } from "../project/context.js";
 import { debug } from "@aurelia-ls/compiler";
 
 /**
