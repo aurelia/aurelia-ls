@@ -61,6 +61,14 @@ export function buildResourceGraph(
     }
   }
 
+  // Add orphaned resources to global scope
+  // Orphans are declared resources (have decorators, static $au, etc.) that weren't
+  // explicitly registered. They should still be usable in templates - the root
+  // component (my-app) is never registered, for example.
+  for (const orphan of registration.orphans) {
+    addToCollections(globalResources, orphan.resource);
+  }
+
   // Build the graph
   const baseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
   const graph = cloneResourceGraph(baseGraph);

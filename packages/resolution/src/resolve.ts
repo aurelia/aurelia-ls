@@ -262,6 +262,10 @@ interface DiscoveredTemplates {
  * For each element:
  * - If it has an inline template (string literal), add to inlineTemplates
  * - Otherwise, apply convention (foo.ts → foo.html) and add to templates
+ *
+ * Processes both registered resources (sites) and orphaned resources (declared
+ * but never registered). Orphans like the root `my-app` component still need
+ * their templates discovered.
  */
 function discoverTemplates(
   registration: RegistrationAnalysis,
@@ -273,6 +277,7 @@ function discoverTemplates(
   const sourceFiles = new Set(program.getSourceFiles().map((sf) => normalizePathForId(sf.fileName)));
   const processedResources = new Set<ResourceCandidate>();
 
+  // Process registered resources (from registration sites)
   for (const site of registration.sites) {
     // Only process resolved resources
     if (site.resourceRef.kind !== "resolved") continue;
@@ -288,6 +293,48 @@ function discoverTemplates(
 
     const componentPath = resource.source;
     const scopeId = computeScopeId(site, resourceGraph);
+
+    // Check for inline template first
+    if (resource.inlineTemplate !== undefined) {
+      inlineTemplates.push({
+        content: resource.inlineTemplate,
+        componentPath,
+        scopeId,
+        className: resource.className,
+        resourceName: resource.name,
+      });
+      continue;
+    }
+
+    // No inline template - try convention-based discovery
+    const templatePath = resolveTemplatePath(componentPath, sourceFiles);
+
+    if (!templatePath) continue;
+
+    templates.push({
+      templatePath,
+      componentPath,
+      scopeId,
+      className: resource.className,
+      resourceName: resource.name,
+    });
+  }
+
+  // Process orphaned resources (declared but never registered)
+  // Orphans like `my-app` are valid elements that need template discovery.
+  // They go to root scope since they have no explicit registration.
+  for (const orphan of registration.orphans) {
+    const resource = orphan.resource;
+
+    // Avoid duplicates (shouldn't happen, but defensive)
+    if (processedResources.has(resource)) continue;
+    processedResources.add(resource);
+
+    // Only elements have templates
+    if (resource.kind !== "element") continue;
+
+    const componentPath = resource.source;
+    const scopeId = resourceGraph.root; // Orphans go to root scope
 
     // Check for inline template first
     if (resource.inlineTemplate !== undefined) {
