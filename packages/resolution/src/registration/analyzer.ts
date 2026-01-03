@@ -1,6 +1,14 @@
 import { toSourceFileId, type NormalizedPath, type SourceSpan } from "@aurelia-ls/compiler";
-import type { SourceFacts, DependencyRef, ClassFacts, RegistrationCallFact, RegistrationArgFact } from "../extraction/types.js";
+import type { SourceFacts, DependencyRef, ClassFacts, RegistrationCallFact, RegistrationArgFact, ImportFact } from "../extraction/types.js";
 import type { ResourceCandidate } from "../inference/types.js";
+import type { ExportBindingMap } from "../binding/types.js";
+import { lookupExportBinding } from "../binding/export-resolver.js";
+import type { PluginManifest, PluginResolver, ImportOrigin } from "../plugins/types.js";
+import {
+  createPluginResolver,
+  traceIdentifierImport,
+  traceMemberAccessImport,
+} from "../plugins/resolver.js";
 import type {
   RegistrationAnalysis,
   RegistrationSite,
@@ -22,19 +30,21 @@ export interface RegistrationAnalyzer {
   analyze(
     candidates: readonly ResourceCandidate[],
     facts: Map<NormalizedPath, SourceFacts>,
+    exportBindings: ExportBindingMap,
   ): RegistrationAnalysis;
 }
 
 /**
  * Create a registration analyzer.
  *
- * The analyzer expects facts to have DependencyRef.resolvedPath populated
- * (via resolveImports). If not populated, resource matching will fail.
+ * The analyzer expects:
+ * - facts to have DependencyRef.resolvedPath populated (via resolveImports)
+ * - exportBindings to be pre-built (via buildExportBindingMap)
  */
 export function createRegistrationAnalyzer(): RegistrationAnalyzer {
   return {
-    analyze(candidates, facts) {
-      const context = new AnalysisContext(facts, candidates);
+    analyze(candidates, facts, exportBindings) {
+      const context = new AnalysisContext(facts, candidates, exportBindings);
       return analyzeRegistrations(context);
     },
   };
@@ -47,16 +57,21 @@ class AnalysisContext {
   /** Map from file path to namespace imports: alias → resolvedPath */
   private namespaceImports = new Map<NormalizedPath, Map<string, NormalizedPath>>();
 
-  /** Map from file path to exported class names (including re-exports) */
+  /** Map from file path to exported class names (for spread resolution) */
   private exportedClasses = new Map<NormalizedPath, Set<string>>();
 
   /** Map from (source file, class name) to ResourceCandidate for fast lookup */
   private candidateIndex = new Map<string, ResourceCandidate>();
 
+  /** Plugin resolver for known plugin manifests */
+  public readonly pluginResolver: PluginResolver;
+
   constructor(
     public readonly facts: Map<NormalizedPath, SourceFacts>,
     public readonly candidates: readonly ResourceCandidate[],
+    public readonly exportBindings: ExportBindingMap,
   ) {
+    this.pluginResolver = createPluginResolver();
     this.buildIndexes();
   }
 
@@ -74,9 +89,10 @@ class AnalysisContext {
       }
     }
 
-    // Index exported classes (resolve re-exports)
-    for (const [path] of this.facts) {
-      this.exportedClasses.set(path, this.collectExportedClasses(path, new Set()));
+    // Index exported class names for spread resolution
+    // (Uses the exportBindings map to get all exported names)
+    for (const [path, bindings] of this.exportBindings) {
+      this.exportedClasses.set(path, new Set(bindings.keys()));
     }
 
     // Index candidates by (source, className)
@@ -84,44 +100,6 @@ class AnalysisContext {
       const key = `${candidate.source}::${candidate.className}`;
       this.candidateIndex.set(key, candidate);
     }
-  }
-
-  /**
-   * Collect all class names exported from a file, resolving re-exports.
-   */
-  private collectExportedClasses(path: NormalizedPath, visited: Set<NormalizedPath>): Set<string> {
-    if (visited.has(path)) return new Set();
-    visited.add(path);
-
-    const fileFacts = this.facts.get(path);
-    if (!fileFacts) return new Set();
-
-    const classes = new Set<string>();
-
-    // Add directly exported classes
-    for (const cls of fileFacts.classes) {
-      classes.add(cls.name);
-    }
-
-    // Process export declarations
-    for (const exp of fileFacts.exports) {
-      if (exp.kind === "named") {
-        for (const name of exp.names) {
-          classes.add(name);
-        }
-      } else if (exp.kind === "reexport-all" && exp.resolvedPath) {
-        const reexported = this.collectExportedClasses(exp.resolvedPath, visited);
-        for (const name of reexported) {
-          classes.add(name);
-        }
-      } else if (exp.kind === "reexport-named" && exp.resolvedPath) {
-        for (const exported of exp.names) {
-          classes.add(exported.alias ?? exported.name);
-        }
-      }
-    }
-
-    return classes;
   }
 
   /**
@@ -153,6 +131,26 @@ class AnalysisContext {
   findCandidateByResolvedPath(resolvedPath: NormalizedPath, className: string): ResourceCandidate | undefined {
     return this.findCandidate(resolvedPath, className);
   }
+
+  /**
+   * Resolve an exported class name through the pre-built export binding map.
+   *
+   * Uses the export binding map built in a prior phase, so this is O(1) lookup
+   * rather than recursive traversal.
+   */
+  resolveExportedClass(
+    filePath: NormalizedPath,
+    className: string,
+  ): { path: NormalizedPath; className: string } | null {
+    const binding = lookupExportBinding(this.exportBindings, filePath, className);
+    if (binding) {
+      return {
+        path: binding.definitionPath,
+        className: binding.definitionName,
+      };
+    }
+    return null;
+  }
 }
 
 /**
@@ -162,6 +160,8 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
   const sites: RegistrationSite[] = [];
   const unresolved: UnresolvedRegistration[] = [];
   const registeredCandidates = new Set<ResourceCandidate>();
+  const activatedPlugins: PluginManifest[] = [];
+  const seenPlugins = new Set<string>(); // Dedupe by package
 
   // 1. Find all local registration sites (static dependencies, decorator deps, static $au deps)
   for (const [filePath, fileFacts] of context.facts) {
@@ -179,18 +179,27 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
   // 2. Find all global registration sites (Aurelia.register, container.register)
   for (const [filePath, fileFacts] of context.facts) {
     for (const call of fileFacts.registrationCalls) {
-      const { globalSites, unresolvedPatterns } = findGlobalRegistrationSites(
+      const result = findGlobalRegistrationSites(
         call,
         filePath,
+        fileFacts.imports,
         context,
       );
-      for (const site of globalSites) {
+      for (const site of result.globalSites) {
         sites.push(site);
         if (site.resourceRef.kind === "resolved") {
           registeredCandidates.add(site.resourceRef.resource);
         }
       }
-      unresolved.push(...unresolvedPatterns);
+      unresolved.push(...result.unresolvedPatterns);
+
+      // Track activated plugins (dedupe by package)
+      for (const plugin of result.plugins) {
+        if (!seenPlugins.has(plugin.package)) {
+          seenPlugins.add(plugin.package);
+          activatedPlugins.push(plugin);
+        }
+      }
     }
   }
 
@@ -209,7 +218,7 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
     }
   }
 
-  return { sites, orphans, unresolved };
+  return { sites, orphans, unresolved, activatedPlugins };
 }
 
 /**
@@ -336,24 +345,45 @@ function refToSourceSpan(ref: DependencyRef, filePath: NormalizedPath): SourceSp
 }
 
 /**
+ * Result from processing global registration sites.
+ */
+interface GlobalRegistrationResult {
+  globalSites: RegistrationSite[];
+  unresolvedPatterns: UnresolvedRegistration[];
+  plugins: PluginManifest[];
+}
+
+/**
  * Find global registration sites from a register() call.
  */
 function findGlobalRegistrationSites(
   call: RegistrationCallFact,
   filePath: NormalizedPath,
+  imports: readonly ImportFact[],
   context: AnalysisContext,
-): { globalSites: RegistrationSite[]; unresolvedPatterns: UnresolvedRegistration[] } {
+): GlobalRegistrationResult {
   const globalSites: RegistrationSite[] = [];
   const unresolvedPatterns: UnresolvedRegistration[] = [];
+  const plugins: PluginManifest[] = [];
   const scope: RegistrationScope = { kind: "global" };
 
   for (const arg of call.arguments) {
-    const { sites, unresolved } = processRegistrationArg(arg, scope, filePath, call, context);
-    globalSites.push(...sites);
-    unresolvedPatterns.push(...unresolved);
+    const result = processRegistrationArg(arg, scope, filePath, imports, call, context);
+    globalSites.push(...result.sites);
+    unresolvedPatterns.push(...result.unresolved);
+    plugins.push(...result.plugins);
   }
 
-  return { globalSites, unresolvedPatterns };
+  return { globalSites, unresolvedPatterns, plugins };
+}
+
+/**
+ * Result from processing a registration argument.
+ */
+interface ProcessArgResult {
+  sites: RegistrationSite[];
+  unresolved: UnresolvedRegistration[];
+  plugins: PluginManifest[];
 }
 
 /**
@@ -363,11 +393,13 @@ function processRegistrationArg(
   arg: RegistrationArgFact,
   scope: RegistrationScope,
   filePath: NormalizedPath,
+  imports: readonly ImportFact[],
   call: RegistrationCallFact,
   context: AnalysisContext,
-): { sites: RegistrationSite[]; unresolved: UnresolvedRegistration[] } {
+): ProcessArgResult {
   const sites: RegistrationSite[] = [];
   const unresolved: UnresolvedRegistration[] = [];
+  const plugins: PluginManifest[] = [];
 
   // Convert arg span to SourceSpan with proper file ID
   const file = toSourceFileId(filePath);
@@ -378,11 +410,26 @@ function processRegistrationArg(
   };
 
   if (arg.kind === "identifier") {
+    // Trace the identifier back through imports to get its origin
+    const origin = traceIdentifierImport(arg.name, imports);
+
+    // Check if this is a known plugin (e.g., RouterConfiguration, StandardConfiguration)
+    if (origin) {
+      const pluginResolution = context.pluginResolver.resolve(origin);
+      if (pluginResolution.kind === "known") {
+        // Record the activated plugin - don't create RegistrationSites
+        // The scope builder will add resources from DEFAULT_SEMANTICS
+        plugins.push(pluginResolution.manifest);
+        return { sites, unresolved, plugins };
+      }
+    }
+
     // Direct identifier: Aurelia.register(MyElement)
     // We need to resolve this identifier to a candidate
     // First, look it up in the file's imports
     const fileFacts = context.facts.get(filePath);
     let resolvedPath: NormalizedPath | null = null;
+    let originalClassName: string = arg.name; // May be aliased
 
     if (fileFacts) {
       for (const imp of fileFacts.imports) {
@@ -390,17 +437,26 @@ function processRegistrationArg(
           const found = imp.names.find(n => (n.alias ?? n.name) === arg.name);
           if (found) {
             resolvedPath = imp.resolvedPath;
+            // Use the original name from the import, not the alias
+            originalClassName = found.name;
             break;
           }
         } else if (imp.kind === "default" && imp.alias === arg.name && imp.resolvedPath) {
           resolvedPath = imp.resolvedPath;
+          // For default imports, we need to find what's exported as default
+          originalClassName = arg.name; // Will be resolved via re-export chain
           break;
         }
       }
     }
 
-    const candidate = resolvedPath
-      ? context.findCandidateByResolvedPath(resolvedPath, arg.name)
+    // Resolve through re-export chains if needed
+    const resolved = resolvedPath
+      ? context.resolveExportedClass(resolvedPath, originalClassName)
+      : null;
+
+    const candidate = resolved
+      ? context.findCandidateByResolvedPath(resolved.path, resolved.className)
       : undefined;
 
     const resourceRef: ResourceRef = candidate
@@ -418,12 +474,102 @@ function processRegistrationArg(
       evidence,
       span: argSpan,
     });
+  } else if (arg.kind === "callExpression") {
+    // Call expression: X.customize(...) pattern
+    // Trace the receiver through imports
+    const origin = traceIdentifierImport(arg.receiver, imports);
+
+    if (origin && arg.method === "customize") {
+      // Check if this is a known plugin with .customize()
+      if (context.pluginResolver.supportsCustomize(origin)) {
+        const pluginResolution = context.pluginResolver.resolve(origin);
+        if (pluginResolution.kind === "known") {
+          // Treat X.customize(...) the same as X
+          plugins.push(pluginResolution.manifest);
+          return { sites, unresolved, plugins };
+        }
+      }
+    }
+
+    // Unknown call expression - can't analyze statically
+    const pattern: UnresolvedPattern = {
+      kind: "function-call",
+      functionName: `${arg.receiver}.${arg.method}`,
+    };
+    unresolved.push({
+      pattern,
+      file: filePath,
+      span: argSpan,
+      reason: `Cannot statically analyze call to '${arg.receiver}.${arg.method}()'`,
+    });
   } else if (arg.kind === "arrayLiteral") {
     // Array literal: Aurelia.register([A, B, C])
     for (const el of arg.elements) {
-      const result = processRegistrationArg(el, scope, filePath, call, context);
+      const result = processRegistrationArg(el, scope, filePath, imports, call, context);
       sites.push(...result.sites);
       unresolved.push(...result.unresolved);
+      plugins.push(...result.plugins);
+    }
+  } else if (arg.kind === "memberAccess") {
+    // Member access: Aurelia.register(Router.RouterConfiguration) or widgets.SpecialWidget
+    // First, check if this is a plugin via namespace import
+    const origin = traceMemberAccessImport(arg.namespace, arg.member, imports);
+    if (origin) {
+      const pluginResolution = context.pluginResolver.resolve(origin);
+      if (pluginResolution.kind === "known") {
+        plugins.push(pluginResolution.manifest);
+        return { sites, unresolved, plugins };
+      }
+    }
+
+    // Not a plugin - resolve the namespace to find the barrel file
+    const barrelPath = context.getNamespaceImportPath(filePath, arg.namespace);
+    if (barrelPath) {
+      // Look up the member in the barrel's exports and follow re-export chain
+      const resolved = context.resolveExportedClass(barrelPath, arg.member);
+      const candidate = resolved
+        ? context.findCandidateByResolvedPath(resolved.path, resolved.className)
+        : undefined;
+
+      const evidence: RegistrationEvidence = {
+        kind: call.receiver === "Aurelia" ? "aurelia-register" : "container-register",
+        file: filePath,
+      };
+
+      if (candidate) {
+        sites.push({
+          resourceRef: { kind: "resolved", resource: candidate },
+          scope,
+          evidence,
+          span: argSpan,
+        });
+      } else {
+        sites.push({
+          resourceRef: {
+            kind: "unresolved",
+            name: `${arg.namespace}.${arg.member}`,
+            reason: `Could not resolve '${arg.member}' in namespace '${arg.namespace}'`,
+          },
+          scope,
+          evidence,
+          span: argSpan,
+        });
+      }
+    } else {
+      // Namespace not found in imports
+      sites.push({
+        resourceRef: {
+          kind: "unresolved",
+          name: `${arg.namespace}.${arg.member}`,
+          reason: `Unknown namespace '${arg.namespace}'`,
+        },
+        scope,
+        evidence: {
+          kind: call.receiver === "Aurelia" ? "aurelia-register" : "container-register",
+          file: filePath,
+        },
+        span: argSpan,
+      });
     }
   } else if (arg.kind === "spread") {
     // Spread: Aurelia.register(...components)
@@ -472,5 +618,5 @@ function processRegistrationArg(
     });
   }
 
-  return { sites, unresolved };
+  return { sites, unresolved, plugins };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { extractAllFacts, resolveImports } from "@aurelia-ls/resolution";
+import { extractAllFacts, resolveImports, buildExportBindingMap } from "@aurelia-ls/resolution";
 import { createResolverPipeline } from "@aurelia-ls/resolution";
 import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
 import { buildResourceGraph } from "@aurelia-ls/resolution";
@@ -24,11 +24,14 @@ describe("Scope: explicit-app", () => {
     // Import resolution phase
     const resolvedFacts = resolveImports(appFacts);
 
+    // Export binding resolution phase
+    const exportBindings = buildExportBindingMap(resolvedFacts);
+
     const pipeline = createResolverPipeline();
     const resolved = pipeline.resolve(resolvedFacts);
 
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(resolved.candidates, resolvedFacts);
+    const registration = analyzer.analyze(resolved.candidates, resolvedFacts, exportBindings);
 
     graph = buildResourceGraph(registration);
   });

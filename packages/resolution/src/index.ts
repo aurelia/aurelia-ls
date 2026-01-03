@@ -127,6 +127,15 @@ export type {
   DependencyRef,
 } from "./extraction/index.js";
 
+// === Export Binding Resolution (Layer 1.5) ===
+export { buildExportBindingMap, lookupExportBinding } from "./binding/index.js";
+export type {
+  ResolvedExport,
+  FileExportBindings,
+  ExportBindingMap,
+  ExportLookupResult,
+} from "./binding/index.js";
+
 // === Inference (Layer 2) ===
 export { createResolverPipeline, resolveFromDecorators, resolveFromStaticAu, resolveFromConventions } from "./inference/index.js";
 export type { ResourceCandidate, BindableSpec, ResolverResult, ResolverDiagnostic, ResolverPipeline } from "./inference/index.js";
@@ -224,3 +233,25 @@ export type {
   DynamicRouteComponent,
   RouteTreeOptions,
 } from "./routes/index.js";
+
+// === Plugins (Known plugin manifests) ===
+export {
+  ROUTER_MANIFEST,
+  STANDARD_CONFIGURATION_MANIFEST,
+  DEFAULT_PLUGIN_MANIFESTS,
+  getPluginManifest,
+  hasPlugins,
+  createPluginResolver,
+  createPluginResolverWithManifests,
+  isCustomizeCall,
+  mightBePluginByName,
+  traceIdentifierImport,
+  traceMemberAccessImport,
+} from "./plugins/index.js";
+export type {
+  ImportOrigin,
+  PluginManifest,
+  PluginManifestRegistry,
+  PluginResolution,
+  PluginResolver,
+} from "./plugins/index.js";

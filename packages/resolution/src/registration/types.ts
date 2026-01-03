@@ -50,6 +50,7 @@
 
 import type { NormalizedPath, SourceSpan } from "@aurelia-ls/compiler";
 import type { ResourceCandidate } from "../inference/types.js";
+import type { PluginManifest } from "../plugins/types.js";
 
 // =============================================================================
 // Core Output Type
@@ -92,6 +93,21 @@ export interface RegistrationAnalysis {
    * These get diagnostics so users understand analysis limitations.
    */
   readonly unresolved: readonly UnresolvedRegistration[];
+
+  /**
+   * Plugins that were detected as registered.
+   *
+   * When a plugin is registered (e.g., `Aurelia.register(RouterConfiguration)`),
+   * its package is "activated". Resources from DEFAULT_SEMANTICS with matching
+   * `package` field should be included in the ResourceGraph.
+   *
+   * This enables conditional resource availability:
+   * - RouterConfiguration registered → au-viewport, load, href available
+   * - RouterConfiguration NOT registered → those elements/attributes are errors
+   *
+   * The scope builder uses this to filter DEFAULT_SEMANTICS by package.
+   */
+  readonly activatedPlugins: readonly PluginManifest[];
 }
 
 // =============================================================================

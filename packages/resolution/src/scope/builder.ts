@@ -15,6 +15,7 @@ import {
 } from "@aurelia-ls/compiler";
 import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
 import type { ResourceCandidate, BindableSpec } from "../inference/types.js";
+import type { PluginManifest } from "../plugins/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
 
 /**
@@ -23,6 +24,9 @@ import { stableStringify } from "../fingerprint/fingerprint.js";
  * Enforces the two-level scope model:
  * - Global scope: resources registered globally (Aurelia.register, container.register)
  * - Local scopes: resources registered locally (static dependencies, decorator deps)
+ *
+ * Plugin resources (those with `package` field in DEFAULT_SEMANTICS) are only included
+ * when the corresponding plugin is activated via registration.activatedPlugins.
  *
  * Note: A resource can have multiple registration sites (both global AND local).
  * This function processes ALL sites, so a resource may appear in multiple scopes.
@@ -33,6 +37,12 @@ export function buildResourceGraph(
   defaultScope?: ResourceScopeId | null,
 ): ResourceGraph {
   const semantics = baseSemantics ?? DEFAULT_SEMANTICS;
+
+  // Build set of activated packages from plugins
+  const activatedPackages = new Set<string>();
+  for (const plugin of registration.activatedPlugins) {
+    activatedPackages.add(plugin.package);
+  }
 
   // Separate sites by scope
   const globalResources = createEmptyCollections();
@@ -69,9 +79,9 @@ export function buildResourceGraph(
     addToCollections(globalResources, orphan.resource);
   }
 
-  // Build the graph
-  const baseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
-  const graph = cloneResourceGraph(baseGraph);
+  // Build the base graph, filtering out plugin resources that aren't activated
+  const fullBaseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
+  const graph = cloneResourceGraphWithFilter(fullBaseGraph, activatedPackages);
 
   // Determine target scope for global resources
   const targetScopeId = defaultScope ?? semantics.defaultScope ?? graph.root;
@@ -229,6 +239,80 @@ function cloneResourceGraph(graph: ResourceGraph): ResourceGraph {
     };
   }
   return { version: graph.version, root: graph.root, scopes };
+}
+
+/**
+ * Clone a ResourceGraph, filtering out plugin resources that aren't activated.
+ *
+ * Resources with a `package` field are only included if their package is in activatedPackages.
+ * Resources without a `package` field (core resources) are always included.
+ */
+function cloneResourceGraphWithFilter(
+  graph: ResourceGraph,
+  activatedPackages: Set<string>,
+): ResourceGraph {
+  const scopes: Record<ResourceScopeId, ResourceScope> = {};
+  for (const [id, scope] of Object.entries(graph.scopes)) {
+    scopes[id as ResourceScopeId] = {
+      id: scope.id,
+      parent: scope.parent,
+      ...(scope.label ? { label: scope.label } : {}),
+      resources: filterPartialResources(scope.resources, activatedPackages),
+    };
+  }
+  return { version: graph.version, root: graph.root, scopes };
+}
+
+/**
+ * Filter resources by activated packages.
+ *
+ * - Resources without `package` field are always included (core resources).
+ * - Resources with `package` field are only included if package is activated.
+ */
+function filterPartialResources(
+  resources: Partial<ResourceCollections> | undefined,
+  activatedPackages: Set<string>,
+): Partial<ResourceCollections> {
+  if (!resources) return {};
+  const filtered: Partial<ResourceCollections> = {};
+
+  if (resources.elements) {
+    const elements: Record<string, ElementRes> = {};
+    for (const [name, el] of Object.entries(resources.elements)) {
+      if (!el.package || activatedPackages.has(el.package)) {
+        elements[name] = el;
+      }
+    }
+    if (Object.keys(elements).length > 0) {
+      filtered.elements = elements;
+    }
+  }
+
+  if (resources.attributes) {
+    const attributes: Record<string, AttrRes> = {};
+    for (const [name, attr] of Object.entries(resources.attributes)) {
+      if (!attr.package || activatedPackages.has(attr.package)) {
+        attributes[name] = attr;
+      }
+    }
+    if (Object.keys(attributes).length > 0) {
+      filtered.attributes = attributes;
+    }
+  }
+
+  // Controllers, value converters, and binding behaviors don't have package field
+  // (they're part of StandardConfiguration which is always assumed "on")
+  if (resources.controllers) {
+    filtered.controllers = { ...resources.controllers };
+  }
+  if (resources.valueConverters) {
+    filtered.valueConverters = { ...resources.valueConverters };
+  }
+  if (resources.bindingBehaviors) {
+    filtered.bindingBehaviors = { ...resources.bindingBehaviors };
+  }
+
+  return filtered;
 }
 
 function clonePartialResources(resources: Partial<ResourceCollections> | undefined): Partial<ResourceCollections> {

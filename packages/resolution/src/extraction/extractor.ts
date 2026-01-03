@@ -28,6 +28,13 @@ export interface ExtractionOptions {
    * @default ['.css', '.scss']
    */
   readonly styleExtensions?: readonly string[];
+
+  /**
+   * Custom module resolution host for resolving import paths.
+   * When provided, used instead of ts.sys for module resolution.
+   * Useful for in-memory programs in tests.
+   */
+  readonly moduleResolutionHost?: ts.ModuleResolutionHost;
 }
 
 /**
@@ -92,12 +99,12 @@ export function extractSourceFacts(
     }
 
     if (ts.isImportDeclaration(stmt)) {
-      const importFact = extractImportFact(stmt, sf.fileName, program);
+      const importFact = extractImportFact(stmt, sf.fileName, program, options?.moduleResolutionHost);
       if (importFact) imports.push(importFact);
     }
 
     if (ts.isExportDeclaration(stmt)) {
-      const exportFact = extractExportFact(stmt, sf.fileName, program);
+      const exportFact = extractExportFact(stmt, sf.fileName, program, options?.moduleResolutionHost);
       if (exportFact) exports.push(exportFact);
     }
 
@@ -160,12 +167,17 @@ function detectSiblingFiles(
 /**
  * Extract import fact from an import declaration.
  */
-function extractImportFact(decl: ts.ImportDeclaration, containingFile: string, program?: ts.Program): ImportFact | null {
+function extractImportFact(
+  decl: ts.ImportDeclaration,
+  containingFile: string,
+  program?: ts.Program,
+  host?: ts.ModuleResolutionHost
+): ImportFact | null {
   const specifier = decl.moduleSpecifier;
   if (!ts.isStringLiteral(specifier)) return null;
 
   const moduleSpecifier = specifier.text;
-  const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program) : null;
+  const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program, host) : null;
 
   const importClause = decl.importClause;
   if (!importClause) {
@@ -216,11 +228,16 @@ function extractImportFact(decl: ts.ImportDeclaration, containingFile: string, p
 /**
  * Extract export fact from an export declaration.
  */
-function extractExportFact(decl: ts.ExportDeclaration, containingFile: string, program?: ts.Program): ExportFact | null {
+function extractExportFact(
+  decl: ts.ExportDeclaration,
+  containingFile: string,
+  program?: ts.Program,
+  host?: ts.ModuleResolutionHost
+): ExportFact | null {
   // Re-export from another module
   if (decl.moduleSpecifier && ts.isStringLiteral(decl.moduleSpecifier)) {
     const moduleSpecifier = decl.moduleSpecifier.text;
-    const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program) : null;
+    const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program, host) : null;
 
     // export * from "./foo"
     if (!decl.exportClause) {
@@ -267,12 +284,17 @@ function extractExportFact(decl: ts.ExportDeclaration, containingFile: string, p
 /**
  * Resolve a module specifier to a file path.
  */
-function resolveModulePath(specifier: string, containingFile: string, program: ts.Program): NormalizedPath | null {
+function resolveModulePath(
+  specifier: string,
+  containingFile: string,
+  program: ts.Program,
+  host?: ts.ModuleResolutionHost
+): NormalizedPath | null {
   const result = ts.resolveModuleName(
     specifier,
     containingFile,
     program.getCompilerOptions(),
-    ts.sys,
+    host ?? ts.sys,
   );
 
   if (result.resolvedModule?.resolvedFileName) {

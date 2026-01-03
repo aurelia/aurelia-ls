@@ -9,6 +9,7 @@ import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
 import { extractAllFacts } from "./extraction/extractor.js";
 import { resolveImports } from "./extraction/import-resolver.js";
+import { buildExportBindingMap } from "./binding/export-resolver.js";
 import { createResolverPipeline } from "./inference/resolver-pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
@@ -164,11 +165,22 @@ export function resolve(
       diagnosticCount: resolverDiags.length,
     });
 
+    // Layer 2.5: Export Binding Resolution
+    log.info("[resolution] building export bindings...");
+    trace.event("resolution.binding.start");
+    const exportBindings = buildExportBindingMap(facts);
+    trace.event("resolution.binding.done", {
+      fileCount: exportBindings.size,
+    });
+    debug.resolution("binding.complete", {
+      fileCount: exportBindings.size,
+    });
+
     // Layer 3: Registration Analysis
     log.info("[resolution] analyzing registration...");
     trace.event("resolution.registration.start");
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(candidates, facts);
+    const registration = analyzer.analyze(candidates, facts, exportBindings);
     trace.event("resolution.registration.done", {
       siteCount: registration.sites.length,
       orphanCount: registration.orphans.length,

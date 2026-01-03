@@ -160,7 +160,9 @@ export interface RegistrationCallFact {
 export type RegistrationArgFact =
   | { readonly kind: "identifier"; readonly name: string; readonly span: TextSpan }
   | { readonly kind: "spread"; readonly name: string; readonly span: TextSpan }
+  | { readonly kind: "memberAccess"; readonly namespace: string; readonly member: string; readonly span: TextSpan }
   | { readonly kind: "arrayLiteral"; readonly elements: readonly RegistrationArgFact[]; readonly span: TextSpan }
+  | { readonly kind: "callExpression"; readonly receiver: string; readonly method: string; readonly span: TextSpan }
   | { readonly kind: "unknown"; readonly span: TextSpan };
 
 /** Source position */

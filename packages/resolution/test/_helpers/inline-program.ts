@@ -50,6 +50,16 @@ export function createProgramFromMemory(
     Object.entries(files).map(([k, v]) => [normalize(k), v])
   );
 
+  // Collect directories from in-memory files
+  const dirs = new Set<string>();
+  for (const path of mem.keys()) {
+    let dir = path;
+    while ((dir = dir.substring(0, dir.lastIndexOf("/"))) && dir !== "") {
+      dirs.add(dir);
+    }
+    dirs.add("/"); // Root directory
+  }
+
   const roots = rootNames ?? Object.keys(files);
   const base = ts.createCompilerHost(opts, true);
 
@@ -59,6 +69,10 @@ export function createProgramFromMemory(
     getCanonicalFileName: (f) => normalize(f),
     fileExists: (f) => mem.has(normalize(f)) || base.fileExists(f),
     readFile: (f) => mem.get(normalize(f)) ?? base.readFile(f),
+    directoryExists: (d) => {
+      const key = normalize(d);
+      return dirs.has(key) || base.directoryExists?.(d) || false;
+    },
     getSourceFile: (f, lang, onErr, shouldCreate) => {
       const key = normalize(f);
       if (mem.has(key)) {

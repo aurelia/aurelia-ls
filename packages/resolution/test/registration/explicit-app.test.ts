@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { extractAllFacts, resolveImports } from "@aurelia-ls/resolution";
+import { extractAllFacts, resolveImports, buildExportBindingMap } from "@aurelia-ls/resolution";
 import { createResolverPipeline } from "@aurelia-ls/resolution";
 import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
 import type { RegistrationAnalysis, RegistrationSite } from "@aurelia-ls/resolution";
@@ -38,10 +38,13 @@ describe("Registration: explicit-app", () => {
     const resolvedFacts = resolveImports(allFacts);
     const appFacts = filterFactsByPathPattern(resolvedFacts, "/explicit-app/src/");
 
+    // Build export binding map
+    const exportBindings = buildExportBindingMap(appFacts);
+
     const pipeline = createResolverPipeline();
     const resolved = pipeline.resolve(appFacts);
     const analyzer = createRegistrationAnalyzer();
-    analysis = analyzer.analyze(resolved.candidates, appFacts);
+    analysis = analyzer.analyze(resolved.candidates, appFacts, exportBindings);
   });
 
   it("analyzes registration sites and orphans for all candidates", () => {

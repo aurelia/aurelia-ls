@@ -135,10 +135,37 @@ function extractSingleArg(expr: ts.Expression, sf: ts.SourceFile): RegistrationA
     return { kind: "arrayLiteral", elements, span };
   }
 
-  // TODO: Handle more complex patterns:
-  // - Property access: SomeModule.SomeElement
-  // - Call expressions: StandardConfiguration, RouterConfiguration.customize({...})
-  // - Object literals for config
+  // Property access: namespace.Member (e.g., widgets.SpecialWidget)
+  if (ts.isPropertyAccessExpression(expr)) {
+    if (ts.isIdentifier(expr.expression) && ts.isIdentifier(expr.name)) {
+      return {
+        kind: "memberAccess",
+        namespace: expr.expression.text,
+        member: expr.name.text,
+        span,
+      };
+    }
+    // More complex chains (a.b.c) - not yet supported
+    return { kind: "unknown", span };
+  }
+
+  // Call expression: X.customize(...) pattern for plugins
+  if (ts.isCallExpression(expr)) {
+    // Check for X.method() pattern
+    if (ts.isPropertyAccessExpression(expr.expression)) {
+      const propAccess = expr.expression;
+      if (ts.isIdentifier(propAccess.expression) && ts.isIdentifier(propAccess.name)) {
+        return {
+          kind: "callExpression",
+          receiver: propAccess.expression.text,
+          method: propAccess.name.text,
+          span,
+        };
+      }
+    }
+    // Direct function call like someFunc() - can't analyze statically
+    return { kind: "unknown", span };
+  }
 
   return { kind: "unknown", span };
 }
