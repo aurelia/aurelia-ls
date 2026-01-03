@@ -1,4 +1,4 @@
 [submodule "aurelia"]
 	path = aurelia
 	url = https://github.com/aurelia/aurelia.git
-	branch = master
+	branch = hydration-approot-resolution

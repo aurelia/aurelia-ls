@@ -119,13 +119,19 @@ export function patchComponentDefinition(
 
 /**
  * Check if a class has a $au definition (is an Aurelia component).
+ *
+ * Returns false for:
+ * - Non-functions (components must be classes/functions)
+ * - Functions without $au property
+ * - $au that is not a plain object (rejects arrays, null, primitives)
  */
 export function hasComponentDefinition(cls: unknown): cls is ComponentClass {
   return (
     typeof cls === "function" &&
     "$au" in cls &&
     typeof cls.$au === "object" &&
-    cls.$au !== null
+    cls.$au !== null &&
+    !Array.isArray(cls.$au)
   );
 }
 

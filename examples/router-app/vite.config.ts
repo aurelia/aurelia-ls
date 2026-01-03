@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
-import aureliaPlugin from '@aurelia/vite-plugin';
-import { aureliaSSR } from '@aurelia-ls/vite-plugin';
+import { aurelia } from '@aurelia-ls/vite-plugin';
 import { Registration, IContainer } from '@aurelia/kernel';
 import { AppTask } from 'aurelia';
 import {
@@ -18,9 +17,8 @@ import {
 /**
  * Vite configuration for Aurelia Router SSR example.
  *
- * Both dev and production builds work with Vite. The aureliaSSR plugin
- * handles .html template imports via virtual files to avoid conflicts
- * with vite:build-html.
+ * The aurelia() plugin handles both dev and production builds,
+ * including AOT compilation and SSR.
  */
 
 // HTML shell for SSR with hydration support
@@ -58,44 +56,35 @@ export default defineConfig({
     conditions: ['development'],
   },
   plugins: [
-    // Use standard aurelia plugin only for dev mode
-    // For production, aureliaSSR handles all transforms with AOT
-    process.env.NODE_ENV !== 'production' && aureliaPlugin({
-      useDev: true,
-    }),
-    aureliaSSR({
+    aurelia({
       entry: './src/my-app.html',
       tsconfig: './tsconfig.json',
-      stripMarkers: false,
-      htmlShell: ssrShell,
-      baseHref: '/',
-      // SSR entry point for production builds
-      ssrEntry: './src/entry-server.ts',
-      // SSG can be enabled here, or run via scripts/generate-static.mjs
+      ssr: {
+        stripMarkers: false,
+        htmlShell: ssrShell,
+        baseHref: '/',
+        ssrEntry: './src/entry-server.ts',
+        // Register router for SSR
+        register: (container: IContainer, req) => {
+          const url = req?.url ?? '/';
+          const locationManager = new ServerLocationManager(url, '/');
+          const routerOptions = RouterOptions.create({});
+
+          container.register(
+            Registration.instance(ILocationManager, locationManager),
+            Registration.instance(IRouterOptions, routerOptions),
+            Registration.instance(RouterOptions, routerOptions),
+            IRouter,
+            ViewportCustomElement,
+            LoadCustomAttribute,
+            HrefCustomAttribute,
+            AppTask.hydrated(IContainer, RouteContext.setRoot),
+            AppTask.activated(IRouter, router => router.load(url)),
+          );
+        },
+      },
       ssg: {
         enabled: false,
-      },
-      // Register router for SSR (dev mode)
-      register: (container: IContainer, req) => {
-        const url = req?.url ?? '/';
-        const locationManager = new ServerLocationManager(url, '/');
-        const routerOptions = RouterOptions.create({});
-
-        container.register(
-          // ServerLocationManager for URL handling without browser APIs
-          Registration.instance(ILocationManager, locationManager),
-          Registration.instance(IRouterOptions, routerOptions),
-          Registration.instance(RouterOptions, routerOptions),
-          IRouter,
-          // Router resources
-          ViewportCustomElement,
-          LoadCustomAttribute,
-          HrefCustomAttribute,
-          // Set up route context
-          AppTask.hydrated(IContainer, RouteContext.setRoot),
-          // Activate routes to render matched components
-          AppTask.activated(IRouter, router => router.load(url)),
-        );
       },
     }),
   ],

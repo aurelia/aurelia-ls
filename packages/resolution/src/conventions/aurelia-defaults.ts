@@ -1,4 +1,5 @@
 import type { ConventionConfig, SuffixConfig, FilePatternConfig } from "./types.js";
+import { DEFAULT_STYLE_EXTENSIONS } from "../project/types.js";
 
 /**
  * Aurelia resource decorator names.
@@ -63,13 +64,19 @@ export const DEFAULT_TEMPLATE_EXTENSIONS = [".html"];
 
 /**
  * Default convention configuration.
+ *
+ * Note: `directories`, `templatePairing`, and `stylesheetPairing` are
+ * intentionally omitted. When undefined, the resolution pipeline uses
+ * its built-in defaults (DEFAULT_DIRECTORY_CONVENTIONS, etc.).
  */
-export const DEFAULT_CONVENTION_CONFIG: Required<ConventionConfig> = {
+export const DEFAULT_CONVENTION_CONFIG: ConventionConfig = {
+  enabled: true,
   suffixes: DEFAULT_SUFFIXES,
   filePatterns: DEFAULT_FILE_PATTERNS,
   viewModelExtensions: DEFAULT_VIEW_MODEL_EXTENSIONS,
   templateExtensions: DEFAULT_TEMPLATE_EXTENSIONS,
-  enabled: true,
+  styleExtensions: DEFAULT_STYLE_EXTENSIONS,
+  // directories, templatePairing, stylesheetPairing use built-in defaults when undefined
 };
 
 /**

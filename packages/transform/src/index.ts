@@ -150,3 +150,17 @@ export type {
   EntryTransformResult,
   KnownConfiguration,
 } from "./entry/index.js";
+
+// High-level compilation utilities (for build tools and tests)
+export {
+  compileModule,
+  transpileToJs,
+  fixImportExtensions,
+  deriveNamesFromPath,
+} from "./compile/index.js";
+export type {
+  CompileModuleOptions,
+  CompileModuleResult,
+  TranspileOptions,
+  DerivedNames,
+} from "./compile/index.js";

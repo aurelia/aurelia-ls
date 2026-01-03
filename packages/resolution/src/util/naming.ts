@@ -75,3 +75,36 @@ export function canonicalAliases(values: readonly string[]): string[] {
 export function canonicalPath(fileName: string): NormalizedPath {
   return normalizePathForId(fileName);
 }
+
+/**
+ * Extract the base name from a file path (without extension).
+ *
+ * Examples:
+ * - "/src/my-app.ts" → "my-app"
+ * - "/src/MyApp.ts" → "MyApp"
+ * - "cortex-devices.html" → "cortex-devices"
+ * - "/foo/bar/index.ts" → "index"
+ */
+export function getBaseName(filePath: string): string {
+  // Get the file name part (after last / or \)
+  const lastSlash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  const fileName = lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath;
+
+  // Remove extension
+  const lastDot = fileName.lastIndexOf(".");
+  return lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
+}
+
+/**
+ * Check if two names are "kind of same" (match ignoring hyphens).
+ * Used for convention matching where class name may differ in casing from file name.
+ *
+ * Examples:
+ * - isKindOfSame("cortex-devices", "CortexDevices") → true
+ * - isKindOfSame("my-app", "MyApp") → true
+ * - isKindOfSame("foo", "bar") → false
+ */
+export function isKindOfSame(name1: string, name2: string): boolean {
+  const normalize = (s: string) => s.toLowerCase().replace(/-/g, "");
+  return normalize(name1) === normalize(name2);
+}

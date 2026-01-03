@@ -16,7 +16,7 @@
 
 import type { ViteDevServer } from "vite";
 import { readFile } from "node:fs/promises";
-import type { CompileTrace } from "@aurelia-ls/compiler";
+import { debug, type CompileTrace } from "@aurelia-ls/compiler";
 import type { ResolutionContext } from "./types.js";
 import { compileWithAot, type AotCompileResult, type ComponentClass } from "@aurelia-ls/ssr";
 
@@ -105,6 +105,7 @@ class ComponentCache {
     // Find and remove any cache entry that matches this path
     // (could be template path or component path)
     let invalidated = false;
+    const invalidatedComponents: string[] = [];
 
     for (const [key, component] of this.cache) {
       if (
@@ -113,7 +114,17 @@ class ComponentCache {
       ) {
         this.cache.delete(key);
         invalidated = true;
+        invalidatedComponents.push(component.name);
       }
+    }
+
+    if (invalidated) {
+      debug.vite("loader.cache.invalidate", {
+        path,
+        normalized,
+        invalidatedComponents,
+        remainingCacheSize: this.cache.size,
+      });
     }
 
     return invalidated;
@@ -123,7 +134,13 @@ class ComponentCache {
    * Clear the entire cache (e.g., on full reload).
    */
   clear(): void {
+    const previousSize = this.cache.size;
     this.cache.clear();
+    if (previousSize > 0) {
+      debug.vite("loader.cache.clear", {
+        clearedCount: previousSize,
+      });
+    }
   }
 
   /**
@@ -191,6 +208,18 @@ export async function loadProjectComponents(
   // Normalize root path for comparison
   const normalizedRootPath = normalizePath(rootTemplatePath);
 
+  // Debug: Log what we're looking for and what templates are available
+  debug.vite("loader.loadComponents", {
+    rootTemplatePath,
+    normalizedRootPath,
+    discoveredTemplates: resolution.result.templates.map(t => ({
+      name: t.resourceName,
+      templatePath: normalizePath(t.templatePath),
+      className: t.className,
+    })),
+    templateCount: resolution.result.templates.length,
+  });
+
   // Process all discovered templates
   for (const templateInfo of resolution.result.templates) {
     try {
@@ -198,12 +227,22 @@ export async function loadProjectComponents(
       const cached = componentCache.get(templateInfo.templatePath);
       if (cached) {
         // Use cached component (already patched)
+        debug.vite("loader.cacheHit", {
+          component: templateInfo.resourceName,
+          templatePath: templateInfo.templatePath,
+        });
         components.set(templateInfo.resourceName, cached);
         categorizeComponent(cached, normalizedRootPath, (r) => { root = r; }, children);
         continue;
       }
 
       // Cache miss - load and compile
+      debug.vite("loader.cacheMiss", {
+        component: templateInfo.resourceName,
+        templatePath: templateInfo.templatePath,
+        componentPath: templateInfo.componentPath,
+        className: templateInfo.className,
+      });
       trace?.event("loader.compile", { component: templateInfo.resourceName });
 
       // Read template HTML
@@ -224,19 +263,38 @@ export async function loadProjectComponents(
 
       // Extract the class by name
       let ComponentClass = module[templateInfo.className] as ComponentClass | undefined;
+      let extractionMethod: "named" | "default" | null = null;
 
-      if (!ComponentClass) {
+      if (ComponentClass) {
+        extractionMethod = "named";
+      } else {
         // Try default export
         const defaultExport = module.default as ComponentClass | undefined;
         if (defaultExport?.name === templateInfo.className) {
           ComponentClass = defaultExport;
-        } else {
-          console.warn(
-            `[aurelia-ssr] Could not find class "${templateInfo.className}" in module "${templateInfo.componentPath}"`,
-          );
-          continue;
+          extractionMethod = "default";
         }
       }
+
+      if (!ComponentClass) {
+        debug.vite("loader.classNotFound", {
+          component: templateInfo.resourceName,
+          className: templateInfo.className,
+          componentPath: templateInfo.componentPath,
+          moduleExports: Object.keys(module),
+        });
+        console.warn(
+          `[aurelia-ssr] Could not find class "${templateInfo.className}" in module "${templateInfo.componentPath}"`,
+        );
+        continue;
+      }
+
+      debug.vite("loader.classLoaded", {
+        component: templateInfo.resourceName,
+        className: templateInfo.className,
+        extractionMethod,
+        hasStaticAu: "$au" in ComponentClass,
+      });
 
       const loaded: LoadedComponent = {
         ComponentClass,
@@ -259,6 +317,17 @@ export async function loadProjectComponents(
       );
     }
   }
+
+  // Debug: Log final result
+  // Note: root is set via callback so TypeScript doesn't track its mutation
+  const finalRoot = root as LoadedComponent | null;
+  debug.vite("loader.loadComplete", {
+    rootFound: finalRoot !== null,
+    rootName: finalRoot?.name ?? null,
+    childCount: children.length,
+    childNames: children.map(c => c.name),
+    totalComponents: components.size,
+  });
 
   return { components, root, children };
 }
@@ -304,13 +373,21 @@ export async function loadComponent(
   templatePath: string,
   trace?: CompileTrace,
 ): Promise<LoadedComponent | null> {
+  const normalizedPath = normalizePath(templatePath);
+
+  debug.vite("loader.loadSingle.start", {
+    templatePath,
+    normalizedPath,
+  });
+
   // Check cache first
   const cached = componentCache.get(templatePath);
   if (cached) {
+    debug.vite("loader.loadSingle.cacheHit", {
+      component: cached.name,
+    });
     return cached;
   }
-
-  const normalizedPath = normalizePath(templatePath);
 
   // Find the template info
   const templateInfo = resolution.result.templates.find(
@@ -318,6 +395,11 @@ export async function loadComponent(
   );
 
   if (!templateInfo) {
+    debug.vite("loader.loadSingle.notFound", {
+      templatePath,
+      normalizedPath,
+      availableTemplates: resolution.result.templates.map(t => normalizePath(t.templatePath)),
+    });
     console.warn(`[aurelia-ssr] No template info found for "${templatePath}"`);
     return null;
   }
@@ -339,6 +421,12 @@ export async function loadComponent(
     const ComponentClass = (module[templateInfo.className] ?? module.default) as ComponentClass | undefined;
 
     if (!ComponentClass) {
+      debug.vite("loader.loadSingle.classNotFound", {
+        component: templateInfo.resourceName,
+        className: templateInfo.className,
+        componentPath: templateInfo.componentPath,
+        moduleExports: Object.keys(module),
+      });
       console.warn(
         `[aurelia-ssr] Could not find class "${templateInfo.className}" in "${templateInfo.componentPath}"`,
       );
@@ -356,6 +444,12 @@ export async function loadComponent(
 
     // Cache the loaded component
     componentCache.set(loaded);
+
+    debug.vite("loader.loadSingle.success", {
+      component: loaded.name,
+      className: loaded.className,
+      hasStaticAu: "$au" in ComponentClass,
+    });
 
     return loaded;
   } catch (error) {

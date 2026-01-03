@@ -1,0 +1,28 @@
+{
+  "name": "issue-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue Tracker - Aurelia 2 AOT test app exercising full API surface with i18n",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "aurelia": "*",
+    "@aurelia/expression-parser": "*",
+    "@aurelia/i18n": "*",
+    "@aurelia/kernel": "*",
+    "@aurelia/platform": "*",
+    "@aurelia/platform-browser": "*",
+    "@aurelia/router": "*",
+    "@aurelia/runtime": "*",
+    "@aurelia/runtime-html": "*",
+    "@aurelia/template-compiler": "*"
+  },
+  "devDependencies": {
+    "@aurelia-ls/ssr": "workspace:*",
+    "@aurelia-ls/transform": "workspace:*",
+    "@aurelia-ls/vite-plugin": "workspace:*"
+  }
+}

@@ -1,0 +1,9 @@
+<div class="page about-page" data-testid="about-page">
+  <h2>${title}</h2>
+  <p data-testid="description">${description}</p>
+
+  <h3>Features Tested</h3>
+  <ul data-testid="features-list">
+    <li repeat.for="feature of features" data-testid="feature">${feature}</li>
+  </ul>
+</div>

@@ -22,6 +22,7 @@ import type {
   PlanController,
   PlanStaticAttr,
 } from "./types.js";
+import { debug } from "../../shared/debug.js";
 
 /* =============================================================================
  * Public API
@@ -186,9 +187,14 @@ function collectNestedFromNodeTree(
  * Collect nested template HTML from an element in tree structure.
  *
  * For each controller on an element, we:
- * 1. Emit the HTML for the controller's template(s)
- * 2. Recursively collect nested templates WITHIN that template
- * 3. Then collect from the element's children (which are empty if controllers exist)
+ * 1. Emit the HTML for the controller's main template
+ * 2. Collect branch templates as nested children (matching emit.ts structure)
+ * 3. Recursively collect any further nested templates
+ * 4. Then collect from the element's children (which are empty if controllers exist)
+ *
+ * This produces a hierarchical structure that matches SerializedDefinition.nestedTemplates:
+ * - switch_0.nestedTemplates = [case_0, case_1]
+ * - nestedHtmlTree[0].nested = [caseHtml_0, caseHtml_1]
  */
 function collectNestedFromElementTree(
   node: PlanElementNode,
@@ -196,24 +202,46 @@ function collectNestedFromElementTree(
 ): NestedTemplateHtmlNode[] {
   const results: NestedTemplateHtmlNode[] = [];
 
-  // Process controllers - each controller creates nested definition(s)
+  // Process controllers - each controller creates one nested definition
   for (const ctrl of node.controllers) {
-    const templates = getControllerTemplates(ctrl);
+    const nestedCtx = ctx.forNestedTemplate();
 
-    for (const template of templates) {
-      // Create child context with fresh local-to-global mapping
-      // but shared global counter for unique marker IDs
-      const nestedCtx = ctx.forNestedTemplate();
+    // Emit HTML for the controller's main template
+    const html = emitNode(ctrl.template, nestedCtx);
 
-      // Emit HTML for this template
-      const html = emitNode(template, nestedCtx);
+    // Collect nested templates:
+    // - For controllers with branches (switch/promise): branches ARE the nested content
+    // - For other controllers: recursively collect from the template tree
+    const nested: NestedTemplateHtmlNode[] = [];
 
-      // Recursively collect nested templates within this template
-      // Use the nested context to continue with the same global counter
-      const nested = collectNestedFromNodeTree(template, nestedCtx);
-
-      results.push({ html, nested });
+    if (ctrl.branches) {
+      // Add branch templates (these match emit.ts emitControllerBranches)
+      // The branches contain all nested controllers for this controller.
+      // Don't also walk ctrl.template - it would find the same case/branch controllers
+      // again since they're attached to elements in the template tree.
+      for (const branchCtrl of ctrl.branches) {
+        const branchCtx = ctx.forNestedTemplate();
+        const branchHtml = emitNode(branchCtrl.template, branchCtx);
+        // Recursively collect nested templates within the branch
+        const branchNested = collectNestedFromNodeTree(branchCtrl.template, branchCtx);
+        nested.push({ html: branchHtml, nested: branchNested });
+      }
+      debug.aot("emit.nestedHtml.branches", {
+        controller: ctrl.resource,
+        branchCount: ctrl.branches.length,
+        branchHtmlLengths: nested.map(n => n.html.length),
+      });
+    } else {
+      // No branches - collect nested templates from within the main template
+      nested.push(...collectNestedFromNodeTree(ctrl.template, nestedCtx));
     }
+
+    debug.aot("emit.nestedHtml", {
+      controller: ctrl.resource,
+      htmlLength: html.length,
+      nestedCount: nested.length,
+    });
+    results.push({ html, nested });
   }
 
   // Also collect from element's children

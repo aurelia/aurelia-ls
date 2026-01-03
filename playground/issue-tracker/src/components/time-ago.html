@@ -1,0 +1,12 @@
+<!--
+  Time Ago Component Template
+
+  Exercises:
+  - if.bind for null check
+  - Interpolation for relative time
+  - title attribute for full date tooltip
+-->
+
+<span if.bind="date" class="time-ago" title.bind="fullDate" data-testid="time-ago">
+  <span if.bind="prefix">${prefix} </span>${relativeTime}
+</span>

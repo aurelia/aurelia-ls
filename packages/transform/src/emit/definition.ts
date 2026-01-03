@@ -498,7 +498,7 @@ function emitHydrateElement(
   indent: string
 ): string {
   const props = emitNestedInstructions(instr.instructions, ctx, indent);
-  let str = `{ type: ${INSTRUCTION_TYPE.hydrateElement}, res: "${instr.resource}", props: ${props}`;
+  let str = `{ type: ${INSTRUCTION_TYPE.hydrateElement}, res: "${instr.res}", props: ${props}`;
   if (instr.containerless) {
     str += ", containerless: true";
   }
@@ -512,7 +512,7 @@ function emitHydrateAttribute(
   indent: string
 ): string {
   const props = emitNestedInstructions(instr.instructions, ctx, indent);
-  let str = `{ type: ${INSTRUCTION_TYPE.hydrateAttribute}, res: "${instr.resource}", props: ${props}`;
+  let str = `{ type: ${INSTRUCTION_TYPE.hydrateAttribute}, res: "${instr.res}", props: ${props}`;
   if (instr.alias) {
     str += `, alias: "${instr.alias}"`;
   }
@@ -535,18 +535,20 @@ function emitHydrateTemplateController(
     throw new Error(`No variable name found for nested definition at index ${instr.templateIndex}`);
   }
   const props = emitNestedInstructions(instr.instructions, ctx, indent);
-  return `{ type: ${INSTRUCTION_TYPE.hydrateTemplateController}, def: ${defVar}, res: "${instr.resource}", props: ${props} }`;
+  return `{ type: ${INSTRUCTION_TYPE.hydrateTemplateController}, def: ${defVar}, res: "${instr.res}", props: ${props} }`;
 }
 
 function emitHydrateLetElement(
   instr: SerializedHydrateLetElement,
   ctx: InstructionEmitContext
 ): string {
-  const bindings = instr.bindings.map(b => {
+  // Each let binding needs type: itLetBinding (101) per Aurelia's LetBindingInstruction
+  const letBindings = instr.bindings.map(b => {
     const exprRef = resolveExprRef(ctx.exprPrefix, b.exprId, ctx.exprIndexMap);
-    return `{ to: "${b.to}", from: ${exprRef} }`;
+    return `{ type: ${INSTRUCTION_TYPE.letBinding}, to: "${b.to}", from: ${exprRef} }`;
   });
-  return `{ type: ${INSTRUCTION_TYPE.hydrateLetElement}, bindings: [${bindings.join(", ")}], toBindingContext: ${instr.toBindingContext} }`;
+  // Runtime expects 'instructions' field in HydrateLetElementInstruction
+  return `{ type: ${INSTRUCTION_TYPE.hydrateLetElement}, instructions: [${letBindings.join(", ")}], toBindingContext: ${instr.toBindingContext} }`;
 }
 
 function emitIteratorBinding(

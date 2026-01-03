@@ -110,8 +110,8 @@ describe("Static $au: Pre-built Instructions", () => {
 
     const result = await render(PreCompiledBinding);
 
-    // The binding should have been applied
-    expect(result.html).toContain("<input");
+    // Verify the binding actually applied the value
+    expect(result.html).toContain('value="test-value"');
   });
 
   test("renders nested repeat with inner bindings", async () => {

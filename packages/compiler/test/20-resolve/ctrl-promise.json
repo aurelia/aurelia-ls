@@ -1,0 +1,149 @@
+[
+  {
+    "name": "R-PR-01 promise with pending branch only",
+    "markup": "<div promise.bind=\"p\"><template pending>Loading...</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "pending", "branch": "pending" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-02 promise with then branch - alias binding",
+    "markup": "<div promise.bind=\"fetchData\"><template then=\"result\">${result}</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-03 promise with catch branch - error alias",
+    "markup": "<div promise.bind=\"riskyOp\"><template catch=\"err\">${err.message}</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "catch", "branch": "catch" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-04 promise with all three branches",
+    "markup": "<div promise.bind=\"fetchData\"><template pending>Loading...</template><template then=\"data\">Got: ${data}</template><template catch=\"err\">Error: ${err}</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "pending", "branch": "pending" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "catch", "branch": "catch" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-05 promise.resolve alternative syntax",
+    "markup": "<div promise.resolve=\"fetchData\"><template then=\"data\">${data}</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-06 promise with bindings inside branches",
+    "markup": "<div promise.bind=\"p\"><template then=\"data\"><span class.bind=\"cls\" textcontent.bind=\"data\"></span></template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" },
+        { "kind": "prop", "to": "class", "target": "native", "effectiveMode": "toView" },
+        { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-07 promise inside repeat",
+    "markup": "<div repeat.for=\"p of promises\"><template promise.bind=\"p\"><span pending>...</span><span then=\"val\">${val}</span></template></div>",
+    "expect": {
+      "items": [
+        { "kind": "iterator", "res": "repeat", "to": "items" },
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "pending", "branch": "pending" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-08 repeat inside promise branch",
+    "markup": "<div promise.bind=\"fetchItems\"><template then=\"items\"><ul repeat.for=\"item of items\"><li>${item}</li></ul></template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" },
+        { "kind": "iterator", "res": "repeat", "to": "items" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-09 promise.resolve with multiple branches",
+    "markup": "<div promise.resolve=\"getData\"><template pending>Loading...</template><template then=\"result\">${result}</template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "pending", "branch": "pending" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "R-PR-10 promise with custom element inside then branch",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "data-display": {
+            "kind": "element",
+            "name": "data-display",
+            "boundary": true,
+            "bindables": {
+              "value": { "name": "value", "mode": "toView" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div promise.bind=\"fetchData\"><template then=\"data\"><data-display value.bind=\"data\"></data-display></template></div>",
+    "expect": {
+      "items": [
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "branch", "res": "then", "branch": "then" },
+        { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "toView" }
+      ],
+      "diags": []
+    }
+  }
+]

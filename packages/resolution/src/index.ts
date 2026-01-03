@@ -4,12 +4,14 @@
 // that the AOT compiler uses for template compilation.
 //
 // Architecture:
-// - Extraction (Layer 1): AST → SourceFacts
+// - File Discovery (Layer 0): File enumeration, sibling detection
+// - Extraction (Layer 1): AST → SourceFacts (with optional sibling info)
 // - Inference (Layer 2): SourceFacts → ResourceCandidate[]
 // - Registration (Layer 3): ResourceCandidate[] → RegistrationIntent[]
 // - Scope (Layer 4): RegistrationIntent[] → ResourceGraph
 //
 // See docs/resolution-architecture.md for details.
+// See docs/file-discovery-design.md for Layer 0 details.
 
 // === Re-export compiler types for convenience ===
 export type {
@@ -32,8 +34,86 @@ export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionD
 // === Shared types ===
 export type { Logger } from "./types.js";
 
+// === File Discovery (Layer 0) ===
+export {
+  // File System Context
+  createNodeFileSystem,
+  createMockFileSystem,
+  getFileType,
+  createProjectFile,
+  pathsEqual,
+  getBaseName,
+  getExtension,
+  getDirectory,
+  // Sibling Detection
+  detectSiblings,
+  findTemplateSibling,
+  findStylesheetSibling,
+  classMatchesFileName,
+  toSiblingFacts,
+  buildFilePair,
+  detectSiblingsBatch,
+  findOrphanTemplates,
+  findSourcesWithoutTemplates,
+  // Project Scanner
+  createProjectScanner,
+  createProjectScannerFromProgram,
+  // Directory Conventions
+  DEFAULT_CONVENTIONS,
+  matchDirectoryConventions,
+  matchDirectoryConvention,
+  buildConventionList,
+  describeScope,
+  isGlobalScope,
+  isRouterScope,
+  conventionBuilder,
+  // Constants
+  FILE_EXTENSIONS,
+  DEFAULT_TEMPLATE_EXTENSIONS,
+  DEFAULT_STYLE_EXTENSIONS,
+  DEFAULT_DIRECTORY_CONVENTIONS,
+  DEFAULT_SCANNER_OPTIONS,
+  DEFAULT_EXTRACTION_OPTIONS,
+} from "./project/index.js";
+
+export type {
+  // Core Types
+  SiblingFile,
+  SiblingFileFact,
+  ProjectFile,
+  ProjectFileType,
+  ProjectStructure,
+  FilePair,
+  PairingDetection,
+  DirectoryConvention,
+  DirectoryScope,
+  DirectoryMatch,
+  ProjectScannerOptions,
+  ProjectExtractionOptions,
+  // File System Context
+  FileSystemContext,
+  FileSystemContextOptions,
+  GlobOptions,
+  WatchCallback,
+  WatchEvent,
+  Disposable,
+  FileStat,
+  // Mock
+  MockFileSystemOptions,
+  MockFileSystemContext,
+  // Sibling Detection
+  SiblingDetectionOptions,
+  FilePairOptions,
+  // Project Scanner
+  ProjectScanner,
+  // Directory Conventions (internal)
+  DirectoryConventionListConfig,
+  ConventionBuilder,
+} from "./project/index.js";
+
 // === Extraction (Layer 1) ===
 export { extractAllFacts, extractSourceFacts } from "./extraction/index.js";
+export type { ExtractionOptions } from "./extraction/index.js";
 export type {
   SourceFacts,
   ClassFacts,
@@ -57,17 +137,33 @@ export type { RegistrationIntent, RegistrationEvidence, ImportGraph, Registratio
 export { buildResourceGraph } from "./scope/index.js";
 
 // === Conventions ===
-export type { ConventionConfig, SuffixConfig, FilePatternConfig } from "./conventions/index.js";
+export type {
+  // Core config
+  ConventionConfig,
+  SuffixConfig,
+  FilePatternConfig,
+  // Directory conventions (user-friendly)
+  DirectoryConventionConfig,
+  DirectoryRule,
+  DirectoryScopeKind,
+  // File pairing
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
+} from "./conventions/index.js";
 export {
   // Decorator names (used by transform package)
   DECORATOR_NAMES,
   RESOURCE_DECORATOR_NAMES,
-  // Suffix patterns
+  // Suffix patterns and defaults
   DEFAULT_CONVENTION_CONFIG,
   DEFAULT_SUFFIXES,
   // Functions
   getResourceTypeFromClassName,
   stripResourceSuffix,
+  // Normalization (user-friendly → internal)
+  normalizeScope,
+  normalizeDirectoryRule,
+  normalizeDirectoryConventions,
 } from "./conventions/index.js";
 
 // === Utilities ===

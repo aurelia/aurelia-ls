@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
-import aurelia from '@aurelia/vite-plugin';
-import { aureliaSSR } from '@aurelia-ls/vite-plugin';
+import { aurelia } from '@aurelia-ls/vite-plugin';
 
 // Custom HTML shell for SSR with hydration support
 const ssrShell = `<!DOCTYPE html>
@@ -37,15 +36,12 @@ export default defineConfig({
   },
   plugins: [
     aurelia({
-      useDev: true,
-    }),
-    aureliaSSR({
       entry: './src/my-app.html',
-      tsconfig: './tsconfig.json', // Enable resolution for child component support
-      stripMarkers: false,
-      htmlShell: ssrShell,
-      // State is not used in new flow - components use their class defaults
-      state: () => ({}),
+      tsconfig: './tsconfig.json',
+      ssr: {
+        stripMarkers: false,
+        htmlShell: ssrShell,
+      },
     }),
   ],
 });

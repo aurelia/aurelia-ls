@@ -1,0 +1,185 @@
+<!--
+  Settings Page Template
+
+  Exercises:
+  - value.bind for text inputs
+  - value.bind for select dropdowns
+  - repeat.for for options
+  - click.trigger for buttons and toggles
+  - class.bind for active states
+  - if.bind for conditional display
+  - t="key" for labels
+-->
+
+<div class="page settings-page" data-testid="settings">
+  <h2 t="settings.title"></h2>
+
+  <!-- Success message -->
+  <div
+    if.bind="showSavedMessage"
+    style="background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;"
+    data-testid="save-success"
+  >
+    <span t="settings.saved"></span>
+  </div>
+
+  <!-- Profile Section -->
+  <section class="settings-section">
+    <div class="card">
+      <h3 t="settings.sections.profile"></h3>
+
+      <div class="form-group">
+        <label class="form-label" t="settings.profile.name"></label>
+        <input
+          type="text"
+          class="form-input"
+          value.bind="profile.name"
+          data-testid="profile-name"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" t="settings.profile.email"></label>
+        <input
+          type="email"
+          class="form-input"
+          value.bind="profile.email"
+          data-testid="profile-email"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" t="settings.profile.role"></label>
+        <input
+          type="text"
+          class="form-input"
+          value.bind="userRole"
+          disabled
+          style="background: #f3f4f6;"
+        >
+      </div>
+
+      <button
+        class="btn btn-primary"
+        click.trigger="saveProfile()"
+        t="settings.profile.save"
+        data-testid="save-profile"
+      ></button>
+    </div>
+  </section>
+
+  <!-- Preferences Section -->
+  <section class="settings-section">
+    <div class="card">
+      <h3 t="settings.sections.preferences"></h3>
+
+      <div class="form-group">
+        <label class="form-label" t="settings.preferences.theme"></label>
+        <select class="form-input" value.bind="theme" data-testid="theme-select">
+          <option repeat.for="opt of themeOptions" value.bind="opt.value">${opt.label}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" t="settings.preferences.language"></label>
+        <select class="form-input" value.bind="language" data-testid="language-select">
+          <option repeat.for="opt of languageOptions" value.bind="opt.value">${opt.label}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" t="settings.preferences.dateFormat"></label>
+        <select class="form-input" value.bind="dateFormat" data-testid="date-format-select">
+          <option repeat.for="opt of dateFormatOptions" value.bind="opt.value">${opt.label}</option>
+        </select>
+      </div>
+
+      <button
+        class="btn btn-primary"
+        click.trigger="savePreferences()"
+        t="actions.save"
+        data-testid="save-preferences"
+      ></button>
+    </div>
+  </section>
+
+  <!-- Notifications Section -->
+  <section class="settings-section">
+    <div class="card">
+      <h3 t="settings.sections.notifications"></h3>
+
+      <!-- Email notifications -->
+      <div class="form-group">
+        <div
+          class="toggle ${notifications.email ? 'active' : ''}"
+          click.trigger="toggleNotification('email')"
+          data-testid="toggle-email"
+        >
+          <div class="toggle-switch"></div>
+          <div>
+            <div style="font-weight: 500;" t="settings.notifications.email"></div>
+            <div style="font-size: 0.875rem; color: #666;" t="settings.notifications.emailDesc"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Browser notifications -->
+      <div class="form-group">
+        <div
+          class="toggle ${notifications.browser ? 'active' : ''}"
+          click.trigger="toggleNotification('browser')"
+          data-testid="toggle-browser"
+        >
+          <div class="toggle-switch"></div>
+          <div>
+            <div style="font-weight: 500;" t="settings.notifications.browser"></div>
+            <div style="font-size: 0.875rem; color: #666;" t="settings.notifications.browserDesc"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assigned notifications -->
+      <div class="form-group">
+        <div
+          class="toggle ${notifications.assigned ? 'active' : ''}"
+          click.trigger="toggleNotification('assigned')"
+          data-testid="toggle-assigned"
+        >
+          <div class="toggle-switch"></div>
+          <div style="font-weight: 500;" t="settings.notifications.assigned"></div>
+        </div>
+      </div>
+
+      <!-- Mentioned notifications -->
+      <div class="form-group">
+        <div
+          class="toggle ${notifications.mentioned ? 'active' : ''}"
+          click.trigger="toggleNotification('mentioned')"
+          data-testid="toggle-mentioned"
+        >
+          <div class="toggle-switch"></div>
+          <div style="font-weight: 500;" t="settings.notifications.mentioned"></div>
+        </div>
+      </div>
+
+      <!-- Status change notifications -->
+      <div class="form-group">
+        <div
+          class="toggle ${notifications.statusChange ? 'active' : ''}"
+          click.trigger="toggleNotification('statusChange')"
+          data-testid="toggle-status-change"
+        >
+          <div class="toggle-switch"></div>
+          <div style="font-weight: 500;" t="settings.notifications.statusChange"></div>
+        </div>
+      </div>
+
+      <button
+        class="btn btn-primary"
+        click.trigger="saveNotifications()"
+        t="actions.save"
+        data-testid="save-notifications"
+      ></button>
+    </div>
+  </section>
+</div>

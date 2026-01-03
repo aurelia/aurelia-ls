@@ -1,5 +1,5 @@
 {
-  "targets": 9,
+  "targets": 5,
   "expressions": 37,
   "instructions": [
     {
@@ -22,7 +22,7 @@
     },
     {
       "kind": "controller",
-      "target": 6,
+      "target": 2,
       "name": "if",
       "template": 1,
       "bindings": [
@@ -35,7 +35,7 @@
     },
     {
       "kind": "controller",
-      "target": 7,
+      "target": 3,
       "name": "if",
       "template": 2,
       "bindings": [
@@ -48,7 +48,7 @@
     },
     {
       "kind": "controller",
-      "target": 8,
+      "target": 4,
       "name": "repeat",
       "template": 3,
       "bindings": [

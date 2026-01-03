@@ -1,0 +1,10 @@
+<div class="page users-page" data-testid="users-page">
+  <h2>${title}</h2>
+
+  <ul data-testid="users-list">
+    <li repeat.for="user of users" data-testid="user-item">
+      <a load="user/${user.id}" data-testid="user-link">${user.name}</a>
+      <span class="role">(${user.role})</span>
+    </li>
+  </ul>
+</div>

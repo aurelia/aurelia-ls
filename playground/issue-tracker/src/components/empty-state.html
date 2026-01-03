@@ -1,0 +1,22 @@
+<!--
+  Empty State Component Template
+
+  Exercises:
+  - if.bind for optional elements
+  - Interpolation for icon, title, description
+  - click.trigger for action button
+-->
+
+<div class="empty-state" data-testid="empty-state">
+  <div class="empty-state-icon">${icon}</div>
+  <div class="empty-state-title">${title}</div>
+  <p if.bind="description">${description}</p>
+  <button
+    if.bind="actionText && onAction"
+    class="btn btn-primary"
+    click.trigger="onAction()"
+    style="margin-top: 1rem;"
+  >
+    ${actionText}
+  </button>
+</div>

@@ -14,12 +14,20 @@ import type {
 
 /**
  * Base registrations that are always needed for AOT.
- * These replace StandardConfiguration minus the parser/compiler.
+ *
+ * NOTE: ExpressionParser and TemplateCompiler are included for compatibility
+ * with third-party libraries that use runtime compilation. Your app's templates
+ * are still AOT-compiled for faster initial render.
+ *
+ * Future: AOT-compile third-party dependencies to enable full tree-shaking.
  */
 const BASE_REGISTRATIONS = [
   // Observation infrastructure
   "DirtyChecker",
   "NodeObserverLocator",
+  // Runtime compilation - needed by third-party libs
+  "ExpressionParser",
+  "TemplateCompiler",
   // Built-in resources (if, repeat, etc.)
   "...DefaultResources",
   // Attribute patterns
@@ -41,6 +49,14 @@ const BASE_IMPORTS: RequiredImport[] = [
   {
     source: "@aurelia/runtime",
     specifiers: ["DirtyChecker"],
+  },
+  {
+    source: "@aurelia/expression-parser",
+    specifiers: ["ExpressionParser"],
+  },
+  {
+    source: "@aurelia/template-compiler",
+    specifiers: ["TemplateCompiler"],
   },
   {
     source: "@aurelia/runtime-html",
@@ -117,18 +133,18 @@ export function buildAotConfiguration(
 
   // Add imports for preserved registrations if they're known configs
   for (const reg of preservedRegistrations) {
-    const importSource = getImportSourceForRegistration(reg);
-    if (importSource) {
+    const importInfo = getImportSourceForRegistration(reg);
+    if (importInfo) {
       // Check if we already have this import
-      const existing = requiredImports.find((i) => i.source === importSource);
+      const existing = requiredImports.find((i) => i.source === importInfo.source);
       if (existing) {
-        if (!existing.specifiers.includes(reg)) {
-          existing.specifiers.push(reg);
+        if (!existing.specifiers.includes(importInfo.identifier)) {
+          existing.specifiers.push(importInfo.identifier);
         }
       } else {
         requiredImports.push({
-          source: importSource,
-          specifiers: [reg],
+          source: importInfo.source,
+          specifiers: [importInfo.identifier],
         });
       }
     }
@@ -175,20 +191,41 @@ export function generateImportStatements(
 }
 
 /**
- * Get the import source for a known registration.
+ * Known configuration import mappings.
  */
-function getImportSourceForRegistration(name: string): string | null {
-  const mapping: Record<string, string> = {
-    RouterConfiguration: "@aurelia/router",
-    DialogConfiguration: "@aurelia/dialog",
-    ValidationConfiguration: "@aurelia/validation",
-    ValidationHtmlConfiguration: "@aurelia/validation-html",
-    I18nConfiguration: "@aurelia/i18n",
-    StateConfiguration: "@aurelia/state",
-    StoreConfiguration: "@aurelia/store-v1",
-  };
+const CONFIGURATION_IMPORTS: Record<string, string> = {
+  RouterConfiguration: "@aurelia/router",
+  DialogConfiguration: "@aurelia/dialog",
+  ValidationConfiguration: "@aurelia/validation",
+  ValidationHtmlConfiguration: "@aurelia/validation-html",
+  I18nConfiguration: "@aurelia/i18n",
+  StateConfiguration: "@aurelia/state",
+  StateDefaultConfiguration: "@aurelia/state",
+  StoreConfiguration: "@aurelia/store-v1",
+};
 
-  return mapping[name] ?? null;
+/**
+ * Extract the base identifier from a registration expression.
+ * Handles both simple identifiers and method calls like `RouterConfiguration.customize(...)`.
+ */
+function extractBaseIdentifier(expression: string): string | null {
+  // Match identifier at the start, optionally followed by .method(...) or (...)
+  const match = expression.match(/^([A-Z][a-zA-Z0-9]*)/);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Get the import source for a known registration.
+ * Handles both bare identifiers and method call expressions.
+ */
+function getImportSourceForRegistration(expression: string): { source: string; identifier: string } | null {
+  const identifier = extractBaseIdentifier(expression);
+  if (!identifier) return null;
+
+  const source = CONFIGURATION_IMPORTS[identifier];
+  if (!source) return null;
+
+  return { source, identifier };
 }
 
 /**

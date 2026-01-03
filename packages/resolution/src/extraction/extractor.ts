@@ -1,15 +1,46 @@
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName } from "./types.js";
+import { debug } from "@aurelia-ls/compiler";
+import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";
 import { canonicalPath } from "../util/naming.js";
+import type { FileSystemContext } from "../project/context.js";
+
+/**
+ * Options for fact extraction.
+ */
+export interface ExtractionOptions {
+  /**
+   * File system context for sibling detection.
+   * When provided, enables sibling file convention support.
+   */
+  readonly fileSystem?: FileSystemContext;
+
+  /**
+   * Template extensions to look for as siblings.
+   * @default ['.html']
+   */
+  readonly templateExtensions?: readonly string[];
+
+  /**
+   * Style extensions to look for as siblings.
+   * @default ['.css', '.scss']
+   */
+  readonly styleExtensions?: readonly string[];
+}
 
 /**
  * Extract facts from all source files in a TypeScript program.
  * Returns a map from file path to extracted facts.
+ *
+ * @param program - TypeScript program
+ * @param options - Extraction options (including optional FileSystemContext)
  */
-export function extractAllFacts(program: ts.Program): Map<NormalizedPath, SourceFacts> {
+export function extractAllFacts(
+  program: ts.Program,
+  options?: ExtractionOptions,
+): Map<NormalizedPath, SourceFacts> {
   const result = new Map<NormalizedPath, SourceFacts>();
   const checker = program.getTypeChecker();
 
@@ -18,18 +49,37 @@ export function extractAllFacts(program: ts.Program): Map<NormalizedPath, Source
     .filter((sf) => !sf.isDeclarationFile)
     .sort((a, b) => a.fileName.localeCompare(b.fileName));
 
+  debug.resolution("extraction.allFacts.start", {
+    fileCount: files.length,
+    hasFileSystem: !!options?.fileSystem,
+  });
+
   for (const sf of files) {
-    const facts = extractSourceFacts(sf, checker, program);
+    const facts = extractSourceFacts(sf, checker, program, options);
     result.set(facts.path, facts);
   }
+
+  debug.resolution("extraction.allFacts.done", {
+    factCount: result.size,
+  });
 
   return result;
 }
 
 /**
  * Extract facts from a single source file.
+ *
+ * @param sf - TypeScript source file
+ * @param checker - Type checker
+ * @param program - TypeScript program (optional, for import resolution)
+ * @param options - Extraction options (optional, for sibling detection)
  */
-export function extractSourceFacts(sf: ts.SourceFile, checker: ts.TypeChecker, program?: ts.Program): SourceFacts {
+export function extractSourceFacts(
+  sf: ts.SourceFile,
+  checker: ts.TypeChecker,
+  program?: ts.Program,
+  options?: ExtractionOptions,
+): SourceFacts {
   const path = canonicalPath(sf.fileName);
   const classes: ClassFacts[] = [];
   const registrationCalls = extractRegistrationCalls(sf, checker);
@@ -71,7 +121,40 @@ export function extractSourceFacts(sf: ts.SourceFile, checker: ts.TypeChecker, p
     }
   }
 
-  return { path, classes, registrationCalls, imports, exports };
+  // Detect sibling files if FileSystemContext is provided
+  const siblingFiles = detectSiblingFiles(sf.fileName, options);
+
+  return { path, classes, registrationCalls, imports, exports, siblingFiles };
+}
+
+/**
+ * Detect sibling files using FileSystemContext.
+ */
+function detectSiblingFiles(
+  sourcePath: string,
+  options?: ExtractionOptions,
+): SiblingFileFact[] {
+  if (!options?.fileSystem) {
+    return [];
+  }
+
+  const fileSystem = options.fileSystem;
+  const templateExtensions = options.templateExtensions ?? [".html"];
+  const styleExtensions = options.styleExtensions ?? [".css", ".scss"];
+
+  const allExtensions = [...templateExtensions, ...styleExtensions];
+  const siblings = fileSystem.getSiblingFiles(sourcePath, allExtensions);
+
+  debug.resolution("extraction.siblings", {
+    sourcePath,
+    found: siblings.map((s) => s.path),
+  });
+
+  return siblings.map((s) => ({
+    path: s.path,
+    extension: s.extension,
+    baseName: s.baseName,
+  }));
 }
 
 /**

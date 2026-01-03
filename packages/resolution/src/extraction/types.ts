@@ -10,6 +10,29 @@ export interface SourceFacts {
   readonly registrationCalls: RegistrationCallFact[];
   readonly imports: ImportFact[];
   readonly exports: ExportFact[];
+
+  /**
+   * Sibling files discovered adjacent to this source file.
+   *
+   * Populated when FileSystemContext is provided during extraction.
+   * Used for sibling file convention: `foo.ts` + `foo.html`
+   */
+  readonly siblingFiles: SiblingFileFact[];
+}
+
+/**
+ * Sibling file discovered adjacent to a source file.
+ * Used for template-pairing convention.
+ */
+export interface SiblingFileFact {
+  /** Normalized path to the sibling file */
+  readonly path: NormalizedPath;
+
+  /** File extension including dot (e.g., '.html') */
+  readonly extension: string;
+
+  /** Base name without extension, matches source file */
+  readonly baseName: string;
 }
 
 /** Import declaration fact */

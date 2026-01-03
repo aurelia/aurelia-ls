@@ -1,8 +1,8 @@
 /**
- * Child Component SSR E2E Tests
+ * Child Component SSR Integration Tests (JSDOM)
  *
- * These tests verify SSR rendering with parent-child component hierarchy,
- * mimicking the structure of the child-component-app example.
+ * Integration tests for SSR rendering with parent-child component hierarchy.
+ * Uses JSDOM to test the machinery, not real browser behavior.
  *
  * CRITICAL: These tests assert on the FULL DOM structure to catch issues
  * like double rendering (multiple div.app elements) that simpler tests miss.
@@ -10,6 +10,8 @@
  * Structure being tested:
  * - MyApp (parent): <div class="app"> with h1, p, and two greeting-card instances
  * - GreetingCard (child): <div class="greeting-card"> with h2, p
+ *
+ * For real browser E2E tests, see playground/
  */
 
 import { test, describe, expect } from "vitest";

@@ -37,7 +37,6 @@
         type="checkbox"
         class="toggle"
         checked.bind="todo.completed"
-        change.trigger="toggleTodo(todo)"
       >
       <span class="todo-text">${todo.text}</span>
       <button class="destroy" click.trigger="removeTodo(todo)">&times;</button>

@@ -1,0 +1,17 @@
+<!--
+  Status Badge Component Template
+
+  Exercises:
+  - switch.bind for multi-way branching
+  - case for each status
+  - t="key" for translated status names
+  - Dynamic class binding based on status
+-->
+
+<span class="badge badge-${status}" switch.bind="status" data-testid="status-badge">
+  <template case="draft"><span t="status.draft"></span></template>
+  <template case="open"><span t="status.open"></span></template>
+  <template case="in_progress"><span t="status.in_progress"></span></template>
+  <template case="review"><span t="status.review"></span></template>
+  <template case="closed"><span t="status.closed"></span></template>
+</span>

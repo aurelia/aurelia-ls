@@ -1,6 +1,7 @@
 /**
- * Nested Component SSR Stress Test
+ * Nested Component SSR Stress Test (JSDOM)
  *
+ * Integration stress test using JSDOM, not real browser.
  * This test exercises the SSR hydration system with:
  * - Deep nesting: stress-app > section-panel > item-card > status-badge (4 levels)
  * - Width: Multiple siblings at each level
@@ -32,6 +33,8 @@
  *     <footer>${text}</footer>
  *   </footer-widget>
  * </stress-app>
+ *
+ * For real browser E2E tests, see playground/
  */
 
 import { test, describe, expect } from "vitest";

@@ -1,0 +1,22 @@
+<!--
+  User Avatar Component Template
+
+  Exercises:
+  - if.bind for null check
+  - with.bind for user context
+  - class.bind for size and online status
+  - Interpolation for initials
+-->
+
+<template if.bind="user">
+  <div
+    class="avatar-wrapper"
+    with.bind="user"
+    data-testid="user-avatar"
+    title.bind="name"
+  >
+    <div class="avatar ${showOnline && online ? 'online' : ''}" style="font-size: ${size === 'small' ? '0.625rem' : size === 'large' ? '1rem' : '0.875rem'};">
+      ${avatar}
+    </div>
+  </div>
+</template>

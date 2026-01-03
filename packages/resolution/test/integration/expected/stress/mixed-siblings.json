@@ -1,5 +1,5 @@
 {
-  "targets": 20,
+  "targets": 18,
   "expressions": 25,
   "instructions": [
     {
@@ -177,7 +177,7 @@
     },
     {
       "kind": "controller",
-      "target": 17,
+      "target": 15,
       "name": "if",
       "template": 15,
       "bindings": [
@@ -190,7 +190,7 @@
     },
     {
       "kind": "controller",
-      "target": 18,
+      "target": 16,
       "name": "repeat",
       "template": 16,
       "bindings": [
@@ -202,7 +202,7 @@
     },
     {
       "kind": "controller",
-      "target": 19,
+      "target": 17,
       "name": "if",
       "template": 17,
       "bindings": [

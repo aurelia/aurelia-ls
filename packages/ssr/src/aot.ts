@@ -4,21 +4,18 @@
  * Provides high-level functions for ahead-of-time compilation of Aurelia templates.
  * This integrates the AOT compiler with the instruction translator to produce
  * output that can be rendered directly by the Aurelia runtime.
+ *
+ * Architecture:
+ * - `compileAot` (from @aurelia-ls/compiler) - SSR-agnostic: analysis + synthesis → serialized output
+ * - `compileWithAot` (this file) - SSR-specific: adds instruction translation for server execution
+ *
+ * For CSR-only AOT builds (no server rendering), use `compileAot` directly from @aurelia-ls/compiler.
  */
 
 import {
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  emitTemplate,
-  collectNestedTemplateHtmlTree,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
+  compileAot,
   DEFAULT_SEMANTICS,
   NOOP_TRACE,
-  CompilerAttributes,
   type AotPlanModule,
   type AotCodeResult,
   type Semantics,
@@ -117,83 +114,45 @@ export function compileWithAot(
   const trace = options.trace ?? NOOP_TRACE;
 
   return trace.span("ssr.compileWithAot", () => {
-    const templatePath = options.templatePath ?? "template.html";
-    const name = options.name ?? "template";
-    const semantics = options.semantics ?? DEFAULT_SEMANTICS;
-
-    trace.setAttributes({
-      [CompilerAttributes.TEMPLATE]: templatePath,
-      "ssr.compile.name": name,
-      "ssr.compile.markupLength": markup.length,
-    });
-
-    // 1. Run AOT compiler analysis pipeline
-    trace.event("ssr.compile.analysis.start");
-    const exprParser = getExpressionParser();
-
-    const ir = lowerDocument(markup, {
-      attrParser: DEFAULT_SYNTAX,
-      exprParser,
-      file: templatePath,
-      name,
-      sem: semantics,
+    // 1. Run SSR-agnostic AOT compilation (analysis + synthesis)
+    // This produces serialized instructions and template HTML
+    trace.event("ssr.compile.aot");
+    const aotResult = compileAot(markup, {
+      templatePath: options.templatePath,
+      name: options.name,
+      semantics: options.semantics,
+      resourceGraph: options.resourceGraph,
+      resourceScope: options.resourceScope,
+      stripSpans: options.stripSpans,
+      deduplicateExpressions: options.deduplicateExpressions,
       trace,
     });
 
-    // Build resolve options for resource graph support
-    const resolveOpts = options.resourceGraph
-      ? { graph: options.resourceGraph, scope: options.resourceScope ?? null }
-      : undefined;
-
-    const linked = resolveHost(ir, semantics, { ...resolveOpts, trace });
-    const scoped = bindScopes(linked, { trace });
-    trace.event("ssr.compile.analysis.done");
-
-    // 2. Build AOT plan
-    trace.event("ssr.compile.plan.start");
-    const plan = planAot(linked, scoped, {
-      templateFilePath: templatePath,
-      trace,
-    });
-    trace.event("ssr.compile.plan.done");
-
-    // 3. Emit serialized instructions
-    trace.event("ssr.compile.emit.start");
-    const stripSpans = options.stripSpans ?? true; // Default to stripping for smaller output
-    const deduplicateExpressions = options.deduplicateExpressions ?? true; // Default to deduplication
-    const codeResult = emitAotCode(plan, { name, stripSpans, deduplicateExpressions, trace });
-
-    // 4. Emit template HTML with markers
-    const templateResult = emitTemplate(plan);
-
-    // 5. Emit nested template HTML (for template controllers)
-    const nestedHtmlTree = collectNestedTemplateHtmlTree(plan);
-    trace.event("ssr.compile.emit.done");
-
-    // 6. Translate to Aurelia runtime format
+    // 2. Translate to Aurelia runtime format (SSR-specific step)
+    // This converts serialized instructions to IInstruction objects for server execution
     trace.event("ssr.compile.translate");
     const { instructions, nestedDefs } = translateInstructions(
-      codeResult.definition.instructions,
-      codeResult.expressions,
-      codeResult.definition.nestedTemplates,
-      nestedHtmlTree,
+      aotResult.codeResult.definition.instructions,
+      aotResult.codeResult.expressions,
+      aotResult.codeResult.definition.nestedTemplates,
+      aotResult.nestedHtmlTree,
     );
 
     trace.setAttributes({
-      "ssr.compile.targetCount": codeResult.definition.targetCount,
+      "ssr.compile.targetCount": aotResult.codeResult.definition.targetCount,
       "ssr.compile.instructionCount": instructions.length,
       "ssr.compile.nestedCount": nestedDefs.length,
     });
 
     return {
-      template: templateResult.html,
+      template: aotResult.template,
       instructions,
       nestedDefs,
-      targetCount: codeResult.definition.targetCount,
+      targetCount: aotResult.codeResult.definition.targetCount,
       raw: {
-        plan,
-        codeResult,
-        nestedHtmlTree,
+        plan: aotResult.plan,
+        codeResult: aotResult.codeResult,
+        nestedHtmlTree: aotResult.nestedHtmlTree,
       },
     };
   });
