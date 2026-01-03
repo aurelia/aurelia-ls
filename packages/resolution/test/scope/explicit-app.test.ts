@@ -1,87 +1,39 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import * as ts from "typescript";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { extractAllFacts, resolveImports } from "@aurelia-ls/resolution";
 import { createResolverPipeline } from "@aurelia-ls/resolution";
-import { createRegistrationAnalyzer, type RegistrationAnalysis } from "@aurelia-ls/resolution";
+import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
 import { buildResourceGraph } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import {
+  createProgramFromApp,
+  getTestAppPath,
+  filterFactsByPathPattern,
+} from "../_helpers/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");
-
-/**
- * Create a TypeScript program from the explicit-app tsconfig.
- */
-function createProgramFromApp(appPath) {
-  const configPath = path.join(appPath, "tsconfig.json");
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-
-  if (configFile.error) {
-    throw new Error(`Failed to read tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`);
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    configFile.config,
-    ts.sys,
-    appPath,
-  );
-
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map(e => ts.flattenDiagnosticMessageText(e.messageText, "\n"));
-    throw new Error(`Failed to parse tsconfig: ${messages.join("\n")}`);
-  }
-
-  return ts.createProgram(parsed.fileNames, parsed.options);
-}
-
-/**
- * Filter facts to only include files from the app (not aurelia runtime).
- */
-function filterAppFacts(facts, appPath) {
-  const filtered = new Map();
-  for (const [filePath, fileFacts] of facts) {
-    const normalized = filePath.replace(/\\/g, "/");
-    if (normalized.includes("/explicit-app/src/")) {
-      filtered.set(filePath, fileFacts);
-    }
-  }
-  return filtered;
-}
-
-/**
- * Run extraction → import resolution → inference → registration pipeline.
- */
-function runPipeline(appPath) {
-  const program = createProgramFromApp(appPath);
-  const allFacts = extractAllFacts(program);
-  const appFacts = filterAppFacts(allFacts, appPath);
-
-  // Import resolution phase (populates DependencyRef.resolvedPath)
-  const resolvedFacts = resolveImports(appFacts);
-
-  const pipeline = createResolverPipeline();
-  const resolved = pipeline.resolve(resolvedFacts);
-
-  const analyzer = createRegistrationAnalyzer();
-  const registration = analyzer.analyze(resolved.candidates, resolvedFacts);
-
-  return { program, appFacts: resolvedFacts, candidates: resolved.candidates, registration };
-}
+const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
 
 describe("Scope: explicit-app", () => {
-  let pipelineResult: ReturnType<typeof runPipeline>;
   let graph: ReturnType<typeof buildResourceGraph>;
 
   beforeAll(() => {
-    pipelineResult = runPipeline(EXPLICIT_APP);
-    graph = buildResourceGraph(pipelineResult.registration);
+    const program = createProgramFromApp(EXPLICIT_APP);
+    const allFacts = extractAllFacts(program);
+    const appFacts = filterFactsByPathPattern(allFacts, "/explicit-app/src/");
+
+    // Import resolution phase
+    const resolvedFacts = resolveImports(appFacts);
+
+    const pipeline = createResolverPipeline();
+    const resolved = pipeline.resolve(resolvedFacts);
+
+    const analyzer = createRegistrationAnalyzer();
+    const registration = analyzer.analyze(resolved.candidates, resolvedFacts);
+
+    graph = buildResourceGraph(registration);
   });
 
   it("builds a ResourceGraph from registration analysis", () => {
-
     // Should produce a valid graph
     expect(graph.version).toBe("aurelia-resource-graph@1");
     expect(graph.root, "Graph should have a root scope").toBeTruthy();
@@ -103,7 +55,7 @@ describe("Scope: explicit-app", () => {
       .filter(k => !DEFAULT_SEMANTICS.resources.bindingBehaviors[k]).sort();
 
     // Assert exact app resources in root scope
-    // Note: includes both globally registered and unknown-scope resources
+    // Note: includes both globally registered and orphan resources
     expect(appElements, "Root scope should have exactly these 6 elements").toEqual([
       "data-grid", "fancy-button", "my-app", "nav-bar", "product-card", "user-card"
     ]);
@@ -127,12 +79,12 @@ describe("Scope: explicit-app", () => {
 
     // Verify product-card's local scope structure
     const productCardScope = localScopes[0];
-    expect(productCardScope.id.includes("product-card"), "Local scope should be for product-card").toBe(true);
-    expect(productCardScope.label?.includes("ProductCard"), "Scope label should include class name").toBe(true);
-    expect(productCardScope.parent, "Local scope parent should be root").toBe(graph.root);
+    expect(productCardScope!.id.includes("product-card"), "Local scope should be for product-card").toBe(true);
+    expect(productCardScope!.label?.includes("ProductCard"), "Scope label should include class name").toBe(true);
+    expect(productCardScope!.parent, "Local scope parent should be root").toBe(graph.root);
 
     // Verify local resources in scope
-    const localElementNames = Object.keys(productCardScope.resources?.elements ?? {}).sort();
+    const localElementNames = Object.keys(productCardScope!.resources?.elements ?? {}).sort();
     expect(localElementNames, "product-card scope should have exactly these 2 local elements").toEqual(["price-tag", "stock-badge"]);
   });
 
@@ -143,8 +95,8 @@ describe("Scope: explicit-app", () => {
     );
 
     expect(productCardScope, "Should find product-card scope").toBeTruthy();
-    expect(productCardScope.resources?.elements?.["price-tag"], "price-tag should be in product-card scope").toBeTruthy();
-    expect(productCardScope.resources?.elements?.["stock-badge"], "stock-badge should be in product-card scope").toBeTruthy();
+    expect(productCardScope!.resources?.elements?.["price-tag"], "price-tag should be in product-card scope").toBeTruthy();
+    expect(productCardScope!.resources?.elements?.["stock-badge"], "stock-badge should be in product-card scope").toBeTruthy();
 
     // Local resources should NOT be in root scope resources (only via overlay)
     const rootScope = graph.scopes[graph.root];
@@ -163,7 +115,7 @@ describe("Scope: explicit-app", () => {
     const { resources } = materializeResourcesForScope(
       DEFAULT_SEMANTICS,
       graph,
-      productCardScopeId
+      productCardScopeId!
     );
 
     // Should have local resources (from product-card scope)

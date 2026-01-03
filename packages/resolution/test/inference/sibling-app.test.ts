@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   extractAllFacts,
   createResolverPipeline,
@@ -9,34 +8,13 @@ import {
   resolve,
 } from "@aurelia-ls/resolution";
 import type { ResourceCandidate, ResolutionResult } from "@aurelia-ls/resolution";
+import {
+  createProgramFromApp,
+  getTestAppPath,
+  filterFactsByPathPattern,
+} from "../_helpers/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SIBLING_APP = path.resolve(__dirname, "../apps/sibling-app");
-
-/**
- * Create a TypeScript program from the sibling-app tsconfig.
- */
-function createProgramFromApp(appPath: string): ts.Program {
-  const configPath = path.join(appPath, "tsconfig.json");
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-
-  if (configFile.error) {
-    throw new Error(
-      `Failed to read tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`
-    );
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, appPath);
-
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map((e) =>
-      ts.flattenDiagnosticMessageText(e.messageText, "\n")
-    );
-    throw new Error(`Failed to parse tsconfig: ${messages.join("\n")}`);
-  }
-
-  return ts.createProgram(parsed.fileNames, parsed.options);
-}
+const SIBLING_APP = getTestAppPath("sibling-app", import.meta.url);
 
 /**
  * Filter candidates to only include those from the app (not node_modules).
@@ -47,24 +25,6 @@ function filterAppCandidates(
   return candidates.filter((c) =>
     c.source.replace(/\\/g, "/").includes("/sibling-app/src/")
   );
-}
-
-/**
- * Filter facts to only include files from the app (not node_modules).
- */
-function filterAppFacts(
-  facts: Map<string, unknown>,
-  appPath: string
-): Map<string, unknown> {
-  const filtered = new Map();
-
-  for (const [filePath, fileFacts] of facts) {
-    const normalized = filePath.replace(/\\/g, "/");
-    if (normalized.includes("/sibling-app/src/")) {
-      filtered.set(filePath, fileFacts);
-    }
-  }
-  return filtered;
 }
 
 // =============================================================================
@@ -89,7 +49,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
     });
 
     // Filter to app-only facts
-    const appFacts = filterAppFacts(allFacts, SIBLING_APP);
+    const appFacts = filterFactsByPathPattern(allFacts, "/sibling-app/src/");
 
     // Run inference pipeline
     const pipeline = createResolverPipeline();
@@ -99,7 +59,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
   it("detects sibling files during extraction", () => {
     const fileSystem = createNodeFileSystem({ root: SIBLING_APP });
     const allFacts = extractAllFacts(program, { fileSystem });
-    const appFacts = filterAppFacts(allFacts, SIBLING_APP);
+    const appFacts = filterFactsByPathPattern(allFacts, "/sibling-app/src/");
 
     // Find my-app facts
     const myAppEntry = Array.from(appFacts.entries()).find(([p]) =>
@@ -265,7 +225,7 @@ describe("Resolution: FileSystemContext impact", () => {
 
     // WITHOUT FileSystemContext - only template-import convention works
     const withoutFs = extractAllFacts(program);
-    const withoutFsAppFacts = filterAppFacts(withoutFs, SIBLING_APP);
+    const withoutFsAppFacts = filterFactsByPathPattern(withoutFs, "/sibling-app/src/");
     const pipelineNoFs = createResolverPipeline();
     const resultNoFs = pipelineNoFs.resolve(withoutFsAppFacts as any);
     const candidatesNoFs = filterAppCandidates(resultNoFs.candidates);
@@ -273,7 +233,7 @@ describe("Resolution: FileSystemContext impact", () => {
     // WITH FileSystemContext - sibling-file convention also works
     const fileSystem = createNodeFileSystem({ root: SIBLING_APP });
     const withFs = extractAllFacts(program, { fileSystem });
-    const withFsAppFacts = filterAppFacts(withFs, SIBLING_APP);
+    const withFsAppFacts = filterFactsByPathPattern(withFs, "/sibling-app/src/");
     const pipelineWithFs = createResolverPipeline();
     const resultWithFs = pipelineWithFs.resolve(withFsAppFacts as any);
     const candidatesWithFs = filterAppCandidates(resultWithFs.candidates);
@@ -294,7 +254,7 @@ describe("Resolution: FileSystemContext impact", () => {
   it("sibling facts are empty without FileSystemContext", () => {
     const program = createProgramFromApp(SIBLING_APP);
     const facts = extractAllFacts(program);
-    const appFacts = filterAppFacts(facts, SIBLING_APP);
+    const appFacts = filterFactsByPathPattern(facts, "/sibling-app/src/");
 
     // All app files should have empty siblingFiles without FileSystemContext
     for (const [, fileFacts] of appFacts as Map<string, { siblingFiles: unknown[] }>) {
@@ -306,7 +266,7 @@ describe("Resolution: FileSystemContext impact", () => {
     const program = createProgramFromApp(SIBLING_APP);
     const fileSystem = createNodeFileSystem({ root: SIBLING_APP });
     const facts = extractAllFacts(program, { fileSystem });
-    const appFacts = filterAppFacts(facts, SIBLING_APP);
+    const appFacts = filterFactsByPathPattern(facts, "/sibling-app/src/");
 
     // Files that have sibling HTML should have populated siblingFiles
     const myAppFacts = Array.from(appFacts.entries()).find(([p]) =>

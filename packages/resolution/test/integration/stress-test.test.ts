@@ -11,12 +11,12 @@
  */
 
 import { describe, it, beforeAll, expect, assert } from "vitest";
-import * as ts from "typescript";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolve } from "@aurelia-ls/resolution";
+import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 import {
   DEFAULT_SEMANTICS,
   normalizePathForId,
@@ -33,7 +33,7 @@ import {
 } from "@aurelia-ls/compiler";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STRESS_APP = path.resolve(__dirname, "../apps/stress-test-app");
+const STRESS_APP = getTestAppPath("stress-test-app", import.meta.url);
 const EXPECTED_DIR = path.resolve(__dirname, "expected/stress");
 
 // Set to true to generate/update expected files instead of comparing
@@ -422,30 +422,8 @@ function compareEmitResults(actual, expected) {
 }
 
 // =============================================================================
-// Utilities: TypeScript Program & Compilation
+// Utilities: Template Compilation
 // =============================================================================
-
-function createProgramFromApp(appPath) {
-  const configPath = path.join(appPath, "tsconfig.json");
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-
-  if (configFile.error) {
-    throw new Error(
-      `Failed to read tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`,
-    );
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, appPath);
-
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map((e) =>
-      ts.flattenDiagnosticMessageText(e.messageText, "\n"),
-    );
-    throw new Error(`Failed to parse tsconfig: ${messages.join("\n")}`);
-  }
-
-  return ts.createProgram(parsed.fileNames, parsed.options);
-}
 
 function compileTemplate(markup, options = {}) {
   const templatePath = options.templatePath ?? "template.html";

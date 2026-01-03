@@ -1,37 +1,9 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import * as ts from "typescript";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { resolve } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");
-
-/**
- * Create a TypeScript program from the explicit-app tsconfig.
- */
-function createProgramFromApp(appPath) {
-  const configPath = path.join(appPath, "tsconfig.json");
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-
-  if (configFile.error) {
-    throw new Error(`Failed to read tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`);
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    configFile.config,
-    ts.sys,
-    appPath,
-  );
-
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map(e => ts.flattenDiagnosticMessageText(e.messageText, "\n"));
-    throw new Error(`Failed to parse tsconfig: ${messages.join("\n")}`);
-  }
-
-  return ts.createProgram(parsed.fileNames, parsed.options);
-}
+const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
 
 describe("Full Pipeline: explicit-app", () => {
   let result: ReturnType<typeof resolve>;

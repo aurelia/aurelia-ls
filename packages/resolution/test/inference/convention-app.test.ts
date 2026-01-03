@@ -1,55 +1,12 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import * as ts from "typescript";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { extractAllFacts, createResolverPipeline } from "@aurelia-ls/resolution";
+import {
+  createProgramFromApp,
+  getTestAppPath,
+  filterFactsByPathPattern,
+} from "../_helpers/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONVENTION_APP = path.resolve(__dirname, "../apps/convention-app");
-
-/**
- * Create a TypeScript program from the convention-app tsconfig.
- */
-function createProgramFromApp(appPath: string): ts.Program {
-  const configPath = path.join(appPath, "tsconfig.json");
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-
-  if (configFile.error) {
-    throw new Error(`Failed to read tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`);
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    configFile.config,
-    ts.sys,
-    appPath,
-  );
-
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map(e => ts.flattenDiagnosticMessageText(e.messageText, "\n"));
-    throw new Error(`Failed to parse tsconfig: ${messages.join("\n")}`);
-  }
-
-  return ts.createProgram(parsed.fileNames, parsed.options);
-}
-
-/**
- * Filter facts to only include files from the app (not node_modules).
- */
-function filterAppFacts(
-  facts: Map<string, unknown>,
-  appPath: string
-): Map<string, unknown> {
-  const filtered = new Map();
-  const normalizedAppPath = appPath.replace(/\\/g, "/");
-
-  for (const [filePath, fileFacts] of facts) {
-    const normalized = filePath.replace(/\\/g, "/");
-    if (normalized.includes("/convention-app/src/")) {
-      filtered.set(filePath, fileFacts);
-    }
-  }
-  return filtered;
-}
+const CONVENTION_APP = getTestAppPath("convention-app", import.meta.url);
 
 describe("Inference: convention-app (template-pairing)", () => {
   let result: ReturnType<ReturnType<typeof createResolverPipeline>["resolve"]>;
@@ -57,7 +14,7 @@ describe("Inference: convention-app (template-pairing)", () => {
   beforeAll(() => {
     const program = createProgramFromApp(CONVENTION_APP);
     const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, CONVENTION_APP);
+    const appFacts = filterFactsByPathPattern(allFacts, "/convention-app/src/");
     const pipeline = createResolverPipeline();
     result = pipeline.resolve(appFacts as any);
   });
@@ -132,7 +89,7 @@ describe("Inference: template-pairing edge cases", () => {
     // The convention resolver should match despite case difference
     const program = createProgramFromApp(CONVENTION_APP);
     const allFacts = extractAllFacts(program);
-    const appFacts = filterAppFacts(allFacts, CONVENTION_APP);
+    const appFacts = filterFactsByPathPattern(allFacts, "/convention-app/src/");
     const pipeline = createResolverPipeline();
     const result = pipeline.resolve(appFacts as any);
 

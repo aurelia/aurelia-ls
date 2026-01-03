@@ -1,47 +1,21 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import * as ts from "typescript";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { extractAllFacts, resolveImports } from "@aurelia-ls/resolution";
+import type { SourceFacts } from "@aurelia-ls/resolution";
+import {
+  createProgramFromApp,
+  getTestAppPath,
+} from "../_helpers/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");
-
-/**
- * Create a TypeScript program from the explicit-app tsconfig.
- */
-function createProgramFromApp(appPath: string) {
-  const configPath = path.join(appPath, "tsconfig.json");
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-
-  if (configFile.error) {
-    throw new Error(`Failed to read tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`);
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    configFile.config,
-    ts.sys,
-    appPath,
-  );
-
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map(e => ts.flattenDiagnosticMessageText(e.messageText, "\n"));
-    throw new Error(`Failed to parse tsconfig: ${messages.join("\n")}`);
-  }
-
-  const program = ts.createProgram(parsed.fileNames, parsed.options);
-  return program;
-}
+const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
 
 describe("Import Resolution", () => {
-  let program: ts.Program;
-  let facts: ReturnType<typeof extractAllFacts>;
-  let resolvedFacts: ReturnType<typeof resolveImports>;
+  let facts: Map<string, SourceFacts>;
+  let resolvedFacts: Map<string, SourceFacts>;
 
   beforeAll(() => {
-    program = createProgramFromApp(EXPLICIT_APP);
-    facts = extractAllFacts(program);
-    resolvedFacts = resolveImports(facts);
+    const program = createProgramFromApp(EXPLICIT_APP);
+    facts = extractAllFacts(program) as Map<string, SourceFacts>;
+    resolvedFacts = resolveImports(facts) as Map<string, SourceFacts>;
   });
 
   it("resolves named imports in static dependencies", () => {
@@ -51,7 +25,7 @@ describe("Import Resolution", () => {
     );
     expect(productCardEntry, "product-card.ts should be in resolved facts").toBeTruthy();
 
-    const [productCardPath, productCardFacts] = productCardEntry!;
+    const [, productCardFacts] = productCardEntry!;
     const productCardClass = productCardFacts.classes.find(c => c.name === "ProductCard");
     expect(productCardClass, "ProductCard class should be found").toBeTruthy();
     expect(productCardClass!.staticDependencies, "Should have static dependencies").toBeTruthy();
