@@ -268,4 +268,180 @@ export class MyApp {}
       expect(importWarning!.message).toContain("2");
     });
   });
+
+  describe("Both default and named aliases (T4 fix)", () => {
+    it("handles both default and named aliases on same import", () => {
+      const templateImports: TemplateImport[] = [
+        {
+          moduleSpecifier: "./components",
+          defaultAlias: "mainComp",
+          namedAliases: [
+            { exportName: "Foo", alias: "f" },
+            { exportName: "Bar", alias: "b" },
+          ],
+        },
+      ];
+
+      const result = transform({
+        source: MINIMAL_SOURCE,
+        filePath: "my-app.ts",
+        aot: createMinimalAot(),
+        resource: { kind: "custom-element", name: "my-app", className: "MyApp" },
+        template: "<div></div>",
+        templateImports,
+      });
+
+      // Check that aliasedResourcesRegistry import was added
+      expect(result.code).toContain('import { aliasedResourcesRegistry } from "@aurelia/kernel";');
+
+      // Check that import statement was generated
+      expect(result.code).toContain('import * as __myApp_dep0 from "./components";');
+
+      // Check that default alias is used
+      expect(result.code).toContain('aliasedResourcesRegistry(__myApp_dep0, "mainComp")');
+
+      // Check that named aliases are also registered
+      expect(result.code).toContain('aliasedResourcesRegistry(__myApp_dep0.Foo, "f")');
+      expect(result.code).toContain('aliasedResourcesRegistry(__myApp_dep0.Bar, "b")');
+    });
+  });
+
+  describe("Insert position (T1 fix)", () => {
+    it("inserts after existing imports", () => {
+      const templateImports: TemplateImport[] = [
+        { moduleSpecifier: "./new-dep" },
+      ];
+
+      const result = transform({
+        source: MINIMAL_SOURCE,
+        filePath: "my-app.ts",
+        aot: createMinimalAot(),
+        resource: { kind: "custom-element", name: "my-app", className: "MyApp" },
+        template: "<div></div>",
+        templateImports,
+      });
+
+      // Check that template import comes after existing imports
+      const customElementImportPos = result.code.indexOf('from "@aurelia/runtime-html"');
+      const templateImportPos = result.code.indexOf('import * as __myApp_dep0');
+      expect(templateImportPos).toBeGreaterThan(customElementImportPos);
+    });
+
+    it("inserts after shebang line", () => {
+      const sourceWithShebang = `#!/usr/bin/env node
+export class MyApp {}
+`;
+
+      const templateImports: TemplateImport[] = [
+        { moduleSpecifier: "./foo" },
+      ];
+
+      const result = transform({
+        source: sourceWithShebang,
+        filePath: "my-app.ts",
+        aot: createMinimalAot(),
+        resource: { kind: "custom-element", name: "my-app", className: "MyApp" },
+        template: "<div></div>",
+        templateImports,
+      });
+
+      // Shebang should still be at the beginning
+      expect(result.code.startsWith("#!/usr/bin/env node")).toBe(true);
+
+      // Template import should come after shebang
+      const shebangEnd = result.code.indexOf("\n") + 1;
+      const templateImportPos = result.code.indexOf('import * as __myApp_dep0');
+      expect(templateImportPos).toBeGreaterThanOrEqual(shebangEnd);
+    });
+
+    it("inserts after use strict directive", () => {
+      const sourceWithUseStrict = `"use strict";
+export class MyApp {}
+`;
+
+      const templateImports: TemplateImport[] = [
+        { moduleSpecifier: "./foo" },
+      ];
+
+      const result = transform({
+        source: sourceWithUseStrict,
+        filePath: "my-app.ts",
+        aot: createMinimalAot(),
+        resource: { kind: "custom-element", name: "my-app", className: "MyApp" },
+        template: "<div></div>",
+        templateImports,
+      });
+
+      // "use strict" should still be at the beginning
+      expect(result.code.startsWith('"use strict"')).toBe(true);
+
+      // Template import should come after "use strict"
+      const useStrictEnd = result.code.indexOf(";") + 1;
+      const templateImportPos = result.code.indexOf('import * as __myApp_dep0');
+      expect(templateImportPos).toBeGreaterThan(useStrictEnd);
+    });
+
+    it("inserts after license comment header", () => {
+      const sourceWithLicense = `/**
+ * MIT License
+ * Copyright (c) 2024
+ */
+export class MyApp {}
+`;
+
+      const templateImports: TemplateImport[] = [
+        { moduleSpecifier: "./foo" },
+      ];
+
+      const result = transform({
+        source: sourceWithLicense,
+        filePath: "my-app.ts",
+        aot: createMinimalAot(),
+        resource: { kind: "custom-element", name: "my-app", className: "MyApp" },
+        template: "<div></div>",
+        templateImports,
+      });
+
+      // License comment should still be at the beginning
+      expect(result.code.startsWith("/**")).toBe(true);
+      expect(result.code).toContain("MIT License");
+
+      // Template import should come after the license comment
+      const licenseEnd = result.code.indexOf("*/") + 2;
+      const templateImportPos = result.code.indexOf('import * as __myApp_dep0');
+      expect(templateImportPos).toBeGreaterThan(licenseEnd);
+    });
+
+    it("does not corrupt file with shebang and imports", () => {
+      const sourceWithShebangAndImports = `#!/usr/bin/env node
+import { something } from "somewhere";
+
+export class MyApp {}
+`;
+
+      const templateImports: TemplateImport[] = [
+        { moduleSpecifier: "./foo" },
+      ];
+
+      const result = transform({
+        source: sourceWithShebangAndImports,
+        filePath: "my-app.ts",
+        aot: createMinimalAot(),
+        resource: { kind: "custom-element", name: "my-app", className: "MyApp" },
+        template: "<div></div>",
+        templateImports,
+      });
+
+      // Shebang should be first
+      expect(result.code.startsWith("#!/usr/bin/env node")).toBe(true);
+
+      // Existing import should be preserved
+      expect(result.code).toContain('import { something } from "somewhere"');
+
+      // Template import should come after existing imports
+      const existingImportPos = result.code.indexOf('from "somewhere"');
+      const templateImportPos = result.code.indexOf('import * as __myApp_dep0');
+      expect(templateImportPos).toBeGreaterThan(existingImportPos);
+    });
+  });
 });
