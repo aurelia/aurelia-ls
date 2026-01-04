@@ -23,6 +23,7 @@ import {
   type ResourceScopeId,
   type NestedTemplateHtmlNode,
   type CompileTrace,
+  type LocalImportDef,
 } from "@aurelia-ls/compiler";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./instruction-translator.js";
@@ -46,6 +47,13 @@ export interface AotCompileOptions {
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
   resourceScope?: ResourceScopeId | null;
+  /**
+   * Local imports from template `<import>` elements.
+   *
+   * These are resolved as local element definitions for this template,
+   * allowing resolution of elements imported via `<import from="./foo">`.
+   */
+  localImports?: LocalImportDef[];
   /**
    * Strip source location spans from expression ASTs.
    * Reduces output size for production builds.
@@ -123,6 +131,7 @@ export function compileWithAot(
       semantics: options.semantics,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
+      localImports: options.localImports,
       stripSpans: options.stripSpans,
       deduplicateExpressions: options.deduplicateExpressions,
       trace,

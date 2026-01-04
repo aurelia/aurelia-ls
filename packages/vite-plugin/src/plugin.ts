@@ -23,12 +23,13 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { normalizePathForId, debug, type CompileTrace } from "@aurelia-ls/compiler";
+import { normalizePathForId, debug, extractTemplateMeta, type CompileTrace, type ImportMetaIR, type LocalImportDef } from "@aurelia-ls/compiler";
 import {
   transform,
   transformEntryPoint,
   analyzeEntryPoint,
   type ResourceDefinition,
+  type TemplateImport,
 } from "@aurelia-ls/transform";
 import { compileWithAot, isSSRHandler, type SSRHandler } from "@aurelia-ls/ssr";
 import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
@@ -75,6 +76,49 @@ const DEFAULT_EXCLUDE = [
 ];
 
 /**
+ * Convert compiler's ImportMetaIR to transform's TemplateImport.
+ *
+ * This bridges the gap between the meta extraction in the compiler package
+ * and the dependency generation in the transform package.
+ */
+function convertToTemplateImports(imports: ImportMetaIR[]): TemplateImport[] {
+  return imports.map((imp) => ({
+    moduleSpecifier: imp.from.value,
+    resolvedPath: null, // Will be resolved by transform if needed
+    defaultAlias: imp.defaultAlias?.value ?? null,
+    namedAliases: imp.namedAliases.map((na) => ({
+      exportName: na.exportName.value,
+      alias: na.alias.value,
+    })),
+    span: { start: imp.from.loc.start, end: imp.from.loc.end },
+  }));
+}
+
+/**
+ * Convert template imports to LocalImportDef for compiler resolution.
+ *
+ * This allows the compiler to resolve elements referenced via `<import from="...">`.
+ * The element name is derived from the module specifier (e.g., "./all-table" → "all-table").
+ */
+function convertToLocalImports(imports: ImportMetaIR[]): LocalImportDef[] {
+  return imports.map((imp) => {
+    // Derive element name from module specifier
+    // "./views/all-table" → "all-table"
+    // "@scope/pkg/my-component" → "my-component"
+    const specifier = imp.from.value;
+    const lastSegment = specifier.split(/[/\\]/).pop() ?? specifier;
+    // Remove any extension if present
+    const name = lastSegment.replace(/\.(ts|js|html)$/, "");
+
+    return {
+      name,
+      bindables: {}, // TODO: Get bindables from resolution analysis
+      alias: imp.defaultAlias?.value ?? undefined,
+    };
+  });
+}
+
+/**
  * Transform a component file to inject $au definition.
  */
 function transformComponent(
@@ -90,6 +134,11 @@ function transformComponent(
     // Read the template HTML
     const templateHtml = readFileSync(templateInfo.templatePath, "utf-8");
 
+    // Extract template meta (imports, bindables, etc.)
+    const templateMeta = extractTemplateMeta(templateHtml, templateInfo.templatePath);
+    const templateImports = convertToTemplateImports(templateMeta.imports);
+    const localImports = convertToLocalImports(templateMeta.imports);
+
     // Compile with AOT
     const aot = compileWithAot(templateHtml, {
       templatePath: templateInfo.templatePath,
@@ -97,6 +146,7 @@ function transformComponent(
       semantics: resolutionContext.semantics,
       resourceGraph: resolutionContext.resourceGraph,
       resourceScope: templateInfo.scopeId,
+      localImports,
       trace,
     });
 
@@ -118,6 +168,7 @@ function transformComponent(
       resource,
       template: aot.template,
       nestedHtmlTree: aot.raw.nestedHtmlTree,
+      templateImports,
       removeDecorators: true,
       includeComments: true,
       trace,

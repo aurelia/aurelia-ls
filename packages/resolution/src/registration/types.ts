@@ -288,6 +288,15 @@ export type RegistrationEvidence =
       readonly pluginName: string;
       /** File where the plugin is registered */
       readonly file: NormalizedPath;
+    }
+  | {
+      readonly kind: "template-import";
+      /** Component class that owns this template */
+      readonly component: NormalizedPath;
+      /** Class name of the component */
+      readonly className: string;
+      /** Template file containing the <import> element */
+      readonly templateFile: NormalizedPath;
     };
 
 // =============================================================================

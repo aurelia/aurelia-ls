@@ -1,4 +1,4 @@
-import type { NormalizedPath, BindingMode, TextSpan } from "@aurelia-ls/compiler";
+import type { NormalizedPath, BindingMode, SourceSpan, TextSpan } from "@aurelia-ls/compiler";
 
 // Re-export BindingMode for consumers of this module
 export type { BindingMode };
@@ -18,6 +18,16 @@ export interface SourceFacts {
    * Used for sibling file convention: `foo.ts` + `foo.html`
    */
   readonly siblingFiles: SiblingFileFact[];
+
+  /**
+   * Template imports from sibling HTML template.
+   *
+   * Extracted from <import> and <require> elements in the sibling template.
+   * Used to create local scope registrations with `template-import` evidence.
+   *
+   * Populated when FileSystemContext is provided and a sibling .html exists.
+   */
+  readonly templateImports: readonly TemplateImportFact[];
 }
 
 /**
@@ -169,4 +179,61 @@ export type RegistrationArgFact =
 export interface Position {
   readonly line: number;
   readonly character: number;
+}
+
+// =============================================================================
+// Template Import Facts
+// =============================================================================
+
+/**
+ * Facts extracted from template <import> elements.
+ *
+ * These come from parsing the HTML template, not TypeScript.
+ * Used to create local registration sites with `template-import` evidence.
+ */
+export interface TemplateImportFact {
+  /**
+   * Module specifier from the `from` attribute.
+   * E.g., "./foo", "@aurelia/router"
+   */
+  readonly moduleSpecifier: string;
+
+  /**
+   * Resolved file path for the module specifier.
+   * Null if resolution failed.
+   */
+  readonly resolvedPath: NormalizedPath | null;
+
+  /**
+   * Default alias from `as` attribute.
+   * E.g., <import from="./foo" as="bar"> → "bar"
+   */
+  readonly defaultAlias: string | null;
+
+  /**
+   * Named aliases from `Export.as` attributes.
+   * E.g., <import from="./x" Foo.as="f"> → [{ exportName: "Foo", alias: "f" }]
+   */
+  readonly namedAliases: readonly NamedAlias[];
+
+  /**
+   * Source span of the import element in the template.
+   * For provenance - diagnostics, navigation.
+   */
+  readonly span: SourceSpan;
+
+  /**
+   * Source span of the `from` attribute value.
+   * For go-to-definition on the module specifier.
+   */
+  readonly moduleSpecifierSpan: SourceSpan;
+}
+
+/**
+ * Named alias in a template import.
+ * E.g., <import from="./x" Foo.as="bar"> → { exportName: "Foo", alias: "bar" }
+ */
+export interface NamedAlias {
+  readonly exportName: string;
+  readonly alias: string;
 }

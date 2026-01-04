@@ -10,10 +10,11 @@ import {
   extractExpressionTokens,
   extractBindingCommandTokens,
   extractInterpolationDelimiterTokens,
+  extractMetaElementTokens,
   handleSemanticTokensFull,
   type RawToken,
 } from "../../out/handlers/semantic-tokens.js";
-import type { DOMNode, ElementNode, LinkedRow, NodeSem, ExprTableEntry, SourceSpan, LinkedInstruction } from "@aurelia-ls/compiler";
+import type { DOMNode, ElementNode, LinkedRow, NodeSem, ExprTableEntry, SourceSpan, LinkedInstruction, TemplateMetaIR } from "@aurelia-ls/compiler";
 
 /* ===========================
  * Token Legend Tests
@@ -1398,5 +1399,391 @@ describe("extractInterpolationDelimiterTokens", () => {
     expect(tokens.length).toBe(2);
     expect(tokens[0]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
     expect(tokens[1]!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+  });
+});
+
+/* ===========================
+ * extractMetaElementTokens Tests
+ * =========================== */
+
+describe("extractMetaElementTokens", () => {
+  const testFileId = "test.html" as any;
+
+  function createEmptyMeta(): TemplateMetaIR {
+    return {
+      imports: [],
+      bindables: [],
+      shadowDom: null,
+      aliases: [],
+      containerless: null,
+      capture: null,
+      hasSlot: false,
+    };
+  }
+
+  test("returns empty array for undefined meta", () => {
+    const tokens = extractMetaElementTokens("", undefined);
+    expect(tokens).toEqual([]);
+  });
+
+  test("returns empty array for empty meta", () => {
+    const tokens = extractMetaElementTokens("", createEmptyMeta());
+    expect(tokens).toEqual([]);
+  });
+
+  describe("<import> elements", () => {
+    test("extracts tag name token", () => {
+      const text = '<import from="./foo">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        imports: [{
+          kind: "import",
+          from: { value: "./foo", loc: { file: testFileId, start: 14, end: 19 } },
+          defaultAlias: null,
+          namedAliases: [],
+          elementLoc: { file: testFileId, start: 0, end: 21 },
+          tagLoc: { file: testFileId, start: 1, end: 7 }, // "import" at 1-7
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const tagToken = tokens.find(t => t.char === 1 && t.length === 6);
+      expect(tagToken).toBeDefined();
+      expect(tagToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+      expect(tagToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+    });
+
+    test("extracts module specifier token", () => {
+      const text = '<import from="./foo">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        imports: [{
+          kind: "import",
+          from: { value: "./foo", loc: { file: testFileId, start: 14, end: 19 } },
+          defaultAlias: null,
+          namedAliases: [],
+          elementLoc: { file: testFileId, start: 0, end: 21 },
+          tagLoc: { file: testFileId, start: 1, end: 7 },
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const moduleToken = tokens.find(t => t.char === 14 && t.length === 5);
+      expect(moduleToken).toBeDefined();
+      expect(moduleToken!.type).toBe(TOKEN_TYPES.indexOf("namespace"));
+    });
+
+    test("extracts default alias token", () => {
+      const text = '<import from="./foo" as="bar">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        imports: [{
+          kind: "import",
+          from: { value: "./foo", loc: { file: testFileId, start: 14, end: 19 } },
+          defaultAlias: { value: "bar", loc: { file: testFileId, start: 25, end: 28 } },
+          namedAliases: [],
+          elementLoc: { file: testFileId, start: 0, end: 30 },
+          tagLoc: { file: testFileId, start: 1, end: 7 },
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const aliasToken = tokens.find(t => t.char === 25 && t.length === 3);
+      expect(aliasToken).toBeDefined();
+      expect(aliasToken!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+      expect(aliasToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("declaration"));
+    });
+
+    test("extracts named alias tokens", () => {
+      const text = '<import from="./x" Foo.as="bar">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        imports: [{
+          kind: "import",
+          from: { value: "./x", loc: { file: testFileId, start: 14, end: 17 } },
+          defaultAlias: null,
+          namedAliases: [{
+            exportName: { value: "Foo", loc: { file: testFileId, start: 19, end: 22 } },
+            alias: { value: "bar", loc: { file: testFileId, start: 27, end: 30 } },
+          }],
+          elementLoc: { file: testFileId, start: 0, end: 32 },
+          tagLoc: { file: testFileId, start: 1, end: 7 },
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      // Export name (Foo) → namespace
+      const exportToken = tokens.find(t => t.char === 19 && t.length === 3);
+      expect(exportToken).toBeDefined();
+      expect(exportToken!.type).toBe(TOKEN_TYPES.indexOf("namespace"));
+
+      // Alias (bar) → variable declaration
+      const aliasToken = tokens.find(t => t.char === 27 && t.length === 3);
+      expect(aliasToken).toBeDefined();
+      expect(aliasToken!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+      expect(aliasToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("declaration"));
+    });
+  });
+
+  describe("<require> elements", () => {
+    test("extracts tag name token for legacy require", () => {
+      const text = '<require from="./legacy">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        imports: [{
+          kind: "require",
+          from: { value: "./legacy", loc: { file: testFileId, start: 15, end: 23 } },
+          defaultAlias: null,
+          namedAliases: [],
+          elementLoc: { file: testFileId, start: 0, end: 25 },
+          tagLoc: { file: testFileId, start: 1, end: 8 }, // "require" at 1-8
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const tagToken = tokens.find(t => t.char === 1 && t.length === 7);
+      expect(tagToken).toBeDefined();
+      expect(tagToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+    });
+  });
+
+  describe("<bindable> elements", () => {
+    test("extracts tag name and property name tokens", () => {
+      const text = '<bindable name="value">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        bindables: [{
+          name: { value: "value", loc: { file: testFileId, start: 16, end: 21 } },
+          mode: null,
+          attribute: null,
+          elementLoc: { file: testFileId, start: 0, end: 23 },
+          tagLoc: { file: testFileId, start: 1, end: 9 }, // "bindable" at 1-9
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      // Tag name → keyword
+      const tagToken = tokens.find(t => t.char === 1 && t.length === 8);
+      expect(tagToken).toBeDefined();
+      expect(tagToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+
+      // Property name → property
+      const nameToken = tokens.find(t => t.char === 16 && t.length === 5);
+      expect(nameToken).toBeDefined();
+      expect(nameToken!.type).toBe(TOKEN_TYPES.indexOf("property"));
+      expect(nameToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("declaration"));
+    });
+
+    test("extracts mode token", () => {
+      const text = '<bindable name="x" mode="two-way">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        bindables: [{
+          name: { value: "x", loc: { file: testFileId, start: 16, end: 17 } },
+          mode: { value: "two-way", loc: { file: testFileId, start: 25, end: 32 } },
+          attribute: null,
+          elementLoc: { file: testFileId, start: 0, end: 34 },
+          tagLoc: { file: testFileId, start: 1, end: 9 },
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const modeToken = tokens.find(t => t.char === 25 && t.length === 7);
+      expect(modeToken).toBeDefined();
+      expect(modeToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+    });
+
+    test("extracts attribute alias token", () => {
+      const text = '<bindable name="myProp" attribute="my-prop">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        bindables: [{
+          name: { value: "myProp", loc: { file: testFileId, start: 16, end: 22 } },
+          mode: null,
+          attribute: { value: "my-prop", loc: { file: testFileId, start: 35, end: 42 } },
+          elementLoc: { file: testFileId, start: 0, end: 44 },
+          tagLoc: { file: testFileId, start: 1, end: 9 },
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const attrToken = tokens.find(t => t.char === 35 && t.length === 7);
+      expect(attrToken).toBeDefined();
+      expect(attrToken!.type).toBe(TOKEN_TYPES.indexOf("property"));
+    });
+  });
+
+  describe("<use-shadow-dom> element", () => {
+    test("extracts tag name token", () => {
+      const text = '<use-shadow-dom>';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        shadowDom: {
+          mode: { value: "open", loc: { file: testFileId, start: 0, end: 16 } },
+          elementLoc: { file: testFileId, start: 0, end: 16 },
+          tagLoc: { file: testFileId, start: 1, end: 15 }, // "use-shadow-dom" at 1-15
+        },
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const tagToken = tokens.find(t => t.char === 1 && t.length === 14);
+      expect(tagToken).toBeDefined();
+      expect(tagToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+      expect(tagToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+    });
+  });
+
+  describe("<containerless> element", () => {
+    test("extracts tag name token", () => {
+      const text = '<containerless>';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        containerless: {
+          elementLoc: { file: testFileId, start: 0, end: 15 },
+          tagLoc: { file: testFileId, start: 1, end: 14 }, // "containerless" at 1-14
+        },
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const tagToken = tokens.find(t => t.char === 1 && t.length === 13);
+      expect(tagToken).toBeDefined();
+      expect(tagToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+      expect(tagToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+    });
+  });
+
+  describe("<capture> element", () => {
+    test("extracts tag name token", () => {
+      const text = '<capture>';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        capture: {
+          elementLoc: { file: testFileId, start: 0, end: 9 },
+          tagLoc: { file: testFileId, start: 1, end: 8 }, // "capture" at 1-8
+        },
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      const tagToken = tokens.find(t => t.char === 1 && t.length === 7);
+      expect(tagToken).toBeDefined();
+      expect(tagToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+      expect(tagToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("defaultLibrary"));
+    });
+  });
+
+  describe("<alias> elements", () => {
+    test("extracts tag name and alias name tokens", () => {
+      const text = '<alias name="foo">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        aliases: [{
+          names: [{ value: "foo", loc: { file: testFileId, start: 13, end: 16 } }],
+          elementLoc: { file: testFileId, start: 0, end: 18 },
+          tagLoc: { file: testFileId, start: 1, end: 6 }, // "alias" at 1-6
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      // Tag name → keyword
+      const tagToken = tokens.find(t => t.char === 1 && t.length === 5);
+      expect(tagToken).toBeDefined();
+      expect(tagToken!.type).toBe(TOKEN_TYPES.indexOf("keyword"));
+
+      // Alias name → variable declaration
+      const nameToken = tokens.find(t => t.char === 13 && t.length === 3);
+      expect(nameToken).toBeDefined();
+      expect(nameToken!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+      expect(nameToken!.modifiers).toBe(1 << TOKEN_MODIFIERS.indexOf("declaration"));
+    });
+
+    test("extracts multiple alias names", () => {
+      const text = '<alias name="foo, bar">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        aliases: [{
+          names: [
+            { value: "foo", loc: { file: testFileId, start: 13, end: 16 } },
+            { value: "bar", loc: { file: testFileId, start: 18, end: 21 } },
+          ],
+          elementLoc: { file: testFileId, start: 0, end: 23 },
+          tagLoc: { file: testFileId, start: 1, end: 6 },
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      // Both alias names should be variable declarations
+      const fooToken = tokens.find(t => t.char === 13 && t.length === 3);
+      const barToken = tokens.find(t => t.char === 18 && t.length === 3);
+
+      expect(fooToken).toBeDefined();
+      expect(barToken).toBeDefined();
+      expect(fooToken!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+      expect(barToken!.type).toBe(TOKEN_TYPES.indexOf("variable"));
+    });
+  });
+
+  describe("Edge cases", () => {
+    test("skips meta elements with zero-length spans", () => {
+      const text = '<import from="./foo">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        imports: [{
+          kind: "import",
+          from: { value: "./foo", loc: { file: testFileId, start: 0, end: 0 } }, // Zero-length span
+          defaultAlias: null,
+          namedAliases: [],
+          elementLoc: { file: testFileId, start: 0, end: 21 },
+          tagLoc: { file: testFileId, start: 0, end: 0 }, // Zero-length span
+        }],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      // Should not produce tokens for zero-length spans
+      expect(tokens).toEqual([]);
+    });
+
+    test("handles multiple meta elements of same type", () => {
+      const text = '<import from="./a"><import from="./b">';
+      const meta: TemplateMetaIR = {
+        ...createEmptyMeta(),
+        imports: [
+          {
+            kind: "import",
+            from: { value: "./a", loc: { file: testFileId, start: 14, end: 17 } },
+            defaultAlias: null,
+            namedAliases: [],
+            elementLoc: { file: testFileId, start: 0, end: 18 },
+            tagLoc: { file: testFileId, start: 1, end: 7 },
+          },
+          {
+            kind: "import",
+            from: { value: "./b", loc: { file: testFileId, start: 33, end: 36 } },
+            defaultAlias: null,
+            namedAliases: [],
+            elementLoc: { file: testFileId, start: 18, end: 37 },
+            tagLoc: { file: testFileId, start: 19, end: 25 },
+          },
+        ],
+      };
+
+      const tokens = extractMetaElementTokens(text, meta);
+
+      // Should have tokens for both imports
+      expect(tokens.length).toBe(4); // 2 tag names + 2 module specifiers
+    });
   });
 });

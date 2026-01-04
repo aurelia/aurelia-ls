@@ -6,6 +6,9 @@
 // Stage 10: Lower (HTML -> IR)
 export { lowerDocument, type BuildIrOptions } from "./10-lower/lower.js";
 
+// Meta element extraction (for resolution package)
+export { extractMeta, extractTemplateMeta, stripMetaFromHtml } from "./10-lower/meta-extraction.js";
+
 // Stage 20: Resolve (IR -> LinkedSemantics)
 export { resolveHost, type ResolveHostOptions } from "./20-resolve/resolve.js";
 export type {

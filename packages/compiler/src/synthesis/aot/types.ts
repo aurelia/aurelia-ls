@@ -25,6 +25,7 @@ import type {
   BindingMode,
   JsonValue,
   AnyBindingExpression,
+  TemplateMetaIR,
 } from "../../model/index.js";
 import type { ControllerConfig } from "../../language/registry.js";
 
@@ -52,6 +53,12 @@ export interface AotPlanModule {
 
   /** Template name (from source) */
   name?: string;
+
+  /**
+   * Extracted meta elements (<import>, <bindable>, etc.).
+   * Carried through from analysis for AOT emission.
+   */
+  templateMeta?: TemplateMetaIR;
 }
 
 /* =============================================================================
@@ -572,6 +579,38 @@ export interface SerializedDefinition {
 
   /** Total target count */
   targetCount: number;
+
+  // === Meta element properties (from <import>, <bindable>, etc.) ===
+
+  /** Shadow DOM options from <use-shadow-dom> */
+  shadowOptions?: { mode: 'open' | 'closed' };
+
+  /** Containerless mode from <containerless> */
+  containerless?: boolean;
+
+  /** Capture mode from <capture> (custom attributes only) */
+  capture?: boolean;
+
+  /** Element aliases from <alias> */
+  aliases?: string[];
+
+  /** Bindable property declarations from <bindable> */
+  bindables?: SerializedBindable[];
+
+  /** Whether template contains a <slot> element */
+  hasSlot?: boolean;
+}
+
+/**
+ * Serialized bindable property from <bindable> meta element.
+ */
+export interface SerializedBindable {
+  /** Property name */
+  name: string;
+  /** Binding mode override */
+  mode?: string;
+  /** HTML attribute name if different from property */
+  attribute?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- INSTRUCTION_TYPE used in typeof

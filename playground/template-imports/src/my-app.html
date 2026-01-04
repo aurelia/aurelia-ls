@@ -1,0 +1,9 @@
+<import from="./counter">
+
+<div class="app">
+  <h1 data-testid="title">${title}</h1>
+
+  <!-- Counter imported via template-level import -->
+  <counter data-testid="first-counter" label.bind="'First Counter'"></counter>
+  <counter data-testid="second-counter" label="Second Counter"></counter>
+</div>

@@ -1,9 +1,10 @@
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { debug } from "@aurelia-ls/compiler";
-import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact } from "./types.js";
+import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact, TemplateImportFact } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";
+import { extractTemplateImports, resolveTemplateImportPaths } from "./template-imports.js";
 import { canonicalPath } from "../util/naming.js";
 import type { FileSystemContext } from "../project/context.js";
 
@@ -131,7 +132,62 @@ export function extractSourceFacts(
   // Detect sibling files if FileSystemContext is provided
   const siblingFiles = detectSiblingFiles(sf.fileName, options);
 
-  return { path, classes, registrationCalls, imports, exports, siblingFiles };
+  // Extract template imports from sibling HTML template (with resolution if program available)
+  const templateImports = extractSiblingTemplateImports(siblingFiles, options, program);
+
+  return { path, classes, registrationCalls, imports, exports, siblingFiles, templateImports };
+}
+
+/**
+ * Extract template imports from a sibling HTML template.
+ *
+ * Finds the sibling .html file (if any) and extracts <import>/<require> elements.
+ * Also resolves module specifiers to file paths using TypeScript's module resolution.
+ */
+function extractSiblingTemplateImports(
+  siblingFiles: SiblingFileFact[],
+  options: ExtractionOptions | undefined,
+  program: ts.Program | undefined,
+): readonly TemplateImportFact[] {
+  if (!options?.fileSystem) {
+    return [];
+  }
+
+  // Find the sibling HTML template
+  const templateExtensions = options.templateExtensions ?? [".html"];
+  const templateSibling = siblingFiles.find((s) =>
+    templateExtensions.includes(s.extension.toLowerCase())
+  );
+
+  if (!templateSibling) {
+    return [];
+  }
+
+  // Extract imports from the template
+  const imports = extractTemplateImports(templateSibling.path, options.fileSystem);
+
+  debug.resolution("extraction.templateImports", {
+    templatePath: templateSibling.path,
+    importCount: imports.length,
+  });
+
+  // Resolve module specifiers if we have a program
+  if (program && imports.length > 0) {
+    const resolveModule = (specifier: string, fromFile: NormalizedPath) =>
+      resolveModulePath(specifier, fromFile, program, options.moduleResolutionHost);
+
+    const resolved = resolveTemplateImportPaths(imports, templateSibling.path, resolveModule);
+
+    debug.resolution("extraction.templateImports.resolved", {
+      templatePath: templateSibling.path,
+      resolvedCount: resolved.filter((i) => i.resolvedPath !== null).length,
+      unresolvedCount: resolved.filter((i) => i.resolvedPath === null).length,
+    });
+
+    return resolved;
+  }
+
+  return imports;
 }
 
 /**

@@ -35,6 +35,8 @@ export type {
   TransformErrorCodeType,
   SourceMapOptions,
   SourceMapResult,
+  TemplateImport,
+  TemplateImportNamedAlias,
 } from "./transform/index.js";
 export { TransformErrorCode } from "./transform/index.js";
 

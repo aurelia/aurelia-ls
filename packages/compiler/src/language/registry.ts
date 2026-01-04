@@ -946,10 +946,36 @@ export interface SemanticsLookup {
   // These should check both built-in (sem.resources) and userland (ResourceGraph).
 }
 
+/**
+ * Local import definition for template-level imports.
+ *
+ * When a template has `<import from="./foo">`, the imported element
+ * should be resolvable within that template's scope. This type represents
+ * that local import, converting the module specifier to element resources.
+ */
+export interface LocalImportDef {
+  /** Element tag name (kebab-case, e.g., "my-component") */
+  name: string;
+  /**
+   * Bindable properties (if known from TypeScript analysis).
+   * When empty, element is still resolvable but bindables are unknown.
+   */
+  bindables?: Record<string, Bindable>;
+  /** Alias for this import (from `as` attribute or `X.as` syntax) */
+  alias?: string;
+}
+
 export interface SemanticsLookupOptions {
   resources?: ResourceCollections;
   graph?: ResourceGraph | null;
   scope?: ResourceScopeId | null;
+  /**
+   * Local imports from template `<import>` elements.
+   *
+   * These are added to the element lookup for this specific template,
+   * allowing resolution of imported elements that aren't in the global scope.
+   */
+  localImports?: LocalImportDef[];
 }
 
 export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOptions): SemanticsLookup {
@@ -958,6 +984,29 @@ export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOpti
     : materializeResourcesForScope(sem, opts?.graph, opts?.scope ?? null);
 
   const elementIndex = buildResourceIndex(scoped.resources.elements);
+
+  // Merge local imports into element index (template-level <import> elements)
+  if (opts?.localImports) {
+    for (const imp of opts.localImports) {
+      const name = imp.alias ?? imp.name;
+      const canonical = name.toLowerCase();
+      // Only add if not already in scope (don't override global registrations)
+      if (!elementIndex.has(canonical)) {
+        const res: ElementRes = {
+          kind: "element",
+          name: imp.name,
+          bindables: imp.bindables ?? {},
+          aliases: imp.alias ? [imp.alias] : undefined,
+        };
+        elementIndex.set(canonical, res);
+        // Also set original name if alias was used
+        if (imp.alias && imp.name.toLowerCase() !== canonical) {
+          elementIndex.set(imp.name.toLowerCase(), res);
+        }
+      }
+    }
+  }
+
   const attributeIndex = buildResourceIndex(scoped.resources.attributes);
   const domIndex = buildDomIndex(sem.dom.elements);
 

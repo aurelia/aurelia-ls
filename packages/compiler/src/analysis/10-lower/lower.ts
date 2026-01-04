@@ -5,11 +5,12 @@ import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { Semantics } from "../../language/registry.js";
 import { DEFAULT as DEFAULT_SEMANTICS } from "../../language/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
-import { buildDomRoot } from "./dom-builder.js";
+import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
 import { ExprTable, DomIdAllocator } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
 
 export interface BuildIrOptions {
   file?: string;
@@ -41,24 +42,42 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const table = new ExprTable(opts.exprParser, source, html);
     const nestedTemplates: TemplateIR[] = [];
 
-    // Build DOM tree
+    // Extract meta elements (<import>, <bindable>, etc.) before DOM building
+    trace.event("lower.meta.start");
+    const { meta: templateMeta, removeRanges } = extractMeta(p5, source, html);
+    trace.event("lower.meta.complete");
+
+    // Tags to skip during DOM building and row collection
+    const skipTags = META_ELEMENT_TAGS;
+
+    // Build DOM tree (skipping meta elements)
     trace.event("lower.dom.start");
-    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source);
+    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, undefined, skipTags);
     trace.event("lower.dom.complete");
 
-    // Collect instruction rows
+    // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, sem);
+    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, sem, skipTags);
     trace.event("lower.rows.complete");
 
-    const root: TemplateIR = { dom: domRoot, rows, name: opts.name! };
+    // Build root template with meta
+    const root: TemplateIR = {
+      dom: domRoot,
+      rows,
+      name: opts.name!,
+      templateMeta,
+    };
 
     const result: IrModule = {
       version: "aurelia-ir@1",
       templates: [root, ...nestedTemplates],
       exprTable: table.entries,
       name: opts.name!,
+      // Store stripped HTML for emit-template (meta elements removed)
+      meta: removeRanges.length > 0
+        ? { strippedHtml: stripMetaFromHtml(html, removeRanges) }
+        : undefined,
     };
 
     // Include diagnostics if any were collected
@@ -72,6 +91,8 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
       [CompilerAttributes.EXPR_COUNT]: table.entries.length,
       [CompilerAttributes.ROW_COUNT]: rows.length,
       "lower.templateCount": result.templates.length,
+      "lower.metaImports": templateMeta.imports.length,
+      "lower.metaBindables": templateMeta.bindables.length,
       [CompilerAttributes.DIAG_COUNT]: result.diags?.length ?? 0,
     });
 

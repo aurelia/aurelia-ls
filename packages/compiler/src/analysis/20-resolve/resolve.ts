@@ -37,7 +37,7 @@ import type {
   SourceSpan,
 } from "../../model/ir.js";
 
-import { createSemanticsLookup, getControllerConfig, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
+import { createSemanticsLookup, getControllerConfig, type SemanticsLookup, type SemanticsLookupOptions, type LocalImportDef } from "../../language/registry.js";
 import type { Semantics } from "../../language/registry.js";
 import type { ResourceCollections, ResourceGraph, ResourceScopeId } from "../../language/resource-graph.js";
 
@@ -149,6 +149,13 @@ export interface ResolveHostOptions {
   resources?: ResourceCollections;
   graph?: ResourceGraph | null;
   scope?: ResourceScopeId | null;
+  /**
+   * Local imports from template `<import>` elements.
+   *
+   * These are resolved as local element definitions for this template,
+   * allowing resolution of elements imported via `<import from="./foo">`.
+   */
+  localImports?: LocalImportDef[];
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
@@ -225,6 +232,7 @@ function buildLookupOpts(opts: ResolveHostOptions): SemanticsLookupOptions {
   if (opts.resources) out.resources = opts.resources;
   if (opts.graph !== undefined) out.graph = opts.graph;
   if (opts.scope !== undefined) out.scope = opts.scope ?? null;
+  if (opts.localImports) out.localImports = opts.localImports;
   return out;
 }
 
@@ -243,7 +251,14 @@ function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
     return { target: row.target, node: nodeSem, instructions: linkedInstrs };
   });
 
-  return { dom: t.dom, rows, name: t.name! };
+  const result: LinkedTemplate = { dom: t.dom, rows, name: t.name! };
+
+  // Carry template meta through for AOT emission
+  if (t.templateMeta) {
+    result.templateMeta = t.templateMeta;
+  }
+
+  return result;
 }
 
 /* ============================================================================

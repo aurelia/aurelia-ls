@@ -4,9 +4,44 @@
  * Core types for the transformation pipeline.
  */
 
-import type { AotCodeResult, NestedTemplateHtmlNode, CompileTrace } from "@aurelia-ls/compiler";
+import type { AotCodeResult, NestedTemplateHtmlNode, CompileTrace, NormalizedPath, TextSpan } from "@aurelia-ls/compiler";
 import type { ResourceDefinition } from "../model/types.js";
 import type { TypedSourceEdit } from "../ts/types.js";
+
+/* =============================================================================
+ * TEMPLATE IMPORTS
+ * ============================================================================= */
+
+/**
+ * Template import from <import> or <require> element in HTML template.
+ *
+ * Used to generate import statements and dependencies array in $au.
+ */
+export interface TemplateImport {
+  /** Module specifier (e.g., "./foo", "@aurelia/router") */
+  moduleSpecifier: string;
+
+  /** Resolved file path (if available) */
+  resolvedPath?: NormalizedPath | null;
+
+  /** Default alias from `as` attribute: <import from="./foo" as="bar"> */
+  defaultAlias?: string | null;
+
+  /** Named aliases from `Export.as` attributes */
+  namedAliases?: readonly TemplateImportNamedAlias[];
+
+  /** Source span in template (for diagnostics) */
+  span?: TextSpan;
+}
+
+/**
+ * Named alias in a template import.
+ * E.g., <import from="./x" Foo.as="bar"> → { exportName: "Foo", alias: "bar" }
+ */
+export interface TemplateImportNamedAlias {
+  exportName: string;
+  alias: string;
+}
 
 /* =============================================================================
  * TRANSFORM OPTIONS
@@ -33,6 +68,19 @@ export interface TransformOptions {
 
   /** Nested template HTML tree (for template controllers) */
   nestedHtmlTree?: NestedTemplateHtmlNode[];
+
+  /**
+   * Template imports from <import> and <require> elements.
+   *
+   * When provided, generates:
+   * 1. Namespace import statements: `import * as __dep0 from './foo'`
+   * 2. Dependency entries in $au: `dependencies: [__dep0, ...]`
+   *
+   * Aliased imports use aliasedResourcesRegistry:
+   * - `<import from="./foo" as="bar">` → `aliasedResourcesRegistry(__dep0, 'bar')`
+   * - `<import from="./foo" X.as="y">` → `aliasedResourcesRegistry(__dep0.X, 'y')`
+   */
+  templateImports?: TemplateImport[];
 
   /** Indentation string (default: "  ") */
   indent?: string;

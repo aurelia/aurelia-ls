@@ -522,3 +522,171 @@ function compareResolveIntent(actual: ResolveIntent, expected: ResolveExpect): R
     extraDiags: diags.extra,
   };
 }
+
+// --- Local Imports Tests ---
+
+describe("Resolve (20) - Local Imports", () => {
+  test("localImports: element from template import resolves correctly", () => {
+    // Simulate: <import from="./my-widget">
+    // Template: <my-widget foo.bind="x"></my-widget>
+    const localImports = [
+      {
+        name: "my-widget",
+        bindables: { foo: { name: "foo" } },
+      },
+    ];
+
+    const ir = lowerDocument(`<my-widget foo.bind="x"></my-widget>`, {
+      attrParser: DEFAULT_SYNTAX,
+      exprParser: getExpressionParser(),
+      file: "mem.html",
+      name: "mem",
+      sem: DEFAULT,
+    });
+
+    const linked = resolveHost(ir, DEFAULT, { localImports });
+    const intent = reduceLinkedIntent(linked);
+
+    // Bindable "foo" should resolve as bindable (proves element was recognized)
+    const propItems = intent.items.filter((i) => i.kind === "prop");
+    expect(propItems).toHaveLength(1);
+    expect(propItems[0]).toEqual(
+      expect.objectContaining({ to: "foo", target: "bindable" })
+    );
+
+    // No AU1104 diagnostic for unknown element/property
+    expect(intent.diags).not.toContain("AU1104");
+  });
+
+  test("localImports: element with alias resolves by alias", () => {
+    // Simulate: <import from="./long-component-name" as="short">
+    // Template: <short bar.bind="y"></short>
+    const localImports = [
+      {
+        name: "long-component-name",
+        bindables: { bar: { name: "bar" } },
+        alias: "short",
+      },
+    ];
+
+    const ir = lowerDocument(`<short bar.bind="y"></short>`, {
+      attrParser: DEFAULT_SYNTAX,
+      exprParser: getExpressionParser(),
+      file: "mem.html",
+      name: "mem",
+      sem: DEFAULT,
+    });
+
+    const linked = resolveHost(ir, DEFAULT, { localImports });
+    const intent = reduceLinkedIntent(linked);
+
+    // Bindable "bar" should resolve as bindable (proves element was recognized via alias)
+    const propItems = intent.items.filter((i) => i.kind === "prop");
+    expect(propItems).toHaveLength(1);
+    expect(propItems[0]).toEqual(
+      expect.objectContaining({ to: "bar", target: "bindable" })
+    );
+
+    // No AU1104 diagnostic
+    expect(intent.diags).not.toContain("AU1104");
+  });
+
+  test("localImports: does not override existing global registration", () => {
+    // Setup semantics with global "au-compose" element
+    const baseSem = deepMergeSemantics(DEFAULT, {
+      resources: {
+        elements: {
+          "au-compose": {
+            kind: "element",
+            name: "au-compose",
+            bindables: { globalProp: { name: "globalProp" } },
+          },
+        },
+      },
+    });
+
+    // Local import tries to define "au-compose" with different bindable
+    const localImports = [
+      {
+        name: "au-compose",
+        bindables: { localProp: { name: "localProp" } },
+      },
+    ];
+
+    const ir = lowerDocument(`<au-compose global-prop.bind="x"></au-compose>`, {
+      attrParser: DEFAULT_SYNTAX,
+      exprParser: getExpressionParser(),
+      file: "mem.html",
+      name: "mem",
+      sem: baseSem,
+    });
+
+    const linked = resolveHost(ir, baseSem, { localImports });
+    const intent = reduceLinkedIntent(linked);
+
+    // Global registration should win, so globalProp resolves as bindable
+    const propItems = intent.items.filter((i) => i.kind === "prop");
+    expect(propItems).toContainEqual(
+      expect.objectContaining({ to: "globalProp", target: "bindable" })
+    );
+  });
+
+  test("localImports: multiple imports resolve correctly", () => {
+    // Simulate: <import from="./nav-bar"> <import from="./footer">
+    const localImports = [
+      { name: "nav-bar", bindables: { items: { name: "items" } } },
+      { name: "footer", bindables: { year: { name: "year" } } },
+    ];
+
+    const ir = lowerDocument(
+      `<nav-bar items.bind="menuItems"></nav-bar><footer year.bind="2024"></footer>`,
+      {
+        attrParser: DEFAULT_SYNTAX,
+        exprParser: getExpressionParser(),
+        file: "mem.html",
+        name: "mem",
+        sem: DEFAULT,
+      }
+    );
+
+    const linked = resolveHost(ir, DEFAULT, { localImports });
+    const intent = reduceLinkedIntent(linked);
+
+    // Both bindables should resolve as bindable (proves both elements were recognized)
+    const propItems = intent.items.filter((i) => i.kind === "prop");
+    expect(propItems).toHaveLength(2);
+    expect(propItems).toContainEqual(
+      expect.objectContaining({ to: "items", target: "bindable" })
+    );
+    expect(propItems).toContainEqual(
+      expect.objectContaining({ to: "year", target: "bindable" })
+    );
+
+    // No AU1104 diagnostics
+    expect(intent.diags).not.toContain("AU1104");
+  });
+
+  test("localImports: unknown element without import produces AU1102", () => {
+    // No local imports - unknown element should produce diagnostic
+    const ir = lowerDocument(`<unknown-widget prop.bind="x"></unknown-widget>`, {
+      attrParser: DEFAULT_SYNTAX,
+      exprParser: getExpressionParser(),
+      file: "mem.html",
+      name: "mem",
+      sem: DEFAULT,
+    });
+
+    const linked = resolveHost(ir, DEFAULT, { localImports: [] });
+    const intent = reduceLinkedIntent(linked);
+
+    // Property should resolve as "unknown" (element not recognized)
+    const propItems = intent.items.filter((i) => i.kind === "prop");
+    expect(propItems).toHaveLength(1);
+    expect(propItems[0]).toEqual(
+      expect.objectContaining({ to: "prop", target: "unknown" })
+    );
+
+    // Should have AU1102 diagnostic for unknown element
+    expect(intent.diags).toContain("AU1102");
+  });
+});

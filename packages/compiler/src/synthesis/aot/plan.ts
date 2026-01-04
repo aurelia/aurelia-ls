@@ -142,7 +142,7 @@ export function planAot(
       "aot.plan.targetCount": ctx.targetCount,
     });
 
-    return {
+    const result: AotPlanModule = {
       version: "aurelia-aot-plan@1",
       root,
       expressions,
@@ -150,6 +150,13 @@ export function planAot(
       targetCount: ctx.targetCount,
       name: rootTemplate.name ?? options.templateFilePath,
     };
+
+    // Carry template meta through for AOT emission
+    if (rootTemplate.templateMeta) {
+      result.templateMeta = rootTemplate.templateMeta;
+    }
+
+    return result;
   });
 }
 

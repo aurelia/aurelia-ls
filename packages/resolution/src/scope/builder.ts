@@ -357,7 +357,8 @@ function extractClassNameFromEvidence(evidence: RegistrationEvidence): string {
   if (
     evidence.kind === "static-dependencies" ||
     evidence.kind === "static-au-dependencies" ||
-    evidence.kind === "decorator-dependencies"
+    evidence.kind === "decorator-dependencies" ||
+    evidence.kind === "template-import"
   ) {
     return evidence.className;
   }

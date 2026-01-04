@@ -33,7 +33,7 @@ export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing
 
 // === Language / Semantics ===
 export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
-export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources } from "./language/index.js";
+export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources, SemanticsLookupOptions, LocalImportDef } from "./language/index.js";
 
 // Resource definitions (for resolution package and external tooling)
 export type {
@@ -119,6 +119,7 @@ export type {
   SerializedIteratorBinding,
   SerializedAuxBinding,
   SerializedLetBinding,
+  SerializedBindable,
   PlanNode,
   PlanElementNode,
   PlanTextNode,
@@ -152,6 +153,10 @@ export {
   checkTypeCompatibility,
   DEFAULT_TYPECHECK_CONFIG,
   TYPECHECK_PRESETS,
+  // Meta element extraction (for resolution package)
+  extractMeta,
+  extractTemplateMeta,
+  stripMetaFromHtml,
 } from "./analysis/index.js";
 export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {
@@ -252,6 +257,19 @@ export type {
   BaseNode,
   Attr,
   NodeId,
+} from "./model/index.js";
+
+// IR types (Template Meta Elements)
+export type {
+  Located,
+  MetaElementBase,
+  TemplateMetaIR,
+  ImportMetaIR,
+  BindableMetaIR,
+  ShadowDomMetaIR,
+  AliasMetaIR,
+  ContainerlessMetaIR,
+  CaptureMetaIR,
 } from "./model/index.js";
 
 // Expression AST types (for evaluation)
