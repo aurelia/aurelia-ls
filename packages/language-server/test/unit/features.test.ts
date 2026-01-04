@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { findImportAtOffset, getMetaElementHover } from "../../out/handlers/features.js";
+import { findImportAtOffset, getMetaElementHover } from "../../src/handlers/features.js";
 import type { TemplateMetaIR, ImportMetaIR, BindableMetaIR } from "@aurelia-ls/compiler";
 
 /* =============================================================================
@@ -22,6 +22,7 @@ function createImport(
 ): ImportMetaIR {
   return {
     kind: options?.kind ?? "import",
+    elementLoc: { start: 0, end: 30 },
     tagLoc: { start: 0, end: 6 },
     from: {
       value: from,
@@ -52,6 +53,7 @@ function createBindable(
   }
 ): BindableMetaIR {
   return {
+    elementLoc: { start: 0, end: 50 },
     tagLoc: options?.tagLoc ?? { start: 0, end: 8 },
     name: {
       value: name,
@@ -79,10 +81,30 @@ function createMeta(
   return {
     imports,
     bindables: options?.bindables ?? [],
-    shadowDom: options?.shadowDom ?? null,
-    aliases: options?.aliases ?? [],
-    containerless: options?.containerless ?? null,
-    capture: options?.capture ?? null,
+    shadowDom: options?.shadowDom
+      ? {
+          elementLoc: { start: 0, end: 20 },
+          tagLoc: options.shadowDom.tagLoc,
+          mode: { value: 'open' as const, loc: { start: 0, end: 0 } },
+        }
+      : null,
+    aliases: (options?.aliases ?? []).map(a => ({
+      elementLoc: { start: 0, end: 15 },
+      tagLoc: a.tagLoc,
+      names: [{ value: "alias", loc: { start: 0, end: 0 } }],
+    })),
+    containerless: options?.containerless
+      ? {
+          elementLoc: { start: 0, end: 20 },
+          tagLoc: options.containerless.tagLoc,
+        }
+      : null,
+    capture: options?.capture
+      ? {
+          elementLoc: { start: 0, end: 15 },
+          tagLoc: options.capture.tagLoc,
+        }
+      : null,
     hasSlot: false,
   };
 }

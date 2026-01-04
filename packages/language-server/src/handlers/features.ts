@@ -29,6 +29,7 @@ import {
 import type { ServerContext } from "../context.js";
 import { mapCompletions, mapHover, mapLocations, mapWorkspaceEdit } from "../mapping/lsp-types.js";
 import { handleSemanticTokensFull, SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
+import ts from "typescript";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
@@ -62,40 +63,92 @@ export function findImportAtOffset(
 }
 
 /**
- * Resolve a module specifier to an absolute file path.
+ * Resolve a module specifier to an absolute file path using TypeScript's module resolution.
+ * This respects tsconfig.json paths, baseUrl, and other resolution settings.
  * Returns null if the module cannot be resolved.
  */
 function resolveModuleSpecifier(
   specifier: string,
-  fromDir: string,
+  containingFile: string,
   ctx: ServerContext
 ): string | null {
-  // Handle relative paths
+  const compilerOptions = ctx.tsService.compilerOptions();
+
+  const result = ts.resolveModuleName(
+    specifier,
+    containingFile,
+    compilerOptions,
+    ts.sys,
+  );
+
+  if (result.resolvedModule?.resolvedFileName) {
+    return result.resolvedModule.resolvedFileName;
+  }
+
+  // Fallback for HTML files which TypeScript doesn't resolve
   if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    // Try common extensions for Aurelia resources
-    const extensions = [".ts", ".js", ".html", "/index.ts", "/index.js"];
-    const basePath = path.resolve(fromDir, specifier);
-
-    // Check if it's already a full path with extension
-    if (fs.existsSync(basePath)) {
-      return basePath;
+    const fromDir = path.dirname(containingFile);
+    const htmlPath = path.resolve(fromDir, specifier + ".html");
+    if (fs.existsSync(htmlPath)) {
+      return htmlPath;
     }
+  }
 
-    // Try adding extensions
-    for (const ext of extensions) {
-      const fullPath = basePath + ext;
-      if (fs.existsSync(fullPath)) {
-        return fullPath;
+  ctx.logger.log(`[definition] Could not resolve module '${specifier}' from '${containingFile}'`);
+  return null;
+}
+
+/**
+ * Find the first exported declaration in a TypeScript/JavaScript file.
+ * Returns the line and character of the export, or null if not found.
+ */
+function findFirstExport(filePath: string): { line: number; character: number } | null {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const sourceFile = ts.createSourceFile(
+      filePath,
+      content,
+      ts.ScriptTarget.Latest,
+      true,
+      filePath.endsWith(".tsx") ? ts.ScriptKind.TSX :
+      filePath.endsWith(".jsx") ? ts.ScriptKind.JSX :
+      filePath.endsWith(".js") ? ts.ScriptKind.JS :
+      ts.ScriptKind.TS
+    );
+
+    // Find the first exported declaration
+    for (const statement of sourceFile.statements) {
+      const modifiers = ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined;
+      const hasExport = modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
+
+      if (hasExport) {
+        // Get the name of the declaration
+        let nameNode: ts.Node | undefined;
+        if (ts.isClassDeclaration(statement) && statement.name) {
+          nameNode = statement.name;
+        } else if (ts.isFunctionDeclaration(statement) && statement.name) {
+          nameNode = statement.name;
+        } else if (ts.isVariableStatement(statement)) {
+          const firstDecl = statement.declarationList.declarations[0];
+          if (firstDecl) nameNode = firstDecl.name;
+        }
+
+        if (nameNode) {
+          const pos = sourceFile.getLineAndCharacterOfPosition(nameNode.getStart(sourceFile));
+          return { line: pos.line, character: pos.character };
+        }
+
+        // If no name, use the start of the declaration
+        const pos = sourceFile.getLineAndCharacterOfPosition(statement.getStart(sourceFile));
+        return { line: pos.line, character: pos.character };
       }
     }
 
+    // No export found, return file start
+    return null;
+  } catch {
     return null;
   }
-
-  // For package specifiers, try to resolve using TypeScript's resolution
-  // For now, return null (would need full TS resolution)
-  ctx.logger.log(`[definition] Package specifier '${specifier}' not yet supported for go-to-definition`);
-  return null;
 }
 
 /**
@@ -119,21 +172,24 @@ function getMetaImportDefinition(
   if (!importMeta) return null;
 
   const specifier = importMeta.from.value;
-  const fromDir = path.dirname(templatePath);
-  const resolvedPath = resolveModuleSpecifier(specifier, fromDir, ctx);
+  const resolvedPath = resolveModuleSpecifier(specifier, templatePath, ctx);
 
   if (!resolvedPath) {
-    ctx.logger.log(`[definition] Could not resolve module '${specifier}' from '${fromDir}'`);
     return null;
   }
 
-  // Return location at the start of the file (line 0, character 0)
   const targetUri = pathToFileURL(resolvedPath).href;
+
+  // Try to find the first export location for a better navigation experience
+  const exportLocation = findFirstExport(resolvedPath);
+  const targetLine = exportLocation?.line ?? 0;
+  const targetChar = exportLocation?.character ?? 0;
+
   return {
     uri: targetUri,
     range: {
-      start: { line: 0, character: 0 },
-      end: { line: 0, character: 0 },
+      start: { line: targetLine, character: targetChar },
+      end: { line: targetLine, character: targetChar },
     },
   };
 }
@@ -395,11 +451,10 @@ export function validateTemplateImports(
   if (!template?.templateMeta) return [];
 
   const diagnostics: TemplateImportDiagnostic[] = [];
-  const fromDir = path.dirname(templatePath);
 
   for (const imp of template.templateMeta.imports) {
     const specifier = imp.from.value;
-    const resolvedPath = resolveModuleSpecifier(specifier, fromDir, ctx);
+    const resolvedPath = resolveModuleSpecifier(specifier, templatePath, ctx);
 
     if (!resolvedPath) {
       // Only emit diagnostics for relative imports (package imports may not be resolvable yet)
