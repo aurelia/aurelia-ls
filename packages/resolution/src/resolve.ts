@@ -3,7 +3,7 @@ import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, Compile
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
 import type { SourceFacts } from "./extraction/types.js";
 import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
-import type { RegistrationAnalysis, RegistrationSite, isLocalSite } from "./registration/types.js";
+import type { RegistrationAnalysis, RegistrationSite, RegistrationEvidence } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
@@ -13,6 +13,7 @@ import { buildExportBindingMap } from "./binding/export-resolver.js";
 import { createResolverPipeline } from "./inference/resolver-pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
+import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
 import { dirname, resolve as resolvePath, basename } from "node:path";
 
 /**
@@ -224,6 +225,25 @@ export function resolve(
       `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
     );
 
+    // Extract unresolved resource refs from registration sites
+    const unresolvedRefs: UnresolvedResourceInfo[] = registration.sites
+      .filter((s): s is RegistrationSite & { resourceRef: { kind: "unresolved"; name: string; reason: string } } =>
+        s.resourceRef.kind === "unresolved"
+      )
+      .map((s) => ({
+        name: s.resourceRef.name,
+        reason: s.resourceRef.reason,
+        file: getFileFromEvidence(s.evidence),
+      }));
+
+    // Merge all diagnostics: resolver + orphans + unresolved patterns + unresolved refs
+    const allDiagnostics: ResolutionDiagnostic[] = [
+      ...resolverDiags.map(toDiagnostic),
+      ...orphansToDiagnostics(registration.orphans),
+      ...unresolvedToDiagnostics(registration.unresolved),
+      ...unresolvedRefsToDiagnostics(unresolvedRefs),
+    ];
+
     trace.setAttributes({
       "resolution.candidateCount": candidates.length,
       "resolution.globalCount": globalCount,
@@ -232,7 +252,7 @@ export function resolve(
       "resolution.unresolvedCount": registration.unresolved.length,
       "resolution.templateCount": templates.length,
       "resolution.inlineTemplateCount": inlineTemplates.length,
-      "resolution.diagnosticCount": resolverDiags.length,
+      "resolution.diagnosticCount": allDiagnostics.length,
     });
 
     return {
@@ -241,7 +261,7 @@ export function resolve(
       registration,
       templates,
       inlineTemplates,
-      diagnostics: resolverDiags.map(toDiagnostic),
+      diagnostics: allDiagnostics,
       facts,
     };
   });
@@ -254,6 +274,25 @@ function toDiagnostic(d: ResolverDiagnostic): ResolutionDiagnostic {
     source: d.source,
     severity: d.severity,
   };
+}
+
+/**
+ * Extract the file path from registration evidence.
+ *
+ * All evidence types contain a file or component path that indicates
+ * where the registration was declared.
+ */
+function getFileFromEvidence(evidence: RegistrationEvidence): NormalizedPath {
+  switch (evidence.kind) {
+    case "aurelia-register":
+    case "container-register":
+    case "plugin":
+      return evidence.file;
+    case "static-dependencies":
+    case "decorator-dependencies":
+    case "static-au-dependencies":
+      return evidence.component;
+  }
 }
 
 const nullLogger: Logger = {

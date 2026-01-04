@@ -21,6 +21,7 @@ export {
   STANDARD_CONFIGURATION_MANIFEST,
   DEFAULT_PLUGIN_MANIFESTS,
   getPluginManifest,
+  getManifestByPackage,
   hasPlugins,
 } from "./manifests.js";
 

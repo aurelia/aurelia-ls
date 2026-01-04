@@ -255,3 +255,36 @@ export type {
   PluginResolution,
   PluginResolver,
 } from "./plugins/index.js";
+
+// === Diagnostics (Error codes and conversion) ===
+export {
+  // Orphan codes
+  RES0001_ORPHAN_ELEMENT,
+  RES0002_ORPHAN_ATTRIBUTE,
+  RES0003_ORPHAN_VALUE_CONVERTER,
+  RES0004_ORPHAN_BINDING_BEHAVIOR,
+  // Unanalyzable codes
+  RES0010_UNANALYZABLE_FUNCTION_CALL,
+  RES0011_UNANALYZABLE_VARIABLE,
+  RES0012_UNANALYZABLE_CONDITIONAL,
+  RES0013_UNANALYZABLE_SPREAD,
+  RES0014_UNANALYZABLE_PROPERTY_ACCESS,
+  RES0019_UNANALYZABLE_OTHER,
+  // Import/resolution codes
+  RES0020_UNRESOLVED_IMPORT,
+  RES0021_NOT_A_RESOURCE,
+  // Plugin codes
+  RES0030_PLUGIN_REQUIRED,
+  // Helpers
+  getOrphanCode,
+  getUnanalyzableCode,
+  // Conversion (for custom diagnostic processing)
+  orphansToDiagnostics,
+  unresolvedToDiagnostics,
+  unresolvedRefsToDiagnostics,
+  // Plugin-aware hints (for compiler error messages)
+  lookupElementPluginHint,
+  lookupAttributePluginHint,
+  formatPluginHintMessage,
+} from "./diagnostics/index.js";
+export type { PluginHint, PluginHintResult, UnresolvedResourceInfo } from "./diagnostics/index.js";

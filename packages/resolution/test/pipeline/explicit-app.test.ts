@@ -46,8 +46,16 @@ describe("Full Pipeline: explicit-app", () => {
     const scopeCount = Object.keys(result.resourceGraph.scopes).length;
     expect(scopeCount, "Should have exactly 2 scopes (root + 1 local)").toBe(2);
 
-    // Should have no diagnostics in well-formed app
-    expect(result.diagnostics.length, "Should have no diagnostics").toBe(0);
+    // Should have orphan diagnostics for unregistered resources:
+    // - my-app: Root component, bootstrapped via .app() not registered
+    // - product-card: Test fixture with local deps but not globally registered
+    expect(result.diagnostics.length, "Should have 2 orphan diagnostics").toBe(2);
+
+    const orphanNames = result.diagnostics
+      .filter(d => d.code === "RES0001")
+      .map(d => d.message.match(/element '([^']+)'/)?.[1])
+      .sort();
+    expect(orphanNames).toEqual(["my-app", "product-card"]);
   });
 
   it("produces a usable ResourceGraph for template compilation", () => {

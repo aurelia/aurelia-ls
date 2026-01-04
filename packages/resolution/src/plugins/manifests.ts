@@ -91,3 +91,17 @@ export function getPluginManifest(
 export function hasPlugins(packageName: string): boolean {
   return DEFAULT_PLUGIN_MANIFESTS.has(packageName);
 }
+
+/**
+ * Get the first manifest for a package (for simple package lookups).
+ *
+ * Most packages have a single primary plugin (e.g., RouterConfiguration for @aurelia/router).
+ * This returns that manifest without needing to know the export name.
+ */
+export function getManifestByPackage(packageName: string): PluginManifest | null {
+  const packageMap = DEFAULT_PLUGIN_MANIFESTS.get(packageName);
+  if (!packageMap) return null;
+  // Return the first manifest for this package
+  const first = packageMap.values().next();
+  return first.done ? null : first.value;
+}
