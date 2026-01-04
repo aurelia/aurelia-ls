@@ -640,6 +640,190 @@ export function getCommandMode(name: string): BindingMode {
 }
 
 /* =======================
+ * Attribute Pattern Configuration
+ * =======================
+ *
+ * Config-driven system for attribute patterns. Patterns determine how raw attribute
+ * names (e.g., "value.bind", ":class", "@click") are parsed into target/command pairs.
+ *
+ * The pattern matching algorithm remains unchanged — only interpretation becomes
+ * config-driven instead of function-based.
+ *
+ * This enables plugins like i18n to register custom patterns (e.g., `t`) that the
+ * compiler can parse without hardcoded knowledge.
+ */
+
+/**
+ * How to interpret matched parts into an AttrSyntax.
+ * Each variant captures a specific interpretation strategy.
+ */
+export type PatternInterpret =
+  /**
+   * Standard dot-separated: last part is command, rest joined by '.' is target.
+   * Examples:
+   *   - "value.bind" → target="value", command="bind"
+   *   - "foo.bar.bind" → target="foo.bar", command="bind"
+   */
+  | { kind: "target-command" }
+
+  /**
+   * Both target and command are fixed (pattern is a literal match).
+   * Examples:
+   *   - "ref" → target="element", command="ref"
+   *   - "then" → target="then", command="from-view"
+   *   - "t" → target="t", command="t" (i18n)
+   */
+  | { kind: "fixed"; target: string; command: string }
+
+  /**
+   * Target from parts[0], command is fixed.
+   * Examples:
+   *   - ":class" → target="class", command="bind"
+   *   - "@click" → target="click", command="trigger"
+   */
+  | { kind: "fixed-command"; command: string }
+
+  /**
+   * Target from parts[0] with optional mapping, command is fixed.
+   * Examples:
+   *   - "view-model.ref" → target="component" (mapped), command="ref"
+   *   - "foo.ref" → target="foo" (unmapped), command="ref"
+   */
+  | { kind: "mapped-fixed-command"; command: string; targetMap?: Record<string, string> }
+
+  /**
+   * Event binding with modifier support.
+   * Target from parts[0], command is fixed, parts are passed through or normalized.
+   * Examples:
+   *   - "click.trigger:once" → target="click", command="trigger", parts=["click","once"]
+   *   - "@click:once" → target="click", command="trigger", parts=["click","trigger","once"]
+   *
+   * The `injectCommand` flag controls parts normalization:
+   *   - false/undefined: passthrough (parts as matched)
+   *   - true: inject command at index 1 (for @ patterns, keeps modifier at index 2)
+   */
+  | { kind: "event-modifier"; command: string; injectCommand?: boolean };
+
+/**
+ * Configuration for an attribute pattern.
+ */
+export interface AttributePatternConfig {
+  /**
+   * Pattern string using PART as dynamic segment placeholder.
+   * Examples: "PART.PART", ":PART", "@PART:PART", "ref", "t"
+   */
+  readonly pattern: string;
+
+  /**
+   * Characters that act as separators for PART matching.
+   * Empty string means no separators (pattern is literal or single PART).
+   */
+  readonly symbols: string;
+
+  /**
+   * How to interpret matched parts into target/command.
+   */
+  readonly interpret: PatternInterpret;
+
+  /**
+   * Source package for plugin-provided patterns (enables targeted diagnostics).
+   */
+  readonly package?: string;
+}
+
+/**
+ * Built-in attribute pattern configurations.
+ * These define how all standard Aurelia attribute syntaxes are parsed.
+ */
+export const BUILTIN_ATTRIBUTE_PATTERNS: readonly AttributePatternConfig[] = [
+  // ===== Dot-separated commands (most common) =====
+  // "value.bind", "foo.bar.two-way", etc.
+  {
+    pattern: "PART.PART",
+    symbols: ".",
+    interpret: { kind: "target-command" },
+  },
+  {
+    pattern: "PART.PART.PART",
+    symbols: ".",
+    interpret: { kind: "target-command" },
+  },
+
+  // ===== Ref patterns =====
+  // "ref" → element.ref
+  {
+    pattern: "ref",
+    symbols: "",
+    interpret: { kind: "fixed", target: "element", command: "ref" },
+  },
+  // "view-model.ref" → component.ref, "foo.ref" → foo.ref
+  {
+    pattern: "PART.ref",
+    symbols: ".",
+    interpret: {
+      kind: "mapped-fixed-command",
+      command: "ref",
+      targetMap: { "view-model": "component" },
+    },
+  },
+
+  // ===== Event patterns with modifiers =====
+  // "click.trigger:once" → click.trigger with modifier
+  {
+    pattern: "PART.trigger:PART",
+    symbols: ".:",
+    interpret: { kind: "event-modifier", command: "trigger", injectCommand: false },
+  },
+  {
+    pattern: "PART.capture:PART",
+    symbols: ".:",
+    interpret: { kind: "event-modifier", command: "capture", injectCommand: false },
+  },
+
+  // ===== Colon shorthand =====
+  // ":class" → class.bind
+  {
+    pattern: ":PART",
+    symbols: ":",
+    interpret: { kind: "fixed-command", command: "bind" },
+  },
+
+  // ===== At shorthand =====
+  // "@click" → click.trigger
+  {
+    pattern: "@PART",
+    symbols: "@",
+    interpret: { kind: "fixed-command", command: "trigger" },
+  },
+  // "@click:once" → click.trigger with modifier (command injected into parts)
+  {
+    pattern: "@PART:PART",
+    symbols: "@:",
+    interpret: { kind: "event-modifier", command: "trigger", injectCommand: true },
+  },
+
+  // ===== Promise patterns =====
+  // "promise.resolve" → promise.bind (alias for promise.bind)
+  {
+    pattern: "promise.resolve",
+    symbols: ".",
+    interpret: { kind: "fixed", target: "promise", command: "bind" },
+  },
+  // "then" → then.from-view (branch receives resolved value)
+  {
+    pattern: "then",
+    symbols: "",
+    interpret: { kind: "fixed", target: "then", command: "from-view" },
+  },
+  // "catch" → catch.from-view (branch receives rejected value)
+  {
+    pattern: "catch",
+    symbols: "",
+    interpret: { kind: "fixed", target: "catch", command: "from-view" },
+  },
+];
+
+/* =======================
  * DOM & Events
  * ======================= */
 

@@ -58,6 +58,9 @@ export type {
   // Binding command configuration
   BindingCommandConfig,
   BindingCommandKind,
+  // Attribute pattern configuration
+  AttributePatternConfig,
+  PatternInterpret,
 } from "./language/index.js";
 
 // Binding command configuration (values)
@@ -66,6 +69,8 @@ export {
   getBindingCommandConfig,
   isPropertyBindingCommand,
   getCommandMode,
+  // Attribute pattern configuration (values)
+  BUILTIN_ATTRIBUTE_PATTERNS,
 } from "./language/index.js";
 
 // === Synthesis (Overlay) ===
