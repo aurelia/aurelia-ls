@@ -468,6 +468,178 @@ export function createCustomControllerConfig(
 }
 
 /* =======================
+ * Binding Command Configuration
+ * =======================
+ *
+ * Config-driven system for binding commands. All commands (built-in and plugin)
+ * are described by configuration primitives.
+ *
+ * Commands determine:
+ * 1. What instruction type is produced (PropertyBindingIR, ListenerBindingIR, etc.)
+ * 2. Any mode/capture semantics for the instruction
+ *
+ * This enables plugins like i18n to register custom commands (e.g., `t`) that the
+ * compiler can process without hardcoded knowledge.
+ */
+
+/**
+ * What kind of instruction a binding command produces.
+ * Maps directly to IR instruction types.
+ */
+export type BindingCommandKind =
+  | "property"   // PropertyBindingIR — bind, one-time, to-view, from-view, two-way
+  | "listener"   // ListenerBindingIR — trigger, capture
+  | "iterator"   // IteratorBindingIR — for
+  | "ref"        // RefBindingIR — ref
+  | "attribute"  // AttributeBindingIR — attr, class
+  | "style";     // StylePropertyBindingIR — style
+
+/**
+ * Configuration for a binding command.
+ * Captures all semantic variations through orthogonal properties.
+ */
+export interface BindingCommandConfig {
+  /** Command name as written in templates (e.g., "bind", "trigger", "t") */
+  readonly name: string;
+
+  /** What kind of instruction this command produces */
+  readonly kind: BindingCommandKind;
+
+  /** For property commands: which binding mode to use */
+  readonly mode?: BindingMode;
+
+  /** For listener commands: capture phase (true) or bubble phase (false) */
+  readonly capture?: boolean;
+
+  /**
+   * For attribute commands: forces a specific attribute name.
+   * Used by `class` command which always binds to "class" attribute.
+   */
+  readonly forceAttribute?: string;
+
+  /**
+   * Source package for optional commands (enables targeted diagnostics).
+   * - Omitted for core runtime commands.
+   * - Present for optional packages: "@aurelia/i18n", etc.
+   */
+  readonly package?: string;
+}
+
+/**
+ * Built-in binding command configurations.
+ * These define the complete semantics for all Aurelia binding commands.
+ */
+export const BUILTIN_BINDING_COMMANDS: Record<string, BindingCommandConfig> = {
+  // ===== Property binding commands (PropertyBindingIR) =====
+  // These produce property bindings with specific modes
+
+  bind: {
+    name: "bind",
+    kind: "property",
+    mode: "default",
+  },
+
+  "one-time": {
+    name: "one-time",
+    kind: "property",
+    mode: "oneTime",
+  },
+
+  "to-view": {
+    name: "to-view",
+    kind: "property",
+    mode: "toView",
+  },
+
+  "from-view": {
+    name: "from-view",
+    kind: "property",
+    mode: "fromView",
+  },
+
+  "two-way": {
+    name: "two-way",
+    kind: "property",
+    mode: "twoWay",
+  },
+
+  // ===== Listener commands (ListenerBindingIR) =====
+  // These produce event listener bindings
+
+  trigger: {
+    name: "trigger",
+    kind: "listener",
+    capture: false,
+  },
+
+  capture: {
+    name: "capture",
+    kind: "listener",
+    capture: true,
+  },
+
+  // ===== Iterator command (IteratorBindingIR) =====
+  // Used with repeat.for
+
+  for: {
+    name: "for",
+    kind: "iterator",
+  },
+
+  // ===== Ref command (RefBindingIR) =====
+
+  ref: {
+    name: "ref",
+    kind: "ref",
+  },
+
+  // ===== Attribute commands =====
+  // These produce attribute or style bindings
+
+  attr: {
+    name: "attr",
+    kind: "attribute",
+  },
+
+  class: {
+    name: "class",
+    kind: "attribute",
+    forceAttribute: "class",
+  },
+
+  style: {
+    name: "style",
+    kind: "style",
+  },
+};
+
+/**
+ * Look up a binding command config by name.
+ * Returns the built-in config, or undefined if not found.
+ */
+export function getBindingCommandConfig(name: string): BindingCommandConfig | undefined {
+  return BUILTIN_BINDING_COMMANDS[name];
+}
+
+/**
+ * Check if a command name is a known property binding command.
+ * Property commands produce PropertyBindingIR with a specific mode.
+ */
+export function isPropertyBindingCommand(name: string): boolean {
+  const config = BUILTIN_BINDING_COMMANDS[name];
+  return config?.kind === "property";
+}
+
+/**
+ * Get the binding mode for a command.
+ * Returns the configured mode for property commands, "default" otherwise.
+ */
+export function getCommandMode(name: string): BindingMode {
+  const config = BUILTIN_BINDING_COMMANDS[name];
+  return config?.kind === "property" ? (config.mode ?? "default") : "default";
+}
+
+/* =======================
  * DOM & Events
  * ======================= */
 

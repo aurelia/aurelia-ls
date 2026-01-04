@@ -55,6 +55,17 @@ export type {
   Naming,
   TwoWayDefaults,
   TypeRef,
+  // Binding command configuration
+  BindingCommandConfig,
+  BindingCommandKind,
+} from "./language/index.js";
+
+// Binding command configuration (values)
+export {
+  BUILTIN_BINDING_COMMANDS,
+  getBindingCommandConfig,
+  isPropertyBindingCommand,
+  getCommandMode,
 } from "./language/index.js";
 
 // === Synthesis (Overlay) ===
