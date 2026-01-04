@@ -18,4 +18,5 @@ export {
   canonicalBindableName,
   canonicalAliases,
   canonicalPath,
+  isKindOfSame,
 } from "./naming.js";

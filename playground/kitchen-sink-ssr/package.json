@@ -1,0 +1,6 @@
+{
+  "name": "kitchen-sink-ssr",
+  "private": true,
+  "type": "module",
+  "description": "Kitchen sink SSR + hydration test fixture"
+}

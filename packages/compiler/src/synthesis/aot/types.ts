@@ -655,27 +655,28 @@ export interface SerializedSetAttribute {
 
 export interface SerializedHydrateElement {
   type: typeof INSTRUCTION_TYPE.hydrateElement;
-  resource: string;
+  res: string;
   instructions: SerializedInstruction[];
   containerless?: boolean;
 }
 
 export interface SerializedHydrateAttribute {
   type: typeof INSTRUCTION_TYPE.hydrateAttribute;
-  resource: string;
+  res: string;
   alias?: string;
   instructions: SerializedInstruction[];
 }
 
 export interface SerializedHydrateTemplateController {
   type: typeof INSTRUCTION_TYPE.hydrateTemplateController;
-  resource: string;
+  res: string;
   templateIndex: number;
   instructions: SerializedInstruction[];
 }
 
 export interface SerializedHydrateLetElement {
   type: typeof INSTRUCTION_TYPE.hydrateLetElement;
+  /** Let bindings - wire format uses 'bindings', runtime translateInstruction converts to 'instructions' */
   bindings: SerializedLetBinding[];
   toBindingContext: boolean;
 }

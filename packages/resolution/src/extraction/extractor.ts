@@ -1,15 +1,53 @@
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName } from "./types.js";
+import { debug } from "@aurelia-ls/compiler";
+import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";
 import { canonicalPath } from "../util/naming.js";
+import type { FileSystemContext } from "../project/context.js";
+
+/**
+ * Options for fact extraction.
+ */
+export interface ExtractionOptions {
+  /**
+   * File system context for sibling detection.
+   * When provided, enables sibling file convention support.
+   */
+  readonly fileSystem?: FileSystemContext;
+
+  /**
+   * Template extensions to look for as siblings.
+   * @default ['.html']
+   */
+  readonly templateExtensions?: readonly string[];
+
+  /**
+   * Style extensions to look for as siblings.
+   * @default ['.css', '.scss']
+   */
+  readonly styleExtensions?: readonly string[];
+
+  /**
+   * Custom module resolution host for resolving import paths.
+   * When provided, used instead of ts.sys for module resolution.
+   * Useful for in-memory programs in tests.
+   */
+  readonly moduleResolutionHost?: ts.ModuleResolutionHost;
+}
 
 /**
  * Extract facts from all source files in a TypeScript program.
  * Returns a map from file path to extracted facts.
+ *
+ * @param program - TypeScript program
+ * @param options - Extraction options (including optional FileSystemContext)
  */
-export function extractAllFacts(program: ts.Program): Map<NormalizedPath, SourceFacts> {
+export function extractAllFacts(
+  program: ts.Program,
+  options?: ExtractionOptions,
+): Map<NormalizedPath, SourceFacts> {
   const result = new Map<NormalizedPath, SourceFacts>();
   const checker = program.getTypeChecker();
 
@@ -18,18 +56,37 @@ export function extractAllFacts(program: ts.Program): Map<NormalizedPath, Source
     .filter((sf) => !sf.isDeclarationFile)
     .sort((a, b) => a.fileName.localeCompare(b.fileName));
 
+  debug.resolution("extraction.allFacts.start", {
+    fileCount: files.length,
+    hasFileSystem: !!options?.fileSystem,
+  });
+
   for (const sf of files) {
-    const facts = extractSourceFacts(sf, checker, program);
+    const facts = extractSourceFacts(sf, checker, program, options);
     result.set(facts.path, facts);
   }
+
+  debug.resolution("extraction.allFacts.done", {
+    factCount: result.size,
+  });
 
   return result;
 }
 
 /**
  * Extract facts from a single source file.
+ *
+ * @param sf - TypeScript source file
+ * @param checker - Type checker
+ * @param program - TypeScript program (optional, for import resolution)
+ * @param options - Extraction options (optional, for sibling detection)
  */
-export function extractSourceFacts(sf: ts.SourceFile, checker: ts.TypeChecker, program?: ts.Program): SourceFacts {
+export function extractSourceFacts(
+  sf: ts.SourceFile,
+  checker: ts.TypeChecker,
+  program?: ts.Program,
+  options?: ExtractionOptions,
+): SourceFacts {
   const path = canonicalPath(sf.fileName);
   const classes: ClassFacts[] = [];
   const registrationCalls = extractRegistrationCalls(sf, checker);
@@ -42,12 +99,12 @@ export function extractSourceFacts(sf: ts.SourceFile, checker: ts.TypeChecker, p
     }
 
     if (ts.isImportDeclaration(stmt)) {
-      const importFact = extractImportFact(stmt, sf.fileName, program);
+      const importFact = extractImportFact(stmt, sf.fileName, program, options?.moduleResolutionHost);
       if (importFact) imports.push(importFact);
     }
 
     if (ts.isExportDeclaration(stmt)) {
-      const exportFact = extractExportFact(stmt, sf.fileName, program);
+      const exportFact = extractExportFact(stmt, sf.fileName, program, options?.moduleResolutionHost);
       if (exportFact) exports.push(exportFact);
     }
 
@@ -71,18 +128,56 @@ export function extractSourceFacts(sf: ts.SourceFile, checker: ts.TypeChecker, p
     }
   }
 
-  return { path, classes, registrationCalls, imports, exports };
+  // Detect sibling files if FileSystemContext is provided
+  const siblingFiles = detectSiblingFiles(sf.fileName, options);
+
+  return { path, classes, registrationCalls, imports, exports, siblingFiles };
+}
+
+/**
+ * Detect sibling files using FileSystemContext.
+ */
+function detectSiblingFiles(
+  sourcePath: string,
+  options?: ExtractionOptions,
+): SiblingFileFact[] {
+  if (!options?.fileSystem) {
+    return [];
+  }
+
+  const fileSystem = options.fileSystem;
+  const templateExtensions = options.templateExtensions ?? [".html"];
+  const styleExtensions = options.styleExtensions ?? [".css", ".scss"];
+
+  const allExtensions = [...templateExtensions, ...styleExtensions];
+  const siblings = fileSystem.getSiblingFiles(sourcePath, allExtensions);
+
+  debug.resolution("extraction.siblings", {
+    sourcePath,
+    found: siblings.map((s) => s.path),
+  });
+
+  return siblings.map((s) => ({
+    path: s.path,
+    extension: s.extension,
+    baseName: s.baseName,
+  }));
 }
 
 /**
  * Extract import fact from an import declaration.
  */
-function extractImportFact(decl: ts.ImportDeclaration, containingFile: string, program?: ts.Program): ImportFact | null {
+function extractImportFact(
+  decl: ts.ImportDeclaration,
+  containingFile: string,
+  program?: ts.Program,
+  host?: ts.ModuleResolutionHost
+): ImportFact | null {
   const specifier = decl.moduleSpecifier;
   if (!ts.isStringLiteral(specifier)) return null;
 
   const moduleSpecifier = specifier.text;
-  const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program) : null;
+  const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program, host) : null;
 
   const importClause = decl.importClause;
   if (!importClause) {
@@ -133,11 +228,16 @@ function extractImportFact(decl: ts.ImportDeclaration, containingFile: string, p
 /**
  * Extract export fact from an export declaration.
  */
-function extractExportFact(decl: ts.ExportDeclaration, containingFile: string, program?: ts.Program): ExportFact | null {
+function extractExportFact(
+  decl: ts.ExportDeclaration,
+  containingFile: string,
+  program?: ts.Program,
+  host?: ts.ModuleResolutionHost
+): ExportFact | null {
   // Re-export from another module
   if (decl.moduleSpecifier && ts.isStringLiteral(decl.moduleSpecifier)) {
     const moduleSpecifier = decl.moduleSpecifier.text;
-    const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program) : null;
+    const resolvedPath = program ? resolveModulePath(moduleSpecifier, containingFile, program, host) : null;
 
     // export * from "./foo"
     if (!decl.exportClause) {
@@ -184,12 +284,17 @@ function extractExportFact(decl: ts.ExportDeclaration, containingFile: string, p
 /**
  * Resolve a module specifier to a file path.
  */
-function resolveModulePath(specifier: string, containingFile: string, program: ts.Program): NormalizedPath | null {
+function resolveModulePath(
+  specifier: string,
+  containingFile: string,
+  program: ts.Program,
+  host?: ts.ModuleResolutionHost
+): NormalizedPath | null {
   const result = ts.resolveModuleName(
     specifier,
     containingFile,
     program.getCompilerOptions(),
-    ts.sys,
+    host ?? ts.sys,
   );
 
   if (result.resolvedModule?.resolvedFileName) {

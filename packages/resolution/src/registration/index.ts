@@ -1,9 +1,23 @@
 export { createRegistrationAnalyzer, type RegistrationAnalyzer } from "./analyzer.js";
-export { buildImportGraph } from "./import-graph.js";
+export { buildImportGraph, type ImportGraph } from "./import-graph.js";
 
+// Registration model (see types.ts for design rationale)
 export type {
-  RegistrationIntent,
+  RegistrationAnalysis,
+  RegistrationSite,
+  RegistrationScope,
+  ResourceRef,
   RegistrationEvidence,
-  Position,
-  ImportGraph,
+  OrphanResource,
+  UnresolvedRegistration,
+  UnresolvedPattern,
+  LocalRegistrationSite,
+  ResolvedRegistrationSite,
+} from "./types.js";
+
+export {
+  isLocalSite,
+  isGlobalSite,
+  isResolvedSite,
+  isUnresolvedSite,
 } from "./types.js";

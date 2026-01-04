@@ -1,0 +1,188 @@
+[
+  {
+    "name": "AOT-DN-01: 3-level if nesting with bindings at each level",
+    "markup": "<div if.bind=\"a\"><div if.bind=\"b\" title.bind=\"t1\"><div if.bind=\"c\">${msg}</div></div></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 5,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "if_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "if_1",
+              "instructions": [
+                { "type": "propertyBinding", "target": 0, "to": "title", "mode": "toView" },
+                { "type": "hydrateTemplateController", "target": 1, "resource": "if", "templateIndex": 0, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "if_2",
+                  "instructions": [
+                    { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-DN-02: if > repeat > if with iterator local access",
+    "markup": "<div if.bind=\"show\"><ul repeat.for=\"item of items\"><li if.bind=\"item.visible\">${item.name}</li></ul></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 4,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "if_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "repeat_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "if_2",
+                  "instructions": [
+                    { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-DN-03: with > repeat > with (value overlay chain)",
+    "markup": "<section with.bind=\"ctx\"><ul repeat.for=\"item of items\"><li with.bind=\"item.detail\">${name}</li></ul></section>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 4,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "with", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "with_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "repeat_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "with", "templateIndex": 0, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "with_2",
+                  "instructions": [
+                    { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-DN-04: simple if/else with bindings",
+    "markup": "<div if.bind=\"show\">${msgA}</div><div else>${msgB}</div>",
+    "expect": {
+      "targetCount": 2,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 },
+        { "type": "hydrateTemplateController", "target": 1, "resource": "else", "templateIndex": 1, "propCount": 0 }
+      ],
+      "nested": [
+        {
+          "name": "if_0",
+          "instructions": [
+            { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+          ]
+        },
+        {
+          "name": "else_1",
+          "instructions": [
+            { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-DN-05: repeat > repeat (nested iteration)",
+    "markup": "<ul repeat.for=\"row of rows\"><li repeat.for=\"cell of row.cells\">${cell}</li></ul>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "repeat_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "repeat_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-DN-06: portal with nested content",
+    "markup": "<template portal=\"#target\"><div if.bind=\"show\">${content}</div></template>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "portal", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "portal_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "if_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

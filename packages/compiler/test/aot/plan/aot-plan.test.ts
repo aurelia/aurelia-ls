@@ -32,6 +32,7 @@ interface BindingIntent {
 interface ControllerIntent {
   kind: string;
   frameId: number;
+  hasTarget?: boolean;
   locals?: string[];
   contextuals?: string[];
   caseCount?: number;
@@ -150,6 +151,7 @@ interface AotBinding {
 interface AotController {
   resource: string;
   frameId: number;
+  targetIndex?: number;
   template?: AotNode;
   locals?: string[];
   contextuals?: string[];
@@ -304,7 +306,8 @@ function reduceBinding(b: AotBinding): BindingIntent {
 }
 
 function reduceController(ctrl: AotController): ControllerIntent {
-  const base = { kind: ctrl.resource, frameId: ctrl.frameId };
+  const hasTarget = ctrl.targetIndex !== undefined;
+  const base = { kind: ctrl.resource, frameId: ctrl.frameId, hasTarget };
   switch (ctrl.resource) {
     case "repeat":
       return { ...base, locals: ctrl.locals, contextuals: ctrl.contextuals };
@@ -396,7 +399,7 @@ function bindingKey(b: BindingIntent): string {
 }
 
 function controllerKey(c: ControllerIntent): string {
-  const parts = [c.kind, `frame:${c.frameId}`];
+  const parts = [c.kind, `frame:${c.frameId}`, c.hasTarget ? "T" : ""];
   if (c.kind === "repeat") {
     parts.push(`locals:${(c.locals ?? []).join(",")}`);
     parts.push(`ctx:${(c.contextuals ?? []).join(",")}`);

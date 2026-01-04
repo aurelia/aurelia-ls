@@ -44,6 +44,7 @@ import {
 } from "@aurelia/expression-parser";
 import {
   INSTRUCTION_TYPE,
+  debug,
   type SerializedDefinition,
   type SerializedInstruction,
   type SerializedExpression,
@@ -86,6 +87,8 @@ export interface NestedDefinition {
   name: string;
   /** Whether compilation is needed (always false for AOT) */
   needsCompile: false;
+  /** Nested template definitions (for controllers with branches like switch/promise) */
+  nestedTemplates?: NestedDefinition[];
 }
 
 /**
@@ -129,6 +132,15 @@ export function translateInstructions(
       instructions: nestedResult.instructions,
       name: nested?.name ?? `nested-${i}`,
       needsCompile: false,
+      // Include nested definitions (for branches like switch/case, promise/then/catch)
+      nestedTemplates: nestedResult.nestedDefs.length > 0 ? nestedResult.nestedDefs : undefined,
+    });
+    debug.ssr("translate.nested", {
+      index: i,
+      name: nested?.name,
+      htmlLength: htmlNode?.html?.length ?? 0,
+      instructionRows: nested?.instructions?.length ?? 0,
+      childNestedCount: nestedResult.nestedDefs.length,
     });
   }
 
@@ -278,7 +290,7 @@ function translateHydrateElement(
 
   return {
     type: itHydrateElement,
-    res: ins.resource,
+    res: ins.res,
     props,
     projections: null,
     containerless: ins.containerless ?? false,
@@ -294,7 +306,7 @@ function translateHydrateAttribute(
   const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, ctx));
   return {
     type: itHydrateAttribute,
-    res: ins.resource,
+    res: ins.res,
     alias: ins.alias,
     props,
   } as HydrateAttributeInstruction;
@@ -310,8 +322,25 @@ function translateHydrateTemplateController(
     throw new Error(`Missing nested template at index ${ins.templateIndex}`);
   }
 
-  // Translate nested instructions
-  const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, ctx));
+  // Create a nested context for translating this controller's instructions.
+  // The templateIndex values in nestedDef.instructions reference nestedDef.nestedTemplates,
+  // not the top-level ctx.nestedDefs.
+  const nestedCtx: TranslationContext = {
+    exprMap: ctx.exprMap,
+    nestedDefs: nestedDef.nestedTemplates ?? [],
+  };
+
+  debug.ssr("translate.controller", {
+    resource: ins.res,
+    templateIndex: ins.templateIndex,
+    templateName: nestedDef.name,
+    templateHtmlLength: nestedDef.template.length,
+    nestedDefsCount: nestedCtx.nestedDefs.length,
+    instructionCount: ins.instructions.length,
+  });
+
+  // Translate nested instructions using the nested context
+  const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, nestedCtx));
 
   // Build the element definition for the template controller
   const def = {
@@ -325,7 +354,7 @@ function translateHydrateTemplateController(
   return {
     type: itHydrateTemplateController,
     def,
-    res: ins.resource,
+    res: ins.res,
     alias: void 0,
     props,
   } as HydrateTemplateController;
@@ -335,7 +364,8 @@ function translateHydrateLetElement(
   ins: SerializedHydrateLetElement,
   ctx: TranslationContext,
 ): HydrateLetElementInstruction {
-  const bindings = ins.bindings.map((b: SerializedLetBinding) => {
+  // Wire format uses 'bindings', runtime expects 'instructions'
+  const letBindings = ins.bindings.map((b: SerializedLetBinding) => {
     const expr = getExpr(ctx.exprMap, b.exprId) as IsBindingBehavior | Interpolation;
     return {
       type: itLetBinding,
@@ -345,7 +375,7 @@ function translateHydrateLetElement(
   });
   return {
     type: itHydrateLetElement,
-    instructions: bindings,
+    instructions: letBindings,
     toBindingContext: ins.toBindingContext,
   } as HydrateLetElementInstruction;
 }

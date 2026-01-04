@@ -1,0 +1,113 @@
+<!--
+  Issues Page Template
+
+  Exercises:
+  - value.bind for form inputs
+  - repeat.for for filter options and issue list
+  - if.bind / else for conditional rendering
+  - click.trigger for actions
+  - class.bind for dynamic classes
+  - t="key" for labels
+  - Custom elements (status-badge, priority-icon, user-avatar, label-list, empty-state)
+  - load="route/${param}" for parameterized navigation
+-->
+
+<div class="page issues-page" data-testid="issues">
+  <!-- Page header -->
+  <div class="card-header" style="margin-bottom: 1rem;">
+    <h2 class="card-title" t="issues.title"></h2>
+    <span style="color: #666;">${issueCount} issues</span>
+  </div>
+
+  <!-- Filters -->
+  <div if.bind="showFilters" class="card" style="margin-bottom: 1rem;" data-testid="filters">
+    <div class="filters">
+      <!-- Search -->
+      <div class="filter-group" style="flex: 1;">
+        <input
+          type="text"
+          class="form-input"
+          placeholder="Search issues..."
+          value.bind="searchQuery"
+          data-testid="search-input"
+        >
+      </div>
+
+      <!-- Status filter -->
+      <div class="filter-group">
+        <select class="form-input" value.bind="statusFilter" data-testid="status-filter">
+          <option repeat.for="opt of statusOptions" value.bind="opt.value">${opt.label}</option>
+        </select>
+      </div>
+
+      <!-- Priority filter -->
+      <div class="filter-group">
+        <select class="form-input" value.bind="priorityFilter" data-testid="priority-filter">
+          <option repeat.for="opt of priorityOptions" value.bind="opt.value">${opt.label}</option>
+        </select>
+      </div>
+
+      <!-- Type filter -->
+      <div class="filter-group">
+        <select class="form-input" value.bind="typeFilter" data-testid="type-filter">
+          <option repeat.for="opt of typeOptions" value.bind="opt.value">${opt.label}</option>
+        </select>
+      </div>
+
+      <!-- Assignee filter -->
+      <div class="filter-group">
+        <select class="form-input" value.bind="assigneeFilter" data-testid="assignee-filter">
+          <option value="all">All Assignees</option>
+          <option repeat.for="user of teamMembers" value.bind="user.id">${user.name}</option>
+        </select>
+      </div>
+
+      <!-- Clear filters -->
+      <button
+        if.bind="hasActiveFilters"
+        class="btn btn-ghost"
+        click.trigger="clearFilters()"
+        t="issues.filters.clear"
+        data-testid="clear-filters"
+      ></button>
+    </div>
+  </div>
+
+  <!-- Issue list -->
+  <div class="card">
+    <!-- Empty state -->
+    <empty-state
+      if.bind="isEmpty"
+      icon="🔍"
+      title.bind="'No issues found'"
+      description.bind="'Try adjusting your filters or create a new issue'"
+      data-testid="empty-state"
+    ></empty-state>
+
+    <!-- Issues -->
+    <ul else class="issue-list" data-testid="issue-list">
+      <li repeat.for="issue of filteredIssues" class="issue-item" data-testid="issue-item-${issue.id}">
+        <!-- Status badge -->
+        <status-badge status.bind="issue.status"></status-badge>
+
+        <!-- Issue info -->
+        <div class="issue-title">
+          <a load="issue/${issue.id}">
+            <span style="color: #666; margin-right: 0.5rem;">${issue.id}</span>
+            ${issue.title}
+          </a>
+        </div>
+
+        <!-- Labels -->
+        <label-list if.bind="issue.labels.length > 0" labels.bind="issue.labels"></label-list>
+
+        <!-- Meta -->
+        <div class="issue-meta">
+          <priority-icon priority.bind="issue.priority"></priority-icon>
+          <user-avatar if.bind="issue.assignee" user.bind="issue.assignee" size="small"></user-avatar>
+          <span if.bind="!issue.assignee" style="color: #999;" t="issue.meta.unassigned"></span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</div>

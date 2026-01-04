@@ -88,6 +88,13 @@ function extractPropertyValue(expr: ts.Expression): PropertyValueFact {
       const bindables = parseBindablesArray(expr);
       return { kind: "bindableArray", bindables };
     }
+    // Check if elements are identifiers - dependency array
+    // dependencies: [MyElement, OtherComponent]
+    const hasIdentifier = expr.elements.some((el) => ts.isIdentifier(el));
+    if (hasIdentifier) {
+      const refs = parseDependencyArray(expr);
+      return { kind: "dependencyArray", refs };
+    }
     // Pure string array (aliases, etc.)
     const values: string[] = [];
     for (const el of expr.elements) {
@@ -127,6 +134,22 @@ function parseBindablesArray(expr: ts.ArrayLiteralExpression): BindableDefFact[]
     }
   }
   return result;
+}
+
+function parseDependencyArray(expr: ts.ArrayLiteralExpression): DependencyRef[] {
+  const refs: DependencyRef[] = [];
+  for (const element of expr.elements) {
+    if (ts.isIdentifier(element)) {
+      refs.push({
+        kind: "identifier",
+        name: element.text,
+        span: { start: element.getStart(), end: element.getEnd() },
+        resolvedPath: null, // Populated by import resolution (WP2)
+      });
+    }
+    // TODO: Handle spread elements, property access, etc.
+  }
+  return refs;
 }
 
 function parseBindingModeValue(expr: ts.Expression | undefined): BindingMode | undefined {
@@ -190,11 +213,19 @@ function extractStaticAu(node: ts.ClassDeclaration): StaticAuFact | null {
       bindables = parseBindablesArray(bindablesProp.initializer);
     }
 
+    // Parse dependencies
+    const dependenciesProp = getProp(obj, "dependencies");
+    let dependencies: DependencyRef[] | undefined;
+    if (dependenciesProp && ts.isArrayLiteralExpression(dependenciesProp.initializer)) {
+      dependencies = parseDependencyArray(dependenciesProp.initializer);
+    }
+
     return {
       ...(type ? { type } : {}),
       ...(name ? { name } : {}),
       ...(aliases.length > 0 ? { aliases } : {}),
       ...(bindables && bindables.length > 0 ? { bindables } : {}),
+      ...(dependencies && dependencies.length > 0 ? { dependencies } : {}),
       ...(template ? { template } : {}),
       ...(containerless !== undefined ? { containerless } : {}),
       ...(isTemplateController !== undefined ? { isTemplateController } : {}),
@@ -215,7 +246,12 @@ function extractStaticDependencies(node: ts.ClassDeclaration): StaticDependencie
     const references: DependencyRef[] = [];
     for (const element of member.initializer.elements) {
       if (ts.isIdentifier(element)) {
-        references.push({ kind: "identifier", name: element.text });
+        references.push({
+          kind: "identifier",
+          name: element.text,
+          span: { start: element.getStart(), end: element.getEnd() },
+          resolvedPath: null, // Populated by import resolution (WP2)
+        });
       }
       // TODO: Handle imported references (more complex AST analysis needed)
     }

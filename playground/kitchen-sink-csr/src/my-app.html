@@ -1,0 +1,70 @@
+<div class="kitchen-sink">
+  <!-- Navigation -->
+  <header data-testid="header">
+    <h1 data-testid="title">${title}</h1>
+    <nav data-testid="nav">
+      <a load="home" data-testid="nav-home">Home</a>
+      <a load="about" data-testid="nav-about">About</a>
+      <a load="users" data-testid="nav-users">Users</a>
+    </nav>
+  </header>
+
+  <!-- Router viewport -->
+  <main data-testid="main">
+    <au-viewport></au-viewport>
+  </main>
+
+  <hr>
+
+  <!-- Feature demos (kept inline for golden testing) -->
+  <section class="features" data-testid="features-section">
+    <h2>Feature Demos</h2>
+
+    <!-- Basic interpolation -->
+    <p data-testid="message">${message}</p>
+
+    <!-- Property binding + event handler -->
+    <section data-testid="counter-section">
+      <span data-testid="count">Count: ${count}</span>
+      <button data-testid="increment" click.trigger="increment()">+</button>
+      <button data-testid="decrement" click.trigger="decrement()">-</button>
+    </section>
+
+    <!-- if/else -->
+    <section data-testid="if-section">
+      <button data-testid="toggle" click.trigger="toggle()">Toggle</button>
+      <div if.bind="showContent" data-testid="if-true">Content is visible</div>
+      <div else data-testid="if-false">Content is hidden</div>
+    </section>
+
+    <!-- repeat.for with array -->
+    <section data-testid="repeat-section">
+      <button data-testid="add-item" click.trigger="addItem()">Add Item</button>
+      <ul data-testid="items-list">
+        <li repeat.for="item of items" data-testid="item">${item}</li>
+      </ul>
+    </section>
+
+    <!-- ref binding -->
+    <section data-testid="ref-section">
+      <input ref="inputRef" data-testid="ref-input" value.bind="inputValue" />
+      <button data-testid="focus-btn" click.trigger="focusInput()">Focus</button>
+    </section>
+
+    <!-- switch/case -->
+    <section data-testid="switch-section">
+      <button data-testid="cycle-status" click.trigger="cycleStatus()">Cycle</button>
+      <div switch.bind="status">
+        <span case="loading" data-testid="status-loading">Loading...</span>
+        <span case="success" data-testid="status-success">Success!</span>
+        <span case="error" data-testid="status-error">Error!</span>
+      </div>
+    </section>
+
+    <!-- let element (computed values) -->
+    <section data-testid="let-section">
+      <let computed.bind="count * 2"></let>
+      <span data-testid="computed-value">Doubled: ${computed}</span>
+    </section>
+  </section>
+</div>

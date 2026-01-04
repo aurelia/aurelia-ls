@@ -1,4 +1,4 @@
-import type { NormalizedPath, BindingMode } from "@aurelia-ls/compiler";
+import type { NormalizedPath, BindingMode, TextSpan } from "@aurelia-ls/compiler";
 
 // Re-export BindingMode for consumers of this module
 export type { BindingMode };
@@ -10,6 +10,29 @@ export interface SourceFacts {
   readonly registrationCalls: RegistrationCallFact[];
   readonly imports: ImportFact[];
   readonly exports: ExportFact[];
+
+  /**
+   * Sibling files discovered adjacent to this source file.
+   *
+   * Populated when FileSystemContext is provided during extraction.
+   * Used for sibling file convention: `foo.ts` + `foo.html`
+   */
+  readonly siblingFiles: SiblingFileFact[];
+}
+
+/**
+ * Sibling file discovered adjacent to a source file.
+ * Used for template-pairing convention.
+ */
+export interface SiblingFileFact {
+  /** Normalized path to the sibling file */
+  readonly path: NormalizedPath;
+
+  /** File extension including dot (e.g., '.html') */
+  readonly extension: string;
+
+  /** Base name without extension, matches source file */
+  readonly baseName: string;
 }
 
 /** Import declaration fact */
@@ -63,6 +86,7 @@ export type PropertyValueFact =
   | { readonly kind: "boolean"; readonly value: boolean }
   | { readonly kind: "stringArray"; readonly values: readonly string[] }
   | { readonly kind: "bindableArray"; readonly bindables: readonly BindableDefFact[] }
+  | { readonly kind: "dependencyArray"; readonly refs: readonly DependencyRef[] }
   | { readonly kind: "identifier"; readonly name: string }
   | { readonly kind: "propertyAccess"; readonly name: string }
   | { readonly kind: "unknown" };
@@ -73,6 +97,7 @@ export interface StaticAuFact {
   readonly name?: string;
   readonly aliases?: readonly string[];
   readonly bindables?: readonly BindableDefFact[];
+  readonly dependencies?: readonly DependencyRef[];
   readonly template?: string;
   readonly containerless?: boolean;
   readonly isTemplateController?: boolean;
@@ -84,10 +109,28 @@ export interface StaticDependenciesFact {
   readonly references: readonly DependencyRef[];
 }
 
-/** Reference in a dependencies array */
+/**
+ * Reference in a dependencies array.
+ *
+ * Includes provenance (span) for diagnostics, refactoring, and ordering.
+ * The resolvedPath is populated by import resolution (WP2); null until then.
+ */
 export type DependencyRef =
-  | { readonly kind: "identifier"; readonly name: string }
-  | { readonly kind: "import"; readonly moduleSpecifier: string; readonly exportName?: string };
+  | {
+      readonly kind: "identifier";
+      readonly name: string;
+      /** Source location of this identifier in the dependencies array */
+      readonly span: TextSpan;
+      /** File path where this class is defined (null until import resolution) */
+      readonly resolvedPath: NormalizedPath | null;
+    }
+  | {
+      readonly kind: "import";
+      readonly moduleSpecifier: string;
+      readonly exportName?: string;
+      /** Source location of this import reference */
+      readonly span: TextSpan;
+    };
 
 /** Bindable member on class (from @bindable decorator) */
 export interface BindableMemberFact {
@@ -115,10 +158,12 @@ export interface RegistrationCallFact {
 
 /** Argument to a .register() call */
 export type RegistrationArgFact =
-  | { readonly kind: "identifier"; readonly name: string }
-  | { readonly kind: "spread"; readonly name: string }
-  | { readonly kind: "arrayLiteral"; readonly elements: readonly RegistrationArgFact[] }
-  | { readonly kind: "unknown" };
+  | { readonly kind: "identifier"; readonly name: string; readonly span: TextSpan }
+  | { readonly kind: "spread"; readonly name: string; readonly span: TextSpan }
+  | { readonly kind: "memberAccess"; readonly namespace: string; readonly member: string; readonly span: TextSpan }
+  | { readonly kind: "arrayLiteral"; readonly elements: readonly RegistrationArgFact[]; readonly span: TextSpan }
+  | { readonly kind: "callExpression"; readonly receiver: string; readonly method: string; readonly span: TextSpan }
+  | { readonly kind: "unknown"; readonly span: TextSpan };
 
 /** Source position */
 export interface Position {

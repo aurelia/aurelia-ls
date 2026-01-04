@@ -1,0 +1,39 @@
+<!--
+  MyApp Template - Application Shell
+
+  Exercises:
+  - t="key" for static translations
+  - load="routeId" for navigation
+  - ${interpolation} for dynamic content
+  - ref for element references
+  - value.bind for two-way binding
+  - click.trigger for event handling
+  - au-viewport for router outlet
+-->
+
+<div class="app-shell">
+  <!-- Header with navigation -->
+  <header class="app-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1 t="app.title"></h1>
+
+      <!-- User info -->
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <span style="opacity: 0.8;">${currentUser.name}</span>
+        <div class="avatar">${currentUser.avatar}</div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="app-nav">
+      <a load="dashboard" t="nav.dashboard"></a>
+      <a load="issues" t="nav.issues"></a>
+      <a load="settings" t="nav.settings"></a>
+    </nav>
+  </header>
+
+  <!-- Main content area -->
+  <main class="app-main">
+    <au-viewport></au-viewport>
+  </main>
+</div>

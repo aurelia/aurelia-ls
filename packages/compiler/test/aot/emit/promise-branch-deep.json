@@ -1,0 +1,269 @@
+[
+  {
+    "name": "AOT-PR-01: promise with then branch containing binding",
+    "markup": "<div promise.bind=\"p\"><template then=\"data\">${data}</template></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "promise_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "then", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "then_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-PR-02: promise with catch branch containing binding",
+    "markup": "<div promise.bind=\"p\"><template catch=\"err\">${err.message}</template></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "promise_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "catch", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "catch_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-PR-03: promise with then and catch branches",
+    "markup": "<div promise.bind=\"p\"><template then=\"data\">${data}</template><template catch=\"err\">${err}</template></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "promise_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "then", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "catch", "templateIndex": 1, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "then_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "catch_2",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-PR-04: promise with pending branch (no alias overlay)",
+    "markup": "<div promise.bind=\"p\"><template pending>Loading ${msg}...</template></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "promise_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "pending", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "pending_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-PR-05: promise with all three branches",
+    "markup": "<div promise.bind=\"p\"><template pending>Loading...</template><template then=\"data\">${data}</template><template catch=\"err\">${err}</template></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "promise_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "pending", "templateIndex": 0, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 1, "resource": "then", "templateIndex": 1, "propCount": 1 },
+            { "type": "hydrateTemplateController", "target": 2, "resource": "catch", "templateIndex": 2, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "pending_1",
+              "instructions": []
+            },
+            {
+              "name": "then_2",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            },
+            {
+              "name": "catch_3",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-PR-06: promise inside repeat",
+    "markup": "<div repeat.for=\"item of items\"><div promise.bind=\"item.task\"><template then=\"data\">${data}</template></div></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "repeat_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "promise_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "then", "templateIndex": 0, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "then_2",
+                  "instructions": [
+                    { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-PR-07: repeat inside promise then branch",
+    "markup": "<div promise.bind=\"fetchItems\"><template then=\"items\"><ul repeat.for=\"item of items\"><li>${item}</li></ul></template></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "promise_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "then", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "then_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "repeat_2",
+                  "instructions": [
+                    { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-PR-08: nested promise (promise inside promise then)",
+    "markup": "<div promise.bind=\"outer\"><template then=\"innerP\"><div promise.bind=\"innerP\"><template then=\"val\">${val}</template></div></template></div>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 3,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "promise_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "then", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "then_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "promise", "templateIndex": 0, "propCount": 1 }
+              ],
+              "nested": [
+                {
+                  "name": "promise_2",
+                  "instructions": [
+                    { "type": "hydrateTemplateController", "target": 0, "resource": "then", "templateIndex": 0, "propCount": 1 }
+                  ],
+                  "nested": [
+                    {
+                      "name": "then_3",
+                      "instructions": [
+                        { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

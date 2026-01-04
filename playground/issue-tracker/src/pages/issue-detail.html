@@ -1,0 +1,178 @@
+<!--
+  Issue Detail Page Template
+
+  Exercises:
+  - if.bind for loading/error states
+  - with.bind for nested context (assignee, reporter)
+  - switch/case for status actions
+  - repeat.for for comments, labels, transitions
+  - click.trigger for actions
+  - value.bind for comment input
+  - t="key" for labels
+  - Custom elements (status-badge, priority-icon, user-avatar, label-list, time-ago)
+  - class.bind for conditional styling
+-->
+
+<div class="page issue-detail-page" data-testid="issue-detail">
+  <!-- Loading state -->
+  <div if.bind="isLoading" class="card" data-testid="loading">
+    <p t="app.loading"></p>
+  </div>
+
+  <!-- Not found state -->
+  <div else-if.bind="notFound" data-testid="not-found">
+    <empty-state
+      icon="❌"
+      title.bind="'Issue not found'"
+      description.bind="'The issue you\\'re looking for doesn\\'t exist or has been deleted'"
+    ></empty-state>
+    <button class="btn btn-secondary" click.trigger="goBack()" style="margin-top: 1rem;">
+      <span t="issue.notFound.back"></span>
+    </button>
+  </div>
+
+  <!-- Issue content -->
+  <template else>
+    <!-- Header with back button -->
+    <div style="margin-bottom: 1rem;">
+      <button class="btn btn-ghost" click.trigger="goBack()">
+        ← <span t="actions.back"></span>
+      </button>
+    </div>
+
+    <div class="card">
+      <!-- Issue header -->
+      <header class="issue-detail-header">
+        <div style="display: flex; align-items: start; gap: 1rem; margin-bottom: 1rem;">
+          <status-badge status.bind="issue.status"></status-badge>
+          <priority-icon priority.bind="issue.priority"></priority-icon>
+          <span class="badge badge-${issue.type}">${issue.type}</span>
+        </div>
+
+        <h1 class="issue-detail-title">${issue.title}</h1>
+
+        <div class="issue-detail-meta">
+          <span style="color: #666;">${issue.id}</span>
+          <span>•</span>
+          <time-ago date.bind="issue.createdAt" prefix="Created"></time-ago>
+          <span>•</span>
+          <time-ago date.bind="issue.updatedAt" prefix="Updated"></time-ago>
+        </div>
+      </header>
+
+      <!-- Reporter and Assignee -->
+      <div style="display: flex; gap: 2rem; margin: 1.5rem 0; padding: 1rem 0; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb;">
+        <!-- Reporter -->
+        <div with.bind="issue.reporter">
+          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Reporter</div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <user-avatar user.bind="$this"></user-avatar>
+            <span>${name}</span>
+          </div>
+        </div>
+
+        <!-- Assignee -->
+        <div>
+          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Assignee</div>
+          <div if.bind="issue.assignee" with.bind="issue.assignee" style="display: flex; align-items: center; gap: 0.5rem;">
+            <user-avatar user.bind="$this"></user-avatar>
+            <span>${name}</span>
+          </div>
+          <span else style="color: #999;" t="issue.meta.unassigned"></span>
+        </div>
+
+        <!-- Due Date -->
+        <div>
+          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Due Date</div>
+          <span if.bind="hasDueDate" class="${isOverdue ? 'badge badge-critical' : ''}">
+            ${issue.dueDate.toLocaleDateString()}
+          </span>
+          <span else style="color: #999;" t="issue.time.noDueDate"></span>
+        </div>
+
+        <!-- Story Points -->
+        <div>
+          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Story Points</div>
+          <span if.bind="issue.storyPoints > 0">${issue.storyPoints}</span>
+          <span else style="color: #999;" t="issue.meta.noPoints"></span>
+        </div>
+      </div>
+
+      <!-- Labels -->
+      <section if.bind="hasLabels" class="issue-detail-section">
+        <h3 t="issue.sections.labels"></h3>
+        <label-list labels.bind="issue.labels"></label-list>
+      </section>
+
+      <!-- Description -->
+      <section class="issue-detail-section">
+        <h3 t="issue.sections.description"></h3>
+        <p style="white-space: pre-wrap;">${issue.description}</p>
+      </section>
+
+      <!-- Status transitions -->
+      <section class="issue-detail-section">
+        <h3>Actions</h3>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button
+            repeat.for="nextStatus of availableTransitions"
+            class="btn btn-secondary"
+            click.trigger="changeStatus(nextStatus)"
+            data-testid="transition-${nextStatus}"
+          >
+            <!-- Status transition labels using switch/case -->
+            <template switch.bind="nextStatus">
+              <span case="open" t="issue.transitions.reopen"></span>
+              <span case="in_progress" t="issue.transitions.start"></span>
+              <span case="review" t="issue.transitions.review"></span>
+              <span case="closed" t="issue.transitions.close"></span>
+              <span default-case>${nextStatus}</span>
+            </template>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Comments section -->
+    <div class="card" style="margin-top: 1rem;">
+      <h3 t="issue.sections.comments"></h3>
+
+      <!-- Empty state -->
+      <div if.bind="!hasComments" class="empty-state" style="padding: 1rem;">
+        <p t="issue.comments.empty"></p>
+      </div>
+
+      <!-- Comment list -->
+      <div else class="comment-list">
+        <div repeat.for="comment of issue.comments" class="comment" data-testid="comment-${comment.id}">
+          <user-avatar user.bind="comment.author"></user-avatar>
+          <div class="comment-content">
+            <div class="comment-header">
+              <span class="comment-author">${comment.author.name}</span>
+              <time-ago date.bind="comment.createdAt"></time-ago>
+            </div>
+            <div class="comment-body">${comment.content}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add comment form -->
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+        <textarea
+          class="form-input"
+          rows="3"
+          value.bind="newComment"
+          placeholder.bind="'Add a comment...'"
+          data-testid="comment-input"
+        ></textarea>
+        <button
+          class="btn btn-primary"
+          style="margin-top: 0.5rem;"
+          click.trigger="addComment()"
+          data-testid="submit-comment"
+          t="issue.comments.submit"
+        ></button>
+      </div>
+    </div>
+  </template>
+</div>

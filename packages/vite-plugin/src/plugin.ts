@@ -1,22 +1,19 @@
 /**
- * Aurelia SSR Vite Plugin
+ * Aurelia Vite Plugin
  *
- * A Vite plugin that provides server-side rendering for Aurelia applications
- * during development. Add this plugin to your vite.config.ts alongside
- * @aurelia/vite-plugin.
+ * Complete build plugin for Aurelia applications with AOT compilation, SSR, and SSG.
+ * This plugin replaces @aurelia/vite-plugin and @aurelia/plugin-conventions.
  *
  * @example
  * ```typescript
  * import { defineConfig } from 'vite';
- * import aurelia from '@aurelia/vite-plugin';
- * import { aureliaSSR } from '@aurelia-ls/vite-plugin';
+ * import { aurelia } from '@aurelia-ls/vite-plugin';
  *
  * export default defineConfig({
  *   plugins: [
- *     aurelia({ useDev: true }),
- *     aureliaSSR({
+ *     aurelia({
  *       entry: './src/my-app.html',
- *       state: async (url) => ({ path: url.pathname }),
+ *       ssr: true,
  *     }),
  *   ],
  * });
@@ -25,8 +22,8 @@
 
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
-import { normalizePathForId, type CompileTrace } from "@aurelia-ls/compiler";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { normalizePathForId, debug, type CompileTrace } from "@aurelia-ls/compiler";
 import {
   transform,
   transformEntryPoint,
@@ -39,7 +36,7 @@ import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
 import { resolveTraceOptions, createBuildTrace, type ManagedTrace } from "./trace.js";
-import type { AureliaSSRPluginOptions, ResolvedSSROptions, ResolutionContext, ResolvedTraceOptions } from "./types.js";
+import type { AureliaPluginOptions, PluginState, ResolutionContext, ResolvedTraceOptions } from "./types.js";
 import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 
 /**
@@ -87,6 +84,7 @@ function transformComponent(
   resolutionContext: ResolutionContext,
   config: ResolvedConfig,
   trace?: CompileTrace,
+  dumpPath?: string | false,
 ): { code: string; map: null } | null {
   try {
     // Read the template HTML
@@ -136,6 +134,18 @@ function transformComponent(
       );
     }
 
+    // Dump artifacts if enabled
+    if (dumpPath) {
+      dumpCompilationArtifacts(
+        dumpPath,
+        templateInfo,
+        templateHtml,
+        aot,
+        result,
+        config,
+      );
+    }
+
     return {
       code: result.code,
       // TODO: Add source map support when transform package implements it
@@ -148,6 +158,77 @@ function transformComponent(
     );
     // Return original code on error to allow fallback to runtime behavior
     return null;
+  }
+}
+
+/**
+ * Dump compilation artifacts to disk for debugging.
+ *
+ * Creates a directory structure with:
+ * - {component}/input.html - Original template
+ * - {component}/plan.json - AOT plan (intermediate representation)
+ * - {component}/instructions.json - Compiled instructions
+ * - {component}/output.html - Template with hydration markers
+ * - {component}/output.ts - Transformed TypeScript with $au
+ */
+function dumpCompilationArtifacts(
+  basePath: string,
+  templateInfo: TemplateInfo,
+  inputHtml: string,
+  aot: ReturnType<typeof compileWithAot>,
+  result: ReturnType<typeof transform>,
+  config: ResolvedConfig,
+): void {
+  try {
+    // Create component-specific directory using class name
+    const componentDir = join(basePath, templateInfo.className);
+    mkdirSync(componentDir, { recursive: true });
+
+    // 1. Original template HTML
+    writeFileSync(join(componentDir, "input.html"), inputHtml, "utf-8");
+
+    // 2. AOT Plan (intermediate representation)
+    writeFileSync(
+      join(componentDir, "plan.json"),
+      JSON.stringify(aot.raw.plan, null, 2),
+      "utf-8",
+    );
+
+    // 3. Compiled instructions (serialized format)
+    writeFileSync(
+      join(componentDir, "instructions.json"),
+      JSON.stringify(aot.raw.codeResult, null, 2),
+      "utf-8",
+    );
+
+    // 4. Template with hydration markers
+    writeFileSync(join(componentDir, "output.html"), aot.template, "utf-8");
+
+    // 5. Transformed TypeScript
+    writeFileSync(join(componentDir, "output.ts"), result.code, "utf-8");
+
+    // 6. Metadata summary
+    const meta = {
+      className: templateInfo.className,
+      resourceName: templateInfo.resourceName,
+      componentPath: templateInfo.componentPath,
+      templatePath: templateInfo.templatePath,
+      scopeId: templateInfo.scopeId,
+      expressionCount: result.meta.expressionCount,
+      instructionRowCount: result.meta.instructionRowCount,
+      targetCount: aot.targetCount,
+      warnings: result.warnings,
+    };
+    writeFileSync(
+      join(componentDir, "meta.json"),
+      JSON.stringify(meta, null, 2),
+      "utf-8",
+    );
+
+    config.logger.info(`[aurelia-ssr] Dumped artifacts: ${componentDir}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    config.logger.warn(`[aurelia-ssr] Failed to dump artifacts: ${errorMessage}`);
   }
 }
 
@@ -225,14 +306,16 @@ const HTML_IMPORT_REGEX = /(from\s+|import\s+)(['"])([^'"]+\.html)\2/g;
  * @param options - Plugin configuration options
  * @returns Array of Vite plugins (pre for import rewriting, post for SSR)
  */
-export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
+export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
   let resolvedConfig: ResolvedConfig;
-  let resolvedOptions: ResolvedSSROptions;
+  let pluginState: PluginState;
   let resolutionContext: ResolutionContext | null = null;
   let resolutionPromise: Promise<ResolutionContext | null> | null = null;
   let routeTree: RouteTree | null = null;
   let traceOptions: ResolvedTraceOptions;
   let buildTrace: ManagedTrace | null = null;
+  let ssrEnabled = false; // Whether SSR middleware should be registered
+  let dumpArtifactsPath: string | false = false; // Path to dump compilation artifacts
 
   /**
    * Pre-plugin: Rewrites .html imports to virtual files in production builds.
@@ -303,7 +386,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
   const mainPlugin: Plugin = {
     name: "aurelia-ssr",
 
-    // Run after other plugins (like @aurelia/vite-plugin)
+    // Run after other plugins
     enforce: "post",
 
     /**
@@ -325,45 +408,78 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
         );
       }
 
-      // Resolve SSG options
-      const ssgOptions = options.ssg ?? {};
+      // Normalize SSR options (boolean | object | undefined → object)
+      const ssrOptions = typeof options.ssr === "object" ? options.ssr : {};
+      // Set closure variable - SSR is enabled if explicitly true or object without enabled:false
+      ssrEnabled = options.ssr === true || (typeof options.ssr === "object" && options.ssr.enabled !== false);
+
+      // Normalize SSG options (boolean | object | undefined → object)
+      const ssgInput = typeof options.ssg === "object" ? options.ssg : {};
+      const ssgEnabled = options.ssg === true || (typeof options.ssg === "object" && ssgInput.enabled !== false);
       const resolvedSSG = {
-        enabled: ssgOptions.enabled ?? false,
-        entryPoints: ssgOptions.entryPoints ?? [],
-        outDir: ssgOptions.outDir ?? ".",
-        fallback: ssgOptions.fallback ?? "404.html",
-        additionalRoutes: ssgOptions.additionalRoutes,
-        onBeforeRender: ssgOptions.onBeforeRender,
-        onAfterRender: ssgOptions.onAfterRender,
+        enabled: ssgEnabled,
+        entryPoints: ssgInput.entryPoints ?? [],
+        outDir: ssgInput.outDir ?? ".",
+        fallback: ssgInput.fallback ?? "404.html",
+        additionalRoutes: ssgInput.additionalRoutes,
+        onBeforeRender: ssgInput.onBeforeRender,
+        onAfterRender: ssgInput.onAfterRender,
       };
 
       // Resolve SSR entry point path
-      const ssrEntry = options.ssrEntry
-        ? resolve(config.root, options.ssrEntry)
+      const ssrEntry = ssrOptions.ssrEntry
+        ? resolve(config.root, ssrOptions.ssrEntry)
         : null;
 
-      // Resolve trace options
-      traceOptions = resolveTraceOptions(options.trace, config.root);
+      // Resolve trace options (from debug.trace)
+      traceOptions = resolveTraceOptions(options.debug?.trace, config.root);
       if (traceOptions.enabled) {
         config.logger.info(`[aurelia-ssr] Tracing enabled (output: ${traceOptions.output})`);
       }
 
-      // Build resolved options with defaults (resolution context added later)
-      resolvedOptions = {
+      // Resolve dumpArtifacts option (from debug.dumpArtifacts)
+      const dumpArtifactsOpt = options.debug?.dumpArtifacts;
+      if (dumpArtifactsOpt === true) {
+        dumpArtifactsPath = resolve(config.root, ".aurelia-artifacts");
+      } else if (typeof dumpArtifactsOpt === "string") {
+        dumpArtifactsPath = resolve(config.root, dumpArtifactsOpt);
+      } else {
+        dumpArtifactsPath = false;
+      }
+      if (dumpArtifactsPath) {
+        config.logger.info(`[aurelia-ssr] Artifact dumping enabled: ${dumpArtifactsPath}`);
+      }
+
+      // Resolve register module path (relative to project root)
+      const register = ssrOptions.register
+        ? resolve(config.root, ssrOptions.register)
+        : null;
+
+      // Build plugin state with defaults
+      pluginState = {
         entry,
-        state: options.state ?? (() => ({})),
-        stripMarkers: options.stripMarkers ?? false,
-        include: options.include ?? ["**"],
-        exclude: options.exclude ?? DEFAULT_EXCLUDE,
-        htmlShell: options.htmlShell ?? DEFAULT_HTML_SHELL,
+        state: ssrOptions.state ?? (() => ({})),
+        stripMarkers: ssrOptions.stripMarkers ?? false,
+        include: ssrOptions.include ?? ["**"],
+        exclude: ssrOptions.exclude ?? DEFAULT_EXCLUDE,
+        htmlShell: ssrOptions.htmlShell ?? DEFAULT_HTML_SHELL,
         resolution: null, // Will be set after async initialization
-        baseHref: options.baseHref ?? "/",
-        register: options.register,
+        baseHref: ssrOptions.baseHref ?? "/",
+        register,
         ssg: resolvedSSG,
         routeTree: null, // Will be set after route discovery
         ssrEntry,
         trace: traceOptions,
       };
+
+      // Debug: log plugin configuration
+      debug.vite("config.resolved", {
+        entry,
+        root: config.root,
+        ssrEnabled,
+        ssgEnabled: resolvedSSG.enabled,
+        command: config.command,
+      });
 
       config.logger.info(
         `[aurelia-ssr] Configured with entry: ${entry}`,
@@ -389,14 +505,14 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
         // Start async resolution (will complete before first request)
         resolutionPromise = createResolutionContext(tsconfigPath, logger).then((ctx) => {
           resolutionContext = ctx;
-          resolvedOptions.resolution = ctx;
+          pluginState.resolution = ctx;
           if (ctx) {
             config.logger.info("[aurelia-ssr] Resource resolution ready");
 
             // Discover routes if SSG is enabled
             if (resolvedSSG.enabled) {
               routeTree = discoverRoutes(tsconfigPath, resolvedSSG.entryPoints, logger);
-              resolvedOptions.routeTree = routeTree;
+              pluginState.routeTree = routeTree;
               if (routeTree) {
                 config.logger.info(
                   `[aurelia-ssr] Route discovery: ${routeTree.allStaticPaths.length} static, ` +
@@ -524,7 +640,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       // Wait for resolution context if not yet ready
       if (resolutionPromise && !resolutionContext) {
         resolutionContext = await resolutionPromise;
-        resolvedOptions.resolution = resolutionContext;
+        pluginState.resolution = resolutionContext;
       }
 
       // No resolution context - can't determine component templates
@@ -545,14 +661,16 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
 
       // If this is an Aurelia component with external template, transform it
       if (templateInfo) {
-        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig, trace);
+        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig, trace, dumpArtifactsPath);
       }
 
       // Check if this is an entry point file (contains Aurelia initialization)
       // Only transform entry points in production builds for tree-shaking
-      if (resolvedConfig.command === "build") {
-        return transformEntryPointIfNeeded(code, id, resolvedConfig);
-      }
+      // TODO: Entry point transform disabled - third-party deps need runtime compilation
+      // Re-enable when third-party AOT compilation is implemented
+      // if (resolvedConfig.command === "build") {
+      //   return transformEntryPointIfNeeded(code, id, resolvedConfig);
+      // }
 
       return null;
     },
@@ -561,12 +679,29 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
      * Add SSR middleware to dev server.
      * Middleware is added directly (not returning a function) so it runs
      * BEFORE Vite's built-in HTML handling.
+     * Only registers middleware when SSR is enabled.
      */
     configureServer(server) {
+      // Debug: log server configuration for troubleshooting
+      const addr = server.httpServer?.address();
+      const port = addr && typeof addr === "object" ? addr.port : undefined;
+      debug.vite("server.configure", {
+        root: server.config.root,
+        ssrEnabled,
+        port,
+        configFile: server.config.configFile,
+      });
+
+      // Skip SSR middleware if SSR is not enabled
+      if (!ssrEnabled) {
+        server.config.logger.info("[aurelia-ssr] SSR disabled, serving CSR");
+        return;
+      }
+
       // Add middleware directly (before Vite's internal middleware)
       // The middleware will wait for resolution if needed
       server.middlewares.use(
-        createSSRMiddleware(server, resolvedOptions, () => resolutionPromise),
+        createSSRMiddleware(server, pluginState, () => resolutionPromise),
       );
 
       server.config.logger.info(
@@ -637,7 +772,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       }
 
       // Check if SSG is enabled
-      if (!resolvedOptions.ssg.enabled) {
+      if (!pluginState.ssg.enabled) {
         return;
       }
 
@@ -660,18 +795,18 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       // Calculate output directory
       const outDir = join(
         resolvedConfig.build.outDir,
-        resolvedOptions.ssg.outDir,
+        pluginState.ssg.outDir,
       );
 
       // Try to load SSR handler from built output
       let ssrHandler: SSRHandler | null = null;
 
-      if (resolvedOptions.ssrEntry) {
+      if (pluginState.ssrEntry) {
         try {
           // The SSR entry should be built to dist/server/entry-server.js
           // We use the same output dir structure as the client build
           const serverOutDir = join(resolvedConfig.build.outDir, "..", "server");
-          const entryBasename = resolvedOptions.ssrEntry.split(/[\\/]/).pop()!.replace(/\.ts$/, ".js");
+          const entryBasename = pluginState.ssrEntry.split(/[\\/]/).pop()!.replace(/\.ts$/, ".js");
           const handlerPath = join(serverOutDir, entryBasename);
 
           resolvedConfig.logger.info(`[aurelia-ssr] Loading SSR handler from: ${handlerPath}`);
@@ -722,7 +857,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
       // Generate static site
       const result: SSGResult = await generateStaticSite(
         routeTree,
-        resolvedOptions.ssg,
+        pluginState.ssg,
         outDir,
         render,
         resolveStaticPaths,
@@ -763,7 +898,7 @@ export function aureliaSSR(options: AureliaSSRPluginOptions = {}): Plugin[] {
     buildEnd() {
       // Finish build trace if SSG is not enabled
       // (SSG-enabled builds finish trace in closeBundle after SSG completes)
-      if (buildTrace && !resolvedOptions.ssg.enabled) {
+      if (buildTrace && !pluginState.ssg.enabled) {
         buildTrace.finish();
         buildTrace = null;
       }

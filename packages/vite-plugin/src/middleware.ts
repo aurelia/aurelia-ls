@@ -9,15 +9,32 @@
  *
  * NOTE: Component classes have their $au definitions injected by the Vite
  * transform hook at compile time - no runtime patching needed.
+ *
+ * IMPORTANT: The SSR renderer is loaded dynamically via ssrLoadModule to ensure
+ * it shares the same module cache as user components. This prevents dual-module
+ * hazard where Node's loader and Vite's SSR loader create separate instances
+ * of @aurelia/kernel (each with its own currentContainer global).
  */
 
 import type { Connect, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { renderWithComponents, type AotCompileResult } from "@aurelia-ls/ssr";
+// NOTE: We import TYPES only from @aurelia-ls/ssr - the actual module is loaded
+// dynamically via ssrLoadModule to share module instances with user components
+import type { AotCompileResult, RenderOptions, RenderResult, ComponentClass } from "@aurelia-ls/ssr";
 import type { ISSRManifest } from "@aurelia/runtime-html";
-import type { ResolvedSSROptions, ResolutionContext } from "./types.js";
+import type { PluginState, ResolutionContext } from "./types.js";
 import { loadProjectComponents } from "./loader.js";
 import { createRequestTrace } from "./trace.js";
+
+// Type for the dynamically loaded SSR module
+interface SSRModule {
+  renderWithComponents: (component: ComponentClass, options?: RenderOptions) => Promise<RenderResult>;
+}
+
+// Type for the dynamically loaded register module
+interface RegisterModule {
+  register: RenderOptions["register"];
+}
 
 /**
  * Create SSR middleware for Vite dev server.
@@ -32,11 +49,19 @@ import { createRequestTrace } from "./trace.js";
  */
 export function createSSRMiddleware(
   server: ViteDevServer,
-  options: ResolvedSSROptions,
+  options: PluginState,
   getResolutionPromise?: () => Promise<ResolutionContext | null> | null,
 ): Connect.NextHandleFunction {
   // Track if resolution has been awaited
   let resolutionReady = false;
+
+  // Cache for the dynamically loaded SSR module
+  // Loaded via ssrLoadModule to share module instances with user components
+  let ssrModule: SSRModule | null = null;
+
+  // Cache for the dynamically loaded register module
+  // This ensures Aurelia imports in the register module go through Vite's resolver
+  let registerModuleCache: RegisterModule | null = null;
 
   return async (
     req: IncomingMessage,
@@ -77,6 +102,28 @@ export function createSSRMiddleware(
         resolutionReady = true;
       }
 
+      // Load SSR module dynamically via Vite's ssrLoadModule
+      // This ensures it shares module instances with user components,
+      // preventing dual-module hazard with @aurelia/kernel's currentContainer
+      if (!ssrModule) {
+        ssrModule = await server.ssrLoadModule("@aurelia-ls/ssr") as SSRModule;
+      }
+
+      // Load register module dynamically if specified
+      // This ensures all Aurelia imports in the register module go through
+      // Vite's resolver with proper aliases, avoiding dual-module hazard
+      if (options.register && !registerModuleCache) {
+        registerModuleCache = await server.ssrLoadModule(options.register) as RegisterModule;
+        if (!registerModuleCache.register) {
+          throw new Error(
+            `[aurelia-ssr] register module "${options.register}" must export a 'register' function`
+          );
+        }
+      }
+
+      // Get the register function from the loaded module
+      const registerFn = registerModuleCache?.register;
+
       // Get resolution context
       const resolution = options.resolution;
 
@@ -106,7 +153,7 @@ export function createSSRMiddleware(
         // Render with real classes (classes have $au from transform hook)
         // Pass request context for URL-aware rendering (routing)
         requestTrace?.trace.event("ssr.render");
-        const renderResult = await renderWithComponents(root.ComponentClass, {
+        const renderResult = await ssrModule.renderWithComponents(root.ComponentClass, {
           childComponents: children.map((c) => c.ComponentClass),
           ssr: {
             stripMarkers: options.stripMarkers,
@@ -115,7 +162,7 @@ export function createSSRMiddleware(
             url,
             baseHref: options.baseHref,
           },
-          register: options.register,
+          register: registerFn,
           trace: requestTrace?.trace,
         });
 

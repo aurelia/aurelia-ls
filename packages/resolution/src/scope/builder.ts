@@ -13,50 +13,75 @@ import {
   type ValueConverterSig,
   type BindingBehaviorSig,
 } from "@aurelia-ls/compiler";
-import type { RegistrationIntent } from "../registration/types.js";
+import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
 import type { ResourceCandidate, BindableSpec } from "../inference/types.js";
+import type { PluginManifest } from "../plugins/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
 
 /**
- * Build a ResourceGraph from registration intents.
+ * Build a ResourceGraph from registration analysis.
  *
  * Enforces the two-level scope model:
- * - Global scope: resources with kind="global" or kind="unknown"
- * - Local scopes: resources with kind="local" (one scope per component)
+ * - Global scope: resources registered globally (Aurelia.register, container.register)
+ * - Local scopes: resources registered locally (static dependencies, decorator deps)
+ *
+ * Plugin resources (those with `package` field in DEFAULT_SEMANTICS) are only included
+ * when the corresponding plugin is activated via registration.activatedPlugins.
+ *
+ * Note: A resource can have multiple registration sites (both global AND local).
+ * This function processes ALL sites, so a resource may appear in multiple scopes.
  */
 export function buildResourceGraph(
-  intents: readonly RegistrationIntent[],
+  registration: RegistrationAnalysis,
   baseSemantics?: Semantics,
   defaultScope?: ResourceScopeId | null,
 ): ResourceGraph {
   const semantics = baseSemantics ?? DEFAULT_SEMANTICS;
 
-  // Separate intents by scope
+  // Build set of activated packages from plugins
+  const activatedPackages = new Set<string>();
+  for (const plugin of registration.activatedPlugins) {
+    activatedPackages.add(plugin.package);
+  }
+
+  // Separate sites by scope
   const globalResources = createEmptyCollections();
   const localScopes = new Map<string, { className: string; resources: ResourceCollections }>();
 
-  for (const intent of intents) {
-    if (intent.kind === "global" || intent.kind === "unknown") {
+  for (const site of registration.sites) {
+    // Only process resolved resource references
+    if (site.resourceRef.kind !== "resolved") continue;
+
+    const resource = site.resourceRef.resource;
+
+    if (site.scope.kind === "global") {
       // Add to global scope
-      addToCollections(globalResources, intent.resource);
-    } else if (intent.kind === "local" && intent.scope) {
-      // Add to component-local scope
-      const scopeKey = intent.scope;
+      addToCollections(globalResources, resource);
+    } else {
+      // Local scope - use owner path as scope key
+      const scopeKey = site.scope.owner;
       let scopeData = localScopes.get(scopeKey);
       if (!scopeData) {
-        // Find the component class name from evidence
-        const depEvidence = intent.evidence.find((e) => e.kind === "static-dependencies");
-        const className = depEvidence?.kind === "static-dependencies" ? depEvidence.className : "unknown";
+        // Extract class name from evidence if available
+        const className = extractClassNameFromEvidence(site.evidence);
         scopeData = { className, resources: createEmptyCollections() };
         localScopes.set(scopeKey, scopeData);
       }
-      addToCollections(scopeData.resources, intent.resource);
+      addToCollections(scopeData.resources, resource);
     }
   }
 
-  // Build the graph
-  const baseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
-  const graph = cloneResourceGraph(baseGraph);
+  // Add orphaned resources to global scope
+  // Orphans are declared resources (have decorators, static $au, etc.) that weren't
+  // explicitly registered. They should still be usable in templates - the root
+  // component (my-app) is never registered, for example.
+  for (const orphan of registration.orphans) {
+    addToCollections(globalResources, orphan.resource);
+  }
+
+  // Build the base graph, filtering out plugin resources that aren't activated
+  const fullBaseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
+  const graph = cloneResourceGraphWithFilter(fullBaseGraph, activatedPackages);
 
   // Determine target scope for global resources
   const targetScopeId = defaultScope ?? semantics.defaultScope ?? graph.root;
@@ -216,6 +241,80 @@ function cloneResourceGraph(graph: ResourceGraph): ResourceGraph {
   return { version: graph.version, root: graph.root, scopes };
 }
 
+/**
+ * Clone a ResourceGraph, filtering out plugin resources that aren't activated.
+ *
+ * Resources with a `package` field are only included if their package is in activatedPackages.
+ * Resources without a `package` field (core resources) are always included.
+ */
+function cloneResourceGraphWithFilter(
+  graph: ResourceGraph,
+  activatedPackages: Set<string>,
+): ResourceGraph {
+  const scopes: Record<ResourceScopeId, ResourceScope> = {};
+  for (const [id, scope] of Object.entries(graph.scopes)) {
+    scopes[id as ResourceScopeId] = {
+      id: scope.id,
+      parent: scope.parent,
+      ...(scope.label ? { label: scope.label } : {}),
+      resources: filterPartialResources(scope.resources, activatedPackages),
+    };
+  }
+  return { version: graph.version, root: graph.root, scopes };
+}
+
+/**
+ * Filter resources by activated packages.
+ *
+ * - Resources without `package` field are always included (core resources).
+ * - Resources with `package` field are only included if package is activated.
+ */
+function filterPartialResources(
+  resources: Partial<ResourceCollections> | undefined,
+  activatedPackages: Set<string>,
+): Partial<ResourceCollections> {
+  if (!resources) return {};
+  const filtered: Partial<ResourceCollections> = {};
+
+  if (resources.elements) {
+    const elements: Record<string, ElementRes> = {};
+    for (const [name, el] of Object.entries(resources.elements)) {
+      if (!el.package || activatedPackages.has(el.package)) {
+        elements[name] = el;
+      }
+    }
+    if (Object.keys(elements).length > 0) {
+      filtered.elements = elements;
+    }
+  }
+
+  if (resources.attributes) {
+    const attributes: Record<string, AttrRes> = {};
+    for (const [name, attr] of Object.entries(resources.attributes)) {
+      if (!attr.package || activatedPackages.has(attr.package)) {
+        attributes[name] = attr;
+      }
+    }
+    if (Object.keys(attributes).length > 0) {
+      filtered.attributes = attributes;
+    }
+  }
+
+  // Controllers, value converters, and binding behaviors don't have package field
+  // (they're part of StandardConfiguration which is always assumed "on")
+  if (resources.controllers) {
+    filtered.controllers = { ...resources.controllers };
+  }
+  if (resources.valueConverters) {
+    filtered.valueConverters = { ...resources.valueConverters };
+  }
+  if (resources.bindingBehaviors) {
+    filtered.bindingBehaviors = { ...resources.bindingBehaviors };
+  }
+
+  return filtered;
+}
+
 function clonePartialResources(resources: Partial<ResourceCollections> | undefined): Partial<ResourceCollections> {
   if (!resources) return {};
   const cloned: Partial<ResourceCollections> = {};
@@ -248,4 +347,19 @@ function isResourceOverlayEmpty(resources: Partial<ResourceCollections>): boolea
     !resources.valueConverters &&
     !resources.bindingBehaviors
   );
+}
+
+/**
+ * Extract class name from registration evidence.
+ * Local registration evidence types contain the class name of the registering component.
+ */
+function extractClassNameFromEvidence(evidence: RegistrationEvidence): string {
+  if (
+    evidence.kind === "static-dependencies" ||
+    evidence.kind === "static-au-dependencies" ||
+    evidence.kind === "decorator-dependencies"
+  ) {
+    return evidence.className;
+  }
+  return "unknown";
 }

@@ -1,0 +1,107 @@
+<!--
+  Dashboard Page Template
+
+  Exercises:
+  - t="key" for labels
+  - t with params for welcome message
+  - ${interpolation} for stats
+  - repeat.for for lists
+  - if.bind / else for empty states
+  - Custom elements (status-badge, priority-icon)
+  - load="issue/${id}" for parameterized routes
+-->
+
+<div class="page dashboard-page" data-testid="dashboard">
+  <!-- Welcome message with i18n parameter -->
+  <h2 t="dashboard.welcome" t.params.bind="{name: user.name}"></h2>
+
+  <!-- Stats grid -->
+  <div class="stats-grid" data-testid="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value">${stats.total}</div>
+      <div class="stat-label" t="dashboard.stats.total"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.open}</div>
+      <div class="stat-label" t="dashboard.stats.open"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.inProgress}</div>
+      <div class="stat-label" t="dashboard.stats.inProgress"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.review}</div>
+      <div class="stat-label" t="dashboard.stats.review"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.closed}</div>
+      <div class="stat-label" t="dashboard.stats.closed"></div>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <section class="card" data-testid="recent-activity">
+    <div class="card-header">
+      <h3 class="card-title" t="dashboard.sections.recentActivity"></h3>
+      <a load="issues" class="btn btn-ghost" t="actions.viewAll"></a>
+    </div>
+
+    <!-- Empty state -->
+    <div if.bind="!hasRecentIssues" class="empty-state">
+      <div class="empty-state-icon">📋</div>
+      <p t="dashboard.empty.noActivity"></p>
+    </div>
+
+    <!-- Issue list -->
+    <ul else class="issue-list">
+      <li repeat.for="issue of recentIssues" class="issue-item">
+        <status-badge status.bind="issue.status"></status-badge>
+        <div class="issue-title">
+          <a load="issue/${issue.id}">${issue.title}</a>
+        </div>
+        <priority-icon priority.bind="issue.priority"></priority-icon>
+        <user-avatar if.bind="issue.assignee" user.bind="issue.assignee"></user-avatar>
+      </li>
+    </ul>
+  </section>
+
+  <!-- My Issues -->
+  <section class="card" data-testid="my-issues">
+    <div class="card-header">
+      <h3 class="card-title" t="dashboard.sections.myIssues"></h3>
+    </div>
+
+    <div if.bind="!hasMyIssues" class="empty-state">
+      <div class="empty-state-icon">✨</div>
+      <p t="dashboard.empty.noAssigned"></p>
+    </div>
+
+    <ul else class="issue-list">
+      <li repeat.for="issue of myIssues" class="issue-item">
+        <status-badge status.bind="issue.status"></status-badge>
+        <div class="issue-title">
+          <a load="issue/${issue.id}">${issue.title}</a>
+        </div>
+        <priority-icon priority.bind="issue.priority"></priority-icon>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Critical Issues -->
+  <section if.bind="hasCriticalIssues" class="card" data-testid="critical-issues">
+    <div class="card-header">
+      <h3 class="card-title" t="dashboard.sections.criticalIssues"></h3>
+    </div>
+
+    <ul class="issue-list">
+      <li repeat.for="issue of criticalIssues" class="issue-item">
+        <status-badge status.bind="issue.status"></status-badge>
+        <div class="issue-title">
+          <a load="issue/${issue.id}">${issue.title}</a>
+        </div>
+        <priority-icon priority.bind="issue.priority"></priority-icon>
+        <user-avatar if.bind="issue.assignee" user.bind="issue.assignee"></user-avatar>
+      </li>
+    </ul>
+  </section>
+</div>

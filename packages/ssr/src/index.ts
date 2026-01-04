@@ -89,7 +89,12 @@ export {
 } from "./aot.js";
 
 // Re-export compile functions from compiler for convenience
+// Use `compileAot` for CSR-only builds (no server rendering needed)
+// Use `compileWithAot` when you need instruction translation for SSR
 export {
+  compileAot,
+  type CompileAotOptions,
+  type CompileAotResult,
   lowerDocument,
   resolveHost,
   bindScopes,

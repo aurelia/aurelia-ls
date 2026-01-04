@@ -1,7 +1,20 @@
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { ImportGraph } from "./types.js";
 import { canonicalPath } from "../util/naming.js";
+
+/**
+ * Import graph for tracing registration flow.
+ */
+export interface ImportGraph {
+  /** Get files that import the given file */
+  getImporters(file: NormalizedPath): readonly NormalizedPath[];
+
+  /** Get files imported by the given file */
+  getImports(file: NormalizedPath): readonly NormalizedPath[];
+
+  /** Get all known files in the graph */
+  getAllFiles(): readonly NormalizedPath[];
+}
 
 /**
  * Build an import graph from a TypeScript program.

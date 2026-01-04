@@ -1,4 +1,5 @@
 import ts from "typescript";
+import type { TextSpan } from "@aurelia-ls/compiler";
 import type { RegistrationCallFact, RegistrationArgFact } from "./types.js";
 
 /**
@@ -39,7 +40,7 @@ function tryExtractRegisterCall(
   const receiver = classifyReceiver(call.expression.expression);
   if (receiver === null) return null;
 
-  const args = extractRegisterArgs(call.arguments);
+  const args = extractRegisterArgs(call.arguments, sf);
   const { line, character } = sf.getLineAndCharacterOfPosition(call.getStart());
 
   return {
@@ -85,43 +86,86 @@ function classifyReceiver(expr: ts.Expression): "Aurelia" | "container" | "unkno
   return "unknown";
 }
 
-function extractRegisterArgs(args: ts.NodeArray<ts.Expression>): RegistrationArgFact[] {
+function extractRegisterArgs(
+  args: ts.NodeArray<ts.Expression>,
+  sf: ts.SourceFile,
+): RegistrationArgFact[] {
   const results: RegistrationArgFact[] = [];
 
   for (const arg of args) {
-    results.push(extractSingleArg(arg));
+    results.push(extractSingleArg(arg, sf));
   }
 
   return results;
 }
 
-function extractSingleArg(expr: ts.Expression): RegistrationArgFact {
+/**
+ * Get a TextSpan from a TypeScript AST node.
+ * Uses getStart() to skip leading trivia (whitespace, comments).
+ */
+function nodeSpan(node: ts.Node, sf: ts.SourceFile): TextSpan {
+  return {
+    start: node.getStart(sf),
+    end: node.getEnd(),
+  };
+}
+
+function extractSingleArg(expr: ts.Expression, sf: ts.SourceFile): RegistrationArgFact {
+  const span = nodeSpan(expr, sf);
+
   // Identifier: MyElement
   if (ts.isIdentifier(expr)) {
-    return { kind: "identifier", name: expr.text };
+    return { kind: "identifier", name: expr.text, span };
   }
 
   // Spread: ...resources
   if (ts.isSpreadElement(expr)) {
     if (ts.isIdentifier(expr.expression)) {
-      return { kind: "spread", name: expr.expression.text };
+      return { kind: "spread", name: expr.expression.text, span };
     }
-    return { kind: "unknown" };
+    return { kind: "unknown", span };
   }
 
   // Array literal: [A, B, C]
   if (ts.isArrayLiteralExpression(expr)) {
     const elements: RegistrationArgFact[] = [];
     for (const el of expr.elements) {
-      elements.push(extractSingleArg(el));
+      elements.push(extractSingleArg(el, sf));
     }
-    return { kind: "arrayLiteral", elements };
+    return { kind: "arrayLiteral", elements, span };
   }
 
-  // TODO: Handle more complex patterns:
-  // - Property access: SomeModule.SomeElement
-  // - Call expressions: StandardConfiguration, RouterConfiguration.customize({...})
-  // - Object literals for config
+  // Property access: namespace.Member (e.g., widgets.SpecialWidget)
+  if (ts.isPropertyAccessExpression(expr)) {
+    if (ts.isIdentifier(expr.expression) && ts.isIdentifier(expr.name)) {
+      return {
+        kind: "memberAccess",
+        namespace: expr.expression.text,
+        member: expr.name.text,
+        span,
+      };
+    }
+    // More complex chains (a.b.c) - not yet supported
+    return { kind: "unknown", span };
+  }
 
-  return { kind: "unknown" };
+  // Call expression: X.customize(...) pattern for plugins
+  if (ts.isCallExpression(expr)) {
+    // Check for X.method() pattern
+    if (ts.isPropertyAccessExpression(expr.expression)) {
+      const propAccess = expr.expression;
+      if (ts.isIdentifier(propAccess.expression) && ts.isIdentifier(propAccess.name)) {
+        return {
+          kind: "callExpression",
+          receiver: propAccess.expression.text,
+          method: propAccess.name.text,
+          span,
+        };
+      }
+    }
+    // Direct function call like someFunc() - can't analyze statically
+    return { kind: "unknown", span };
+  }
+
+  return { kind: "unknown", span };
 }

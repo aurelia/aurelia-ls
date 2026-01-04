@@ -1,6 +1,8 @@
 export { extractAllFacts, extractSourceFacts } from "./extractor.js";
+export type { ExtractionOptions } from "./extractor.js";
 export { extractClassFacts } from "./class-extractor.js";
 export { extractRegistrationCalls } from "./registrations.js";
+export { resolveImports } from "./import-resolver.js";
 
 export type {
   SourceFacts,
@@ -21,4 +23,5 @@ export type {
   ImportedName,
   ExportFact,
   ExportedName,
+  SiblingFileFact,
 } from "./types.js";

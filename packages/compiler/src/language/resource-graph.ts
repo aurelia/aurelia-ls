@@ -41,21 +41,21 @@ export interface ScopedResources {
  * requested scope and applying overrides.
  *
  * - When no graph is provided, fall back to the semantics.resources as-is.
- * - The base semantics.resources act as the implicit root payload; scopes only
- *   need to specify overrides/additions.
+ * - When a graph is provided, it's authoritative: the graph's root scope
+ *   contains the properly filtered base resources (e.g., plugin resources
+ *   are only included when the corresponding plugin is activated).
  */
 export function materializeResourcesForScope(
   sem: Semantics,
   graph?: ResourceGraph | null,
   scope?: ResourceScopeId | null,
 ): ScopedResources {
-  // Base: implicit root (semantics.resources)
-  let acc = cloneResources(sem.resources);
-
   if (graph) {
-    // Root overlay from graph (if provided)
+    // When graph is provided, it's authoritative (includes package-filtered resources)
     const rootScope = graph.scopes[graph.root];
-    acc = applyOverlay(acc, rootScope?.resources);
+    let acc = rootScope?.resources
+      ? partialToFull(rootScope.resources)
+      : cloneResources(sem.resources);
 
     // Local overlay: only the requested scope (no ancestor walk)
     const targetScope = scope ?? graph.root;
@@ -66,7 +66,22 @@ export function materializeResourcesForScope(
     return { scope: scope ?? null, resources: acc };
   }
 
-  return { scope: scope ?? null, resources: acc };
+  // No graph: use semantics resources as-is
+  return { scope: scope ?? null, resources: cloneResources(sem.resources) };
+}
+
+/**
+ * Convert partial resources (from a scope overlay) to full resources.
+ * Missing categories become empty objects.
+ */
+function partialToFull(partial: Partial<ResourceCollections>): ResourceCollections {
+  return {
+    elements: { ...partial.elements },
+    attributes: { ...partial.attributes },
+    controllers: { ...partial.controllers },
+    valueConverters: { ...partial.valueConverters },
+    bindingBehaviors: { ...partial.bindingBehaviors },
+  };
 }
 
 /**

@@ -75,3 +75,17 @@ export function canonicalAliases(values: readonly string[]): string[] {
 export function canonicalPath(fileName: string): NormalizedPath {
   return normalizePathForId(fileName);
 }
+
+/**
+ * Check if two names are "kind of same" (match ignoring hyphens).
+ * Used for convention matching where class name may differ in casing from file name.
+ *
+ * Examples:
+ * - isKindOfSame("cortex-devices", "CortexDevices") → true
+ * - isKindOfSame("my-app", "MyApp") → true
+ * - isKindOfSame("foo", "bar") → false
+ */
+export function isKindOfSame(name1: string, name2: string): boolean {
+  const normalize = (s: string) => s.toLowerCase().replace(/-/g, "");
+  return normalize(name1) === normalize(name2);
+}

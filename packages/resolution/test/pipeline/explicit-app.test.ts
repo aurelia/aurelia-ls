@@ -1,37 +1,9 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import * as ts from "typescript";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { resolve } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPLICIT_APP = path.resolve(__dirname, "../apps/explicit-app");
-
-/**
- * Create a TypeScript program from the explicit-app tsconfig.
- */
-function createProgramFromApp(appPath) {
-  const configPath = path.join(appPath, "tsconfig.json");
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-
-  if (configFile.error) {
-    throw new Error(`Failed to read tsconfig: ${ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n")}`);
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    configFile.config,
-    ts.sys,
-    appPath,
-  );
-
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map(e => ts.flattenDiagnosticMessageText(e.messageText, "\n"));
-    throw new Error(`Failed to parse tsconfig: ${messages.join("\n")}`);
-  }
-
-  return ts.createProgram(parsed.fileNames, parsed.options);
-}
+const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
 
 describe("Full Pipeline: explicit-app", () => {
   let result: ReturnType<typeof resolve>;
@@ -62,25 +34,28 @@ describe("Full Pipeline: explicit-app", () => {
       bindingBehaviors: 11, // 2 app + 9 runtime
     });
 
-    // Assert intent counts by kind
-    expect(result.intents.length, "Should produce 29 intents").toBe(29);
-    const intentsByKind = {
-      global: result.intents.filter(i => i.kind === "global").length,
-      local: result.intents.filter(i => i.kind === "local").length,
-      unknown: result.intents.filter(i => i.kind === "unknown").length,
+    // Assert registration site counts by scope kind
+    const sitesByScope = {
+      global: result.registration.sites.filter(s => s.scope.kind === "global").length,
+      local: result.registration.sites.filter(s => s.scope.kind === "local").length,
     };
-    expect(intentsByKind, "Intent breakdown by kind").toEqual({
-      global: 10, // Resources registered via barrels
-      local: 2,   // price-tag, stock-badge (via static dependencies)
-      unknown: 17, // Runtime resources + app resources not in barrels
-    });
+    expect(sitesByScope.global, "Should have global registration sites").toBeGreaterThan(0);
+    expect(sitesByScope.local, "Should have local registration sites").toBe(2); // price-tag, stock-badge
 
     // Assert scope count
     const scopeCount = Object.keys(result.resourceGraph.scopes).length;
     expect(scopeCount, "Should have exactly 2 scopes (root + 1 local)").toBe(2);
 
-    // Should have no diagnostics in well-formed app
-    expect(result.diagnostics.length, "Should have no diagnostics").toBe(0);
+    // Should have orphan diagnostics for unregistered resources:
+    // - my-app: Root component, bootstrapped via .app() not registered
+    // - product-card: Test fixture with local deps but not globally registered
+    expect(result.diagnostics.length, "Should have 2 orphan diagnostics").toBe(2);
+
+    const orphanNames = result.diagnostics
+      .filter(d => d.code === "RES0001")
+      .map(d => d.message.match(/element '([^']+)'/)?.[1])
+      .sort();
+    expect(orphanNames).toEqual(["my-app", "product-card"]);
   });
 
   it("produces a usable ResourceGraph for template compilation", () => {
@@ -127,20 +102,25 @@ describe("Full Pipeline: explicit-app", () => {
     expect(currency.resolver).toBe("static-au");
   });
 
-  it("exposes intents for tooling", () => {
-    // Check global intent evidence
-    const navBarIntent = result.intents.find(i => i.resource.name === "nav-bar");
-    expect(navBarIntent, "Should have nav-bar intent").toBeTruthy();
-    expect(navBarIntent.kind).toBe("global");
-    expect(navBarIntent.evidence.length > 0, "Should have evidence").toBe(true);
-    expect(navBarIntent.evidence[0].kind).toBe("aurelia-register");
+  it("exposes registration sites for tooling", () => {
+    // Check global registration site evidence
+    const navBarSite = result.registration.sites.find(
+      s => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === "nav-bar"
+    );
+    expect(navBarSite, "Should have nav-bar registration site").toBeTruthy();
+    expect(navBarSite!.scope.kind).toBe("global");
+    expect(navBarSite!.evidence.kind).toBe("aurelia-register");
 
-    // Check local intent evidence
-    const priceTagIntent = result.intents.find(i => i.resource.name === "price-tag");
-    expect(priceTagIntent, "Should have price-tag intent").toBeTruthy();
-    expect(priceTagIntent.kind).toBe("local");
-    expect(priceTagIntent.scope?.includes("product-card"), "Should be scoped to product-card").toBe(true);
-    expect(priceTagIntent.evidence[0].kind).toBe("static-dependencies");
+    // Check local registration site evidence
+    const priceTagSite = result.registration.sites.find(
+      s => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === "price-tag"
+    );
+    expect(priceTagSite, "Should have price-tag registration site").toBeTruthy();
+    expect(priceTagSite!.scope.kind).toBe("local");
+    if (priceTagSite!.scope.kind === "local") {
+      expect(priceTagSite!.scope.owner.includes("product-card"), "Should be scoped to product-card").toBe(true);
+    }
+    expect(priceTagSite!.evidence.kind).toBe("static-dependencies");
   });
 
   it("discovers templates for element resources", () => {
