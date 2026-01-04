@@ -1,9 +1,10 @@
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { debug } from "@aurelia-ls/compiler";
-import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact } from "./types.js";
+import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact, TemplateImportFact } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";
+import { extractTemplateImports } from "./template-imports.js";
 import { canonicalPath } from "../util/naming.js";
 import type { FileSystemContext } from "../project/context.js";
 
@@ -131,7 +132,44 @@ export function extractSourceFacts(
   // Detect sibling files if FileSystemContext is provided
   const siblingFiles = detectSiblingFiles(sf.fileName, options);
 
-  return { path, classes, registrationCalls, imports, exports, siblingFiles };
+  // Extract template imports from sibling HTML template
+  const templateImports = extractSiblingTemplateImports(siblingFiles, options);
+
+  return { path, classes, registrationCalls, imports, exports, siblingFiles, templateImports };
+}
+
+/**
+ * Extract template imports from a sibling HTML template.
+ *
+ * Finds the sibling .html file (if any) and extracts <import>/<require> elements.
+ */
+function extractSiblingTemplateImports(
+  siblingFiles: SiblingFileFact[],
+  options?: ExtractionOptions,
+): readonly TemplateImportFact[] {
+  if (!options?.fileSystem) {
+    return [];
+  }
+
+  // Find the sibling HTML template
+  const templateExtensions = options.templateExtensions ?? [".html"];
+  const templateSibling = siblingFiles.find((s) =>
+    templateExtensions.includes(s.extension.toLowerCase())
+  );
+
+  if (!templateSibling) {
+    return [];
+  }
+
+  // Extract imports from the template
+  const imports = extractTemplateImports(templateSibling.path, options.fileSystem);
+
+  debug.resolution("extraction.templateImports", {
+    templatePath: templateSibling.path,
+    importCount: imports.length,
+  });
+
+  return imports;
 }
 
 /**

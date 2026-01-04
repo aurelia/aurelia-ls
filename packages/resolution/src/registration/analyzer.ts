@@ -1,5 +1,5 @@
-import { toSourceFileId, type NormalizedPath, type SourceSpan } from "@aurelia-ls/compiler";
-import type { SourceFacts, DependencyRef, ClassFacts, RegistrationCallFact, RegistrationArgFact, ImportFact } from "../extraction/types.js";
+import { toSourceFileId, type NormalizedPath, type SourceSpan, type TextSpan } from "@aurelia-ls/compiler";
+import type { SourceFacts, DependencyRef, ClassFacts, RegistrationCallFact, RegistrationArgFact, ImportFact, TemplateImportFact } from "../extraction/types.js";
 import type { ResourceCandidate } from "../inference/types.js";
 import type { ExportBindingMap } from "../binding/types.js";
 import { lookupExportBinding } from "../binding/export-resolver.js";
@@ -176,6 +176,35 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
     }
   }
 
+  // 1.5. Find template import registration sites (from <import>/<require> in sibling templates)
+  for (const [filePath, fileFacts] of context.facts) {
+    if (fileFacts.templateImports.length === 0) continue;
+
+    // Find all element candidates from this source file
+    const elementCandidates = context.candidates.filter(
+      (c) => c.source === filePath && c.kind === "element"
+    );
+
+    // Find the sibling template file path (for evidence)
+    const templateFile = fileFacts.siblingFiles.find((s) => s.extension === ".html")?.path ?? filePath;
+
+    for (const candidate of elementCandidates) {
+      const templateSites = findTemplateImportSites(
+        fileFacts.templateImports,
+        filePath,
+        candidate.className,
+        templateFile,
+        context,
+      );
+      for (const site of templateSites) {
+        sites.push(site);
+        if (site.resourceRef.kind === "resolved") {
+          registeredCandidates.add(site.resourceRef.resource);
+        }
+      }
+    }
+  }
+
   // 2. Find all global registration sites (Aurelia.register, container.register)
   for (const [filePath, fileFacts] of context.facts) {
     for (const call of fileFacts.registrationCalls) {
@@ -274,6 +303,124 @@ function findLocalRegistrationSites(
   }
 
   return sites;
+}
+
+/**
+ * Find registration sites from template imports.
+ *
+ * Template imports in <import from="..."> create local scope registrations,
+ * similar to static dependencies in the component class.
+ */
+function findTemplateImportSites(
+  templateImports: readonly TemplateImportFact[],
+  componentPath: NormalizedPath,
+  className: string,
+  templateFile: NormalizedPath,
+  context: AnalysisContext,
+): RegistrationSite[] {
+  const sites: RegistrationSite[] = [];
+  const scope: RegistrationScope = { kind: "local", owner: componentPath };
+
+  for (const imp of templateImports) {
+    const site = createSiteFromTemplateImport(
+      imp,
+      scope,
+      {
+        kind: "template-import",
+        component: componentPath,
+        className,
+        templateFile,
+      },
+      templateFile,
+      context,
+    );
+    sites.push(site);
+  }
+
+  return sites;
+}
+
+/**
+ * Create a RegistrationSite from a template import.
+ */
+function createSiteFromTemplateImport(
+  imp: TemplateImportFact,
+  scope: RegistrationScope,
+  evidence: RegistrationEvidence,
+  templateFile: NormalizedPath,
+  context: AnalysisContext,
+): RegistrationSite {
+  const resourceRef = resolveTemplateImportRef(imp, context);
+  const span = importToSourceSpan(imp.span, templateFile);
+
+  return {
+    resourceRef,
+    scope,
+    evidence,
+    span,
+  };
+}
+
+/**
+ * Resolve a template import to a ResourceRef.
+ *
+ * Template imports can resolve to multiple resources from a single module.
+ * For now, we create one site per import element (matching runtime behavior).
+ *
+ * Future: Handle named aliases to resolve specific exports.
+ */
+function resolveTemplateImportRef(
+  imp: TemplateImportFact,
+  context: AnalysisContext,
+): ResourceRef {
+  // If we don't have a resolved path, module resolution failed
+  if (!imp.resolvedPath) {
+    return {
+      kind: "unresolved",
+      name: imp.moduleSpecifier,
+      reason: `Could not resolve module '${imp.moduleSpecifier}'`,
+    };
+  }
+
+  // For now, we treat the import as resolving to the module itself
+  // (all exports from that module become available in the template)
+  // This matches Aurelia runtime behavior where <import from="./foo">
+  // makes all resources from ./foo available.
+
+  // If we have a default alias, try to find a candidate with that name
+  if (imp.defaultAlias) {
+    const candidate = context.findCandidateByResolvedPath(imp.resolvedPath, imp.defaultAlias);
+    if (candidate) {
+      return { kind: "resolved", resource: candidate };
+    }
+  }
+
+  // Try to find any candidate exported from this module
+  // (First element candidate we find - this is a simplification)
+  for (const candidate of context.candidates) {
+    if (candidate.source === imp.resolvedPath) {
+      return { kind: "resolved", resource: candidate };
+    }
+  }
+
+  // No candidate found in the imported module
+  return {
+    kind: "unresolved",
+    name: imp.moduleSpecifier,
+    reason: `No resources found in '${imp.moduleSpecifier}'`,
+  };
+}
+
+/**
+ * Convert a template import span to a SourceSpan.
+ */
+function importToSourceSpan(span: TextSpan, templateFile: NormalizedPath): SourceSpan {
+  const file = toSourceFileId(templateFile);
+  return {
+    file,
+    start: span.start,
+    end: span.end,
+  };
 }
 
 /**

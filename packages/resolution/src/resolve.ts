@@ -291,6 +291,7 @@ function getFileFromEvidence(evidence: RegistrationEvidence): NormalizedPath {
     case "static-dependencies":
     case "decorator-dependencies":
     case "static-au-dependencies":
+    case "template-import":
       return evidence.component;
   }
 }

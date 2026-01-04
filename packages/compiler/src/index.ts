@@ -153,6 +153,10 @@ export {
   checkTypeCompatibility,
   DEFAULT_TYPECHECK_CONFIG,
   TYPECHECK_PRESETS,
+  // Meta element extraction (for resolution package)
+  extractMeta,
+  extractTemplateMeta,
+  stripMetaFromHtml,
 } from "./analysis/index.js";
 export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {

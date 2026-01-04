@@ -671,3 +671,33 @@ export function stripMetaFromHtml(html: string, removeRanges: Array<[number, num
 
   return result;
 }
+
+// =============================================================================
+// Convenience API
+// =============================================================================
+
+import { parseFragment } from "parse5";
+import { resolveSourceFile } from "../../model/source.js";
+
+/**
+ * Extract template meta from HTML string.
+ *
+ * Convenience function that handles parse5 parsing internally.
+ * Use this when you only need the meta elements, not the full DOM tree.
+ *
+ * @param html - HTML template content
+ * @param filePath - Path to the template file (for provenance)
+ * @returns Extracted template meta with full provenance
+ *
+ * @example
+ * ```typescript
+ * const meta = extractTemplateMeta('<import from="./foo"><div></div>', '/app/my.html');
+ * console.log(meta.imports[0].from.value); // "./foo"
+ * ```
+ */
+export function extractTemplateMeta(html: string, filePath: string): TemplateMetaIR {
+  const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
+  const source = resolveSourceFile(filePath);
+  const { meta } = extractMeta(p5, source, html);
+  return meta;
+}
