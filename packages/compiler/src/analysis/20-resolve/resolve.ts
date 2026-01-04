@@ -243,7 +243,14 @@ function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
     return { target: row.target, node: nodeSem, instructions: linkedInstrs };
   });
 
-  return { dom: t.dom, rows, name: t.name! };
+  const result: LinkedTemplate = { dom: t.dom, rows, name: t.name! };
+
+  // Carry template meta through for AOT emission
+  if (t.templateMeta) {
+    result.templateMeta = t.templateMeta;
+  }
+
+  return result;
 }
 
 /* ============================================================================

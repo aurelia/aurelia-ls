@@ -8,6 +8,7 @@ import type {
   SourceSpan,
   TemplateIR,
   TemplateNode,
+  TemplateMetaIR,
   BindingMode,
   BindingSourceIR,
   ExprRef,
@@ -85,6 +86,12 @@ export interface LinkedTemplate {
   dom: TemplateNode;
   rows: LinkedRow[];
   name?: string;
+  /**
+   * Extracted meta elements (<import>, <bindable>, etc.).
+   * Only present on root templates (not nested TC templates).
+   * Carried through from TemplateIR for AOT emission.
+   */
+  templateMeta?: TemplateMetaIR;
 }
 
 export interface LinkedRow {

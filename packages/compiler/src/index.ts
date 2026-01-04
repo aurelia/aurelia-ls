@@ -119,6 +119,7 @@ export type {
   SerializedIteratorBinding,
   SerializedAuxBinding,
   SerializedLetBinding,
+  SerializedBindable,
   PlanNode,
   PlanElementNode,
   PlanTextNode,

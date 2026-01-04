@@ -28,6 +28,7 @@ import type {
   SerializedHydrateLetElement,
   SerializedLetBinding,
   SerializedExpression,
+  SerializedBindable,
   AotMappingEntry,
   PlanNode,
   PlanElementNode,
@@ -39,7 +40,7 @@ import type {
   PlanController,
 } from "./types.js";
 import { INSTRUCTION_TYPE, BINDING_MODE, type BindingModeValue } from "./constants.js";
-import type { ExprId, BindingMode } from "../../model/index.js";
+import type { ExprId, BindingMode, TemplateMetaIR } from "../../model/index.js";
 
 /* =============================================================================
  * Public API
@@ -97,7 +98,7 @@ export function emitAotCode(
     const ctx = new EmitContext(plan, options);
 
     trace.event("aot.emit.definition");
-    let definition = ctx.emitDefinition(plan.root, options.name ?? "template");
+    let definition = ctx.emitDefinition(plan.root, options.name ?? "template", plan.templateMeta);
     let expressions = ctx.getExpressions();
 
     // Apply expression deduplication if requested
@@ -163,19 +164,26 @@ class EmitContext {
   /**
    * Emit a definition for a template subtree.
    */
-  emitDefinition(root: PlanNode, name: string): SerializedDefinition {
+  emitDefinition(root: PlanNode, name: string, templateMeta?: TemplateMetaIR): SerializedDefinition {
     const instructions: SerializedInstruction[][] = [];
     const nestedTemplates: SerializedDefinition[] = [];
 
     // Walk the tree and collect instructions by target index
     this.emitNode(root, instructions, nestedTemplates);
 
-    return {
+    const result: SerializedDefinition = {
       name,
       instructions,
       nestedTemplates,
       targetCount: instructions.length,
     };
+
+    // Emit meta element properties
+    if (templateMeta) {
+      emitMetaProperties(result, templateMeta);
+    }
+
+    return result;
   }
 
   /**
@@ -1023,5 +1031,65 @@ function remapInstructionExprIds(
 
     default:
       return inst;
+  }
+}
+
+/* =============================================================================
+ * Meta Element Emission
+ * -----------------------------------------------------------------------------
+ * Converts TemplateMetaIR to SerializedDefinition properties.
+ * ============================================================================= */
+
+/**
+ * Emit meta element properties into the serialized definition.
+ * Mutates the result in place.
+ */
+function emitMetaProperties(result: SerializedDefinition, meta: TemplateMetaIR): void {
+  // Shadow DOM options
+  if (meta.shadowDom) {
+    result.shadowOptions = { mode: meta.shadowDom.mode.value };
+  }
+
+  // Containerless
+  if (meta.containerless) {
+    result.containerless = true;
+  }
+
+  // Capture (custom attributes only)
+  if (meta.capture) {
+    result.capture = true;
+  }
+
+  // Aliases
+  if (meta.aliases.length > 0) {
+    const aliasNames: string[] = [];
+    for (const alias of meta.aliases) {
+      for (const name of alias.names) {
+        aliasNames.push(name.value);
+      }
+    }
+    if (aliasNames.length > 0) {
+      result.aliases = aliasNames;
+    }
+  }
+
+  // Bindables
+  if (meta.bindables.length > 0) {
+    const bindables: SerializedBindable[] = meta.bindables.map(b => {
+      const serialized: SerializedBindable = { name: b.name.value };
+      if (b.mode) {
+        serialized.mode = b.mode.value;
+      }
+      if (b.attribute) {
+        serialized.attribute = b.attribute.value;
+      }
+      return serialized;
+    });
+    result.bindables = bindables;
+  }
+
+  // hasSlot
+  if (meta.hasSlot) {
+    result.hasSlot = true;
   }
 }

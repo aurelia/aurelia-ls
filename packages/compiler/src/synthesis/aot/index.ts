@@ -62,6 +62,7 @@ export type {
   SerializedHydrateTemplateController,
   SerializedHydrateLetElement,
   SerializedLetBinding,
+  SerializedBindable,
   AotMappingEntry,
 } from "./types.js";
 
