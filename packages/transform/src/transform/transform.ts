@@ -17,8 +17,10 @@ import type {
   TransformResult,
   TransformWarning,
   TransformMeta,
+  TemplateImport,
 } from "./types.js";
 import { TransformError, TransformErrorCode } from "./types.js";
+import { insert } from "../ts/edit.js";
 
 /* =============================================================================
  * PUBLIC API
@@ -47,6 +49,7 @@ export function transform(options: TransformOptions): TransformResult {
     resource,
     template,
     nestedHtmlTree = [],
+    templateImports = [],
     indent = "  ",
     removeDecorators = true,
     includeComments = true,
@@ -101,7 +104,7 @@ export function transform(options: TransformOptions): TransformResult {
     // Extract dependencies from decorator config
     trace.event("transform.extractDeps");
     const extractedDeps = extractDependencies(source, classInfo);
-    const dependencies = extractedDeps.map(dep => {
+    const decoratorDependencies = extractedDeps.map(dep => {
       if (dep.type === "identifier") {
         return dep.name;
       } else {
@@ -110,15 +113,24 @@ export function transform(options: TransformOptions): TransformResult {
       }
     });
 
+    // Process template imports
+    trace.event("transform.processTemplateImports");
+    const templateImportResult = processTemplateImports(templateImports, resource.className);
+
+    // Merge dependencies: decorator deps first, then template import deps
+    const dependencies = [...decoratorDependencies, ...templateImportResult.dependencyEntries];
+
     // Extract bindables from @bindable property decorators
     const bindables = extractBindables(source, classInfo);
     trace.setAttributes({
       "transform.dependencyCount": dependencies.length,
+      "transform.templateImportCount": templateImports.length,
       "transform.bindableCount": bindables.length,
     });
 
     debug.transform("extracted", {
       dependencies: dependencies.length,
+      templateImports: templateImports.length,
       bindables: bindables.length,
     });
 
@@ -188,8 +200,20 @@ export function transform(options: TransformOptions): TransformResult {
     trace.event("transform.cleanupImports");
     const importCleanupResult = generateImportCleanupEdits(source, unusedImports);
 
+    // Generate template import statement edits
+    const templateImportEdits = generateTemplateImportEdits(templateImportResult);
+
+    // Add template import warnings
+    if (templateImportResult.importStatements.length > 0) {
+      warnings.push({
+        code: "TRANSFORM_INFO",
+        message: `Added ${templateImportResult.importStatements.length} template import(s)`,
+        file: filePath,
+      });
+    }
+
     // Combine all edits
-    const allEdits = [...injectionResult.edits, ...importCleanupResult.edits];
+    const allEdits = [...templateImportEdits, ...injectionResult.edits, ...importCleanupResult.edits];
 
     // Add import cleanup warnings
     if (importCleanupResult.removedSpecifiers.length > 0) {
@@ -275,4 +299,110 @@ function getResourceType(resource: ResourceDefinition): TransformMeta["resourceT
     case "binding-behavior":
       return "binding-behavior";
   }
+}
+
+/* =============================================================================
+ * TEMPLATE IMPORT PROCESSING
+ * ============================================================================= */
+
+/**
+ * Result of processing template imports.
+ */
+interface TemplateImportProcessResult {
+  /** Generated import statements to add at top of file */
+  importStatements: string[];
+
+  /**
+   * Dependency entries to add to dependencies array.
+   * Each entry is a string expression (e.g., "__dep0" or "aliasedResourcesRegistry(__dep0, 'bar')").
+   */
+  dependencyEntries: string[];
+
+  /** Whether aliasedResourcesRegistry is needed */
+  needsAliasedRegistry: boolean;
+}
+
+/**
+ * Process template imports to generate import statements and dependency entries.
+ *
+ * For each template import:
+ * - Generates `import * as __dep{n} from './path'`
+ * - Generates dependency entry based on aliases:
+ *   - No alias: `__dep{n}` (all exports)
+ *   - Default alias: `aliasedResourcesRegistry(__dep{n}, 'alias')`
+ *   - Named aliases: `aliasedResourcesRegistry(__dep{n}.Export, 'alias')`
+ *
+ * @param templateImports - Template imports from HTML template
+ * @param prefix - Prefix for variable names (usually class name in camelCase)
+ */
+function processTemplateImports(
+  templateImports: TemplateImport[],
+  prefix: string
+): TemplateImportProcessResult {
+  const importStatements: string[] = [];
+  const dependencyEntries: string[] = [];
+  let needsAliasedRegistry = false;
+
+  // Use a short prefix for dependency variables
+  const depPrefix = `__${prefix.charAt(0).toLowerCase()}${prefix.slice(1)}_dep`;
+
+  for (let i = 0; i < templateImports.length; i++) {
+    const imp = templateImports[i]!;
+    const depVar = `${depPrefix}${i}`;
+
+    // Generate import statement
+    const moduleSpec = imp.moduleSpecifier;
+    importStatements.push(`import * as ${depVar} from "${moduleSpec}";`);
+
+    // Generate dependency entries based on aliases
+    const hasDefaultAlias = imp.defaultAlias != null && imp.defaultAlias.length > 0;
+    const hasNamedAliases = imp.namedAliases != null && imp.namedAliases.length > 0;
+
+    if (!hasDefaultAlias && !hasNamedAliases) {
+      // Simple import: all exports from module
+      dependencyEntries.push(depVar);
+    } else if (hasDefaultAlias && !hasNamedAliases) {
+      // Default alias: rename the entire module import
+      needsAliasedRegistry = true;
+      dependencyEntries.push(`aliasedResourcesRegistry(${depVar}, "${imp.defaultAlias}")`);
+    } else if (hasNamedAliases) {
+      // Named aliases: rename specific exports
+      needsAliasedRegistry = true;
+      for (const alias of imp.namedAliases!) {
+        dependencyEntries.push(
+          `aliasedResourcesRegistry(${depVar}.${alias.exportName}, "${alias.alias}")`
+        );
+      }
+    }
+  }
+
+  return { importStatements, dependencyEntries, needsAliasedRegistry };
+}
+
+/**
+ * Generate edits to insert template import statements.
+ *
+ * Inserts import statements at the very beginning of the file.
+ * If aliasedResourcesRegistry is needed, also adds the import for it.
+ */
+function generateTemplateImportEdits(
+  result: TemplateImportProcessResult
+): ReturnType<typeof insert>[] {
+  if (result.importStatements.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = [];
+
+  // Add aliasedResourcesRegistry import if needed
+  if (result.needsAliasedRegistry) {
+    lines.push(`import { aliasedResourcesRegistry } from "@aurelia/kernel";`);
+  }
+
+  // Add all template import statements
+  lines.push(...result.importStatements);
+  lines.push(""); // Empty line after imports
+
+  // Insert at the beginning of the file
+  return [insert(0, lines.join("\n"))];
 }
