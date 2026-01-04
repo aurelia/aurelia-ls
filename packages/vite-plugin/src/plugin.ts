@@ -22,7 +22,7 @@
 
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { normalizePathForId, debug, type CompileTrace } from "@aurelia-ls/compiler";
 import {
   transform,
@@ -84,6 +84,7 @@ function transformComponent(
   resolutionContext: ResolutionContext,
   config: ResolvedConfig,
   trace?: CompileTrace,
+  dumpPath?: string | false,
 ): { code: string; map: null } | null {
   try {
     // Read the template HTML
@@ -133,6 +134,18 @@ function transformComponent(
       );
     }
 
+    // Dump artifacts if enabled
+    if (dumpPath) {
+      dumpCompilationArtifacts(
+        dumpPath,
+        templateInfo,
+        templateHtml,
+        aot,
+        result,
+        config,
+      );
+    }
+
     return {
       code: result.code,
       // TODO: Add source map support when transform package implements it
@@ -145,6 +158,77 @@ function transformComponent(
     );
     // Return original code on error to allow fallback to runtime behavior
     return null;
+  }
+}
+
+/**
+ * Dump compilation artifacts to disk for debugging.
+ *
+ * Creates a directory structure with:
+ * - {component}/input.html - Original template
+ * - {component}/plan.json - AOT plan (intermediate representation)
+ * - {component}/instructions.json - Compiled instructions
+ * - {component}/output.html - Template with hydration markers
+ * - {component}/output.ts - Transformed TypeScript with $au
+ */
+function dumpCompilationArtifacts(
+  basePath: string,
+  templateInfo: TemplateInfo,
+  inputHtml: string,
+  aot: ReturnType<typeof compileWithAot>,
+  result: ReturnType<typeof transform>,
+  config: ResolvedConfig,
+): void {
+  try {
+    // Create component-specific directory using class name
+    const componentDir = join(basePath, templateInfo.className);
+    mkdirSync(componentDir, { recursive: true });
+
+    // 1. Original template HTML
+    writeFileSync(join(componentDir, "input.html"), inputHtml, "utf-8");
+
+    // 2. AOT Plan (intermediate representation)
+    writeFileSync(
+      join(componentDir, "plan.json"),
+      JSON.stringify(aot.raw.plan, null, 2),
+      "utf-8",
+    );
+
+    // 3. Compiled instructions (serialized format)
+    writeFileSync(
+      join(componentDir, "instructions.json"),
+      JSON.stringify(aot.raw.codeResult, null, 2),
+      "utf-8",
+    );
+
+    // 4. Template with hydration markers
+    writeFileSync(join(componentDir, "output.html"), aot.template, "utf-8");
+
+    // 5. Transformed TypeScript
+    writeFileSync(join(componentDir, "output.ts"), result.code, "utf-8");
+
+    // 6. Metadata summary
+    const meta = {
+      className: templateInfo.className,
+      resourceName: templateInfo.resourceName,
+      componentPath: templateInfo.componentPath,
+      templatePath: templateInfo.templatePath,
+      scopeId: templateInfo.scopeId,
+      expressionCount: result.meta.expressionCount,
+      instructionRowCount: result.meta.instructionRowCount,
+      targetCount: aot.targetCount,
+      warnings: result.warnings,
+    };
+    writeFileSync(
+      join(componentDir, "meta.json"),
+      JSON.stringify(meta, null, 2),
+      "utf-8",
+    );
+
+    config.logger.info(`[aurelia-ssr] Dumped artifacts: ${componentDir}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    config.logger.warn(`[aurelia-ssr] Failed to dump artifacts: ${errorMessage}`);
   }
 }
 
@@ -231,6 +315,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
   let traceOptions: ResolvedTraceOptions;
   let buildTrace: ManagedTrace | null = null;
   let ssrEnabled = false; // Whether SSR middleware should be registered
+  let dumpArtifactsPath: string | false = false; // Path to dump compilation artifacts
 
   /**
    * Pre-plugin: Rewrites .html imports to virtual files in production builds.
@@ -350,6 +435,19 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       traceOptions = resolveTraceOptions(options.debug?.trace, config.root);
       if (traceOptions.enabled) {
         config.logger.info(`[aurelia-ssr] Tracing enabled (output: ${traceOptions.output})`);
+      }
+
+      // Resolve dumpArtifacts option (from debug.dumpArtifacts)
+      const dumpArtifactsOpt = options.debug?.dumpArtifacts;
+      if (dumpArtifactsOpt === true) {
+        dumpArtifactsPath = resolve(config.root, ".aurelia-artifacts");
+      } else if (typeof dumpArtifactsOpt === "string") {
+        dumpArtifactsPath = resolve(config.root, dumpArtifactsOpt);
+      } else {
+        dumpArtifactsPath = false;
+      }
+      if (dumpArtifactsPath) {
+        config.logger.info(`[aurelia-ssr] Artifact dumping enabled: ${dumpArtifactsPath}`);
       }
 
       // Resolve register module path (relative to project root)
@@ -563,7 +661,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
 
       // If this is an Aurelia component with external template, transform it
       if (templateInfo) {
-        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig, trace);
+        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig, trace, dumpArtifactsPath);
       }
 
       // Check if this is an entry point file (contains Aurelia initialization)
