@@ -18,7 +18,7 @@ import type {
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
-import type { LinkedRow, NodeSem, ExprTableEntry, SourceSpan, LinkedInstruction } from "@aurelia-ls/compiler";
+import type { LinkedRow, NodeSem, ExprTableEntry, SourceSpan, LinkedInstruction, TemplateMetaIR } from "@aurelia-ls/compiler";
 import type { DOMNode, ElementNode } from "@aurelia-ls/compiler";
 
 /* ===========================
@@ -1203,6 +1203,221 @@ function emitDelimiterTokensFromInterp(
 }
 
 /* ===========================
+ * Meta Element Token Extraction
+ * =========================== */
+
+/**
+ * Extract semantic tokens from template meta elements.
+ * Meta elements are <import>, <require>, <bindable>, <use-shadow-dom>,
+ * <containerless>, <capture>, and <alias>.
+ *
+ * Token types:
+ * - Tag names (import, bindable, etc.) → keyword
+ * - Module specifier values → namespace (module reference)
+ * - Alias values → variable (local name declaration)
+ * - Property names (name, mode, attribute) → property
+ */
+export function extractMetaElementTokens(
+  text: string,
+  meta: TemplateMetaIR | undefined,
+): RawToken[] {
+  if (!meta) return [];
+
+  const tokens: RawToken[] = [];
+
+  // Process <import> and <require> elements
+  for (const imp of meta.imports) {
+    // Tag name (import/require) → keyword
+    if (imp.tagLoc && imp.tagLoc.start < imp.tagLoc.end) {
+      const { line, char } = offsetToLineChar(text, imp.tagLoc.start);
+      tokens.push({
+        line,
+        char,
+        length: imp.tagLoc.end - imp.tagLoc.start,
+        type: TokenType.keyword,
+        modifiers: TokenModifier.defaultLibrary,
+      });
+    }
+
+    // Module specifier (from="./path") → namespace (module reference)
+    if (imp.from.loc && imp.from.loc.start < imp.from.loc.end) {
+      const { line, char } = offsetToLineChar(text, imp.from.loc.start);
+      tokens.push({
+        line,
+        char,
+        length: imp.from.loc.end - imp.from.loc.start,
+        type: TokenType.namespace,
+        modifiers: 0,
+      });
+    }
+
+    // Default alias (as="bar") → variable (declaration)
+    if (imp.defaultAlias?.loc && imp.defaultAlias.loc.start < imp.defaultAlias.loc.end) {
+      const { line, char } = offsetToLineChar(text, imp.defaultAlias.loc.start);
+      tokens.push({
+        line,
+        char,
+        length: imp.defaultAlias.loc.end - imp.defaultAlias.loc.start,
+        type: TokenType.variable,
+        modifiers: TokenModifier.declaration,
+      });
+    }
+
+    // Named aliases (X.as="y")
+    for (const na of imp.namedAliases) {
+      // Export name (X) → namespace (reference to exported symbol)
+      if (na.exportName.loc && na.exportName.loc.start < na.exportName.loc.end) {
+        const { line, char } = offsetToLineChar(text, na.exportName.loc.start);
+        tokens.push({
+          line,
+          char,
+          length: na.exportName.loc.end - na.exportName.loc.start,
+          type: TokenType.namespace,
+          modifiers: 0,
+        });
+      }
+
+      // Alias (y) → variable (declaration)
+      if (na.alias.loc && na.alias.loc.start < na.alias.loc.end) {
+        const { line, char } = offsetToLineChar(text, na.alias.loc.start);
+        tokens.push({
+          line,
+          char,
+          length: na.alias.loc.end - na.alias.loc.start,
+          type: TokenType.variable,
+          modifiers: TokenModifier.declaration,
+        });
+      }
+    }
+  }
+
+  // Process <bindable> elements
+  for (const bindable of meta.bindables) {
+    // Tag name → keyword
+    if (bindable.tagLoc && bindable.tagLoc.start < bindable.tagLoc.end) {
+      const { line, char } = offsetToLineChar(text, bindable.tagLoc.start);
+      tokens.push({
+        line,
+        char,
+        length: bindable.tagLoc.end - bindable.tagLoc.start,
+        type: TokenType.keyword,
+        modifiers: TokenModifier.defaultLibrary,
+      });
+    }
+
+    // Property name (name="value") → property
+    if (bindable.name.loc && bindable.name.loc.start < bindable.name.loc.end) {
+      const { line, char } = offsetToLineChar(text, bindable.name.loc.start);
+      tokens.push({
+        line,
+        char,
+        length: bindable.name.loc.end - bindable.name.loc.start,
+        type: TokenType.property,
+        modifiers: TokenModifier.declaration,
+      });
+    }
+
+    // Mode value → keyword
+    if (bindable.mode?.loc && bindable.mode.loc.start < bindable.mode.loc.end) {
+      const { line, char } = offsetToLineChar(text, bindable.mode.loc.start);
+      tokens.push({
+        line,
+        char,
+        length: bindable.mode.loc.end - bindable.mode.loc.start,
+        type: TokenType.keyword,
+        modifiers: 0,
+      });
+    }
+
+    // Attribute alias → property
+    if (bindable.attribute?.loc && bindable.attribute.loc.start < bindable.attribute.loc.end) {
+      const { line, char } = offsetToLineChar(text, bindable.attribute.loc.start);
+      tokens.push({
+        line,
+        char,
+        length: bindable.attribute.loc.end - bindable.attribute.loc.start,
+        type: TokenType.property,
+        modifiers: 0,
+      });
+    }
+  }
+
+  // Process <use-shadow-dom>
+  if (meta.shadowDom) {
+    // Tag name → keyword
+    if (meta.shadowDom.tagLoc && meta.shadowDom.tagLoc.start < meta.shadowDom.tagLoc.end) {
+      const { line, char } = offsetToLineChar(text, meta.shadowDom.tagLoc.start);
+      tokens.push({
+        line,
+        char,
+        length: meta.shadowDom.tagLoc.end - meta.shadowDom.tagLoc.start,
+        type: TokenType.keyword,
+        modifiers: TokenModifier.defaultLibrary,
+      });
+    }
+  }
+
+  // Process <containerless>
+  if (meta.containerless) {
+    if (meta.containerless.tagLoc && meta.containerless.tagLoc.start < meta.containerless.tagLoc.end) {
+      const { line, char } = offsetToLineChar(text, meta.containerless.tagLoc.start);
+      tokens.push({
+        line,
+        char,
+        length: meta.containerless.tagLoc.end - meta.containerless.tagLoc.start,
+        type: TokenType.keyword,
+        modifiers: TokenModifier.defaultLibrary,
+      });
+    }
+  }
+
+  // Process <capture>
+  if (meta.capture) {
+    if (meta.capture.tagLoc && meta.capture.tagLoc.start < meta.capture.tagLoc.end) {
+      const { line, char } = offsetToLineChar(text, meta.capture.tagLoc.start);
+      tokens.push({
+        line,
+        char,
+        length: meta.capture.tagLoc.end - meta.capture.tagLoc.start,
+        type: TokenType.keyword,
+        modifiers: TokenModifier.defaultLibrary,
+      });
+    }
+  }
+
+  // Process <alias>
+  for (const alias of meta.aliases) {
+    // Tag name → keyword
+    if (alias.tagLoc && alias.tagLoc.start < alias.tagLoc.end) {
+      const { line, char } = offsetToLineChar(text, alias.tagLoc.start);
+      tokens.push({
+        line,
+        char,
+        length: alias.tagLoc.end - alias.tagLoc.start,
+        type: TokenType.keyword,
+        modifiers: TokenModifier.defaultLibrary,
+      });
+    }
+
+    // Each alias name → variable (declaration)
+    for (const name of alias.names) {
+      if (name.loc && name.loc.start < name.loc.end) {
+        const { line, char } = offsetToLineChar(text, name.loc.start);
+        tokens.push({
+          line,
+          char,
+          length: name.loc.end - name.loc.start,
+          type: TokenType.variable,
+          modifiers: TokenModifier.declaration,
+        });
+      }
+    }
+  }
+
+  return tokens;
+}
+
+/* ===========================
  * Handler
  * =========================== */
 
@@ -1253,8 +1468,11 @@ export function handleSemanticTokensFull(
       // Extract interpolation delimiter tokens (${ and })
       const delimiterTokens = extractInterpolationDelimiterTokens(text, template.rows);
 
+      // Extract meta element tokens (<import>, <bindable>, etc.)
+      const metaTokens = extractMetaElementTokens(text, template.templateMeta);
+
       // Merge all tokens
-      const tokens = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens];
+      const tokens = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens, ...metaTokens];
 
       if (tokens.length === 0) {
         return null;
@@ -1265,6 +1483,7 @@ export function handleSemanticTokensFull(
         "lsp.semanticTokens.elementCount": elementTokens.length,
         "lsp.semanticTokens.exprCount": exprTokens.length,
         "lsp.semanticTokens.commandCount": commandTokens.length,
+        "lsp.semanticTokens.metaCount": metaTokens.length,
       });
 
       const encoded = encodeTokens(tokens);

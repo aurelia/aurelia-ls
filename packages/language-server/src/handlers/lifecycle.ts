@@ -13,11 +13,12 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import path from "node:path";
 import { canonicalDocumentUri, deriveTemplatePaths } from "@aurelia-ls/compiler";
+import { DiagnosticSeverity } from "vscode-languageserver/node.js";
 import { AureliaProjectIndex } from "../services/project-index.js";
 import { TemplateWorkspace } from "../services/template-workspace.js";
 import type { ServerContext } from "../context.js";
 import { mapDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
-import { SEMANTIC_TOKENS_LEGEND } from "./features.js";
+import { SEMANTIC_TOKENS_LEGEND, validateTemplateImports } from "./features.js";
 
 /** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
 const DOCUMENT_CHANGE_DEBOUNCE_MS = 300;
@@ -88,7 +89,18 @@ export async function refreshDocument(
 
     const diagnostics = ctx.workspace.languageService.getDiagnostics(canonical.uri);
     const lspDiagnostics = mapDiagnostics(diagnostics, lookupText);
-    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
+
+    // Add template import diagnostics
+    const templateImportDiags = validateTemplateImports(ctx, doc, canonical.path);
+    const importDiagsLsp = templateImportDiags.map((diag) => ({
+      range: diag.range,
+      message: diag.message,
+      severity: diag.severity === "error" ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+      code: diag.code,
+      source: "aurelia",
+    }));
+
+    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: [...lspDiagnostics, ...importDiagsLsp] });
 
     const compilation = ctx.workspace.program.getCompilation(canonical.uri);
     await ctx.connection.sendNotification("aurelia/overlayReady", {
