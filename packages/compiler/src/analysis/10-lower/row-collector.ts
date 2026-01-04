@@ -25,7 +25,10 @@ export function collectRows(
         const tag = n.nodeName.toLowerCase();
 
         // Skip meta elements (they're extracted separately)
+        // But process their children - parse5 may have nested content inside them
         if (skipTags?.has(tag)) {
+          // Recursively process children
+          collectRows(n, ids, attrParser, table, nestedTemplates, rows, sem, skipTags);
           continue;
         }
 

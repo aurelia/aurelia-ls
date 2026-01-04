@@ -48,7 +48,10 @@ export function buildDomChildren(
         const tag = n.nodeName.toLowerCase();
 
         // Skip meta elements (they're extracted separately)
+        // But adopt their children - parse5 may have nested content inside them
         if (skipTags?.has(tag)) {
+          // Recursively process children and add to output
+          out.push(...buildDomChildren(n, ids, file, idMap, skipTags));
           continue;
         }
 
