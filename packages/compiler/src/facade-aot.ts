@@ -13,7 +13,7 @@
 import { lowerDocument, resolveHost, bindScopes } from "./analysis/index.js";
 import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
 import { getExpressionParser, DEFAULT_SYNTAX } from "./parsing/index.js";
-import { DEFAULT as DEFAULT_SEMANTICS, type Semantics, type ResourceGraph, type ResourceScopeId } from "./language/index.js";
+import { DEFAULT as DEFAULT_SEMANTICS, type Semantics, type ResourceGraph, type ResourceScopeId, type LocalImportDef } from "./language/index.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "./shared/index.js";
 import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";
 
@@ -32,6 +32,13 @@ export interface CompileAotOptions {
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
   resourceScope?: ResourceScopeId | null;
+  /**
+   * Local imports from template `<import>` elements.
+   *
+   * These are resolved as local element definitions for this template,
+   * allowing resolution of elements imported via `<import from="./foo">`.
+   */
+  localImports?: LocalImportDef[];
   /**
    * Strip source location spans from expression ASTs.
    * Reduces output size for production builds.
@@ -134,9 +141,13 @@ export function compileAot(
       trace,
     });
 
-    // Build resolve options for resource graph support
-    const resolveOpts = options.resourceGraph
-      ? { graph: options.resourceGraph, scope: options.resourceScope ?? null }
+    // Build resolve options for resource graph and local imports
+    const resolveOpts = options.resourceGraph || options.localImports
+      ? {
+          graph: options.resourceGraph ?? null,
+          scope: options.resourceScope ?? null,
+          localImports: options.localImports,
+        }
       : undefined;
 
     const linked = resolveHost(ir, semantics, { ...resolveOpts, trace });

@@ -33,7 +33,7 @@ export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing
 
 // === Language / Semantics ===
 export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
-export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources } from "./language/index.js";
+export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources, SemanticsLookupOptions, LocalImportDef } from "./language/index.js";
 
 // Resource definitions (for resolution package and external tooling)
 export type {
