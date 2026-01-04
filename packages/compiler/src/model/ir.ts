@@ -853,9 +853,7 @@ export interface AliasMetaIR extends MetaElementBase {
  * Makes the component containerless (no wrapper element in DOM).
  * Maps to `containerless: true` in CustomElementDefinition.
  */
-export interface ContainerlessMetaIR extends MetaElementBase {
-  // No additional properties — provenance in base is sufficient
-}
+export type ContainerlessMetaIR = MetaElementBase;
 
 /**
  * <capture>
@@ -863,9 +861,7 @@ export interface ContainerlessMetaIR extends MetaElementBase {
  * Enables capture mode for custom attributes.
  * Maps to `capture: true` in CustomAttributeDefinition.
  */
-export interface CaptureMetaIR extends MetaElementBase {
-  // No additional properties — provenance in base is sufficient
-}
+export type CaptureMetaIR = MetaElementBase;
 
 /**
  * All meta elements extracted from a template.

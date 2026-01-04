@@ -18,12 +18,13 @@ import type {
   ContainerlessMetaIR,
   ImportMetaIR,
   Located,
+  MetaElementBase,
   ShadowDomMetaIR,
   SourceSpan,
   TemplateMetaIR,
 } from "../../model/ir.js";
 import type { SourceFile } from "../../model/source.js";
-import { toSpan, type P5Element, type P5Loc, type P5Node } from "./lower-shared.js";
+import { toSpan, type P5Element } from "./lower-shared.js";
 import { META_ELEMENT_TAGS } from "./dom-builder.js";
 
 type P5DocumentFragment = DefaultTreeAdapterMap["documentFragment"];
@@ -107,15 +108,17 @@ export function extractMeta(
       // Extract based on tag type
       switch (tag) {
         case "import":
-        case "require":
-          const imp = extractImport(node, tag as "import" | "require", source, sourceText);
+        case "require": {
+          const imp = extractImport(node, tag, source, sourceText);
           if (imp) imports.push(imp);
           break;
+        }
 
-        case "bindable":
+        case "bindable": {
           const bind = extractBindable(node, source, sourceText);
           if (bind) bindables.push(bind);
           break;
+        }
 
         case "use-shadow-dom":
           shadowDom = extractShadowDom(node, source, sourceText);
@@ -129,10 +132,11 @@ export function extractMeta(
           capture = extractFlag(node, source, sourceText);
           break;
 
-        case "alias":
+        case "alias": {
           const al = extractAlias(node, source, sourceText);
           if (al) aliases.push(al);
           break;
+        }
       }
     }
   });
@@ -322,7 +326,7 @@ function extractFlag(
   el: P5Element,
   source: SourceFile,
   sourceText: string
-): ContainerlessMetaIR | CaptureMetaIR {
+): MetaElementBase {
   const loc = el.sourceCodeLocation as ElementLocation | undefined;
   const tag = el.tagName.toLowerCase();
 
@@ -369,7 +373,7 @@ function extractTemplateMetaAttrs(
 
     switch (attrName) {
       case "use-shadow-dom": {
-        const modeValue = (attr.value === "closed" ? "closed" : "open") as "open" | "closed";
+        const modeValue = attr.value === "closed" ? "closed" : "open";
         callbacks.onShadowDom({
           mode: { value: modeValue, loc: attrSpan },
           elementLoc: attrSpan,
@@ -537,7 +541,7 @@ function extractNamedAliasExportSpan(
   el: P5Element,
   attrName: string,
   source: SourceFile,
-  sourceText: string
+  _sourceText: string
 ): SourceSpan {
   const loc = el.sourceCodeLocation as ElementLocation | undefined;
   const attrLoc = loc?.attrs?.[attrName];
