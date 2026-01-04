@@ -9,9 +9,10 @@
 
 import {
   extractTemplateMeta,
+  toSourceFileId,
   type NormalizedPath,
   type ImportMetaIR,
-  type TextSpan,
+  type SourceSpan,
 } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "../project/context.js";
 import type { TemplateImportFact, NamedAlias } from "./types.js";
@@ -37,17 +38,21 @@ export function extractTemplateImports(
   const meta = extractTemplateMeta(content, templatePath);
 
   // Convert ImportMetaIR to TemplateImportFact
-  return meta.imports.map((imp) => convertImportMeta(imp));
+  return meta.imports.map((imp) => convertImportMeta(imp, templatePath));
 }
 
 /**
  * Convert ImportMetaIR from the compiler to TemplateImportFact.
+ *
+ * Preserves source spans as SourceSpan (with file) rather than downgrading to TextSpan.
  */
-function convertImportMeta(imp: ImportMetaIR): TemplateImportFact {
+function convertImportMeta(imp: ImportMetaIR, templatePath: NormalizedPath): TemplateImportFact {
   const namedAliases: NamedAlias[] = imp.namedAliases.map((na) => ({
     exportName: na.exportName.value,
     alias: na.alias.value,
   }));
+
+  const file = toSourceFileId(templatePath);
 
   return {
     moduleSpecifier: imp.from.value,
@@ -55,10 +60,12 @@ function convertImportMeta(imp: ImportMetaIR): TemplateImportFact {
     defaultAlias: imp.defaultAlias?.value ?? null,
     namedAliases,
     span: {
+      file,
       start: imp.elementLoc.start,
       end: imp.elementLoc.end,
     },
     moduleSpecifierSpan: {
+      file,
       start: imp.from.loc.start,
       end: imp.from.loc.end,
     },

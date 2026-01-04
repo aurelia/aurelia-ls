@@ -1,4 +1,4 @@
-import { toSourceFileId, type NormalizedPath, type SourceSpan, type TextSpan } from "@aurelia-ls/compiler";
+import { toSourceFileId, type NormalizedPath, type SourceSpan } from "@aurelia-ls/compiler";
 import type { SourceFacts, DependencyRef, ClassFacts, RegistrationCallFact, RegistrationArgFact, ImportFact, TemplateImportFact } from "../extraction/types.js";
 import type { ResourceCandidate } from "../inference/types.js";
 import type { ExportBindingMap } from "../binding/types.js";
@@ -310,6 +310,11 @@ function findLocalRegistrationSites(
  *
  * Template imports in <import from="..."> create local scope registrations,
  * similar to static dependencies in the component class.
+ *
+ * Handles three cases:
+ * 1. Named aliases: `<import from="./x" Foo.as="f">` → one site per alias
+ * 2. Default alias: `<import from="./x" as="y">` → one site for the aliased default
+ * 3. Plain import: `<import from="./x">` → one site for all module exports
  */
 function findTemplateImportSites(
   templateImports: readonly TemplateImportFact[],
@@ -322,18 +327,29 @@ function findTemplateImportSites(
   const scope: RegistrationScope = { kind: "local", owner: componentPath };
 
   for (const imp of templateImports) {
-    const site = createSiteFromTemplateImport(
-      imp,
-      scope,
-      {
-        kind: "template-import",
-        component: componentPath,
-        className,
-        templateFile,
-      },
+    const evidence: RegistrationEvidence = {
+      kind: "template-import",
+      component: componentPath,
+      className,
       templateFile,
-      context,
-    );
+    };
+
+    // Case 1: Named aliases - create one site per alias
+    if (imp.namedAliases.length > 0) {
+      for (const alias of imp.namedAliases) {
+        const resourceRef = resolveNamedAliasImport(imp, alias.exportName, context);
+        sites.push({
+          resourceRef,
+          scope,
+          evidence,
+          span: imp.span,
+        });
+      }
+      continue;
+    }
+
+    // Case 2 & 3: Default alias or plain import - single site
+    const site = createSiteFromTemplateImport(imp, scope, evidence, templateFile, context);
     sites.push(site);
   }
 
@@ -347,27 +363,58 @@ function createSiteFromTemplateImport(
   imp: TemplateImportFact,
   scope: RegistrationScope,
   evidence: RegistrationEvidence,
-  templateFile: NormalizedPath,
+  _templateFile: NormalizedPath,
   context: AnalysisContext,
 ): RegistrationSite {
   const resourceRef = resolveTemplateImportRef(imp, context);
-  const span = importToSourceSpan(imp.span, templateFile);
 
   return {
     resourceRef,
     scope,
     evidence,
-    span,
+    span: imp.span, // Already a SourceSpan, no conversion needed
+  };
+}
+
+/**
+ * Resolve a named alias import to a ResourceRef.
+ *
+ * For `<import from="./x" Foo.as="f">`, looks up the export `Foo` from module `./x`.
+ */
+function resolveNamedAliasImport(
+  imp: TemplateImportFact,
+  exportName: string,
+  context: AnalysisContext,
+): ResourceRef {
+  if (!imp.resolvedPath) {
+    return {
+      kind: "unresolved",
+      name: imp.moduleSpecifier,
+      reason: `Could not resolve module '${imp.moduleSpecifier}'`,
+    };
+  }
+
+  // Look up the specific export by name
+  const candidate = context.findCandidateByResolvedPath(imp.resolvedPath, exportName);
+  if (candidate) {
+    return { kind: "resolved", resource: candidate };
+  }
+
+  return {
+    kind: "unresolved",
+    name: exportName,
+    reason: `Export '${exportName}' not found in '${imp.moduleSpecifier}'`,
   };
 }
 
 /**
  * Resolve a template import to a ResourceRef.
  *
- * Template imports can resolve to multiple resources from a single module.
- * For now, we create one site per import element (matching runtime behavior).
+ * Handles two cases:
+ * 1. Default alias: `<import from="./x" as="y">` → look up by alias name
+ * 2. Plain import: `<import from="./x">` → look up any exported resource
  *
- * Future: Handle named aliases to resolve specific exports.
+ * Named aliases are handled separately by resolveNamedAliasImport.
  */
 function resolveTemplateImportRef(
   imp: TemplateImportFact,
@@ -382,11 +429,6 @@ function resolveTemplateImportRef(
     };
   }
 
-  // For now, we treat the import as resolving to the module itself
-  // (all exports from that module become available in the template)
-  // This matches Aurelia runtime behavior where <import from="./foo">
-  // makes all resources from ./foo available.
-
   // If we have a default alias, try to find a candidate with that name
   if (imp.defaultAlias) {
     const candidate = context.findCandidateByResolvedPath(imp.resolvedPath, imp.defaultAlias);
@@ -395,8 +437,9 @@ function resolveTemplateImportRef(
     }
   }
 
-  // Try to find any candidate exported from this module
-  // (First element candidate we find - this is a simplification)
+  // Plain import: find any candidate exported from this module
+  // This matches Aurelia runtime behavior where <import from="./foo">
+  // makes all resources from ./foo available.
   for (const candidate of context.candidates) {
     if (candidate.source === imp.resolvedPath) {
       return { kind: "resolved", resource: candidate };
@@ -411,17 +454,6 @@ function resolveTemplateImportRef(
   };
 }
 
-/**
- * Convert a template import span to a SourceSpan.
- */
-function importToSourceSpan(span: TextSpan, templateFile: NormalizedPath): SourceSpan {
-  const file = toSourceFileId(templateFile);
-  return {
-    file,
-    start: span.start,
-    end: span.end,
-  };
-}
 
 /**
  * Create a RegistrationSite from a DependencyRef.

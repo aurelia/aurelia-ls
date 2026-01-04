@@ -1,4 +1,4 @@
-import type { NormalizedPath, BindingMode, TextSpan } from "@aurelia-ls/compiler";
+import type { NormalizedPath, BindingMode, SourceSpan, TextSpan } from "@aurelia-ls/compiler";
 
 // Re-export BindingMode for consumers of this module
 export type { BindingMode };
@@ -220,13 +220,13 @@ export interface TemplateImportFact {
    * Source span of the import element in the template.
    * For provenance - diagnostics, navigation.
    */
-  readonly span: TextSpan;
+  readonly span: SourceSpan;
 
   /**
    * Source span of the `from` attribute value.
    * For go-to-definition on the module specifier.
    */
-  readonly moduleSpecifierSpan: TextSpan;
+  readonly moduleSpecifierSpan: SourceSpan;
 }
 
 /**
