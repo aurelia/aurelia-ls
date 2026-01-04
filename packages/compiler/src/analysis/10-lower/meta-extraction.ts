@@ -24,12 +24,10 @@ import type {
 } from "../../model/ir.js";
 import type { SourceFile } from "../../model/source.js";
 import { toSpan, type P5Element, type P5Loc, type P5Node } from "./lower-shared.js";
+import { META_ELEMENT_TAGS } from "./dom-builder.js";
 
 type P5DocumentFragment = DefaultTreeAdapterMap["documentFragment"];
 type ElementLocation = Token.ElementLocation;
-
-/** Meta element tag names we recognize */
-const META_TAGS = new Set(["import", "require", "bindable", "use-shadow-dom", "containerless", "capture", "alias"]);
 
 /** Attribute-based meta on <template> element */
 const TEMPLATE_META_ATTRS = new Set(["use-shadow-dom", "containerless", "capture", "alias", "bindable"]);
@@ -94,7 +92,7 @@ export function extractMeta(
     }
 
     // Handle meta element tags
-    if (META_TAGS.has(tag ?? "")) {
+    if (META_ELEMENT_TAGS.has(tag ?? "")) {
       const loc = node.sourceCodeLocation as ElementLocation | undefined;
       if (!loc) return;
 
@@ -124,11 +122,11 @@ export function extractMeta(
           break;
 
         case "containerless":
-          containerless = extractFlag(node, source);
+          containerless = extractFlag(node, source, sourceText);
           break;
 
         case "capture":
-          capture = extractFlag(node, source);
+          capture = extractFlag(node, source, sourceText);
           break;
 
         case "alias":
@@ -322,14 +320,15 @@ function extractAlias(
 
 function extractFlag(
   el: P5Element,
-  source: SourceFile
+  source: SourceFile,
+  sourceText: string
 ): ContainerlessMetaIR | CaptureMetaIR {
   const loc = el.sourceCodeLocation as ElementLocation | undefined;
   const tag = el.tagName.toLowerCase();
 
   return {
     elementLoc: getElementSpan(loc, source),
-    tagLoc: getTagNameSpan(loc, tag, source, el.parentNode ? "" : ""),
+    tagLoc: getTagNameSpan(loc, tag, source, sourceText),
   };
 }
 
