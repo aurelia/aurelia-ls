@@ -15,13 +15,20 @@ export function collectRows(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[],
-  sem: Semantics
+  sem: Semantics,
+  skipTags?: Set<string>
 ): void {
   ids.withinChildren(() => {
     const kids = p.childNodes ?? [];
     for (const n of kids) {
       if (isElement(n)) {
         const tag = n.nodeName.toLowerCase();
+
+        // Skip meta elements (they're extracted separately)
+        if (skipTags?.has(tag)) {
+          continue;
+        }
+
         const target = ids.nextElement();
 
         if (tag === "template" && findAttr(n, "as-custom-element")) {
@@ -55,11 +62,12 @@ export function collectRows(
                 table,
                 nestedTemplates,
                 rows,
-                sem
+                sem,
+                skipTags
               );
             }
           } else {
-            collectRows(n, ids, attrParser, table, nestedTemplates, rows, sem);
+            collectRows(n, ids, attrParser, table, nestedTemplates, rows, sem, skipTags);
           }
         }
         ids.exitElement();

@@ -4,18 +4,30 @@ import type { DomIdAllocator } from "./lower-shared.js";
 import { isComment, isElement, isText, toSpan } from "./lower-shared.js";
 import type { SourceFile } from "../../model/source.js";
 
+/** Meta element tags to skip during DOM building */
+export const META_ELEMENT_TAGS = new Set([
+  "import",
+  "require",
+  "bindable",
+  "use-shadow-dom",
+  "containerless",
+  "capture",
+  "alias",
+]);
+
 export function buildDomRoot(
   rootLike: { childNodes?: P5Node[] },
   ids: DomIdAllocator,
   file: SourceFile,
   idMap?: WeakMap<P5Node, NodeId>,
+  skipTags?: Set<string>,
 ): TemplateNode {
   return {
     kind: "template",
     id: ids.current(),
     ns: "html",
     attrs: [],
-    children: buildDomChildren(rootLike, ids, file, idMap),
+    children: buildDomChildren(rootLike, ids, file, idMap, skipTags),
     loc: null,
   };
 }
@@ -25,6 +37,7 @@ export function buildDomChildren(
   ids: DomIdAllocator,
   file: SourceFile,
   idMap?: WeakMap<P5Node, NodeId>,
+  skipTags?: Set<string>,
 ): DOMNode[] {
   return ids.withinChildren(() => {
     const out: DOMNode[] = [];
@@ -32,6 +45,13 @@ export function buildDomChildren(
 
     for (const n of kids) {
       if (isElement(n)) {
+        const tag = n.nodeName.toLowerCase();
+
+        // Skip meta elements (they're extracted separately)
+        if (skipTags?.has(tag)) {
+          continue;
+        }
+
         const id = ids.nextElement();
         idMap?.set(n, id);
 
@@ -42,7 +62,7 @@ export function buildDomChildren(
             id,
             ns: toNs(n),
             attrs: mapStaticAttrs(n),
-            children: buildDomChildren(t.content, ids, file, idMap),
+            children: buildDomChildren(t.content, ids, file, idMap, skipTags),
             loc: toSpan(n.sourceCodeLocation, file),
           });
         } else {
@@ -50,9 +70,9 @@ export function buildDomChildren(
             kind: "element",
             id,
             ns: toNs(n),
-            tag: n.nodeName.toLowerCase(),
+            tag,
             attrs: mapStaticAttrs(n),
-            children: buildDomChildren(n, ids, file, idMap),
+            children: buildDomChildren(n, ids, file, idMap, skipTags),
             selfClosed: false,
             loc: toSpan(n.sourceCodeLocation, file),
           });

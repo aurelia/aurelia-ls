@@ -387,7 +387,15 @@ export interface TemplateIR {
   dom: TemplateNode; // root with children = top-level nodes
   rows: InstructionRow[];
   name?: string;
-  meta?: Record<string, unknown>;
+  /**
+   * Extracted meta elements (<import>, <bindable>, etc.).
+   * Only present on root templates (not nested TC templates).
+   * These elements are stripped from `dom` but preserved here for:
+   * - AOT code generation
+   * - LSP features
+   * - Refactoring
+   */
+  templateMeta?: TemplateMetaIR;
 }
 
 /* ===========================
@@ -741,3 +749,144 @@ export type ExprTableEntry =
   | ExprTableEntry_T<'Interpolation', Interpolation>
   | ExprTableEntry_T<'IsIterator', ForOfStatement | BadExpression>
   | ExprTableEntry_T<'IsCustom', CustomExpression>;
+
+/* ===========================================
+ * Template Meta Elements
+ * -------------------------------------------
+ * HTML-based component configuration:
+ * <import>, <require>, <bindable>, <use-shadow-dom>,
+ * <containerless>, <capture>, <alias>
+ *
+ * These elements are stripped from output but need
+ * full provenance for LSP features and refactoring.
+ * =========================================== */
+
+/**
+ * Source-located value — the fundamental provenance unit.
+ * Every piece of syntax that could be navigated to, hovered,
+ * diagnosed, renamed, or refactored needs its own span.
+ */
+export interface Located<T> {
+  value: T;
+  loc: SourceSpan;
+}
+
+/**
+ * Base interface for all meta elements.
+ * Every meta element needs element-level and tag-level provenance
+ * for refactoring actions like "move to TypeScript definition".
+ */
+export interface MetaElementBase {
+  /** Full element span (start tag through end tag, or self-closing tag) */
+  elementLoc: SourceSpan;
+  /** Just the tag name span (e.g., "import" within <import>) */
+  tagLoc: SourceSpan;
+}
+
+/**
+ * <import from="./path"> or <require from="./path">
+ *
+ * Declares a local dependency for the component.
+ * Maps to `dependencies[]` in CustomElementDefinition.
+ *
+ * Forms:
+ * - `<import from="./foo">` — import all exports
+ * - `<import from="./foo" as="bar">` — alias default export
+ * - `<import from="./foo" Baz.as="qux">` — alias named export
+ */
+export interface ImportMetaIR extends MetaElementBase {
+  /** 'import' or 'require' (require is legacy alias) */
+  kind: 'import' | 'require';
+  /** Module specifier from `from="..."` attribute */
+  from: Located<string>;
+  /** Default export alias from `as="..."` attribute */
+  defaultAlias: Located<string> | null;
+  /** Named export aliases from `X.as="Y"` attributes */
+  namedAliases: Array<{
+    /** The export name (X in X.as="Y") */
+    exportName: Located<string>;
+    /** The alias (Y in X.as="Y") */
+    alias: Located<string>;
+  }>;
+}
+
+/**
+ * <bindable name="value" mode="two-way" attribute="value">
+ *
+ * Declares a bindable property for the component.
+ * Maps to `bindables[]` in CustomElementDefinition.
+ */
+export interface BindableMetaIR extends MetaElementBase {
+  /** Property name (required) */
+  name: Located<string>;
+  /** Binding mode: one-time, one-way, to-view, from-view, two-way */
+  mode: Located<string> | null;
+  /** HTML attribute name if different from property name */
+  attribute: Located<string> | null;
+}
+
+/**
+ * <use-shadow-dom> or <use-shadow-dom mode="open|closed">
+ *
+ * Enables shadow DOM for the component.
+ * Maps to `shadowOptions` in CustomElementDefinition.
+ */
+export interface ShadowDomMetaIR extends MetaElementBase {
+  /** Shadow DOM mode: 'open' (default) or 'closed' */
+  mode: Located<'open' | 'closed'>;
+}
+
+/**
+ * <alias name="foo"> or <alias name="foo, bar">
+ *
+ * Declares alternative names for the component.
+ * Maps to `aliases[]` in CustomElementDefinition.
+ */
+export interface AliasMetaIR extends MetaElementBase {
+  /** Alias names (may be comma-separated in source, stored individually) */
+  names: Located<string>[];
+}
+
+/**
+ * <containerless>
+ *
+ * Makes the component containerless (no wrapper element in DOM).
+ * Maps to `containerless: true` in CustomElementDefinition.
+ */
+export interface ContainerlessMetaIR extends MetaElementBase {
+  // No additional properties — provenance in base is sufficient
+}
+
+/**
+ * <capture>
+ *
+ * Enables capture mode for custom attributes.
+ * Maps to `capture: true` in CustomAttributeDefinition.
+ */
+export interface CaptureMetaIR extends MetaElementBase {
+  // No additional properties — provenance in base is sufficient
+}
+
+/**
+ * All meta elements extracted from a template.
+ * Stripped from output HTML but preserved in IR for:
+ * - AOT code generation (dependencies, definition properties)
+ * - LSP features (semantic tokens, navigation, hover, diagnostics)
+ * - Refactoring (move to TypeScript, project-wide transforms)
+ */
+export interface TemplateMetaIR {
+  /** <import> and <require> elements */
+  imports: ImportMetaIR[];
+  /** <bindable> elements */
+  bindables: BindableMetaIR[];
+  /** <use-shadow-dom> element (at most one) */
+  shadowDom: ShadowDomMetaIR | null;
+  /** <alias> elements */
+  aliases: AliasMetaIR[];
+  /** <containerless> element (at most one) */
+  containerless: ContainerlessMetaIR | null;
+  /** <capture> element (at most one) */
+  capture: CaptureMetaIR | null;
+  /** Whether a <slot> element was found (affects hasSlot in definition) */
+  hasSlot: boolean;
+}

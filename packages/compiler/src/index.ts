@@ -254,6 +254,19 @@ export type {
   NodeId,
 } from "./model/index.js";
 
+// IR types (Template Meta Elements)
+export type {
+  Located,
+  MetaElementBase,
+  TemplateMetaIR,
+  ImportMetaIR,
+  BindableMetaIR,
+  ShadowDomMetaIR,
+  AliasMetaIR,
+  ContainerlessMetaIR,
+  CaptureMetaIR,
+} from "./model/index.js";
+
 // Expression AST types (for evaluation)
 export type {
   AnyBindingExpression,
