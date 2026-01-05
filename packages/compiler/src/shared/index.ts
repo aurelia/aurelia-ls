@@ -119,3 +119,12 @@ export {
   type DebugData,
   type DebugConfig,
 } from "./debug.js";
+
+// String Suggestions ("Did you mean?")
+export {
+  levenshteinDistance,
+  findSimilar,
+  findBestMatch,
+  formatSuggestion,
+  type FindSimilarOptions,
+} from "./suggestions.js";

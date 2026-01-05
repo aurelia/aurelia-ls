@@ -6,6 +6,7 @@ import type {
   Semantics,
 } from "../../language/registry.js";
 import { debug } from "../../shared/debug.js";
+import { formatSuggestion } from "../../shared/suggestions.js";
 import {
   BUILTIN_CONTROLLER_CONFIGS,
   createCustomControllerConfig,
@@ -231,6 +232,17 @@ export function lowerElementAttributes(
     // Config-driven command handling
     if (s.command) {
       const cmdConfig = sem.bindingCommands[s.command];
+      if (!cmdConfig) {
+        // Unknown binding command - emit diagnostic with suggestion
+        const knownCommands = Object.keys(sem.bindingCommands);
+        const suggestion = formatSuggestion(s.command, knownCommands);
+        table.addDiag(
+          "AU0705",
+          `Unknown binding command '${s.command}'.${suggestion}`,
+          loc
+        );
+        // Fall through to treat as property binding for graceful degradation
+      }
       if (cmdConfig) {
         switch (cmdConfig.kind) {
           case "listener":

@@ -377,7 +377,8 @@ export interface InstructionRow {
  * - AU07xx: Template compilation errors (matches runtime template-compiler)
  */
 export type IrDiagCode =
-  | "AU0704"; // Invalid <let> command (must be bind/to-view/one-time/two-way/from-view)
+  | "AU0704"  // Invalid <let> command (must be bind/to-view/one-time/two-way/from-view)
+  | "AU0705"; // Unknown binding command
 
 export type IrDiagnostic = CompilerDiagnostic<IrDiagCode>;
 
