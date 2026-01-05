@@ -566,14 +566,24 @@ class EmitContext {
         // - type 100 (translation) for literal keys: t="key"
         // - type 101 (translationBind) for expressions: t.bind="expr" or t="key.${expr}"
         if (binding.isExpression) {
-          // t.bind="expr" or t="key.${expr}" - use exprId (looked up in expression table)
-          // Both bound expressions and interpolated keys are now pre-parsed at AOT time,
-          // eliminating the need for runtime parsing via CustomExpression
-          return {
-            type: INSTRUCTION_TYPE.translationBind,
-            from: binding.exprId!,
-            to: binding.to,
-          } satisfies SerializedTranslationBinding;
+          // Check if interpolation variant (parts + exprIds) or single expression (exprId)
+          if (binding.parts && binding.exprIds) {
+            // t="key.${expr}" - interpolated translation key
+            // Emit with parts and exprIds for runtime Interpolation construction
+            return {
+              type: INSTRUCTION_TYPE.translationBind,
+              to: binding.to,
+              parts: binding.parts,
+              exprIds: binding.exprIds,
+            } satisfies SerializedTranslationBinding;
+          } else {
+            // t.bind="expr" - single expression
+            return {
+              type: INSTRUCTION_TYPE.translationBind,
+              from: binding.exprId!,
+              to: binding.to,
+            } satisfies SerializedTranslationBinding;
+          }
         } else {
           // t="static.key" - emit PrimitiveLiteral AST
           // Why PrimitiveLiteral and not CustomExpression?
@@ -1034,9 +1044,19 @@ function remapInstructionExprIds(
       // Literal keys (type 100) have CustomExpression AST in `from`
       return inst;
 
-    case INSTRUCTION_TYPE.translationBind:
-      // Bound expressions (type 101) have exprId in `from`
-      return { ...inst, from: remapId(inst.from as ExprId) };
+    case INSTRUCTION_TYPE.translationBind: {
+      // Bound expressions (type 101) have:
+      // - `from: exprId` for single expressions (t.bind="expr")
+      // - `exprIds: [exprId, ...]` for interpolations (t="key.${expr}")
+      const result = { ...inst };
+      if (inst.from && typeof inst.from === "string") {
+        result.from = remapId(inst.from as ExprId);
+      }
+      if (inst.exprIds) {
+        result.exprIds = inst.exprIds.map(remapId);
+      }
+      return result;
+    }
 
     case INSTRUCTION_TYPE.hydrateElement:
       return {

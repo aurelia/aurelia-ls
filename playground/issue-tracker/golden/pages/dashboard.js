@@ -216,12 +216,7 @@ const dashboard__def_0 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.empty.noActivity"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.empty.noActivity" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -277,12 +272,7 @@ const dashboard__def_4 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.empty.noAssigned"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.empty.noAssigned" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -356,12 +346,7 @@ const dashboard__def_7 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.sections.criticalIssues"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.sections.criticalIssues" }, to: "" }
     ],
     /* target 1 */
     [
@@ -377,12 +362,7 @@ const dashboard_$au = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.welcome"
-      },
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.welcome" }, to: "" },
       { type: 12, from: dashboard__e[0], to: "t.params", mode: 2 }
     ],
     /* target 1 */
@@ -391,12 +371,7 @@ const dashboard_$au = {
     ],
     /* target 2 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.stats.total"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.stats.total" }, to: "" }
     ],
     /* target 3 */
     [
@@ -404,12 +379,7 @@ const dashboard_$au = {
     ],
     /* target 4 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.stats.open"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.stats.open" }, to: "" }
     ],
     /* target 5 */
     [
@@ -417,12 +387,7 @@ const dashboard_$au = {
     ],
     /* target 6 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.stats.inProgress"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.stats.inProgress" }, to: "" }
     ],
     /* target 7 */
     [
@@ -430,12 +395,7 @@ const dashboard_$au = {
     ],
     /* target 8 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.stats.review"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.stats.review" }, to: "" }
     ],
     /* target 9 */
     [
@@ -443,31 +403,16 @@ const dashboard_$au = {
     ],
     /* target 10 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.stats.closed"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.stats.closed" }, to: "" }
     ],
     /* target 11 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.sections.recentActivity"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.sections.recentActivity" }, to: "" }
     ],
     /* target 12 */
     [
       { type: 1, res: "load", props: [{ type: 10, value: "issues", to: "route" }] },
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "actions.viewAll"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "actions.viewAll" }, to: "" }
     ],
     /* target 13 */
     [
@@ -477,12 +422,7 @@ const dashboard_$au = {
     [{ type: 2, def: dashboard__def_1, res: "else", props: [] }],
     /* target 15 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "dashboard.sections.myIssues"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "dashboard.sections.myIssues" }, to: "" }
     ],
     /* target 16 */
     [

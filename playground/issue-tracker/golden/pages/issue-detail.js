@@ -478,12 +478,7 @@ const issueDetail__def_0 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "app.loading"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "app.loading" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -516,12 +511,7 @@ const issueDetail__def_4 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.meta.unassigned"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.meta.unassigned" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -549,12 +539,7 @@ const issueDetail__def_6 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.time.noDueDate"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.time.noDueDate" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -578,12 +563,7 @@ const issueDetail__def_8 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.meta.noPoints"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.meta.noPoints" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -595,12 +575,7 @@ const issueDetail__def_9 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.sections.labels"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.sections.labels" }, to: "" }
     ],
     /* target 1 */
     [{ type: 12, from: issueDetail__e[21], to: "labels", mode: 2 }]
@@ -614,12 +589,7 @@ const issueDetail__def_12 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.transitions.reopen"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.reopen" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -631,12 +601,7 @@ const issueDetail__def_13 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.transitions.start"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.start" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -648,12 +613,7 @@ const issueDetail__def_14 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.transitions.review"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.review" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -665,12 +625,7 @@ const issueDetail__def_15 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.transitions.close"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.close" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -737,12 +692,7 @@ const issueDetail__def_17 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.comments.empty"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.comments.empty" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -792,12 +742,7 @@ const issueDetail__def_1 = {
     [{ type: 31, from: issueDetail__e[4], to: "click", capture: false }],
     /* target 1 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "actions.back"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "actions.back" }, to: "" }
     ],
     /* target 2 */
     [{ type: 12, from: issueDetail__e[5], to: "status", mode: 2 }],
@@ -851,12 +796,7 @@ const issueDetail__def_1 = {
     ],
     /* target 18 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.sections.description"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.sections.description" }, to: "" }
     ],
     /* target 19 */
     [
@@ -868,12 +808,7 @@ const issueDetail__def_1 = {
     ],
     /* target 21 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.sections.comments"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.sections.comments" }, to: "" }
     ],
     /* target 22 */
     [
@@ -889,12 +824,7 @@ const issueDetail__def_1 = {
     /* target 25 */
     [
       { type: 31, from: issueDetail__e[40], to: "click", capture: false },
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.comments.submit"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.comments.submit" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -919,12 +849,7 @@ const issueDetail_$au = {
     [{ type: 31, from: issueDetail__e[4], to: "click", capture: false }],
     /* target 4 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.notFound.back"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.notFound.back" }, to: "" }
     ],
     /* target 5 */
     [{ type: 2, def: issueDetail__def_1, res: "else", props: [] }]

@@ -97,7 +97,7 @@
         { "type": "translationBind", "target": 0, "to": "", "hasExpr": true }
       ],
       "targetCount": 1,
-      "exprCount": 1
+      "exprCount": 2
     }
   },
   {

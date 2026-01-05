@@ -268,8 +268,10 @@ export interface PlanRefBinding extends PlanBindingBase {
  * Translation binding (i18n `t` attribute).
  * Sets translated content on an element or attribute.
  *
- * When `isExpression: true` (t.bind), `exprId` contains the expression reference.
- * When `isExpression: false` (t), `keyValue` contains the literal translation key.
+ * Three variants:
+ * 1. `t="static.key"` - literal key, uses `keyValue`
+ * 2. `t.bind="expr"` - single expression, uses `exprId`
+ * 3. `t="key.${expr}"` - interpolated key, uses `parts` + `exprIds`
  */
 export interface PlanTranslationBinding extends PlanBindingBase {
   type: "translationBinding";
@@ -277,11 +279,17 @@ export interface PlanTranslationBinding extends PlanBindingBase {
   /** Target attribute/property (empty string = textContent) */
   to: string;
 
-  /** Expression ID (only when isExpression: true) */
+  /** Whether the value is a dynamic expression (t.bind or interpolation) vs literal key (t) */
+  isExpression: boolean;
+
+  /** Expression ID (only for t.bind="expr" - single expression) */
   exprId?: ExprId;
 
-  /** Whether the value is a dynamic expression (t.bind) vs literal key (t) */
-  isExpression: boolean;
+  /** Static parts between expressions (only for interpolated keys like t="key.${expr}") */
+  parts?: string[];
+
+  /** Expression IDs for each interpolation (only for interpolated keys) */
+  exprIds?: ExprId[];
 
   /** Literal translation key (only when isExpression: false) */
   keyValue?: string;
@@ -708,12 +716,23 @@ export interface SerializedRefBinding {
 export interface SerializedTranslationBinding {
   type: typeof INSTRUCTION_TYPE.translation | typeof INSTRUCTION_TYPE.translationBind;
   /**
-   * Expression source:
-   * - ExprId for t.bind="expr" or t="key.${expr}" (looked up in expression table)
+   * Expression source (mutually exclusive variants):
    * - PrimitiveLiteral AST for t="static.key"
+   * - ExprId for t.bind="expr" (single expression)
+   * - undefined when using parts/exprIds for interpolation
    */
-  from: ExprId | { $kind: "PrimitiveLiteral"; value: string };
+  from?: ExprId | { $kind: "PrimitiveLiteral"; value: string };
   to: string;
+  /**
+   * Static parts between expressions (for interpolated keys like t="key.${expr}").
+   * When present, `exprIds` must also be set.
+   */
+  parts?: string[];
+  /**
+   * Expression IDs for interpolated key (for t="key.${expr}").
+   * When present, `parts` must also be set.
+   */
+  exprIds?: ExprId[];
 }
 
 export interface SerializedSetProperty {

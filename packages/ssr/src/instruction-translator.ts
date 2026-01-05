@@ -466,17 +466,32 @@ function translateTranslationBinding(
   //
   // For AOT, we emit non-CustomExpression ASTs to bypass runtime parsing:
   // - PrimitiveLiteral for static keys
-  // - Pre-parsed Interpolation/IsBindingBehavior for dynamic keys
+  // - Pre-parsed Interpolation for interpolated keys (t="key.${expr}")
+  // - Pre-parsed IsBindingBehavior for bound expressions (t.bind="expr")
 
   if (ins.type === INSTRUCTION_TYPE.translationBind) {
-    // t.bind="expr" or t="key.${expr}" - from is ExprId, look up pre-parsed expression
-    const expr = getExpr(ctx.exprMap, ins.from as ExprId) as IsBindingBehavior;
-    return {
-      type: itTranslationBind,
-      from: expr,
-      to: ins.to,
-      mode: 2, // toView
-    } as TranslationBindingInstructionLike as IInstruction;
+    // Check which variant: interpolation or single expression
+    if (ins.parts && ins.exprIds) {
+      // t="key.${expr}" - interpolated translation key
+      // Build Interpolation AST from parts and expressions
+      const expressions = ins.exprIds.map((id: ExprId) => getExpr(ctx.exprMap, id) as IsBindingBehavior);
+      const interpolation = createInterpolation(ins.parts, expressions);
+      return {
+        type: itTranslationBind,
+        from: interpolation as unknown as IsBindingBehavior,
+        to: ins.to,
+        mode: 2, // toView
+      } as TranslationBindingInstructionLike as IInstruction;
+    } else {
+      // t.bind="expr" - single expression, from is ExprId
+      const expr = getExpr(ctx.exprMap, ins.from as ExprId) as IsBindingBehavior;
+      return {
+        type: itTranslationBind,
+        from: expr,
+        to: ins.to,
+        mode: 2, // toView
+      } as TranslationBindingInstructionLike as IInstruction;
+    }
   } else {
     // t="static.key" - from is PrimitiveLiteral AST
     // Pass through as PrimitiveLiteral (NOT CustomExpression) to bypass runtime parsing

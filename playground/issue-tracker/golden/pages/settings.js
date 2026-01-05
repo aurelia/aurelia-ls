@@ -348,12 +348,7 @@ const settings__def_0 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.saved"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.saved" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -407,12 +402,7 @@ const settings_$au = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.title"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.title" }, to: "" }
     ],
     /* target 1 */
     [
@@ -420,73 +410,38 @@ const settings_$au = {
     ],
     /* target 2 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.sections.profile"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.sections.profile" }, to: "" }
     ],
     /* target 3 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.profile.name"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.profile.name" }, to: "" }
     ],
     /* target 4 */
     [{ type: 12, from: settings__e[1], to: "value", mode: 6 }],
     /* target 5 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.profile.email"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.profile.email" }, to: "" }
     ],
     /* target 6 */
     [{ type: 12, from: settings__e[2], to: "value", mode: 6 }],
     /* target 7 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.profile.role"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.profile.role" }, to: "" }
     ],
     /* target 8 */
     [{ type: 12, from: settings__e[3], to: "value", mode: 6 }],
     /* target 9 */
     [
       { type: 31, from: settings__e[4], to: "click", capture: false },
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.profile.save"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.profile.save" }, to: "" }
     ],
     /* target 10 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.sections.preferences"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.sections.preferences" }, to: "" }
     ],
     /* target 11 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.preferences.theme"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.preferences.theme" }, to: "" }
     ],
     /* target 12 */
     [{ type: 12, from: settings__e[5], to: "value", mode: 6 }],
@@ -496,12 +451,7 @@ const settings_$au = {
     ],
     /* target 14 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.preferences.language"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.preferences.language" }, to: "" }
     ],
     /* target 15 */
     [{ type: 12, from: settings__e[9], to: "value", mode: 6 }],
@@ -511,12 +461,7 @@ const settings_$au = {
     ],
     /* target 17 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.preferences.dateFormat"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.preferences.dateFormat" }, to: "" }
     ],
     /* target 18 */
     [{ type: 12, from: settings__e[11], to: "value", mode: 6 }],
@@ -527,21 +472,11 @@ const settings_$au = {
     /* target 20 */
     [
       { type: 31, from: settings__e[13], to: "click", capture: false },
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "actions.save"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "actions.save" }, to: "" }
     ],
     /* target 21 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.sections.notifications"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.sections.notifications" }, to: "" }
     ],
     /* target 22 */
     [
@@ -550,21 +485,11 @@ const settings_$au = {
     ],
     /* target 23 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.notifications.email"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.notifications.email" }, to: "" }
     ],
     /* target 24 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.notifications.emailDesc"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.notifications.emailDesc" }, to: "" }
     ],
     /* target 25 */
     [
@@ -573,21 +498,11 @@ const settings_$au = {
     ],
     /* target 26 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.notifications.browser"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.notifications.browser" }, to: "" }
     ],
     /* target 27 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.notifications.browserDesc"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.notifications.browserDesc" }, to: "" }
     ],
     /* target 28 */
     [
@@ -596,12 +511,7 @@ const settings_$au = {
     ],
     /* target 29 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.notifications.assigned"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.notifications.assigned" }, to: "" }
     ],
     /* target 30 */
     [
@@ -610,12 +520,7 @@ const settings_$au = {
     ],
     /* target 31 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.notifications.mentioned"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.notifications.mentioned" }, to: "" }
     ],
     /* target 32 */
     [
@@ -624,22 +529,12 @@ const settings_$au = {
     ],
     /* target 33 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "settings.notifications.statusChange"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "settings.notifications.statusChange" }, to: "" }
     ],
     /* target 34 */
     [
       { type: 31, from: settings__e[24], to: "click", capture: false },
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "actions.save"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "actions.save" }, to: "" }
     ]
   ],
   needsCompile: false
