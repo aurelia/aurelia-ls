@@ -501,5 +501,23 @@
         { "kind": "event", "on": "click", "command": "trigger", "code": "handleClick()" }
       ]
     }
+  },
+  {
+    "name": "LB-56 i18n t attribute (literal key)",
+    "markup": "<span t=\"greeting.hello\"></span>",
+    "expect": {
+      "expressions": [
+        { "kind": "translation", "on": "", "command": "t", "code": "greeting.hello" }
+      ]
+    }
+  },
+  {
+    "name": "LB-57 i18n t.bind (expression key)",
+    "markup": "<span t.bind=\"translationKey\"></span>",
+    "expect": {
+      "expressions": [
+        { "kind": "translation", "on": "", "command": "t.bind", "code": "translationKey" }
+      ]
+    }
   }
 ]

@@ -303,6 +303,14 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
           }
           break;
         }
+        case "translationBinding":
+          out.expressions.push({
+            kind: "translation",
+            on: ins.to,
+            command: (ins as { isExpression?: boolean }).isExpression ? "t.bind" : "t",
+            code: ins.from?.code,
+          });
+          break;
         default:
           break;
       }

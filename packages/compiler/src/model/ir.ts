@@ -207,6 +207,21 @@ export interface RefBindingIR {
   loc?: SourceSpan | null;
 }
 
+/**
+ * Translation binding for i18n (t="key" or t.bind="expr").
+ * Produced by the `t` and `t.bind` binding commands from @aurelia/i18n.
+ */
+export interface TranslationBindingIR {
+  type: 'translationBinding';
+  /** Target attribute/property to set with translated value (empty string = textContent) */
+  to: string;
+  /** Translation key or expression */
+  from: BindingSourceIR;
+  /** Whether value is expression (t.bind) vs literal key (t) */
+  isExpression: boolean;
+  loc?: SourceSpan | null;
+}
+
 /** Static attributes (no binding). */
 export interface SetAttributeIR {
   type: 'setAttribute';
@@ -336,6 +351,7 @@ export type InstructionIR =
   | ListenerBindingIR
   | AttributeBindingIR
   | StylePropertyBindingIR
+  | TranslationBindingIR
   | SetAttributeIR
   | SetClassAttributeIR
   | SetStyleAttributeIR;

@@ -13,6 +13,7 @@ import {
 import type {
   AttributeBindableIR,
   ElementBindableIR,
+  ExprId,
   HydrateAttributeIR,
   HydrateElementIR,
   InstructionIR,
@@ -268,6 +269,21 @@ export function lowerElementAttributes(
               attr: attrName,
               to: attrName,
               from: toBindingSource(raw, valueLoc, table, "IsProperty"),
+              loc: toSpan(loc, table.source),
+            });
+            continue;
+          }
+
+          case "translation": {
+            // i18n translation binding (t="key" or t.bind="expr")
+            const isExpression = s.command === "t.bind";
+            tail.push({
+              type: "translationBinding",
+              to: s.target, // empty string for textContent, or specific attribute
+              from: isExpression
+                ? toBindingSource(raw, valueLoc, table, "IsProperty")
+                : { id: "" as ExprId, code: raw, loc: toSpan(valueLoc, table.source) }, // literal key
+              isExpression,
               loc: toSpan(loc, table.source),
             });
             continue;
