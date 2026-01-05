@@ -15,7 +15,6 @@ import type {
   AttributeBindableIR,
   BindingMode,
   ElementBindableIR,
-  ExprId,
   HydrateAttributeIR,
   HydrateElementIR,
   InstructionIR,

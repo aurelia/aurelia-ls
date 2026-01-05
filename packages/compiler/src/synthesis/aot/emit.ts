@@ -1050,7 +1050,7 @@ function remapInstructionExprIds(
       // - `exprIds: [exprId, ...]` for interpolations (t="key.${expr}")
       const result = { ...inst };
       if (inst.from && typeof inst.from === "string") {
-        result.from = remapId(inst.from as ExprId);
+        result.from = remapId(inst.from);
       }
       if (inst.exprIds) {
         result.exprIds = inst.exprIds.map(remapId);
