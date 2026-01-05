@@ -212,7 +212,7 @@ const dashboard__e = [
 const dashboard__def_0 = {
   name: "if_0",
   type: "custom-element",
-  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u{1F4CB}</div>\n      <!--au--><p t="dashboard.empty.noActivity"></p>\n    </div>',
+  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u{1F4CB}</div>\n      <!--au--><p></p>\n    </div>',
   instructions: [
     /* target 0 */
     [
@@ -274,7 +274,7 @@ const dashboard__def_1 = {
 const dashboard__def_4 = {
   name: "if_4",
   type: "custom-element",
-  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u2728</div>\n      <!--au--><p t="dashboard.empty.noAssigned"></p>\n    </div>',
+  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u2728</div>\n      <!--au--><p></p>\n    </div>',
   instructions: [
     /* target 0 */
     [
@@ -354,7 +354,7 @@ const dashboard__def_8 = {
 const dashboard__def_7 = {
   name: "if_7",
   type: "custom-element",
-  template: '<section class="card" data-testid="critical-issues">\n    <div class="card-header">\n      <!--au--><h3 class="card-title" t="dashboard.sections.criticalIssues"></h3>\n    </div>\n\n    <ul class="issue-list">\n      <!--au--><!--au-start--><!--au-end-->\n    </ul>\n  </section>',
+  template: '<section class="card" data-testid="critical-issues">\n    <div class="card-header">\n      <!--au--><h3 class="card-title"></h3>\n    </div>\n\n    <ul class="issue-list">\n      <!--au--><!--au-start--><!--au-end-->\n    </ul>\n  </section>',
   instructions: [
     /* target 0 */
     [
@@ -376,7 +376,7 @@ const dashboard__def_7 = {
 const dashboard_$au = {
   type: "custom-element",
   name: "dashboard",
-  template: '<!--\n  Dashboard Page Template\n\n  Exercises:\n  - t="key" for labels\n  - t with params for welcome message\n  - ${interpolation} for stats\n  - repeat.for for lists\n  - if.bind / else for empty states\n  - Custom elements (status-badge, priority-icon)\n  - load="issue/${id}" for parameterized routes\n-->\n\n<div class="page dashboard-page" data-testid="dashboard">\n  <!-- Welcome message with i18n parameter -->\n  <!--au--><h2 t="dashboard.welcome"></h2>\n\n  <!-- Stats grid -->\n  <div class="stats-grid" data-testid="stats-grid">\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label" t="dashboard.stats.total"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label" t="dashboard.stats.open"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label" t="dashboard.stats.inProgress"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label" t="dashboard.stats.review"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label" t="dashboard.stats.closed"></div>\n    </div>\n  </div>\n\n  <!-- Recent Activity -->\n  <section class="card" data-testid="recent-activity">\n    <div class="card-header">\n      <!--au--><h3 class="card-title" t="dashboard.sections.recentActivity"></h3>\n      <!--au--><a class="btn btn-ghost" load="issues" t="actions.viewAll"></a>\n    </div>\n\n    <!-- Empty state -->\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!-- Issue list -->\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- My Issues -->\n  <section class="card" data-testid="my-issues">\n    <div class="card-header">\n      <!--au--><h3 class="card-title" t="dashboard.sections.myIssues"></h3>\n    </div>\n\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- Critical Issues -->\n  <!--au--><!--au-start--><!--au-end-->\n</div>\n',
+  template: '<!--\n  Dashboard Page Template\n\n  Exercises:\n  - t="key" for labels\n  - t with params for welcome message\n  - ${interpolation} for stats\n  - repeat.for for lists\n  - if.bind / else for empty states\n  - Custom elements (status-badge, priority-icon)\n  - load="issue/${id}" for parameterized routes\n-->\n\n<div class="page dashboard-page" data-testid="dashboard">\n  <!-- Welcome message with i18n parameter -->\n  <!--au--><h2></h2>\n\n  <!-- Stats grid -->\n  <div class="stats-grid" data-testid="stats-grid">\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n  </div>\n\n  <!-- Recent Activity -->\n  <section class="card" data-testid="recent-activity">\n    <div class="card-header">\n      <!--au--><h3 class="card-title"></h3>\n      <!--au--><a class="btn btn-ghost" load="issues"></a>\n    </div>\n\n    <!-- Empty state -->\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!-- Issue list -->\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- My Issues -->\n  <section class="card" data-testid="my-issues">\n    <div class="card-header">\n      <!--au--><h3 class="card-title"></h3>\n    </div>\n\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- Critical Issues -->\n  <!--au--><!--au-start--><!--au-end-->\n</div>\n',
   instructions: [
     /* target 0 */
     [

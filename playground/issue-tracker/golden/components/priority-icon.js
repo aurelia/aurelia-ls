@@ -93,7 +93,7 @@ const priorityIcon__def_0 = {
 const priorityIcon__def_5 = {
   name: "if_5",
   type: "custom-element",
-  template: '<!--au--><span style="margin-left: 0.25rem;" t="priority.${priority}"></span>',
+  template: '<!--au--><span style="margin-left: 0.25rem;"></span>',
   instructions: [
     /* target 0 */
     [

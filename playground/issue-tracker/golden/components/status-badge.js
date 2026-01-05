@@ -40,7 +40,7 @@ const statusBadge__e = [
 const statusBadge__def_1 = {
   name: "case_1",
   type: "custom-element",
-  template: '<!--au--><span t="status.draft"></span>',
+  template: "<!--au--><span></span>",
   instructions: [
     /* target 0 */
     [
@@ -58,7 +58,7 @@ const statusBadge__def_1 = {
 const statusBadge__def_2 = {
   name: "case_2",
   type: "custom-element",
-  template: '<!--au--><span t="status.open"></span>',
+  template: "<!--au--><span></span>",
   instructions: [
     /* target 0 */
     [
@@ -76,7 +76,7 @@ const statusBadge__def_2 = {
 const statusBadge__def_3 = {
   name: "case_3",
   type: "custom-element",
-  template: '<!--au--><span t="status.in_progress"></span>',
+  template: "<!--au--><span></span>",
   instructions: [
     /* target 0 */
     [
@@ -94,7 +94,7 @@ const statusBadge__def_3 = {
 const statusBadge__def_4 = {
   name: "case_4",
   type: "custom-element",
-  template: '<!--au--><span t="status.review"></span>',
+  template: "<!--au--><span></span>",
   instructions: [
     /* target 0 */
     [
@@ -112,7 +112,7 @@ const statusBadge__def_4 = {
 const statusBadge__def_5 = {
   name: "case_5",
   type: "custom-element",
-  template: '<!--au--><span t="status.closed"></span>',
+  template: "<!--au--><span></span>",
   instructions: [
     /* target 0 */
     [

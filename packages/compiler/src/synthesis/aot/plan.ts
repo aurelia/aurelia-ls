@@ -1244,9 +1244,22 @@ const BINDING_COMMANDS = new Set(Object.keys(BUILTIN_BINDING_COMMANDS));
 
 /**
  * Check if an attribute name is a binding attribute.
- * Binding attributes have the form "name.command" where command is a known binding command.
+ *
+ * Binding attributes come in two forms:
+ * 1. Standalone command: attribute name IS a command (e.g., `t="key"`, `ref="varName"`)
+ * 2. Target.command: attribute has form "target.command" (e.g., `click.trigger`, `value.bind`)
+ *
+ * Both forms should be stripped from the template HTML since they're compiled into instructions.
  */
 function isBindingAttribute(attrName: string): boolean {
+  // Check if the attribute name itself is a binding command (standalone usage)
+  // Examples: t="key", ref="varName"
+  if (BINDING_COMMANDS.has(attrName)) {
+    return true;
+  }
+
+  // Check for "target.command" format
+  // Examples: click.trigger, value.bind, repeat.for
   const dotIndex = attrName.lastIndexOf(".");
   if (dotIndex === -1) return false;
   const command = attrName.slice(dotIndex + 1);
