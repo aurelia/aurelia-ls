@@ -93,11 +93,17 @@ const priorityIcon__def_0 = {
 const priorityIcon__def_5 = {
   name: "if_5",
   type: "custom-element",
-  template: '<!--au--><span style="margin-left: 0.25rem;"></span>',
+  template: '<!--au--><span style="margin-left: 0.25rem;" t="priority.${priority}"></span>',
   instructions: [
     /* target 0 */
     [
-      { type: 11, to: "t", from: { $kind: "Interpolation", parts: ["priority.", ""], expressions: [priorityIcon__e[0]], isMulti: false, firstExpression: priorityIcon__e[0] } }
+      {
+        type: 37,
+        to: "",
+        exprId: "",
+        isExpression: false,
+        keyValue: "priority.${priority}"
+      }
     ]
   ],
   needsCompile: false
