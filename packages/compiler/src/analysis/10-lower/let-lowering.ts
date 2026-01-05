@@ -73,9 +73,13 @@ function compileLet(
     // Any other command (e.g., .trigger, .capture) is invalid for <let>
     // Emit AU0704: Invalid <let> command
     const loc = attrLoc(el, a.name);
+    const validCommands = Object.entries(sem.bindingCommands)
+      .filter(([, cfg]) => cfg.kind === "property")
+      .map(([name]) => name)
+      .join(", ");
     table.addDiag(
       "AU0704",
-      `Invalid command '.${s.command}' on <let>. Only bind, to-view, one-time, two-way, from-view are allowed.`,
+      `Invalid command '.${s.command}' on <let>. Valid commands: ${validCommands}.`,
       loc
     );
   }
