@@ -47,7 +47,6 @@ const statusBadge__def_1 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "status.draft"
       }
@@ -65,7 +64,6 @@ const statusBadge__def_2 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "status.open"
       }
@@ -83,7 +81,6 @@ const statusBadge__def_3 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "status.in_progress"
       }
@@ -101,7 +98,6 @@ const statusBadge__def_4 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "status.review"
       }
@@ -119,7 +115,6 @@ const statusBadge__def_5 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "status.closed"
       }

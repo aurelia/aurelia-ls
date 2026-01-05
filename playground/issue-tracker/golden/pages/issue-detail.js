@@ -481,7 +481,6 @@ const issueDetail__def_0 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "app.loading"
       }
@@ -520,7 +519,6 @@ const issueDetail__def_4 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.meta.unassigned"
       }
@@ -554,7 +552,6 @@ const issueDetail__def_6 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.time.noDueDate"
       }
@@ -584,7 +581,6 @@ const issueDetail__def_8 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.meta.noPoints"
       }
@@ -602,7 +598,6 @@ const issueDetail__def_9 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.sections.labels"
       }
@@ -622,7 +617,6 @@ const issueDetail__def_12 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.transitions.reopen"
       }
@@ -640,7 +634,6 @@ const issueDetail__def_13 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.transitions.start"
       }
@@ -658,7 +651,6 @@ const issueDetail__def_14 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.transitions.review"
       }
@@ -676,7 +668,6 @@ const issueDetail__def_15 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.transitions.close"
       }
@@ -749,7 +740,6 @@ const issueDetail__def_17 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.comments.empty"
       }
@@ -805,7 +795,6 @@ const issueDetail__def_1 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "actions.back"
       }
@@ -865,7 +854,6 @@ const issueDetail__def_1 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.sections.description"
       }
@@ -883,7 +871,6 @@ const issueDetail__def_1 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.sections.comments"
       }
@@ -905,7 +892,6 @@ const issueDetail__def_1 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.comments.submit"
       }
@@ -936,7 +922,6 @@ const issueDetail_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.notFound.back"
       }

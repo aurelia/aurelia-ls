@@ -219,7 +219,6 @@ const dashboard__def_0 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.empty.noActivity"
       }
@@ -281,7 +280,6 @@ const dashboard__def_4 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.empty.noAssigned"
       }
@@ -361,7 +359,6 @@ const dashboard__def_7 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.sections.criticalIssues"
       }
@@ -383,7 +380,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.welcome"
       },
@@ -398,7 +394,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.stats.total"
       }
@@ -412,7 +407,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.stats.open"
       }
@@ -426,7 +420,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.stats.inProgress"
       }
@@ -440,7 +433,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.stats.review"
       }
@@ -454,7 +446,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.stats.closed"
       }
@@ -464,7 +455,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.sections.recentActivity"
       }
@@ -475,7 +465,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "actions.viewAll"
       }
@@ -491,7 +480,6 @@ const dashboard_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "dashboard.sections.myIssues"
       }

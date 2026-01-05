@@ -39,7 +39,6 @@ const myApp_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "app.title"
       }
@@ -58,7 +57,6 @@ const myApp_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "nav.dashboard"
       }
@@ -69,7 +67,6 @@ const myApp_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "nav.issues"
       }
@@ -80,7 +77,6 @@ const myApp_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "nav.settings"
       }

@@ -100,7 +100,6 @@ const priorityIcon__def_5 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "priority.${priority}"
       }

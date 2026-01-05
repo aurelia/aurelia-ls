@@ -394,7 +394,6 @@ const issues__def_5 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issues.filters.clear"
       }
@@ -483,7 +482,6 @@ const issues__def_11 = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issue.meta.unassigned"
       }
@@ -551,7 +549,6 @@ const issues_$au = {
       {
         type: 37,
         to: "",
-        exprId: "",
         isExpression: false,
         keyValue: "issues.title"
       }
