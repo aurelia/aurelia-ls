@@ -438,7 +438,7 @@ function translateTranslationBinding(
   // - type 100 (itTranslation) for literal keys with CustomExpression
   // - type 101 (itTranslationBind) for expressions with IsBindingBehavior
 
-  if (ins.isExpression) {
+  if (ins.isExpression && ins.exprId !== undefined) {
     // t.bind="expr" - use the expression from the table
     const expr = getExpr(ctx.exprMap, ins.exprId) as IsBindingBehavior;
     return {

@@ -565,9 +565,13 @@ class EmitContext {
         const result: SerializedTranslationBinding = {
           type: INSTRUCTION_TYPE.translationBinding,
           to: binding.to,
-          exprId: binding.exprId,
           isExpression: binding.isExpression,
         };
+        // Only include exprId for expressions (t.bind)
+        if (binding.exprId !== undefined) {
+          result.exprId = binding.exprId;
+        }
+        // Only include keyValue for literal keys (t)
         if (binding.keyValue !== undefined) {
           result.keyValue = binding.keyValue;
         }
@@ -1015,7 +1019,10 @@ function remapInstructionExprIds(
       return { ...inst, exprId: remapId(inst.exprId) };
 
     case INSTRUCTION_TYPE.translationBinding:
-      return { ...inst, exprId: remapId(inst.exprId) };
+      // Only remap exprId if present (expressions only, not literal keys)
+      return inst.exprId !== undefined
+        ? { ...inst, exprId: remapId(inst.exprId) }
+        : inst;
 
     case INSTRUCTION_TYPE.hydrateElement:
       return {

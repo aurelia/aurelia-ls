@@ -267,6 +267,9 @@ export interface PlanRefBinding extends PlanBindingBase {
 /**
  * Translation binding (i18n `t` attribute).
  * Sets translated content on an element or attribute.
+ *
+ * When `isExpression: true` (t.bind), `exprId` contains the expression reference.
+ * When `isExpression: false` (t), `keyValue` contains the literal translation key.
  */
 export interface PlanTranslationBinding extends PlanBindingBase {
   type: "translationBinding";
@@ -274,13 +277,13 @@ export interface PlanTranslationBinding extends PlanBindingBase {
   /** Target attribute/property (empty string = textContent) */
   to: string;
 
-  /** Expression ID (for t.bind) or empty for literal keys */
-  exprId: ExprId;
+  /** Expression ID (only when isExpression: true) */
+  exprId?: ExprId;
 
   /** Whether the value is a dynamic expression (t.bind) vs literal key (t) */
   isExpression: boolean;
 
-  /** Literal translation key (only when isExpression is false) */
+  /** Literal translation key (only when isExpression: false) */
   keyValue?: string;
 }
 
@@ -705,9 +708,10 @@ export interface SerializedRefBinding {
 export interface SerializedTranslationBinding {
   type: typeof INSTRUCTION_TYPE.translationBinding;
   to: string;
-  exprId: ExprId;
+  /** Expression ID (only when isExpression: true) */
+  exprId?: ExprId;
   isExpression: boolean;
-  /** Literal translation key (only when isExpression is false) */
+  /** Literal translation key (only when isExpression: false) */
   keyValue?: string;
 }
 

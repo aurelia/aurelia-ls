@@ -724,13 +724,17 @@ function linkTextBinding(ins: TextBindingIR): LinkedTextBinding {
 /* ---- TranslationBinding (i18n) ---- */
 
 function linkTranslationBinding(ins: TranslationBindingIR): LinkedTranslationBinding {
-  return {
+  const result: LinkedTranslationBinding = {
     kind: "translationBinding",
     to: ins.to,
-    from: ins.from,
     isExpression: ins.isExpression,
     loc: ins.loc ?? null,
   };
+  // Only include from when it's an expression (t.bind)
+  if (ins.from) result.from = ins.from;
+  // Only include keyValue when it's a literal key (t)
+  if (ins.keyValue !== undefined) result.keyValue = ins.keyValue;
+  return result;
 }
 
 /* ---- SetAttribute / Class / Style ---- */

@@ -814,19 +814,20 @@ function transformRefBinding(ins: LinkedRefBinding, ctx: PlanningContext): PlanR
 }
 
 function transformTranslationBinding(ins: LinkedTranslationBinding, ctx: PlanningContext): PlanTranslationBinding {
-  const exprId = primaryExprId(ins.from);
-  ctx.registerExpression(exprId, ins.loc ?? undefined);
-
   const result: PlanTranslationBinding = {
     type: "translationBinding",
     to: ins.to,
-    exprId,
     isExpression: ins.isExpression,
   };
 
-  // For literal keys (t="key"), preserve the key value from the source code
-  if (!ins.isExpression && !isInterpolation(ins.from)) {
-    result.keyValue = ins.from.code;
+  if (ins.isExpression && ins.from) {
+    // t.bind="expr" - register the expression
+    const exprId = primaryExprId(ins.from);
+    ctx.registerExpression(exprId, ins.loc ?? undefined);
+    result.exprId = exprId;
+  } else if (ins.keyValue !== undefined) {
+    // t="key" - preserve the literal key value
+    result.keyValue = ins.keyValue;
   }
 
   if (ins.loc) result.loc = ins.loc;

@@ -294,9 +294,9 @@ export function lowerElementAttributes(
             tail.push({
               type: "translationBinding",
               to: s.target, // empty string for textContent, or specific attribute
-              from: isExpression
-                ? toBindingSource(raw, valueLoc, table, "IsProperty")
-                : { id: "" as ExprId, code: raw, loc: toSpan(valueLoc, table.source) }, // literal key
+              ...(isExpression
+                ? { from: toBindingSource(raw, valueLoc, table, "IsProperty") }
+                : { keyValue: raw }),
               isExpression,
               loc: toSpan(loc, table.source),
             });
