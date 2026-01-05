@@ -68,6 +68,28 @@ describe("attribute parser / built-ins", () => {
     expect(attr.command).toBe(null);
     expect(attr.parts).toBe(null);
   });
+
+  test("parses i18n t pattern", () => {
+    const parser = createDefaultSyntax();
+    const attr = parser.parse("t", "greeting.hello");
+
+    expect(attr.rawName).toBe("t");
+    expect(attr.rawValue).toBe("greeting.hello");
+    expect(attr.target).toBe("");
+    expect(attr.command).toBe("t");
+    expect(attr.parts).toBe(null);
+  });
+
+  test("parses i18n t.bind pattern", () => {
+    const parser = createDefaultSyntax();
+    const attr = parser.parse("t.bind", "translationKey");
+
+    expect(attr.rawName).toBe("t.bind");
+    expect(attr.rawValue).toBe("translationKey");
+    expect(attr.target).toBe("");
+    expect(attr.command).toBe("t.bind");
+    expect(attr.parts).toBe(null);
+  });
 });
 
 describe("attribute parser / precedence and lifecycle", () => {

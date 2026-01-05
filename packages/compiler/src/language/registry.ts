@@ -501,12 +501,13 @@ export function createCustomControllerConfig(
  * Maps directly to IR instruction types.
  */
 export type BindingCommandKind =
-  | "property"   // PropertyBindingIR — bind, one-time, to-view, from-view, two-way
-  | "listener"   // ListenerBindingIR — trigger, capture
-  | "iterator"   // IteratorBindingIR — for
-  | "ref"        // RefBindingIR — ref
-  | "attribute"  // AttributeBindingIR — attr, class
-  | "style";     // StylePropertyBindingIR — style
+  | "property"     // PropertyBindingIR — bind, one-time, to-view, from-view, two-way
+  | "listener"     // ListenerBindingIR — trigger, capture
+  | "iterator"     // IteratorBindingIR — for
+  | "ref"          // RefBindingIR — ref
+  | "attribute"    // AttributeBindingIR — attr, class
+  | "style"        // StylePropertyBindingIR — style
+  | "translation"; // TranslationBindingIR — t (i18n)
 
 /**
  * Configuration for a binding command.
@@ -624,6 +625,21 @@ export const BUILTIN_BINDING_COMMANDS: Record<string, BindingCommandConfig> = {
   style: {
     name: "style",
     kind: "style",
+  },
+
+  // ===== Translation binding commands (i18n plugin) =====
+  // These produce translation bindings handled by @aurelia/i18n
+
+  t: {
+    name: "t",
+    kind: "translation",
+    package: "@aurelia/i18n",
+  },
+
+  "t.bind": {
+    name: "t.bind",
+    kind: "translation",
+    package: "@aurelia/i18n",
   },
 };
 
@@ -834,6 +850,22 @@ export const BUILTIN_ATTRIBUTE_PATTERNS: readonly AttributePatternConfig[] = [
     pattern: "catch",
     symbols: "",
     interpret: { kind: "fixed", target: "catch", command: "from-view" },
+  },
+
+  // ===== i18n translation patterns (@aurelia/i18n) =====
+  // "t" → translation command (value is translation key)
+  {
+    pattern: "t",
+    symbols: "",
+    interpret: { kind: "fixed", target: "", command: "t" },
+    package: "@aurelia/i18n",
+  },
+  // "t.bind" → translation binding (value is expression evaluating to key)
+  {
+    pattern: "t.bind",
+    symbols: ".",
+    interpret: { kind: "fixed", target: "", command: "t.bind" },
+    package: "@aurelia/i18n",
   },
 ];
 
