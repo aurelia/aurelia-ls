@@ -133,6 +133,7 @@ export type {
   SerializedHydrateTemplateController,
   SerializedHydrateLetElement,
   SerializedIteratorBinding,
+  SerializedTranslationBinding,
   SerializedAuxBinding,
   SerializedLetBinding,
   SerializedBindable,

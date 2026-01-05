@@ -274,11 +274,14 @@ export interface PlanTranslationBinding extends PlanBindingBase {
   /** Target attribute/property (empty string = textContent) */
   to: string;
 
-  /** Translation key or expression ID */
+  /** Expression ID (for t.bind) or empty for literal keys */
   exprId: ExprId;
 
   /** Whether the value is a dynamic expression (t.bind) vs literal key (t) */
   isExpression: boolean;
+
+  /** Literal translation key (only when isExpression is false) */
+  keyValue?: string;
 }
 
 /**
@@ -704,6 +707,8 @@ export interface SerializedTranslationBinding {
   to: string;
   exprId: ExprId;
   isExpression: boolean;
+  /** Literal translation key (only when isExpression is false) */
+  keyValue?: string;
 }
 
 export interface SerializedSetProperty {

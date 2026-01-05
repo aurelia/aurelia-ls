@@ -823,6 +823,12 @@ function transformTranslationBinding(ins: LinkedTranslationBinding, ctx: Plannin
     exprId,
     isExpression: ins.isExpression,
   };
+
+  // For literal keys (t="key"), preserve the key value from the source code
+  if (!ins.isExpression && !isInterpolation(ins.from)) {
+    result.keyValue = ins.from.code;
+  }
+
   if (ins.loc) result.loc = ins.loc;
   return result;
 }

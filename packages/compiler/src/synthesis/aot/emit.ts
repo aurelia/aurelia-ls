@@ -561,13 +561,18 @@ class EmitContext {
           exprId: binding.exprId,
         } satisfies SerializedRefBinding;
 
-      case "translationBinding":
-        return {
+      case "translationBinding": {
+        const result: SerializedTranslationBinding = {
           type: INSTRUCTION_TYPE.translationBinding,
           to: binding.to,
           exprId: binding.exprId,
           isExpression: binding.isExpression,
-        } satisfies SerializedTranslationBinding;
+        };
+        if (binding.keyValue !== undefined) {
+          result.keyValue = binding.keyValue;
+        }
+        return result;
+      }
     }
   }
 
