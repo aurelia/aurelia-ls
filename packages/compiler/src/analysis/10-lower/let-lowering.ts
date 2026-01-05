@@ -1,4 +1,5 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
+import type { Semantics } from "../../language/registry.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
 import type { ExprTable, P5Element } from "./lower-shared.js";
 import { attrLoc, attrValueLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
@@ -6,9 +7,10 @@ import { attrLoc, attrValueLoc, toBindingSource, toInterpIR, toSpan } from "./lo
 export function lowerLetElement(
   el: P5Element,
   attrParser: AttributeParser,
-  table: ExprTable
+  table: ExprTable,
+  sem: Semantics
 ): HydrateLetElementIR {
-  const { instructions, toBindingContext } = compileLet(el, attrParser, table);
+  const { instructions, toBindingContext } = compileLet(el, attrParser, table, sem);
   return {
     type: "hydrateLetElement",
     instructions,
@@ -20,7 +22,8 @@ export function lowerLetElement(
 function compileLet(
   el: P5Element,
   attrParser: AttributeParser,
-  table: ExprTable
+  table: ExprTable,
+  sem: Semantics
 ): { instructions: LetBindingIR[]; toBindingContext: boolean } {
   const out: LetBindingIR[] = [];
   let toBindingContext = false;
@@ -32,11 +35,11 @@ function compileLet(
     }
     const s = attrParser.parse(a.name, a.value ?? "");
 
-    // <let> supports binding mode commands (bind, one-time, to-view, two-way, from-view)
+    // <let> supports property binding commands (bind, one-time, to-view, two-way, from-view)
     // but NOT event commands (trigger, capture) or ref commands
     // Runtime throws AU0704 for unsupported commands
-    const validLetCommands = new Set(["bind", "one-time", "to-view", "two-way", "from-view"]);
-    if (validLetCommands.has(s.command ?? "")) {
+    const cmdConfig = s.command ? sem.bindingCommands[s.command] : null;
+    if (cmdConfig?.kind === "property") {
       const loc = attrLoc(el, a.name);
       const valueLoc = attrValueLoc(el, a.name, table.sourceText);
       out.push({
@@ -70,9 +73,13 @@ function compileLet(
     // Any other command (e.g., .trigger, .capture) is invalid for <let>
     // Emit AU0704: Invalid <let> command
     const loc = attrLoc(el, a.name);
+    const validCommands = Object.entries(sem.bindingCommands)
+      .filter(([, cfg]) => cfg.kind === "property")
+      .map(([name]) => name)
+      .join(", ");
     table.addDiag(
       "AU0704",
-      `Invalid command '.${s.command}' on <let>. Only bind, to-view, one-time, two-way, from-view are allowed.`,
+      `Invalid command '.${s.command}' on <let>. Valid commands: ${validCommands}.`,
       loc
     );
   }

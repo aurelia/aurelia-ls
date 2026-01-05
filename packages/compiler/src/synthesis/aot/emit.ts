@@ -21,6 +21,7 @@ import type {
   SerializedListenerBinding,
   SerializedIteratorBinding,
   SerializedRefBinding,
+  SerializedTranslationBinding,
   SerializedSetProperty,
   SerializedHydrateElement,
   SerializedHydrateAttribute,
@@ -559,6 +560,23 @@ class EmitContext {
           to: binding.to,
           exprId: binding.exprId,
         } satisfies SerializedRefBinding;
+
+      case "translationBinding": {
+        const result: SerializedTranslationBinding = {
+          type: INSTRUCTION_TYPE.translationBinding,
+          to: binding.to,
+          isExpression: binding.isExpression,
+        };
+        // Only include exprId for expressions (t.bind)
+        if (binding.exprId !== undefined) {
+          result.exprId = binding.exprId;
+        }
+        // Only include keyValue for literal keys (t)
+        if (binding.keyValue !== undefined) {
+          result.keyValue = binding.keyValue;
+        }
+        return result;
+      }
     }
   }
 
@@ -999,6 +1017,12 @@ function remapInstructionExprIds(
 
     case INSTRUCTION_TYPE.refBinding:
       return { ...inst, exprId: remapId(inst.exprId) };
+
+    case INSTRUCTION_TYPE.translationBinding:
+      // Only remap exprId if present (expressions only, not literal keys)
+      return inst.exprId !== undefined
+        ? { ...inst, exprId: remapId(inst.exprId) }
+        : inst;
 
     case INSTRUCTION_TYPE.hydrateElement:
       return {

@@ -38,6 +38,7 @@ import {
 } from "@aurelia/template-compiler";
 import {
   createInterpolation,
+  CustomExpression,
   type IsBindingBehavior,
   type ForOfStatement,
   type Interpolation,
@@ -60,7 +61,7 @@ import {
   type SerializedHydrateTemplateController,
   type SerializedHydrateLetElement,
   type SerializedIteratorBinding,
-  // SerializedAuxBinding - reserved for future use
+  type SerializedTranslationBinding,
   type SerializedLetBinding,
   type NestedTemplateHtmlNode,
   type ExprId,
@@ -188,6 +189,8 @@ function translateInstruction(
       return translateHydrateLetElement(ins, ctx);
     case INSTRUCTION_TYPE.iteratorBinding:
       return translateIteratorBinding(ins, ctx);
+    case INSTRUCTION_TYPE.translationBinding:
+      return translateTranslationBinding(ins, ctx);
     default:
       throw new Error(`Unknown instruction type: ${(ins as SerializedInstruction).type}`);
   }
@@ -409,6 +412,51 @@ function translateIteratorBinding(
     to: ins.to,
     props,
   } as IteratorBindingInstruction;
+}
+
+/**
+ * i18n instruction type codes (from @aurelia/i18n, defined locally to avoid plugin dependency)
+ */
+const itTranslation = 100;
+const itTranslationBind = 101;
+
+/**
+ * Translation binding instruction interface (matches @aurelia/i18n's TranslationBindingInstruction)
+ */
+interface TranslationBindingInstructionLike {
+  type: number;
+  from: CustomExpression | IsBindingBehavior;
+  to: string;
+  mode: number;
+}
+
+function translateTranslationBinding(
+  ins: SerializedTranslationBinding,
+  ctx: TranslationContext,
+): IInstruction {
+  // i18n renderers expect:
+  // - type 100 (itTranslation) for literal keys with CustomExpression
+  // - type 101 (itTranslationBind) for expressions with IsBindingBehavior
+
+  if (ins.isExpression && ins.exprId !== undefined) {
+    // t.bind="expr" - use the expression from the table
+    const expr = getExpr(ctx.exprMap, ins.exprId) as IsBindingBehavior;
+    return {
+      type: itTranslationBind,
+      from: expr,
+      to: ins.to,
+      mode: 2, // toView
+    } as TranslationBindingInstructionLike as IInstruction;
+  } else {
+    // t="key" - wrap the literal key in CustomExpression
+    const keyValue = ins.keyValue ?? "";
+    return {
+      type: itTranslation,
+      from: new CustomExpression(keyValue),
+      to: ins.to,
+      mode: 2, // toView
+    } as TranslationBindingInstructionLike as IInstruction;
+  }
 }
 
 /* =============================================================================

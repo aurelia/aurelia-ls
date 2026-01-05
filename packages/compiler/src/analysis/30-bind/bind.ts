@@ -207,6 +207,10 @@ function walkRows(
         case "textBinding":
           mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
           break;
+        case "translationBinding":
+          // Only map expression source when it's t.bind (not literal t="key")
+          if (ins.from) mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
+          break;
 
         // ---- Setters (no expressions) ----
         case "setAttribute":

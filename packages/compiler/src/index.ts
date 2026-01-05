@@ -55,6 +55,22 @@ export type {
   Naming,
   TwoWayDefaults,
   TypeRef,
+  // Binding command configuration
+  BindingCommandConfig,
+  BindingCommandKind,
+  // Attribute pattern configuration
+  AttributePatternConfig,
+  PatternInterpret,
+} from "./language/index.js";
+
+// Binding command configuration (values)
+export {
+  BUILTIN_BINDING_COMMANDS,
+  getBindingCommandConfig,
+  isPropertyBindingCommand,
+  getCommandMode,
+  // Attribute pattern configuration (values)
+  BUILTIN_ATTRIBUTE_PATTERNS,
 } from "./language/index.js";
 
 // === Synthesis (Overlay) ===
@@ -117,6 +133,7 @@ export type {
   SerializedHydrateTemplateController,
   SerializedHydrateLetElement,
   SerializedIteratorBinding,
+  SerializedTranslationBinding,
   SerializedAuxBinding,
   SerializedLetBinding,
   SerializedBindable,

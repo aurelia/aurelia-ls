@@ -344,8 +344,18 @@ const settings__e = [
 const settings__def_0 = {
   name: "if_0",
   type: "custom-element",
-  template: '<div style="background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;" data-testid="save-success">\n    <span t="settings.saved"></span>\n  </div>',
-  instructions: [],
+  template: '<div style="background: #d1fae5; color: #065f46; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;" data-testid="save-success">\n    <!--au--><span></span>\n  </div>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.saved"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const settings__def_1 = {
@@ -393,67 +403,244 @@ const settings__def_3 = {
 const settings_$au = {
   type: "custom-element",
   name: "settings",
-  template: '<!--\n  Settings Page Template\n\n  Exercises:\n  - value.bind for text inputs\n  - value.bind for select dropdowns\n  - repeat.for for options\n  - click.trigger for buttons and toggles\n  - class.bind for active states\n  - if.bind for conditional display\n  - t="key" for labels\n-->\n\n<div class="page settings-page" data-testid="settings">\n  <h2 t="settings.title"></h2>\n\n  <!-- Success message -->\n  <!--au--><!--au-start--><!--au-end-->\n\n  <!-- Profile Section -->\n  <section class="settings-section">\n    <div class="card">\n      <h3 t="settings.sections.profile"></h3>\n\n      <div class="form-group">\n        <label class="form-label" t="settings.profile.name"></label>\n        <!--au--><input type="text" class="form-input" data-testid="profile-name">\n      </div>\n\n      <div class="form-group">\n        <label class="form-label" t="settings.profile.email"></label>\n        <!--au--><input type="email" class="form-input" data-testid="profile-email">\n      </div>\n\n      <div class="form-group">\n        <label class="form-label" t="settings.profile.role"></label>\n        <!--au--><input type="text" class="form-input" disabled style="background: #f3f4f6;">\n      </div>\n\n      <!--au--><button class="btn btn-primary" t="settings.profile.save" data-testid="save-profile"></button>\n    </div>\n  </section>\n\n  <!-- Preferences Section -->\n  <section class="settings-section">\n    <div class="card">\n      <h3 t="settings.sections.preferences"></h3>\n\n      <div class="form-group">\n        <label class="form-label" t="settings.preferences.theme"></label>\n        <!--au--><select class="form-input" data-testid="theme-select">\n          <!--au--><!--au-start--><!--au-end-->\n        </select>\n      </div>\n\n      <div class="form-group">\n        <label class="form-label" t="settings.preferences.language"></label>\n        <!--au--><select class="form-input" data-testid="language-select">\n          <!--au--><!--au-start--><!--au-end-->\n        </select>\n      </div>\n\n      <div class="form-group">\n        <label class="form-label" t="settings.preferences.dateFormat"></label>\n        <!--au--><select class="form-input" data-testid="date-format-select">\n          <!--au--><!--au-start--><!--au-end-->\n        </select>\n      </div>\n\n      <!--au--><button class="btn btn-primary" t="actions.save" data-testid="save-preferences"></button>\n    </div>\n  </section>\n\n  <!-- Notifications Section -->\n  <section class="settings-section">\n    <div class="card">\n      <h3 t="settings.sections.notifications"></h3>\n\n      <!-- Email notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-email">\n          <div class="toggle-switch"></div>\n          <div>\n            <div style="font-weight: 500;" t="settings.notifications.email"></div>\n            <div style="font-size: 0.875rem; color: #666;" t="settings.notifications.emailDesc"></div>\n          </div>\n        </div>\n      </div>\n\n      <!-- Browser notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-browser">\n          <div class="toggle-switch"></div>\n          <div>\n            <div style="font-weight: 500;" t="settings.notifications.browser"></div>\n            <div style="font-size: 0.875rem; color: #666;" t="settings.notifications.browserDesc"></div>\n          </div>\n        </div>\n      </div>\n\n      <!-- Assigned notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-assigned">\n          <div class="toggle-switch"></div>\n          <div style="font-weight: 500;" t="settings.notifications.assigned"></div>\n        </div>\n      </div>\n\n      <!-- Mentioned notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-mentioned">\n          <div class="toggle-switch"></div>\n          <div style="font-weight: 500;" t="settings.notifications.mentioned"></div>\n        </div>\n      </div>\n\n      <!-- Status change notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-status-change">\n          <div class="toggle-switch"></div>\n          <div style="font-weight: 500;" t="settings.notifications.statusChange"></div>\n        </div>\n      </div>\n\n      <!--au--><button class="btn btn-primary" t="actions.save" data-testid="save-notifications"></button>\n    </div>\n  </section>\n</div>\n',
+  template: '<!--\n  Settings Page Template\n\n  Exercises:\n  - value.bind for text inputs\n  - value.bind for select dropdowns\n  - repeat.for for options\n  - click.trigger for buttons and toggles\n  - class.bind for active states\n  - if.bind for conditional display\n  - t="key" for labels\n-->\n\n<div class="page settings-page" data-testid="settings">\n  <!--au--><h2></h2>\n\n  <!-- Success message -->\n  <!--au--><!--au-start--><!--au-end-->\n\n  <!-- Profile Section -->\n  <section class="settings-section">\n    <div class="card">\n      <!--au--><h3></h3>\n\n      <div class="form-group">\n        <!--au--><label class="form-label"></label>\n        <!--au--><input type="text" class="form-input" data-testid="profile-name">\n      </div>\n\n      <div class="form-group">\n        <!--au--><label class="form-label"></label>\n        <!--au--><input type="email" class="form-input" data-testid="profile-email">\n      </div>\n\n      <div class="form-group">\n        <!--au--><label class="form-label"></label>\n        <!--au--><input type="text" class="form-input" disabled style="background: #f3f4f6;">\n      </div>\n\n      <!--au--><button class="btn btn-primary" data-testid="save-profile"></button>\n    </div>\n  </section>\n\n  <!-- Preferences Section -->\n  <section class="settings-section">\n    <div class="card">\n      <!--au--><h3></h3>\n\n      <div class="form-group">\n        <!--au--><label class="form-label"></label>\n        <!--au--><select class="form-input" data-testid="theme-select">\n          <!--au--><!--au-start--><!--au-end-->\n        </select>\n      </div>\n\n      <div class="form-group">\n        <!--au--><label class="form-label"></label>\n        <!--au--><select class="form-input" data-testid="language-select">\n          <!--au--><!--au-start--><!--au-end-->\n        </select>\n      </div>\n\n      <div class="form-group">\n        <!--au--><label class="form-label"></label>\n        <!--au--><select class="form-input" data-testid="date-format-select">\n          <!--au--><!--au-start--><!--au-end-->\n        </select>\n      </div>\n\n      <!--au--><button class="btn btn-primary" data-testid="save-preferences"></button>\n    </div>\n  </section>\n\n  <!-- Notifications Section -->\n  <section class="settings-section">\n    <div class="card">\n      <!--au--><h3></h3>\n\n      <!-- Email notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-email">\n          <div class="toggle-switch"></div>\n          <div>\n            <!--au--><div style="font-weight: 500;"></div>\n            <!--au--><div style="font-size: 0.875rem; color: #666;"></div>\n          </div>\n        </div>\n      </div>\n\n      <!-- Browser notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-browser">\n          <div class="toggle-switch"></div>\n          <div>\n            <!--au--><div style="font-weight: 500;"></div>\n            <!--au--><div style="font-size: 0.875rem; color: #666;"></div>\n          </div>\n        </div>\n      </div>\n\n      <!-- Assigned notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-assigned">\n          <div class="toggle-switch"></div>\n          <!--au--><div style="font-weight: 500;"></div>\n        </div>\n      </div>\n\n      <!-- Mentioned notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-mentioned">\n          <div class="toggle-switch"></div>\n          <!--au--><div style="font-weight: 500;"></div>\n        </div>\n      </div>\n\n      <!-- Status change notifications -->\n      <div class="form-group">\n        <!--au--><div data-testid="toggle-status-change">\n          <div class="toggle-switch"></div>\n          <!--au--><div style="font-weight: 500;"></div>\n        </div>\n      </div>\n\n      <!--au--><button class="btn btn-primary" data-testid="save-notifications"></button>\n    </div>\n  </section>\n</div>\n',
   instructions: [
     /* target 0 */
     [
-      { type: 2, def: settings__def_0, res: "if", props: [{ type: 12, from: settings__e[0], to: "value", mode: 2 }] }
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.title"
+      }
     ],
     /* target 1 */
-    [{ type: 12, from: settings__e[1], to: "value", mode: 6 }],
+    [
+      { type: 2, def: settings__def_0, res: "if", props: [{ type: 12, from: settings__e[0], to: "value", mode: 2 }] }
+    ],
     /* target 2 */
-    [{ type: 12, from: settings__e[2], to: "value", mode: 6 }],
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.sections.profile"
+      }
+    ],
     /* target 3 */
-    [{ type: 12, from: settings__e[3], to: "value", mode: 6 }],
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.profile.name"
+      }
+    ],
     /* target 4 */
-    [{ type: 31, from: settings__e[4], to: "click", capture: false }],
+    [{ type: 12, from: settings__e[1], to: "value", mode: 6 }],
     /* target 5 */
-    [{ type: 12, from: settings__e[5], to: "value", mode: 6 }],
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.profile.email"
+      }
+    ],
     /* target 6 */
+    [{ type: 12, from: settings__e[2], to: "value", mode: 6 }],
+    /* target 7 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.profile.role"
+      }
+    ],
+    /* target 8 */
+    [{ type: 12, from: settings__e[3], to: "value", mode: 6 }],
+    /* target 9 */
+    [
+      { type: 31, from: settings__e[4], to: "click", capture: false },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.profile.save"
+      }
+    ],
+    /* target 10 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.sections.preferences"
+      }
+    ],
+    /* target 11 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.preferences.theme"
+      }
+    ],
+    /* target 12 */
+    [{ type: 12, from: settings__e[5], to: "value", mode: 6 }],
+    /* target 13 */
     [
       { type: 2, def: settings__def_1, res: "repeat", props: [{ forOf: settings__e[8], to: "items", props: [], type: 15 }] }
     ],
-    /* target 7 */
+    /* target 14 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.preferences.language"
+      }
+    ],
+    /* target 15 */
     [{ type: 12, from: settings__e[9], to: "value", mode: 6 }],
-    /* target 8 */
+    /* target 16 */
     [
       { type: 2, def: settings__def_2, res: "repeat", props: [{ forOf: settings__e[10], to: "items", props: [], type: 15 }] }
     ],
-    /* target 9 */
+    /* target 17 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.preferences.dateFormat"
+      }
+    ],
+    /* target 18 */
     [{ type: 12, from: settings__e[11], to: "value", mode: 6 }],
-    /* target 10 */
+    /* target 19 */
     [
       { type: 2, def: settings__def_3, res: "repeat", props: [{ forOf: settings__e[12], to: "items", props: [], type: 15 }] }
     ],
-    /* target 11 */
-    [{ type: 31, from: settings__e[13], to: "click", capture: false }],
-    /* target 12 */
+    /* target 20 */
+    [
+      { type: 31, from: settings__e[13], to: "click", capture: false },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "actions.save"
+      }
+    ],
+    /* target 21 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.sections.notifications"
+      }
+    ],
+    /* target 22 */
     [
       { type: 11, to: "class", from: { $kind: "Interpolation", parts: ["toggle ", ""], expressions: [settings__e[14]], isMulti: false, firstExpression: settings__e[14] } },
       { type: 31, from: settings__e[15], to: "click", capture: false }
     ],
-    /* target 13 */
+    /* target 23 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.notifications.email"
+      }
+    ],
+    /* target 24 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.notifications.emailDesc"
+      }
+    ],
+    /* target 25 */
     [
       { type: 11, to: "class", from: { $kind: "Interpolation", parts: ["toggle ", ""], expressions: [settings__e[16]], isMulti: false, firstExpression: settings__e[16] } },
       { type: 31, from: settings__e[17], to: "click", capture: false }
     ],
-    /* target 14 */
+    /* target 26 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.notifications.browser"
+      }
+    ],
+    /* target 27 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.notifications.browserDesc"
+      }
+    ],
+    /* target 28 */
     [
       { type: 11, to: "class", from: { $kind: "Interpolation", parts: ["toggle ", ""], expressions: [settings__e[18]], isMulti: false, firstExpression: settings__e[18] } },
       { type: 31, from: settings__e[19], to: "click", capture: false }
     ],
-    /* target 15 */
+    /* target 29 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.notifications.assigned"
+      }
+    ],
+    /* target 30 */
     [
       { type: 11, to: "class", from: { $kind: "Interpolation", parts: ["toggle ", ""], expressions: [settings__e[20]], isMulti: false, firstExpression: settings__e[20] } },
       { type: 31, from: settings__e[21], to: "click", capture: false }
     ],
-    /* target 16 */
+    /* target 31 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.notifications.mentioned"
+      }
+    ],
+    /* target 32 */
     [
       { type: 11, to: "class", from: { $kind: "Interpolation", parts: ["toggle ", ""], expressions: [settings__e[22]], isMulti: false, firstExpression: settings__e[22] } },
       { type: 31, from: settings__e[23], to: "click", capture: false }
     ],
-    /* target 17 */
-    [{ type: 31, from: settings__e[24], to: "click", capture: false }]
+    /* target 33 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "settings.notifications.statusChange"
+      }
+    ],
+    /* target 34 */
+    [
+      { type: 31, from: settings__e[24], to: "click", capture: false },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "actions.save"
+      }
+    ]
   ],
   needsCompile: false
 };

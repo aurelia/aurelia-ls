@@ -501,5 +501,43 @@
         { "kind": "event", "on": "click", "command": "trigger", "code": "handleClick()" }
       ]
     }
+  },
+  {
+    "name": "LB-56 i18n t attribute (literal key)",
+    "markup": "<span t=\"greeting.hello\"></span>",
+    "expect": {
+      "expressions": [
+        { "kind": "translation", "on": "", "command": "t", "code": "greeting.hello" }
+      ]
+    }
+  },
+  {
+    "name": "LB-57 i18n t.bind (expression key)",
+    "markup": "<span t.bind=\"translationKey\"></span>",
+    "expect": {
+      "expressions": [
+        { "kind": "translation", "on": "", "command": "t.bind", "code": "translationKey" }
+      ]
+    }
+  },
+  {
+    "name": "LB-58 unknown binding command emits AU0705",
+    "markup": "<div foo.unknowncommand=\"bar\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "bar" }
+      ],
+      "diags": [{ "code": "AU0705" }]
+    }
+  },
+  {
+    "name": "LB-59 unknown command with suggestion (bnd → bind)",
+    "markup": "<div foo.bnd=\"bar\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "bar" }
+      ],
+      "diags": [{ "code": "AU0705" }]
+    }
   }
 ]

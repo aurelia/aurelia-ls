@@ -39,6 +39,7 @@ import type {
   LinkedListenerBinding,
   LinkedRefBinding,
   LinkedTextBinding,
+  LinkedTranslationBinding,
   LinkedHydrateElement,
   LinkedHydrateAttribute,
   LinkedHydrateTemplateController,
@@ -49,6 +50,7 @@ import type {
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
 import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
 import { debug } from "../../shared/debug.js";
+import { BUILTIN_BINDING_COMMANDS } from "../../language/registry.js";
 
 import type {
   AotPlanModule,
@@ -65,6 +67,7 @@ import type {
   PlanStyleBinding,
   PlanListenerBinding,
   PlanRefBinding,
+  PlanTranslationBinding,
   PlanTextInterpolation,
   PlanStaticAttr,
   PlanCustomElement,
@@ -438,6 +441,11 @@ function transformElement(
         needsTarget = true;
         break;
 
+      case "translationBinding":
+        bindings.push(transformTranslationBinding(ins, ctx));
+        needsTarget = true;
+        break;
+
       case "setAttribute":
         staticAttrs.push({ name: ins.to, value: ins.value });
         break;
@@ -801,6 +809,27 @@ function transformRefBinding(ins: LinkedRefBinding, ctx: PlanningContext): PlanR
     to: ins.to,
     exprId: ins.from.id,
   };
+  if (ins.loc) result.loc = ins.loc;
+  return result;
+}
+
+function transformTranslationBinding(ins: LinkedTranslationBinding, ctx: PlanningContext): PlanTranslationBinding {
+  const result: PlanTranslationBinding = {
+    type: "translationBinding",
+    to: ins.to,
+    isExpression: ins.isExpression,
+  };
+
+  if (ins.isExpression && ins.from) {
+    // t.bind="expr" - register the expression
+    const exprId = primaryExprId(ins.from);
+    ctx.registerExpression(exprId, ins.loc ?? undefined);
+    result.exprId = exprId;
+  } else if (ins.keyValue !== undefined) {
+    // t="key" - preserve the literal key value
+    result.keyValue = ins.keyValue;
+  }
+
   if (ins.loc) result.loc = ins.loc;
   return result;
 }
@@ -1208,21 +1237,30 @@ function extractIteratorLocals(forOfExprId: ExprId, ctx: PlanningContext): strin
  * ============================================================================= */
 
 /**
- * Known binding command suffixes that indicate an attribute is a binding, not static.
- * These should NOT be included in staticAttrs.
+ * Binding command suffixes derived from config.
+ * Used to identify binding attributes that should NOT be included in staticAttrs.
+ * Computed once at module load from the config-driven binding command registry.
  */
-const BINDING_COMMANDS = new Set([
-  "bind", "one-time", "to-view", "from-view", "two-way",
-  "trigger", "capture", "delegate",
-  "ref",
-  "for", // repeat.for
-]);
+const BINDING_COMMANDS = new Set(Object.keys(BUILTIN_BINDING_COMMANDS));
 
 /**
  * Check if an attribute name is a binding attribute.
- * Binding attributes have the form "name.command" where command is a known binding command.
+ *
+ * Binding attributes come in two forms:
+ * 1. Standalone command: attribute name IS a command (e.g., `t="key"`, `ref="varName"`)
+ * 2. Target.command: attribute has form "target.command" (e.g., `click.trigger`, `value.bind`)
+ *
+ * Both forms should be stripped from the template HTML since they're compiled into instructions.
  */
 function isBindingAttribute(attrName: string): boolean {
+  // Check if the attribute name itself is a binding command (standalone usage)
+  // Examples: t="key", ref="varName"
+  if (BINDING_COMMANDS.has(attrName)) {
+    return true;
+  }
+
+  // Check for "target.command" format
+  // Examples: click.trigger, value.bind, repeat.for
   const dotIndex = attrName.lastIndexOf(".");
   if (dotIndex === -1) return false;
   const command = attrName.slice(dotIndex + 1);

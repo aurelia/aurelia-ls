@@ -42,7 +42,7 @@ export function collectRows(
         if (tag === "let") {
           rows.push({
             target,
-            instructions: [lowerLetElement(n, attrParser, table)],
+            instructions: [lowerLetElement(n, attrParser, table, sem)],
           });
           ids.exitElement();
           continue;

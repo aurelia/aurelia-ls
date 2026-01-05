@@ -22,6 +22,7 @@ import type {
   SetClassAttributeIR,
   SetStyleAttributeIR,
   TextBindingIR,
+  TranslationBindingIR,
   IteratorBindingIR,
   HydrateTemplateControllerIR,
   HydrateLetElementIR,
@@ -53,6 +54,7 @@ import type {
   LinkedListenerBinding,
   LinkedRefBinding,
   LinkedTextBinding,
+  LinkedTranslationBinding,
   LinkedSetAttribute,
   LinkedSetClassAttribute,
   LinkedSetStyleAttribute,
@@ -573,6 +575,8 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
       return linkRefBinding(ins);
     case "textBinding":
       return linkTextBinding(ins);
+    case "translationBinding":
+      return linkTranslationBinding(ins);
     case "setAttribute":
       return linkSetAttribute(ins);
     case "setProperty":
@@ -715,6 +719,22 @@ function linkRefBinding(ins: RefBindingIR): LinkedRefBinding {
 
 function linkTextBinding(ins: TextBindingIR): LinkedTextBinding {
   return { kind: "textBinding", from: ins.from, loc: ins.loc ?? null };
+}
+
+/* ---- TranslationBinding (i18n) ---- */
+
+function linkTranslationBinding(ins: TranslationBindingIR): LinkedTranslationBinding {
+  const result: LinkedTranslationBinding = {
+    kind: "translationBinding",
+    to: ins.to,
+    isExpression: ins.isExpression,
+    loc: ins.loc ?? null,
+  };
+  // Only include from when it's an expression (t.bind)
+  if (ins.from) result.from = ins.from;
+  // Only include keyValue when it's a literal key (t)
+  if (ins.keyValue !== undefined) result.keyValue = ins.keyValue;
+  return result;
 }
 
 /* ---- SetAttribute / Class / Style ---- */

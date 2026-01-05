@@ -79,13 +79,33 @@ export class ExprTable {
   }
 }
 
-export function toMode(cmd: string | null, rawName?: string): BindingMode {
-  if (cmd === "one-time") return "oneTime";
-  if (cmd === "to-view") return "toView";
-  if (cmd === "from-view") return "fromView";
-  if (cmd === "two-way") return "twoWay";
-  // AttrParser maps ':' shorthand to command 'bind'; preserve authored intent.
-  if (rawName?.startsWith(":")) return "toView";
+/**
+ * Get the binding mode for a command.
+ * Uses config-driven lookup via bindingCommands.
+ *
+ * Resolution order:
+ * 1. Pattern-provided mode (e.g., `:PART` pattern specifies mode="toView")
+ * 2. Command config mode (e.g., "one-time" → mode="oneTime")
+ * 3. Default fallback ("default")
+ *
+ * @param cmd - Command name (e.g., "bind", "one-time", "to-view")
+ * @param patternMode - Mode override from pattern config (takes precedence)
+ * @param bindingCommands - Command config record from Semantics
+ */
+export function toMode(
+  cmd: string | null,
+  patternMode: BindingMode | null | undefined,
+  bindingCommands: Record<string, { kind: string; mode?: BindingMode }>
+): BindingMode {
+  // Pattern-provided mode takes precedence (e.g., `:PART` → toView)
+  if (patternMode) return patternMode;
+
+  if (cmd) {
+    const config = bindingCommands[cmd];
+    if (config?.kind === "property" && config.mode) {
+      return config.mode;
+    }
+  }
   return "default";
 }
 

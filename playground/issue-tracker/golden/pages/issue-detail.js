@@ -474,8 +474,18 @@ const issueDetail__e = [
 const issueDetail__def_0 = {
   name: "if_0",
   type: "custom-element",
-  template: '<div class="card" data-testid="loading">\n    <p t="app.loading"></p>\n  </div>',
-  instructions: [],
+  template: '<div class="card" data-testid="loading">\n    <!--au--><p></p>\n  </div>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "app.loading"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_2 = {
@@ -502,8 +512,18 @@ const issueDetail__def_3 = {
 const issueDetail__def_4 = {
   name: "else_4",
   type: "custom-element",
-  template: '<span style="color: #999;" t="issue.meta.unassigned"></span>',
-  instructions: [],
+  template: '<!--au--><span style="color: #999;"></span>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.meta.unassigned"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_5 = {
@@ -525,8 +545,18 @@ const issueDetail__def_5 = {
 const issueDetail__def_6 = {
   name: "else_6",
   type: "custom-element",
-  template: '<span style="color: #999;" t="issue.time.noDueDate"></span>',
-  instructions: [],
+  template: '<!--au--><span style="color: #999;"></span>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.time.noDueDate"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_7 = {
@@ -544,16 +574,35 @@ const issueDetail__def_7 = {
 const issueDetail__def_8 = {
   name: "else_8",
   type: "custom-element",
-  template: '<span style="color: #999;" t="issue.meta.noPoints"></span>',
-  instructions: [],
+  template: '<!--au--><span style="color: #999;"></span>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.meta.noPoints"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_9 = {
   name: "if_9",
   type: "custom-element",
-  template: '<section class="issue-detail-section">\n        <h3 t="issue.sections.labels"></h3>\n        <!--au--><label-list></label-list>\n      </section>',
+  template: '<section class="issue-detail-section">\n        <!--au--><h3></h3>\n        <!--au--><label-list></label-list>\n      </section>',
   instructions: [
     /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.sections.labels"
+      }
+    ],
+    /* target 1 */
     [{ type: 12, from: issueDetail__e[21], to: "labels", mode: 2 }]
   ],
   needsCompile: false
@@ -561,29 +610,69 @@ const issueDetail__def_9 = {
 const issueDetail__def_12 = {
   name: "case_12",
   type: "custom-element",
-  template: '<span t="issue.transitions.reopen"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.transitions.reopen"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_13 = {
   name: "case_13",
   type: "custom-element",
-  template: '<span t="issue.transitions.start"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.transitions.start"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_14 = {
   name: "case_14",
   type: "custom-element",
-  template: '<span t="issue.transitions.review"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.transitions.review"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_15 = {
   name: "case_15",
   type: "custom-element",
-  template: '<span t="issue.transitions.close"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.transitions.close"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_16 = {
@@ -644,8 +733,18 @@ const issueDetail__def_10 = {
 const issueDetail__def_17 = {
   name: "if_17",
   type: "custom-element",
-  template: '<div class="empty-state" style="padding: 1rem;">\n        <p t="issue.comments.empty"></p>\n      </div>',
-  instructions: [],
+  template: '<div class="empty-state" style="padding: 1rem;">\n        <!--au--><p></p>\n      </div>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.comments.empty"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issueDetail__def_19 = {
@@ -687,88 +786,123 @@ const issueDetail__def_18 = {
 const issueDetail__def_1 = {
   name: "else_1",
   type: "custom-element",
-  template: '\n    <!-- Header with back button -->\n    <div style="margin-bottom: 1rem;">\n      <!--au--><button class="btn btn-ghost">\n        \u2190 <span t="actions.back"></span>\n      </button>\n    </div>\n\n    <div class="card">\n      <!-- Issue header -->\n      <header class="issue-detail-header">\n        <div style="display: flex; align-items: start; gap: 1rem; margin-bottom: 1rem;">\n          <!--au--><status-badge></status-badge>\n          <!--au--><priority-icon></priority-icon>\n          <!--au--><span><!--au--> </span>\n        </div>\n\n        <h1 class="issue-detail-title"><!--au--> </h1>\n\n        <div class="issue-detail-meta">\n          <span style="color: #666;"><!--au--> </span>\n          <span>\u2022</span>\n          <!--au--><time-ago prefix="Created"></time-ago>\n          <span>\u2022</span>\n          <!--au--><time-ago prefix="Updated"></time-ago>\n        </div>\n      </header>\n\n      <!-- Reporter and Assignee -->\n      <div style="display: flex; gap: 2rem; margin: 1.5rem 0; padding: 1rem 0; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb;">\n        <!-- Reporter -->\n        <!--au--><!--au-start--><!--au-end-->\n\n        <!-- Assignee -->\n        <div>\n          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Assignee</div>\n          <!--au--><!--au-start--><!--au-end-->\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n\n        <!-- Due Date -->\n        <div>\n          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Due Date</div>\n          <!--au--><!--au-start--><!--au-end-->\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n\n        <!-- Story Points -->\n        <div>\n          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Story Points</div>\n          <!--au--><!--au-start--><!--au-end-->\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n      </div>\n\n      <!-- Labels -->\n      <!--au--><!--au-start--><!--au-end-->\n\n      <!-- Description -->\n      <section class="issue-detail-section">\n        <h3 t="issue.sections.description"></h3>\n        <p style="white-space: pre-wrap;"><!--au--> </p>\n      </section>\n\n      <!-- Status transitions -->\n      <section class="issue-detail-section">\n        <h3>Actions</h3>\n        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n      </section>\n    </div>\n\n    <!-- Comments section -->\n    <div class="card" style="margin-top: 1rem;">\n      <h3 t="issue.sections.comments"></h3>\n\n      <!-- Empty state -->\n      <!--au--><!--au-start--><!--au-end-->\n\n      <!-- Comment list -->\n      <!--au--><!--au-start--><!--au-end-->\n\n      <!-- Add comment form -->\n      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">\n        <!--au--><textarea class="form-input" rows="3" data-testid="comment-input"></textarea>\n        <!--au--><button class="btn btn-primary" style="margin-top: 0.5rem;" data-testid="submit-comment" t="issue.comments.submit"></button>\n      </div>\n    </div>\n  ',
+  template: '\n    <!-- Header with back button -->\n    <div style="margin-bottom: 1rem;">\n      <!--au--><button class="btn btn-ghost">\n        \u2190 <!--au--><span></span>\n      </button>\n    </div>\n\n    <div class="card">\n      <!-- Issue header -->\n      <header class="issue-detail-header">\n        <div style="display: flex; align-items: start; gap: 1rem; margin-bottom: 1rem;">\n          <!--au--><status-badge></status-badge>\n          <!--au--><priority-icon></priority-icon>\n          <!--au--><span><!--au--> </span>\n        </div>\n\n        <h1 class="issue-detail-title"><!--au--> </h1>\n\n        <div class="issue-detail-meta">\n          <span style="color: #666;"><!--au--> </span>\n          <span>\u2022</span>\n          <!--au--><time-ago prefix="Created"></time-ago>\n          <span>\u2022</span>\n          <!--au--><time-ago prefix="Updated"></time-ago>\n        </div>\n      </header>\n\n      <!-- Reporter and Assignee -->\n      <div style="display: flex; gap: 2rem; margin: 1.5rem 0; padding: 1rem 0; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb;">\n        <!-- Reporter -->\n        <!--au--><!--au-start--><!--au-end-->\n\n        <!-- Assignee -->\n        <div>\n          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Assignee</div>\n          <!--au--><!--au-start--><!--au-end-->\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n\n        <!-- Due Date -->\n        <div>\n          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Due Date</div>\n          <!--au--><!--au-start--><!--au-end-->\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n\n        <!-- Story Points -->\n        <div>\n          <div style="font-size: 0.75rem; color: #666; margin-bottom: 0.25rem;">Story Points</div>\n          <!--au--><!--au-start--><!--au-end-->\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n      </div>\n\n      <!-- Labels -->\n      <!--au--><!--au-start--><!--au-end-->\n\n      <!-- Description -->\n      <section class="issue-detail-section">\n        <!--au--><h3></h3>\n        <p style="white-space: pre-wrap;"><!--au--> </p>\n      </section>\n\n      <!-- Status transitions -->\n      <section class="issue-detail-section">\n        <h3>Actions</h3>\n        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">\n          <!--au--><!--au-start--><!--au-end-->\n        </div>\n      </section>\n    </div>\n\n    <!-- Comments section -->\n    <div class="card" style="margin-top: 1rem;">\n      <!--au--><h3></h3>\n\n      <!-- Empty state -->\n      <!--au--><!--au-start--><!--au-end-->\n\n      <!-- Comment list -->\n      <!--au--><!--au-start--><!--au-end-->\n\n      <!-- Add comment form -->\n      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">\n        <!--au--><textarea class="form-input" rows="3" data-testid="comment-input"></textarea>\n        <!--au--><button class="btn btn-primary" style="margin-top: 0.5rem;" data-testid="submit-comment"></button>\n      </div>\n    </div>\n  ',
   instructions: [
     /* target 0 */
     [{ type: 31, from: issueDetail__e[4], to: "click", capture: false }],
     /* target 1 */
-    [{ type: 12, from: issueDetail__e[5], to: "status", mode: 2 }],
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "actions.back"
+      }
+    ],
     /* target 2 */
-    [{ type: 12, from: issueDetail__e[6], to: "priority", mode: 2 }],
+    [{ type: 12, from: issueDetail__e[5], to: "status", mode: 2 }],
     /* target 3 */
+    [{ type: 12, from: issueDetail__e[6], to: "priority", mode: 2 }],
+    /* target 4 */
     [
       { type: 11, to: "class", from: { $kind: "Interpolation", parts: ["badge badge-", ""], expressions: [issueDetail__e[7]], isMulti: false, firstExpression: issueDetail__e[7] } }
     ],
-    /* target 4 */
+    /* target 5 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [issueDetail__e[7]], isMulti: false, firstExpression: issueDetail__e[7] } }
     ],
-    /* target 5 */
+    /* target 6 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [issueDetail__e[8]], isMulti: false, firstExpression: issueDetail__e[8] } }
     ],
-    /* target 6 */
+    /* target 7 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [issueDetail__e[9]], isMulti: false, firstExpression: issueDetail__e[9] } }
     ],
-    /* target 7 */
-    [{ type: 12, from: issueDetail__e[10], to: "date", mode: 2 }],
     /* target 8 */
-    [{ type: 12, from: issueDetail__e[11], to: "date", mode: 2 }],
+    [{ type: 12, from: issueDetail__e[10], to: "date", mode: 2 }],
     /* target 9 */
+    [{ type: 12, from: issueDetail__e[11], to: "date", mode: 2 }],
+    /* target 10 */
     [
       { type: 2, def: issueDetail__def_2, res: "with", props: [{ type: 12, from: issueDetail__e[14], to: "value", mode: 2 }] }
     ],
-    /* target 10 */
+    /* target 11 */
     [
       { type: 2, def: issueDetail__def_3, res: "if", props: [{ type: 12, from: issueDetail__e[15], to: "value", mode: 2 }] }
     ],
-    /* target 11 */
-    [{ type: 2, def: issueDetail__def_4, res: "else", props: [] }],
     /* target 12 */
+    [{ type: 2, def: issueDetail__def_4, res: "else", props: [] }],
+    /* target 13 */
     [
       { type: 2, def: issueDetail__def_5, res: "if", props: [{ type: 12, from: issueDetail__e[18], to: "value", mode: 2 }] }
     ],
-    /* target 13 */
-    [{ type: 2, def: issueDetail__def_6, res: "else", props: [] }],
     /* target 14 */
+    [{ type: 2, def: issueDetail__def_6, res: "else", props: [] }],
+    /* target 15 */
     [
       { type: 2, def: issueDetail__def_7, res: "if", props: [{ type: 12, from: issueDetail__e[20], to: "value", mode: 2 }] }
     ],
-    /* target 15 */
-    [{ type: 2, def: issueDetail__def_8, res: "else", props: [] }],
     /* target 16 */
+    [{ type: 2, def: issueDetail__def_8, res: "else", props: [] }],
+    /* target 17 */
     [
       { type: 2, def: issueDetail__def_9, res: "if", props: [{ type: 12, from: issueDetail__e[22], to: "value", mode: 2 }] }
     ],
-    /* target 17 */
-    [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [issueDetail__e[23]], isMulti: false, firstExpression: issueDetail__e[23] } }
-    ],
     /* target 18 */
     [
-      { type: 2, def: issueDetail__def_10, res: "repeat", props: [{ forOf: issueDetail__e[30], to: "items", props: [], type: 15 }] }
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.sections.description"
+      }
     ],
     /* target 19 */
     [
-      { type: 2, def: issueDetail__def_17, res: "if", props: [{ type: 12, from: issueDetail__e[31], to: "value", mode: 2 }] }
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [issueDetail__e[23]], isMulti: false, firstExpression: issueDetail__e[23] } }
     ],
     /* target 20 */
-    [{ type: 2, def: issueDetail__def_18, res: "else", props: [] }],
+    [
+      { type: 2, def: issueDetail__def_10, res: "repeat", props: [{ forOf: issueDetail__e[30], to: "items", props: [], type: 15 }] }
+    ],
     /* target 21 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.sections.comments"
+      }
+    ],
+    /* target 22 */
+    [
+      { type: 2, def: issueDetail__def_17, res: "if", props: [{ type: 12, from: issueDetail__e[31], to: "value", mode: 2 }] }
+    ],
+    /* target 23 */
+    [{ type: 2, def: issueDetail__def_18, res: "else", props: [] }],
+    /* target 24 */
     [
       { type: 12, from: issueDetail__e[38], to: "value", mode: 6 },
       { type: 12, from: issueDetail__e[39], to: "placeholder", mode: 2 }
     ],
-    /* target 22 */
-    [{ type: 31, from: issueDetail__e[40], to: "click", capture: false }]
+    /* target 25 */
+    [
+      { type: 31, from: issueDetail__e[40], to: "click", capture: false },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.comments.submit"
+      }
+    ]
   ],
   needsCompile: false
 };
 const issueDetail_$au = {
   type: "custom-element",
   name: "issue-detail",
-  template: '<!--\n  Issue Detail Page Template\n\n  Exercises:\n  - if.bind for loading/error states\n  - with.bind for nested context (assignee, reporter)\n  - switch/case for status actions\n  - repeat.for for comments, labels, transitions\n  - click.trigger for actions\n  - value.bind for comment input\n  - t="key" for labels\n  - Custom elements (status-badge, priority-icon, user-avatar, label-list, time-ago)\n  - class.bind for conditional styling\n-->\n\n<div class="page issue-detail-page" data-testid="issue-detail">\n  <!-- Loading state -->\n  <!--au--><!--au-start--><!--au-end-->\n\n  <!-- Not found state -->\n  <!--au--><div data-testid="not-found">\n    <!--au--><empty-state icon="\u274C"></empty-state>\n    <!--au--><button class="btn btn-secondary" style="margin-top: 1rem;">\n      <span t="issue.notFound.back"></span>\n    </button>\n  </div>\n\n  <!-- Issue content -->\n  <!--au--><!--au-start--><!--au-end-->\n</div>\n',
+  template: '<!--\n  Issue Detail Page Template\n\n  Exercises:\n  - if.bind for loading/error states\n  - with.bind for nested context (assignee, reporter)\n  - switch/case for status actions\n  - repeat.for for comments, labels, transitions\n  - click.trigger for actions\n  - value.bind for comment input\n  - t="key" for labels\n  - Custom elements (status-badge, priority-icon, user-avatar, label-list, time-ago)\n  - class.bind for conditional styling\n-->\n\n<div class="page issue-detail-page" data-testid="issue-detail">\n  <!-- Loading state -->\n  <!--au--><!--au-start--><!--au-end-->\n\n  <!-- Not found state -->\n  <!--au--><div data-testid="not-found">\n    <!--au--><empty-state icon="\u274C"></empty-state>\n    <!--au--><button class="btn btn-secondary" style="margin-top: 1rem;">\n      <!--au--><span></span>\n    </button>\n  </div>\n\n  <!-- Issue content -->\n  <!--au--><!--au-start--><!--au-end-->\n</div>\n',
   instructions: [
     /* target 0 */
     [
@@ -784,6 +918,15 @@ const issueDetail_$au = {
     /* target 3 */
     [{ type: 31, from: issueDetail__e[4], to: "click", capture: false }],
     /* target 4 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.notFound.back"
+      }
+    ],
+    /* target 5 */
     [{ type: 2, def: issueDetail__def_1, res: "else", props: [] }]
   ],
   needsCompile: false

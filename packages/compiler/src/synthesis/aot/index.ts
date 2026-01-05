@@ -53,6 +53,7 @@ export type {
   SerializedTextBinding,
   SerializedListenerBinding,
   SerializedIteratorBinding,
+  SerializedTranslationBinding,
   SerializedAuxBinding,
   SerializedRefBinding,
   SerializedSetProperty,

@@ -40,36 +40,86 @@ const statusBadge__e = [
 const statusBadge__def_1 = {
   name: "case_1",
   type: "custom-element",
-  template: '<span t="status.draft"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "status.draft"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const statusBadge__def_2 = {
   name: "case_2",
   type: "custom-element",
-  template: '<span t="status.open"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "status.open"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const statusBadge__def_3 = {
   name: "case_3",
   type: "custom-element",
-  template: '<span t="status.in_progress"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "status.in_progress"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const statusBadge__def_4 = {
   name: "case_4",
   type: "custom-element",
-  template: '<span t="status.review"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "status.review"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const statusBadge__def_5 = {
   name: "case_5",
   type: "custom-element",
-  template: '<span t="status.closed"></span>',
-  instructions: [],
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "status.closed"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const statusBadge__def_0 = {

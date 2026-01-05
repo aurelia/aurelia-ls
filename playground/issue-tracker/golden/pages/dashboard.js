@@ -212,8 +212,18 @@ const dashboard__e = [
 const dashboard__def_0 = {
   name: "if_0",
   type: "custom-element",
-  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u{1F4CB}</div>\n      <p t="dashboard.empty.noActivity"></p>\n    </div>',
-  instructions: [],
+  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u{1F4CB}</div>\n      <!--au--><p></p>\n    </div>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.empty.noActivity"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const dashboard__def_3 = {
@@ -263,8 +273,18 @@ const dashboard__def_1 = {
 const dashboard__def_4 = {
   name: "if_4",
   type: "custom-element",
-  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u2728</div>\n      <p t="dashboard.empty.noAssigned"></p>\n    </div>',
-  instructions: [],
+  template: '<div class="empty-state">\n      <div class="empty-state-icon">\u2728</div>\n      <!--au--><p></p>\n    </div>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.empty.noAssigned"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const dashboard__def_6 = {
@@ -332,9 +352,18 @@ const dashboard__def_8 = {
 const dashboard__def_7 = {
   name: "if_7",
   type: "custom-element",
-  template: '<section class="card" data-testid="critical-issues">\n    <div class="card-header">\n      <h3 class="card-title" t="dashboard.sections.criticalIssues"></h3>\n    </div>\n\n    <ul class="issue-list">\n      <!--au--><!--au-start--><!--au-end-->\n    </ul>\n  </section>',
+  template: '<section class="card" data-testid="critical-issues">\n    <div class="card-header">\n      <!--au--><h3 class="card-title"></h3>\n    </div>\n\n    <ul class="issue-list">\n      <!--au--><!--au-start--><!--au-end-->\n    </ul>\n  </section>',
   instructions: [
     /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.sections.criticalIssues"
+      }
+    ],
+    /* target 1 */
     [
       { type: 2, def: dashboard__def_8, res: "repeat", props: [{ forOf: dashboard__e[14], to: "items", props: [], type: 15 }] }
     ]
@@ -344,45 +373,124 @@ const dashboard__def_7 = {
 const dashboard_$au = {
   type: "custom-element",
   name: "dashboard",
-  template: '<!--\n  Dashboard Page Template\n\n  Exercises:\n  - t="key" for labels\n  - t with params for welcome message\n  - ${interpolation} for stats\n  - repeat.for for lists\n  - if.bind / else for empty states\n  - Custom elements (status-badge, priority-icon)\n  - load="issue/${id}" for parameterized routes\n-->\n\n<div class="page dashboard-page" data-testid="dashboard">\n  <!-- Welcome message with i18n parameter -->\n  <!--au--><h2 t="dashboard.welcome"></h2>\n\n  <!-- Stats grid -->\n  <div class="stats-grid" data-testid="stats-grid">\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <div class="stat-label" t="dashboard.stats.total"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <div class="stat-label" t="dashboard.stats.open"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <div class="stat-label" t="dashboard.stats.inProgress"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <div class="stat-label" t="dashboard.stats.review"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <div class="stat-label" t="dashboard.stats.closed"></div>\n    </div>\n  </div>\n\n  <!-- Recent Activity -->\n  <section class="card" data-testid="recent-activity">\n    <div class="card-header">\n      <h3 class="card-title" t="dashboard.sections.recentActivity"></h3>\n      <!--au--><a class="btn btn-ghost" t="actions.viewAll" load="issues"></a>\n    </div>\n\n    <!-- Empty state -->\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!-- Issue list -->\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- My Issues -->\n  <section class="card" data-testid="my-issues">\n    <div class="card-header">\n      <h3 class="card-title" t="dashboard.sections.myIssues"></h3>\n    </div>\n\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- Critical Issues -->\n  <!--au--><!--au-start--><!--au-end-->\n</div>\n',
+  template: '<!--\n  Dashboard Page Template\n\n  Exercises:\n  - t="key" for labels\n  - t with params for welcome message\n  - ${interpolation} for stats\n  - repeat.for for lists\n  - if.bind / else for empty states\n  - Custom elements (status-badge, priority-icon)\n  - load="issue/${id}" for parameterized routes\n-->\n\n<div class="page dashboard-page" data-testid="dashboard">\n  <!-- Welcome message with i18n parameter -->\n  <!--au--><h2></h2>\n\n  <!-- Stats grid -->\n  <div class="stats-grid" data-testid="stats-grid">\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n    <div class="stat-card">\n      <div class="stat-value"><!--au--> </div>\n      <!--au--><div class="stat-label"></div>\n    </div>\n  </div>\n\n  <!-- Recent Activity -->\n  <section class="card" data-testid="recent-activity">\n    <div class="card-header">\n      <!--au--><h3 class="card-title"></h3>\n      <!--au--><a class="btn btn-ghost" load="issues"></a>\n    </div>\n\n    <!-- Empty state -->\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!-- Issue list -->\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- My Issues -->\n  <section class="card" data-testid="my-issues">\n    <div class="card-header">\n      <!--au--><h3 class="card-title"></h3>\n    </div>\n\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!--au--><!--au-start--><!--au-end-->\n  </section>\n\n  <!-- Critical Issues -->\n  <!--au--><!--au-start--><!--au-end-->\n</div>\n',
   instructions: [
     /* target 0 */
-    [{ type: 12, from: dashboard__e[0], to: "t.params", mode: 2 }],
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.welcome"
+      },
+      { type: 12, from: dashboard__e[0], to: "t.params", mode: 2 }
+    ],
     /* target 1 */
     [
       { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[1]], isMulti: false, firstExpression: dashboard__e[1] } }
     ],
     /* target 2 */
     [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[2]], isMulti: false, firstExpression: dashboard__e[2] } }
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.stats.total"
+      }
     ],
     /* target 3 */
     [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[3]], isMulti: false, firstExpression: dashboard__e[3] } }
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[2]], isMulti: false, firstExpression: dashboard__e[2] } }
     ],
     /* target 4 */
     [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[4]], isMulti: false, firstExpression: dashboard__e[4] } }
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.stats.open"
+      }
     ],
     /* target 5 */
     [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[5]], isMulti: false, firstExpression: dashboard__e[5] } }
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[3]], isMulti: false, firstExpression: dashboard__e[3] } }
     ],
     /* target 6 */
-    [{ type: 1, res: "load", props: [{ type: 10, value: "issues", to: "route" }] }],
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.stats.inProgress"
+      }
+    ],
     /* target 7 */
+    [
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[4]], isMulti: false, firstExpression: dashboard__e[4] } }
+    ],
+    /* target 8 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.stats.review"
+      }
+    ],
+    /* target 9 */
+    [
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [dashboard__e[5]], isMulti: false, firstExpression: dashboard__e[5] } }
+    ],
+    /* target 10 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.stats.closed"
+      }
+    ],
+    /* target 11 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.sections.recentActivity"
+      }
+    ],
+    /* target 12 */
+    [
+      { type: 1, res: "load", props: [{ type: 10, value: "issues", to: "route" }] },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "actions.viewAll"
+      }
+    ],
+    /* target 13 */
     [
       { type: 2, def: dashboard__def_0, res: "if", props: [{ type: 12, from: dashboard__e[6], to: "value", mode: 2 }] }
     ],
-    /* target 8 */
+    /* target 14 */
     [{ type: 2, def: dashboard__def_1, res: "else", props: [] }],
-    /* target 9 */
+    /* target 15 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "dashboard.sections.myIssues"
+      }
+    ],
+    /* target 16 */
     [
       { type: 2, def: dashboard__def_4, res: "if", props: [{ type: 12, from: dashboard__e[12], to: "value", mode: 2 }] }
     ],
-    /* target 10 */
+    /* target 17 */
     [{ type: 2, def: dashboard__def_5, res: "else", props: [] }],
-    /* target 11 */
+    /* target 18 */
     [
       { type: 2, def: dashboard__def_7, res: "if", props: [{ type: 12, from: dashboard__e[15], to: "value", mode: 2 }] }
     ]

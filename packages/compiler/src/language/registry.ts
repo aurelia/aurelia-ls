@@ -30,6 +30,20 @@ export interface Semantics {
   };
 
   /**
+   * Binding command configurations.
+   * Maps command names (e.g., "bind", "trigger") to their semantic config.
+   * Used by lowering to determine instruction type and mode.
+   */
+  bindingCommands: Record<string, BindingCommandConfig>;
+
+  /**
+   * Attribute pattern configurations.
+   * Defines how attribute names are parsed into target/command pairs.
+   * Used by AttributeParser for config-driven pattern interpretation.
+   */
+  attributePatterns: readonly AttributePatternConfig[];
+
+  /**
    * DOM schema (HTML only for now).
    * - Guides attribute→property normalization and native prop default modes.
    * - Per-element overrides mirror runtime **AttrMapper** behavior.
@@ -468,6 +482,405 @@ export function createCustomControllerConfig(
 }
 
 /* =======================
+ * Binding Command Configuration
+ * =======================
+ *
+ * Config-driven system for binding commands. All commands (built-in and plugin)
+ * are described by configuration primitives.
+ *
+ * Commands determine:
+ * 1. What instruction type is produced (PropertyBindingIR, ListenerBindingIR, etc.)
+ * 2. Any mode/capture semantics for the instruction
+ *
+ * This enables plugins like i18n to register custom commands (e.g., `t`) that the
+ * compiler can process without hardcoded knowledge.
+ */
+
+/**
+ * What kind of instruction a binding command produces.
+ * Maps directly to IR instruction types.
+ */
+export type BindingCommandKind =
+  | "property"     // PropertyBindingIR — bind, one-time, to-view, from-view, two-way
+  | "listener"     // ListenerBindingIR — trigger, capture
+  | "iterator"     // IteratorBindingIR — for
+  | "ref"          // RefBindingIR — ref
+  | "attribute"    // AttributeBindingIR — attr, class
+  | "style"        // StylePropertyBindingIR — style
+  | "translation"; // TranslationBindingIR — t (i18n)
+
+/**
+ * Configuration for a binding command.
+ * Captures all semantic variations through orthogonal properties.
+ */
+export interface BindingCommandConfig {
+  /** Command name as written in templates (e.g., "bind", "trigger", "t") */
+  readonly name: string;
+
+  /** What kind of instruction this command produces */
+  readonly kind: BindingCommandKind;
+
+  /** For property commands: which binding mode to use */
+  readonly mode?: BindingMode;
+
+  /** For listener commands: capture phase (true) or bubble phase (false) */
+  readonly capture?: boolean;
+
+  /**
+   * For attribute commands: forces a specific attribute name.
+   * Used by `class` command which always binds to "class" attribute.
+   */
+  readonly forceAttribute?: string;
+
+  /**
+   * Source package for optional commands (enables targeted diagnostics).
+   * - Omitted for core runtime commands.
+   * - Present for optional packages: "@aurelia/i18n", etc.
+   */
+  readonly package?: string;
+}
+
+/**
+ * Built-in binding command configurations.
+ * These define the complete semantics for all Aurelia binding commands.
+ */
+export const BUILTIN_BINDING_COMMANDS: Record<string, BindingCommandConfig> = {
+  // ===== Property binding commands (PropertyBindingIR) =====
+  // These produce property bindings with specific modes
+
+  bind: {
+    name: "bind",
+    kind: "property",
+    mode: "default",
+  },
+
+  "one-time": {
+    name: "one-time",
+    kind: "property",
+    mode: "oneTime",
+  },
+
+  "to-view": {
+    name: "to-view",
+    kind: "property",
+    mode: "toView",
+  },
+
+  "from-view": {
+    name: "from-view",
+    kind: "property",
+    mode: "fromView",
+  },
+
+  "two-way": {
+    name: "two-way",
+    kind: "property",
+    mode: "twoWay",
+  },
+
+  // ===== Listener commands (ListenerBindingIR) =====
+  // These produce event listener bindings
+
+  trigger: {
+    name: "trigger",
+    kind: "listener",
+    capture: false,
+  },
+
+  capture: {
+    name: "capture",
+    kind: "listener",
+    capture: true,
+  },
+
+  // ===== Iterator command (IteratorBindingIR) =====
+  // Used with repeat.for
+
+  for: {
+    name: "for",
+    kind: "iterator",
+  },
+
+  // ===== Ref command (RefBindingIR) =====
+
+  ref: {
+    name: "ref",
+    kind: "ref",
+  },
+
+  // ===== Attribute commands =====
+  // These produce attribute or style bindings
+
+  attr: {
+    name: "attr",
+    kind: "attribute",
+  },
+
+  class: {
+    name: "class",
+    kind: "attribute",
+    forceAttribute: "class",
+  },
+
+  style: {
+    name: "style",
+    kind: "style",
+  },
+
+  // ===== Translation binding commands (i18n plugin) =====
+  // These produce translation bindings handled by @aurelia/i18n
+
+  t: {
+    name: "t",
+    kind: "translation",
+    package: "@aurelia/i18n",
+  },
+
+  "t.bind": {
+    name: "t.bind",
+    kind: "translation",
+    package: "@aurelia/i18n",
+  },
+};
+
+/**
+ * Look up a binding command config by name.
+ * Returns the built-in config, or undefined if not found.
+ */
+export function getBindingCommandConfig(name: string): BindingCommandConfig | undefined {
+  return BUILTIN_BINDING_COMMANDS[name];
+}
+
+/**
+ * Check if a command name is a known property binding command.
+ * Property commands produce PropertyBindingIR with a specific mode.
+ */
+export function isPropertyBindingCommand(name: string): boolean {
+  const config = BUILTIN_BINDING_COMMANDS[name];
+  return config?.kind === "property";
+}
+
+/**
+ * Get the binding mode for a command.
+ * Returns the configured mode for property commands, "default" otherwise.
+ */
+export function getCommandMode(name: string): BindingMode {
+  const config = BUILTIN_BINDING_COMMANDS[name];
+  return config?.kind === "property" ? (config.mode ?? "default") : "default";
+}
+
+/* =======================
+ * Attribute Pattern Configuration
+ * =======================
+ *
+ * Config-driven system for attribute patterns. Patterns determine how raw attribute
+ * names (e.g., "value.bind", ":class", "@click") are parsed into target/command pairs.
+ *
+ * The pattern matching algorithm remains unchanged — only interpretation becomes
+ * config-driven instead of function-based.
+ *
+ * This enables plugins like i18n to register custom patterns (e.g., `t`) that the
+ * compiler can parse without hardcoded knowledge.
+ */
+
+/**
+ * How to interpret matched parts into an AttrSyntax.
+ * Each variant captures a specific interpretation strategy.
+ */
+export type PatternInterpret =
+  /**
+   * Standard dot-separated: last part is command, rest joined by '.' is target.
+   * Examples:
+   *   - "value.bind" → target="value", command="bind"
+   *   - "foo.bar.bind" → target="foo.bar", command="bind"
+   */
+  | { kind: "target-command" }
+
+  /**
+   * Both target and command are fixed (pattern is a literal match).
+   * Examples:
+   *   - "ref" → target="element", command="ref"
+   *   - "then" → target="then", command="from-view"
+   *   - "t" → target="t", command="t" (i18n)
+   */
+  | { kind: "fixed"; target: string; command: string }
+
+  /**
+   * Target from parts[0], command is fixed.
+   * Optionally overrides the binding mode (for patterns like `:PART` which use
+   * command="bind" but should behave as toView).
+   * Examples:
+   *   - ":class" → target="class", command="bind", mode="toView"
+   *   - "@click" → target="click", command="trigger"
+   */
+  | { kind: "fixed-command"; command: string; mode?: BindingMode }
+
+  /**
+   * Target from parts[0] with optional mapping, command is fixed.
+   * Examples:
+   *   - "view-model.ref" → target="component" (mapped), command="ref"
+   *   - "foo.ref" → target="foo" (unmapped), command="ref"
+   */
+  | { kind: "mapped-fixed-command"; command: string; targetMap?: Record<string, string> }
+
+  /**
+   * Event binding with modifier support.
+   * Target from parts[0], command is fixed, parts are passed through or normalized.
+   * Examples:
+   *   - "click.trigger:once" → target="click", command="trigger", parts=["click","once"]
+   *   - "@click:once" → target="click", command="trigger", parts=["click","trigger","once"]
+   *
+   * The `injectCommand` flag controls parts normalization:
+   *   - false/undefined: passthrough (parts as matched)
+   *   - true: inject command at index 1 (for @ patterns, keeps modifier at index 2)
+   */
+  | { kind: "event-modifier"; command: string; injectCommand?: boolean }
+
+  /**
+   * Passthrough for testing: fixed target/command but preserves matched parts.
+   * Useful for verifying pattern matching extracts correct segments.
+   * Examples:
+   *   - "value.bind" with PART.PART → target="test", command="PART.PART", parts=["value","bind"]
+   */
+  | { kind: "passthrough"; target: string; command: string };
+
+/**
+ * Configuration for an attribute pattern.
+ */
+export interface AttributePatternConfig {
+  /**
+   * Pattern string using PART as dynamic segment placeholder.
+   * Examples: "PART.PART", ":PART", "@PART:PART", "ref", "t"
+   */
+  readonly pattern: string;
+
+  /**
+   * Characters that act as separators for PART matching.
+   * Empty string means no separators (pattern is literal or single PART).
+   */
+  readonly symbols: string;
+
+  /**
+   * How to interpret matched parts into target/command.
+   */
+  readonly interpret: PatternInterpret;
+
+  /**
+   * Source package for plugin-provided patterns (enables targeted diagnostics).
+   */
+  readonly package?: string;
+}
+
+/**
+ * Built-in attribute pattern configurations.
+ * These define how all standard Aurelia attribute syntaxes are parsed.
+ */
+export const BUILTIN_ATTRIBUTE_PATTERNS: readonly AttributePatternConfig[] = [
+  // ===== Dot-separated commands (most common) =====
+  // "value.bind", "foo.bar.two-way", etc.
+  {
+    pattern: "PART.PART",
+    symbols: ".",
+    interpret: { kind: "target-command" },
+  },
+  {
+    pattern: "PART.PART.PART",
+    symbols: ".",
+    interpret: { kind: "target-command" },
+  },
+
+  // ===== Ref patterns =====
+  // "ref" → element.ref
+  {
+    pattern: "ref",
+    symbols: "",
+    interpret: { kind: "fixed", target: "element", command: "ref" },
+  },
+  // "view-model.ref" → component.ref, "foo.ref" → foo.ref
+  {
+    pattern: "PART.ref",
+    symbols: ".",
+    interpret: {
+      kind: "mapped-fixed-command",
+      command: "ref",
+      targetMap: { "view-model": "component" },
+    },
+  },
+
+  // ===== Event patterns with modifiers =====
+  // "click.trigger:once" → click.trigger with modifier
+  {
+    pattern: "PART.trigger:PART",
+    symbols: ".:",
+    interpret: { kind: "event-modifier", command: "trigger", injectCommand: false },
+  },
+  {
+    pattern: "PART.capture:PART",
+    symbols: ".:",
+    interpret: { kind: "event-modifier", command: "capture", injectCommand: false },
+  },
+
+  // ===== Colon shorthand =====
+  // ":class" → class.bind with mode toView (not default)
+  // This is intentional: the colon shorthand behaves as one-way to view, not default.
+  {
+    pattern: ":PART",
+    symbols: ":",
+    interpret: { kind: "fixed-command", command: "bind", mode: "toView" },
+  },
+
+  // ===== At shorthand =====
+  // "@click" → click.trigger
+  {
+    pattern: "@PART",
+    symbols: "@",
+    interpret: { kind: "fixed-command", command: "trigger" },
+  },
+  // "@click:once" → click.trigger with modifier (command injected into parts)
+  {
+    pattern: "@PART:PART",
+    symbols: "@:",
+    interpret: { kind: "event-modifier", command: "trigger", injectCommand: true },
+  },
+
+  // ===== Promise patterns =====
+  // "promise.resolve" → promise.bind (alias for promise.bind)
+  {
+    pattern: "promise.resolve",
+    symbols: ".",
+    interpret: { kind: "fixed", target: "promise", command: "bind" },
+  },
+  // "then" → then.from-view (branch receives resolved value)
+  {
+    pattern: "then",
+    symbols: "",
+    interpret: { kind: "fixed", target: "then", command: "from-view" },
+  },
+  // "catch" → catch.from-view (branch receives rejected value)
+  {
+    pattern: "catch",
+    symbols: "",
+    interpret: { kind: "fixed", target: "catch", command: "from-view" },
+  },
+
+  // ===== i18n translation patterns (@aurelia/i18n) =====
+  // "t" → translation command (value is translation key)
+  {
+    pattern: "t",
+    symbols: "",
+    interpret: { kind: "fixed", target: "", command: "t" },
+    package: "@aurelia/i18n",
+  },
+  // "t.bind" → translation binding (value is expression evaluating to key)
+  {
+    pattern: "t.bind",
+    symbols: ".",
+    interpret: { kind: "fixed", target: "", command: "t.bind" },
+    package: "@aurelia/i18n",
+  },
+];
+
+/* =======================
  * DOM & Events
  * ======================= */
 
@@ -902,6 +1315,18 @@ export const DEFAULT: Semantics = {
       { prop: "innerHTML",   requiresAttr: "contenteditable" },
     ],
   },
+
+  /* ---- Binding commands ----
+   * Config-driven binding command semantics.
+   * Used by lowering to determine instruction types and modes.
+   */
+  bindingCommands: BUILTIN_BINDING_COMMANDS,
+
+  /* ---- Attribute patterns ----
+   * Config-driven pattern matching and interpretation.
+   * Used by AttributeParser for parsing attribute names.
+   */
+  attributePatterns: BUILTIN_ATTRIBUTE_PATTERNS,
 };
 
 /* -------------------------------------------------------------------------

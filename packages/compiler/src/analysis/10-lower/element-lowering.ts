@@ -1,17 +1,21 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type {
   AttrRes,
+  BindingCommandConfig,
   ControllerConfig,
   Semantics,
 } from "../../language/registry.js";
 import { debug } from "../../shared/debug.js";
+import { formatSuggestion } from "../../shared/suggestions.js";
 import {
   BUILTIN_CONTROLLER_CONFIGS,
   createCustomControllerConfig,
 } from "../../language/registry.js";
 import type {
   AttributeBindableIR,
+  BindingMode,
   ElementBindableIR,
+  ExprId,
   HydrateAttributeIR,
   HydrateElementIR,
   InstructionIR,
@@ -69,7 +73,8 @@ function parseMultiBindings(
   attrParser: AttributeParser,
   loc: P5Loc,
   valueLoc: P5Loc,
-  table: ExprTable
+  table: ExprTable,
+  bindingCommands: Record<string, BindingCommandConfig>
 ): AttributeBindableIR[] {
   const props: AttributeBindableIR[] = [];
   const len = raw.length;
@@ -113,7 +118,7 @@ function parseMultiBindings(
             type: "propertyBinding",
             to,
             from: toBindingSource(valuePart, valueLoc, table, "IsProperty"),
-            mode: toMode(parsed.command, propPart),
+            mode: toMode(parsed.command, parsed.mode, bindingCommands),
             loc: toSpan(loc, table.source),
           });
         } else if (valuePart.includes("${")) {
@@ -182,7 +187,8 @@ export function lowerElementAttributes(
     raw: string,
     loc: P5Loc,
     valueLoc: P5Loc,
-    command: string | null
+    command: string | null,
+    patternMode: BindingMode | null
   ): void => {
     const to = camelCase(target);
     if (command) {
@@ -190,7 +196,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to,
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(command, attrName),
+        mode: toMode(command, patternMode, sem.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       return;
@@ -223,63 +229,90 @@ export function lowerElementAttributes(
     if (a.name === "as-element" || a.name === "containerless") continue;
     if (isControllerAttr(s, sem)) continue;
 
-    if (s.command === "trigger" || s.command === "capture") {
-      debug.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
-      tail.push({
-        type: "listenerBinding",
-        to: s.target,
-        from: toExprRef(raw, valueLoc, table, "IsFunction"),
-        capture: s.command === "capture",
-        modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
+    // Config-driven command handling
+    if (s.command) {
+      const cmdConfig = sem.bindingCommands[s.command];
+      if (!cmdConfig) {
+        // Unknown binding command - emit diagnostic with suggestion
+        const knownCommands = Object.keys(sem.bindingCommands);
+        const suggestion = formatSuggestion(s.command, knownCommands);
+        table.addDiag(
+          "AU0705",
+          `Unknown binding command '${s.command}'.${suggestion}`,
+          loc
+        );
+        // Fall through to treat as property binding for graceful degradation
+      }
+      if (cmdConfig) {
+        switch (cmdConfig.kind) {
+          case "listener":
+            debug.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
+            tail.push({
+              type: "listenerBinding",
+              to: s.target,
+              from: toExprRef(raw, valueLoc, table, "IsFunction"),
+              capture: cmdConfig.capture ?? false,
+              modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
+              loc: toSpan(loc, table.source),
+            });
+            continue;
 
-    if (s.command === "ref") {
-      tail.push({
-        type: "refBinding",
-        to: s.target,
-        from: toExprRef(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
+          case "ref":
+            tail.push({
+              type: "refBinding",
+              to: s.target,
+              from: toExprRef(raw, valueLoc, table, "IsProperty"),
+              loc: toSpan(loc, table.source),
+            });
+            continue;
 
-    if (s.command === "style") {
-      tail.push({
-        type: "stylePropertyBinding",
-        to: s.target,
-        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
-    if (s.command === "class") {
-      tail.push({
-        type: "attributeBinding",
-        attr: "class",
-        to: "class",
-        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
-    if (s.command === "attr") {
-      tail.push({
-        type: "attributeBinding",
-        attr: s.target,
-        to: s.target,
-        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
+          case "style":
+            tail.push({
+              type: "stylePropertyBinding",
+              to: s.target,
+              from: toBindingSource(raw, valueLoc, table, "IsProperty"),
+              loc: toSpan(loc, table.source),
+            });
+            continue;
+
+          case "attribute": {
+            // Use forceAttribute if specified (e.g., "class" command always uses "class")
+            const attrName = cmdConfig.forceAttribute ?? s.target;
+            tail.push({
+              type: "attributeBinding",
+              attr: attrName,
+              to: attrName,
+              from: toBindingSource(raw, valueLoc, table, "IsProperty"),
+              loc: toSpan(loc, table.source),
+            });
+            continue;
+          }
+
+          case "translation": {
+            // i18n translation binding (t="key" or t.bind="expr")
+            const isExpression = s.command === "t.bind";
+            tail.push({
+              type: "translationBinding",
+              to: s.target, // empty string for textContent, or specific attribute
+              ...(isExpression
+                ? { from: toBindingSource(raw, valueLoc, table, "IsProperty") }
+                : { keyValue: raw }),
+              isExpression,
+              loc: toSpan(loc, table.source),
+            });
+            continue;
+          }
+
+          // "property" and "iterator" kinds fall through to later handling
+          // (property is handled after bindable/custom-attr checks, iterator is for repeat.for)
+        }
+      }
     }
 
     const bindable = elementDef?.bindables[camelCase(s.target)];
     if (bindable) {
       debug.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
-      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command);
+      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command, s.mode);
       continue;
     }
 
@@ -295,7 +328,7 @@ export function lowerElementAttributes(
 
       let props: AttributeBindableIR[];
       if (isMultiBinding) {
-        props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table);
+        props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table, sem.bindingCommands);
       } else {
         props = [];
         const targetBindableName =
@@ -303,7 +336,7 @@ export function lowerElementAttributes(
             ? camelCase(s.target)
             : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
         if (targetBindableName) {
-          lowerBindable(props, targetBindableName, a.name, raw, loc, valueLoc, s.command);
+          lowerBindable(props, targetBindableName, a.name, raw, loc, valueLoc, s.command, s.mode);
         }
       }
 
@@ -323,7 +356,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to: camelCase(s.target),
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(s.command, a.name),
+        mode: toMode(s.command, s.mode, sem.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       continue;

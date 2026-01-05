@@ -29,6 +29,7 @@ export type {
   LinkedListenerBinding,
   LinkedRefBinding,
   LinkedTextBinding,
+  LinkedTranslationBinding,
   LinkedSetAttribute,
   LinkedSetProperty,
   LinkedSetClassAttribute,

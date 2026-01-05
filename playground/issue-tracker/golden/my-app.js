@@ -32,25 +32,56 @@ const myApp__e = [
 const myApp_$au = {
   type: "custom-element",
   name: "my-app",
-  template: '<!--\n  MyApp Template - Application Shell\n\n  Exercises:\n  - t="key" for static translations\n  - load="routeId" for navigation\n  - ${interpolation} for dynamic content\n  - ref for element references\n  - value.bind for two-way binding\n  - click.trigger for event handling\n  - au-viewport for router outlet\n-->\n\n<div class="app-shell">\n  <!-- Header with navigation -->\n  <header class="app-header">\n    <div style="display: flex; justify-content: space-between; align-items: center;">\n      <h1 t="app.title"></h1>\n\n      <!-- User info -->\n      <div style="display: flex; align-items: center; gap: 1rem;">\n        <span style="opacity: 0.8;"><!--au--> </span>\n        <div class="avatar"><!--au--> </div>\n      </div>\n    </div>\n\n    <!-- Navigation -->\n    <nav class="app-nav">\n      <!--au--><a t="nav.dashboard" load="dashboard"></a>\n      <!--au--><a t="nav.issues" load="issues"></a>\n      <!--au--><a t="nav.settings" load="settings"></a>\n    </nav>\n  </header>\n\n  <!-- Main content area -->\n  <main class="app-main">\n    <!--au--><au-viewport></au-viewport>\n  </main>\n</div>\n',
+  template: '<!--\n  MyApp Template - Application Shell\n\n  Exercises:\n  - t="key" for static translations\n  - load="routeId" for navigation\n  - ${interpolation} for dynamic content\n  - ref for element references\n  - value.bind for two-way binding\n  - click.trigger for event handling\n  - au-viewport for router outlet\n-->\n\n<div class="app-shell">\n  <!-- Header with navigation -->\n  <header class="app-header">\n    <div style="display: flex; justify-content: space-between; align-items: center;">\n      <!--au--><h1></h1>\n\n      <!-- User info -->\n      <div style="display: flex; align-items: center; gap: 1rem;">\n        <span style="opacity: 0.8;"><!--au--> </span>\n        <div class="avatar"><!--au--> </div>\n      </div>\n    </div>\n\n    <!-- Navigation -->\n    <nav class="app-nav">\n      <!--au--><a load="dashboard"></a>\n      <!--au--><a load="issues"></a>\n      <!--au--><a load="settings"></a>\n    </nav>\n  </header>\n\n  <!-- Main content area -->\n  <main class="app-main">\n    <!--au--><au-viewport></au-viewport>\n  </main>\n</div>\n',
   instructions: [
     /* target 0 */
     [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [myApp__e[0]], isMulti: false, firstExpression: myApp__e[0] } }
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "app.title"
+      }
     ],
     /* target 1 */
     [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [myApp__e[1]], isMulti: false, firstExpression: myApp__e[1] } }
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [myApp__e[0]], isMulti: false, firstExpression: myApp__e[0] } }
     ],
     /* target 2 */
     [
-      { type: 1, res: "load", props: [{ type: 10, value: "dashboard", to: "route" }] }
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [myApp__e[1]], isMulti: false, firstExpression: myApp__e[1] } }
     ],
     /* target 3 */
-    [{ type: 1, res: "load", props: [{ type: 10, value: "issues", to: "route" }] }],
+    [
+      { type: 1, res: "load", props: [{ type: 10, value: "dashboard", to: "route" }] },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "nav.dashboard"
+      }
+    ],
     /* target 4 */
-    [{ type: 1, res: "load", props: [{ type: 10, value: "settings", to: "route" }] }],
+    [
+      { type: 1, res: "load", props: [{ type: 10, value: "issues", to: "route" }] },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "nav.issues"
+      }
+    ],
     /* target 5 */
+    [
+      { type: 1, res: "load", props: [{ type: 10, value: "settings", to: "route" }] },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "nav.settings"
+      }
+    ],
+    /* target 6 */
     [{ type: 0, res: "au-viewport", props: [] }]
   ],
   needsCompile: false

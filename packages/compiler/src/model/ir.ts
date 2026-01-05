@@ -207,6 +207,26 @@ export interface RefBindingIR {
   loc?: SourceSpan | null;
 }
 
+/**
+ * Translation binding for i18n (t="key" or t.bind="expr").
+ * Produced by the `t` and `t.bind` binding commands from @aurelia/i18n.
+ *
+ * When `isExpression: true` (t.bind), `from` contains the parsed expression.
+ * When `isExpression: false` (t), `keyValue` contains the literal translation key.
+ */
+export interface TranslationBindingIR {
+  type: 'translationBinding';
+  /** Target attribute/property to set with translated value (empty string = textContent) */
+  to: string;
+  /** Expression source (only when isExpression: true) */
+  from?: BindingSourceIR;
+  /** Literal translation key (only when isExpression: false) */
+  keyValue?: string;
+  /** Whether value is expression (t.bind) vs literal key (t) */
+  isExpression: boolean;
+  loc?: SourceSpan | null;
+}
+
 /** Static attributes (no binding). */
 export interface SetAttributeIR {
   type: 'setAttribute';
@@ -336,6 +356,7 @@ export type InstructionIR =
   | ListenerBindingIR
   | AttributeBindingIR
   | StylePropertyBindingIR
+  | TranslationBindingIR
   | SetAttributeIR
   | SetClassAttributeIR
   | SetStyleAttributeIR;
@@ -361,7 +382,8 @@ export interface InstructionRow {
  * - AU07xx: Template compilation errors (matches runtime template-compiler)
  */
 export type IrDiagCode =
-  | "AU0704"; // Invalid <let> command (must be bind/to-view/one-time/two-way/from-view)
+  | "AU0704"  // Invalid <let> command (must be property-kind command from config)
+  | "AU0705"; // Unknown binding command
 
 export type IrDiagnostic = CompilerDiagnostic<IrDiagCode>;
 

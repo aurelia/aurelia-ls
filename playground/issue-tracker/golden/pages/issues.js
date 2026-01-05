@@ -386,10 +386,18 @@ const issues__def_4 = {
 const issues__def_5 = {
   name: "if_5",
   type: "custom-element",
-  template: '<!--au--><button class="btn btn-ghost" t="issues.filters.clear" data-testid="clear-filters"></button>',
+  template: '<!--au--><button class="btn btn-ghost" data-testid="clear-filters"></button>',
   instructions: [
     /* target 0 */
-    [{ type: 31, from: issues__e[14], to: "click", capture: false }]
+    [
+      { type: 31, from: issues__e[14], to: "click", capture: false },
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issues.filters.clear"
+      }
+    ]
   ],
   needsCompile: false
 };
@@ -467,8 +475,18 @@ const issues__def_10 = {
 const issues__def_11 = {
   name: "if_11",
   type: "custom-element",
-  template: '<span style="color: #999;" t="issue.meta.unassigned"></span>',
-  instructions: [],
+  template: '<!--au--><span style="color: #999;"></span>',
+  instructions: [
+    /* target 0 */
+    [
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issue.meta.unassigned"
+      }
+    ]
+  ],
   needsCompile: false
 };
 const issues__def_8 = {
@@ -524,21 +542,30 @@ const issues__def_7 = {
 const issues_$au = {
   type: "custom-element",
   name: "issues",
-  template: '<!--\n  Issues Page Template\n\n  Exercises:\n  - value.bind for form inputs\n  - repeat.for for filter options and issue list\n  - if.bind / else for conditional rendering\n  - click.trigger for actions\n  - class.bind for dynamic classes\n  - t="key" for labels\n  - Custom elements (status-badge, priority-icon, user-avatar, label-list, empty-state)\n  - load="route/${param}" for parameterized navigation\n-->\n\n<div class="page issues-page" data-testid="issues">\n  <!-- Page header -->\n  <div class="card-header" style="margin-bottom: 1rem;">\n    <h2 class="card-title" t="issues.title"></h2>\n    <span style="color: #666;"><!--au--> </span>\n  </div>\n\n  <!-- Filters -->\n  <!--au--><!--au-start--><!--au-end-->\n\n  <!-- Issue list -->\n  <div class="card">\n    <!-- Empty state -->\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!-- Issues -->\n    <!--au--><!--au-start--><!--au-end-->\n  </div>\n</div>\n',
+  template: '<!--\n  Issues Page Template\n\n  Exercises:\n  - value.bind for form inputs\n  - repeat.for for filter options and issue list\n  - if.bind / else for conditional rendering\n  - click.trigger for actions\n  - class.bind for dynamic classes\n  - t="key" for labels\n  - Custom elements (status-badge, priority-icon, user-avatar, label-list, empty-state)\n  - load="route/${param}" for parameterized navigation\n-->\n\n<div class="page issues-page" data-testid="issues">\n  <!-- Page header -->\n  <div class="card-header" style="margin-bottom: 1rem;">\n    <!--au--><h2 class="card-title"></h2>\n    <span style="color: #666;"><!--au--> </span>\n  </div>\n\n  <!-- Filters -->\n  <!--au--><!--au-start--><!--au-end-->\n\n  <!-- Issue list -->\n  <div class="card">\n    <!-- Empty state -->\n    <!--au--><!--au-start--><!--au-end-->\n\n    <!-- Issues -->\n    <!--au--><!--au-start--><!--au-end-->\n  </div>\n</div>\n',
   instructions: [
     /* target 0 */
     [
-      { type: 30, from: { $kind: "Interpolation", parts: ["", " issues"], expressions: [issues__e[0]], isMulti: false, firstExpression: issues__e[0] } }
+      {
+        type: 37,
+        to: "",
+        isExpression: false,
+        keyValue: "issues.title"
+      }
     ],
     /* target 1 */
     [
-      { type: 2, def: issues__def_0, res: "if", props: [{ type: 12, from: issues__e[16], to: "value", mode: 2 }] }
+      { type: 30, from: { $kind: "Interpolation", parts: ["", " issues"], expressions: [issues__e[0]], isMulti: false, firstExpression: issues__e[0] } }
     ],
     /* target 2 */
     [
-      { type: 2, def: issues__def_6, res: "if", props: [{ type: 12, from: issues__e[19], to: "value", mode: 2 }] }
+      { type: 2, def: issues__def_0, res: "if", props: [{ type: 12, from: issues__e[16], to: "value", mode: 2 }] }
     ],
     /* target 3 */
+    [
+      { type: 2, def: issues__def_6, res: "if", props: [{ type: 12, from: issues__e[19], to: "value", mode: 2 }] }
+    ],
+    /* target 4 */
     [{ type: 2, def: issues__def_7, res: "else", props: [] }]
   ],
   needsCompile: false

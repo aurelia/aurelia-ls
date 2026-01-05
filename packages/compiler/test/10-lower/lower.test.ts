@@ -303,6 +303,17 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
           }
           break;
         }
+        case "translationBinding": {
+          const isExpr = (ins as { isExpression?: boolean }).isExpression;
+          out.expressions.push({
+            kind: "translation",
+            on: ins.to,
+            command: isExpr ? "t.bind" : "t",
+            // t.bind uses from.code, t uses keyValue
+            code: isExpr ? ins.from?.code : (ins as { keyValue?: string }).keyValue,
+          });
+          break;
+        }
         default:
           break;
       }

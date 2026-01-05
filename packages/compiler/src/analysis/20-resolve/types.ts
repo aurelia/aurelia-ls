@@ -123,6 +123,7 @@ export type LinkedInstruction =
   | LinkedListenerBinding
   | LinkedRefBinding
   | LinkedTextBinding
+  | LinkedTranslationBinding
   | LinkedSetAttribute
   | LinkedSetProperty
   | LinkedSetClassAttribute
@@ -193,6 +194,25 @@ export interface LinkedRefBinding extends BaseLinked {
 export interface LinkedTextBinding extends BaseLinked {
   kind: "textBinding";
   from: BindingSourceIR;
+}
+
+/**
+ * Translation binding from i18n `t` attribute.
+ * Produced by the `t` and `t.bind` binding commands from @aurelia/i18n.
+ *
+ * When `isExpression: true` (t.bind), `from` contains the parsed expression.
+ * When `isExpression: false` (t), `keyValue` contains the literal translation key.
+ */
+export interface LinkedTranslationBinding extends BaseLinked {
+  kind: "translationBinding";
+  /** Target attribute/property to set with translated value (empty string = textContent) */
+  to: string;
+  /** Expression source (only when isExpression: true) */
+  from?: BindingSourceIR;
+  /** Literal translation key (only when isExpression: false) */
+  keyValue?: string;
+  /** Whether value is expression (t.bind) vs literal key (t) */
+  isExpression: boolean;
 }
 
 /** Raw (literal) attribute set; no semantics resolution. */
