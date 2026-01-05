@@ -1,6 +1,6 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ControllerConfig, Semantics } from "../../language/registry.js";
+import type { BindingCommandConfig, ControllerConfig, Semantics } from "../../language/registry.js";
 import { debug } from "../../shared/debug.js";
 import type {
   ControllerBindableIR,
@@ -88,11 +88,12 @@ function buildIteratorProps(
   raw: string,
   valueLoc: P5Loc,
   loc: P5Loc,
-  table: ExprTable
+  table: ExprTable,
+  bindingCommands: Record<string, BindingCommandConfig>
 ): IteratorBindingIR {
   const forRef = table.add(raw, valueLoc, "IsIterator");
   const forOf = { astId: forRef.id, code: raw, loc: toSpan(valueLoc, table.source) };
-  const tailProps = toRepeatTailIR(raw, valueLoc, table);
+  const tailProps = toRepeatTailIR(raw, valueLoc, table, bindingCommands);
   return {
     type: "iteratorBinding",
     to: "items",
@@ -107,9 +108,11 @@ function buildLiteralOrBindingProps(
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
-  command: string | null
+  command: string | null,
+  bindingCommands: Record<string, BindingCommandConfig>
 ): PropertyBindingIR {
-  const isBinding = command === "bind";
+  // Check if command is a property binding command (bind, one-time, to-view, etc.)
+  const isBinding = command !== null && bindingCommands[command]?.kind === "property";
   return {
     type: "propertyBinding",
     to: "value",
@@ -141,7 +144,8 @@ function buildValueProps(
   table: ExprTable,
   propName: string,
   controllerName: string,
-  command: string | null
+  command: string | null,
+  bindingCommands: Record<string, BindingCommandConfig>
 ): ControllerBindableIR {
   const locSpan = toSpan(loc, table.source);
   const exprText = raw.length === 0 ? controllerName : raw;
@@ -152,7 +156,7 @@ function buildValueProps(
       type: "propertyBinding",
       to: propName,
       from: toBindingSource(exprText, valueLoc, table, "IsProperty"),
-      mode: toMode(command, controllerName),
+      mode: toMode(command, controllerName, bindingCommands),
       loc: locSpan,
     };
   }
@@ -228,7 +232,7 @@ export function collectControllers(
     const { a, s, config } = candidate;
     const loc = attrLoc(el, a.name);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
-    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config);
+    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, sem.bindingCommands);
 
     // Build switch branch info for case/default-case controllers
     const branch = buildSwitchBranchInfo(config, proto.props);
@@ -268,7 +272,8 @@ function buildControllerPrototype(
   table: ExprTable,
   loc: P5Loc,
   valueLoc: P5Loc,
-  config: ControllerConfig
+  config: ControllerConfig,
+  bindingCommands: Record<string, BindingCommandConfig>
 ): ControllerPrototype {
   const raw = a.value ?? "";
   const name = config.name;
@@ -286,18 +291,18 @@ function buildControllerPrototype(
       return { res: name, props: [] };
 
     case "iterator":
-      return { res: name, props: [buildIteratorProps(raw, valueLoc, loc, table)] };
+      return { res: name, props: [buildIteratorProps(raw, valueLoc, loc, table, bindingCommands)] };
 
     case "branch":
       // Branch controllers (else, case, then, etc.) may have literal or binding values
       // Case has value.bind, else has no value
       if (config.props?.["value"]) {
-        return { res: name, props: [buildLiteralOrBindingProps(raw, valueLoc, loc, table, s.command)] };
+        return { res: name, props: [buildLiteralOrBindingProps(raw, valueLoc, loc, table, s.command, bindingCommands)] };
       }
       return { res: name, props: [] };
 
     case "value":
-      return { res: name, props: [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, s.command)] };
+      return { res: name, props: [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, s.command, bindingCommands)] };
   }
 }
 
@@ -322,7 +327,7 @@ function buildRightmostController(
   const name = config.name;
 
   // Build props based on controller type
-  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command);
+  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command, sem.bindingCommands);
 
   // Promise needs special handling for branch injection
   if (hasPromiseBranches(config)) {
@@ -344,7 +349,8 @@ function buildPropsForConfig(
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
-  command: string | null
+  command: string | null,
+  bindingCommands: Record<string, BindingCommandConfig>
 ): ControllerBindableIR[] {
   const trigger = config.trigger;
   const name = config.name;
@@ -353,15 +359,15 @@ function buildPropsForConfig(
     case "marker":
       return [];
     case "iterator":
-      return [buildIteratorProps(raw, valueLoc, loc, table)];
+      return [buildIteratorProps(raw, valueLoc, loc, table, bindingCommands)];
     case "branch":
       // Branch controllers (case) may have literal or binding values
       if (config.props?.["value"]) {
-        return [buildLiteralOrBindingProps(raw, valueLoc, loc, table, command)];
+        return [buildLiteralOrBindingProps(raw, valueLoc, loc, table, command, bindingCommands)];
       }
       return [];
     case "value":
-      return [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, command)];
+      return [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, command, bindingCommands)];
   }
 }
 
@@ -403,7 +409,12 @@ function buildPromiseController(
 // Repeat Tail Props
 // -----------------------------------------------------------------------------
 
-function toRepeatTailIR(raw: string, loc: P5Loc, table: ExprTable): MultiAttrIR[] | null {
+function toRepeatTailIR(
+  raw: string,
+  loc: P5Loc,
+  table: ExprTable,
+  bindingCommands: Record<string, BindingCommandConfig>
+): MultiAttrIR[] | null {
   const tail = parseRepeatTailProps(raw, loc, table);
   if (!tail) return null;
 
@@ -414,7 +425,8 @@ function toRepeatTailIR(raw: string, loc: P5Loc, table: ExprTable): MultiAttrIR[
 
     if (dotIdx > 0) {
       const suffix = p.to.slice(dotIdx + 1);
-      if (["bind", "one-time", "to-view", "from-view", "two-way"].includes(suffix)) {
+      // Check if suffix is a property binding command using config lookup
+      if (bindingCommands[suffix]?.kind === "property") {
         to = p.to.slice(0, dotIdx);
         command = suffix;
       }

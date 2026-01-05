@@ -30,6 +30,13 @@ export interface Semantics {
   };
 
   /**
+   * Binding command configurations.
+   * Maps command names (e.g., "bind", "trigger") to their semantic config.
+   * Used by lowering to determine instruction type and mode.
+   */
+  bindingCommands: Record<string, BindingCommandConfig>;
+
+  /**
    * DOM schema (HTML only for now).
    * - Guides attribute→property normalization and native prop default modes.
    * - Per-element overrides mirror runtime **AttrMapper** behavior.
@@ -1258,6 +1265,12 @@ export const DEFAULT: Semantics = {
       { prop: "innerHTML",   requiresAttr: "contenteditable" },
     ],
   },
+
+  /* ---- Binding commands ----
+   * Config-driven binding command semantics.
+   * Used by lowering to determine instruction types and modes.
+   */
+  bindingCommands: BUILTIN_BINDING_COMMANDS,
 };
 
 /* -------------------------------------------------------------------------

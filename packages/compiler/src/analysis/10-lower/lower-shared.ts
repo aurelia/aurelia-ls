@@ -79,13 +79,29 @@ export class ExprTable {
   }
 }
 
-export function toMode(cmd: string | null, rawName?: string): BindingMode {
-  if (cmd === "one-time") return "oneTime";
-  if (cmd === "to-view") return "toView";
-  if (cmd === "from-view") return "fromView";
-  if (cmd === "two-way") return "twoWay";
+/**
+ * Get the binding mode for a command.
+ * Uses config-driven lookup via bindingCommands.
+ *
+ * @param cmd - Command name (e.g., "bind", "one-time", "to-view")
+ * @param rawName - Original attribute name (used to detect `:` shorthand)
+ * @param bindingCommands - Command config record from Semantics
+ */
+export function toMode(
+  cmd: string | null,
+  rawName: string | undefined,
+  bindingCommands: Record<string, { kind: string; mode?: BindingMode }>
+): BindingMode {
   // AttrParser maps ':' shorthand to command 'bind'; preserve authored intent.
+  // The ':class' syntax should behave as toView, not default.
   if (rawName?.startsWith(":")) return "toView";
+
+  if (cmd) {
+    const config = bindingCommands[cmd];
+    if (config?.kind === "property" && config.mode) {
+      return config.mode;
+    }
+  }
   return "default";
 }
 

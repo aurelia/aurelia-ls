@@ -1,6 +1,7 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type {
   AttrRes,
+  BindingCommandConfig,
   ControllerConfig,
   Semantics,
 } from "../../language/registry.js";
@@ -69,7 +70,8 @@ function parseMultiBindings(
   attrParser: AttributeParser,
   loc: P5Loc,
   valueLoc: P5Loc,
-  table: ExprTable
+  table: ExprTable,
+  bindingCommands: Record<string, BindingCommandConfig>
 ): AttributeBindableIR[] {
   const props: AttributeBindableIR[] = [];
   const len = raw.length;
@@ -113,7 +115,7 @@ function parseMultiBindings(
             type: "propertyBinding",
             to,
             from: toBindingSource(valuePart, valueLoc, table, "IsProperty"),
-            mode: toMode(parsed.command, propPart),
+            mode: toMode(parsed.command, propPart, bindingCommands),
             loc: toSpan(loc, table.source),
           });
         } else if (valuePart.includes("${")) {
@@ -190,7 +192,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to,
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(command, attrName),
+        mode: toMode(command, attrName, sem.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       return;
@@ -223,57 +225,58 @@ export function lowerElementAttributes(
     if (a.name === "as-element" || a.name === "containerless") continue;
     if (isControllerAttr(s, sem)) continue;
 
-    if (s.command === "trigger" || s.command === "capture") {
-      debug.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
-      tail.push({
-        type: "listenerBinding",
-        to: s.target,
-        from: toExprRef(raw, valueLoc, table, "IsFunction"),
-        capture: s.command === "capture",
-        modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
+    // Config-driven command handling
+    if (s.command) {
+      const cmdConfig = sem.bindingCommands[s.command];
+      if (cmdConfig) {
+        switch (cmdConfig.kind) {
+          case "listener":
+            debug.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
+            tail.push({
+              type: "listenerBinding",
+              to: s.target,
+              from: toExprRef(raw, valueLoc, table, "IsFunction"),
+              capture: cmdConfig.capture ?? false,
+              modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
+              loc: toSpan(loc, table.source),
+            });
+            continue;
 
-    if (s.command === "ref") {
-      tail.push({
-        type: "refBinding",
-        to: s.target,
-        from: toExprRef(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
+          case "ref":
+            tail.push({
+              type: "refBinding",
+              to: s.target,
+              from: toExprRef(raw, valueLoc, table, "IsProperty"),
+              loc: toSpan(loc, table.source),
+            });
+            continue;
 
-    if (s.command === "style") {
-      tail.push({
-        type: "stylePropertyBinding",
-        to: s.target,
-        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
-    if (s.command === "class") {
-      tail.push({
-        type: "attributeBinding",
-        attr: "class",
-        to: "class",
-        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
-    }
-    if (s.command === "attr") {
-      tail.push({
-        type: "attributeBinding",
-        attr: s.target,
-        to: s.target,
-        from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        loc: toSpan(loc, table.source),
-      });
-      continue;
+          case "style":
+            tail.push({
+              type: "stylePropertyBinding",
+              to: s.target,
+              from: toBindingSource(raw, valueLoc, table, "IsProperty"),
+              loc: toSpan(loc, table.source),
+            });
+            continue;
+
+          case "attribute": {
+            // Use forceAttribute if specified (e.g., "class" command always uses "class")
+            const attrName = cmdConfig.forceAttribute ?? s.target;
+            tail.push({
+              type: "attributeBinding",
+              attr: attrName,
+              to: attrName,
+              from: toBindingSource(raw, valueLoc, table, "IsProperty"),
+              loc: toSpan(loc, table.source),
+            });
+            continue;
+          }
+
+          // "property" and "iterator" kinds fall through to later handling
+          // (property is handled after bindable/custom-attr checks, iterator is for repeat.for)
+        }
+      }
     }
 
     const bindable = elementDef?.bindables[camelCase(s.target)];
@@ -295,7 +298,7 @@ export function lowerElementAttributes(
 
       let props: AttributeBindableIR[];
       if (isMultiBinding) {
-        props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table);
+        props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table, sem.bindingCommands);
       } else {
         props = [];
         const targetBindableName =
@@ -323,7 +326,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to: camelCase(s.target),
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(s.command, a.name),
+        mode: toMode(s.command, a.name, sem.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       continue;
