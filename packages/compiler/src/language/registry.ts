@@ -734,7 +734,15 @@ export type PatternInterpret =
    *   - false/undefined: passthrough (parts as matched)
    *   - true: inject command at index 1 (for @ patterns, keeps modifier at index 2)
    */
-  | { kind: "event-modifier"; command: string; injectCommand?: boolean };
+  | { kind: "event-modifier"; command: string; injectCommand?: boolean }
+
+  /**
+   * Passthrough for testing: fixed target/command but preserves matched parts.
+   * Useful for verifying pattern matching extracts correct segments.
+   * Examples:
+   *   - "value.bind" with PART.PART → target="test", command="PART.PART", parts=["value","bind"]
+   */
+  | { kind: "passthrough"; target: string; command: string };
 
 /**
  * Configuration for an attribute pattern.

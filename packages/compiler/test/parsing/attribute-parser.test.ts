@@ -326,11 +326,11 @@ describe("attribute parser / legacy parity matrices", () => {
         { pattern: "t-params.bind", symbols: "" },
       ],
       cases: [
-        { raw: "t", match: "t", parts: ["t"] },
+        { raw: "t", match: "t", parts: [] },  // literal pattern, no PART
         { raw: "tt.bind", match: "PART.PART", parts: ["tt", "bind"] },
-        { raw: "t.bind", match: "t.PART", parts: ["t", "bind"] },
-        { raw: "then", match: "then", parts: ["then"] },
-        { raw: "t-params.bind", match: "t-params.bind", parts: ["t-params.bind"] },
+        { raw: "t.bind", match: "t.PART", parts: ["bind"] },  // "t" is literal, only PART extracted
+        { raw: "then", match: "then", parts: [] },  // literal pattern, no PART
+        { raw: "t-params.bind", match: "t-params.bind", parts: [] },  // literal pattern, no PART
       ],
     },
     {
@@ -343,10 +343,10 @@ describe("attribute parser / legacy parity matrices", () => {
       ],
       cases: [
         { raw: "tt", match: null, parts: [] },
-        { raw: "t", match: "t", parts: ["t"] },
-        { raw: "th", match: "th", parts: ["th"] },
-        { raw: "the", match: "the", parts: ["the"] },
-        { raw: "then", match: "then", parts: ["then"] },
+        { raw: "t", match: "t", parts: [] },  // literal pattern
+        { raw: "th", match: "th", parts: [] },  // literal pattern
+        { raw: "the", match: "the", parts: [] },  // literal pattern
+        { raw: "then", match: "then", parts: [] },  // literal pattern
       ],
     },
     {
@@ -358,10 +358,10 @@ describe("attribute parser / legacy parity matrices", () => {
         { pattern: "t.PART", symbols: "." },
       ],
       cases: [
-        { raw: "then", match: "then", parts: ["then"] },
-        { raw: "the", match: "the", parts: ["the"] },
-        { raw: "th", match: "th", parts: ["th"] },
-        { raw: "t", match: "t", parts: ["t"] },
+        { raw: "then", match: "then", parts: [] },  // literal pattern
+        { raw: "the", match: "the", parts: [] },  // literal pattern
+        { raw: "th", match: "th", parts: [] },  // literal pattern
+        { raw: "t", match: "t", parts: [] },  // literal pattern
         { raw: "tt", match: null, parts: [] },
       ],
     },
@@ -374,10 +374,10 @@ describe("attribute parser / legacy parity matrices", () => {
         { pattern: "t.PART", symbols: "." },
       ],
       cases: [
-        { raw: "then", match: "then", parts: ["then"] },
-        { raw: "the", match: "the", parts: ["the"] },
-        { raw: "th", match: "th", parts: ["th"] },
-        { raw: "t", match: "t", parts: ["t"] },
+        { raw: "then", match: "then", parts: [] },  // literal pattern
+        { raw: "the", match: "the", parts: [] },  // literal pattern
+        { raw: "th", match: "th", parts: [] },  // literal pattern
+        { raw: "t", match: "t", parts: [] },  // literal pattern
         { raw: "tt", match: null, parts: [] },
       ],
     },
@@ -390,10 +390,10 @@ describe("attribute parser / legacy parity matrices", () => {
         { pattern: "t.PART", symbols: "." },
       ],
       cases: [
-        { raw: "t", match: "t", parts: ["t"] },
-        { raw: "th", match: "th", parts: ["th"] },
-        { raw: "the", match: "the", parts: ["the"] },
-        { raw: "then", match: "then", parts: ["then"] },
+        { raw: "t", match: "t", parts: [] },  // literal pattern
+        { raw: "th", match: "th", parts: [] },  // literal pattern
+        { raw: "the", match: "the", parts: [] },  // literal pattern
+        { raw: "then", match: "then", parts: [] },  // literal pattern
         { raw: "tt", match: null, parts: [] },
       ],
     },
@@ -401,16 +401,18 @@ describe("attribute parser / legacy parity matrices", () => {
 
   /**
    * Convert a simple def into an AttributePatternConfig for testing.
-   * Uses a "fixed" interpretation that makes the pattern name visible in output.
+   * Uses "passthrough" interpretation that:
+   * - Makes the pattern name visible in output (command = pattern)
+   * - Preserves matched parts for verification
    * This tests pattern *matching*, not interpretation semantics.
    */
   function toConfig(def: { pattern: string; symbols: string }): AttributePatternConfig {
-    // All patterns use fixed interpretation with pattern name as command
-    // This makes it easy to verify which pattern matched
+    // All patterns use passthrough interpretation with pattern name as command
+    // This makes it easy to verify which pattern matched AND what parts were extracted
     return {
       pattern: def.pattern,
       symbols: def.symbols,
-      interpret: { kind: "fixed", target: `target:${def.pattern}`, command: def.pattern },
+      interpret: { kind: "passthrough", target: `target:${def.pattern}`, command: def.pattern },
     };
   }
 
@@ -422,7 +424,7 @@ describe("attribute parser / legacy parity matrices", () => {
         return p;
       })();
 
-      for (const { raw, match } of cases) {
+      for (const { raw, match, parts: expectedParts } of cases) {
         test(`parse ${raw} -> ${match ?? "no match"}`, () => {
           const attr = parser.parse(raw, "foo");
 
@@ -436,8 +438,10 @@ describe("attribute parser / legacy parity matrices", () => {
 
           // Verify the pattern matched by checking command equals pattern name
           expect(attr.command).toBe(match);
-          // All patterns use fixed interpretation: target is "target:{pattern}"
+          // All patterns use passthrough interpretation: target is "target:{pattern}"
           expect(attr.target).toBe(`target:${match}`);
+          // Verify the extracted parts match expected
+          expect(attr.parts).toEqual(expectedParts);
         });
       }
     });

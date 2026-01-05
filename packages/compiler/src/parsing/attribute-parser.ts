@@ -164,6 +164,11 @@ function interpretConfig(
         : parts;
       return new AttrSyntax(rawName, rawValue, event, command, normalizedParts);
     }
+
+    case "passthrough": {
+      // Fixed target/command but preserve parts (useful for testing pattern matching)
+      return new AttrSyntax(rawName, rawValue, interpret.target, interpret.command, parts);
+    }
   }
 }
 
