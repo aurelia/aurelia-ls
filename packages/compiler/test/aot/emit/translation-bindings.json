@@ -77,5 +77,38 @@
       "targetCount": 1,
       "exprCount": 0
     }
+  },
+  {
+    "name": "AE-T08 translation interpolated key (t='key.${expr}')",
+    "markup": "<span t=\"priority.${level}\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBind", "target": 0, "to": "", "hasExpr": true }
+      ],
+      "targetCount": 1,
+      "exprCount": 1
+    }
+  },
+  {
+    "name": "AE-T09 translation interpolated key with multiple expressions",
+    "markup": "<span t=\"${namespace}.${key}\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBind", "target": 0, "to": "", "hasExpr": true }
+      ],
+      "targetCount": 1,
+      "exprCount": 1
+    }
+  },
+  {
+    "name": "AE-T10 translation interpolated key with bracket syntax",
+    "markup": "<span t=\"[title]tooltip.${type}\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBind", "target": 0, "to": "", "hasExpr": true }
+      ],
+      "targetCount": 1,
+      "exprCount": 1
+    }
   }
 ]

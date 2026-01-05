@@ -1,0 +1,59 @@
+<!--
+  i18n E2E Test Template
+
+  Comprehensive coverage of translation binding patterns:
+  1. Static key: t="greeting.hello"
+  2. Interpolated key: t="priority.${level}"
+  3. Bound expression: t.bind="statusKey"
+  4. Bracket syntax (static): t="[title]tooltip.message"
+  5. Bracket syntax (interpolated): t="[title]tooltip.${tooltipType}"
+-->
+
+<div class="i18n-test-container">
+  <h1>i18n Translation Binding Tests</h1>
+
+  <!-- Test 1: Static translation key -->
+  <section data-testid="static-key">
+    <h2>1. Static Key (t="greeting.hello")</h2>
+    <span data-testid="static-result" t="greeting.hello"></span>
+  </section>
+
+  <!-- Test 2: Interpolated translation key -->
+  <section data-testid="interpolated-key">
+    <h2>2. Interpolated Key (t="priority.${level}")</h2>
+    <div>
+      <button data-testid="set-low" click.trigger="level = 'low'">Low</button>
+      <button data-testid="set-high" click.trigger="level = 'high'">High</button>
+    </div>
+    <span data-testid="interpolated-result" t="priority.${level}"></span>
+    <span data-testid="current-level">(level: ${level})</span>
+  </section>
+
+  <!-- Test 3: Bound expression -->
+  <section data-testid="bound-expression">
+    <h2>3. Bound Expression (t.bind="statusKey")</h2>
+    <div>
+      <button data-testid="set-open" click.trigger="statusKey = 'status.open'">Open</button>
+      <button data-testid="set-closed" click.trigger="statusKey = 'status.closed'">Closed</button>
+    </div>
+    <span data-testid="bound-result" t.bind="statusKey"></span>
+    <span data-testid="current-key">(key: ${statusKey})</span>
+  </section>
+
+  <!-- Test 4: Bracket syntax with static key -->
+  <section data-testid="bracket-static">
+    <h2>4. Bracket Syntax Static (t="[title]tooltip.message")</h2>
+    <span data-testid="bracket-static-result" t="[title]tooltip.message">Hover me</span>
+  </section>
+
+  <!-- Test 5: Bracket syntax with interpolated key -->
+  <section data-testid="bracket-interpolated">
+    <h2>5. Bracket Syntax Interpolated (t="[title]tooltip.${tooltipType}")</h2>
+    <div>
+      <button data-testid="set-info" click.trigger="tooltipType = 'info'">Info</button>
+      <button data-testid="set-warning" click.trigger="tooltipType = 'warning'">Warning</button>
+    </div>
+    <span data-testid="bracket-interpolated-result" t="[title]tooltip.${tooltipType}">Hover me</span>
+    <span data-testid="current-tooltip">(tooltip: ${tooltipType})</span>
+  </section>
+</div>

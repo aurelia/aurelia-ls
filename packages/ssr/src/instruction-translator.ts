@@ -423,24 +423,53 @@ const itTranslationBind = 101;
 
 /**
  * Translation binding instruction interface (matches @aurelia/i18n's TranslationBindingInstruction)
+ *
+ * The i18n runtime checks: `isCustomExpression(expr) ? parser.parse(expr.value) : expr`
+ * - CustomExpression triggers runtime parsing (we avoid this for AOT)
+ * - Any other AST type (PrimitiveLiteral, Interpolation, etc.) is used directly
+ *
+ * AOT strategy:
+ * - Static keys: emit PrimitiveLiteral → isCustomExpression returns false → ast used directly
+ * - Interpolated keys: pre-parse to Interpolation → isCustomExpression returns false → ast used directly
+ * - Bound expressions: emit IsBindingBehavior → isCustomExpression returns false → ast used directly
  */
 interface TranslationBindingInstructionLike {
   type: number;
-  from: CustomExpression | IsBindingBehavior;
+  from: IsBindingBehavior;
   to: string;
   mode: number;
+}
+
+/**
+ * PrimitiveLiteral AST structure (matches @aurelia/expression-parser's PrimitiveLiteralExpression)
+ */
+interface PrimitiveLiteralExpression {
+  readonly $kind: "PrimitiveLiteral";
+  readonly value: string | number | boolean | null | undefined;
+}
+
+/**
+ * Create a PrimitiveLiteral expression object.
+ * This matches @aurelia/expression-parser's createPrimitiveLiteral() output.
+ */
+function createPrimitiveLiteral(value: string): PrimitiveLiteralExpression {
+  return { $kind: "PrimitiveLiteral", value };
 }
 
 function translateTranslationBinding(
   ins: SerializedTranslationBinding,
   ctx: TranslationContext,
 ): IInstruction {
-  // i18n renderers expect:
-  // - type 100 (itTranslation) for literal keys with CustomExpression
-  // - type 101 (itTranslationBind) for expressions with IsBindingBehavior
+  // i18n renderers check isCustomExpression(from):
+  // - If CustomExpression → runtime parses via parser.parse(expr.value, etInterpolation)
+  // - Otherwise → uses expr directly as binding.ast
+  //
+  // For AOT, we emit non-CustomExpression ASTs to bypass runtime parsing:
+  // - PrimitiveLiteral for static keys
+  // - Pre-parsed Interpolation/IsBindingBehavior for dynamic keys
 
   if (ins.type === INSTRUCTION_TYPE.translationBind) {
-    // t.bind="expr" - from is ExprId, look up expression
+    // t.bind="expr" or t="key.${expr}" - from is ExprId, look up pre-parsed expression
     const expr = getExpr(ctx.exprMap, ins.from as ExprId) as IsBindingBehavior;
     return {
       type: itTranslationBind,
@@ -449,11 +478,12 @@ function translateTranslationBinding(
       mode: 2, // toView
     } as TranslationBindingInstructionLike as IInstruction;
   } else {
-    // t="key" - from is CustomExpression AST object
-    const customAst = ins.from as { $kind: "Custom"; value: string };
+    // t="static.key" - from is PrimitiveLiteral AST
+    // Pass through as PrimitiveLiteral (NOT CustomExpression) to bypass runtime parsing
+    const literalAst = ins.from as { $kind: "PrimitiveLiteral"; value: string };
     return {
       type: itTranslation,
-      from: new CustomExpression(customAst.value),
+      from: createPrimitiveLiteral(literalAst.value) as unknown as IsBindingBehavior,
       to: ins.to,
       mode: 2, // toView
     } as TranslationBindingInstructionLike as IInstruction;

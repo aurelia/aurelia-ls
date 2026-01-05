@@ -564,19 +564,27 @@ class EmitContext {
       case "translationBinding": {
         // Emit i18n plugin instruction types directly for runtime compatibility:
         // - type 100 (translation) for literal keys: t="key"
-        // - type 101 (translationBind) for expressions: t.bind="expr"
+        // - type 101 (translationBind) for expressions: t.bind="expr" or t="key.${expr}"
         if (binding.isExpression) {
-          // t.bind="expr" - use exprId which gets replaced with AST
+          // t.bind="expr" or t="key.${expr}" - use exprId (looked up in expression table)
+          // Both bound expressions and interpolated keys are now pre-parsed at AOT time,
+          // eliminating the need for runtime parsing via CustomExpression
           return {
             type: INSTRUCTION_TYPE.translationBind,
             from: binding.exprId!,
             to: binding.to,
           } satisfies SerializedTranslationBinding;
         } else {
-          // t="key" - emit CustomExpression AST directly
+          // t="static.key" - emit PrimitiveLiteral AST
+          // Why PrimitiveLiteral and not CustomExpression?
+          // - CustomExpression triggers runtime parsing via parser.parse(expr.value)
+          // - The runtime checks isCustomExpression(expr) and only parses if true
+          // - PrimitiveLiteral bypasses this: isCustomExpression returns false
+          // - binding.ast = expr directly uses the PrimitiveLiteral
+          // - astEvaluate(PrimitiveLiteral) just returns ast.value - no method call needed
           return {
             type: INSTRUCTION_TYPE.translation,
-            from: { $kind: "Custom", value: binding.keyValue ?? "" },
+            from: { $kind: "PrimitiveLiteral", value: binding.keyValue ?? "" },
             to: binding.to,
           } satisfies SerializedTranslationBinding;
         }

@@ -707,8 +707,12 @@ export interface SerializedRefBinding {
 
 export interface SerializedTranslationBinding {
   type: typeof INSTRUCTION_TYPE.translation | typeof INSTRUCTION_TYPE.translationBind;
-  /** Expression source - ExprId for t.bind, CustomExpression AST for t */
-  from: ExprId | { $kind: "Custom"; value: string };
+  /**
+   * Expression source:
+   * - ExprId for t.bind="expr" or t="key.${expr}" (looked up in expression table)
+   * - PrimitiveLiteral AST for t="static.key"
+   */
+  from: ExprId | { $kind: "PrimitiveLiteral"; value: string };
   to: string;
 }
 
