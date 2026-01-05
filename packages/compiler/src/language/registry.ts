@@ -707,11 +707,13 @@ export type PatternInterpret =
 
   /**
    * Target from parts[0], command is fixed.
+   * Optionally overrides the binding mode (for patterns like `:PART` which use
+   * command="bind" but should behave as toView).
    * Examples:
-   *   - ":class" → target="class", command="bind"
+   *   - ":class" → target="class", command="bind", mode="toView"
    *   - "@click" → target="click", command="trigger"
    */
-  | { kind: "fixed-command"; command: string }
+  | { kind: "fixed-command"; command: string; mode?: BindingMode }
 
   /**
    * Target from parts[0] with optional mapping, command is fixed.
@@ -811,11 +813,12 @@ export const BUILTIN_ATTRIBUTE_PATTERNS: readonly AttributePatternConfig[] = [
   },
 
   // ===== Colon shorthand =====
-  // ":class" → class.bind
+  // ":class" → class.bind with mode toView (not default)
+  // This is intentional: the colon shorthand behaves as one-way to view, not default.
   {
     pattern: ":PART",
     symbols: ":",
-    interpret: { kind: "fixed-command", command: "bind" },
+    interpret: { kind: "fixed-command", command: "bind", mode: "toView" },
   },
 
   // ===== At shorthand =====

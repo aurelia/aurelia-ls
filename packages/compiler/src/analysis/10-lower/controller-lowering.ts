@@ -3,6 +3,7 @@ import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { BindingCommandConfig, ControllerConfig, Semantics } from "../../language/registry.js";
 import { debug } from "../../shared/debug.js";
 import type {
+  BindingMode,
   ControllerBindableIR,
   ControllerBranchInfo,
   ExprRef,
@@ -145,6 +146,7 @@ function buildValueProps(
   propName: string,
   controllerName: string,
   command: string | null,
+  patternMode: BindingMode | null,
   bindingCommands: Record<string, BindingCommandConfig>
 ): ControllerBindableIR {
   const locSpan = toSpan(loc, table.source);
@@ -156,7 +158,7 @@ function buildValueProps(
       type: "propertyBinding",
       to: propName,
       from: toBindingSource(exprText, valueLoc, table, "IsProperty"),
-      mode: toMode(command, controllerName, bindingCommands),
+      mode: toMode(command, patternMode, bindingCommands),
       loc: locSpan,
     };
   }
@@ -302,7 +304,7 @@ function buildControllerPrototype(
       return { res: name, props: [] };
 
     case "value":
-      return { res: name, props: [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, s.command, bindingCommands)] };
+      return { res: name, props: [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, s.command, s.mode, bindingCommands)] };
   }
 }
 
@@ -327,7 +329,7 @@ function buildRightmostController(
   const name = config.name;
 
   // Build props based on controller type
-  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command, sem.bindingCommands);
+  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command, s.mode, sem.bindingCommands);
 
   // Promise needs special handling for branch injection
   if (hasPromiseBranches(config)) {
@@ -350,6 +352,7 @@ function buildPropsForConfig(
   loc: P5Loc,
   table: ExprTable,
   command: string | null,
+  patternMode: BindingMode | null,
   bindingCommands: Record<string, BindingCommandConfig>
 ): ControllerBindableIR[] {
   const trigger = config.trigger;
@@ -367,7 +370,7 @@ function buildPropsForConfig(
       }
       return [];
     case "value":
-      return [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, command, bindingCommands)];
+      return [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, command, patternMode, bindingCommands)];
   }
 }
 

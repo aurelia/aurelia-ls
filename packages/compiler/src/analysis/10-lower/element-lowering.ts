@@ -12,6 +12,7 @@ import {
 } from "../../language/registry.js";
 import type {
   AttributeBindableIR,
+  BindingMode,
   ElementBindableIR,
   ExprId,
   HydrateAttributeIR,
@@ -116,7 +117,7 @@ function parseMultiBindings(
             type: "propertyBinding",
             to,
             from: toBindingSource(valuePart, valueLoc, table, "IsProperty"),
-            mode: toMode(parsed.command, propPart, bindingCommands),
+            mode: toMode(parsed.command, parsed.mode, bindingCommands),
             loc: toSpan(loc, table.source),
           });
         } else if (valuePart.includes("${")) {
@@ -185,7 +186,8 @@ export function lowerElementAttributes(
     raw: string,
     loc: P5Loc,
     valueLoc: P5Loc,
-    command: string | null
+    command: string | null,
+    patternMode: BindingMode | null
   ): void => {
     const to = camelCase(target);
     if (command) {
@@ -193,7 +195,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to,
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(command, attrName, sem.bindingCommands),
+        mode: toMode(command, patternMode, sem.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       return;
@@ -298,7 +300,7 @@ export function lowerElementAttributes(
     const bindable = elementDef?.bindables[camelCase(s.target)];
     if (bindable) {
       debug.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
-      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command);
+      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command, s.mode);
       continue;
     }
 
@@ -322,7 +324,7 @@ export function lowerElementAttributes(
             ? camelCase(s.target)
             : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
         if (targetBindableName) {
-          lowerBindable(props, targetBindableName, a.name, raw, loc, valueLoc, s.command);
+          lowerBindable(props, targetBindableName, a.name, raw, loc, valueLoc, s.command, s.mode);
         }
       }
 
@@ -342,7 +344,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to: camelCase(s.target),
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(s.command, a.name, sem.bindingCommands),
+        mode: toMode(s.command, s.mode, sem.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       continue;

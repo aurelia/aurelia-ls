@@ -13,6 +13,8 @@ describe("attribute parser / built-ins", () => {
     expect(attr.target).toBe("value");
     expect(attr.command).toBe("bind");
     expect(attr.parts).toBe(null);
+    // Standard PART.PART pattern has no mode override
+    expect(attr.mode).toBe(null);
   });
 
   test("parses triple-part binding (PART.PART.PART)", () => {
@@ -42,13 +44,15 @@ describe("attribute parser / built-ins", () => {
     expect(attr.parts).toEqual(["click", "once"]);
   });
 
-  test("parses colon-prefixed bind", () => {
+  test("parses colon-prefixed bind with toView mode", () => {
     const parser = createDefaultSyntax();
     const attr = parser.parse(":class", "active");
 
     expect(attr.target).toBe("class");
     expect(attr.command).toBe("bind");
     expect(attr.parts).toBe(null);
+    // Colon shorthand produces mode "toView" (not "default") via pattern config
+    expect(attr.mode).toBe("toView");
   });
 
   test("prefers @PART:PART over @PART and preserves trigger shape", () => {

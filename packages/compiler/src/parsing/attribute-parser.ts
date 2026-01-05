@@ -1,3 +1,4 @@
+import type { BindingMode } from "../model/ir.js";
 import type { AttributePatternConfig } from "../language/registry.js";
 import { BUILTIN_ATTRIBUTE_PATTERNS } from "../language/registry.js";
 
@@ -9,6 +10,12 @@ export class AttrSyntax {
     public target: string,              // e.g. 'value', 'click', 'element' (for 'ref'), 'component' (for 'view-model.ref')
     public command: string | null,      // e.g. 'bind' | 'to-view' | 'two-way' | 'trigger' | 'capture' | 'ref' | null
     public parts: readonly string[] | null = null, // optional extra info (event modifiers, etc.)
+    /**
+     * Optional mode override from pattern config.
+     * When set, this takes precedence over mode derived from command.
+     * Used by `:PART` pattern which produces command="bind" but mode="toView".
+     */
+    public mode: BindingMode | null = null,
   ) {}
 }
 
@@ -132,8 +139,9 @@ function interpretConfig(
 
     case "fixed-command": {
       // First part becomes target, command is fixed
+      // Mode override is passed through if specified (e.g., `:PART` → mode="toView")
       const target = parts[0] ?? rawName;
-      return new AttrSyntax(rawName, rawValue, target, interpret.command);
+      return new AttrSyntax(rawName, rawValue, target, interpret.command, null, interpret.mode ?? null);
     }
 
     case "mapped-fixed-command": {
