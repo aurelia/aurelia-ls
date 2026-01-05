@@ -55,19 +55,32 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            aurelia/packages/addons/dist
             aurelia/packages/aurelia/dist
+            aurelia/packages/compat-v1/dist
+            aurelia/packages/dialog/dist
             aurelia/packages/expression-parser/dist
             aurelia/packages/fetch-client/dist
+            aurelia/packages/i18n/dist
             aurelia/packages/kernel/dist
             aurelia/packages/metadata/dist
             aurelia/packages/platform/dist
             aurelia/packages/platform-browser/dist
             aurelia/packages/route-recognizer/dist
             aurelia/packages/router/dist
+            aurelia/packages/router-direct/dist
+            aurelia/packages/router-html/dist
             aurelia/packages/runtime/dist
             aurelia/packages/runtime-html/dist
+            aurelia/packages/state/dist
+            aurelia/packages/store-v1/dist
             aurelia/packages/template-compiler/dist
             aurelia/packages/testing/dist
+            aurelia/packages/ui-virtualization/dist
+            aurelia/packages/validation/dist
+            aurelia/packages/validation-html/dist
+            aurelia/packages/validation-i18n/dist
+            aurelia/packages/web-components/dist
           key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**') }}
           restore-keys: |
             aurelia-build-
@@ -176,19 +189,32 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            aurelia/packages/addons/dist
             aurelia/packages/aurelia/dist
+            aurelia/packages/compat-v1/dist
+            aurelia/packages/dialog/dist
             aurelia/packages/expression-parser/dist
             aurelia/packages/fetch-client/dist
+            aurelia/packages/i18n/dist
             aurelia/packages/kernel/dist
             aurelia/packages/metadata/dist
             aurelia/packages/platform/dist
             aurelia/packages/platform-browser/dist
             aurelia/packages/route-recognizer/dist
             aurelia/packages/router/dist
+            aurelia/packages/router-direct/dist
+            aurelia/packages/router-html/dist
             aurelia/packages/runtime/dist
             aurelia/packages/runtime-html/dist
+            aurelia/packages/state/dist
+            aurelia/packages/store-v1/dist
             aurelia/packages/template-compiler/dist
             aurelia/packages/testing/dist
+            aurelia/packages/ui-virtualization/dist
+            aurelia/packages/validation/dist
+            aurelia/packages/validation-html/dist
+            aurelia/packages/validation-i18n/dist
+            aurelia/packages/web-components/dist
           key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**') }}
           restore-keys: |
             aurelia-build-
