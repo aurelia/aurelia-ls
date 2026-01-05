@@ -707,12 +707,9 @@ export interface SerializedRefBinding {
 
 export interface SerializedTranslationBinding {
   type: typeof INSTRUCTION_TYPE.translation | typeof INSTRUCTION_TYPE.translationBind;
+  /** Expression source - ExprId for t.bind, CustomExpression AST for t */
+  from: ExprId | { $kind: "Custom"; value: string };
   to: string;
-  /** Expression ID (only when isExpression: true) */
-  exprId?: ExprId;
-  isExpression: boolean;
-  /** Literal translation key (only when isExpression: false) */
-  keyValue?: string;
 }
 
 export interface SerializedSetProperty {

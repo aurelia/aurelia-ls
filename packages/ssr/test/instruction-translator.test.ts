@@ -509,10 +509,10 @@ describe("Instruction: translationBinding", () => {
     expect(translation).toBeDefined();
     expect(translation!.type).toBe(INSTRUCTION_TYPE.translation);
     expect(translation!.to).toBe("");
-    expect(translation!.isExpression).toBe(false);
-    expect(translation!.keyValue).toBe("greeting.hello");
-    // Literal keys don't have exprId
-    expect(translation!.exprId).toBeUndefined();
+    // from contains CustomExpression AST for literal keys
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.$kind).toBe("Custom");
+    expect(from.value).toBe("greeting.hello");
   });
 
   it("emits translationBind for expression (t.bind='expr')", () => {
@@ -530,21 +530,18 @@ describe("Instruction: translationBinding", () => {
     expect(translation).toBeDefined();
     expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBind);
     expect(translation!.to).toBe("");
-    expect(translation!.isExpression).toBe(true);
-    expect(translation!.exprId).toBeDefined();
-    // Expressions don't have keyValue
-    expect(translation!.keyValue).toBeUndefined();
+    // from contains ExprId (string) for expressions
+    expect(typeof translation!.from).toBe("string");
 
     // Verify the expression exists in the expression table
-    const expr = aot.raw.codeResult.expressions.find(
-      (e) => e.id === translation!.exprId,
-    );
+    const exprId = translation!.from as string;
+    const expr = aot.raw.codeResult.expressions.find((e) => e.id === exprId);
     expect(expr).toBeDefined();
     expect(expr!.ast.$kind).toBe("AccessScope");
     expect((expr!.ast as { name: string }).name).toBe("translationKey");
   });
 
-  it("preserves i18n bracket syntax in keyValue", () => {
+  it("preserves i18n bracket syntax in from.value", () => {
     const aot = compileWithAot(
       '<span t="[title]tooltip.message"></span>',
       { name: "test" },
@@ -556,9 +553,10 @@ describe("Instruction: translationBinding", () => {
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.isExpression).toBe(false);
-    // i18n bracket syntax is preserved as-is, not parsed
-    expect(translation!.keyValue).toBe("[title]tooltip.message");
+    // i18n bracket syntax is preserved as-is in CustomExpression value
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.$kind).toBe("Custom");
+    expect(from.value).toBe("[title]tooltip.message");
     expect(translation!.to).toBe("");
   });
 
@@ -574,8 +572,9 @@ describe("Instruction: translationBinding", () => {
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.isExpression).toBe(false);
-    expect(translation!.keyValue).toBe("");
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.$kind).toBe("Custom");
+    expect(from.value).toBe("");
   });
 
   it("emits multiple translation instructions on sibling elements", () => {
@@ -591,11 +590,17 @@ describe("Instruction: translationBinding", () => {
 
     expect(translations.length).toBe(2);
 
-    const keys = translations.map((t) => t.keyValue).sort();
+    const keys = translations
+      .map((t) => (t.from as { $kind: string; value: string }).value)
+      .sort();
     expect(keys).toEqual(["hello", "world"]);
 
-    // Both should be literal (not expression)
-    expect(translations.every((t) => t.isExpression === false)).toBe(true);
+    // Both should have CustomExpression in from
+    expect(
+      translations.every(
+        (t) => (t.from as { $kind: string; value: string }).$kind === "Custom",
+      ),
+    ).toBe(true);
   });
 
   it("emits translation with dotted key path", () => {
@@ -610,7 +615,8 @@ describe("Instruction: translationBinding", () => {
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.keyValue).toBe("messages.errors.validation.required");
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.value).toBe("messages.errors.validation.required");
   });
 
   it("emits translation alongside other bindings", () => {
@@ -633,7 +639,8 @@ describe("Instruction: translationBinding", () => {
     expect(propBinding!.to).toBe("class");
 
     expect(translation).toBeDefined();
-    expect(translation!.keyValue).toBe("label.text");
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.value).toBe("label.text");
   });
 });
 

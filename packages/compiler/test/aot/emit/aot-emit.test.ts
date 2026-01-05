@@ -70,8 +70,8 @@ interface InstructionIntent {
   bindingCount?: number;
   toBindingContext?: boolean;
   // Translation binding fields
-  isExpression?: boolean;
   keyValue?: string;
+  hasExpr?: boolean;
 }
 
 interface NestedIntent {
@@ -274,19 +274,23 @@ function reduceInstruction(inst, targetIdx) {
         toBindingContext: inst.toBindingContext,
       };
 
-    case "translation":
-    case "translationBind": {
-      const result: InstructionIntent = {
+    case "translation": {
+      // Literal key - from is CustomExpression AST
+      const customAst = inst.from as { $kind: string; value: string };
+      return {
         ...base,
         to: inst.to,
-        isExpression: inst.isExpression,
+        keyValue: customAst.value,
       };
-      // Include keyValue for literal keys, exprId presence for expressions
-      if (inst.keyValue !== undefined) {
-        result.keyValue = inst.keyValue;
-      }
-      return result;
     }
+
+    case "translationBind":
+      // Expression - from is ExprId (number)
+      return {
+        ...base,
+        to: inst.to,
+        hasExpr: true,
+      };
 
     default:
       return base;
@@ -445,8 +449,10 @@ function instructionKey(inst) {
       parts.push(inst.resource, `tpl${inst.templateIndex}`, `${inst.propCount}props`);
       break;
     case "translation":
+      parts.push(inst.to, "literal", inst.keyValue ?? "");
+      break;
     case "translationBind":
-      parts.push(inst.to, inst.isExpression ? "expr" : "literal", inst.keyValue ?? "");
+      parts.push(inst.to, "expr");
       break;
   }
 

@@ -565,22 +565,21 @@ class EmitContext {
         // Emit i18n plugin instruction types directly for runtime compatibility:
         // - type 100 (translation) for literal keys: t="key"
         // - type 101 (translationBind) for expressions: t.bind="expr"
-        const result: SerializedTranslationBinding = {
-          type: binding.isExpression
-            ? INSTRUCTION_TYPE.translationBind
-            : INSTRUCTION_TYPE.translation,
-          to: binding.to,
-          isExpression: binding.isExpression,
-        };
-        // Only include exprId for expressions (t.bind)
-        if (binding.exprId !== undefined) {
-          result.exprId = binding.exprId;
+        if (binding.isExpression) {
+          // t.bind="expr" - use exprId which gets replaced with AST
+          return {
+            type: INSTRUCTION_TYPE.translationBind,
+            from: binding.exprId!,
+            to: binding.to,
+          } satisfies SerializedTranslationBinding;
+        } else {
+          // t="key" - emit CustomExpression AST directly
+          return {
+            type: INSTRUCTION_TYPE.translation,
+            from: { $kind: "Custom", value: binding.keyValue ?? "" },
+            to: binding.to,
+          } satisfies SerializedTranslationBinding;
         }
-        // Only include keyValue for literal keys (t)
-        if (binding.keyValue !== undefined) {
-          result.keyValue = binding.keyValue;
-        }
-        return result;
       }
     }
   }
@@ -1024,12 +1023,12 @@ function remapInstructionExprIds(
       return { ...inst, exprId: remapId(inst.exprId) };
 
     case INSTRUCTION_TYPE.translation:
-      // Literal keys (type 100) have no exprId
+      // Literal keys (type 100) have CustomExpression AST in `from`
       return inst;
 
     case INSTRUCTION_TYPE.translationBind:
-      // Bound expressions (type 101) always have exprId
-      return { ...inst, exprId: remapId(inst.exprId!) };
+      // Bound expressions (type 101) have exprId in `from`
+      return { ...inst, from: remapId(inst.from as ExprId) };
 
     case INSTRUCTION_TYPE.hydrateElement:
       return {

@@ -439,9 +439,9 @@ function translateTranslationBinding(
   // - type 100 (itTranslation) for literal keys with CustomExpression
   // - type 101 (itTranslationBind) for expressions with IsBindingBehavior
 
-  if (ins.isExpression && ins.exprId !== undefined) {
-    // t.bind="expr" - use the expression from the table
-    const expr = getExpr(ctx.exprMap, ins.exprId) as IsBindingBehavior;
+  if (ins.type === INSTRUCTION_TYPE.translationBind) {
+    // t.bind="expr" - from is ExprId, look up expression
+    const expr = getExpr(ctx.exprMap, ins.from as ExprId) as IsBindingBehavior;
     return {
       type: itTranslationBind,
       from: expr,
@@ -449,11 +449,11 @@ function translateTranslationBinding(
       mode: 2, // toView
     } as TranslationBindingInstructionLike as IInstruction;
   } else {
-    // t="key" - wrap the literal key in CustomExpression
-    const keyValue = ins.keyValue ?? "";
+    // t="key" - from is CustomExpression AST object
+    const customAst = ins.from as { $kind: "Custom"; value: string };
     return {
       type: itTranslation,
-      from: new CustomExpression(keyValue),
+      from: new CustomExpression(customAst.value),
       to: ins.to,
       mode: 2, // toView
     } as TranslationBindingInstructionLike as IInstruction;

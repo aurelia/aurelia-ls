@@ -4,7 +4,7 @@
     "markup": "<span t=\"greeting.hello\"></span>",
     "expect": {
       "instructions": [
-        { "type": "translation", "target": 0, "to": "", "isExpression": false, "keyValue": "greeting.hello" }
+        { "type": "translation", "target": 0, "to": "", "keyValue": "greeting.hello" }
       ],
       "targetCount": 1,
       "exprCount": 0
@@ -15,7 +15,7 @@
     "markup": "<span t.bind=\"translationKey\"></span>",
     "expect": {
       "instructions": [
-        { "type": "translationBind", "target": 0, "to": "", "isExpression": true }
+        { "type": "translationBind", "target": 0, "to": "", "hasExpr": true }
       ],
       "targetCount": 1,
       "exprCount": 1
@@ -26,7 +26,7 @@
     "markup": "<span t=\"[title]tooltip.message\"></span>",
     "expect": {
       "instructions": [
-        { "type": "translation", "target": 0, "to": "", "isExpression": false, "keyValue": "[title]tooltip.message" }
+        { "type": "translation", "target": 0, "to": "", "keyValue": "[title]tooltip.message" }
       ],
       "targetCount": 1,
       "exprCount": 0
@@ -37,7 +37,7 @@
     "markup": "<span t=\"\"></span>",
     "expect": {
       "instructions": [
-        { "type": "translation", "target": 0, "to": "", "isExpression": false, "keyValue": "" }
+        { "type": "translation", "target": 0, "to": "", "keyValue": "" }
       ],
       "targetCount": 1,
       "exprCount": 0
@@ -49,7 +49,7 @@
     "expect": {
       "instructions": [
         { "type": "propertyBinding", "target": 0, "to": "class", "mode": "toView" },
-        { "type": "translation", "target": 0, "to": "", "isExpression": false, "keyValue": "label.text" }
+        { "type": "translation", "target": 0, "to": "", "keyValue": "label.text" }
       ],
       "targetCount": 1,
       "exprCount": 1
@@ -60,8 +60,8 @@
     "markup": "<div><span t=\"hello\"></span><span t=\"world\"></span></div>",
     "expect": {
       "instructions": [
-        { "type": "translation", "target": 0, "to": "", "isExpression": false, "keyValue": "hello" },
-        { "type": "translation", "target": 1, "to": "", "isExpression": false, "keyValue": "world" }
+        { "type": "translation", "target": 0, "to": "", "keyValue": "hello" },
+        { "type": "translation", "target": 1, "to": "", "keyValue": "world" }
       ],
       "targetCount": 2,
       "exprCount": 0
@@ -72,7 +72,7 @@
     "markup": "<span t=\"messages.errors.validation.required\"></span>",
     "expect": {
       "instructions": [
-        { "type": "translation", "target": 0, "to": "", "isExpression": false, "keyValue": "messages.errors.validation.required" }
+        { "type": "translation", "target": 0, "to": "", "keyValue": "messages.errors.validation.required" }
       ],
       "targetCount": 1,
       "exprCount": 0
