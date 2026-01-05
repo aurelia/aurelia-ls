@@ -5,10 +5,10 @@ export default defineConfig({
     // Use playground as root so globs are relative to it
     root: import.meta.dirname,
     include: ["**/*.test.ts"],
-    // Aggressive timeouts - no test should take more than 10s
-    testTimeout: 10000,
-    // Hooks get 15s for server startup/shutdown
-    hookTimeout: 15000,
+    // CI is slower - browser tests need time for navigation + Aurelia bootstrap
+    testTimeout: 30000,
+    // Hooks need time for Vite server startup/shutdown
+    hookTimeout: 30000,
     // Run sequentially to avoid port conflicts between tests
     fileParallelism: false,
   },

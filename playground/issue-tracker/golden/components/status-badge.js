@@ -44,12 +44,7 @@ const statusBadge__def_1 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "status.draft"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "status.draft" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -61,12 +56,7 @@ const statusBadge__def_2 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "status.open"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "status.open" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -78,12 +68,7 @@ const statusBadge__def_3 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "status.in_progress"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "status.in_progress" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -95,12 +80,7 @@ const statusBadge__def_4 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "status.review"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "status.review" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -112,12 +92,7 @@ const statusBadge__def_5 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "status.closed"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "status.closed" }, to: "" }
     ]
   ],
   needsCompile: false

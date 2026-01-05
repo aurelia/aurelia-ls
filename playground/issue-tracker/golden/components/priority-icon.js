@@ -97,12 +97,7 @@ const priorityIcon__def_5 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "priority.${priority}"
-      }
+      { type: 101, from: { $kind: "Interpolation", parts: ["priority.", ""], expressions: [priorityIcon__e[0]], isMulti: false, firstExpression: priorityIcon__e[0] }, to: "" }
     ]
   ],
   needsCompile: false

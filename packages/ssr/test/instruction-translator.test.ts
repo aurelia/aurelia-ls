@@ -494,55 +494,55 @@ describe("Instruction: propertyBinding", () => {
 // =============================================================================
 
 describe("Instruction: translationBinding", () => {
-  it("emits translationBinding for literal key (t='key')", () => {
+  it("emits translation for literal key (t='key')", () => {
     const aot = compileWithAot(
       '<span t="greeting.hello"></span>',
       { name: "test" },
     );
 
+    // Literal keys use type 100 (INSTRUCTION_TYPE.translation)
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBinding);
+    expect(translation!.type).toBe(INSTRUCTION_TYPE.translation);
     expect(translation!.to).toBe("");
-    expect(translation!.isExpression).toBe(false);
-    expect(translation!.keyValue).toBe("greeting.hello");
-    // Literal keys don't have exprId
-    expect(translation!.exprId).toBeUndefined();
+    // AOT emits PrimitiveLiteral (not CustomExpression) to bypass runtime parsing
+    // This allows astEvaluate() to return the value directly without method calls
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.$kind).toBe("PrimitiveLiteral");
+    expect(from.value).toBe("greeting.hello");
   });
 
-  it("emits translationBinding for expression (t.bind='expr')", () => {
+  it("emits translationBind for expression (t.bind='expr')", () => {
     const aot = compileWithAot(
       '<span t.bind="translationKey"></span>',
       { name: "test" },
     );
 
+    // Expressions use type 101 (INSTRUCTION_TYPE.translationBind)
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translationBind,
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBinding);
+    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBind);
     expect(translation!.to).toBe("");
-    expect(translation!.isExpression).toBe(true);
-    expect(translation!.exprId).toBeDefined();
-    // Expressions don't have keyValue
-    expect(translation!.keyValue).toBeUndefined();
+    // from contains ExprId (string) for expressions
+    expect(typeof translation!.from).toBe("string");
 
     // Verify the expression exists in the expression table
-    const expr = aot.raw.codeResult.expressions.find(
-      (e) => e.id === translation!.exprId,
-    );
+    const exprId = translation!.from as string;
+    const expr = aot.raw.codeResult.expressions.find((e) => e.id === exprId);
     expect(expr).toBeDefined();
     expect(expr!.ast.$kind).toBe("AccessScope");
     expect((expr!.ast as { name: string }).name).toBe("translationKey");
   });
 
-  it("preserves i18n bracket syntax in keyValue", () => {
+  it("preserves i18n bracket syntax in from.value", () => {
     const aot = compileWithAot(
       '<span t="[title]tooltip.message"></span>',
       { name: "test" },
@@ -550,17 +550,18 @@ describe("Instruction: translationBinding", () => {
 
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.isExpression).toBe(false);
-    // i18n bracket syntax is preserved as-is, not parsed
-    expect(translation!.keyValue).toBe("[title]tooltip.message");
+    // i18n bracket syntax is preserved as-is in PrimitiveLiteral value
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.$kind).toBe("PrimitiveLiteral");
+    expect(from.value).toBe("[title]tooltip.message");
     expect(translation!.to).toBe("");
   });
 
-  it("emits translationBinding with empty key", () => {
+  it("emits translation with empty key", () => {
     const aot = compileWithAot(
       '<span t=""></span>',
       { name: "test" },
@@ -568,15 +569,16 @@ describe("Instruction: translationBinding", () => {
 
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.isExpression).toBe(false);
-    expect(translation!.keyValue).toBe("");
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.$kind).toBe("PrimitiveLiteral");
+    expect(from.value).toBe("");
   });
 
-  it("emits multiple translationBindings on sibling elements", () => {
+  it("emits multiple translation instructions on sibling elements", () => {
     const aot = compileWithAot(
       '<div><span t="hello"></span><span t="world"></span></div>',
       { name: "test" },
@@ -584,19 +586,25 @@ describe("Instruction: translationBinding", () => {
 
     const translations = findAllInstructions<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translations.length).toBe(2);
 
-    const keys = translations.map((t) => t.keyValue).sort();
+    const keys = translations
+      .map((t) => (t.from as { $kind: string; value: string }).value)
+      .sort();
     expect(keys).toEqual(["hello", "world"]);
 
-    // Both should be literal (not expression)
-    expect(translations.every((t) => t.isExpression === false)).toBe(true);
+    // Both should have PrimitiveLiteral in from (not CustomExpression)
+    expect(
+      translations.every(
+        (t) => (t.from as { $kind: string; value: string }).$kind === "PrimitiveLiteral",
+      ),
+    ).toBe(true);
   });
 
-  it("emits translationBinding with dotted key path", () => {
+  it("emits translation with dotted key path", () => {
     const aot = compileWithAot(
       '<span t="messages.errors.validation.required"></span>',
       { name: "test" },
@@ -604,34 +612,123 @@ describe("Instruction: translationBinding", () => {
 
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.keyValue).toBe("messages.errors.validation.required");
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.value).toBe("messages.errors.validation.required");
   });
 
-  it("emits translationBinding alongside other bindings", () => {
+  it("emits translation alongside other bindings", () => {
     const aot = compileWithAot(
       '<span class.bind="cls" t="label.text"></span>',
       { name: "test" },
     );
 
-    // Should have both a propertyBinding and a translationBinding
+    // Should have both a propertyBinding and a translation
     const propBinding = findInstruction<SerializedPropertyBinding>(
       aot.raw.codeResult.definition.instructions,
       INSTRUCTION_TYPE.propertyBinding,
     );
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(propBinding).toBeDefined();
     expect(propBinding!.to).toBe("class");
 
     expect(translation).toBeDefined();
-    expect(translation!.keyValue).toBe("label.text");
+    const from = translation!.from as { $kind: string; value: string };
+    expect(from.value).toBe("label.text");
+  });
+
+  // ==========================================================================
+  // Interpolated translation keys (t="key.${expr}")
+  // ==========================================================================
+
+  it("emits translationBind with parts and exprIds for interpolated key", () => {
+    const aot = compileWithAot(
+      '<span t="priority.${level}"></span>',
+      { name: "test" },
+    );
+
+    // Interpolated keys use type 101 (INSTRUCTION_TYPE.translationBind)
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBind,
+    );
+
+    expect(translation).toBeDefined();
+    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBind);
+    expect(translation!.to).toBe("");
+
+    // Verify parts and exprIds are set (interpolation variant)
+    expect(translation!.parts).toEqual(["priority.", ""]);
+    expect(translation!.exprIds).toHaveLength(1);
+
+    // Verify the expression exists in the expression table
+    const exprId = translation!.exprIds![0];
+    const expr = aot.raw.codeResult.expressions.find((e) => e.id === exprId);
+    expect(expr).toBeDefined();
+    expect(expr!.ast.$kind).toBe("AccessScope");
+    expect((expr!.ast as { name: string }).name).toBe("level");
+  });
+
+  it("emits translationBind with multiple expressions for complex interpolated key", () => {
+    const aot = compileWithAot(
+      '<span t="${namespace}.${key}"></span>',
+      { name: "test" },
+    );
+
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBind,
+    );
+
+    expect(translation).toBeDefined();
+    expect(translation!.parts).toEqual(["", ".", ""]);
+    expect(translation!.exprIds).toHaveLength(2);
+
+    // Verify both expressions
+    const namespaceExpr = aot.raw.codeResult.expressions.find(
+      (e) => e.id === translation!.exprIds![0],
+    );
+    const keyExpr = aot.raw.codeResult.expressions.find(
+      (e) => e.id === translation!.exprIds![1],
+    );
+
+    expect(namespaceExpr).toBeDefined();
+    expect(namespaceExpr!.ast.$kind).toBe("AccessScope");
+    expect((namespaceExpr!.ast as { name: string }).name).toBe("namespace");
+
+    expect(keyExpr).toBeDefined();
+    expect(keyExpr!.ast.$kind).toBe("AccessScope");
+    expect((keyExpr!.ast as { name: string }).name).toBe("key");
+  });
+
+  it("emits translationBind with bracket syntax and interpolation", () => {
+    const aot = compileWithAot(
+      '<span t="[title]tooltip.${type}"></span>',
+      { name: "test" },
+    );
+
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBind,
+    );
+
+    expect(translation).toBeDefined();
+    // Bracket syntax is preserved in parts
+    expect(translation!.parts).toEqual(["[title]tooltip.", ""]);
+    expect(translation!.exprIds).toHaveLength(1);
+
+    const expr = aot.raw.codeResult.expressions.find(
+      (e) => e.id === translation!.exprIds![0],
+    );
+    expect(expr).toBeDefined();
+    expect((expr!.ast as { name: string }).name).toBe("type");
   });
 });
 

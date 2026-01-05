@@ -391,12 +391,7 @@ const issues__def_5 = {
     /* target 0 */
     [
       { type: 31, from: issues__e[14], to: "click", capture: false },
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issues.filters.clear"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issues.filters.clear" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -479,12 +474,7 @@ const issues__def_11 = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issue.meta.unassigned"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.meta.unassigned" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -546,12 +536,7 @@ const issues_$au = {
   instructions: [
     /* target 0 */
     [
-      {
-        type: 37,
-        to: "",
-        isExpression: false,
-        keyValue: "issues.title"
-      }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issues.title" }, to: "" }
     ],
     /* target 1 */
     [

@@ -15,7 +15,6 @@ import type {
   AttributeBindableIR,
   BindingMode,
   ElementBindableIR,
-  ExprId,
   HydrateAttributeIR,
   HydrateElementIR,
   InstructionIR,
@@ -289,17 +288,39 @@ export function lowerElementAttributes(
           }
 
           case "translation": {
-            // i18n translation binding (t="key" or t.bind="expr")
-            const isExpression = s.command === "t.bind";
-            tail.push({
-              type: "translationBinding",
-              to: s.target, // empty string for textContent, or specific attribute
-              ...(isExpression
-                ? { from: toBindingSource(raw, valueLoc, table, "IsProperty") }
-                : { keyValue: raw }),
-              isExpression,
-              loc: toSpan(loc, table.source),
-            });
+            // i18n translation binding (t="key", t="key.${expr}", or t.bind="expr")
+            const isBoundCommand = s.command === "t.bind";
+            // Check for interpolation in literal keys: t="priority.${level}"
+            const hasInterpolation = !isBoundCommand && raw.includes("${");
+
+            if (isBoundCommand) {
+              // t.bind="expr" - parse as property expression
+              tail.push({
+                type: "translationBinding",
+                to: s.target,
+                from: toBindingSource(raw, valueLoc, table, "IsProperty"),
+                isExpression: true,
+                loc: toSpan(loc, table.source),
+              });
+            } else if (hasInterpolation) {
+              // t="key.${expr}" - parse interpolation at AOT time
+              tail.push({
+                type: "translationBinding",
+                to: s.target,
+                from: toInterpIR(raw, valueLoc, table),
+                isExpression: true, // Treat as expression since it contains dynamic parts
+                loc: toSpan(loc, table.source),
+              });
+            } else {
+              // t="static.key" - literal translation key
+              tail.push({
+                type: "translationBinding",
+                to: s.target,
+                keyValue: raw,
+                isExpression: false,
+                loc: toSpan(loc, table.source),
+              });
+            }
             continue;
           }
 

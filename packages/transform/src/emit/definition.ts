@@ -25,6 +25,7 @@ import {
   type SerializedHydrateTemplateController,
   type SerializedHydrateLetElement,
   type SerializedIteratorBinding,
+  type SerializedTranslationBinding,
   type ExprId,
   type BindingModeValue,
   type NestedTemplateHtmlNode,
@@ -422,6 +423,10 @@ function emitInstruction(
     case INSTRUCTION_TYPE.iteratorBinding:
       return emitIteratorBinding(instr, ctx);
 
+    case INSTRUCTION_TYPE.translation:
+    case INSTRUCTION_TYPE.translationBind:
+      return emitTranslationBinding(instr as SerializedTranslationBinding, ctx);
+
     default:
       // Fallback: emit as-is
       return formatValue(instr, "  ", "");
@@ -557,6 +562,42 @@ function emitIteratorBinding(
 ): string {
   const exprRef = resolveExprRef(ctx.exprPrefix, instr.exprId, ctx.exprIndexMap);
   return `{ forOf: ${exprRef}, to: "${instr.to}", props: [], type: ${INSTRUCTION_TYPE.iteratorBinding} }`;
+}
+
+/**
+ * Emit i18n translation binding instruction.
+ *
+ * The i18n runtime's TranslationBinding.create() checks isCustomExpression(from):
+ * - If CustomExpression → runtime parses via parser.parse(expr.value, etInterpolation)
+ * - Otherwise → uses expr directly as binding.ast
+ *
+ * AOT emits non-CustomExpression ASTs to bypass runtime parsing:
+ * - type 100 (translation): from is inline PrimitiveLiteral AST for static keys
+ * - type 101 (translationBind): from is expression table reference for single expressions
+ * - type 101 (translationBind): from is Interpolation AST for interpolated keys
+ */
+function emitTranslationBinding(
+  instr: SerializedTranslationBinding,
+  ctx: InstructionEmitContext
+): string {
+  if (instr.type === INSTRUCTION_TYPE.translationBind) {
+    // Check if interpolation variant (parts + exprIds) or single expression (from)
+    if (instr.parts && instr.exprIds) {
+      // t="key.${expr}" - interpolated translation key
+      // Emit Interpolation AST with parts and expressions
+      const exprRefs = instr.exprIds.map(id => resolveExprRef(ctx.exprPrefix, id, ctx.exprIndexMap));
+      return `{ type: ${INSTRUCTION_TYPE.translationBind}, from: ${emitInterpolationObject(instr.parts, exprRefs)}, to: "${instr.to}" }`;
+    } else {
+      // t.bind="expr" - single expression, from is ExprId
+      const exprRef = resolveExprRef(ctx.exprPrefix, instr.from as ExprId, ctx.exprIndexMap);
+      return `{ type: ${INSTRUCTION_TYPE.translationBind}, from: ${exprRef}, to: "${instr.to}" }`;
+    }
+  } else {
+    // t="static.key" - from is inline PrimitiveLiteral AST
+    // Emit the AST object directly so runtime's isCustomExpression returns false
+    const literalAst = instr.from as { $kind: "PrimitiveLiteral"; value: string };
+    return `{ type: ${INSTRUCTION_TYPE.translation}, from: { $kind: "PrimitiveLiteral", value: "${escapeString(literalAst.value)}" }, to: "${instr.to}" }`;
+  }
 }
 
 /* =============================================================================

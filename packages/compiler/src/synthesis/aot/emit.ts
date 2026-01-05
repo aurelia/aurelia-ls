@@ -562,20 +562,42 @@ class EmitContext {
         } satisfies SerializedRefBinding;
 
       case "translationBinding": {
-        const result: SerializedTranslationBinding = {
-          type: INSTRUCTION_TYPE.translationBinding,
-          to: binding.to,
-          isExpression: binding.isExpression,
-        };
-        // Only include exprId for expressions (t.bind)
-        if (binding.exprId !== undefined) {
-          result.exprId = binding.exprId;
+        // Emit i18n plugin instruction types directly for runtime compatibility:
+        // - type 100 (translation) for literal keys: t="key"
+        // - type 101 (translationBind) for expressions: t.bind="expr" or t="key.${expr}"
+        if (binding.isExpression) {
+          // Check if interpolation variant (parts + exprIds) or single expression (exprId)
+          if (binding.parts && binding.exprIds) {
+            // t="key.${expr}" - interpolated translation key
+            // Emit with parts and exprIds for runtime Interpolation construction
+            return {
+              type: INSTRUCTION_TYPE.translationBind,
+              to: binding.to,
+              parts: binding.parts,
+              exprIds: binding.exprIds,
+            } satisfies SerializedTranslationBinding;
+          } else {
+            // t.bind="expr" - single expression
+            return {
+              type: INSTRUCTION_TYPE.translationBind,
+              from: binding.exprId!,
+              to: binding.to,
+            } satisfies SerializedTranslationBinding;
+          }
+        } else {
+          // t="static.key" - emit PrimitiveLiteral AST
+          // Why PrimitiveLiteral and not CustomExpression?
+          // - CustomExpression triggers runtime parsing via parser.parse(expr.value)
+          // - The runtime checks isCustomExpression(expr) and only parses if true
+          // - PrimitiveLiteral bypasses this: isCustomExpression returns false
+          // - binding.ast = expr directly uses the PrimitiveLiteral
+          // - astEvaluate(PrimitiveLiteral) just returns ast.value - no method call needed
+          return {
+            type: INSTRUCTION_TYPE.translation,
+            from: { $kind: "PrimitiveLiteral", value: binding.keyValue ?? "" },
+            to: binding.to,
+          } satisfies SerializedTranslationBinding;
         }
-        // Only include keyValue for literal keys (t)
-        if (binding.keyValue !== undefined) {
-          result.keyValue = binding.keyValue;
-        }
-        return result;
       }
     }
   }
@@ -1018,11 +1040,23 @@ function remapInstructionExprIds(
     case INSTRUCTION_TYPE.refBinding:
       return { ...inst, exprId: remapId(inst.exprId) };
 
-    case INSTRUCTION_TYPE.translationBinding:
-      // Only remap exprId if present (expressions only, not literal keys)
-      return inst.exprId !== undefined
-        ? { ...inst, exprId: remapId(inst.exprId) }
-        : inst;
+    case INSTRUCTION_TYPE.translation:
+      // Literal keys (type 100) have CustomExpression AST in `from`
+      return inst;
+
+    case INSTRUCTION_TYPE.translationBind: {
+      // Bound expressions (type 101) have:
+      // - `from: exprId` for single expressions (t.bind="expr")
+      // - `exprIds: [exprId, ...]` for interpolations (t="key.${expr}")
+      const result = { ...inst };
+      if (inst.from && typeof inst.from === "string") {
+        result.from = remapId(inst.from);
+      }
+      if (inst.exprIds) {
+        result.exprIds = inst.exprIds.map(remapId);
+      }
+      return result;
+    }
 
     case INSTRUCTION_TYPE.hydrateElement:
       return {

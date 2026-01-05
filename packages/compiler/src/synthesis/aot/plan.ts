@@ -821,10 +821,22 @@ function transformTranslationBinding(ins: LinkedTranslationBinding, ctx: Plannin
   };
 
   if (ins.isExpression && ins.from) {
-    // t.bind="expr" - register the expression
-    const exprId = primaryExprId(ins.from);
-    ctx.registerExpression(exprId, ins.loc ?? undefined);
-    result.exprId = exprId;
+    // Check if this is an interpolation (t="key.${expr}") vs single expression (t.bind="expr")
+    if (isInterpolation(ins.from)) {
+      // t="key.${expr}" - interpolated translation key
+      // Register all expressions and store parts + exprIds
+      const exprIds = ins.from.exprs.map(e => e.id);
+      for (const id of exprIds) {
+        ctx.registerExpression(id, ins.loc ?? undefined);
+      }
+      result.parts = ins.from.parts;
+      result.exprIds = exprIds;
+    } else {
+      // t.bind="expr" - single expression
+      const exprId = primaryExprId(ins.from);
+      ctx.registerExpression(exprId, ins.loc ?? undefined);
+      result.exprId = exprId;
+    }
   } else if (ins.keyValue !== undefined) {
     // t="key" - preserve the literal key value
     result.keyValue = ins.keyValue;
