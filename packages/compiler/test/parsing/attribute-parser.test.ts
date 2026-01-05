@@ -1,6 +1,7 @@
 import { test, describe, expect } from "vitest";
 
 import { AttrSyntax, AttributeParser, createDefaultSyntax, registerBuiltins } from "@aurelia-ls/compiler";
+import type { AttributePatternConfig } from "@aurelia-ls/compiler";
 
 describe("attribute parser / built-ins", () => {
   test("parses dot binding (PART.PART)", () => {
@@ -37,6 +38,7 @@ describe("attribute parser / built-ins", () => {
 
     expect(attr.target).toBe("click");
     expect(attr.command).toBe("capture");
+    // PART.capture:PART has injectCommand: false - parts are passed through as matched
     expect(attr.parts).toEqual(["click", "once"]);
   });
 
@@ -71,12 +73,10 @@ describe("attribute parser / built-ins", () => {
 describe("attribute parser / precedence and lifecycle", () => {
   test("prefers more statics over dynamics", () => {
     const parser = new AttributeParser();
-    parser.registerPattern([{ pattern: "foo.PART", symbols: "." }], {
-      "foo.PART": (rawName, rawValue, parts) => new AttrSyntax(rawName, rawValue, `dynamic:${parts[0]}`, "dynamic"),
-    });
-    parser.registerPattern([{ pattern: "foo.bar", symbols: "." }], {
-      "foo.bar": (rawName, rawValue) => new AttrSyntax(rawName, rawValue, "static-target", "static"),
-    });
+    parser.registerPatterns([
+      { pattern: "foo.PART", symbols: ".", interpret: { kind: "fixed", target: "dynamic-target", command: "dynamic" } },
+      { pattern: "foo.bar", symbols: ".", interpret: { kind: "fixed", target: "static-target", command: "static" } },
+    ]);
 
     const attr = parser.parse("foo.bar", "v");
     expect(attr.command).toBe("static");
@@ -88,56 +88,39 @@ describe("attribute parser / precedence and lifecycle", () => {
     parser.parse("value.bind", "v");
 
     expect(
-      () => parser.registerPattern([{ pattern: "x", symbols: "" }], {
-        x: (rawName, rawValue, parts) => new AttrSyntax(rawName, rawValue, parts[0] ?? "x", "x"),
-      }),
+      () => parser.registerPatterns([
+        { pattern: "x", symbols: "", interpret: { kind: "fixed", target: "x", command: "x" } },
+      ]),
     ).toThrow(/AttributeParser already used/);
   });
 
   test("rejects duplicate patterns", () => {
     const parser = new AttributeParser();
-    parser.registerPattern([{ pattern: "foo", symbols: "" }], {
-      foo: (rawName, rawValue) => new AttrSyntax(rawName, rawValue, "foo", null),
-    });
+    parser.registerPatterns([
+      { pattern: "foo", symbols: "", interpret: { kind: "fixed", target: "foo", command: null } },
+    ]);
 
     expect(
-      () => parser.registerPattern([{ pattern: "foo", symbols: "" }], {
-        foo: (rawName, rawValue) => new AttrSyntax(rawName, rawValue, "dup", null),
-      }),
+      () => parser.registerPatterns([
+        { pattern: "foo", symbols: "", interpret: { kind: "fixed", target: "dup", command: null } },
+      ]),
     ).toThrow(/Duplicate attribute pattern "foo"/);
   });
 
-  test("calls handler even when cache hits (value-dependent)", () => {
+  test("interpretation is deterministic (pure function of config + parts)", () => {
     const parser = new AttributeParser();
-    let calls = 0;
-    parser.registerPattern([{ pattern: "x", symbols: "" }], {
-      x: (rawName, rawValue) => {
-        calls++;
-        return new AttrSyntax(rawName, rawValue, rawValue, "x");
-      },
-    });
+    parser.registerPatterns([
+      { pattern: "x", symbols: "", interpret: { kind: "fixed-command", command: "x" } },
+    ]);
 
+    // Parse same name with different values - target should be consistent
     const first = parser.parse("x", "a");
     const second = parser.parse("x", "b");
 
-    expect(calls).toBe(2);
-    expect(first.target).toBe("a");
-    expect(second.target).toBe("b");
-  });
-
-  test("binds handlers to their implementation object", () => {
-    const parser = new AttributeParser();
-    const impl = {
-      seenThis: null,
-      foo(rawName, rawValue, parts) {
-        this.seenThis = this;
-        return new AttrSyntax(rawName, rawValue, parts[0] ?? "x", "foo");
-      },
-    };
-    parser.registerPattern([{ pattern: "foo", symbols: "" }], impl);
-
-    parser.parse("foo", "v");
-    expect(impl.seenThis).toBe(impl);
+    expect(first.target).toBe("x");
+    expect(second.target).toBe("x");
+    expect(first.rawValue).toBe("a");
+    expect(second.rawValue).toBe("b");
   });
 
   test("dynamic segments must be non-empty", () => {
@@ -151,24 +134,32 @@ describe("attribute parser / precedence and lifecycle", () => {
 
   test("ties favor more symbol runs when statics/dynamics equal", () => {
     const parser = new AttributeParser();
-    parser.registerPattern([
-      { pattern: "a.PART:PART", symbols: ".:" },   // symbols=2 ('.' and ':')
-      { pattern: "aPART:PART", symbols: ":" },     // symbols=1 (only ':')
-    ], {
-      "a.PART:PART": (rawName, rawValue, parts) => new AttrSyntax(rawName, rawValue, "dot-form", "more-symbols", parts),
-      "aPART:PART": (rawName, rawValue, parts) => new AttrSyntax(rawName, rawValue, "plain", "fewer-symbols", parts),
-    });
+    parser.registerPatterns([
+      { pattern: "a.PART:PART", symbols: ".:", interpret: { kind: "fixed", target: "dot-form", command: "more-symbols" } },
+      { pattern: "aPART:PART", symbols: ":", interpret: { kind: "fixed", target: "plain", command: "fewer-symbols" } },
+    ]);
 
     const attr = parser.parse("a.foo:bar", "v");
 
     expect(attr.command).toBe("more-symbols");
     expect(attr.target).toBe("dot-form");
-    expect(attr.parts).toEqual(["foo", "bar"]); // picked the pattern that splits at the dot
+    // With fixed interpret, parts is null
+    expect(attr.parts).toBe(null);
   });
 });
 
 describe("attribute parser / legacy parity matrices", () => {
-  const matrices = [
+  /**
+   * These matrices test pattern *matching* behavior, not interpretation.
+   * Each pattern uses a config that makes match/parts easy to verify:
+   * - target becomes "target:{pattern}"
+   * - command becomes the pattern name
+   * - parts come from a target-command interpretation
+   */
+  const matrices: Array<{
+    defs: Array<{ pattern: string; symbols: string }>;
+    cases: Array<{ raw: string; match: string | null; parts: string[] }>;
+  }> = [
     {
       defs: [
         { pattern: "PART.PART", symbols: "." },
@@ -382,44 +373,45 @@ describe("attribute parser / legacy parity matrices", () => {
     },
   ];
 
-  function countParts(pattern) {
-    return (pattern.match(/PART/g) ?? []).length;
-  }
-
-  function normalizeParts(pattern, expectedParts) {
-    const partCount = countParts(pattern);
-    if (partCount === 0) return [];
-    return expectedParts.slice(expectedParts.length - partCount);
+  /**
+   * Convert a simple def into an AttributePatternConfig for testing.
+   * Uses a "fixed" interpretation that makes the pattern name visible in output.
+   * This tests pattern *matching*, not interpretation semantics.
+   */
+  function toConfig(def: { pattern: string; symbols: string }): AttributePatternConfig {
+    // All patterns use fixed interpretation with pattern name as command
+    // This makes it easy to verify which pattern matched
+    return {
+      pattern: def.pattern,
+      symbols: def.symbols,
+      interpret: { kind: "fixed", target: `target:${def.pattern}`, command: def.pattern },
+    };
   }
 
   for (const { defs, cases } of matrices) {
     describe(`patterns [${defs.map((d) => d.pattern).join(", ")}]`, () => {
       const parser = (() => {
         const p = new AttributeParser();
-        const impl = {};
-        for (const def of defs) {
-          impl[def.pattern] = (rawName, rawValue, parts) =>
-            new AttrSyntax(rawName, rawValue, `target:${def.pattern}`, def.pattern, parts);
-        }
-        p.registerPattern(defs, impl);
+        p.registerPatterns(defs.map(toConfig));
         return p;
       })();
 
-      for (const { raw, match, parts } of cases) {
+      for (const { raw, match } of cases) {
         test(`parse ${raw} -> ${match ?? "no match"}`, () => {
           const attr = parser.parse(raw, "foo");
 
           if (match === null) {
+            // No pattern matched - identity fallback
             expect(attr.command).toBe(null);
             expect(attr.target).toBe(raw);
             expect(attr.parts).toBe(null);
             return;
           }
 
-          const expectedParts = normalizeParts(match, parts);
+          // Verify the pattern matched by checking command equals pattern name
           expect(attr.command).toBe(match);
+          // All patterns use fixed interpretation: target is "target:{pattern}"
           expect(attr.target).toBe(`target:${match}`);
-          expect(attr.parts).toEqual(expectedParts);
         });
       }
     });

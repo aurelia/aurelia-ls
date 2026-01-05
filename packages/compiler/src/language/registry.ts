@@ -37,6 +37,13 @@ export interface Semantics {
   bindingCommands: Record<string, BindingCommandConfig>;
 
   /**
+   * Attribute pattern configurations.
+   * Defines how attribute names are parsed into target/command pairs.
+   * Used by AttributeParser for config-driven pattern interpretation.
+   */
+  attributePatterns: readonly AttributePatternConfig[];
+
+  /**
    * DOM schema (HTML only for now).
    * - Guides attribute→property normalization and native prop default modes.
    * - Per-element overrides mirror runtime **AttrMapper** behavior.
@@ -1271,6 +1278,12 @@ export const DEFAULT: Semantics = {
    * Used by lowering to determine instruction types and modes.
    */
   bindingCommands: BUILTIN_BINDING_COMMANDS,
+
+  /* ---- Attribute patterns ----
+   * Config-driven pattern matching and interpretation.
+   * Used by AttributeParser for parsing attribute names.
+   */
+  attributePatterns: BUILTIN_ATTRIBUTE_PATTERNS,
 };
 
 /* -------------------------------------------------------------------------

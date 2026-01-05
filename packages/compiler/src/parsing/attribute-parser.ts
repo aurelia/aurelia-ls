@@ -1,7 +1,5 @@
-export interface AttributePatternDefinition<T extends string = string> {
-  pattern: T;       // e.g. 'PART.PART', 'ref', '@PART:PART'
-  symbols: string;  // characters considered "separators" for PART
-}
+import type { AttributePatternConfig } from "../language/registry.js";
+import { BUILTIN_ATTRIBUTE_PATTERNS } from "../language/registry.js";
 
 /** Result of parsing an attribute name. */
 export class AttrSyntax {
@@ -28,13 +26,12 @@ class CompiledPattern {
   readonly symbolSet: Set<string>;
 
   constructor(
-    public readonly def: AttributePatternDefinition,
-    public readonly handler: (rawName: string, rawValue: string, parts: readonly string[]) => AttrSyntax,
+    public readonly config: AttributePatternConfig,
   ) {
-    const { tokens, score } = compilePattern(def.pattern, def.symbols);
+    const { tokens, score } = compilePattern(config.pattern, config.symbols);
     this.tokens = tokens;
     this.score = score;
-    this.symbolSet = toSymbolSet(def.symbols);
+    this.symbolSet = toSymbolSet(config.symbols);
   }
 
   tryMatch(input: string): string[] | null {
@@ -104,13 +101,68 @@ function compilePattern(pattern: string, symbols: string): { tokens: Token[]; sc
   return { tokens, score: { statics, dynamics, symbols: symbolRuns } };
 }
 
-/* ---------- Public registry ---------- */
-
-export type AttributePatternHandler = (rawName: string, rawValue: string, parts: readonly string[]) => AttrSyntax;
-export type IAttributePattern<T extends string = string> = Record<T, AttributePatternHandler>;
+/* ---------- Config-driven interpretation ---------- */
 
 /**
- * AttributeParser: register patterns with handlers, then parse names.
+ * Interpret a matched pattern using its config.
+ * This replaces the function-based handlers with config-driven logic.
+ */
+function interpretConfig(
+  config: AttributePatternConfig,
+  rawName: string,
+  rawValue: string,
+  parts: readonly string[]
+): AttrSyntax {
+  const interpret = config.interpret;
+
+  switch (interpret.kind) {
+    case "target-command": {
+      // PART.PART → target=parts[0], command=parts[last]
+      // PART.PART.PART → target=parts[0].parts[1], command=parts[last]
+      // All parts except the last are joined by "." to form the target
+      const target = parts.slice(0, -1).join(".");
+      const command = parts[parts.length - 1]!;
+      return new AttrSyntax(rawName, rawValue, target, command);
+    }
+
+    case "fixed": {
+      // Fixed target and command (e.g., "ref" → target="element", command="ref")
+      return new AttrSyntax(rawName, rawValue, interpret.target, interpret.command);
+    }
+
+    case "fixed-command": {
+      // First part becomes target, command is fixed
+      const target = parts[0] ?? rawName;
+      return new AttrSyntax(rawName, rawValue, target, interpret.command);
+    }
+
+    case "mapped-fixed-command": {
+      // First part becomes target (with optional mapping), command is fixed
+      const part = parts[0] ?? "";
+      const target = interpret.targetMap?.[part] ?? part;
+      return new AttrSyntax(rawName, rawValue, target, interpret.command);
+    }
+
+    case "event-modifier": {
+      // Event pattern with modifier: PART.trigger:PART or @PART:PART
+      // parts[0] = event, parts[1] = modifier (if present)
+      const event = parts[0]!;
+      const command = interpret.command;
+
+      // injectCommand: true means insert command at index 1 (for @ patterns)
+      // injectCommand: false means passthrough parts as-is
+      const normalizedParts = interpret.injectCommand && parts.length > 1
+        ? [event, command, ...parts.slice(1)]
+        : parts;
+      return new AttrSyntax(rawName, rawValue, event, command, normalizedParts);
+    }
+  }
+}
+
+/* ---------- Public registry ---------- */
+
+/**
+ * AttributeParser: register patterns with configs, then parse names.
  * - Deterministic precedence: more statics > more dynamics > more symbols.
  * - Caches successful matches by attribute name (value-independent).
  */
@@ -120,16 +172,19 @@ export class AttributeParser {
   private readonly _cache = new Map<string, { pat: CompiledPattern; parts: readonly string[] }>();
   private _sealed = false;
 
-  registerPattern(defs: AttributePatternDefinition[], impl: IAttributePattern): void {
+  /**
+   * Register patterns from config objects.
+   * This is the config-driven API replacing the old function-based registerPattern.
+   */
+  registerPatterns(configs: readonly AttributePatternConfig[]): void {
     if (this._sealed) throw new Error('[syntax] AttributeParser already used; cannot add patterns after parse()');
-    for (const def of defs) {
-      if (this._byKey.has(def.pattern)) {
-        throw new Error(`[syntax] Duplicate attribute pattern "${def.pattern}"`);
+    for (const config of configs) {
+      if (this._byKey.has(config.pattern)) {
+        throw new Error(`[syntax] Duplicate attribute pattern "${config.pattern}"`);
       }
-      const handler = impl[def.pattern]!.bind(impl);
-      const cp = new CompiledPattern(def, handler);
+      const cp = new CompiledPattern(config);
       this._compiled.push(cp);
-      this._byKey.set(def.pattern, cp);
+      this._byKey.set(config.pattern, cp);
     }
   }
 
@@ -140,7 +195,7 @@ export class AttributeParser {
     const cached = this._cache.get(name);
     if (cached) {
       const { pat, parts } = cached;
-      return pat.handler(name, value, parts);
+      return interpretConfig(pat.config, name, value, parts);
     }
 
     // Try all patterns, keep the best match by score.
@@ -170,148 +225,9 @@ export class AttributeParser {
     }
 
     this._cache.set(name, best);
-    return best.pat.handler(name, value, best.parts);
+    return interpretConfig(best.pat.config, name, value, best.parts);
   }
 }
-
-/* -------------------------------------------------------------------------------------------------
- * Dot-separated commands (".bind"/".to-view"/".two-way", etc.)
- *   - 'PART.PART'           e.g., "value.bind"         -> target: 'value',  command: 'bind'
- *   - 'PART.PART.PART'      e.g., "foo.bar.bind"       -> target: 'foo.bar', command: 'bind'
- * ------------------------------------------------------------------------------------------------ */
-
-type DotKeys = 'PART.PART' | 'PART.PART.PART';
-
-const DOT_DEFS: AttributePatternDefinition<DotKeys>[] = [
-  { pattern: 'PART.PART', symbols: '.' },
-  { pattern: 'PART.PART.PART', symbols: '.' },
-];
-
-const DOT_IMPL: IAttributePattern<DotKeys> = {
-  'PART.PART': (rawName, rawValue, parts) => {
-    const [target, command] = parts;
-    return new AttrSyntax(rawName, rawValue, target!, command!);
-  },
-  'PART.PART.PART': (rawName, rawValue, parts) => {
-    const [first, second, command] = parts;
-    const target = `${first!}.${second!}`;
-    return new AttrSyntax(rawName, rawValue, target, command!);
-  },
-};
-
-/* -------------------------------------------------------------------------------------------------
- * Ref:
- *   - 'ref'                => element.ref
- *   - 'PART.ref'           e.g., "view-model.ref" -> component.ref (runtime parity)
- * ------------------------------------------------------------------------------------------------ */
-
-type RefKeys = 'ref' | 'PART.ref';
-
-const REF_DEFS: AttributePatternDefinition<RefKeys>[] = [
-  { pattern: 'ref', symbols: '' },
-  { pattern: 'PART.ref', symbols: '.' },
-];
-
-const REF_IMPL: IAttributePattern<RefKeys> = {
-  ref: (rawName, rawValue) =>
-    new AttrSyntax(rawName, rawValue, 'element', 'ref'),
-
-  'PART.ref': (rawName, rawValue, parts) => {
-    const part = parts[0] === 'view-model' ? 'component' : parts[0]!;
-    return new AttrSyntax(rawName, rawValue, part, 'ref');
-  },
-};
-
-/* -------------------------------------------------------------------------------------------------
- * Event (dot form):
- *   - 'PART.trigger:PART'  e.g., "click.trigger:once"  -> command 'trigger', parts = [event, modifier]
- *   - 'PART.capture:PART'  e.g., "click.capture:once"  -> command 'capture', parts = [event, modifier]
- *
- * NOTE: These parts mirror the runtime: handlers receive only PART captures.
- * ------------------------------------------------------------------------------------------------ */
-
-type EventKeys = 'PART.trigger:PART' | 'PART.capture:PART';
-
-const EVENT_DEFS: AttributePatternDefinition<EventKeys>[] = [
-  { pattern: 'PART.trigger:PART', symbols: '.:' },
-  { pattern: 'PART.capture:PART', symbols: '.:' },
-];
-
-const EVENT_IMPL: IAttributePattern<EventKeys> = {
-  'PART.trigger:PART': (rawName, rawValue, parts) =>
-    new AttrSyntax(rawName, rawValue, parts[0]!, 'trigger', parts),
-  'PART.capture:PART': (rawName, rawValue, parts) =>
-    new AttrSyntax(rawName, rawValue, parts[0]!, 'capture', parts),
-};
-
-/* -------------------------------------------------------------------------------------------------
- * Colon-prefixed bind:
- *   - ':PART'              e.g., ":class"              -> class.bind
- * ------------------------------------------------------------------------------------------------ */
-
-type ColonKeys = ':PART';
-
-const COLON_DEFS: AttributePatternDefinition<ColonKeys>[] = [
-  { pattern: ':PART', symbols: ':' },
-];
-
-const COLON_IMPL: IAttributePattern<ColonKeys> = {
-  ':PART': (rawName, rawValue, parts) =>
-    new AttrSyntax(rawName, rawValue, parts[0]!, 'bind'),
-};
-
-/* -------------------------------------------------------------------------------------------------
- * At-prefixed trigger:
- *   - '@PART'              e.g., "@click"              -> click.trigger
- *   - '@PART:PART'         e.g., "@click:once"
- *
- * IMPORTANT SHAPE: For '@PART:PART' we intentionally pass parts as
- * [event, 'trigger', modifier] so downstream code can read parts?.[2]
- * (this matches runtime Trigger/Capture commands).
- * ------------------------------------------------------------------------------------------------ */
-
-type AtKeys = '@PART' | '@PART:PART';
-
-const AT_DEFS: AttributePatternDefinition<AtKeys>[] = [
-  { pattern: '@PART', symbols: '@' },
-  { pattern: '@PART:PART', symbols: '@:' },
-];
-
-const AT_IMPL: IAttributePattern<AtKeys> = {
-  '@PART': (rawName, rawValue, parts) =>
-    new AttrSyntax(rawName, rawValue, parts[0]!, 'trigger'),
-
-  '@PART:PART': (rawName, rawValue, parts) =>
-    // normalize to keep modifier at index 2, like the runtime
-    new AttrSyntax(rawName, rawValue, parts[0]!, 'trigger', [parts[0]!, 'trigger', ...parts.slice(1)]),
-};
-
-/* -------------------------------------------------------------------------------------------------
- * Promise patterns:
- *   - 'promise.resolve'      e.g., "promise.resolve"     -> target: 'promise', command: 'bind'
- *   - 'then'                 e.g., "then"                -> target: 'then', command: 'from-view'
- *   - 'catch'                e.g., "catch"               -> target: 'catch', command: 'from-view'
- *
- * Why 'from-view': The branch controller (FulfilledTC/RejectedTC) passes the resolved/error
- * value INTO the binding - it flows FROM the view (branch) TO the parent scope.
- * ------------------------------------------------------------------------------------------------ */
-
-type PromiseKeys = 'promise.resolve' | 'then' | 'catch';
-
-const PROMISE_DEFS: AttributePatternDefinition<PromiseKeys>[] = [
-  { pattern: 'promise.resolve', symbols: '.' },
-  { pattern: 'then', symbols: '' },
-  { pattern: 'catch', symbols: '' },
-];
-
-const PROMISE_IMPL: IAttributePattern<PromiseKeys> = {
-  'promise.resolve': (rawName, rawValue) =>
-    new AttrSyntax(rawName, rawValue, 'promise', 'bind'),
-  'then': (rawName, rawValue) =>
-    new AttrSyntax(rawName, rawValue, 'then', 'from-view'),
-  'catch': (rawName, rawValue) =>
-    new AttrSyntax(rawName, rawValue, 'catch', 'from-view'),
-};
 
 /* -------------------------------------------------------------------------------------------------
  * Public helpers
@@ -319,12 +235,7 @@ const PROMISE_IMPL: IAttributePattern<PromiseKeys> = {
 
 /** Registers all built-in patterns into an existing parser (fluent). */
 export function registerBuiltins(p: AttributeParser): AttributeParser {
-  p.registerPattern(DOT_DEFS,     DOT_IMPL);
-  p.registerPattern(REF_DEFS,     REF_IMPL);
-  p.registerPattern(EVENT_DEFS,   EVENT_IMPL);
-  p.registerPattern(COLON_DEFS,   COLON_IMPL);
-  p.registerPattern(AT_DEFS,      AT_IMPL);
-  p.registerPattern(PROMISE_DEFS, PROMISE_IMPL);
+  p.registerPatterns(BUILTIN_ATTRIBUTE_PATTERNS);
   return p;
 }
 
