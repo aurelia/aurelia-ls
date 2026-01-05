@@ -18,6 +18,7 @@ import {
   type SerializedInterpolation,
   type SerializedPropertyBinding,
   type SerializedTextBinding,
+  type SerializedTranslationBinding,
 } from "@aurelia-ls/compiler";
 
 /**
@@ -485,6 +486,152 @@ describe("Instruction: propertyBinding", () => {
     );
     expect(expr).toBeDefined();
     expect(expr!.ast.$kind).toBe("AccessMember");
+  });
+});
+
+// =============================================================================
+// Translation Binding
+// =============================================================================
+
+describe("Instruction: translationBinding", () => {
+  it("emits translationBinding for literal key (t='key')", () => {
+    const aot = compileWithAot(
+      '<span t="greeting.hello"></span>',
+      { name: "test" },
+    );
+
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBinding,
+    );
+
+    expect(translation).toBeDefined();
+    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBinding);
+    expect(translation!.to).toBe("");
+    expect(translation!.isExpression).toBe(false);
+    expect(translation!.keyValue).toBe("greeting.hello");
+    // Literal keys don't have exprId
+    expect(translation!.exprId).toBeUndefined();
+  });
+
+  it("emits translationBinding for expression (t.bind='expr')", () => {
+    const aot = compileWithAot(
+      '<span t.bind="translationKey"></span>',
+      { name: "test" },
+    );
+
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBinding,
+    );
+
+    expect(translation).toBeDefined();
+    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBinding);
+    expect(translation!.to).toBe("");
+    expect(translation!.isExpression).toBe(true);
+    expect(translation!.exprId).toBeDefined();
+    // Expressions don't have keyValue
+    expect(translation!.keyValue).toBeUndefined();
+
+    // Verify the expression exists in the expression table
+    const expr = aot.raw.codeResult.expressions.find(
+      (e) => e.id === translation!.exprId,
+    );
+    expect(expr).toBeDefined();
+    expect(expr!.ast.$kind).toBe("AccessScope");
+    expect((expr!.ast as { name: string }).name).toBe("translationKey");
+  });
+
+  it("preserves i18n bracket syntax in keyValue", () => {
+    const aot = compileWithAot(
+      '<span t="[title]tooltip.message"></span>',
+      { name: "test" },
+    );
+
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBinding,
+    );
+
+    expect(translation).toBeDefined();
+    expect(translation!.isExpression).toBe(false);
+    // i18n bracket syntax is preserved as-is, not parsed
+    expect(translation!.keyValue).toBe("[title]tooltip.message");
+    expect(translation!.to).toBe("");
+  });
+
+  it("emits translationBinding with empty key", () => {
+    const aot = compileWithAot(
+      '<span t=""></span>',
+      { name: "test" },
+    );
+
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBinding,
+    );
+
+    expect(translation).toBeDefined();
+    expect(translation!.isExpression).toBe(false);
+    expect(translation!.keyValue).toBe("");
+  });
+
+  it("emits multiple translationBindings on sibling elements", () => {
+    const aot = compileWithAot(
+      '<div><span t="hello"></span><span t="world"></span></div>',
+      { name: "test" },
+    );
+
+    const translations = findAllInstructions<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBinding,
+    );
+
+    expect(translations.length).toBe(2);
+
+    const keys = translations.map((t) => t.keyValue).sort();
+    expect(keys).toEqual(["hello", "world"]);
+
+    // Both should be literal (not expression)
+    expect(translations.every((t) => t.isExpression === false)).toBe(true);
+  });
+
+  it("emits translationBinding with dotted key path", () => {
+    const aot = compileWithAot(
+      '<span t="messages.errors.validation.required"></span>',
+      { name: "test" },
+    );
+
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBinding,
+    );
+
+    expect(translation).toBeDefined();
+    expect(translation!.keyValue).toBe("messages.errors.validation.required");
+  });
+
+  it("emits translationBinding alongside other bindings", () => {
+    const aot = compileWithAot(
+      '<span class.bind="cls" t="label.text"></span>',
+      { name: "test" },
+    );
+
+    // Should have both a propertyBinding and a translationBinding
+    const propBinding = findInstruction<SerializedPropertyBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.propertyBinding,
+    );
+    const translation = findInstruction<SerializedTranslationBinding>(
+      aot.raw.codeResult.definition.instructions,
+      INSTRUCTION_TYPE.translationBinding,
+    );
+
+    expect(propBinding).toBeDefined();
+    expect(propBinding!.to).toBe("class");
+
+    expect(translation).toBeDefined();
+    expect(translation!.keyValue).toBe("label.text");
   });
 });
 
