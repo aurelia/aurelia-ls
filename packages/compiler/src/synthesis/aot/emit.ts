@@ -562,8 +562,13 @@ class EmitContext {
         } satisfies SerializedRefBinding;
 
       case "translationBinding": {
+        // Emit i18n plugin instruction types directly for runtime compatibility:
+        // - type 100 (translation) for literal keys: t="key"
+        // - type 101 (translationBind) for expressions: t.bind="expr"
         const result: SerializedTranslationBinding = {
-          type: INSTRUCTION_TYPE.translationBinding,
+          type: binding.isExpression
+            ? INSTRUCTION_TYPE.translationBind
+            : INSTRUCTION_TYPE.translation,
           to: binding.to,
           isExpression: binding.isExpression,
         };
@@ -1018,11 +1023,13 @@ function remapInstructionExprIds(
     case INSTRUCTION_TYPE.refBinding:
       return { ...inst, exprId: remapId(inst.exprId) };
 
-    case INSTRUCTION_TYPE.translationBinding:
-      // Only remap exprId if present (expressions only, not literal keys)
-      return inst.exprId !== undefined
-        ? { ...inst, exprId: remapId(inst.exprId) }
-        : inst;
+    case INSTRUCTION_TYPE.translation:
+      // Literal keys (type 100) have no exprId
+      return inst;
+
+    case INSTRUCTION_TYPE.translationBind:
+      // Bound expressions (type 101) always have exprId
+      return { ...inst, exprId: remapId(inst.exprId!) };
 
     case INSTRUCTION_TYPE.hydrateElement:
       return {

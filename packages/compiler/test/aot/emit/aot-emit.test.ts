@@ -274,7 +274,8 @@ function reduceInstruction(inst, targetIdx) {
         toBindingContext: inst.toBindingContext,
       };
 
-    case "translationBinding": {
+    case "translation":
+    case "translationBind": {
       const result: InstructionIntent = {
         ...base,
         to: inst.to,
@@ -443,7 +444,8 @@ function instructionKey(inst) {
     case "hydrateTemplateController":
       parts.push(inst.resource, `tpl${inst.templateIndex}`, `${inst.propCount}props`);
       break;
-    case "translationBinding":
+    case "translation":
+    case "translationBind":
       parts.push(inst.to, inst.isExpression ? "expr" : "literal", inst.keyValue ?? "");
       break;
   }

@@ -706,7 +706,7 @@ export interface SerializedRefBinding {
 }
 
 export interface SerializedTranslationBinding {
-  type: typeof INSTRUCTION_TYPE.translationBinding;
+  type: typeof INSTRUCTION_TYPE.translation | typeof INSTRUCTION_TYPE.translationBind;
   to: string;
   /** Expression ID (only when isExpression: true) */
   exprId?: ExprId;

@@ -189,7 +189,8 @@ function translateInstruction(
       return translateHydrateLetElement(ins, ctx);
     case INSTRUCTION_TYPE.iteratorBinding:
       return translateIteratorBinding(ins, ctx);
-    case INSTRUCTION_TYPE.translationBinding:
+    case INSTRUCTION_TYPE.translation:
+    case INSTRUCTION_TYPE.translationBind:
       return translateTranslationBinding(ins, ctx);
     default:
       throw new Error(`Unknown instruction type: ${(ins as SerializedInstruction).type}`);

@@ -494,19 +494,20 @@ describe("Instruction: propertyBinding", () => {
 // =============================================================================
 
 describe("Instruction: translationBinding", () => {
-  it("emits translationBinding for literal key (t='key')", () => {
+  it("emits translation for literal key (t='key')", () => {
     const aot = compileWithAot(
       '<span t="greeting.hello"></span>',
       { name: "test" },
     );
 
+    // Literal keys use type 100 (INSTRUCTION_TYPE.translation)
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBinding);
+    expect(translation!.type).toBe(INSTRUCTION_TYPE.translation);
     expect(translation!.to).toBe("");
     expect(translation!.isExpression).toBe(false);
     expect(translation!.keyValue).toBe("greeting.hello");
@@ -514,19 +515,20 @@ describe("Instruction: translationBinding", () => {
     expect(translation!.exprId).toBeUndefined();
   });
 
-  it("emits translationBinding for expression (t.bind='expr')", () => {
+  it("emits translationBind for expression (t.bind='expr')", () => {
     const aot = compileWithAot(
       '<span t.bind="translationKey"></span>',
       { name: "test" },
     );
 
+    // Expressions use type 101 (INSTRUCTION_TYPE.translationBind)
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translationBind,
     );
 
     expect(translation).toBeDefined();
-    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBinding);
+    expect(translation!.type).toBe(INSTRUCTION_TYPE.translationBind);
     expect(translation!.to).toBe("");
     expect(translation!.isExpression).toBe(true);
     expect(translation!.exprId).toBeDefined();
@@ -550,7 +552,7 @@ describe("Instruction: translationBinding", () => {
 
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
@@ -560,7 +562,7 @@ describe("Instruction: translationBinding", () => {
     expect(translation!.to).toBe("");
   });
 
-  it("emits translationBinding with empty key", () => {
+  it("emits translation with empty key", () => {
     const aot = compileWithAot(
       '<span t=""></span>',
       { name: "test" },
@@ -568,7 +570,7 @@ describe("Instruction: translationBinding", () => {
 
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
@@ -576,7 +578,7 @@ describe("Instruction: translationBinding", () => {
     expect(translation!.keyValue).toBe("");
   });
 
-  it("emits multiple translationBindings on sibling elements", () => {
+  it("emits multiple translation instructions on sibling elements", () => {
     const aot = compileWithAot(
       '<div><span t="hello"></span><span t="world"></span></div>',
       { name: "test" },
@@ -584,7 +586,7 @@ describe("Instruction: translationBinding", () => {
 
     const translations = findAllInstructions<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translations.length).toBe(2);
@@ -596,7 +598,7 @@ describe("Instruction: translationBinding", () => {
     expect(translations.every((t) => t.isExpression === false)).toBe(true);
   });
 
-  it("emits translationBinding with dotted key path", () => {
+  it("emits translation with dotted key path", () => {
     const aot = compileWithAot(
       '<span t="messages.errors.validation.required"></span>',
       { name: "test" },
@@ -604,27 +606,27 @@ describe("Instruction: translationBinding", () => {
 
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(translation).toBeDefined();
     expect(translation!.keyValue).toBe("messages.errors.validation.required");
   });
 
-  it("emits translationBinding alongside other bindings", () => {
+  it("emits translation alongside other bindings", () => {
     const aot = compileWithAot(
       '<span class.bind="cls" t="label.text"></span>',
       { name: "test" },
     );
 
-    // Should have both a propertyBinding and a translationBinding
+    // Should have both a propertyBinding and a translation
     const propBinding = findInstruction<SerializedPropertyBinding>(
       aot.raw.codeResult.definition.instructions,
       INSTRUCTION_TYPE.propertyBinding,
     );
     const translation = findInstruction<SerializedTranslationBinding>(
       aot.raw.codeResult.definition.instructions,
-      INSTRUCTION_TYPE.translationBinding,
+      INSTRUCTION_TYPE.translation,
     );
 
     expect(propBinding).toBeDefined();

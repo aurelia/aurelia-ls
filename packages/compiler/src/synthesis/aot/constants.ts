@@ -44,12 +44,16 @@ export const INSTRUCTION_TYPE = {
   setAttribute: 34,
   setClassAttribute: 35,
   setStyleAttribute: 36,
-  translationBinding: 37,
 
   // Spread instructions (50-59)
   spreadTransferedBinding: 50,
   spreadElementProp: 51,
   spreadValueBinding: 52,
+
+  // i18n plugin instructions (100-119)
+  // These match @aurelia/i18n's instruction types for runtime compatibility
+  translation: 100,      // t="key" - literal translation key
+  translationBind: 101,  // t.bind="expr" - bound translation expression
 } as const;
 
 /**
