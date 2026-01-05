@@ -162,7 +162,8 @@ export type PlanBinding =
   | PlanAttributeInterpolation
   | PlanStyleBinding
   | PlanListenerBinding
-  | PlanRefBinding;
+  | PlanRefBinding
+  | PlanTranslationBinding;
 
 interface PlanBindingBase {
   /** Source location */
@@ -261,6 +262,23 @@ export interface PlanRefBinding extends PlanBindingBase {
 
   /** Expression ID (usually just an identifier) */
   exprId: ExprId;
+}
+
+/**
+ * Translation binding (i18n `t` attribute).
+ * Sets translated content on an element or attribute.
+ */
+export interface PlanTranslationBinding extends PlanBindingBase {
+  type: "translationBinding";
+
+  /** Target attribute/property (empty string = textContent) */
+  to: string;
+
+  /** Translation key or expression ID */
+  exprId: ExprId;
+
+  /** Whether the value is a dynamic expression (t.bind) vs literal key (t) */
+  isExpression: boolean;
 }
 
 /**
@@ -627,6 +645,7 @@ export type SerializedInstruction =
   | SerializedListenerBinding
   | SerializedIteratorBinding
   | SerializedRefBinding
+  | SerializedTranslationBinding
   | SerializedSetProperty
   | SerializedSetAttribute
   | SerializedHydrateElement
@@ -678,6 +697,13 @@ export interface SerializedRefBinding {
   type: typeof INSTRUCTION_TYPE.refBinding;
   to: string;
   exprId: ExprId;
+}
+
+export interface SerializedTranslationBinding {
+  type: typeof INSTRUCTION_TYPE.translationBinding;
+  to: string;
+  exprId: ExprId;
+  isExpression: boolean;
 }
 
 export interface SerializedSetProperty {

@@ -39,6 +39,7 @@ import type {
   LinkedListenerBinding,
   LinkedRefBinding,
   LinkedTextBinding,
+  LinkedTranslationBinding,
   LinkedHydrateElement,
   LinkedHydrateAttribute,
   LinkedHydrateTemplateController,
@@ -66,6 +67,7 @@ import type {
   PlanStyleBinding,
   PlanListenerBinding,
   PlanRefBinding,
+  PlanTranslationBinding,
   PlanTextInterpolation,
   PlanStaticAttr,
   PlanCustomElement,
@@ -439,6 +441,11 @@ function transformElement(
         needsTarget = true;
         break;
 
+      case "translationBinding":
+        bindings.push(transformTranslationBinding(ins, ctx));
+        needsTarget = true;
+        break;
+
       case "setAttribute":
         staticAttrs.push({ name: ins.to, value: ins.value });
         break;
@@ -801,6 +808,20 @@ function transformRefBinding(ins: LinkedRefBinding, ctx: PlanningContext): PlanR
     type: "refBinding",
     to: ins.to,
     exprId: ins.from.id,
+  };
+  if (ins.loc) result.loc = ins.loc;
+  return result;
+}
+
+function transformTranslationBinding(ins: LinkedTranslationBinding, ctx: PlanningContext): PlanTranslationBinding {
+  const exprId = primaryExprId(ins.from);
+  ctx.registerExpression(exprId, ins.loc ?? undefined);
+
+  const result: PlanTranslationBinding = {
+    type: "translationBinding",
+    to: ins.to,
+    exprId,
+    isExpression: ins.isExpression,
   };
   if (ins.loc) result.loc = ins.loc;
   return result;

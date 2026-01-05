@@ -207,6 +207,9 @@ function walkRows(
         case "textBinding":
           mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
           break;
+        case "translationBinding":
+          mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
+          break;
 
         // ---- Setters (no expressions) ----
         case "setAttribute":

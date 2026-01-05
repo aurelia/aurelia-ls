@@ -21,6 +21,7 @@ import type {
   SerializedListenerBinding,
   SerializedIteratorBinding,
   SerializedRefBinding,
+  SerializedTranslationBinding,
   SerializedSetProperty,
   SerializedHydrateElement,
   SerializedHydrateAttribute,
@@ -559,6 +560,14 @@ class EmitContext {
           to: binding.to,
           exprId: binding.exprId,
         } satisfies SerializedRefBinding;
+
+      case "translationBinding":
+        return {
+          type: INSTRUCTION_TYPE.translationBinding,
+          to: binding.to,
+          exprId: binding.exprId,
+          isExpression: binding.isExpression,
+        } satisfies SerializedTranslationBinding;
     }
   }
 
@@ -998,6 +1007,9 @@ function remapInstructionExprIds(
       };
 
     case INSTRUCTION_TYPE.refBinding:
+      return { ...inst, exprId: remapId(inst.exprId) };
+
+    case INSTRUCTION_TYPE.translationBinding:
       return { ...inst, exprId: remapId(inst.exprId) };
 
     case INSTRUCTION_TYPE.hydrateElement:

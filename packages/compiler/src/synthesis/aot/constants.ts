@@ -44,6 +44,7 @@ export const INSTRUCTION_TYPE = {
   setAttribute: 34,
   setClassAttribute: 35,
   setStyleAttribute: 36,
+  translationBinding: 37,
 
   // Spread instructions (50-59)
   spreadTransferedBinding: 50,
