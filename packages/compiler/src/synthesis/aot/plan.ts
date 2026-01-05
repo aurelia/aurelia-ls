@@ -49,6 +49,7 @@ import type {
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
 import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
 import { debug } from "../../shared/debug.js";
+import { BUILTIN_BINDING_COMMANDS } from "../../language/registry.js";
 
 import type {
   AotPlanModule,
@@ -1208,15 +1209,11 @@ function extractIteratorLocals(forOfExprId: ExprId, ctx: PlanningContext): strin
  * ============================================================================= */
 
 /**
- * Known binding command suffixes that indicate an attribute is a binding, not static.
- * These should NOT be included in staticAttrs.
+ * Binding command suffixes derived from config.
+ * Used to identify binding attributes that should NOT be included in staticAttrs.
+ * Computed once at module load from the config-driven binding command registry.
  */
-const BINDING_COMMANDS = new Set([
-  "bind", "one-time", "to-view", "from-view", "two-way",
-  "trigger", "capture", "delegate",
-  "ref",
-  "for", // repeat.for
-]);
+const BINDING_COMMANDS = new Set(Object.keys(BUILTIN_BINDING_COMMANDS));
 
 /**
  * Check if an attribute name is a binding attribute.
