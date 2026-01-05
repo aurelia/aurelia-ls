@@ -69,6 +69,9 @@ interface InstructionIntent {
   templateIndex?: number;
   bindingCount?: number;
   toBindingContext?: boolean;
+  // Translation binding fields
+  isExpression?: boolean;
+  keyValue?: string;
 }
 
 interface NestedIntent {
@@ -271,6 +274,19 @@ function reduceInstruction(inst, targetIdx) {
         toBindingContext: inst.toBindingContext,
       };
 
+    case "translationBinding": {
+      const result: InstructionIntent = {
+        ...base,
+        to: inst.to,
+        isExpression: inst.isExpression,
+      };
+      // Include keyValue for literal keys, exprId presence for expressions
+      if (inst.keyValue !== undefined) {
+        result.keyValue = inst.keyValue;
+      }
+      return result;
+    }
+
     default:
       return base;
   }
@@ -426,6 +442,9 @@ function instructionKey(inst) {
       break;
     case "hydrateTemplateController":
       parts.push(inst.resource, `tpl${inst.templateIndex}`, `${inst.propCount}props`);
+      break;
+    case "translationBinding":
+      parts.push(inst.to, inst.isExpression ? "expr" : "literal", inst.keyValue ?? "");
       break;
   }
 

@@ -1,0 +1,81 @@
+[
+  {
+    "name": "AE-T01 translation literal key (t='key')",
+    "markup": "<span t=\"greeting.hello\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBinding", "target": 0, "to": "", "isExpression": false, "keyValue": "greeting.hello" }
+      ],
+      "targetCount": 1,
+      "exprCount": 0
+    }
+  },
+  {
+    "name": "AE-T02 translation expression (t.bind='expr')",
+    "markup": "<span t.bind=\"translationKey\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBinding", "target": 0, "to": "", "isExpression": true }
+      ],
+      "targetCount": 1,
+      "exprCount": 1
+    }
+  },
+  {
+    "name": "AE-T03 translation with i18n bracket syntax preserved as keyValue",
+    "markup": "<span t=\"[title]tooltip.message\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBinding", "target": 0, "to": "", "isExpression": false, "keyValue": "[title]tooltip.message" }
+      ],
+      "targetCount": 1,
+      "exprCount": 0
+    }
+  },
+  {
+    "name": "AE-T04 translation empty key",
+    "markup": "<span t=\"\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBinding", "target": 0, "to": "", "isExpression": false, "keyValue": "" }
+      ],
+      "targetCount": 1,
+      "exprCount": 0
+    }
+  },
+  {
+    "name": "AE-T05 translation with other bindings",
+    "markup": "<span class.bind=\"cls\" t=\"label.text\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "propertyBinding", "target": 0, "to": "class", "mode": "toView" },
+        { "type": "translationBinding", "target": 0, "to": "", "isExpression": false, "keyValue": "label.text" }
+      ],
+      "targetCount": 1,
+      "exprCount": 1
+    }
+  },
+  {
+    "name": "AE-T06 multiple translation bindings on sibling elements",
+    "markup": "<div><span t=\"hello\"></span><span t=\"world\"></span></div>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBinding", "target": 0, "to": "", "isExpression": false, "keyValue": "hello" },
+        { "type": "translationBinding", "target": 1, "to": "", "isExpression": false, "keyValue": "world" }
+      ],
+      "targetCount": 2,
+      "exprCount": 0
+    }
+  },
+  {
+    "name": "AE-T07 translation dotted key path",
+    "markup": "<span t=\"messages.errors.validation.required\"></span>",
+    "expect": {
+      "instructions": [
+        { "type": "translationBinding", "target": 0, "to": "", "isExpression": false, "keyValue": "messages.errors.validation.required" }
+      ],
+      "targetCount": 1,
+      "exprCount": 0
+    }
+  }
+]
