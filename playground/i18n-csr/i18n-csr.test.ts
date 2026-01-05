@@ -35,163 +35,79 @@ describe("i18n CSR (AOT Translation Bindings)", () => {
     await ctx?.cleanup();
   });
 
-  // ==========================================================================
-  // Basic Setup
-  // ==========================================================================
-
-  test("page loads without SSR", async () => {
+  test("page loads without SSR and static key renders", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
+    // Verify no SSR
     const hadSSR = await wasSSRRendered(ctx.page);
     expect(hadSSR).toBe(false);
-  });
 
-  // ==========================================================================
-  // Test 1: Static Translation Key
-  // ==========================================================================
-
-  test("static key: t='greeting.hello' renders translation", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    const result = await ctx.page
+    // Static key: t="greeting.hello"
+    const staticResult = await ctx.page
       .locator('[data-testid="static-result"]')
       .textContent();
-
-    expect(result).toBe("Hello World");
+    expect(staticResult).toBe("Hello World");
   });
 
-  // ==========================================================================
-  // Test 2: Interpolated Translation Key
-  // ==========================================================================
-
-  test("interpolated key: t='priority.${level}' renders with initial value", async () => {
+  test("interpolated key renders and updates reactively", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
-    const result = await ctx.page
-      .locator('[data-testid="interpolated-result"]')
-      .textContent();
+    const locator = ctx.page.locator('[data-testid="interpolated-result"]');
 
     // Initial value is "medium"
-    expect(result).toBe("Medium Priority");
-  });
+    expect(await locator.textContent()).toBe("Medium Priority");
 
-  test("interpolated key: updates when level changes", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    // Click "Low" button
+    // Click "Low" button → updates to low
     await ctx.page.locator('[data-testid="set-low"]').click();
+    expect(await locator.textContent()).toBe("Low Priority");
 
-    const result = await ctx.page
-      .locator('[data-testid="interpolated-result"]')
-      .textContent();
-
-    expect(result).toBe("Low Priority");
-  });
-
-  test("interpolated key: updates again when level changes", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    // Click "High" button
+    // Click "High" button → updates to high
     await ctx.page.locator('[data-testid="set-high"]').click();
-
-    const result = await ctx.page
-      .locator('[data-testid="interpolated-result"]')
-      .textContent();
-
-    expect(result).toBe("High Priority");
+    expect(await locator.textContent()).toBe("High Priority");
   });
 
-  // ==========================================================================
-  // Test 3: Bound Expression
-  // ==========================================================================
-
-  test("bound expression: t.bind='statusKey' renders with initial value", async () => {
+  test("bound expression renders and updates reactively", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
-    const result = await ctx.page
-      .locator('[data-testid="bound-result"]')
-      .textContent();
+    const locator = ctx.page.locator('[data-testid="bound-result"]');
 
     // Initial value is "status.pending"
-    expect(result).toBe("Pending");
-  });
-
-  test("bound expression: updates when key changes", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
+    expect(await locator.textContent()).toBe("Pending");
 
     // Click "Open" button
     await ctx.page.locator('[data-testid="set-open"]').click();
-
-    const result = await ctx.page
-      .locator('[data-testid="bound-result"]')
-      .textContent();
-
-    expect(result).toBe("Open");
-  });
-
-  test("bound expression: updates again when key changes", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
+    expect(await locator.textContent()).toBe("Open");
 
     // Click "Closed" button
     await ctx.page.locator('[data-testid="set-closed"]').click();
-
-    const result = await ctx.page
-      .locator('[data-testid="bound-result"]')
-      .textContent();
-
-    expect(result).toBe("Closed");
+    expect(await locator.textContent()).toBe("Closed");
   });
 
-  // ==========================================================================
-  // Test 4: Bracket Syntax (Static Key)
-  // ==========================================================================
-
-  test("bracket syntax static: t='[title]tooltip.message' sets title attribute", async () => {
+  test("bracket syntax sets attributes correctly", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
-    const title = await ctx.page
+    // Static bracket: t="[title]tooltip.message"
+    const staticTitle = await ctx.page
       .locator('[data-testid="bracket-static-result"]')
       .getAttribute("title");
+    expect(staticTitle).toBe("This is a tooltip");
 
-    expect(title).toBe("This is a tooltip");
-  });
+    // Interpolated bracket: t="[title]tooltip.${type}" - initial is "info"
+    const interpolatedLocator = ctx.page.locator(
+      '[data-testid="bracket-interpolated-result"]'
+    );
+    expect(await interpolatedLocator.getAttribute("title")).toBe(
+      "More information"
+    );
 
-  // ==========================================================================
-  // Test 5: Bracket Syntax (Interpolated Key)
-  // ==========================================================================
-
-  test("bracket syntax interpolated: t='[title]tooltip.${type}' sets title with initial value", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    const title = await ctx.page
-      .locator('[data-testid="bracket-interpolated-result"]')
-      .getAttribute("title");
-
-    // Initial value is "info"
-    expect(title).toBe("More information");
-  });
-
-  test("bracket syntax interpolated: updates when type changes", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    // Click "Warning" button
+    // Click "Warning" button → updates title
     await ctx.page.locator('[data-testid="set-warning"]').click();
-
-    const title = await ctx.page
-      .locator('[data-testid="bracket-interpolated-result"]')
-      .getAttribute("title");
-
-    expect(title).toBe("Warning message");
+    expect(await interpolatedLocator.getAttribute("title")).toBe(
+      "Warning message"
+    );
   });
 });

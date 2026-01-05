@@ -30,70 +30,28 @@ describe("Basic Hydration", () => {
     await ctx?.cleanup();
   });
 
-  test("page loads with SSR content", async () => {
+  test("page loads with SSR and renders correctly", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
     // Verify SSR data was present
-    const hadSSR = await wasSSRRendered(ctx.page);
-    expect(hadSSR).toBe(true);
-  });
-
-  test("renders correct initial content", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
+    expect(await wasSSRRendered(ctx.page)).toBe(true);
 
     // Check title
-    const title = await ctx.page
-      .locator('[data-testid="title"]')
-      .textContent();
-    expect(title).toBe("Hello from Aurelia");
+    expect(await ctx.page.locator('[data-testid="title"]').textContent()).toBe(
+      "Hello from Aurelia"
+    );
 
     // Check initial click count
-    const count = await ctx.page
-      .locator('[data-testid="count"]')
-      .textContent();
-    expect(count).toBe("Clicks: 0");
+    expect(await ctx.page.locator('[data-testid="count"]').textContent()).toBe(
+      "Clicks: 0"
+    );
   });
 
-  // TODO: Event handlers not working after hydration - investigate
-  test.skip("click handler works after hydration", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    // Click the button
-    await ctx.page.locator('[data-testid="increment"]').click();
-
-    // Verify count updated
-    const count = await ctx.page
-      .locator('[data-testid="count"]')
-      .textContent();
-    expect(count).toBe("Clicks: 1");
-  });
-
-  // TODO: Event handlers not working after hydration - investigate
-  test.skip("multiple clicks update correctly", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    const button = ctx.page.locator('[data-testid="increment"]');
-
-    // Click multiple times
-    await button.click();
-    await button.click();
-    await button.click();
-
-    const count = await ctx.page
-      .locator('[data-testid="count"]')
-      .textContent();
-    expect(count).toBe("Clicks: 3");
-  });
-
-  test("DOM is preserved during hydration (not replaced)", async () => {
+  test("DOM is preserved during hydration", async () => {
     await ctx.page.goto(ctx.url);
 
     // Mark a DOM element before hydration completes
-    // We do this immediately after navigation, before Aurelia hydrates
     await ctx.page.evaluate(() => {
       const title = document.querySelector('[data-testid="title"]');
       if (title) {
@@ -110,5 +68,26 @@ describe("Basic Hydration", () => {
     });
 
     expect(markerPreserved).toBe(true);
+  });
+
+  // TODO: Event handlers not working after hydration - investigate
+  test.skip("click handlers work after hydration", async () => {
+    await ctx.page.goto(ctx.url);
+    await waitForAureliaReady(ctx.page);
+
+    const button = ctx.page.locator('[data-testid="increment"]');
+
+    // Single click
+    await button.click();
+    expect(await ctx.page.locator('[data-testid="count"]').textContent()).toBe(
+      "Clicks: 1"
+    );
+
+    // Multiple clicks
+    await button.click();
+    await button.click();
+    expect(await ctx.page.locator('[data-testid="count"]').textContent()).toBe(
+      "Clicks: 3"
+    );
   });
 });

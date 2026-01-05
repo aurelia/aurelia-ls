@@ -4,19 +4,6 @@
  * Tests AOT-compiled features in pure CSR mode (no SSR/hydration).
  * If it works here, AOT emit is correct. If it fails in SSR but works here,
  * the bug is in hydration.
- *
- * WORKING:
- * - Basic interpolation
- * - Event handlers (click.trigger)
- * - if/else (simple, sibling elements)
- * - repeat.for (basic arrays, simple iteration)
- * - ref binding
- * - switch/case
- * - <let> element (computed values)
- *
- * UNTESTED (may have issues with nested templates):
- * - with.bind
- * - Nested TCs (if inside repeat)
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
@@ -41,142 +28,88 @@ describe("Kitchen Sink CSR (AOT, no SSR)", () => {
     await ctx?.cleanup();
   });
 
-  test("page loads without SSR", async () => {
+  test("page loads without SSR, interpolation and click handlers work", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
-    const hadSSR = await wasSSRRendered(ctx.page);
-    expect(hadSSR).toBe(false);
-  });
+    // Verify no SSR
+    expect(await wasSSRRendered(ctx.page)).toBe(false);
 
-  test("renders interpolation", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
+    // Interpolation
+    expect(await ctx.page.locator('[data-testid="title"]').textContent()).toBe(
+      "Kitchen Sink"
+    );
 
-    const title = await ctx.page.locator('[data-testid="title"]').textContent();
-    expect(title).toBe("Kitchen Sink");
-  });
-
-  test("click handler works", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
+    // Click handler
     await ctx.page.locator('[data-testid="increment"]').click();
-    const count = await ctx.page.locator('[data-testid="count"]').textContent();
-    expect(count).toBe("Count: 1");
+    expect(await ctx.page.locator('[data-testid="count"]').textContent()).toBe(
+      "Count: 1"
+    );
   });
 
-  test("if/else shows correct branch", async () => {
+  test("if/else shows correct branch and toggles", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
-    const ifTrue = await ctx.page.locator('[data-testid="if-true"]').isVisible();
-    const ifFalse = await ctx.page.locator('[data-testid="if-false"]').isVisible();
-    expect(ifTrue).toBe(true);
-    expect(ifFalse).toBe(false);
-  });
+    // Initial state
+    expect(await ctx.page.locator('[data-testid="if-true"]').isVisible()).toBe(true);
+    expect(await ctx.page.locator('[data-testid="if-false"]').isVisible()).toBe(false);
 
-  test("if/else toggle works", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
+    // Toggle
     await ctx.page.locator('[data-testid="toggle"]').click();
-
-    const ifTrue = await ctx.page.locator('[data-testid="if-true"]').isVisible();
-    const ifFalse = await ctx.page.locator('[data-testid="if-false"]').isVisible();
-    expect(ifTrue).toBe(false);
-    expect(ifFalse).toBe(true);
+    expect(await ctx.page.locator('[data-testid="if-true"]').isVisible()).toBe(false);
+    expect(await ctx.page.locator('[data-testid="if-false"]').isVisible()).toBe(true);
   });
 
-  test("repeat.for renders items", async () => {
+  test("repeat.for renders items and add works", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
     const items = ctx.page.locator('[data-testid="items-list"] [data-testid="item"]');
-    const count = await items.count();
-    expect(count).toBe(3);
 
-    const texts = await items.allTextContents();
-    expect(texts).toEqual(["Apple", "Banana", "Cherry"]);
-  });
+    // Initial items
+    expect(await items.count()).toBe(3);
+    expect(await items.allTextContents()).toEqual(["Apple", "Banana", "Cherry"]);
 
-  test("repeat.for add item works", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
+    // Add item
     await ctx.page.locator('[data-testid="add-item"]').click();
-
-    const items = ctx.page.locator('[data-testid="items-list"] [data-testid="item"]');
-    const count = await items.count();
-    expect(count).toBe(4);
+    expect(await items.count()).toBe(4);
   });
 
-  test("ref binding creates element reference", async () => {
+  test("ref binding, switch/case, and let element work", async () => {
     await ctx.page.goto(ctx.url);
     await waitForAureliaReady(ctx.page);
 
+    // Ref binding
     const input = ctx.page.locator('[data-testid="ref-input"]');
-    const visible = await input.isVisible();
-    expect(visible).toBe(true);
+    expect(await input.isVisible()).toBe(true);
+    expect(await input.inputValue()).toBe("initial");
 
-    // Input should have initial value
-    const value = await input.inputValue();
-    expect(value).toBe("initial");
-  });
+    // Switch/case - initial state is "success"
+    expect(await ctx.page.locator('[data-testid="status-loading"]').isVisible()).toBe(false);
+    expect(await ctx.page.locator('[data-testid="status-success"]').isVisible()).toBe(true);
+    expect(await ctx.page.locator('[data-testid="status-error"]').isVisible()).toBe(false);
 
-  test("switch/case shows correct branch", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    // Initial state is "success"
-    const loading = await ctx.page.locator('[data-testid="status-loading"]').isVisible();
-    const success = await ctx.page.locator('[data-testid="status-success"]').isVisible();
-    const error = await ctx.page.locator('[data-testid="status-error"]').isVisible();
-
-    expect(loading).toBe(false);
-    expect(success).toBe(true);
-    expect(error).toBe(false);
-  });
-
-  test("switch/case cycles through states", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    // Click to cycle: success → error
+    // Cycle: success → error → loading → success
     await ctx.page.locator('[data-testid="cycle-status"]').click();
-    let error = await ctx.page.locator('[data-testid="status-error"]').isVisible();
-    expect(error).toBe(true);
+    expect(await ctx.page.locator('[data-testid="status-error"]').isVisible()).toBe(true);
 
-    // Click again: error → loading
     await ctx.page.locator('[data-testid="cycle-status"]').click();
-    const loading = await ctx.page.locator('[data-testid="status-loading"]').isVisible();
-    expect(loading).toBe(true);
+    expect(await ctx.page.locator('[data-testid="status-loading"]').isVisible()).toBe(true);
 
-    // Click again: loading → success
     await ctx.page.locator('[data-testid="cycle-status"]').click();
-    const success = await ctx.page.locator('[data-testid="status-success"]').isVisible();
-    expect(success).toBe(true);
-  });
+    expect(await ctx.page.locator('[data-testid="status-success"]').isVisible()).toBe(true);
 
-  test("let element computes derived value", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
+    // Let element - initial count is 0, doubled is 0
+    expect(await ctx.page.locator('[data-testid="computed-value"]').textContent()).toBe(
+      "Doubled: 0"
+    );
 
-    // Initial count is 0, so computed (doubled) is 0
-    const computed = await ctx.page.locator('[data-testid="computed-value"]').textContent();
-    expect(computed).toBe("Doubled: 0");
-  });
-
-  test("let element updates when source changes", async () => {
-    await ctx.page.goto(ctx.url);
-    await waitForAureliaReady(ctx.page);
-
-    // Click increment twice
+    // Increment twice → count=2 → doubled=4
     await ctx.page.locator('[data-testid="increment"]').click();
     await ctx.page.locator('[data-testid="increment"]').click();
-
-    // count is now 2, computed (doubled) should be 4
-    const computed = await ctx.page.locator('[data-testid="computed-value"]').textContent();
-    expect(computed).toBe("Doubled: 4");
+    expect(await ctx.page.locator('[data-testid="computed-value"]').textContent()).toBe(
+      "Doubled: 4"
+    );
   });
 });
