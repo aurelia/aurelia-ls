@@ -1,5 +1,13 @@
-import type { SourceFacts, ClassFacts, BindableMemberFact, ImportFact, SiblingFileFact } from "../extraction/types.js";
-import type { ResolverResult, ResourceCandidate, BindableSpec } from "./types.js";
+import type {
+  SourceFacts,
+  ClassFacts,
+  BindableMemberFact,
+  ImportFact,
+  SiblingFileFact,
+  AnalysisResult,
+} from "../extraction/types.js";
+import { highConfidence } from "../extraction/types.js";
+import type { ResourceCandidate, BindableSpec } from "./types.js";
 import type { ConventionConfig } from "../conventions/types.js";
 import {
   getResourceTypeFromClassName,
@@ -15,6 +23,10 @@ import { debug } from "@aurelia-ls/compiler";
 /**
  * Resolve resource candidates from file/class naming conventions.
  * This is the lowest-priority resolver.
+ *
+ * Returns high confidence for in-project resolution — conventions are
+ * well-documented with deterministic rules. A class matching the pattern
+ * IS a resource by Aurelia's convention system.
  *
  * Handles three convention types:
  *
@@ -36,13 +48,13 @@ import { debug } from "@aurelia-ls/compiler";
 export function resolveFromConventions(
   facts: SourceFacts,
   config?: ConventionConfig,
-): ResolverResult {
+): AnalysisResult<ResourceCandidate[]> {
   const effectiveConfig = config ?? DEFAULT_CONVENTION_CONFIG;
 
   // Skip if conventions are disabled
   if (effectiveConfig.enabled === false) {
     debug.resolution("convention.skip", { reason: "disabled", path: facts.path });
-    return { candidates: [], diagnostics: [] };
+    return highConfidence([]);
   }
 
   const candidates: ResourceCandidate[] = [];
@@ -117,7 +129,9 @@ export function resolveFromConventions(
     }
   }
 
-  return { candidates, diagnostics: [] };
+  // Conventions are deterministic in-project — high confidence
+  // No gaps: not matching a pattern isn't a failure, just not a resource
+  return highConfidence(candidates);
 }
 
 /**

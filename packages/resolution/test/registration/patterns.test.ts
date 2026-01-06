@@ -38,7 +38,7 @@ function analyzeRegistration(files: Record<string, string>): RegistrationAnalysi
   const pipeline = createResolverPipeline();
   const resolved = pipeline.resolve(resolvedFacts);
   const analyzer = createRegistrationAnalyzer();
-  return analyzer.analyze(resolved.candidates, resolvedFacts, exportBindings);
+  return analyzer.analyze(resolved.value, resolvedFacts, exportBindings);
 }
 
 /**

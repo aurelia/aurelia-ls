@@ -1,8 +1,8 @@
 import type ts from "typescript";
 import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, CompileTrace } from "@aurelia-ls/compiler";
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
-import type { SourceFacts } from "./extraction/types.js";
-import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
+import type { SourceFacts, AnalysisGap } from "./extraction/types.js";
+import type { ResourceCandidate } from "./inference/types.js";
 import type { RegistrationAnalysis, RegistrationSite, RegistrationEvidence } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
@@ -159,11 +159,14 @@ export function resolve(
     log.info("[resolution] resolving candidates...");
     trace.event("resolution.inference.start");
     const pipeline = createResolverPipeline(config?.conventions);
-    const { candidates, diagnostics: resolverDiags } = pipeline.resolve(facts);
+    const resolverResult = pipeline.resolve(facts);
+    const candidates = resolverResult.value;
+    const resolverGaps = resolverResult.gaps;
     trace.event("resolution.inference.done", { candidateCount: candidates.length });
     debug.resolution("inference.complete", {
       candidateCount: candidates.length,
-      diagnosticCount: resolverDiags.length,
+      gapCount: resolverGaps.length,
+      confidence: resolverResult.confidence,
     });
 
     // Layer 2.5: Export Binding Resolution
@@ -236,9 +239,9 @@ export function resolve(
         file: getFileFromEvidence(s.evidence),
       }));
 
-    // Merge all diagnostics: resolver + orphans + unresolved patterns + unresolved refs
+    // Merge all diagnostics: resolver gaps + orphans + unresolved patterns + unresolved refs
     const allDiagnostics: ResolutionDiagnostic[] = [
-      ...resolverDiags.map(toDiagnostic),
+      ...resolverGaps.map(gapToDiagnostic),
       ...orphansToDiagnostics(registration.orphans),
       ...unresolvedToDiagnostics(registration.unresolved),
       ...unresolvedRefsToDiagnostics(unresolvedRefs),
@@ -267,12 +270,15 @@ export function resolve(
   });
 }
 
-function toDiagnostic(d: ResolverDiagnostic): ResolutionDiagnostic {
+/**
+ * Convert an AnalysisGap to a ResolutionDiagnostic.
+ */
+function gapToDiagnostic(gap: AnalysisGap): ResolutionDiagnostic {
   return {
-    code: d.code,
-    message: d.message,
-    source: d.source,
-    severity: d.severity,
+    code: `gap:${gap.why.kind}`,
+    message: `${gap.what}: ${gap.suggestion}`,
+    source: (gap.where?.file ?? "unknown") as NormalizedPath,
+    severity: "warning",
   };
 }
 

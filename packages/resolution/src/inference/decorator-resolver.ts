@@ -1,6 +1,16 @@
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { SourceFacts, ClassFacts, DecoratorFact, BindableMemberFact, BindableDefFact, BindingMode } from "../extraction/types.js";
-import type { ResourceCandidate, BindableSpec, ResolverResult, ResolverDiagnostic } from "./types.js";
+import type {
+  SourceFacts,
+  ClassFacts,
+  DecoratorFact,
+  BindableMemberFact,
+  BindableDefFact,
+  BindingMode,
+  AnalysisResult,
+  AnalysisGap,
+} from "../extraction/types.js";
+import { highConfidence, partial, gap } from "../extraction/types.js";
+import type { ResourceCandidate, BindableSpec } from "./types.js";
 import {
   canonicalElementName,
   canonicalAttrName,
@@ -11,19 +21,27 @@ import {
 /**
  * Resolve resource candidates from decorator facts.
  * This is the highest-priority resolver.
+ *
+ * Returns high confidence for in-project resolution (decorators are explicit).
  */
-export function resolveFromDecorators(facts: SourceFacts): ResolverResult {
+export function resolveFromDecorators(facts: SourceFacts): AnalysisResult<ResourceCandidate[]> {
   const candidates: ResourceCandidate[] = [];
-  const diagnostics: ResolverDiagnostic[] = [];
+  const gaps: AnalysisGap[] = [];
 
   for (const cls of facts.classes) {
-    const candidate = resolveClassDecorators(cls, facts.path);
-    if (candidate) {
-      candidates.push(candidate);
+    const result = resolveClassDecorators(cls, facts.path);
+    if (result.candidate) {
+      candidates.push(result.candidate);
+    }
+    if (result.gap) {
+      gaps.push(result.gap);
     }
   }
 
-  return { candidates, diagnostics };
+  if (gaps.length > 0) {
+    return partial(candidates, 'high', gaps);
+  }
+  return highConfidence(candidates);
 }
 
 interface DecoratorMeta {
@@ -53,31 +71,48 @@ interface DecoratorMeta {
   templateController: boolean;
 }
 
+interface ClassResolutionResult {
+  candidate: ResourceCandidate | null;
+  gap: AnalysisGap | null;
+}
+
 function resolveClassDecorators(
   cls: ClassFacts,
   source: NormalizedPath,
-): ResourceCandidate | null {
+): ClassResolutionResult {
   const meta = collectDecoratorMeta(cls.decorators);
 
   if (meta.element) {
     const bindables = mergeBindableSpecs(meta.element.bindables, cls.bindableMembers);
     const { specs } = buildBindableSpecs(bindables);
     const name = canonicalElementName(meta.element.name ?? cls.name);
-    if (!name) return null;
+    if (!name) {
+      return {
+        candidate: null,
+        gap: gap(
+          `resource name for ${cls.name}`,
+          { kind: 'invalid-resource-name', className: cls.name, reason: 'Could not derive valid element name' },
+          `Provide an explicit name in the @customElement decorator.`
+        ),
+      };
+    }
     const aliases = canonicalAliases(meta.element.aliases);
 
     return {
-      kind: "element",
-      name,
-      source,
-      className: cls.name,
-      aliases,
-      bindables: specs,
-      confidence: "explicit",
-      resolver: "decorator",
-      containerless: meta.element.containerless || meta.containerless,
-      boundary: true,
-      ...(meta.element.template ? { inlineTemplate: meta.element.template } : {}),
+      candidate: {
+        kind: "element",
+        name,
+        source,
+        className: cls.name,
+        aliases,
+        bindables: specs,
+        confidence: "explicit",
+        resolver: "decorator",
+        containerless: meta.element.containerless || meta.containerless,
+        boundary: true,
+        ...(meta.element.template ? { inlineTemplate: meta.element.template } : {}),
+      },
+      gap: null,
     };
   }
 
@@ -85,58 +120,95 @@ function resolveClassDecorators(
     const bindables = mergeBindableSpecs(meta.attribute.bindables, cls.bindableMembers);
     const { specs, primary } = buildBindableSpecs(bindables);
     const name = canonicalAttrName(meta.attribute.name ?? cls.name);
-    if (!name) return null;
+    if (!name) {
+      return {
+        candidate: null,
+        gap: gap(
+          `resource name for ${cls.name}`,
+          { kind: 'invalid-resource-name', className: cls.name, reason: 'Could not derive valid attribute name' },
+          `Provide an explicit name in the @customAttribute decorator.`
+        ),
+      };
+    }
     const aliases = canonicalAliases(meta.attribute.aliases);
     const isTemplateController = meta.attribute.isTemplateController || meta.templateController;
 
     return {
-      kind: "attribute",
-      name,
-      source,
-      className: cls.name,
-      aliases,
-      bindables: specs,
-      confidence: "explicit",
-      resolver: "decorator",
-      isTemplateController,
-      noMultiBindings: meta.attribute.noMultiBindings,
-      primary,
+      candidate: {
+        kind: "attribute",
+        name,
+        source,
+        className: cls.name,
+        aliases,
+        bindables: specs,
+        confidence: "explicit",
+        resolver: "decorator",
+        isTemplateController,
+        noMultiBindings: meta.attribute.noMultiBindings,
+        primary,
+      },
+      gap: null,
     };
   }
 
   if (meta.valueConverter) {
     const name = canonicalSimpleName(meta.valueConverter.name ?? cls.name);
-    if (!name) return null;
+    if (!name) {
+      return {
+        candidate: null,
+        gap: gap(
+          `resource name for ${cls.name}`,
+          { kind: 'invalid-resource-name', className: cls.name, reason: 'Could not derive valid value converter name' },
+          `Provide an explicit name in the @valueConverter decorator.`
+        ),
+      };
+    }
 
     return {
-      kind: "valueConverter",
-      name,
-      source,
-      className: cls.name,
-      aliases: canonicalAliases(meta.valueConverter.aliases),
-      bindables: [],
-      confidence: "explicit",
-      resolver: "decorator",
+      candidate: {
+        kind: "valueConverter",
+        name,
+        source,
+        className: cls.name,
+        aliases: canonicalAliases(meta.valueConverter.aliases),
+        bindables: [],
+        confidence: "explicit",
+        resolver: "decorator",
+      },
+      gap: null,
     };
   }
 
   if (meta.bindingBehavior) {
     const name = canonicalSimpleName(meta.bindingBehavior.name ?? cls.name);
-    if (!name) return null;
+    if (!name) {
+      return {
+        candidate: null,
+        gap: gap(
+          `resource name for ${cls.name}`,
+          { kind: 'invalid-resource-name', className: cls.name, reason: 'Could not derive valid binding behavior name' },
+          `Provide an explicit name in the @bindingBehavior decorator.`
+        ),
+      };
+    }
 
     return {
-      kind: "bindingBehavior",
-      name,
-      source,
-      className: cls.name,
-      aliases: canonicalAliases(meta.bindingBehavior.aliases),
-      bindables: [],
-      confidence: "explicit",
-      resolver: "decorator",
+      candidate: {
+        kind: "bindingBehavior",
+        name,
+        source,
+        className: cls.name,
+        aliases: canonicalAliases(meta.bindingBehavior.aliases),
+        bindables: [],
+        confidence: "explicit",
+        resolver: "decorator",
+      },
+      gap: null,
     };
   }
 
-  return null;
+  // No resource decorator found — not a gap, just not a resource
+  return { candidate: null, gap: null };
 }
 
 function collectDecoratorMeta(decorators: readonly DecoratorFact[]): DecoratorMeta {

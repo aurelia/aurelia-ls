@@ -138,7 +138,7 @@ export type {
 
 // === Inference (Layer 2) ===
 export { createResolverPipeline, resolveFromDecorators, resolveFromStaticAu, resolveFromConventions } from "./inference/index.js";
-export type { ResourceCandidate, BindableSpec, ResolverResult, ResolverDiagnostic, ResolverPipeline } from "./inference/index.js";
+export type { ResourceCandidate, BindableSpec, ResolverPipeline } from "./inference/index.js";
 
 // === Registration (Layer 3) ===
 export { createRegistrationAnalyzer, buildImportGraph } from "./registration/index.js";

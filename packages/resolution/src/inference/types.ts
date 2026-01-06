@@ -1,7 +1,12 @@
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { BindingMode } from "../extraction/types.js";
 
-/** Resource candidate identified by a resolver */
+/**
+ * Resource candidate identified by a resolver.
+ *
+ * This is the in-project resolution result type. For npm package analysis,
+ * see ExtractedResource in npm/types.ts.
+ */
 export interface ResourceCandidate {
   readonly kind: "element" | "attribute" | "valueConverter" | "bindingBehavior";
   readonly name: string;
@@ -9,7 +14,18 @@ export interface ResourceCandidate {
   readonly className: string;
   readonly aliases: readonly string[];
   readonly bindables: readonly BindableSpec[];
+
+  /**
+   * Evidence source: how we identified this resource.
+   * - "explicit": decorator or static $au (authoritative)
+   * - "inferred": naming convention (deterministic in-project)
+   *
+   * Note: This is distinct from AnalysisResult.confidence which is
+   * about overall analysis certainty.
+   */
   readonly confidence: "explicit" | "inferred";
+
+  /** Which resolver identified this resource */
   readonly resolver: string; // "decorator" | "static-au" | "convention"
 
   // Element-specific
@@ -31,23 +47,4 @@ export interface BindableSpec {
   readonly primary?: boolean;
   readonly type?: string;
   readonly attribute?: string;
-}
-
-/** Result from a single resolver */
-export interface ResolverResult {
-  readonly candidates: readonly ResourceCandidate[];
-  readonly diagnostics: readonly ResolverDiagnostic[];
-}
-
-/** Diagnostic from a resolver */
-export interface ResolverDiagnostic {
-  readonly code: string;
-  readonly message: string;
-  readonly source: NormalizedPath;
-  readonly severity: "error" | "warning" | "info";
-}
-
-/** Empty resolver result */
-export function emptyResolverResult(): ResolverResult {
-  return { candidates: [], diagnostics: [] };
 }

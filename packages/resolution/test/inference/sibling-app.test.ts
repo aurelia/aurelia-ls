@@ -73,7 +73,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
   });
 
   it("resolves my-app via sibling-file convention", () => {
-    const candidates = filterAppCandidates(result.candidates);
+    const candidates = filterAppCandidates(result.value);
     const myApp = candidates.find(
       (c) => c.name === "my-app" && c.kind === "element"
     );
@@ -85,7 +85,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
   });
 
   it("resolves nav-bar via sibling-file convention", () => {
-    const candidates = filterAppCandidates(result.candidates);
+    const candidates = filterAppCandidates(result.value);
     const navBar = candidates.find(
       (c) => c.name === "nav-bar" && c.kind === "element"
     );
@@ -96,7 +96,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
   });
 
   it("resolves user-card with bindables via sibling-file convention", () => {
-    const candidates = filterAppCandidates(result.candidates);
+    const candidates = filterAppCandidates(result.value);
     const userCard = candidates.find(
       (c) => c.name === "user-card" && c.kind === "element"
     );
@@ -111,7 +111,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
   });
 
   it("resolves inline-only via decorator (not sibling convention)", () => {
-    const candidates = filterAppCandidates(result.candidates);
+    const candidates = filterAppCandidates(result.value);
     const inlineOnly = candidates.find(
       (c) => c.name === "inline-only" && c.kind === "element"
     );
@@ -123,7 +123,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
   });
 
   it("finds exactly 4 element resources from sibling-app", () => {
-    const candidates = filterAppCandidates(result.candidates);
+    const candidates = filterAppCandidates(result.value);
     const elements = candidates.filter((c) => c.kind === "element");
     const elementNames = elements.map((e) => e.name).sort();
 
@@ -136,7 +136,7 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
   });
 
   it("does not produce duplicates", () => {
-    const candidates = filterAppCandidates(result.candidates);
+    const candidates = filterAppCandidates(result.value);
     const names = candidates.map((c) => `${c.kind}:${c.name}`);
     const uniqueNames = [...new Set(names)];
 

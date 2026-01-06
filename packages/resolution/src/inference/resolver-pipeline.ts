@@ -1,6 +1,7 @@
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { SourceFacts } from "../extraction/types.js";
-import type { ResourceCandidate, ResolverResult, ResolverDiagnostic, BindableSpec } from "./types.js";
+import type { SourceFacts, AnalysisResult, AnalysisGap, Confidence } from "../extraction/types.js";
+import { compareConfidence } from "../extraction/types.js";
+import type { ResourceCandidate, BindableSpec } from "./types.js";
 import type { ConventionConfig } from "../conventions/types.js";
 import { resolveFromDecorators } from "./decorator-resolver.js";
 import { resolveFromStaticAu } from "./static-au-resolver.js";
@@ -10,7 +11,7 @@ import { resolveFromConventions } from "./convention-resolver.js";
  * Pipeline that runs multiple resolvers in priority order.
  */
 export interface ResolverPipeline {
-  resolve(facts: Map<NormalizedPath, SourceFacts>): ResolverResult;
+  resolve(facts: Map<NormalizedPath, SourceFacts>): AnalysisResult<ResourceCandidate[]>;
 }
 
 /**
@@ -22,43 +23,57 @@ export interface ResolverPipeline {
  * 3. Convention resolver - inferred from naming
  *
  * Higher priority wins on conflicts, but bindables are merged.
+ *
+ * Returns high confidence for in-project resolution — all resolvers
+ * provide deterministic results.
  */
 export function createResolverPipeline(config?: ConventionConfig): ResolverPipeline {
   return {
     resolve(facts) {
       const candidates = new Map<string, ResourceCandidate>();
-      const diagnostics: ResolverDiagnostic[] = [];
+      const allGaps: AnalysisGap[] = [];
+      let lowestConfidence: Confidence = 'exact';
 
       for (const [_path, fileFacts] of facts) {
         // 1. Decorator resolver (highest priority)
         const decoratorResult = resolveFromDecorators(fileFacts);
-        mergeResults(candidates, decoratorResult, diagnostics);
+        mergeResult(candidates, decoratorResult.value);
+        allGaps.push(...decoratorResult.gaps);
+        if (compareConfidence(decoratorResult.confidence, lowestConfidence) < 0) {
+          lowestConfidence = decoratorResult.confidence;
+        }
 
         // 2. Static $au resolver
         const staticAuResult = resolveFromStaticAu(fileFacts);
-        mergeResults(candidates, staticAuResult, diagnostics);
+        mergeResult(candidates, staticAuResult.value);
+        allGaps.push(...staticAuResult.gaps);
+        if (compareConfidence(staticAuResult.confidence, lowestConfidence) < 0) {
+          lowestConfidence = staticAuResult.confidence;
+        }
 
         // 3. Convention resolver (lowest priority)
         const conventionResult = resolveFromConventions(fileFacts, config);
-        mergeResults(candidates, conventionResult, diagnostics);
+        mergeResult(candidates, conventionResult.value);
+        allGaps.push(...conventionResult.gaps);
+        if (compareConfidence(conventionResult.confidence, lowestConfidence) < 0) {
+          lowestConfidence = conventionResult.confidence;
+        }
       }
 
       return {
-        candidates: Array.from(candidates.values()),
-        diagnostics,
+        value: Array.from(candidates.values()),
+        confidence: lowestConfidence,
+        gaps: allGaps,
       };
     },
   };
 }
 
-function mergeResults(
+function mergeResult(
   target: Map<string, ResourceCandidate>,
-  result: ResolverResult,
-  diagnostics: ResolverDiagnostic[],
+  newCandidates: ResourceCandidate[],
 ): void {
-  diagnostics.push(...result.diagnostics);
-
-  for (const candidate of result.candidates) {
+  for (const candidate of newCandidates) {
     const key = `${candidate.kind}:${candidate.name}`;
     const existing = target.get(key);
 

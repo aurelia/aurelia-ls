@@ -23,7 +23,7 @@ describe("Inference: convention-app (template-pairing)", () => {
     // These elements have NO @customElement decorator
     // They are detected via: import template from './foo.html' + matching class name
 
-    const elements = result.candidates.filter(c => c.kind === "element");
+    const elements = result.value.filter(c => c.kind === "element");
     const elementNames = elements.map(e => e.name).sort();
 
     // Should find all 3 convention-based elements
@@ -35,7 +35,7 @@ describe("Inference: convention-app (template-pairing)", () => {
   });
 
   it("resolves cortex-devices via template-pairing", () => {
-    const cortex = result.candidates.find(c => c.name === "cortex-devices" && c.kind === "element");
+    const cortex = result.value.find(c => c.name === "cortex-devices" && c.kind === "element");
 
     expect(cortex, "Should find cortex-devices element").toBeTruthy();
     expect(cortex!.className).toBe("CortexDevices");
@@ -44,7 +44,7 @@ describe("Inference: convention-app (template-pairing)", () => {
   });
 
   it("resolves my-app via template-pairing", () => {
-    const myApp = result.candidates.find(c => c.name === "my-app" && c.kind === "element");
+    const myApp = result.value.find(c => c.name === "my-app" && c.kind === "element");
 
     expect(myApp, "Should find my-app element").toBeTruthy();
     expect(myApp!.className).toBe("MyApp");
@@ -53,7 +53,7 @@ describe("Inference: convention-app (template-pairing)", () => {
   });
 
   it("resolves user-profile with bindables via template-pairing", () => {
-    const userProfile = result.candidates.find(c => c.name === "user-profile" && c.kind === "element");
+    const userProfile = result.value.find(c => c.name === "user-profile" && c.kind === "element");
 
     expect(userProfile, "Should find user-profile element").toBeTruthy();
     expect(userProfile!.className).toBe("UserProfile");
@@ -67,7 +67,7 @@ describe("Inference: convention-app (template-pairing)", () => {
 
   it("resolves suffix-based value converter", () => {
     // DateFormatValueConverter is detected via class name suffix, not template-pairing
-    const dateFormat = result.candidates.find(c => c.name === "dateFormat" && c.kind === "valueConverter");
+    const dateFormat = result.value.find(c => c.name === "dateFormat" && c.kind === "valueConverter");
 
     expect(dateFormat, "Should find dateFormat value converter").toBeTruthy();
     expect(dateFormat!.className).toBe("DateFormatValueConverter");
@@ -77,7 +77,7 @@ describe("Inference: convention-app (template-pairing)", () => {
 
   it("does not produce duplicates", () => {
     // Each resource should appear exactly once
-    const names = result.candidates.map(c => `${c.kind}:${c.name}`);
+    const names = result.value.map(c => `${c.kind}:${c.name}`);
     const uniqueNames = [...new Set(names)];
     expect(names.length).toBe(uniqueNames.length);
   });
@@ -93,7 +93,7 @@ describe("Inference: template-pairing edge cases", () => {
     const pipeline = createResolverPipeline();
     const result = pipeline.resolve(appFacts as any);
 
-    const cortex = result.candidates.find(c => c.name === "cortex-devices");
+    const cortex = result.value.find(c => c.name === "cortex-devices");
     expect(cortex, "kebab-case file should match PascalCase class").toBeTruthy();
   });
 });

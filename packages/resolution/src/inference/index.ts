@@ -12,8 +12,4 @@ export {
 export type {
   ResourceCandidate,
   BindableSpec,
-  ResolverResult,
-  ResolverDiagnostic,
 } from "./types.js";
-
-export { emptyResolverResult } from "./types.js";

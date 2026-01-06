@@ -22,10 +22,10 @@ describe("Inference: explicit-app", () => {
 
   it("resolves all resource candidates from explicit-app", () => {
     // Group candidates by kind for structured assertions
-    const elements = result.candidates.filter(c => c.kind === "element");
-    const attributes = result.candidates.filter(c => c.kind === "attribute");
-    const valueConverters = result.candidates.filter(c => c.kind === "valueConverter");
-    const bindingBehaviors = result.candidates.filter(c => c.kind === "bindingBehavior");
+    const elements = result.value.filter(c => c.kind === "element");
+    const attributes = result.value.filter(c => c.kind === "attribute");
+    const valueConverters = result.value.filter(c => c.kind === "valueConverter");
+    const bindingBehaviors = result.value.filter(c => c.kind === "bindingBehavior");
 
     // Assert exact element names found
     const elementNames = elements.map(e => e.name).sort();
@@ -49,21 +49,21 @@ describe("Inference: explicit-app", () => {
 
   it("correctly resolves decorator-based elements", () => {
     // Find nav-bar (simple decorator)
-    const navBar = result.candidates.find(c => c.name === "nav-bar" && c.kind === "element");
+    const navBar = result.value.find(c => c.name === "nav-bar" && c.kind === "element");
     expect(navBar, "Should find nav-bar element").toBeTruthy();
     expect(navBar!.className).toBe("NavBar");
     expect(navBar!.resolver).toBe("decorator");
     expect(navBar!.confidence).toBe("explicit");
 
     // Find data-grid (full config decorator)
-    const dataGrid = result.candidates.find(c => c.name === "data-grid" && c.kind === "element");
+    const dataGrid = result.value.find(c => c.name === "data-grid" && c.kind === "element");
     expect(dataGrid, "Should find data-grid element").toBeTruthy();
     expect(dataGrid!.aliases.includes("grid"), "data-grid should have 'grid' alias").toBe(true);
     expect(dataGrid!.aliases.includes("table-view"), "data-grid should have 'table-view' alias").toBe(true);
     expect(dataGrid!.containerless, "data-grid should be containerless").toBe(true);
 
     // Find user-card (separate decorators)
-    const userCard = result.candidates.find(c => c.name === "user-card" && c.kind === "element");
+    const userCard = result.value.find(c => c.name === "user-card" && c.kind === "element");
     expect(userCard, "Should find user-card element").toBeTruthy();
     expect(userCard!.containerless, "user-card should be containerless").toBe(true);
 
@@ -74,14 +74,14 @@ describe("Inference: explicit-app", () => {
 
   it("correctly resolves static $au resources", () => {
     // Find fancy-button (static $au element)
-    const fancyButton = result.candidates.find(c => c.name === "fancy-button" && c.kind === "element");
+    const fancyButton = result.value.find(c => c.name === "fancy-button" && c.kind === "element");
     expect(fancyButton, "Should find fancy-button element").toBeTruthy();
     expect(fancyButton!.className).toBe("FancyButton");
     expect(fancyButton!.resolver).toBe("static-au");
     expect(fancyButton!.aliases.includes("btn"), "fancy-button should have 'btn' alias").toBe(true);
 
     // Find currency (static $au value converter)
-    const currency = result.candidates.find(c => c.name === "currency" && c.kind === "valueConverter");
+    const currency = result.value.find(c => c.name === "currency" && c.kind === "valueConverter");
     expect(currency, "Should find currency value converter").toBeTruthy();
     expect(currency!.className).toBe("CurrencyValueConverter");
     expect(currency!.resolver).toBe("static-au");
@@ -89,34 +89,34 @@ describe("Inference: explicit-app", () => {
 
   it("correctly resolves attributes with primary bindables", () => {
     // Find highlight (attribute with primary bindable)
-    const highlight = result.candidates.find(c => c.name === "highlight" && c.kind === "attribute");
+    const highlight = result.value.find(c => c.name === "highlight" && c.kind === "attribute");
     expect(highlight, "Should find highlight attribute").toBeTruthy();
     expect(highlight!.primary, "highlight primary should be 'color'").toBe("color");
 
     // Find tooltip (simple attribute)
-    const tooltip = result.candidates.find(c => c.name === "tooltip" && c.kind === "attribute");
+    const tooltip = result.value.find(c => c.name === "tooltip" && c.kind === "attribute");
     expect(tooltip, "Should find tooltip attribute").toBeTruthy();
   });
 
   it("correctly resolves value converters and binding behaviors", () => {
     // Find date value converter
-    const date = result.candidates.find(c => c.name === "date" && c.kind === "valueConverter");
+    const date = result.value.find(c => c.name === "date" && c.kind === "valueConverter");
     expect(date, "Should find date value converter").toBeTruthy();
     expect(date!.resolver).toBe("decorator");
 
     // Find debounce binding behavior
-    const debounce = result.candidates.find(c => c.name === "debounce" && c.kind === "bindingBehavior");
+    const debounce = result.value.find(c => c.name === "debounce" && c.kind === "bindingBehavior");
     expect(debounce, "Should find debounce binding behavior").toBeTruthy();
     expect(debounce!.resolver).toBe("decorator");
 
     // Find throttle binding behavior
-    const throttle = result.candidates.find(c => c.name === "throttle" && c.kind === "bindingBehavior");
+    const throttle = result.value.find(c => c.name === "throttle" && c.kind === "bindingBehavior");
     expect(throttle, "Should find throttle binding behavior").toBeTruthy();
   });
 
   it("correctly resolves bindable attribute mappings", () => {
     // Find stock-badge with attribute mapping
-    const stockBadge = result.candidates.find(c => c.name === "stock-badge" && c.kind === "element");
+    const stockBadge = result.value.find(c => c.name === "stock-badge" && c.kind === "element");
     expect(stockBadge, "Should find stock-badge element").toBeTruthy();
 
     const inStockBindable = stockBadge!.bindables.find(b => b.name === "inStock");

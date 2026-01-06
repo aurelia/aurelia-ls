@@ -44,7 +44,7 @@ describe("Registration: explicit-app", () => {
     const pipeline = createResolverPipeline();
     const resolved = pipeline.resolve(appFacts);
     const analyzer = createRegistrationAnalyzer();
-    analysis = analyzer.analyze(resolved.candidates, appFacts, exportBindings);
+    analysis = analyzer.analyze(resolved.value, appFacts, exportBindings);
   });
 
   it("analyzes registration sites and orphans for all candidates", () => {

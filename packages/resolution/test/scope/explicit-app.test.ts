@@ -31,7 +31,7 @@ describe("Scope: explicit-app", () => {
     const resolved = pipeline.resolve(resolvedFacts);
 
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(resolved.candidates, resolvedFacts, exportBindings);
+    const registration = analyzer.analyze(resolved.value, resolvedFacts, exportBindings);
 
     graph = buildResourceGraph(registration);
   });
