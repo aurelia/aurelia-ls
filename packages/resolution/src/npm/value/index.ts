@@ -67,6 +67,7 @@ export {
   isResolved,
   hasMethod,
   isRegistryShape,
+  getRegisterMethod,
   isClassValue,
   isResolvedClassRef,
   getResolvedValue,

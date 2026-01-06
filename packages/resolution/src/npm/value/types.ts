@@ -521,6 +521,11 @@ export function isRegistryShape(value: AnalyzableValue): value is ObjectValue {
   return hasMethod(value, 'register');
 }
 
+/** Get the register method from an IRegistry-shaped object */
+export function getRegisterMethod(value: ObjectValue): MethodValue | undefined {
+  return value.methods.get('register');
+}
+
 /** Check if a value is a class reference */
 export function isClassValue(value: AnalyzableValue): value is ClassValue {
   return value.kind === 'class';
