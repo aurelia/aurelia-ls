@@ -300,8 +300,12 @@ async function resolveEntryPoints(packagePath: string, pkgJson: PackageJson): Pr
         entryPoints.push({ condition: 'module', path: fullPath, typesOnly: false });
       }
     } catch {
-      // Module field points to missing file - not critical, don't add gap
-      // (main/exports are the primary entry points)
+      // Module field points to missing file - produce gap for consistency with main/exports
+      entryPointGaps.push(gap(
+        `module entry "${pkgJson.module}"`,
+        { kind: 'entry-point-not-found', specifier: pkgJson.module, resolvedPath: fullPath },
+        `Build the package or ensure ${fullPath} exists.`
+      ));
     }
   }
 

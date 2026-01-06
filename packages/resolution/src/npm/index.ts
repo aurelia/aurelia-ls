@@ -462,6 +462,16 @@ async function extractFromTypeScriptSource(
   // Merge configuration-discovered resources into the main list
   mergeResources(resources, configResult.resources);
 
+  // If we analyzed files but found no resources, add explanatory gap
+  if (resources.length === 0 && discoveredFiles.length > 0) {
+    gaps.push(gap(
+      `TypeScript source at ${pkgInfo.sourceDir}`,
+      { kind: 'no-source', hasTypes: false },
+      `Analyzed ${discoveredFiles.length} file(s) but found no decorated resources or configurations. ` +
+      'The package may use a pattern not yet supported (dynamic registration, runtime configuration).'
+    ));
+  }
+
   return { resources, configurations, gaps };
 }
 
