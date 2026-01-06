@@ -25,7 +25,6 @@
  * - Doesn't analyze recursive factory calls
  */
 
-import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
 import { debug } from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../../extraction/types.js';
 import { gap } from '../../extraction/types.js';

@@ -106,7 +106,7 @@ import type {
   ExtractedConfiguration as ExtractedConfigurationType,
   ConfigurationRegistration as ConfigurationRegistrationType,
 } from './types.js';
-import { success, partial, gap, combine } from './types.js';
+import { success, partial, highConfidence, gap, combine } from './types.js';
 import { debug, type NormalizedPath } from '@aurelia-ls/compiler';
 
 // Local type aliases to avoid duplicate identifier issues with re-exports
@@ -203,6 +203,10 @@ export async function analyzePackage(
     configurations: allConfigurations,
   };
 
+  // Use semantic helpers when appropriate
+  if (gaps.length === 0 && confidence === 'high') {
+    return highConfidence(analysis);
+  }
   return partial(analysis, confidence, gaps);
 }
 

@@ -354,7 +354,7 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
    * array spread resolution, import following.
    */
   describe.skipIf(!submoduleAvailable)('aurelia2-outclick', () => {
-    it.todo('extracts outclick custom attribute from configuration', async () => {
+    it('extracts outclick custom attribute from configuration', async () => {
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-outclick'));
 
       expect(result.resources).toHaveLength(1);
@@ -364,7 +364,7 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
       expect(outclick.kind).toBe('custom-attribute');
     });
 
-    it.todo('finds primary bindable', async () => {
+    it('finds primary bindable', async () => {
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-outclick'));
 
       const outclick = result.resources[0]!;
@@ -372,7 +372,7 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
       expect(fn?.primary).toBe(true);
     });
 
-    it.todo('extracts configuration export', async () => {
+    it('extracts configuration export', async () => {
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-outclick'));
 
       expect(result.configurations).toHaveLength(1);
@@ -390,7 +390,7 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
    * Requires: factory call tracing, DI token filtering.
    */
   describe.skipIf(!submoduleAvailable)('aurelia2-froala-editor', () => {
-    it.todo('extracts froala-editor custom element', async () => {
+    it('extracts froala-editor custom element', async () => {
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-froala-editor'));
 
       // Should find FroalaEditor but NOT IFroalaConfig (which is a DI token)
@@ -401,7 +401,7 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
       expect(editor.kind).toBe('custom-element');
     });
 
-    it.todo('identifies factory pattern configuration', async () => {
+    it('identifies factory pattern configuration', async () => {
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-froala-editor'));
 
       expect(result.configurations).toHaveLength(1);
@@ -409,7 +409,7 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
       expect(result.configurations[0]!.isFactory).toBe(true);
     });
 
-    it.todo('filters out DI interface tokens', async () => {
+    it('filters out DI interface tokens', async () => {
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-froala-editor'));
 
       // IFroalaConfig should NOT appear as a resource
