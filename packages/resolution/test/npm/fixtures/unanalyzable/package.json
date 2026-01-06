@@ -1,0 +1,11 @@
+{
+  "name": "test-unanalyzable",
+  "version": "1.0.0",
+  "description": "Test fixture: unanalyzable dynamic registration pattern",
+  "type": "module",
+  "main": "./src/index.js",
+  "peerDependencies": {
+    "aurelia": "^2.0.0"
+  },
+  "keywords": ["aurelia"]
+}

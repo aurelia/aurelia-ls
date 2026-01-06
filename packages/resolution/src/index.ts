@@ -288,3 +288,35 @@ export {
   formatPluginHintMessage,
 } from "./diagnostics/index.js";
 export type { PluginHint, PluginHintResult, UnresolvedResourceInfo } from "./diagnostics/index.js";
+
+// === NPM Package Analysis ===
+// Extracts Aurelia resource semantics from npm packages.
+// Used by app mode to understand dependencies, and by library mode to generate manifests.
+// See docs/npm-analysis-design.md for architecture.
+export {
+  analyzePackage,
+  analyzePackages,
+  isAureliaPackage,
+  // Utility functions
+  success,
+  partial,
+  combine,
+  gap,
+} from "./npm/index.js";
+export type {
+  AnalysisResult,
+  Confidence,
+  AnalysisGap,
+  GapLocation,
+  GapReason,
+  PackageAnalysis,
+  ExtractedResource,
+  ResourceKind,
+  ResourceSource,
+  ResourceEvidence,
+  ExtractedBindable,
+  BindableEvidence,
+  ExtractedConfiguration,
+  ConfigurationRegistration,
+  AnalysisOptions,
+} from "./npm/index.js";
