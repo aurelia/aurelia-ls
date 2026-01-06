@@ -35,6 +35,14 @@ export type {
   ExtractedConfiguration,
   ConfigurationRegistration,
   AnalysisOptions,
+  // Inspection types
+  InspectionResult,
+  InspectedResource,
+  InspectedBindable,
+  InspectedConfiguration,
+  InspectionGraph,
+  InspectionEdge,
+  InspectedGap,
 } from './types.js';
 
 // Re-export utility functions
@@ -652,3 +660,271 @@ function createMinimalCompilerHost(
     readFile: () => undefined,
   };
 }
+
+// =============================================================================
+// Inspection API
+// =============================================================================
+
+import type {
+  InspectionResult,
+  InspectedResource,
+  InspectedBindable,
+  InspectedConfiguration,
+  InspectionGraph,
+  InspectionEdge,
+  InspectedGap,
+} from './types.js';
+
+/**
+ * Inspect a package and return a human-readable analysis result.
+ *
+ * This is the main entry point for the inspection CLI tool.
+ * Transforms the internal analysis result into a JSON-serializable format
+ * designed for human inspection and debugging.
+ *
+ * @param packagePath - Path to package root (containing package.json)
+ * @param options - Analysis options
+ * @returns Inspection result with resources, graph, and gaps
+ *
+ * @example
+ * ```typescript
+ * const result = await inspect('./node_modules/aurelia2-table');
+ * console.log(JSON.stringify(result, null, 2));
+ * ```
+ */
+export async function inspect(
+  packagePath: string,
+  options?: AnalysisOptions
+): Promise<InspectionResult> {
+  // Run the full analysis
+  const analysisResult = await analyzePackage(packagePath, options);
+  const analysis = analysisResult.value;
+
+  // Transform resources to inspection format
+  const inspectedResources = analysis.resources.map(transformResource);
+
+  // Build dependency graph
+  const graph = buildInspectionGraph(analysis.resources, analysis.configurations);
+
+  // Transform configurations
+  const configurations = analysis.configurations.map(transformConfiguration);
+
+  // Transform gaps
+  const gaps = analysisResult.gaps.map(transformGap);
+
+  // Determine primary strategy from resources
+  const primaryStrategy = determinePrimaryStrategy(analysis.resources);
+
+  // Collect analyzed paths (files we looked at)
+  const analyzedPaths = collectAnalyzedPaths(analysis.resources);
+
+  return {
+    package: analysis.packageName,
+    version: analysis.version,
+    confidence: analysisResult.confidence,
+    resources: inspectedResources,
+    graph,
+    configurations,
+    gaps,
+    meta: {
+      primaryStrategy,
+      analyzedPaths,
+      timestamp: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * Transform an ExtractedResource to InspectedResource.
+ */
+function transformResource(resource: ExtractedResource): InspectedResource {
+  return {
+    kind: resource.kind,
+    name: resource.name,
+    className: resource.className,
+    aliases: resource.aliases,
+    bindables: resource.bindables.map(transformBindable),
+    dependencies: [], // TODO: Extract from static dependencies when available
+    source: {
+      file: resource.source.file,
+      line: resource.source.line,
+      format: resource.source.format,
+    },
+    evidence: resource.evidence.kind,
+  };
+}
+
+/**
+ * Transform an ExtractedBindable to InspectedBindable.
+ */
+function transformBindable(bindable: ExtractedBindable): InspectedBindable {
+  const result: InspectedBindable = {
+    name: bindable.name,
+  };
+
+  if (bindable.attribute) {
+    result.attribute = bindable.attribute;
+  }
+
+  if (bindable.mode !== undefined) {
+    // BindingMode is already a string literal type ('default' | 'oneTime' | 'toView' | 'fromView' | 'twoWay')
+    result.mode = bindable.mode;
+  }
+
+  if (bindable.primary) {
+    result.primary = true;
+  }
+
+  return result;
+}
+
+/**
+ * Transform an ExtractedConfiguration to InspectedConfiguration.
+ */
+function transformConfiguration(config: ExtractedConfiguration): InspectedConfiguration {
+  return {
+    exportName: config.exportName,
+    isFactory: config.isFactory,
+    registers: config.registers.map(r => r.identifier),
+    source: {
+      file: config.source.file,
+      line: config.source.line,
+    },
+  };
+}
+
+/**
+ * Transform an AnalysisGap to InspectedGap.
+ */
+function transformGap(gap: AnalysisGap): InspectedGap {
+  return {
+    what: gap.what,
+    why: formatGapReason(gap.why),
+    where: gap.where ? {
+      file: gap.where.file,
+      line: gap.where.line,
+      snippet: gap.where.snippet,
+    } : undefined,
+    suggestion: gap.suggestion,
+  };
+}
+
+/**
+ * Format a GapReason into a human-readable string.
+ */
+function formatGapReason(reason: GapReason): string {
+  switch (reason.kind) {
+    case 'package-not-found':
+      return `Package not found: ${reason.packagePath}`;
+    case 'invalid-package-json':
+      return `Invalid package.json: ${reason.parseError}`;
+    case 'missing-package-field':
+      return `Missing package.json field: ${reason.field}`;
+    case 'entry-point-not-found':
+      return `Entry point not found: ${reason.specifier}`;
+    case 'no-entry-points':
+      return 'No entry points found in package';
+    case 'complex-exports':
+      return `Complex exports field: ${reason.reason}`;
+    case 'unresolved-import':
+      return `Unresolved import: ${reason.path} (${reason.reason})`;
+    case 'circular-import':
+      return `Circular import: ${reason.cycle.join(' → ')}`;
+    case 'external-package':
+      return `External package: ${reason.packageName}`;
+    case 'dynamic-value':
+      return `Dynamic value: ${reason.expression}`;
+    case 'function-return':
+      return `Function return value: ${reason.functionName}()`;
+    case 'computed-property':
+      return `Computed property: ${reason.expression}`;
+    case 'spread-unknown':
+      return `Unknown spread: ...${reason.spreadOf}`;
+    case 'conditional-registration':
+      return `Conditional registration: ${reason.condition}`;
+    case 'loop-variable':
+      return `Loop variable: ${reason.variable}`;
+    case 'legacy-decorators':
+      return 'Legacy decorator format (metadata lost)';
+    case 'no-source':
+      return reason.hasTypes ? 'No source (types available)' : 'No source or types';
+    case 'minified-code':
+      return 'Minified code';
+    case 'unsupported-format':
+      return `Unsupported format: ${reason.format}`;
+    case 'invalid-resource-name':
+      return `Invalid resource name for ${reason.className}: ${reason.reason}`;
+    case 'parse-error':
+      return `Parse error: ${reason.message}`;
+    default:
+      return 'Unknown reason';
+  }
+}
+
+/**
+ * Build the inspection graph from resources and configurations.
+ */
+function buildInspectionGraph(
+  resources: ExtractedResource[],
+  configurations: ExtractedConfiguration[]
+): InspectionGraph {
+  const nodes = resources.map(r => r.className);
+  const edges: InspectionEdge[] = [];
+
+  // TODO: Add edges from static dependencies arrays when we extract them
+  // For now, we can add edges from configuration registrations
+
+  for (const config of configurations) {
+    for (const registration of config.registers) {
+      if (registration.resolved && registration.resource) {
+        // Find if this resource is in our nodes
+        const targetClassName = registration.resource.className;
+        if (nodes.includes(targetClassName)) {
+          edges.push({
+            from: config.exportName,
+            to: targetClassName,
+            kind: 'configuration-registers',
+          });
+        }
+      }
+    }
+  }
+
+  return { nodes, edges };
+}
+
+/**
+ * Determine primary extraction strategy from resources.
+ */
+function determinePrimaryStrategy(
+  resources: ExtractedResource[]
+): 'typescript' | 'es2022' | 'none' {
+  if (resources.length === 0) {
+    return 'none';
+  }
+
+  // Check the first resource's source format
+  const firstFormat = resources[0]?.source.format;
+  if (firstFormat === 'typescript') {
+    return 'typescript';
+  }
+  if (firstFormat === 'javascript') {
+    return 'es2022';
+  }
+
+  return 'none';
+}
+
+/**
+ * Collect unique file paths from resources.
+ */
+function collectAnalyzedPaths(resources: ExtractedResource[]): string[] {
+  const paths = new Set<string>();
+  for (const resource of resources) {
+    paths.add(resource.source.file);
+  }
+  return [...paths].sort();
+}
+
+import type { GapReason } from './types.js';
+import type { ExtractedBindable, ExtractedConfiguration } from './types.js';
