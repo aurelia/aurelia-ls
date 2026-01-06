@@ -353,7 +353,10 @@ export type GapReason =
   | { kind: 'unsupported-format'; format: string }
 
   // Resource inference issues
-  | { kind: 'invalid-resource-name'; className: string; reason: string };
+  | { kind: 'invalid-resource-name'; className: string; reason: string }
+
+  // General parsing/processing errors
+  | { kind: 'parse-error'; message: string };
 
 // =============================================================================
 // Analysis Result Utilities
