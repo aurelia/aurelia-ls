@@ -1,0 +1,102 @@
+/**
+ * Value Model for Partial Evaluation
+ *
+ * This module provides the core IR for static value analysis in npm package
+ * extraction. It represents "what we know about a value at compile time."
+ *
+ * Usage:
+ * ```typescript
+ * import { AnalyzableValue, ref, call, isRegistryShape } from './value';
+ *
+ * // Create values
+ * const configRef = ref('Config');
+ * const registerCall = call(propAccess(ref('container'), 'register'), [configRef]);
+ *
+ * // Type guards
+ * if (isRegistryShape(resolved)) {
+ *   const method = resolved.methods.get('register');
+ * }
+ * ```
+ *
+ * See: partial-evaluation-design.md
+ */
+
+// Re-export all types
+export type {
+  // Core value types
+  AnalyzableValue,
+  LiteralValue,
+  ArrayValue,
+  ObjectValue,
+  FunctionValue,
+  ClassValue,
+  ReferenceValue,
+  ImportValue,
+  PropertyAccessValue,
+  CallValue,
+  SpreadValue,
+  NewValue,
+  UnknownValue,
+
+  // Method and statement types
+  MethodValue,
+  ParameterInfo,
+  StatementValue,
+  ReturnStatement,
+  ExpressionStatement,
+  VariableStatement,
+  VariableDeclaration,
+  IfStatement,
+  ForOfStatement,
+  UnknownStatement,
+
+  // Scope types
+  Scope,
+  ImportBinding,
+  ResolutionContext,
+} from './types.js';
+
+// Re-export type guards
+export {
+  isResolved,
+  hasMethod,
+  isRegistryShape,
+  isClassValue,
+  isResolvedClassRef,
+  getResolvedValue,
+} from './types.js';
+
+// Re-export value constructors
+export {
+  literal,
+  array,
+  object,
+  ref,
+  importVal,
+  propAccess,
+  call,
+  spread,
+  classVal,
+  unknown,
+  method,
+} from './types.js';
+
+// Re-export statement constructors
+export {
+  returnStmt,
+  exprStmt,
+  varStmt,
+  varDecl,
+  ifStmt,
+  forOfStmt,
+  unknownStmt,
+} from './types.js';
+
+// Re-export transformation functions (Layer 1)
+export {
+  transformExpression,
+  transformStatement,
+  transformMethod,
+  transformExportedValue,
+  transformModuleExports,
+} from './transform.js';
