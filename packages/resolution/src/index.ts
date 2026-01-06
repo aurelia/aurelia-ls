@@ -113,7 +113,7 @@ export type {
 } from "./project/index.js";
 
 // === Extraction (Layer 1) ===
-export { extractAllFacts, extractSourceFacts, resolveImports } from "./extraction/index.js";
+export { extractAllFacts, extractSourceFacts, extractDefineCalls, resolveImports } from "./extraction/index.js";
 export type { ExtractionOptions } from "./extraction/index.js";
 export type {
   SourceFacts,
@@ -123,6 +123,7 @@ export type {
   StaticDependenciesFact,
   BindableMemberFact,
   RegistrationCallFact,
+  DefineCallFact,
   BindingMode,
   DependencyRef,
 } from "./extraction/index.js";
@@ -137,7 +138,7 @@ export type {
 } from "./binding/index.js";
 
 // === Inference (Layer 2) ===
-export { createResolverPipeline, resolveFromDecorators, resolveFromStaticAu, resolveFromConventions } from "./inference/index.js";
+export { createResolverPipeline, resolveFromDecorators, resolveFromStaticAu, resolveFromDefine, resolveFromConventions } from "./inference/index.js";
 export type { ResourceCandidate, BindableSpec, ResolverPipeline } from "./inference/index.js";
 
 // === Registration (Layer 3) ===

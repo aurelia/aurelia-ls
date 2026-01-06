@@ -5,6 +5,7 @@ import type { ResourceCandidate, BindableSpec } from "./types.js";
 import type { ConventionConfig } from "../conventions/types.js";
 import { resolveFromDecorators } from "./decorator-resolver.js";
 import { resolveFromStaticAu } from "./static-au-resolver.js";
+import { resolveFromDefine } from "./define-resolver.js";
 import { resolveFromConventions } from "./convention-resolver.js";
 
 /**
@@ -20,7 +21,8 @@ export interface ResolverPipeline {
  * Priority order (highest to lowest):
  * 1. Decorator resolver - explicit @customElement, etc.
  * 2. Static $au resolver - explicit static $au = {...}
- * 3. Convention resolver - inferred from naming
+ * 3. Define resolver - imperative CustomElement.define(), etc.
+ * 4. Convention resolver - inferred from naming
  *
  * Higher priority wins on conflicts, but bindables are merged.
  *
@@ -51,7 +53,15 @@ export function createResolverPipeline(config?: ConventionConfig): ResolverPipel
           lowestConfidence = staticAuResult.confidence;
         }
 
-        // 3. Convention resolver (lowest priority)
+        // 3. Define resolver - imperative .define() calls
+        const defineResult = resolveFromDefine(fileFacts);
+        mergeResult(candidates, defineResult.value);
+        allGaps.push(...defineResult.gaps);
+        if (compareConfidence(defineResult.confidence, lowestConfidence) < 0) {
+          lowestConfidence = defineResult.confidence;
+        }
+
+        // 4. Convention resolver (lowest priority)
         const conventionResult = resolveFromConventions(fileFacts, config);
         mergeResult(candidates, conventionResult.value);
         allGaps.push(...conventionResult.gaps);

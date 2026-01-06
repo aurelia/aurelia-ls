@@ -65,6 +65,7 @@ import { extractFromES2022 } from './decorator-es2022.js';
 import { extractSourceFacts } from '../extraction/extractor.js';
 import { resolveFromDecorators } from '../inference/decorator-resolver.js';
 import { resolveFromStaticAu } from '../inference/static-au-resolver.js';
+import { resolveFromDefine } from '../inference/define-resolver.js';
 import { resolveFromConventions } from '../inference/convention-resolver.js';
 import type { ResourceCandidate } from '../inference/types.js';
 
@@ -260,6 +261,7 @@ function mergeResource(a: ExtractedResource, b: ExtractedResource): ExtractedRes
     'manifest': 5,           // Highest - explicit package metadata
     'explicit-config': 4,    // User-provided configuration
     'decorator': 3,          // Source-level decorators
+    'define': 3,             // .define() API calls (same as decorator)
     'static-au': 2,          // Static $au property
     'convention': 1,         // Naming convention inference
   };
@@ -403,11 +405,12 @@ async function extractFromTypeScriptSource(
       // Run inference resolvers
       const decoratorResult = resolveFromDecorators(facts);
       const staticAuResult = resolveFromStaticAu(facts);
+      const defineResult = resolveFromDefine(facts);
       const conventionResult = resolveFromConventions(facts);
 
       // Combine results - flatten arrays of candidates
       const combined = combine(
-        [decoratorResult, staticAuResult, conventionResult],
+        [decoratorResult, staticAuResult, defineResult, conventionResult],
         (arrays) => arrays.flat()
       );
       gaps.push(...combined.gaps);
@@ -421,7 +424,7 @@ async function extractFromTypeScriptSource(
       }
 
       // Find re-exports and add those files to the queue
-      const reExportPaths = findTypeScriptReExports(sourceFile, filePath);
+      const reExportPaths = findTypeScriptImportsAndReExports(sourceFile, filePath);
       for (const reExportPath of reExportPaths) {
         if (!processedFiles.has(reExportPath)) {
           filesToProcess.push(reExportPath);
@@ -546,46 +549,62 @@ function findReExports(sourceText: string, currentFile: string): string[] {
 }
 
 /**
- * Find re-export module specifiers in a TypeScript source file.
- * Handles: export { X } from './foo' and export * from './bar'
+ * Find imported/re-exported modules to follow.
+ *
+ * Follows both:
+ * - `export { X } from './path'` (re-exports)
+ * - `import { X } from './path'` (regular imports)
+ *
+ * This ensures we traverse the full module graph, not just re-export chains.
+ * Important for packages that import resources into a configuration file
+ * (e.g., @aurelia/router imports ViewportCustomElement into configuration.ts).
  *
  * @param sourceFile - Already parsed TypeScript source file
  * @param currentFile - Path to the current file (for resolving relative paths)
  * @returns Array of resolved file paths to process
  */
-function findTypeScriptReExports(sourceFile: ts.SourceFile, currentFile: string): string[] {
-  const reExports: string[] = [];
+function findTypeScriptImportsAndReExports(sourceFile: ts.SourceFile, currentFile: string): string[] {
+  const paths: string[] = [];
   const currentDir = dirname(currentFile);
 
   for (const stmt of sourceFile.statements) {
+    let specifier: string | undefined;
+
+    // Handle: export { X } from './path'
     if (ts.isExportDeclaration(stmt) && stmt.moduleSpecifier) {
       if (ts.isStringLiteral(stmt.moduleSpecifier)) {
-        const specifier = stmt.moduleSpecifier.text;
-        // Only process relative imports
-        if (specifier.startsWith('./') || specifier.startsWith('../')) {
-          // Resolve the path - TypeScript specifiers may or may not have extension
-          const resolvedPath = join(currentDir, specifier);
-
-          // Try to resolve to a TypeScript file
-          // Specifier might be './foo', './foo.js', or './foo.ts'
-          let fullPath: string;
-          if (resolvedPath.endsWith('.ts')) {
-            fullPath = resolvedPath;
-          } else if (resolvedPath.endsWith('.js')) {
-            // Convert .js to .ts for source files
-            fullPath = resolvedPath.slice(0, -3) + '.ts';
-          } else {
-            // No extension - add .ts
-            fullPath = resolvedPath + '.ts';
-          }
-
-          reExports.push(fullPath);
-        }
+        specifier = stmt.moduleSpecifier.text;
       }
+    }
+    // Handle: import { X } from './path'
+    else if (ts.isImportDeclaration(stmt) && stmt.moduleSpecifier) {
+      if (ts.isStringLiteral(stmt.moduleSpecifier)) {
+        specifier = stmt.moduleSpecifier.text;
+      }
+    }
+
+    if (specifier && (specifier.startsWith('./') || specifier.startsWith('../'))) {
+      // Resolve the path - TypeScript specifiers may or may not have extension
+      const resolvedPath = join(currentDir, specifier);
+
+      // Try to resolve to a TypeScript file
+      // Specifier might be './foo', './foo.js', or './foo.ts'
+      let fullPath: string;
+      if (resolvedPath.endsWith('.ts')) {
+        fullPath = resolvedPath;
+      } else if (resolvedPath.endsWith('.js')) {
+        // Convert .js to .ts for source files
+        fullPath = resolvedPath.slice(0, -3) + '.ts';
+      } else {
+        // No extension - add .ts
+        fullPath = resolvedPath + '.ts';
+      }
+
+      paths.push(fullPath);
     }
   }
 
-  return reExports;
+  return paths;
 }
 
 /**
@@ -634,6 +653,7 @@ function candidateToExtractedResource(
     evidence: {
       kind: candidate.resolver === 'decorator' ? 'decorator' :
             candidate.resolver === 'static-au' ? 'static-au' :
+            candidate.resolver === 'define' ? 'define' :
             'convention',
       decoratorName: candidate.resolver === 'decorator' ? 'customElement' : undefined,
       suffix: candidate.resolver === 'convention' ? 'CustomElement' : undefined,

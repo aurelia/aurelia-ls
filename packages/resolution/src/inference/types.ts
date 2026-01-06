@@ -26,7 +26,7 @@ export interface ResourceCandidate {
   readonly confidence: "explicit" | "inferred";
 
   /** Which resolver identified this resource */
-  readonly resolver: string; // "decorator" | "static-au" | "convention"
+  readonly resolver: string; // "decorator" | "static-au" | "define" | "convention"
 
   // Element-specific
   readonly containerless?: boolean;

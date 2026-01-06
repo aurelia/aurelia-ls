@@ -12,6 +12,14 @@ export interface SourceFacts {
   readonly exports: ExportFact[];
 
   /**
+   * Imperative `.define()` calls (e.g., `CustomElement.define({...}, Class)`).
+   *
+   * These are official Aurelia APIs that define resources imperatively rather
+   * than via decorators or static $au. Common in aurelia core packages.
+   */
+  readonly defineCalls: DefineCallFact[];
+
+  /**
    * Sibling files discovered adjacent to this source file.
    *
    * Populated when FileSystemContext is provided during extraction.
@@ -179,6 +187,47 @@ export interface RegistrationCallFact {
   readonly receiver: "Aurelia" | "container" | "unknown";
   readonly methodChain?: string; // e.g., "new Aurelia().register" or "container.register"
   readonly arguments: readonly RegistrationArgFact[];
+  readonly position: Position;
+}
+
+/**
+ * Imperative `.define()` call fact.
+ *
+ * Captures calls like:
+ * - `CustomElement.define({ name: 'foo', bindables: [...] }, FooClass)`
+ * - `CustomAttribute.define({ name: 'bar' }, BarClass)`
+ * - `BindingBehavior.define('state', StateBindingBehavior)`
+ * - `ValueConverter.define('json', JsonValueConverter)`
+ */
+export interface DefineCallFact {
+  /** The resource type being defined */
+  readonly resourceType: "CustomElement" | "CustomAttribute" | "BindingBehavior" | "ValueConverter";
+
+  /** Class name being defined (from second argument) */
+  readonly className: string;
+
+  /** Resource name (from definition object or first string arg) */
+  readonly name?: string;
+
+  /** Bindables from definition object */
+  readonly bindables?: readonly BindableDefFact[];
+
+  /** Aliases from definition object */
+  readonly aliases?: readonly string[];
+
+  /** Template string (for elements) */
+  readonly template?: string;
+
+  /** Containerless flag (for elements) */
+  readonly containerless?: boolean;
+
+  /** Is template controller (for attributes) */
+  readonly isTemplateController?: boolean;
+
+  /** No multi-bindings (for attributes) */
+  readonly noMultiBindings?: boolean;
+
+  /** Source position for diagnostics */
   readonly position: Position;
 }
 

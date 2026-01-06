@@ -89,6 +89,7 @@ export interface ResourceSource {
 export type ResourceEvidence =
   | { kind: 'decorator'; decoratorName: string }
   | { kind: 'static-au'; }
+  | { kind: 'define'; }
   | { kind: 'convention'; suffix: string }
   | { kind: 'manifest'; }
   | { kind: 'explicit-config'; };

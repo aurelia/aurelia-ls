@@ -4,6 +4,7 @@ import { debug } from "@aurelia-ls/compiler";
 import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact, TemplateImportFact } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";
+import { extractDefineCalls } from "./define-calls.js";
 import { extractTemplateImports, resolveTemplateImportPaths } from "./template-imports.js";
 import { canonicalPath } from "../util/naming.js";
 import type { FileSystemContext } from "../project/context.js";
@@ -91,6 +92,7 @@ export function extractSourceFacts(
   const path = canonicalPath(sf.fileName);
   const classes: ClassFacts[] = [];
   const registrationCalls = extractRegistrationCalls(sf, checker);
+  const defineCalls = extractDefineCalls(sf);
   const imports: ImportFact[] = [];
   const exports: ExportFact[] = [];
 
@@ -135,7 +137,7 @@ export function extractSourceFacts(
   // Extract template imports from sibling HTML template (with resolution if program available)
   const templateImports = extractSiblingTemplateImports(siblingFiles, options, program);
 
-  return { path, classes, registrationCalls, imports, exports, siblingFiles, templateImports };
+  return { path, classes, registrationCalls, defineCalls, imports, exports, siblingFiles, templateImports };
 }
 
 /**

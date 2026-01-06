@@ -1,6 +1,7 @@
 export { createResolverPipeline, type ResolverPipeline } from "./resolver-pipeline.js";
 export { resolveFromDecorators } from "./decorator-resolver.js";
 export { resolveFromStaticAu } from "./static-au-resolver.js";
+export { resolveFromDefine } from "./define-resolver.js";
 export { resolveFromConventions } from "./convention-resolver.js";
 export {
   extractTemplateMetadata,
