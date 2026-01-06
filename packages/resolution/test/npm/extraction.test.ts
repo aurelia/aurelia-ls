@@ -230,6 +230,67 @@ describe('npm extraction', () => {
   });
 
   // ===========================================================================
+  // Phase 3: Factory configuration pattern
+  // ===========================================================================
+
+  describe('factory-config fixture', () => {
+    const fixturePath = resolve(FIXTURES, 'factory-config');
+
+    it('detects factory pattern and extracts resources', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      expect(result.confidence).toBeOneOf(['exact', 'high']);
+      expect(result.value.resources).toHaveLength(3);
+
+      const names = result.value.resources.map(r => r.name).sort();
+      expect(names).toEqual(['currency', 'modal', 'tooltip']);
+    });
+
+    it('marks configuration as factory-created', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      expect(result.value.configurations).toHaveLength(1);
+      expect(result.value.configurations[0]!.exportName).toBe('ModalConfiguration');
+      expect(result.value.configurations[0]!.isFactory).toBe(true);
+    });
+
+    it('extracts all resource types', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      // Custom element
+      const modal = result.value.resources.find(r => r.name === 'modal');
+      expect(modal).toBeDefined();
+      expect(modal!.kind).toBe('custom-element');
+      expect(modal!.className).toBe('ModalCustomElement');
+      expect(modal!.bindables).toHaveLength(3);
+      expect(modal!.bindables.map(b => b.name).sort()).toEqual(['isOpen', 'size', 'title']);
+
+      // Custom attribute
+      const tooltip = result.value.resources.find(r => r.name === 'tooltip');
+      expect(tooltip).toBeDefined();
+      expect(tooltip!.kind).toBe('custom-attribute');
+      expect(tooltip!.className).toBe('TooltipCustomAttribute');
+      expect(tooltip!.bindables).toHaveLength(2);
+      const primaryBindable = tooltip!.bindables.find(b => b.primary);
+      expect(primaryBindable?.name).toBe('text');
+
+      // Value converter
+      const currency = result.value.resources.find(r => r.name === 'currency');
+      expect(currency).toBeDefined();
+      expect(currency!.kind).toBe('value-converter');
+      expect(currency!.className).toBe('CurrencyValueConverter');
+    });
+
+    it('links factory configuration to registered resources', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      const config = result.value.configurations[0]!;
+      expect(config.registers).toHaveLength(3);
+      expect(config.registers.every(r => r.resolved)).toBe(true);
+    });
+  });
+
+  // ===========================================================================
   // Graceful degradation
   // ===========================================================================
 

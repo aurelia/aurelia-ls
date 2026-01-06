@@ -298,11 +298,15 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
    * spread resolution, convention inference for undecorated classes.
    */
   describe.skipIf(!submoduleAvailable)('aurelia2-bootstrap', () => {
-    it.todo('extracts 22 resources from DefaultComponents array', async () => {
-      const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-bootstrap'));
+    let result: InspectionResult;
 
-      // Phase 2: Should find all 22 components
-      expect(result.resources.length).toBeGreaterThanOrEqual(21);
+    beforeAll(async () => {
+      result = await inspect(join(PLUGINS_ROOT, 'aurelia2-bootstrap'));
+    });
+
+    it('extracts 21 resources from DefaultComponents array', async () => {
+      // Phase 3: Factory pattern analysis finds all 21 template resources
+      expect(result.resources).toHaveLength(21);
 
       // Key resources that should be found:
       const names = result.resources.map(r => r.name);
@@ -312,17 +316,26 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
       expect(names).toContain('aubs-pagination');
     });
 
-    it.todo('detects factory configuration pattern', async () => {
-      const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-bootstrap'));
-
+    it('detects factory configuration pattern', async () => {
       expect(result.configurations).toHaveLength(1);
       expect(result.configurations[0]!.exportName).toBe('BootstrapConfiguration');
       expect(result.configurations[0]!.isFactory).toBe(true);
     });
 
-    it.todo('uses convention inference for classes without decorators', async () => {
-      const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-bootstrap'));
+    it('links configuration to all 21 class registrations', async () => {
+      const config = result.configurations[0]!;
+      expect(config.registers).toHaveLength(21);
 
+      // All registers should be class names (strings) in inspect output
+      expect(config.registers.every(r => typeof r === 'string')).toBe(true);
+
+      // Verify key classes are registered
+      expect(config.registers).toContain('AubsAccordionCustomElement');
+      expect(config.registers).toContain('AubsModalCustomAttribute');
+      expect(config.registers).toContain('AubsTooltipCustomAttribute');
+    });
+
+    it('uses convention inference for classes without decorators', async () => {
       // AubsModalCustomAttribute has no @customAttribute decorator
       // but should be detected via naming convention
       const modal = result.resources.find(r => r.className === 'AubsModalCustomAttribute');

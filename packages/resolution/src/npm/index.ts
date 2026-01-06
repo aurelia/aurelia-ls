@@ -86,7 +86,7 @@ import {
   type Scope,
   type ClassValue,
 } from './value/index.js';
-import { extractRegisterBodyResources, type RegisterBodyContext } from './patterns/index.js';
+import { extractRegisterBodyResources, tryResolveAsFactory, type RegisterBodyContext } from './patterns/index.js';
 
 // =============================================================================
 // Main API
@@ -107,7 +107,7 @@ import type {
   ConfigurationRegistration as ConfigurationRegistrationType,
 } from './types.js';
 import { success, partial, gap, combine } from './types.js';
-import type { NormalizedPath } from '@aurelia-ls/compiler';
+import { debug, type NormalizedPath } from '@aurelia-ls/compiler';
 
 // Local type aliases to avoid duplicate identifier issues with re-exports
 type ExtractedConfigurationLocal = ExtractedConfigurationType;
@@ -727,11 +727,30 @@ function analyzeConfigurations(
     // Check each export for IRegistry pattern
     for (const [exportName, exportValue] of exports) {
       // Resolve through Layers 2-3
-      const resolved = fullyResolve(exportValue, scope, resolutionContext);
+      let resolved = fullyResolve(exportValue, scope, resolutionContext);
+      let isFactory = false;
 
       // Check if resolved value is IRegistry-shaped
       if (!isRegistryShape(resolved)) {
-        continue;
+        // Try factory analysis if it's a call expression
+        const factoryResult = tryResolveAsFactory(resolved, scope, resolutionContext);
+        gaps.push(...factoryResult.gaps);
+
+        if (factoryResult.isFactory && factoryResult.value !== resolved) {
+          // Factory analysis succeeded - use the return value
+          resolved = factoryResult.value;
+          isFactory = true;
+
+          debug.resolution('factory.resolved', {
+            exportName,
+            returnValueKind: resolved.kind,
+          });
+        }
+
+        // Check again after factory resolution
+        if (!isRegistryShape(resolved)) {
+          continue;
+        }
       }
 
       // Found an IRegistry! Extract resources from register body.
@@ -774,7 +793,7 @@ function analyzeConfigurations(
       const config: ExtractedConfigurationLocal = {
         exportName,
         registers,
-        isFactory: false, // TODO: Detect factory functions
+        isFactory,
         source: {
           file: relative(packagePath, filePath),
           format: 'typescript',
