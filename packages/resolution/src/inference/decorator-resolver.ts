@@ -23,12 +23,18 @@ import {
  * This is the highest-priority resolver.
  *
  * Returns high confidence for in-project resolution (decorators are explicit).
+ * Propagates extraction gaps from class facts.
  */
 export function resolveFromDecorators(facts: SourceFacts): AnalysisResult<ResourceCandidate[]> {
   const candidates: ResourceCandidate[] = [];
   const gaps: AnalysisGap[] = [];
 
   for (const cls of facts.classes) {
+    // Propagate extraction gaps (spreads, computed properties, etc.)
+    if (cls.extractionGaps) {
+      gaps.push(...cls.extractionGaps);
+    }
+
     const result = resolveClassDecorators(cls, facts.path);
     if (result.candidate) {
       candidates.push(result.candidate);

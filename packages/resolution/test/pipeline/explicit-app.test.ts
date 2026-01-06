@@ -20,12 +20,12 @@ describe("Full Pipeline: explicit-app", () => {
 
     // Assert candidate counts by kind (includes runtime resources from Aurelia)
     // Full pipeline picks up runtime resources like promise template controllers, binding behaviors, etc.
-    expect(result.value.length, "Should find 29 candidates (app + runtime)").toBe(29);
+    expect(result.candidates.length, "Should find 29 candidates (app + runtime)").toBe(29);
     const byKind = {
-      elements: result.value.filter(c => c.kind === "element").length,
-      attributes: result.value.filter(c => c.kind === "attribute").length,
-      valueConverters: result.value.filter(c => c.kind === "valueConverter").length,
-      bindingBehaviors: result.value.filter(c => c.kind === "bindingBehavior").length,
+      elements: result.candidates.filter(c => c.kind === "element").length,
+      attributes: result.candidates.filter(c => c.kind === "attribute").length,
+      valueConverters: result.candidates.filter(c => c.kind === "valueConverter").length,
+      bindingBehaviors: result.candidates.filter(c => c.kind === "bindingBehavior").length,
     };
     expect(byKind, "Candidate breakdown by kind").toEqual({
       elements: 8,        // 8 app elements
@@ -91,12 +91,12 @@ describe("Full Pipeline: explicit-app", () => {
 
   it("exposes candidates for tooling", () => {
     // Find specific candidates
-    const navBar = result.value.find(c => c.name === "nav-bar");
+    const navBar = result.candidates.find(c => c.name === "nav-bar");
     expect(navBar, "Should find nav-bar candidate").toBeTruthy();
     expect(navBar.kind).toBe("element");
     expect(navBar.resolver).toBe("decorator");
 
-    const currency = result.value.find(c => c.name === "currency");
+    const currency = result.candidates.find(c => c.name === "currency");
     expect(currency, "Should find currency candidate").toBeTruthy();
     expect(currency.kind).toBe("valueConverter");
     expect(currency.resolver).toBe("static-au");

@@ -19,6 +19,7 @@ import {
  * This is the second-priority resolver after decorators.
  *
  * Returns high confidence for in-project resolution (static $au is explicit).
+ * Propagates extraction gaps from class facts.
  *
  * Handles patterns like:
  * ```typescript
@@ -36,6 +37,11 @@ export function resolveFromStaticAu(facts: SourceFacts): AnalysisResult<Resource
   const gaps: AnalysisGap[] = [];
 
   for (const cls of facts.classes) {
+    // Propagate extraction gaps (spreads, computed properties, etc.)
+    if (cls.extractionGaps) {
+      gaps.push(...cls.extractionGaps);
+    }
+
     if (!cls.staticAu) continue;
 
     const result = resolveStaticAu(cls.name, cls.staticAu, facts.path);

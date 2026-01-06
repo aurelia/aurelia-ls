@@ -5,8 +5,9 @@ import type {
   ImportFact,
   SiblingFileFact,
   AnalysisResult,
+  AnalysisGap,
 } from "../extraction/types.js";
-import { highConfidence } from "../extraction/types.js";
+import { highConfidence, partial } from "../extraction/types.js";
 import type { ResourceCandidate, BindableSpec } from "./types.js";
 import type { ConventionConfig } from "../conventions/types.js";
 import {
@@ -58,6 +59,7 @@ export function resolveFromConventions(
   }
 
   const candidates: ResourceCandidate[] = [];
+  const gaps: AnalysisGap[] = [];
 
   // Find template imports for template-import convention
   const templateImports = findTemplateImports(facts.imports, effectiveConfig);
@@ -76,6 +78,10 @@ export function resolveFromConventions(
   });
 
   for (const cls of facts.classes) {
+    // Propagate extraction gaps (spreads, computed properties, etc.)
+    if (cls.extractionGaps) {
+      gaps.push(...cls.extractionGaps);
+    }
     // Skip classes that already have explicit resource definition
     // (decorators or static $au - those are handled by higher-priority resolvers)
     if (hasExplicitResourceDefinition(cls)) {
@@ -130,7 +136,10 @@ export function resolveFromConventions(
   }
 
   // Conventions are deterministic in-project — high confidence
-  // No gaps: not matching a pattern isn't a failure, just not a resource
+  // Propagate any extraction gaps encountered during class fact extraction
+  if (gaps.length > 0) {
+    return partial(candidates, 'high', gaps);
+  }
   return highConfidence(candidates);
 }
 

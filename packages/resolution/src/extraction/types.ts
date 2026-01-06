@@ -77,6 +77,11 @@ export interface ClassFacts {
   readonly staticAu: StaticAuFact | null;
   readonly staticDependencies: StaticDependenciesFact | null;
   readonly bindableMembers: BindableMemberFact[];
+  /**
+   * Gaps encountered during extraction of this class.
+   * These represent patterns we couldn't fully analyze (spreads, computed props, etc.)
+   */
+  readonly extractionGaps?: AnalysisGap[];
 }
 
 /** Raw decorator occurrence */
@@ -140,6 +145,17 @@ export type DependencyRef =
       readonly exportName?: string;
       /** Source location of this import reference */
       readonly span: TextSpan;
+    }
+  | {
+      readonly kind: "property-access";
+      /** The object being accessed (e.g., "MyModule" in MyModule.Component) */
+      readonly object: string;
+      /** The property being accessed (e.g., "Component" in MyModule.Component) */
+      readonly property: string;
+      /** Source location of this property access in the dependencies array */
+      readonly span: TextSpan;
+      /** File path where this class is defined (null until import resolution) */
+      readonly resolvedPath: NormalizedPath | null;
     };
 
 /** Bindable member on class (from @bindable decorator) */

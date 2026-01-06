@@ -228,7 +228,7 @@ describe("Resolution: FileSystemContext impact", () => {
     const withoutFsAppFacts = filterFactsByPathPattern(withoutFs, "/sibling-app/src/");
     const pipelineNoFs = createResolverPipeline();
     const resultNoFs = pipelineNoFs.resolve(withoutFsAppFacts as any);
-    const candidatesNoFs = filterAppCandidates(resultNoFs.candidates);
+    const candidatesNoFs = filterAppCandidates(resultNoFs.value);
 
     // WITH FileSystemContext - sibling-file convention also works
     const fileSystem = createNodeFileSystem({ root: SIBLING_APP });
@@ -236,7 +236,7 @@ describe("Resolution: FileSystemContext impact", () => {
     const withFsAppFacts = filterFactsByPathPattern(withFs, "/sibling-app/src/");
     const pipelineWithFs = createResolverPipeline();
     const resultWithFs = pipelineWithFs.resolve(withFsAppFacts as any);
-    const candidatesWithFs = filterAppCandidates(resultWithFs.candidates);
+    const candidatesWithFs = filterAppCandidates(resultWithFs.value);
 
     // Without FS: only inline-only (explicit decorator) should be detected
     // With FS: my-app, nav-bar, user-card (sibling) + inline-only (decorator)

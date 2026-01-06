@@ -501,6 +501,28 @@ function resolveResourceRef(ref: DependencyRef, context: AnalysisContext): Resou
     };
   }
 
+  if (ref.kind === "property-access") {
+    // Property access: Module.Component
+    // If we have a resolved path, look up the candidate
+    if (ref.resolvedPath) {
+      const candidate = context.findCandidateByResolvedPath(ref.resolvedPath, ref.property);
+      if (candidate) {
+        return { kind: "resolved", resource: candidate };
+      }
+      return {
+        kind: "unresolved",
+        name: `${ref.object}.${ref.property}`,
+        reason: `Class '${ref.property}' at '${ref.resolvedPath}' is not a known resource`,
+      };
+    }
+    // No resolved path - import resolution needed
+    return {
+      kind: "unresolved",
+      name: `${ref.object}.${ref.property}`,
+      reason: `Could not resolve import for '${ref.object}.${ref.property}'`,
+    };
+  }
+
   // kind === "import" - direct import reference
   return {
     kind: "unresolved",
