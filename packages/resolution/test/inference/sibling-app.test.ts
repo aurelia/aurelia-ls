@@ -56,6 +56,15 @@ describe("Inference: sibling-app (sibling-file convention)", () => {
     result = pipeline.resolve(appFacts as any);
   });
 
+  it("returns confidence and gaps for sibling-based convention resolution", () => {
+    // Verify result has confidence and gaps properties (Q10 test hardening)
+    expect(result.confidence).toBeDefined();
+    expect(result.gaps).toBeDefined();
+    // Sibling-file convention with @bindable decorators achieves high confidence
+    expect(result.confidence).toBe("high");
+    expect(result.gaps).toHaveLength(0);
+  });
+
   it("detects sibling files during extraction", () => {
     const fileSystem = createNodeFileSystem({ root: SIBLING_APP });
     const allFacts = extractAllFacts(program, { fileSystem });

@@ -36,9 +36,11 @@ describe('aurelia2-plugins: re-export pattern', () => {
       result = await inspect(join(PLUGINS_ROOT, 'aurelia2-table'));
     });
 
-    it('extracts 4 resources', () => {
+    it('extracts 4 resources with high confidence', () => {
       expect(result.resources).toHaveLength(4);
       expect(result.confidence).toBe('high');
+      // One gap: entry-point-not-found for source lookup (doesn't affect extraction)
+      expect(result.gaps).toHaveLength(1);
     });
 
     it('finds aurelia-table custom attribute with 8 bindables', () => {
@@ -100,9 +102,11 @@ describe('aurelia2-plugins: re-export pattern', () => {
       result = await inspect(join(PLUGINS_ROOT, 'aurelia2-google-maps'));
     });
 
-    it('extracts google-map custom element', () => {
+    it('extracts google-map custom element with high confidence', () => {
       expect(result.resources).toHaveLength(1);
       expect(result.confidence).toBe('high');
+      // 19 gaps: 1 entry-point-not-found + 18 unresolved-import (source file discovery issues)
+      expect(result.gaps).toHaveLength(19);
 
       const googleMap = result.resources[0]!;
       expect(googleMap.name).toBe('google-map');

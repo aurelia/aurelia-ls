@@ -201,6 +201,12 @@ function extractFromExpression(
     for (const arg of expr.args) {
       extractFromValue(arg, resources, gaps, ctx);
     }
+
+    // For chained calls like container.register(A).register(B),
+    // also extract from the base call (which is also a register call)
+    if (expr.callee.kind === 'propertyAccess' && expr.callee.base.kind === 'call') {
+      extractFromExpression(expr.callee.base, containerParam, resources, gaps, ctx);
+    }
     return;
   }
 
@@ -392,6 +398,9 @@ function extractFromSpread(
 
 /**
  * Check if a call expression is `container.register(...)`.
+ *
+ * Also handles chained calls like `container.register(A).register(B)` since
+ * the register() method returns the container for fluent chaining.
  */
 function isContainerRegisterCall(call: CallValue, containerParam: string): boolean {
   // Must be a property access call
@@ -411,6 +420,12 @@ function isContainerRegisterCall(call: CallValue, containerParam: string): boole
   // Also handle resolved references
   if (base.kind === 'reference' && base.resolved?.kind === 'reference') {
     return base.resolved.name === containerParam;
+  }
+
+  // Handle chained register calls: container.register(A).register(B)
+  // The base is a call to register(), which returns the container
+  if (base.kind === 'call') {
+    return isContainerRegisterCall(base, containerParam);
   }
 
   return false;

@@ -20,6 +20,12 @@ describe("Inference: explicit-app", () => {
     result = pipeline.resolve(appFacts);
   });
 
+  it("returns high confidence with no gaps for explicit decorators", () => {
+    // Explicitly decorated resources should resolve with high confidence
+    expect(result.confidence).toBe("high");
+    expect(result.gaps).toHaveLength(0);
+  });
+
   it("resolves all resource candidates from explicit-app", () => {
     // Group candidates by kind for structured assertions
     const elements = result.value.filter(c => c.kind === "element");

@@ -19,6 +19,15 @@ describe("Inference: convention-app (template-pairing)", () => {
     result = pipeline.resolve(appFacts as any);
   });
 
+  it("returns confidence and gaps for convention-based resolution", () => {
+    // Verify result has confidence and gaps properties (Q10 test hardening)
+    expect(result.confidence).toBeDefined();
+    expect(result.gaps).toBeDefined();
+    // Convention-based resources with explicit @bindable achieve partial/high confidence
+    expect(["partial", "high"]).toContain(result.confidence);
+    expect(result.gaps).toHaveLength(0);
+  });
+
   it("resolves convention-based custom elements via template-pairing", () => {
     // These elements have NO @customElement decorator
     // They are detected via: import template from './foo.html' + matching class name

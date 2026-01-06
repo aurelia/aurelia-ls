@@ -554,6 +554,68 @@ describe('extractRegisterBodyResources', () => {
       expect(result.confidence).toBe('high');
       expect(result.value.length).toBe(1);
     });
+
+    it('handles chained register calls: container.register(A).register(B)', () => {
+      const fooClass = classVal('FooElement', TEST_FILE);
+      const barClass = classVal('BarElement', TEST_FILE);
+
+      // Build: container.register(FooElement).register(BarElement)
+      // This is a call on the result of a previous register call
+      const chainedCall = call(
+        propAccess(registerCall('container', [fooClass]), 'register'),
+        [barClass]
+      );
+      const registerMethod = createRegisterMethod([
+        exprStmt(chainedCall),
+      ]);
+
+      const classMap = new Map([
+        ['FooElement', createResource('FooElement')],
+        ['BarElement', createResource('BarElement')],
+      ]);
+      const ctx = createMockContext(classMap);
+      const result = extractRegisterBodyResources(registerMethod, ctx);
+
+      expect(result.confidence).toBe('high');
+      expect(result.value.length).toBe(2);
+
+      // Verify both resources are extracted
+      const names = result.value.map(r => r.className).sort();
+      expect(names).toEqual(['BarElement', 'FooElement']);
+    });
+
+    it('handles deeply chained register calls: A.register(B).register(C).register(D)', () => {
+      const aClass = classVal('AElement', TEST_FILE);
+      const bClass = classVal('BElement', TEST_FILE);
+      const cClass = classVal('CElement', TEST_FILE);
+
+      // Build: container.register(A).register(B).register(C)
+      const firstChain = call(
+        propAccess(registerCall('container', [aClass]), 'register'),
+        [bClass]
+      );
+      const secondChain = call(
+        propAccess(firstChain, 'register'),
+        [cClass]
+      );
+      const registerMethod = createRegisterMethod([
+        exprStmt(secondChain),
+      ]);
+
+      const classMap = new Map([
+        ['AElement', createResource('AElement')],
+        ['BElement', createResource('BElement')],
+        ['CElement', createResource('CElement')],
+      ]);
+      const ctx = createMockContext(classMap);
+      const result = extractRegisterBodyResources(registerMethod, ctx);
+
+      expect(result.confidence).toBe('high');
+      expect(result.value.length).toBe(3);
+
+      const names = result.value.map(r => r.className).sort();
+      expect(names).toEqual(['AElement', 'BElement', 'CElement']);
+    });
   });
 });
 

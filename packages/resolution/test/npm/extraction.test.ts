@@ -358,6 +358,78 @@ describe('npm extraction', () => {
   });
 
   // ===========================================================================
+  // Edge case: Factory using runtime arguments
+  // ===========================================================================
+
+  describe('factory-arguments fixture', () => {
+    const fixturePath = resolve(FIXTURES, 'factory-arguments');
+
+    it('reports gap for conditional registration based on runtime arguments', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      // The factory uses `options.useAdvanced` which is a runtime value
+      // This creates a ternary that we cannot statically evaluate
+      // Expected: gap reported for the conditional expression
+
+      // We should get some resources (the ones that can be traced)
+      // and potentially gaps for the conditional parts
+      expect(result.gaps.length).toBeGreaterThan(0);
+
+      // Should find at least one gap related to conditional or dynamic value
+      const relevantGap = result.gaps.find(
+        g => g.why.kind === 'conditional-registration' ||
+             g.why.kind === 'dynamic-value' ||
+             g.why.kind === 'spread-unknown'
+      );
+      expect(relevantGap).toBeDefined();
+    });
+
+    it('extracts directly exported resources even when factory has gaps', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      // BasicElement and AdvancedElement are directly exported from index.ts
+      // They should be found even if the configuration analysis has gaps
+      expect(result.value.resources.length).toBeGreaterThanOrEqual(2);
+
+      const names = result.value.resources.map(r => r.name).sort();
+      expect(names).toContain('advanced-element');
+      expect(names).toContain('basic-element');
+    });
+  });
+
+  // ===========================================================================
+  // Edge case: Nested factory calls
+  // ===========================================================================
+
+  describe('nested-factory fixture', () => {
+    const fixturePath = resolve(FIXTURES, 'nested-factory');
+
+    it('extracts resources from nested factory pattern', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      // The nested factory pattern:
+      // createPluginConfig() calls createBaseConfig() which registers MyWidget
+      // We should either:
+      // 1. Successfully trace through and find MyWidget, OR
+      // 2. Report a gap explaining the nested factory limitation
+
+      // At minimum, MyWidget should be found via direct export
+      const widget = result.value.resources.find(r => r.name === 'my-widget');
+      expect(widget).toBeDefined();
+      expect(widget!.kind).toBe('custom-element');
+    });
+
+    it('identifies configuration from nested factory', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      // Should detect PluginConfiguration as a factory-created config
+      expect(result.value.configurations).toHaveLength(1);
+      expect(result.value.configurations[0]!.exportName).toBe('PluginConfiguration');
+      expect(result.value.configurations[0]!.isFactory).toBe(true);
+    });
+  });
+
+  // ===========================================================================
   // Graceful degradation
   // ===========================================================================
 
