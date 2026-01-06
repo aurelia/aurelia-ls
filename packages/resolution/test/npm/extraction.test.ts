@@ -74,6 +74,58 @@ describe('npm extraction', () => {
   });
 
   // ===========================================================================
+  // Directory index resolution (Q17)
+  // ===========================================================================
+
+  describe('barrel-directory fixture', () => {
+    const fixturePath = resolve(FIXTURES, 'barrel-directory');
+
+    it('resolves directory imports to index.ts', async () => {
+      // This tests Q17: export * from './components' where ./components is a directory
+      const result = await analyzePackage(fixturePath, { preferSource: true });
+
+      expect(result.confidence).toBe('high');
+      expect(result.value.resources).toHaveLength(2);
+
+      const names = result.value.resources.map(r => r.name).sort();
+      expect(names).toEqual(['action-button', 'info-card']);
+    });
+
+    it('extracts resources from nested barrel directories', async () => {
+      const result = await analyzePackage(fixturePath, { preferSource: true });
+
+      // ActionButton
+      const actionButton = result.value.resources.find(r => r.name === 'action-button');
+      expect(actionButton).toBeDefined();
+      expect(actionButton!.kind).toBe('custom-element');
+      expect(actionButton!.className).toBe('ActionButton');
+      expect(actionButton!.bindables).toHaveLength(2);
+      expect(actionButton!.bindables.map(b => b.name).sort()).toEqual(['disabled', 'label']);
+
+      // InfoCard
+      const infoCard = result.value.resources.find(r => r.name === 'info-card');
+      expect(infoCard).toBeDefined();
+      expect(infoCard!.kind).toBe('custom-element');
+      expect(infoCard!.className).toBe('InfoCard');
+      expect(infoCard!.bindables).toHaveLength(2);
+      expect(infoCard!.bindables.map(b => b.name).sort()).toEqual(['content', 'title']);
+    });
+
+    it('follows the full import chain', async () => {
+      const result = await analyzePackage(fixturePath, { preferSource: true });
+
+      // The chain is: src/index.ts → src/components/index.ts → src/components/*.ts
+      // If both resources were found, the full chain was followed
+      expect(result.value.resources).toHaveLength(2);
+      expect(result.confidence).toBe('high');
+
+      // Source files should be in the components directory (proves chain was followed)
+      const sources = result.value.resources.map(r => r.source.file);
+      expect(sources.every(s => s.includes('components'))).toBe(true);
+    });
+  });
+
+  // ===========================================================================
   // Phase 2: Plugin configuration pattern
   // ===========================================================================
 

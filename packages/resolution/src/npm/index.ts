@@ -74,6 +74,7 @@ import type { ResourceCandidate } from '../inference/types.js';
 // =============================================================================
 
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, relative, basename, dirname } from 'node:path';
 import * as ts from 'typescript';
 import type {
@@ -535,17 +536,56 @@ function findReExports(sourceText: string, currentFile: string): string[] {
         const specifier = stmt.moduleSpecifier.text;
         // Only process relative imports
         if (specifier.startsWith('./') || specifier.startsWith('../')) {
-          // Resolve the path
-          const resolvedPath = join(currentDir, specifier);
-          // Ensure .js extension
-          const fullPath = resolvedPath.endsWith('.js') ? resolvedPath : resolvedPath + '.js';
-          reExports.push(fullPath);
+          const fullPath = resolveJavaScriptModulePath(currentDir, specifier);
+          if (fullPath) {
+            reExports.push(fullPath);
+          }
         }
       }
     }
   }
 
   return reExports;
+}
+
+/**
+ * Resolve a JavaScript module specifier to a file path.
+ *
+ * Handles:
+ * - Explicit extensions: './foo.js' → './foo.js'
+ * - No extension: './foo' → './foo.js' or './foo/index.js'
+ * - Directory with index: './components' → './components/index.js'
+ */
+function resolveJavaScriptModulePath(currentDir: string, specifier: string): string | null {
+  const resolvedPath = join(currentDir, specifier);
+
+  // Explicit .js extension - use as-is, but also check for directory index
+  if (resolvedPath.endsWith('.js')) {
+    if (existsSync(resolvedPath)) {
+      return resolvedPath;
+    }
+    // Maybe it's './foo.js' meaning './foo/index.js'? Unlikely but check.
+    const indexPath = join(resolvedPath.slice(0, -3), 'index.js');
+    if (existsSync(indexPath)) {
+      return indexPath;
+    }
+    // Default to original path (will produce ENOENT, caught as gap)
+    return resolvedPath;
+  }
+
+  // No extension - try file first, then directory index
+  const filePath = resolvedPath + '.js';
+  if (existsSync(filePath)) {
+    return filePath;
+  }
+
+  const indexPath = join(resolvedPath, 'index.js');
+  if (existsSync(indexPath)) {
+    return indexPath;
+  }
+
+  // Default to file path (will produce ENOENT, caught as gap)
+  return filePath;
 }
 
 /**
@@ -584,27 +624,61 @@ function findTypeScriptImportsAndReExports(sourceFile: ts.SourceFile, currentFil
     }
 
     if (specifier && (specifier.startsWith('./') || specifier.startsWith('../'))) {
-      // Resolve the path - TypeScript specifiers may or may not have extension
-      const resolvedPath = join(currentDir, specifier);
-
-      // Try to resolve to a TypeScript file
-      // Specifier might be './foo', './foo.js', or './foo.ts'
-      let fullPath: string;
-      if (resolvedPath.endsWith('.ts')) {
-        fullPath = resolvedPath;
-      } else if (resolvedPath.endsWith('.js')) {
-        // Convert .js to .ts for source files
-        fullPath = resolvedPath.slice(0, -3) + '.ts';
-      } else {
-        // No extension - add .ts
-        fullPath = resolvedPath + '.ts';
+      const fullPath = resolveTypeScriptModulePath(currentDir, specifier);
+      if (fullPath) {
+        paths.push(fullPath);
       }
-
-      paths.push(fullPath);
     }
   }
 
   return paths;
+}
+
+/**
+ * Resolve a TypeScript module specifier to a file path.
+ *
+ * Handles:
+ * - Explicit extensions: './foo.ts' → './foo.ts'
+ * - JS extensions (source mapping): './foo.js' → './foo.ts'
+ * - No extension: './foo' → './foo.ts' or './foo/index.ts'
+ * - Directory with index: './components' → './components/index.ts'
+ */
+function resolveTypeScriptModulePath(currentDir: string, specifier: string): string | null {
+  const resolvedPath = join(currentDir, specifier);
+
+  // Explicit .ts extension - use as-is
+  if (resolvedPath.endsWith('.ts')) {
+    return resolvedPath;
+  }
+
+  // .js extension - convert to .ts (TypeScript source mapping)
+  if (resolvedPath.endsWith('.js')) {
+    const tsPath = resolvedPath.slice(0, -3) + '.ts';
+    // Also check for directory index if .ts doesn't exist
+    if (existsSync(tsPath)) {
+      return tsPath;
+    }
+    const indexPath = join(resolvedPath.slice(0, -3), 'index.ts');
+    if (existsSync(indexPath)) {
+      return indexPath;
+    }
+    // Default to .ts path (will produce ENOENT, caught as gap)
+    return tsPath;
+  }
+
+  // No extension - try file first, then directory index
+  const filePath = resolvedPath + '.ts';
+  if (existsSync(filePath)) {
+    return filePath;
+  }
+
+  const indexPath = join(resolvedPath, 'index.ts');
+  if (existsSync(indexPath)) {
+    return indexPath;
+  }
+
+  // Default to file path (will produce ENOENT, caught as gap)
+  return filePath;
 }
 
 /**
