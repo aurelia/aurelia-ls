@@ -711,7 +711,7 @@ function getLoopVariable(initializer: ts.ForInitializer, sf: ts.SourceFile): str
 /**
  * Transform a block of statements.
  */
-function transformBlock(block: ts.Block, sf: ts.SourceFile): StatementValue[] {
+export function transformBlock(block: ts.Block, sf: ts.SourceFile): StatementValue[] {
   return block.statements.map(stmt => transformStatement(stmt, sf));
 }
 
@@ -739,7 +739,7 @@ export function transformMethod(
 /**
  * Transform function parameters.
  */
-function transformParameters(
+export function transformParameters(
   params: ts.NodeArray<ts.ParameterDeclaration>,
   sf: ts.SourceFile
 ): ParameterInfo[] {

@@ -99,4 +99,16 @@ export {
   transformMethod,
   transformExportedValue,
   transformModuleExports,
+  transformParameters,
+  transformBlock,
 } from './transform.js';
+
+// Re-export scope functions (Layer 2)
+export {
+  buildFileScope,
+  enterFunctionScope,
+  createChildScope,
+  lookupBinding,
+  isImportBinding,
+  resolveInScope,
+} from './scope.js';
