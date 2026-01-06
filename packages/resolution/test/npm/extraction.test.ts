@@ -126,6 +126,55 @@ describe('npm extraction', () => {
   });
 
   // ===========================================================================
+  // Multi-class files (Q14)
+  // ===========================================================================
+
+  describe('multi-class fixture', () => {
+    const fixturePath = resolve(FIXTURES, 'multi-class');
+
+    it('extracts all resources from multi-class ES2022 file', async () => {
+      // This tests Q14: ES2022 field association should work with multiple classes
+      const result = await analyzePackage(fixturePath, { preferSource: false });
+
+      expect(result.confidence).toBe('high');
+      expect(result.value.resources).toHaveLength(2);
+
+      const names = result.value.resources.map(r => r.name).sort();
+      expect(names).toEqual(['highlight', 'user-card']);
+    });
+
+    it('associates bindables with correct class', async () => {
+      const result = await analyzePackage(fixturePath, { preferSource: false });
+
+      // UserCard should have name and avatar bindables
+      const userCard = result.value.resources.find(r => r.name === 'user-card');
+      expect(userCard).toBeDefined();
+      expect(userCard!.className).toBe('UserCard');
+      expect(userCard!.kind).toBe('custom-element');
+      expect(userCard!.bindables).toHaveLength(2);
+      expect(userCard!.bindables.map(b => b.name).sort()).toEqual(['avatar', 'name']);
+
+      // HighlightAttribute should have color bindable (with primary: true)
+      const highlight = result.value.resources.find(r => r.name === 'highlight');
+      expect(highlight).toBeDefined();
+      expect(highlight!.className).toBe('HighlightAttribute');
+      expect(highlight!.kind).toBe('custom-attribute');
+      expect(highlight!.bindables).toHaveLength(1);
+      expect(highlight!.bindables[0]!.name).toBe('color');
+      expect(highlight!.bindables[0]!.primary).toBe(true);
+    });
+
+    it('TypeScript extraction also works with multi-class files', async () => {
+      const result = await analyzePackage(fixturePath, { preferSource: true });
+
+      // Should find the same resources from TypeScript source
+      expect(result.value.resources).toHaveLength(2);
+      const names = result.value.resources.map(r => r.name).sort();
+      expect(names).toEqual(['highlight', 'user-card']);
+    });
+  });
+
+  // ===========================================================================
   // Phase 2: Plugin configuration pattern
   // ===========================================================================
 

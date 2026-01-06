@@ -60,6 +60,8 @@ interface EsDecorateCall {
   name: string;
   /** Variable names of decorators applied (e.g., ['_dec']) */
   decoratorVars: string[];
+  /** The class name from the enclosing static block (for field-to-class association) */
+  enclosingClass: string | null;
 }
 
 /**
@@ -206,27 +208,36 @@ function findDecoratorArrayAssignments(sourceFile: ts.SourceFile): Map<string, s
 
 /**
  * Find __esDecorate calls and extract metadata.
+ * Tracks the enclosing class for proper field-to-class association.
  */
 function findEsDecorateCalls(sourceFile: ts.SourceFile): EsDecorateCall[] {
   const result: EsDecorateCall[] = [];
 
-  function visit(node: ts.Node): void {
+  function visit(node: ts.Node, enclosingClass: string | null): void {
+    // Track when we enter a class declaration
+    if (ts.isClassDeclaration(node) && node.name) {
+      const className = node.name.text;
+      // Visit children with this class as the enclosing context
+      ts.forEachChild(node, child => visit(child, className));
+      return;
+    }
+
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
 
       // Check for __esDecorate(...)
       if (ts.isIdentifier(callee) && callee.text === '__esDecorate') {
-        const call = parseEsDecorateCall(node);
+        const call = parseEsDecorateCall(node, enclosingClass);
         if (call) {
           result.push(call);
         }
       }
     }
 
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, child => visit(child, enclosingClass));
   }
 
-  visit(sourceFile);
+  visit(sourceFile, null);
   return result;
 }
 
@@ -316,8 +327,10 @@ function extractLiteralValue(node: ts.Expression): unknown {
  * We care about:
  * - decorators (arg 2, 0-indexed) - array of decorator variables
  * - contextIn (arg 3) - object with { kind, name, ... }
+ *
+ * @param enclosingClass - The class name from the enclosing static block
  */
-function parseEsDecorateCall(call: ts.CallExpression): EsDecorateCall | null {
+function parseEsDecorateCall(call: ts.CallExpression, enclosingClass: string | null): EsDecorateCall | null {
   const args = call.arguments;
   if (args.length < 4) {
     return null;
@@ -371,7 +384,7 @@ function parseEsDecorateCall(call: ts.CallExpression): EsDecorateCall | null {
     return null;
   }
 
-  return { kind, decoratorVars, name };
+  return { kind, decoratorVars, name, enclosingClass };
 }
 
 // =============================================================================
@@ -380,6 +393,9 @@ function parseEsDecorateCall(call: ts.CallExpression): EsDecorateCall | null {
 
 /**
  * Build extracted classes from __esDecorate calls.
+ *
+ * Uses the enclosingClass field (derived from static block context) to properly
+ * associate field decorators with their owning class.
  */
 function buildExtractedClasses(
   esDecorateCalls: EsDecorateCall[],
@@ -388,78 +404,63 @@ function buildExtractedClasses(
 ): Map<string, ExtractedClass> {
   const classes = new Map<string, ExtractedClass>();
 
-  // Group by class - we identify class decorators by kind: "class"
-  // and field decorators by kind: "field"
-  for (const call of esDecorateCalls) {
-    if (call.kind === 'class') {
-      // This defines the class
-      const className = call.name;
-      let cls = classes.get(className);
-      if (!cls) {
-        cls = { className, classDecorators: [], fields: new Map() };
-        classes.set(className, cls);
+  /**
+   * Helper to get or create a class entry.
+   */
+  function getOrCreateClass(className: string): ExtractedClass {
+    let cls = classes.get(className);
+    if (!cls) {
+      cls = { className, classDecorators: [], fields: new Map() };
+      classes.set(className, cls);
+    }
+    return cls;
+  }
+
+  /**
+   * Helper to resolve decorator variables through arrays if needed.
+   */
+  function resolveDecorators(varNames: string[]): DecoratorCall[] {
+    const result: DecoratorCall[] = [];
+    for (const varName of varNames) {
+      // Check if it's a direct decorator reference
+      const directDecorator = decoratorCalls.get(varName);
+      if (directDecorator) {
+        result.push(directDecorator);
+        continue;
       }
 
-      // Resolve decorators
-      for (const varName of call.decoratorVars) {
-        const decorator = decoratorCalls.get(varName);
-        if (decorator) {
-          cls.classDecorators.push(decorator);
-        }
-      }
-    } else if (call.kind === 'field') {
-      // This is a field decorator - we need to find which class it belongs to
-      // In ES2022 output, field decorators appear before class decorator in static block
-      // We'll associate with the most recently defined class or create placeholder
-      const fieldName = call.name;
-
-      // Resolve decorator variables through arrays if needed
-      const resolvedDecorators: DecoratorCall[] = [];
-      for (const varName of call.decoratorVars) {
-        // Check if it's a direct decorator reference
-        const directDecorator = decoratorCalls.get(varName);
-        if (directDecorator) {
-          resolvedDecorators.push(directDecorator);
-          continue;
-        }
-
-        // Check if it's an array reference (_init_content -> [_dec2])
-        const arrayVars = decoratorArrays.get(varName);
-        if (arrayVars) {
-          for (const arrayVar of arrayVars) {
-            const decorator = decoratorCalls.get(arrayVar);
-            if (decorator) {
-              resolvedDecorators.push(decorator);
-            }
+      // Check if it's an array reference (_init_content -> [_dec2])
+      const arrayVars = decoratorArrays.get(varName);
+      if (arrayVars) {
+        for (const arrayVar of arrayVars) {
+          const decorator = decoratorCalls.get(arrayVar);
+          if (decorator) {
+            result.push(decorator);
           }
         }
       }
-
-      // For now, store fields in a temporary holder - will associate later
-      // Use a special key for orphaned fields
-      let cls = classes.get('__pending__');
-      if (!cls) {
-        cls = { className: '__pending__', classDecorators: [], fields: new Map() };
-        classes.set('__pending__', cls);
-      }
-      cls.fields.set(fieldName, resolvedDecorators);
     }
+    return result;
   }
 
-  // Move pending fields to the actual class
-  const pending = classes.get('__pending__');
-  if (pending && pending.fields.size > 0) {
-    // Find the actual class (the one with class decorators)
-    for (const [name, cls] of classes) {
-      if (name !== '__pending__' && cls.classDecorators.length > 0) {
-        // Move fields to this class
-        for (const [fieldName, decorators] of pending.fields) {
-          cls.fields.set(fieldName, decorators);
-        }
-        break;
+  // Process all __esDecorate calls
+  for (const call of esDecorateCalls) {
+    if (call.kind === 'class') {
+      // Class decorator: the call.name is the class name
+      const cls = getOrCreateClass(call.name);
+      const decorators = resolveDecorators(call.decoratorVars);
+      cls.classDecorators.push(...decorators);
+    } else if (call.kind === 'field') {
+      // Field decorator: use enclosingClass to associate with correct class
+      // The enclosingClass comes from the static block context
+      const className = call.enclosingClass;
+      if (className) {
+        const cls = getOrCreateClass(className);
+        const decorators = resolveDecorators(call.decoratorVars);
+        cls.fields.set(call.name, decorators);
       }
+      // If no enclosingClass, the field is orphaned (shouldn't happen with proper ES2022 output)
     }
-    classes.delete('__pending__');
   }
 
   return classes;
