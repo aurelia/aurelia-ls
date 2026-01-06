@@ -72,6 +72,7 @@ import type {
   AnalysisGap,
   PackageAnalysis,
   ExtractedResource,
+  ResourceEvidence,
   AnalysisOptions,
 } from './types.js';
 import { success, partial, gap, combine } from './types.js';
@@ -104,47 +105,176 @@ export async function analyzePackage(
   const pkgInfo = scanResult.value;
   gaps.push(...scanResult.gaps);
 
-  // Step 2: Determine extraction strategy
-  const useSource = preferSource && pkgInfo.hasTypeScriptSource;
+  // Step 2: Multi-strategy extraction with fallback chain
+  // Strategy order based on preferSource option:
+  // - preferSource: true  → TypeScript source → ES2022 compiled JS
+  // - preferSource: false → ES2022 compiled JS → TypeScript source
+  //
+  // Later strategies fill gaps from earlier ones. Results are merged.
 
-  // Step 3: Extract resources
-  let resources: ExtractedResource[] = [];
-  // Both TypeScript source and ES2022 extraction are 'high' confidence
-  // (decorator analysis isn't 100% certain - only manifest is 'exact')
-  const baseConfidence: 'high' = 'high';
+  const allResources: ExtractedResource[] = [];
+  let primaryStrategyUsed: 'typescript' | 'es2022' | 'none' = 'none';
 
-  if (useSource && pkgInfo.sourceDir) {
-    // Use TypeScript source extraction (existing infrastructure)
-    const sourceResult = await extractFromTypeScriptSource(pkgInfo, packagePath);
-    resources = sourceResult.resources;
-    gaps.push(...sourceResult.gaps);
-  } else {
-    // Use ES2022 extraction from compiled JavaScript
-    const es2022Result = await extractFromCompiledJS(pkgInfo, packagePath);
-    resources = es2022Result.resources;
-    gaps.push(...es2022Result.gaps);
+  // Determine which strategies to try and in what order
+  const hasTypeScript = pkgInfo.hasTypeScriptSource && pkgInfo.sourceDir;
+  const hasJavaScript = pkgInfo.entryPoints.some(e => !e.typesOnly);
+
+  const strategies: Array<'typescript' | 'es2022'> = preferSource
+    ? ['typescript', 'es2022']
+    : ['es2022', 'typescript'];
+
+  for (const strategy of strategies) {
+    if (strategy === 'typescript' && hasTypeScript) {
+      const tsResult = await extractFromTypeScriptSource(pkgInfo, packagePath);
+      if (tsResult.resources.length > 0) {
+        mergeResources(allResources, tsResult.resources);
+        if (primaryStrategyUsed === 'none') {
+          primaryStrategyUsed = 'typescript';
+        }
+      }
+      gaps.push(...tsResult.gaps);
+    } else if (strategy === 'es2022' && hasJavaScript) {
+      const es2022Result = await extractFromCompiledJS(pkgInfo, packagePath);
+      if (es2022Result.resources.length > 0) {
+        mergeResources(allResources, es2022Result.resources);
+        if (primaryStrategyUsed === 'none') {
+          primaryStrategyUsed = 'es2022';
+        }
+      }
+      gaps.push(...es2022Result.gaps);
+    }
+
+    // If we found resources and have no blocking gaps, we can stop
+    // (later strategies would just find the same things)
+    if (allResources.length > 0 && !hasBlockingGaps(gaps)) {
+      break;
+    }
   }
+
+  // Step 3: Determine confidence based on results
+  const confidence = determineConfidence(allResources, gaps, primaryStrategyUsed);
 
   // Step 4: Build result
   const analysis: PackageAnalysis = {
     packageName: pkgInfo.name,
     version: pkgInfo.version,
-    resources,
+    resources: allResources,
     configurations: [], // TODO: Phase 2 - configuration analysis
   };
 
-  if (gaps.length > 0) {
-    // Determine confidence based on gaps
-    const hasBlockingGaps = gaps.some(g =>
-      g.why.kind === 'dynamic-value' ||
-      g.why.kind === 'function-return' ||
-      g.why.kind === 'spread-unknown'
-    );
-    return partial(analysis, hasBlockingGaps ? 'partial' : 'high', gaps);
+  return partial(analysis, confidence, gaps);
+}
+
+/**
+ * Check if gaps include blocking patterns that prevent confident analysis.
+ */
+function hasBlockingGaps(gaps: AnalysisGap[]): boolean {
+  return gaps.some(g =>
+    g.why.kind === 'dynamic-value' ||
+    g.why.kind === 'function-return' ||
+    g.why.kind === 'spread-unknown'
+  );
+}
+
+/**
+ * Determine overall confidence based on extraction results.
+ */
+function determineConfidence(
+  resources: ExtractedResource[],
+  gaps: AnalysisGap[],
+  primaryStrategy: 'typescript' | 'es2022' | 'none'
+): 'exact' | 'high' | 'partial' | 'low' | 'manual' {
+  // No resources found at all
+  if (resources.length === 0) {
+    // If we have gaps explaining why, it's 'manual' (user needs to provide config)
+    if (gaps.length > 0) {
+      return 'manual';
+    }
+    // No resources and no gaps - package might just not have Aurelia resources
+    return 'high';
   }
 
-  // Use base confidence - 'high' for decorator-based analysis
-  return partial(analysis, baseConfidence, []);
+  // Have resources - check for blocking gaps
+  if (hasBlockingGaps(gaps)) {
+    return 'partial';
+  }
+
+  // Check if any resources were found via convention only (low confidence)
+  const hasConventionOnly = resources.some(r =>
+    r.evidence.kind === 'convention'
+  );
+  if (hasConventionOnly && primaryStrategy === 'none') {
+    return 'low';
+  }
+
+  // Decorator-based extraction succeeded
+  return 'high';
+}
+
+/**
+ * Merge new resources into existing list, deduplicating by className.
+ *
+ * When a resource with the same className exists:
+ * - Keep the one with more bindables (more complete extraction)
+ * - Keep the one with higher-confidence evidence
+ * - Merge aliases from both
+ */
+function mergeResources(
+  existing: ExtractedResource[],
+  incoming: ExtractedResource[]
+): void {
+  for (const newResource of incoming) {
+    const existingIndex = existing.findIndex(r => r.className === newResource.className);
+
+    if (existingIndex === -1) {
+      // New resource - add it
+      existing.push(newResource);
+    } else {
+      // Duplicate - merge intelligently
+      const existingResource = existing[existingIndex]!;
+      const merged = mergeResource(existingResource, newResource);
+      existing[existingIndex] = merged;
+    }
+  }
+}
+
+/**
+ * Merge two resources with the same className.
+ * Takes the best data from each.
+ */
+function mergeResource(a: ExtractedResource, b: ExtractedResource): ExtractedResource {
+  // Prefer the one with more bindables
+  const aBindables = a.bindables.length;
+  const bBindables = b.bindables.length;
+
+  // Prefer higher-confidence evidence sources
+  const evidenceRank: Record<ResourceEvidence['kind'], number> = {
+    'manifest': 5,           // Highest - explicit package metadata
+    'explicit-config': 4,    // User-provided configuration
+    'decorator': 3,          // Source-level decorators
+    'static-au': 2,          // Static $au property
+    'convention': 1,         // Naming convention inference
+  };
+  const aRank = evidenceRank[a.evidence.kind];
+  const bRank = evidenceRank[b.evidence.kind];
+
+  // Choose primary based on evidence, then bindable count
+  const primary = (aRank > bRank) ? a : (bRank > aRank) ? b :
+                  (aBindables >= bBindables) ? a : b;
+  const secondary = primary === a ? b : a;
+
+  // Merge aliases from both
+  const mergedAliases = [...new Set([...primary.aliases, ...secondary.aliases])];
+
+  // Merge bindables - take primary's bindables, add any unique ones from secondary
+  const primaryBindableNames = new Set(primary.bindables.map(b => b.name));
+  const additionalBindables = secondary.bindables.filter(b => !primaryBindableNames.has(b.name));
+
+  return {
+    ...primary,
+    aliases: mergedAliases,
+    bindables: [...primary.bindables, ...additionalBindables],
+  };
 }
 
 /**
@@ -190,6 +320,14 @@ interface ExtractionResult {
 /**
  * Extract resources from TypeScript source files.
  * Uses the existing extraction/inference infrastructure.
+ *
+ * Follows re-exports to discover all resource classes in the package.
+ *
+ * TODO: Future enhancement - integrate with `binding/export-resolver.ts` infrastructure
+ * which provides more sophisticated cross-file resolution including cycle detection,
+ * alias handling, and integration with the full TypeScript program. This would enable
+ * richer analysis but requires creating a Program across all package files.
+ * See npm-analysis-design.md "Option B" for details.
  */
 async function extractFromTypeScriptSource(
   pkgInfo: PackageInfo,
@@ -197,6 +335,7 @@ async function extractFromTypeScriptSource(
 ): Promise<ExtractionResult> {
   const resources: ExtractedResource[] = [];
   const gaps: AnalysisGap[] = [];
+  const processedFiles = new Set<string>();
 
   if (!pkgInfo.sourceDir) {
     gaps.push(gap(
@@ -207,7 +346,7 @@ async function extractFromTypeScriptSource(
     return { resources, gaps };
   }
 
-  // Find all TypeScript files in source directory
+  // Find TypeScript entry point
   const sourceEntryPoint = getSourceEntryPoint(pkgInfo);
   if (!sourceEntryPoint) {
     gaps.push(gap(
@@ -218,53 +357,78 @@ async function extractFromTypeScriptSource(
     return { resources, gaps };
   }
 
-  try {
-    // Read the source file
-    const sourceText = await readFile(sourceEntryPoint, 'utf-8');
-    const sourceFile = ts.createSourceFile(
-      sourceEntryPoint,
-      sourceText,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS
-    );
+  // Queue of files to process (start with entry point)
+  const filesToProcess: string[] = [sourceEntryPoint];
 
-    // Create a minimal program for type checking
-    const compilerHost = createMinimalCompilerHost(sourceFile, sourceEntryPoint);
-    const program = ts.createProgram([sourceEntryPoint], {
-      target: ts.ScriptTarget.Latest,
-      module: ts.ModuleKind.ESNext,
-    }, compilerHost);
-    const checker = program.getTypeChecker();
+  // Process files, following re-exports
+  while (filesToProcess.length > 0) {
+    const filePath = filesToProcess.pop()!;
 
-    // Extract facts using existing infrastructure
-    const facts = extractSourceFacts(sourceFile, checker, program);
+    // Skip already processed files
+    if (processedFiles.has(filePath)) {
+      continue;
+    }
+    processedFiles.add(filePath);
 
-    // Run inference resolvers
-    const decoratorResult = resolveFromDecorators(facts);
-    const staticAuResult = resolveFromStaticAu(facts);
-    const conventionResult = resolveFromConventions(facts);
+    try {
+      // Read and parse the source file
+      const sourceText = await readFile(filePath, 'utf-8');
+      const sourceFile = ts.createSourceFile(
+        filePath,
+        sourceText,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS
+      );
 
-    // Combine results - flatten arrays of candidates
-    const combined = combine(
-      [decoratorResult, staticAuResult, conventionResult],
-      (arrays) => arrays.flat()
-    );
-    gaps.push(...combined.gaps);
+      // Create a minimal program for type checking this file
+      const compilerHost = createMinimalCompilerHost(sourceFile, filePath);
+      const program = ts.createProgram([filePath], {
+        target: ts.ScriptTarget.Latest,
+        module: ts.ModuleKind.ESNext,
+      }, compilerHost);
+      const checker = program.getTypeChecker();
 
-    // Convert ResourceCandidate to ExtractedResource
-    for (const candidate of combined.value) {
-      const extracted = candidateToExtractedResource(candidate, packagePath);
-      if (extracted) {
-        resources.push(extracted);
+      // Extract facts using existing infrastructure
+      const facts = extractSourceFacts(sourceFile, checker, program);
+
+      // Run inference resolvers
+      const decoratorResult = resolveFromDecorators(facts);
+      const staticAuResult = resolveFromStaticAu(facts);
+      const conventionResult = resolveFromConventions(facts);
+
+      // Combine results - flatten arrays of candidates
+      const combined = combine(
+        [decoratorResult, staticAuResult, conventionResult],
+        (arrays) => arrays.flat()
+      );
+      gaps.push(...combined.gaps);
+
+      // Convert ResourceCandidate to ExtractedResource
+      for (const candidate of combined.value) {
+        const extracted = candidateToExtractedResource(candidate, packagePath);
+        if (extracted) {
+          resources.push(extracted);
+        }
+      }
+
+      // Find re-exports and add those files to the queue
+      const reExportPaths = findTypeScriptReExports(sourceFile, filePath);
+      for (const reExportPath of reExportPaths) {
+        if (!processedFiles.has(reExportPath)) {
+          filesToProcess.push(reExportPath);
+        }
+      }
+    } catch (err) {
+      // File might not exist (bad re-export) or parse error
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        gaps.push(gap(
+          `file "${basename(filePath)}"`,
+          { kind: 'parse-error', message: err instanceof Error ? err.message : String(err) },
+          `Failed to parse ${filePath}.`
+        ));
       }
     }
-  } catch (err) {
-    gaps.push(gap(
-      'TypeScript parsing',
-      { kind: 'parse-error', message: err instanceof Error ? err.message : String(err) },
-      'Failed to parse TypeScript source.'
-    ));
   }
 
   return { resources, gaps };
@@ -364,6 +528,49 @@ function findReExports(sourceText: string, currentFile: string): string[] {
           const resolvedPath = join(currentDir, specifier);
           // Ensure .js extension
           const fullPath = resolvedPath.endsWith('.js') ? resolvedPath : resolvedPath + '.js';
+          reExports.push(fullPath);
+        }
+      }
+    }
+  }
+
+  return reExports;
+}
+
+/**
+ * Find re-export module specifiers in a TypeScript source file.
+ * Handles: export { X } from './foo' and export * from './bar'
+ *
+ * @param sourceFile - Already parsed TypeScript source file
+ * @param currentFile - Path to the current file (for resolving relative paths)
+ * @returns Array of resolved file paths to process
+ */
+function findTypeScriptReExports(sourceFile: ts.SourceFile, currentFile: string): string[] {
+  const reExports: string[] = [];
+  const currentDir = dirname(currentFile);
+
+  for (const stmt of sourceFile.statements) {
+    if (ts.isExportDeclaration(stmt) && stmt.moduleSpecifier) {
+      if (ts.isStringLiteral(stmt.moduleSpecifier)) {
+        const specifier = stmt.moduleSpecifier.text;
+        // Only process relative imports
+        if (specifier.startsWith('./') || specifier.startsWith('../')) {
+          // Resolve the path - TypeScript specifiers may or may not have extension
+          const resolvedPath = join(currentDir, specifier);
+
+          // Try to resolve to a TypeScript file
+          // Specifier might be './foo', './foo.js', or './foo.ts'
+          let fullPath: string;
+          if (resolvedPath.endsWith('.ts')) {
+            fullPath = resolvedPath;
+          } else if (resolvedPath.endsWith('.js')) {
+            // Convert .js to .ts for source files
+            fullPath = resolvedPath.slice(0, -3) + '.ts';
+          } else {
+            // No extension - add .ts
+            fullPath = resolvedPath + '.ts';
+          }
+
           reExports.push(fullPath);
         }
       }

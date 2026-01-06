@@ -181,6 +181,85 @@ describe('npm extraction', () => {
       // Should return empty resources, not error
     });
   });
+
+  // ===========================================================================
+  // Orchestrator behavior (WP 1.5)
+  // ===========================================================================
+
+  describe('orchestrator behavior', () => {
+    const fixturePath = resolve(FIXTURES, 'simple-decorated');
+
+    it('uses TypeScript source when preferSource is true (default)', async () => {
+      const result = await analyzePackage(fixturePath, { preferSource: true });
+
+      expect(result.confidence).toBe('high');
+      expect(result.value.resources).toHaveLength(1);
+      // TypeScript path uses 'typescript' format in source evidence
+      expect(result.value.resources[0]!.source.format).toBe('typescript');
+    });
+
+    it('uses ES2022 when preferSource is false', async () => {
+      const result = await analyzePackage(fixturePath, { preferSource: false });
+
+      expect(result.confidence).toBe('high');
+      expect(result.value.resources).toHaveLength(1);
+      // ES2022 path uses 'javascript' format in source evidence
+      expect(result.value.resources[0]!.source.format).toBe('javascript');
+    });
+
+    it('both strategies find the same resource', async () => {
+      const tsResult = await analyzePackage(fixturePath, { preferSource: true });
+      const es2022Result = await analyzePackage(fixturePath, { preferSource: false });
+
+      // Both should find the tooltip resource
+      expect(tsResult.value.resources).toHaveLength(1);
+      expect(es2022Result.value.resources).toHaveLength(1);
+
+      const tsTooltip = tsResult.value.resources[0]!;
+      const es2022Tooltip = es2022Result.value.resources[0]!;
+
+      // Same resource identity
+      expect(tsTooltip.name).toBe(es2022Tooltip.name);
+      expect(tsTooltip.className).toBe(es2022Tooltip.className);
+      expect(tsTooltip.kind).toBe(es2022Tooltip.kind);
+
+      // Same bindables discovered
+      expect(tsTooltip.bindables.length).toBe(es2022Tooltip.bindables.length);
+    });
+
+    it('deduplicates resources by className when strategies overlap', async () => {
+      // When both strategies run and find the same class,
+      // the orchestrator should deduplicate to avoid duplicates
+      const result = await analyzePackage(fixturePath);
+
+      // Should have exactly 1 tooltip, not 2
+      expect(result.value.resources).toHaveLength(1);
+      expect(result.value.resources[0]!.className).toBe('TooltipCustomAttribute');
+    });
+
+    it('follows re-export chains in TypeScript source', async () => {
+      // The simple-decorated fixture uses re-exports:
+      // index.ts → tooltip.ts
+      // The orchestrator should follow this chain
+      const result = await analyzePackage(fixturePath, { preferSource: true });
+
+      // Should find the tooltip despite it being re-exported
+      expect(result.value.resources).toHaveLength(1);
+      expect(result.value.resources[0]!.name).toBe('tooltip');
+
+      // Source should reference the actual file, not the entry point
+      expect(result.value.resources[0]!.source.file).toContain('tooltip');
+    });
+
+    it('follows re-export chains in ES2022 compiled output', async () => {
+      // Same test for ES2022 path
+      const result = await analyzePackage(fixturePath, { preferSource: false });
+
+      expect(result.value.resources).toHaveLength(1);
+      expect(result.value.resources[0]!.name).toBe('tooltip');
+      expect(result.value.resources[0]!.source.file).toContain('tooltip');
+    });
+  });
 });
 
 // ===========================================================================
