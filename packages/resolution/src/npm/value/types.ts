@@ -400,6 +400,12 @@ export interface ResolutionContext {
   /** Map of file paths to their module scopes */
   readonly fileScopes: ReadonlyMap<NormalizedPath, Scope>;
 
+  /** Export binding map from export-resolver.ts */
+  readonly exportBindings: ExportBindingMap;
+
+  /** Source facts for all files (for import specifier resolution) */
+  readonly sourceFacts: ReadonlyMap<NormalizedPath, SourceFactsLike>;
+
   /** Currently resolving (for cycle detection) */
   readonly resolving: Set<string>;
 
@@ -408,6 +414,37 @@ export interface ResolutionContext {
 
   /** Package root path (for relative path resolution) */
   readonly packagePath: string;
+}
+
+/**
+ * Minimal interface for SourceFacts used by cross-file resolution.
+ * Only needs import information for specifier → path mapping.
+ */
+export interface SourceFactsLike {
+  readonly path: NormalizedPath;
+  readonly imports: readonly ImportFactLike[];
+}
+
+/**
+ * Minimal interface for ImportFact used by cross-file resolution.
+ */
+export type ImportFactLike =
+  | { readonly kind: "namespace"; readonly alias: string; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null }
+  | { readonly kind: "named"; readonly names: readonly { readonly name: string; readonly alias: string | null }[]; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null }
+  | { readonly kind: "default"; readonly alias: string; readonly moduleSpecifier: string; readonly resolvedPath: NormalizedPath | null };
+
+/**
+ * Export binding map type (imported from binding/types.ts).
+ * Map: filePath → (exportName → ResolvedExport)
+ */
+export type ExportBindingMap = ReadonlyMap<NormalizedPath, ReadonlyMap<string, ResolvedExportLike>>;
+
+/**
+ * Minimal interface for ResolvedExport.
+ */
+export interface ResolvedExportLike {
+  readonly definitionPath: NormalizedPath;
+  readonly definitionName: string;
 }
 
 // =============================================================================

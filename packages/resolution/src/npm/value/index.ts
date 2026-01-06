@@ -54,6 +54,12 @@ export type {
   Scope,
   ImportBinding,
   ResolutionContext,
+
+  // Cross-file resolution types
+  SourceFactsLike,
+  ImportFactLike,
+  ExportBindingMap,
+  ResolvedExportLike,
 } from './types.js';
 
 // Re-export type guards
@@ -112,3 +118,13 @@ export {
   isImportBinding,
   resolveInScope,
 } from './scope.js';
+
+// Re-export cross-file resolution functions (Layer 3)
+export {
+  buildResolutionContext,
+  resolveImportsCrossFile,
+  resolveImport,
+  fullyResolve,
+} from './resolve.js';
+
+export type { BuildContextOptions } from './resolve.js';
