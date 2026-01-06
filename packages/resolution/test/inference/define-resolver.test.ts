@@ -28,6 +28,8 @@ function createFacts(code: string, path: NormalizedPath = "/test.ts" as Normaliz
     defineCalls,
     imports: [],
     exports: [],
+    variables: [],
+    functions: [],
     siblingFiles: [],
     templateImports: [],
   };

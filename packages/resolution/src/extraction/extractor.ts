@@ -1,7 +1,7 @@
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { debug } from "@aurelia-ls/compiler";
-import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact, TemplateImportFact } from "./types.js";
+import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact, TemplateImportFact, VariableFact, FunctionFact } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";
 import { extractDefineCalls } from "./define-calls.js";
@@ -95,6 +95,8 @@ export function extractSourceFacts(
   const defineCalls = extractDefineCalls(sf);
   const imports: ImportFact[] = [];
   const exports: ExportFact[] = [];
+  const variables: VariableFact[] = [];
+  const functions: FunctionFact[] = [];
 
   for (const stmt of sf.statements) {
     if (ts.isClassDeclaration(stmt) && stmt.name) {
@@ -129,6 +131,58 @@ export function extractSourceFacts(
         }
       }
     }
+
+    // Handle exported variable declarations: export const Foo = ...
+    if (ts.isVariableStatement(stmt)) {
+      const modifiers = ts.canHaveModifiers(stmt) ? ts.getModifiers(stmt) : undefined;
+      const hasExport = modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
+      if (hasExport) {
+        const varKind = getVariableKind(stmt.declarationList.flags);
+        for (const decl of stmt.declarationList.declarations) {
+          if (ts.isIdentifier(decl.name)) {
+            variables.push({
+              name: decl.name.text,
+              kind: varKind,
+              initializerKind: getInitializerKind(decl.initializer),
+            });
+            // Also add to named exports list
+            const existing = exports.find((e): e is Extract<ExportFact, { kind: "named" }> => e.kind === "named");
+            if (existing) {
+              (existing.names as string[]).push(decl.name.text);
+            } else {
+              exports.push({ kind: "named", names: [decl.name.text] });
+            }
+          }
+        }
+      }
+    }
+
+    // Handle exported function declarations: export function Foo() {}
+    if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+      const modifiers = ts.canHaveModifiers(stmt) ? ts.getModifiers(stmt) : undefined;
+      const hasExport = modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
+      const hasDefault = modifiers?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword);
+      if (hasExport) {
+        const isAsync = modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword) ?? false;
+        const isGenerator = stmt.asteriskToken !== undefined;
+        functions.push({
+          name: stmt.name.text,
+          isAsync,
+          isGenerator,
+        });
+        // Also add to exports list
+        if (hasDefault) {
+          exports.push({ kind: "default", name: stmt.name.text });
+        } else {
+          const existing = exports.find((e): e is Extract<ExportFact, { kind: "named" }> => e.kind === "named");
+          if (existing) {
+            (existing.names as string[]).push(stmt.name.text);
+          } else {
+            exports.push({ kind: "named", names: [stmt.name.text] });
+          }
+        }
+      }
+    }
   }
 
   // Detect sibling files if FileSystemContext is provided
@@ -137,7 +191,7 @@ export function extractSourceFacts(
   // Extract template imports from sibling HTML template (with resolution if program available)
   const templateImports = extractSiblingTemplateImports(siblingFiles, options, program);
 
-  return { path, classes, registrationCalls, defineCalls, imports, exports, siblingFiles, templateImports };
+  return { path, classes, registrationCalls, defineCalls, imports, exports, variables, functions, siblingFiles, templateImports };
 }
 
 /**
@@ -416,4 +470,48 @@ function resolveModulePath(
 
   debug.resolution("resolveModulePath.failed", { specifier });
   return null;
+}
+
+/**
+ * Get the variable kind from declaration list flags.
+ */
+function getVariableKind(flags: ts.NodeFlags): 'const' | 'let' | 'var' {
+  if (flags & ts.NodeFlags.Const) {
+    return 'const';
+  }
+  if (flags & ts.NodeFlags.Let) {
+    return 'let';
+  }
+  return 'var';
+}
+
+/**
+ * Get a hint about what kind of expression initializes a variable.
+ *
+ * This helps downstream analysis understand patterns like:
+ * - `const X = renderer(class Y ...)` → 'call'
+ * - `const X = class Y {}` → 'class'
+ * - `const X = { ... }` → 'object'
+ * - `const X = SomeOther` → 'identifier'
+ */
+function getInitializerKind(
+  initializer: ts.Expression | undefined
+): VariableFact['initializerKind'] {
+  if (!initializer) {
+    return undefined;
+  }
+
+  if (ts.isCallExpression(initializer)) {
+    return 'call';
+  }
+  if (ts.isClassExpression(initializer)) {
+    return 'class';
+  }
+  if (ts.isObjectLiteralExpression(initializer)) {
+    return 'object';
+  }
+  if (ts.isIdentifier(initializer)) {
+    return 'identifier';
+  }
+  return 'other';
 }

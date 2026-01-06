@@ -20,6 +20,22 @@ export interface SourceFacts {
   readonly defineCalls: DefineCallFact[];
 
   /**
+   * Exported variable declarations.
+   *
+   * Captures `export const X = ...`, `export let Y = ...`, etc.
+   * Used by the export resolver to track non-class exports.
+   */
+  readonly variables: VariableFact[];
+
+  /**
+   * Exported function declarations.
+   *
+   * Captures `export function X() {}`, `export async function Y() {}`, etc.
+   * Used by the export resolver to track non-class exports.
+   */
+  readonly functions: FunctionFact[];
+
+  /**
    * Sibling files discovered adjacent to this source file.
    *
    * Populated when FileSystemContext is provided during extraction.
@@ -180,6 +196,34 @@ export interface BindableDefFact {
   readonly mode?: BindingMode;
   readonly primary?: boolean;
   readonly attribute?: string;
+}
+
+/**
+ * Facts about an exported variable declaration.
+ *
+ * Captures `export const X = ...`, `export let Y = ...`, etc.
+ * Used by the export resolver to track non-class exports.
+ */
+export interface VariableFact {
+  readonly name: string;
+  readonly kind: 'const' | 'let' | 'var';
+  /**
+   * Hint about what the variable is initialized to.
+   * Useful for later analysis (e.g., recognizing `const X = renderer(class...)`)
+   */
+  readonly initializerKind?: 'call' | 'class' | 'object' | 'identifier' | 'other';
+}
+
+/**
+ * Facts about an exported function declaration.
+ *
+ * Captures `export function X() {}`, `export async function Y() {}`, etc.
+ * Used by the export resolver to track non-class exports.
+ */
+export interface FunctionFact {
+  readonly name: string;
+  readonly isAsync: boolean;
+  readonly isGenerator: boolean;
 }
 
 /** .register() call site */

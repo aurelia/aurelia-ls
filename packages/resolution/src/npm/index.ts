@@ -885,6 +885,8 @@ function inferResourceFromClass(
     imports: [],
     exports: [],
     defineCalls: [],
+    variables: [],
+    functions: [],
     siblingFiles: [],
     templateImports: [],
   };

@@ -66,18 +66,17 @@ function buildFileExportBindings(
 
   const bindings = new Map<string, ResolvedExport>();
 
-  // 1. Add locally defined classes as exports
-  for (const cls of fileFacts.classes) {
-    // Check if this class is exported
-    const isExported = fileFacts.exports.some(exp => {
-      if (exp.kind === "named" && exp.names.includes(cls.name)) return true;
-      if (exp.kind === "default" && exp.name === cls.name) return true;
+  // Helper to check if a name is exported
+  const isNameExported = (name: string) =>
+    fileFacts.exports.some(exp => {
+      if (exp.kind === "named" && exp.names.includes(name)) return true;
+      if (exp.kind === "default" && exp.name === name) return true;
       return false;
     });
 
-    // Classes with export modifier are implicitly exported
-    // (the extraction phase adds them to exports.named)
-    if (isExported || fileFacts.exports.some(e => e.kind === "named" && e.names.includes(cls.name))) {
+  // 1. Add locally defined classes as exports
+  for (const cls of fileFacts.classes) {
+    if (isNameExported(cls.name)) {
       bindings.set(cls.name, {
         definitionPath: filePath,
         definitionName: cls.name,
@@ -85,14 +84,39 @@ function buildFileExportBindings(
     }
   }
 
-  // 2. Process explicit exports
+  // 2. Add locally defined variables as exports (e.g., `export const Foo = ...`)
+  for (const variable of fileFacts.variables) {
+    if (isNameExported(variable.name)) {
+      bindings.set(variable.name, {
+        definitionPath: filePath,
+        definitionName: variable.name,
+      });
+    }
+  }
+
+  // 3. Add locally defined functions as exports (e.g., `export function Foo() {}`)
+  for (const func of fileFacts.functions) {
+    if (isNameExported(func.name)) {
+      bindings.set(func.name, {
+        definitionPath: filePath,
+        definitionName: func.name,
+      });
+    }
+  }
+
+  // Helper to check if a name is locally defined (class, variable, or function)
+  const isLocallyDefined = (name: string): boolean =>
+    fileFacts.classes.some(c => c.name === name) ||
+    fileFacts.variables.some(v => v.name === name) ||
+    fileFacts.functions.some(f => f.name === name);
+
+  // 4. Process explicit exports
   for (const exp of fileFacts.exports) {
     if (exp.kind === "named") {
       // Local named exports: export { Foo, Bar }
       for (const name of exp.names) {
-        // Check if it's a locally defined class
-        const localClass = fileFacts.classes.find(c => c.name === name);
-        if (localClass) {
+        // Check if it's a locally defined class, variable, or function
+        if (isLocallyDefined(name)) {
           bindings.set(name, {
             definitionPath: filePath,
             definitionName: name,
@@ -186,9 +210,13 @@ function resolveExportName(
     return null;
   }
 
-  // Check if it's a locally defined class
-  const localClass = fileFacts.classes.find(c => c.name === name);
-  if (localClass) {
+  // Check if it's a locally defined class, variable, or function
+  const isLocallyDefined =
+    fileFacts.classes.some(c => c.name === name) ||
+    fileFacts.variables.some(v => v.name === name) ||
+    fileFacts.functions.some(f => f.name === name);
+
+  if (isLocallyDefined) {
     return {
       definitionPath: filePath,
       definitionName: name,

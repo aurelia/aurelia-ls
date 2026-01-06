@@ -105,8 +105,10 @@ describe('aurelia2-plugins: re-export pattern', () => {
     it('extracts google-map custom element with high confidence', () => {
       expect(result.resources).toHaveLength(1);
       expect(result.confidence).toBe('high');
-      // 19 gaps: 1 entry-point-not-found + 18 unresolved-import (source file discovery issues)
-      expect(result.gaps).toHaveLength(19);
+      // 24 gaps: 1 entry-point-not-found + 23 unresolved-import (cross-package .d.ts resolution)
+      // Note: Variable/function export tracking enables deeper import chain resolution,
+      // which discovers more cross-package gaps but also fixes local file resolution.
+      expect(result.gaps).toHaveLength(24);
 
       const googleMap = result.resources[0]!;
       expect(googleMap.name).toBe('google-map');
