@@ -137,6 +137,14 @@ function collectVariableBindings(
 /**
  * Collect bindings from object destructuring pattern.
  * e.g., `const { a, b: c } = obj`
+ *
+ * Limitations (intentional, documented):
+ * - Nested destructuring not supported: `{ a: { b } }` only binds what's at top level
+ * - Rest patterns not supported: `{ a, ...rest }` - 'rest' is not bound
+ * - Computed property names not supported: `{ [expr]: x }` skipped
+ *
+ * These patterns are rare in Aurelia plugin configuration. If encountered in real
+ * packages, consider extending this function.
  */
 function collectObjectBindingPattern(
   pattern: ts.ObjectBindingPattern,
@@ -161,12 +169,22 @@ function collectObjectBindingPattern(
         bindings.set(boundName, ref(boundName));
       }
     }
+    // Note: Nested patterns (element.name is ObjectBindingPattern/ArrayBindingPattern)
+    // and rest patterns (element.dotDotDotToken) are silently skipped.
   }
 }
 
 /**
  * Collect bindings from array destructuring pattern.
  * e.g., `const [a, b] = arr`
+ *
+ * Limitations (intentional, documented):
+ * - Nested destructuring not supported: `[a, [b, c]]` only binds 'a'
+ * - Rest patterns not supported: `[first, ...rest]` - 'rest' is not bound
+ * - Holes are handled correctly: `[, second]` binds 'second' at index 1
+ *
+ * These patterns are rare in Aurelia plugin configuration. If encountered in real
+ * packages, consider extending this function.
  */
 function collectArrayBindingPattern(
   pattern: ts.ArrayBindingPattern,
@@ -186,6 +204,7 @@ function collectArrayBindingPattern(
         bindings.set(boundName, ref(boundName));
       }
     }
+    // Note: Nested patterns and rest patterns (element.dotDotDotToken) are silently skipped.
   });
 }
 
@@ -352,10 +371,17 @@ export function createChildScope(
  * This enables resolving function-local variables like:
  * ```typescript
  * function createConfig() {
- *   const components = [A, B, C];  // Captured here
+ *   const components = [A, B, C];  // ✓ Captured
  *   return { register(c) { c.register(...components); } };
  * }
  * ```
+ *
+ * Limitations (intentional, documented):
+ * - Variables in if/for/while/try blocks are NOT captured
+ * - This is correct for JavaScript scoping: those vars wouldn't be accessible
+ *   in sibling statements anyway
+ * - If a plugin has patterns like `if (x) { const extras = [...]; ... }`,
+ *   the 'extras' binding is correctly scoped to that block
  *
  * @param body - The statement block to scan
  * @returns Map of variable name to initializer value

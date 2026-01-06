@@ -199,6 +199,11 @@ export async function checkIsAureliaPackage(packagePath: string): Promise<boolea
 
 /**
  * Check if package.json has any Aurelia-related dependencies.
+ *
+ * Note: Intentionally excludes devDependencies. A package with Aurelia only
+ * in devDeps (e.g., test utilities) doesn't ship Aurelia resources to consumers.
+ * We only care about dependencies and peerDependencies which indicate the
+ * package provides Aurelia functionality.
  */
 function hasAureliaDependency(pkgJson: PackageJson): boolean {
   const allDeps = {

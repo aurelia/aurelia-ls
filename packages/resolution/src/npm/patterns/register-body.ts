@@ -111,6 +111,18 @@ export function extractRegisterBodyResources(
 
 /**
  * Extract resources from a statement in the register body.
+ *
+ * Supported statements: expression, return, variable, if, forOf
+ *
+ * Unsupported (produce gaps via 'unknownStatement'):
+ * - try/catch/finally: Rare in registration, and catch blocks may have different
+ *   registration logic. Not worth the complexity to analyze.
+ * - switch: Uncommon pattern for registration. Would need full case analysis.
+ * - while/do-while: Loop count unknown at static analysis time.
+ * - labeled statements, with statements: Exotic patterns not seen in plugins.
+ *
+ * All unsupported statements propagate their gap to the caller, so users know
+ * analysis may be incomplete.
  */
 function extractFromStatement(
   stmt: StatementValue,

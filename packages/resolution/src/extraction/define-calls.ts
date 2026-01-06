@@ -76,6 +76,10 @@ function tryExtractDefineCall(call: ts.CallExpression, sf: ts.SourceFile): Defin
   const secondArg = args[1]!;
 
   // Second argument must be an identifier (the class)
+  // Note: Anonymous class expressions like `CustomElement.define({...}, class { })` are not
+  // supported. This is intentional - such patterns are rare in real-world Aurelia code and
+  // would require synthetic className generation. If needed, users can refactor to use a
+  // named class declaration.
   if (!ts.isIdentifier(secondArg)) {
     return null;
   }

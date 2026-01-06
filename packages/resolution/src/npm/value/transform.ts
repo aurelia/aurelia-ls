@@ -201,6 +201,17 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
     );
   }
 
+  // Optional chaining (foo?.bar, foo?.[x], foo?.())
+  // These introduce runtime conditionality that can't be statically resolved.
+  // TypeScript represents these as regular PropertyAccessExpression/ElementAccessExpression/CallExpression
+  // with a `questionDotToken` property. We check for this and produce a specific gap.
+  if ('questionDotToken' in expr && (expr as { questionDotToken?: unknown }).questionDotToken) {
+    return unknown(
+      gap('optional chain', { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) }, 'Optional chaining introduces runtime conditionality'),
+      span
+    );
+  }
+
   // Default: unknown expression type
   return unknown(
     gap('expression', { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) }, `Unsupported expression type: ${ts.SyntaxKind[expr.kind]}`),
@@ -366,6 +377,19 @@ function transformCallExpression(
   sf: ts.SourceFile,
   span: TextSpan
 ): AnalyzableValue {
+  // Handle dynamic imports: import('./module')
+  // These can't be statically resolved - the module path might be dynamic and
+  // the import is async. Return Unknown with a descriptive gap.
+  if (expr.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    const specifier = expr.arguments[0];
+    const specifierText = specifier ? specifier.getText(sf).slice(0, 50) : '?';
+    return unknown(
+      gap('dynamic import', { kind: 'dynamic-value', expression: `import(${specifierText})` },
+          'Dynamic imports cannot be statically resolved - use static import declarations'),
+      span
+    );
+  }
+
   const callee = transformExpression(expr.expression, sf);
   const args: AnalyzableValue[] = [];
 
