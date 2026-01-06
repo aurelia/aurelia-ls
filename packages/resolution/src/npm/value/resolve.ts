@@ -15,7 +15,10 @@
  */
 
 import type { NormalizedPath } from '@aurelia-ls/compiler';
-import { gap } from '../../extraction/types.js';
+import { debug } from '@aurelia-ls/compiler';
+import { gap, type SourceFacts } from '../../extraction/types.js';
+import { lookupExportBinding } from '../../binding/export-resolver.js';
+import type { ExportBindingMap } from '../../binding/types.js';
 import type {
   AnalyzableValue,
   ImportValue,
@@ -23,8 +26,6 @@ import type {
   Scope,
   StatementValue,
   MethodValue,
-  SourceFactsLike,
-  ExportBindingMap,
 } from './types.js';
 import {
   unknown,
@@ -43,11 +44,11 @@ export interface BuildContextOptions {
   /** Pre-built file scopes (required) */
   readonly fileScopes: ReadonlyMap<NormalizedPath, Scope>;
 
-  /** Export binding map from export-resolver.ts */
+  /** Export binding map from binding/export-resolver.ts */
   readonly exportBindings: ExportBindingMap;
 
   /** Source facts for import specifier resolution */
-  readonly sourceFacts: ReadonlyMap<NormalizedPath, SourceFactsLike>;
+  readonly sourceFacts: ReadonlyMap<NormalizedPath, SourceFacts>;
 
   /** Package root path */
   readonly packagePath: string;
@@ -196,7 +197,11 @@ function resolveValueCrossFile(
       let expanded = value.expanded;
       const resolvedTarget = getResolvedTarget(target);
       if (resolvedTarget?.kind === 'array' && !expanded) {
-        expanded = resolvedTarget.elements;
+        // Resolve each element of the expanded array (they may contain unresolved imports)
+        expanded = resolvedTarget.elements.map(el => resolveValueCrossFile(el, ctx, fromFile));
+      } else if (expanded) {
+        // If already expanded, ensure elements are resolved
+        expanded = expanded.map(el => resolveValueCrossFile(el, ctx, fromFile));
       }
 
       if (target === value.target && expanded === value.expanded) return value;
@@ -347,7 +352,20 @@ export function resolveImport(
 
   try {
     // Step 3: Look up in export bindings to find actual definition
+    debug.resolution('resolveImport.step3', {
+      resolvedPath,
+      exportName: imp.exportName,
+      exportBindingsKeys: [...ctx.exportBindings.keys()].slice(0, 5),
+      hasPathInBindings: ctx.exportBindings.has(resolvedPath),
+    });
+
     const exportBinding = lookupExportBinding(ctx.exportBindings, resolvedPath, imp.exportName);
+
+    debug.resolution('resolveImport.step3.result', {
+      found: !!exportBinding,
+      definitionPath: exportBinding?.definitionPath,
+      definitionName: exportBinding?.definitionName,
+    });
 
     if (!exportBinding) {
       // Export not found in target module
@@ -361,9 +379,16 @@ export function resolveImport(
     }
 
     // Step 4: Get the scope for the definition file
+    debug.resolution('resolveImport.step4', {
+      definitionPath: exportBinding.definitionPath,
+      availableScopes: [...ctx.fileScopes.keys()].slice(0, 5),
+      hasScope: ctx.fileScopes.has(exportBinding.definitionPath),
+    });
+
     const definitionScope = ctx.fileScopes.get(exportBinding.definitionPath);
     if (!definitionScope) {
       // Definition file not analyzed
+      debug.resolution('resolveImport.step4.failed', { definitionPath: exportBinding.definitionPath });
       const reason = gap(
         `import "${imp.exportName}" from "${imp.specifier}"`,
         { kind: 'unresolved-import', path: exportBinding.definitionPath, reason: 'file not analyzed' },
@@ -374,9 +399,16 @@ export function resolveImport(
     }
 
     // Step 5: Look up the definition in the scope
+    debug.resolution('resolveImport.step5', {
+      definitionName: exportBinding.definitionName,
+      availableBindings: [...definitionScope.bindings.keys()],
+      hasBinding: definitionScope.bindings.has(exportBinding.definitionName),
+    });
+
     const definition = definitionScope.bindings.get(exportBinding.definitionName);
     if (!definition) {
       // Definition not found in scope bindings
+      debug.resolution('resolveImport.step5.failed', { definitionName: exportBinding.definitionName });
       const reason = gap(
         `import "${imp.exportName}" from "${imp.specifier}"`,
         { kind: 'unresolved-import', path: exportBinding.definitionPath, reason: `"${exportBinding.definitionName}" not found in scope` },
@@ -442,52 +474,62 @@ function lookupImportPath(
   fromFile: NormalizedPath,
   ctx: ResolutionContext
 ): NormalizedPath | null {
+  debug.resolution('lookupImportPath.start', {
+    specifier,
+    exportName,
+    fromFile,
+    availableFiles: [...ctx.sourceFacts.keys()].slice(0, 5),
+  });
+
   const fileFacts = ctx.sourceFacts.get(fromFile);
-  if (!fileFacts) return null;
+  if (!fileFacts) {
+    debug.resolution('lookupImportPath.noFileFacts', { fromFile });
+    return null;
+  }
+
+  debug.resolution('lookupImportPath.fileFacts', {
+    fromFile,
+    importCount: fileFacts.imports.length,
+    imports: fileFacts.imports.map(i => ({
+      moduleSpecifier: i.moduleSpecifier,
+      kind: i.kind,
+      resolvedPath: i.resolvedPath,
+    })),
+  });
 
   for (const imp of fileFacts.imports) {
     if (imp.moduleSpecifier !== specifier) continue;
-    if (!imp.resolvedPath) continue;
+    if (!imp.resolvedPath) {
+      debug.resolution('lookupImportPath.noResolvedPath', {
+        specifier,
+        moduleSpecifier: imp.moduleSpecifier,
+      });
+      continue;
+    }
 
     // Check if this import provides the export name we need
     if (imp.kind === 'namespace') {
       // Namespace imports provide access to all exports
+      debug.resolution('lookupImportPath.found', { specifier, kind: 'namespace', resolvedPath: imp.resolvedPath });
       return imp.resolvedPath;
     }
     if (imp.kind === 'default' && exportName === 'default') {
+      debug.resolution('lookupImportPath.found', { specifier, kind: 'default', resolvedPath: imp.resolvedPath });
       return imp.resolvedPath;
     }
     if (imp.kind === 'named') {
       // Check if the export name matches any imported name
       for (const name of imp.names) {
         if (name.name === exportName || name.alias === exportName) {
+          debug.resolution('lookupImportPath.found', { specifier, kind: 'named', exportName, resolvedPath: imp.resolvedPath });
           return imp.resolvedPath;
         }
       }
     }
   }
 
+  debug.resolution('lookupImportPath.notFound', { specifier, exportName });
   return null;
-}
-
-/**
- * Look up an export binding from the export binding map.
- */
-function lookupExportBinding(
-  map: ExportBindingMap,
-  filePath: NormalizedPath,
-  exportName: string
-): { definitionPath: NormalizedPath; definitionName: string } | null {
-  const fileBindings = map.get(filePath);
-  if (!fileBindings) return null;
-
-  const binding = fileBindings.get(exportName);
-  if (!binding) return null;
-
-  return {
-    definitionPath: binding.definitionPath,
-    definitionName: binding.definitionName,
-  };
 }
 
 // =============================================================================

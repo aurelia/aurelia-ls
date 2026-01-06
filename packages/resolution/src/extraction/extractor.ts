@@ -341,6 +341,8 @@ function extractExportFact(
 
 /**
  * Resolve a module specifier to a file path.
+ *
+ * Handles .js → .ts mapping for ESM-style imports in TypeScript source.
  */
 function resolveModulePath(
   specifier: string,
@@ -348,16 +350,70 @@ function resolveModulePath(
   program: ts.Program,
   host?: ts.ModuleResolutionHost
 ): NormalizedPath | null {
+  const resolveHost = host ?? ts.sys;
+
+  debug.resolution("resolveModulePath.start", {
+    specifier,
+    containingFile,
+    hasHost: !!host,
+  });
+
   const result = ts.resolveModuleName(
     specifier,
     containingFile,
     program.getCompilerOptions(),
-    host ?? ts.sys,
+    resolveHost,
   );
 
+  debug.resolution("resolveModulePath.result", {
+    specifier,
+    resolvedFileName: result.resolvedModule?.resolvedFileName ?? null,
+  });
+
   if (result.resolvedModule?.resolvedFileName) {
-    return canonicalPath(result.resolvedModule.resolvedFileName);
+    let resolvedPath = result.resolvedModule.resolvedFileName;
+
+    // If resolved to .js but .ts exists, prefer .ts
+    // This handles ESM-style imports like `import from './foo.js'` pointing to `foo.ts`
+    if (resolvedPath.endsWith('.js')) {
+      const tsPath = resolvedPath.slice(0, -3) + '.ts';
+      if (resolveHost.fileExists?.(tsPath)) {
+        debug.resolution("resolveModulePath.jsToTs", { from: resolvedPath, to: tsPath });
+        resolvedPath = tsPath;
+      }
+    }
+
+    const canonicalized = canonicalPath(resolvedPath);
+    debug.resolution("resolveModulePath.success", {
+      specifier,
+      resolvedPath,
+      canonicalized,
+    });
+    return canonicalized;
   }
 
+  // If standard resolution fails, try manual .js → .ts mapping
+  if (specifier.endsWith('.js') && (specifier.startsWith('./') || specifier.startsWith('../'))) {
+    const tsSpecifier = specifier.slice(0, -3) + '.ts';
+    debug.resolution("resolveModulePath.tryTsSpecifier", { tsSpecifier });
+
+    const result2 = ts.resolveModuleName(
+      tsSpecifier,
+      containingFile,
+      program.getCompilerOptions(),
+      resolveHost,
+    );
+
+    debug.resolution("resolveModulePath.tsResult", {
+      tsSpecifier,
+      resolvedFileName: result2.resolvedModule?.resolvedFileName ?? null,
+    });
+
+    if (result2.resolvedModule?.resolvedFileName) {
+      return canonicalPath(result2.resolvedModule.resolvedFileName);
+    }
+  }
+
+  debug.resolution("resolveModulePath.failed", { specifier });
   return null;
 }

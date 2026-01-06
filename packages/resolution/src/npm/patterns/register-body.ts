@@ -20,6 +20,7 @@
  */
 
 import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
+import { debug } from '@aurelia-ls/compiler';
 import type { AnalysisResult, AnalysisGap } from '../../extraction/types.js';
 import { gap, partial, highConfidence } from '../../extraction/types.js';
 import type { ExtractedResource } from '../types.js';
@@ -236,6 +237,13 @@ function extractFromValue(
 ): void {
   // Get the resolved value (follow reference/import chains)
   const resolved = getResolvedValue(value);
+
+  debug.resolution('extractFromValue', {
+    valueKind: value.kind,
+    resolvedKind: resolved.kind,
+    hasResolvedField: value.kind === 'import' ? !!(value as any).resolved : undefined,
+    importDetails: value.kind === 'import' ? { specifier: (value as any).specifier, exportName: (value as any).exportName } : undefined,
+  });
 
   switch (resolved.kind) {
     case 'class':

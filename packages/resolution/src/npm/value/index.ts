@@ -54,13 +54,11 @@ export type {
   Scope,
   ImportBinding,
   ResolutionContext,
-
-  // Cross-file resolution types
-  SourceFactsLike,
-  ImportFactLike,
-  ExportBindingMap,
-  ResolvedExportLike,
 } from './types.js';
+
+// Re-export cross-file resolution types from canonical locations
+export type { ExportBindingMap } from '../../binding/types.js';
+export type { SourceFacts } from '../../extraction/types.js';
 
 // Re-export type guards
 export {

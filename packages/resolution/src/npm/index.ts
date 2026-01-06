@@ -62,12 +62,31 @@ import { checkIsAureliaPackage, scanPackage, getSourceEntryPoint } from './scann
 import { extractFromES2022 } from './decorator-es2022.js';
 
 // Import TypeScript extraction (existing infrastructure)
-import { extractSourceFacts } from '../extraction/extractor.js';
+import { extractSourceFacts, extractAllFacts } from '../extraction/extractor.js';
+import { canonicalPath } from '../util/naming.js';
 import { resolveFromDecorators } from '../inference/decorator-resolver.js';
 import { resolveFromStaticAu } from '../inference/static-au-resolver.js';
 import { resolveFromDefine } from '../inference/define-resolver.js';
 import { resolveFromConventions } from '../inference/convention-resolver.js';
 import type { ResourceCandidate } from '../inference/types.js';
+import type { SourceFacts } from '../extraction/types.js';
+
+// Import export resolver for cross-file resolution
+import { buildExportBindingMap } from '../binding/export-resolver.js';
+
+// Import value model (Layers 1-3) and pattern matching (Layer 4)
+import {
+  buildFileScope,
+  transformModuleExports,
+  buildResolutionContext,
+  fullyResolve,
+  isRegistryShape,
+  getRegisterMethod,
+  getResolvedValue,
+  type Scope,
+  type ClassValue,
+} from './value/index.js';
+import { extractRegisterBodyResources, type RegisterBodyContext } from './patterns/index.js';
 
 // =============================================================================
 // Main API
@@ -84,8 +103,15 @@ import type {
   ExtractedResource,
   ResourceEvidence,
   AnalysisOptions,
+  ExtractedConfiguration as ExtractedConfigurationType,
+  ConfigurationRegistration as ConfigurationRegistrationType,
 } from './types.js';
 import { success, partial, gap, combine } from './types.js';
+import type { NormalizedPath } from '@aurelia-ls/compiler';
+
+// Local type aliases to avoid duplicate identifier issues with re-exports
+type ExtractedConfigurationLocal = ExtractedConfigurationType;
+type ConfigurationRegistrationLocal = ConfigurationRegistrationType;
 
 /**
  * Analyze an npm package to extract Aurelia resource semantics.
@@ -133,6 +159,9 @@ export async function analyzePackage(
     ? ['typescript', 'es2022']
     : ['es2022', 'typescript'];
 
+  // Collect configurations from extraction strategies
+  const allConfigurations: ExtractedConfigurationLocal[] = [];
+
   for (const strategy of strategies) {
     if (strategy === 'typescript' && hasTypeScript) {
       const tsResult = await extractFromTypeScriptSource(pkgInfo, packagePath);
@@ -142,6 +171,7 @@ export async function analyzePackage(
           primaryStrategyUsed = 'typescript';
         }
       }
+      allConfigurations.push(...tsResult.configurations);
       gaps.push(...tsResult.gaps);
     } else if (strategy === 'es2022' && hasJavaScript) {
       const es2022Result = await extractFromCompiledJS(pkgInfo, packagePath);
@@ -151,6 +181,7 @@ export async function analyzePackage(
           primaryStrategyUsed = 'es2022';
         }
       }
+      allConfigurations.push(...es2022Result.configurations);
       gaps.push(...es2022Result.gaps);
     }
 
@@ -169,7 +200,7 @@ export async function analyzePackage(
     packageName: pkgInfo.name,
     version: pkgInfo.version,
     resources: allResources,
-    configurations: [], // TODO: Phase 2 - configuration analysis
+    configurations: allConfigurations,
   };
 
   return partial(analysis, confidence, gaps);
@@ -321,32 +352,30 @@ export async function isAureliaPackage(packagePath: string): Promise<boolean> {
 // =============================================================================
 
 import type { PackageInfo } from './scanner.js';
-import type { NormalizedPath } from '@aurelia-ls/compiler';
 
 interface ExtractionResult {
   resources: ExtractedResource[];
+  configurations: ExtractedConfigurationLocal[];
   gaps: AnalysisGap[];
 }
 
 /**
  * Extract resources from TypeScript source files.
- * Uses the existing extraction/inference infrastructure.
+ * Uses full TypeScript Program for proper cross-file module resolution.
  *
- * Follows re-exports to discover all resource classes in the package.
- *
- * TODO: Future enhancement - integrate with `binding/export-resolver.ts` infrastructure
- * which provides more sophisticated cross-file resolution including cycle detection,
- * alias handling, and integration with the full TypeScript program. This would enable
- * richer analysis but requires creating a Program across all package files.
- * See npm-analysis-design.md "Option B" for details.
+ * This is the "Option B" approach from npm-analysis-design.md:
+ * 1. Discover all TypeScript files starting from entry point
+ * 2. Create ONE ts.Program containing all files
+ * 3. Use extractAllFacts() for proper import resolution
+ * 4. Run inference and configuration analysis with fully resolved facts
  */
 async function extractFromTypeScriptSource(
   pkgInfo: PackageInfo,
   packagePath: string
 ): Promise<ExtractionResult> {
   const resources: ExtractedResource[] = [];
+  const configurations: ExtractedConfigurationLocal[] = [];
   const gaps: AnalysisGap[] = [];
-  const processedFiles = new Set<string>();
 
   if (!pkgInfo.sourceDir) {
     gaps.push(gap(
@@ -354,7 +383,7 @@ async function extractFromTypeScriptSource(
       { kind: 'no-source', hasTypes: false },
       'Package does not have TypeScript source available.'
     ));
-    return { resources, gaps };
+    return { resources, configurations, gaps };
   }
 
   // Find TypeScript entry point
@@ -365,24 +394,94 @@ async function extractFromTypeScriptSource(
       { kind: 'entry-point-not-found', specifier: 'index.ts', resolvedPath: pkgInfo.sourceDir },
       'Could not find source entry point (index.ts).'
     ));
-    return { resources, gaps };
+    return { resources, configurations, gaps };
   }
 
-  // Queue of files to process (start with entry point)
-  const filesToProcess: string[] = [sourceEntryPoint];
+  // Phase 1: Discover all TypeScript files in the package
+  const discoveredFiles = await discoverPackageFiles(sourceEntryPoint, gaps);
+  if (discoveredFiles.length === 0) {
+    return { resources, configurations, gaps };
+  }
 
-  // Process files, following re-exports
+  // Phase 2: Create full TypeScript program with all discovered files
+  const { program, host } = createPackageProgram(discoveredFiles);
+
+  // Phase 3: Extract facts using existing infrastructure (with proper resolution!)
+  // Pass the custom host for .js → .ts module resolution
+  const allFacts = extractAllFacts(program, { moduleResolutionHost: host });
+
+  // Phase 4: Run inference on each file's facts
+  for (const [, facts] of allFacts) {
+    const decoratorResult = resolveFromDecorators(facts);
+    const staticAuResult = resolveFromStaticAu(facts);
+    const defineResult = resolveFromDefine(facts);
+    const conventionResult = resolveFromConventions(facts);
+
+    // Combine results - flatten arrays of candidates
+    const combined = combine(
+      [decoratorResult, staticAuResult, defineResult, conventionResult],
+      (arrays) => arrays.flat()
+    );
+    gaps.push(...combined.gaps);
+
+    // Convert ResourceCandidate to ExtractedResource
+    for (const candidate of combined.value) {
+      const extracted = candidateToExtractedResource(candidate, packagePath);
+      if (extracted) {
+        // Avoid duplicates
+        if (!resources.some(r => r.className === extracted.className)) {
+          resources.push(extracted);
+        }
+      }
+    }
+  }
+
+  // Phase 5: Analyze configurations using the value model
+  // Build source file map from program (use same canonicalization as extractAllFacts)
+  const allSourceFiles = new Map<NormalizedPath, ts.SourceFile>();
+  for (const sf of program.getSourceFiles()) {
+    if (!sf.isDeclarationFile) {
+      const normalizedPath = canonicalPath(sf.fileName);
+      allSourceFiles.set(normalizedPath, sf);
+    }
+  }
+
+  const configResult = analyzeConfigurations(
+    allFacts,
+    allSourceFiles,
+    resources,
+    packagePath
+  );
+  configurations.push(...configResult.configurations);
+  gaps.push(...configResult.gaps);
+
+  // Merge configuration-discovered resources into the main list
+  mergeResources(resources, configResult.resources);
+
+  return { resources, configurations, gaps };
+}
+
+/**
+ * Discover all TypeScript files in a package starting from the entry point.
+ * Walks import/re-export chains to find all reachable files.
+ */
+async function discoverPackageFiles(
+  entryPoint: string,
+  gaps: AnalysisGap[]
+): Promise<string[]> {
+  const discoveredFiles: string[] = [];
+  const processedFiles = new Set<string>();
+  const filesToProcess: string[] = [entryPoint];
+
   while (filesToProcess.length > 0) {
     const filePath = filesToProcess.pop()!;
 
-    // Skip already processed files
     if (processedFiles.has(filePath)) {
       continue;
     }
     processedFiles.add(filePath);
 
     try {
-      // Read and parse the source file
       const sourceText = await readFile(filePath, 'utf-8');
       const sourceFile = ts.createSourceFile(
         filePath,
@@ -392,47 +491,17 @@ async function extractFromTypeScriptSource(
         ts.ScriptKind.TS
       );
 
-      // Create a minimal program for type checking this file
-      const compilerHost = createMinimalCompilerHost(sourceFile, filePath);
-      const program = ts.createProgram([filePath], {
-        target: ts.ScriptTarget.Latest,
-        module: ts.ModuleKind.ESNext,
-      }, compilerHost);
-      const checker = program.getTypeChecker();
+      discoveredFiles.push(filePath);
 
-      // Extract facts using existing infrastructure
-      const facts = extractSourceFacts(sourceFile, checker, program);
-
-      // Run inference resolvers
-      const decoratorResult = resolveFromDecorators(facts);
-      const staticAuResult = resolveFromStaticAu(facts);
-      const defineResult = resolveFromDefine(facts);
-      const conventionResult = resolveFromConventions(facts);
-
-      // Combine results - flatten arrays of candidates
-      const combined = combine(
-        [decoratorResult, staticAuResult, defineResult, conventionResult],
-        (arrays) => arrays.flat()
-      );
-      gaps.push(...combined.gaps);
-
-      // Convert ResourceCandidate to ExtractedResource
-      for (const candidate of combined.value) {
-        const extracted = candidateToExtractedResource(candidate, packagePath);
-        if (extracted) {
-          resources.push(extracted);
-        }
-      }
-
-      // Find re-exports and add those files to the queue
-      const reExportPaths = findTypeScriptImportsAndReExports(sourceFile, filePath);
-      for (const reExportPath of reExportPaths) {
-        if (!processedFiles.has(reExportPath)) {
-          filesToProcess.push(reExportPath);
+      // Find imports/re-exports and add to queue
+      const referencedPaths = findTypeScriptImportsAndReExports(sourceFile, filePath);
+      for (const referencedPath of referencedPaths) {
+        if (!processedFiles.has(referencedPath)) {
+          filesToProcess.push(referencedPath);
         }
       }
     } catch (err) {
-      // File might not exist (bad re-export) or parse error
+      // File might not exist (bad import/re-export) or parse error
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
         gaps.push(gap(
           `file "${basename(filePath)}"`,
@@ -443,7 +512,77 @@ async function extractFromTypeScriptSource(
     }
   }
 
-  return { resources, gaps };
+  return discoveredFiles;
+}
+
+/**
+ * Create a TypeScript program containing all the specified files.
+ * Uses a custom compiler host that maps .js imports to .ts files.
+ *
+ * Returns both the program and the host so the host can be reused
+ * for module resolution during fact extraction.
+ */
+function createPackageProgram(files: string[]): { program: ts.Program; host: ts.CompilerHost } {
+  const compilerOptions: ts.CompilerOptions = {
+    target: ts.ScriptTarget.Latest,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    allowJs: false,
+    checkJs: false,
+    noEmit: true,
+    skipLibCheck: true,
+  };
+
+  // Create base compiler host
+  const baseHost = ts.createCompilerHost(compilerOptions);
+
+  // Create custom host that maps .js → .ts
+  const host: ts.CompilerHost = {
+    ...baseHost,
+    fileExists: (fileName: string) => {
+      // First check the original file
+      if (baseHost.fileExists(fileName)) {
+        return true;
+      }
+      // If it's a .js file, check for .ts equivalent
+      if (fileName.endsWith('.js')) {
+        const tsFileName = fileName.slice(0, -3) + '.ts';
+        if (baseHost.fileExists(tsFileName)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+      // First try the original file
+      let sf = baseHost.getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+      if (sf) return sf;
+
+      // If it's a .js file, try .ts equivalent
+      if (fileName.endsWith('.js')) {
+        const tsFileName = fileName.slice(0, -3) + '.ts';
+        sf = baseHost.getSourceFile(tsFileName, languageVersion, onError, shouldCreateNewSourceFile);
+        if (sf) return sf;
+      }
+      return undefined;
+    },
+    readFile: (fileName: string) => {
+      // First try the original file
+      let content = baseHost.readFile(fileName);
+      if (content !== undefined) return content;
+
+      // If it's a .js file, try .ts equivalent
+      if (fileName.endsWith('.js')) {
+        const tsFileName = fileName.slice(0, -3) + '.ts';
+        content = baseHost.readFile(tsFileName);
+        if (content !== undefined) return content;
+      }
+      return undefined;
+    },
+  };
+
+  const program = ts.createProgram(files, compilerOptions, host);
+  return { program, host };
 }
 
 /**
@@ -466,7 +605,7 @@ async function extractFromCompiledJS(
       { kind: 'no-entry-points' },
       'No JavaScript entry points found in package.'
     ));
-    return { resources, gaps };
+    return { resources, configurations: [], gaps };
   }
 
   // Queue of files to process (start with entry points)
@@ -510,7 +649,229 @@ async function extractFromCompiledJS(
     }
   }
 
-  return { resources, gaps };
+  // TODO: Phase 2 - ES2022 configuration analysis
+  return { resources, configurations: [], gaps };
+}
+
+// =============================================================================
+// Configuration Analysis (Phase 2)
+// =============================================================================
+
+interface ConfigurationAnalysisResult {
+  configurations: ExtractedConfigurationLocal[];
+  resources: ExtractedResource[];
+  gaps: AnalysisGap[];
+}
+
+/**
+ * Analyze exported values for IRegistry configuration pattern.
+ *
+ * Uses the 4-layer value model:
+ * - Layer 1: AST → AnalyzableValue (transform)
+ * - Layer 2: Scope building and local resolution
+ * - Layer 3: Cross-file import resolution
+ * - Layer 4: Pattern matching (IRegistry detection, register body analysis)
+ *
+ * @param allFacts - SourceFacts for all processed files
+ * @param allSourceFiles - Parsed TypeScript source files
+ * @param existingResources - Already-extracted resources (for resolveClass callback)
+ * @param packagePath - Package root path
+ */
+function analyzeConfigurations(
+  allFacts: ReadonlyMap<NormalizedPath, SourceFacts>,
+  allSourceFiles: ReadonlyMap<NormalizedPath, ts.SourceFile>,
+  existingResources: ExtractedResource[],
+  packagePath: string
+): ConfigurationAnalysisResult {
+  const configurations: ExtractedConfigurationLocal[] = [];
+  const resources: ExtractedResource[] = [];
+  const gaps: AnalysisGap[] = [];
+
+  // Skip if no files to analyze
+  if (allSourceFiles.size === 0) {
+    return { configurations, resources, gaps };
+  }
+
+  // Step 1: Build file scopes (Layer 2)
+  const fileScopes = new Map<NormalizedPath, Scope>();
+  for (const [filePath, sourceFile] of allSourceFiles) {
+    const scope = buildFileScope(sourceFile, filePath);
+    fileScopes.set(filePath, scope);
+  }
+
+  // Step 2: Build export binding map for cross-file resolution
+  const exportBindings = buildExportBindingMap(allFacts);
+
+  // Step 3: Build resolution context (Layer 3)
+  const resolutionContext = buildResolutionContext({
+    fileScopes,
+    exportBindings,
+    sourceFacts: allFacts,
+    packagePath,
+  });
+
+  // Step 4: Create resolveClass callback for register body analysis
+  const resolveClass = createClassResolver(existingResources, allFacts, packagePath);
+
+  // Step 5: Find and analyze IRegistry exports
+  for (const [filePath, sourceFile] of allSourceFiles) {
+    const scope = fileScopes.get(filePath);
+    if (!scope) continue;
+
+    const facts = allFacts.get(filePath);
+    if (!facts) continue;
+
+    // Transform exported values using Layer 1
+    const exports = transformModuleExports(sourceFile);
+
+    // Check each export for IRegistry pattern
+    for (const [exportName, exportValue] of exports) {
+      // Resolve through Layers 2-3
+      const resolved = fullyResolve(exportValue, scope, resolutionContext);
+
+      // Check if resolved value is IRegistry-shaped
+      if (!isRegistryShape(resolved)) {
+        continue;
+      }
+
+      // Found an IRegistry! Extract resources from register body.
+      const registerMethod = getRegisterMethod(resolved);
+      if (!registerMethod) {
+        gaps.push(gap(
+          `configuration "${exportName}"`,
+          { kind: 'parse-error', message: 'IRegistry missing register method' },
+          `Export "${exportName}" looks like IRegistry but has no register() method`
+        ));
+        continue;
+      }
+
+      // Create context for register body analysis
+      const registerBodyContext: RegisterBodyContext = {
+        resolveClass,
+        packagePath,
+      };
+
+      // Extract resources from register body (Layer 4)
+      const bodyResult = extractRegisterBodyResources(registerMethod, registerBodyContext);
+      gaps.push(...bodyResult.gaps);
+
+      // Build configuration registration list
+      const registers: ConfigurationRegistrationLocal[] = [];
+      for (const resource of bodyResult.value) {
+        registers.push({
+          resource,
+          identifier: resource.className,
+          resolved: true,
+        });
+
+        // Add resource to discovered resources if not already in existing
+        if (!existingResources.some(r => r.className === resource.className)) {
+          resources.push(resource);
+        }
+      }
+
+      // Create configuration entry
+      const config: ExtractedConfigurationLocal = {
+        exportName,
+        registers,
+        isFactory: false, // TODO: Detect factory functions
+        source: {
+          file: relative(packagePath, filePath),
+          format: 'typescript',
+        },
+      };
+      configurations.push(config);
+    }
+  }
+
+  // Add gaps from cross-file resolution
+  gaps.push(...resolutionContext.gaps);
+
+  return { configurations, resources, gaps };
+}
+
+/**
+ * Create a resolveClass callback for RegisterBodyContext.
+ *
+ * This callback maps ClassValue to ExtractedResource by:
+ * 1. Looking up in already-extracted resources by className
+ * 2. Running inference on class facts if not found
+ */
+function createClassResolver(
+  existingResources: ExtractedResource[],
+  allFacts: ReadonlyMap<NormalizedPath, SourceFacts>,
+  packagePath: string
+): (classVal: ClassValue) => ExtractedResource | null {
+  // Build lookup map by className
+  const resourceMap = new Map<string, ExtractedResource>();
+  for (const resource of existingResources) {
+    resourceMap.set(resource.className, resource);
+  }
+
+  return (classVal: ClassValue): ExtractedResource | null => {
+    // First check existing resources
+    const existing = resourceMap.get(classVal.className);
+    if (existing) {
+      return existing;
+    }
+
+    // Try to infer from class facts
+    if (classVal.filePath) {
+      const facts = allFacts.get(classVal.filePath);
+      if (facts) {
+        const classFacts = facts.classes.find(c => c.name === classVal.className);
+        if (classFacts) {
+          // Run inference to determine if this is a resource
+          const candidate = inferResourceFromClass(classFacts, classVal.filePath, packagePath);
+          if (candidate) {
+            // Cache for future lookups
+            resourceMap.set(classVal.className, candidate);
+            return candidate;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+}
+
+/**
+ * Infer resource from class facts using decorator/static-au/convention resolvers.
+ */
+function inferResourceFromClass(
+  classFacts: SourceFacts['classes'][0],
+  filePath: NormalizedPath,
+  packagePath: string
+): ExtractedResource | null {
+  // Build minimal SourceFacts for this single class
+  const minimalFacts: SourceFacts = {
+    path: filePath,
+    classes: [classFacts],
+    registrationCalls: [],
+    imports: [],
+    exports: [],
+    defineCalls: [],
+    siblingFiles: [],
+    templateImports: [],
+  };
+
+  // Run inference resolvers
+  const decoratorResult = resolveFromDecorators(minimalFacts);
+  const staticAuResult = resolveFromStaticAu(minimalFacts);
+  const conventionResult = resolveFromConventions(minimalFacts);
+
+  // Combine and get first candidate
+  const combined = combine(
+    [decoratorResult, staticAuResult, conventionResult],
+    (arrays) => arrays.flat()
+  );
+
+  if (combined.value.length > 0) {
+    return candidateToExtractedResource(combined.value[0]!, packagePath);
+  }
+
+  return null;
 }
 
 /**
@@ -735,26 +1096,6 @@ function candidateToExtractedResource(
   };
 }
 
-/**
- * Create a minimal compiler host for single-file analysis.
- */
-function createMinimalCompilerHost(
-  sourceFile: ts.SourceFile,
-  fileName: string
-): ts.CompilerHost {
-  return {
-    getSourceFile: (name) => name === fileName ? sourceFile : undefined,
-    getDefaultLibFileName: () => 'lib.d.ts',
-    writeFile: () => {},
-    getCurrentDirectory: () => '',
-    getCanonicalFileName: (f) => f,
-    useCaseSensitiveFileNames: () => true,
-    getNewLine: () => '\n',
-    fileExists: (f) => f === fileName,
-    readFile: () => undefined,
-  };
-}
-
 // =============================================================================
 // Inspection API
 // =============================================================================
@@ -875,7 +1216,7 @@ function transformBindable(bindable: ExtractedBindable): InspectedBindable {
 /**
  * Transform an ExtractedConfiguration to InspectedConfiguration.
  */
-function transformConfiguration(config: ExtractedConfiguration): InspectedConfiguration {
+function transformConfiguration(config: ExtractedConfigurationLocal): InspectedConfiguration {
   return {
     exportName: config.exportName,
     isFactory: config.isFactory,
@@ -960,7 +1301,7 @@ function formatGapReason(reason: GapReason): string {
  */
 function buildInspectionGraph(
   resources: ExtractedResource[],
-  configurations: ExtractedConfiguration[]
+  configurations: ExtractedConfigurationLocal[]
 ): InspectionGraph {
   const nodes = resources.map(r => r.className);
   const edges: InspectionEdge[] = [];
@@ -1020,5 +1361,4 @@ function collectAnalyzedPaths(resources: ExtractedResource[]): string[] {
   return [...paths].sort();
 }
 
-import type { GapReason } from './types.js';
-import type { ExtractedBindable, ExtractedConfiguration } from './types.js';
+import type { GapReason, ExtractedBindable } from './types.js';
