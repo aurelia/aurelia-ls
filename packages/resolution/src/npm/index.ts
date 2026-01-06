@@ -45,8 +45,13 @@ export {
   gap,
 } from './types.js';
 
+// Re-export scanner types and functions
+export type { PackageInfo, EntryPoint } from './scanner.js';
+export { scanPackage, getSourceEntryPoint } from './scanner.js';
+import { checkIsAureliaPackage } from './scanner.js';
+
 // =============================================================================
-// Main API (to be implemented)
+// Main API
 // =============================================================================
 
 import type {
@@ -89,12 +94,11 @@ export async function analyzePackages(
  * Check if a package likely contains Aurelia resources.
  * Fast heuristic check before full analysis.
  *
+ * Looks for 'aurelia' or '@aurelia/*' in dependencies/peerDependencies.
+ *
  * @param packagePath - Path to package root
  * @returns true if package appears to be Aurelia-related
  */
-export async function isAureliaPackage(
-  _packagePath: string
-): Promise<boolean> {
-  // TODO: Check package.json keywords, dependencies, name patterns
-  throw new Error('isAureliaPackage not yet implemented');
+export async function isAureliaPackage(packagePath: string): Promise<boolean> {
+  return checkIsAureliaPackage(packagePath);
 }

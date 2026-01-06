@@ -69,9 +69,25 @@ export interface GapLocation {
 /**
  * Structured reasons why analysis failed.
  * Each kind enables targeted diagnostic messages.
+ *
+ * Categories:
+ * - Package structure: Issues with the npm package itself (package.json, entry points)
+ * - Import/resolution: Issues resolving imports within code
+ * - Dynamic patterns: Code that can't be statically analyzed
+ * - Control flow: Complex control flow in registration code
+ * - Package format: Limitations of the compiled output format
  */
 export type GapReason =
-  // Import/resolution issues
+  // Package structure issues (scanner domain)
+  // These are about the package itself, not the code within it
+  | { kind: 'package-not-found'; packagePath: string }
+  | { kind: 'invalid-package-json'; path: string; parseError: string }
+  | { kind: 'missing-package-field'; field: 'name' | 'version' | 'main' | 'exports' | string }
+  | { kind: 'entry-point-not-found'; specifier: string; resolvedPath: string }
+  | { kind: 'no-entry-points' }
+  | { kind: 'complex-exports'; reason: string }
+
+  // Import/resolution issues (within code)
   | { kind: 'unresolved-import'; path: string; reason: string }
   | { kind: 'circular-import'; cycle: string[] }
   | { kind: 'external-package'; packageName: string }
