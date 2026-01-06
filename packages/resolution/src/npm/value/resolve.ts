@@ -205,9 +205,11 @@ function resolveValueCrossFile(
       }
 
       if (target === value.target && expanded === value.expanded) return value;
-      const result = { ...value, target };
-      if (expanded) (result as { expanded: readonly AnalyzableValue[] }).expanded = expanded;
-      return result;
+      return {
+        ...value,
+        target,
+        ...(expanded !== undefined && { expanded }),
+      };
     }
 
     case 'new': {

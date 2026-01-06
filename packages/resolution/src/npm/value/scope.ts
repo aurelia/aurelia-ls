@@ -830,14 +830,11 @@ function resolveSpread(
     return value;
   }
 
-  const result: SpreadValue = {
+  return {
     ...value,
     target,
+    ...(expanded !== undefined && { expanded }),
   };
-  if (expanded) {
-    (result as { expanded: readonly AnalyzableValue[] }).expanded = expanded;
-  }
-  return result;
 }
 
 /**

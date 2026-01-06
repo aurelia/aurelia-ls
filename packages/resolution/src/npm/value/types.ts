@@ -555,10 +555,14 @@ export function importVal(
   resolved?: AnalyzableValue,
   span?: TextSpan
 ): ImportValue {
-  const result: ImportValue = { kind: 'import', specifier, exportName, span };
-  if (resolvedPath) (result as { resolvedPath: NormalizedPath }).resolvedPath = resolvedPath;
-  if (resolved) (result as { resolved: AnalyzableValue }).resolved = resolved;
-  return result;
+  return {
+    kind: 'import',
+    specifier,
+    exportName,
+    span,
+    ...(resolvedPath !== undefined && { resolvedPath }),
+    ...(resolved !== undefined && { resolved }),
+  };
 }
 
 /** Create a property access value */
