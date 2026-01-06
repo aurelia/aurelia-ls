@@ -291,6 +291,73 @@ describe('npm extraction', () => {
   });
 
   // ===========================================================================
+  // Phase 3: Function-local spread targets (WP 3.2)
+  // ===========================================================================
+
+  describe('local-spread fixture', () => {
+    const fixturePath = resolve(FIXTURES, 'local-spread');
+
+    it('resolves function-local array spread', async () => {
+      // This is the key WP 3.2 test case:
+      // The `components` array is defined INSIDE the factory function,
+      // not at module level. The enhancement in scope.ts collects block
+      // bindings to make this resolvable.
+      const result = await analyzePackage(fixturePath);
+
+      expect(result.confidence).toBeOneOf(['exact', 'high']);
+      expect(result.value.resources).toHaveLength(3);
+
+      const names = result.value.resources.map(r => r.name).sort();
+      expect(names).toEqual(['badge', 'card', 'icon']);
+    });
+
+    it('marks configuration as factory-created', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      expect(result.value.configurations).toHaveLength(1);
+      expect(result.value.configurations[0]!.exportName).toBe('PluginConfiguration');
+      expect(result.value.configurations[0]!.isFactory).toBe(true);
+    });
+
+    it('extracts resources with correct metadata', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      // Custom elements
+      const card = result.value.resources.find(r => r.name === 'card');
+      expect(card).toBeDefined();
+      expect(card!.kind).toBe('custom-element');
+      expect(card!.className).toBe('CardCustomElement');
+      expect(card!.bindables).toHaveLength(3);
+      expect(card!.bindables.map(b => b.name).sort()).toEqual(['subtitle', 'title', 'variant']);
+
+      const badge = result.value.resources.find(r => r.name === 'badge');
+      expect(badge).toBeDefined();
+      expect(badge!.kind).toBe('custom-element');
+      expect(badge!.className).toBe('BadgeCustomElement');
+      expect(badge!.bindables).toHaveLength(2);
+      const primaryBadge = badge!.bindables.find(b => b.primary);
+      expect(primaryBadge?.name).toBe('value');
+
+      // Custom attribute
+      const icon = result.value.resources.find(r => r.name === 'icon');
+      expect(icon).toBeDefined();
+      expect(icon!.kind).toBe('custom-attribute');
+      expect(icon!.className).toBe('IconCustomAttribute');
+      expect(icon!.bindables).toHaveLength(2);
+      const primaryIcon = icon!.bindables.find(b => b.primary);
+      expect(primaryIcon?.name).toBe('name');
+    });
+
+    it('links configuration to all registered resources', async () => {
+      const result = await analyzePackage(fixturePath);
+
+      const config = result.value.configurations[0]!;
+      expect(config.registers).toHaveLength(3);
+      expect(config.registers.every(r => r.resolved)).toBe(true);
+    });
+  });
+
+  // ===========================================================================
   // Graceful degradation
   // ===========================================================================
 

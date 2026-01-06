@@ -339,6 +339,97 @@ export function createChildScope(
 }
 
 // =============================================================================
+// Block Binding Collection (WP 3.2)
+// =============================================================================
+
+/**
+ * Collect variable bindings from a block of statements.
+ *
+ * This is a shallow collection - it walks the top-level statements and
+ * extracts variable declarations. It does NOT recurse into nested blocks
+ * (if/for/etc.) because those create their own scopes.
+ *
+ * This enables resolving function-local variables like:
+ * ```typescript
+ * function createConfig() {
+ *   const components = [A, B, C];  // Captured here
+ *   return { register(c) { c.register(...components); } };
+ * }
+ * ```
+ *
+ * @param body - The statement block to scan
+ * @returns Map of variable name to initializer value
+ */
+function collectBlockBindings(body: readonly StatementValue[]): Map<string, AnalyzableValue> {
+  const bindings = new Map<string, AnalyzableValue>();
+
+  for (const stmt of body) {
+    if (stmt.kind === 'variable') {
+      for (const decl of stmt.declarations) {
+        if (decl.init) {
+          bindings.set(decl.name, decl.init);
+        } else {
+          // Declaration without initializer - treat as undefined
+          bindings.set(decl.name, { kind: 'literal', value: undefined });
+        }
+      }
+    }
+    // Note: We intentionally don't recurse into if/for blocks
+    // Those variables are scoped to those blocks and wouldn't be
+    // accessible in sibling statements anyway.
+  }
+
+  return bindings;
+}
+
+/**
+ * Create a function scope with both parameters and block bindings.
+ *
+ * This is an enhanced version of enterFunctionScope that also includes
+ * variable declarations collected from the function body.
+ *
+ * @param params - Function parameters
+ * @param blockBindings - Variable declarations from the function body
+ * @param parent - Parent scope
+ */
+function enterFunctionScopeWithBindings(
+  params: readonly ParameterInfo[],
+  blockBindings: Map<string, AnalyzableValue>,
+  parent: Scope
+): Scope {
+  const bindings = new Map<string, AnalyzableValue>();
+
+  // Add parameters first (they shadow any block bindings with same name)
+  for (const param of params) {
+    // Skip destructuring placeholders
+    if (param.name === '(destructuring)') continue;
+
+    // Parameter with default value
+    if (param.defaultValue) {
+      bindings.set(param.name, param.defaultValue);
+    } else {
+      // Parameter without default - just a reference to itself
+      bindings.set(param.name, ref(param.name));
+    }
+  }
+
+  // Add block bindings (variables declared in function body)
+  // These don't override parameters (parameters shadow them)
+  for (const [name, value] of blockBindings) {
+    if (!bindings.has(name)) {
+      bindings.set(name, value);
+    }
+  }
+
+  return {
+    bindings,
+    imports: new Map(), // Functions don't have their own imports
+    parent,
+    filePath: parent.filePath,
+  };
+}
+
+// =============================================================================
 // Scope Lookup
 // =============================================================================
 
@@ -567,14 +658,28 @@ function resolveObject(
 
 /**
  * Resolve a function value (its body).
+ *
+ * Enhanced (WP 3.2): Also collects variable declarations from the function
+ * body and adds them to the scope. This enables resolving spreads of
+ * function-local arrays, e.g.:
+ *
+ * ```typescript
+ * function createConfig() {
+ *   const components = [A, B, C];  // Now captured in scope
+ *   return { register(c) { c.register(...components); } };
+ * }
+ * ```
  */
 function resolveFunction(
   value: FunctionValue,
   scope: Scope,
   resolving: Set<string>
 ): FunctionValue {
-  // Create a child scope with the function's parameters
-  const funcScope = enterFunctionScope(value.params, scope);
+  // Collect block-scoped variable bindings from function body
+  const blockBindings = collectBlockBindings(value.body);
+
+  // Create a child scope with parameters AND block bindings
+  const funcScope = enterFunctionScopeWithBindings(value.params, blockBindings, scope);
 
   // Resolve the body in the function scope
   const body = value.body.map(stmt => resolveStatement(stmt, funcScope, resolving));
@@ -592,14 +697,20 @@ function resolveFunction(
 
 /**
  * Resolve a method value (its body).
+ *
+ * Enhanced (WP 3.2): Same as resolveFunction - collects block bindings
+ * from the method body for scope resolution.
  */
 function resolveMethod(
   value: MethodValue,
   scope: Scope,
   resolving: Set<string>
 ): MethodValue {
-  // Create a child scope with the method's parameters
-  const methodScope = enterFunctionScope(value.params, scope);
+  // Collect block-scoped variable bindings from method body
+  const blockBindings = collectBlockBindings(value.body);
+
+  // Create a child scope with parameters AND block bindings
+  const methodScope = enterFunctionScopeWithBindings(value.params, blockBindings, scope);
 
   // Resolve the body in the method scope
   const body = value.body.map(stmt => resolveStatement(stmt, methodScope, resolving));
