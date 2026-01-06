@@ -414,10 +414,17 @@ describe('aurelia2-plugins: services only', () => {
   const submoduleAvailable = checkSubmoduleAvailable();
 
   describe.skipIf(!submoduleAvailable)('aurelia2-auth', () => {
-    it('reports 0 resources (services only)', async () => {
+    it('reports 1 resource (AuthFilterValueConverter)', async () => {
+      // aurelia2-auth has one template resource: AuthFilterValueConverter
+      // (the rest are services/DI infrastructure)
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-auth'));
 
-      expect(result.resources).toHaveLength(0);
+      expect(result.resources).toHaveLength(1);
+
+      const authFilter = result.resources[0]!;
+      expect(authFilter.kind).toBe('value-converter');
+      expect(authFilter.name).toBe('auth-filter');
+      expect(authFilter.className).toBe('AuthFilterValueConverter');
     });
   });
 

@@ -272,14 +272,20 @@ export function resolve(
 
 /**
  * Convert an AnalysisGap to a ResolutionDiagnostic.
+ *
+ * The source field is only included when gap has location information.
+ * The file path is normalized since GapLocation.file is a plain string.
  */
 function gapToDiagnostic(gap: AnalysisGap): ResolutionDiagnostic {
-  return {
+  const diagnostic: ResolutionDiagnostic = {
     code: `gap:${gap.why.kind}`,
     message: `${gap.what}: ${gap.suggestion}`,
-    source: (gap.where?.file ?? "unknown") as NormalizedPath,
     severity: "warning",
   };
+  if (gap.where?.file) {
+    diagnostic.source = normalizePathForId(gap.where.file);
+  }
+  return diagnostic;
 }
 
 /**

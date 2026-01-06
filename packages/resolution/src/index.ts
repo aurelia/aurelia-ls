@@ -298,6 +298,9 @@ export {
   analyzePackage,
   analyzePackages,
   isAureliaPackage,
+  // Package scanner
+  scanPackage,
+  getSourceEntryPoint,
   // Utility functions
   success,
   partial,
@@ -305,11 +308,13 @@ export {
   gap,
 } from "./npm/index.js";
 export type {
+  // Analysis result types
   AnalysisResult,
   Confidence,
   AnalysisGap,
   GapLocation,
   GapReason,
+  // Package analysis types
   PackageAnalysis,
   ExtractedResource,
   ResourceKind,
@@ -320,4 +325,7 @@ export type {
   ExtractedConfiguration,
   ConfigurationRegistration,
   AnalysisOptions,
+  // Package scanner types
+  PackageInfo,
+  EntryPoint,
 } from "./npm/index.js";
