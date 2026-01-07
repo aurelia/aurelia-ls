@@ -154,7 +154,6 @@ export function extractSourceFacts(
             variables.push({
               name: decl.name.text,
               kind: varKind,
-              initializerKind: getInitializerKind(decl.initializer),
             });
             // Also add to named exports list
             const existing = exports.find((e): e is Extract<ExportFact, { kind: "named" }> => e.kind === "named");
@@ -520,33 +519,3 @@ function getVariableKind(flags: ts.NodeFlags): 'const' | 'let' | 'var' {
   return 'var';
 }
 
-/**
- * Get a hint about what kind of expression initializes a variable.
- *
- * This helps downstream analysis understand patterns like:
- * - `const X = renderer(class Y ...)` → 'call'
- * - `const X = class Y {}` → 'class'
- * - `const X = { ... }` → 'object'
- * - `const X = SomeOther` → 'identifier'
- */
-function getInitializerKind(
-  initializer: ts.Expression | undefined
-): VariableFact['initializerKind'] {
-  if (!initializer) {
-    return undefined;
-  }
-
-  if (ts.isCallExpression(initializer)) {
-    return 'call';
-  }
-  if (ts.isClassExpression(initializer)) {
-    return 'class';
-  }
-  if (ts.isObjectLiteralExpression(initializer)) {
-    return 'object';
-  }
-  if (ts.isIdentifier(initializer)) {
-    return 'identifier';
-  }
-  return 'other';
-}

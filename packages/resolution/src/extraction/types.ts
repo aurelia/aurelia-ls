@@ -219,11 +219,6 @@ export interface BindableDefFact {
 export interface VariableFact {
   readonly name: string;
   readonly kind: 'const' | 'let' | 'var';
-  /**
-   * Hint about what the variable is initialized to.
-   * Useful for later analysis (e.g., recognizing `const X = renderer(class...)`)
-   */
-  readonly initializerKind?: 'call' | 'class' | 'object' | 'identifier' | 'other';
 }
 
 /**
@@ -435,6 +430,10 @@ export type GapReason =
   | { kind: 'entry-point-not-found'; specifier: string; resolvedPath: string }
   | { kind: 'no-entry-points' }
   | { kind: 'complex-exports'; reason: string }
+
+  // Monorepo resolution issues
+  | { kind: 'workspace-no-source-dir'; packageName: string; packagePath: string }
+  | { kind: 'workspace-entry-not-found'; packageName: string; srcDir: string; subpath: string | null }
 
   // Import/resolution issues (within code)
   | { kind: 'unresolved-import'; path: string; reason: string }

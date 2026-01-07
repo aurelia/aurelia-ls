@@ -23,7 +23,7 @@ import type {
   AnalyzableValue,
   ImportValue,
   ResolutionContext,
-  Scope,
+  LexicalScope,
   StatementValue,
   MethodValue,
 } from './types.js';
@@ -42,7 +42,7 @@ import { resolveInScope } from './scope.js';
  */
 export interface BuildContextOptions {
   /** Pre-built file scopes (required) */
-  readonly fileScopes: ReadonlyMap<NormalizedPath, Scope>;
+  readonly fileScopes: ReadonlyMap<NormalizedPath, LexicalScope>;
 
   /** Export binding map from binding/export-resolver.ts */
   readonly exportBindings: ExportBindingMap;
@@ -638,7 +638,7 @@ function lookupImportPath(
  */
 export function fullyResolve(
   value: AnalyzableValue,
-  scope: Scope,
+  scope: LexicalScope,
   ctx: ResolutionContext
 ): AnalyzableValue {
   // Layer 2: Scope resolution

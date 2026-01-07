@@ -351,15 +351,16 @@ export interface UnknownStatement {
 }
 
 // =============================================================================
-// Scope Types
+// Lexical Scope Types
 // =============================================================================
 
 /**
  * Lexical scope for value resolution.
  *
  * Scopes form a chain from innermost (function body) to outermost (module).
+ * Named "LexicalScope" to distinguish from ResourceScope in registration.
  */
-export interface Scope {
+export interface LexicalScope {
   /** Variable bindings in this scope */
   readonly bindings: ReadonlyMap<string, AnalyzableValue>;
 
@@ -367,7 +368,7 @@ export interface Scope {
   readonly imports: ReadonlyMap<string, ImportBinding>;
 
   /** Parent scope (null for module scope) */
-  readonly parent: Scope | null;
+  readonly parent: LexicalScope | null;
 
   /** File this scope belongs to */
   readonly filePath: NormalizedPath;
@@ -399,7 +400,7 @@ export interface ImportBinding {
  */
 export interface ResolutionContext {
   /** Map of file paths to their module scopes */
-  readonly fileScopes: ReadonlyMap<NormalizedPath, Scope>;
+  readonly fileScopes: ReadonlyMap<NormalizedPath, LexicalScope>;
 
   /** Export binding map from binding/export-resolver.ts */
   readonly exportBindings: ExportBindingMap;

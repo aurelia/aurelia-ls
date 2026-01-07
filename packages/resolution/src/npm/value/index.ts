@@ -51,7 +51,7 @@ export type {
   UnknownStatement,
 
   // Scope types
-  Scope,
+  LexicalScope,
   ImportBinding,
   ResolutionContext,
   OnDemandResolver,

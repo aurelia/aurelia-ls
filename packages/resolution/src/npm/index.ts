@@ -59,11 +59,12 @@ export { scanPackage, getSourceEntryPoint } from './scanner.js';
 import { checkIsAureliaPackage, scanPackage, getSourceEntryPoint } from './scanner.js';
 
 // Re-export monorepo types and functions
-export type { MonorepoContext, WorkspacePackage } from './monorepo.js';
-export { detectMonorepo, resolveWorkspaceImport } from './monorepo.js';
+export type { MonorepoContext, WorkspacePackage, WorkspaceResolutionResult } from './monorepo.js';
+export { detectMonorepo, resolveWorkspaceImport, resolveWorkspaceImportWithReason } from './monorepo.js';
 import {
   detectMonorepo,
   resolveWorkspaceImport,
+  resolveWorkspaceImportWithReason,
   isRelativeImport,
   isPackageImport,
   type MonorepoContext,
@@ -94,7 +95,7 @@ import {
   isRegistryShape,
   getRegisterMethod,
   getResolvedValue,
-  type Scope,
+  type LexicalScope,
   type ClassValue,
 } from './value/index.js';
 import { extractRegisterBodyResources, tryResolveAsFactory, type RegisterBodyContext } from './patterns/index.js';
@@ -729,7 +730,7 @@ function analyzeConfigurations(
   }
 
   // Step 1: Build file scopes (Layer 2)
-  const fileScopes = new Map<NormalizedPath, Scope>();
+  const fileScopes = new Map<NormalizedPath, LexicalScope>();
   for (const [filePath, sourceFile] of allSourceFiles) {
     const scope = buildFileScope(sourceFile, filePath);
     fileScopes.set(filePath, scope);

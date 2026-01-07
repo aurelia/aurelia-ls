@@ -19,7 +19,7 @@ import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type {
   AnalyzableValue,
-  Scope,
+  LexicalScope,
   ResolutionContext,
   OnDemandResolver,
 } from "../npm/value/types.js";
@@ -49,7 +49,7 @@ export interface PropertyResolutionContext {
   readonly sourceFile: ts.SourceFile;
 
   /** Pre-built scope for this file (Layer 2) */
-  readonly scope: Scope;
+  readonly scope: LexicalScope;
 
   /**
    * Cross-file resolution context (Layer 3).
@@ -134,7 +134,7 @@ export function buildContextWithProgram(
  */
 export function createProgramResolver(program: ts.Program): OnDemandResolver {
   // Cache scopes for files we've visited
-  const scopeCache = new Map<NormalizedPath, Scope>();
+  const scopeCache = new Map<NormalizedPath, LexicalScope>();
 
   return (
     specifier: string,

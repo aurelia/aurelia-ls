@@ -42,6 +42,18 @@ export interface MonorepoContext {
 }
 
 /**
+ * Result of workspace import resolution.
+ *
+ * Provides detailed information about why resolution succeeded or failed,
+ * enabling better diagnostics and gap reporting.
+ */
+export type WorkspaceResolutionResult =
+  | { readonly kind: 'resolved'; readonly path: string }
+  | { readonly kind: 'not-workspace-package'; readonly packageName: string }
+  | { readonly kind: 'no-source-dir'; readonly packageName: string; readonly packagePath: string }
+  | { readonly kind: 'entry-not-found'; readonly packageName: string; readonly srcDir: string; readonly subpath: string | null };
+
+/**
  * Raw package.json structure (partial).
  */
 interface PackageJson {
@@ -350,6 +362,59 @@ async function findSourceDirectory(packagePath: string): Promise<string | null> 
 /**
  * Resolve a package import to source file path if it's a workspace package.
  *
+ * Returns detailed result for gap reporting.
+ *
+ * @param specifier - Import specifier (e.g., "@aurelia/kernel")
+ * @param ctx - Monorepo context
+ * @returns Resolution result with path or failure reason
+ */
+export function resolveWorkspaceImportWithReason(
+  specifier: string,
+  ctx: MonorepoContext
+): WorkspaceResolutionResult {
+  // Handle scoped packages and subpath imports
+  // e.g., "@aurelia/kernel" or "@aurelia/kernel/something"
+  const packageName = getPackageNameFromSpecifier(specifier);
+  const subpath = getSubpathFromSpecifier(specifier) || null;
+
+  const pkg = ctx.packages.get(packageName);
+  if (!pkg) {
+    return { kind: 'not-workspace-package', packageName };
+  }
+
+  if (!pkg.srcDir) {
+    return { kind: 'no-source-dir', packageName, packagePath: pkg.path };
+  }
+
+  // Resolve to source entry point
+  if (subpath) {
+    // Subpath import: @aurelia/kernel/utilities → src/utilities.ts
+    const subpathFile = join(pkg.srcDir, subpath + '.ts');
+    if (existsSync(subpathFile)) {
+      return { kind: 'resolved', path: subpathFile };
+    }
+    // Try index.ts in subdirectory
+    const subpathIndex = join(pkg.srcDir, subpath, 'index.ts');
+    if (existsSync(subpathIndex)) {
+      return { kind: 'resolved', path: subpathIndex };
+    }
+    return { kind: 'entry-not-found', packageName, srcDir: pkg.srcDir, subpath };
+  }
+
+  // Main entry point: src/index.ts
+  const indexPath = join(pkg.srcDir, 'index.ts');
+  if (existsSync(indexPath)) {
+    return { kind: 'resolved', path: indexPath };
+  }
+
+  return { kind: 'entry-not-found', packageName, srcDir: pkg.srcDir, subpath: null };
+}
+
+/**
+ * Resolve a package import to source file path if it's a workspace package.
+ *
+ * Simple wrapper that returns just the path or null.
+ *
  * @param specifier - Import specifier (e.g., "@aurelia/kernel")
  * @param ctx - Monorepo context
  * @returns Path to source entry point, or null if not a workspace package
@@ -358,37 +423,8 @@ export function resolveWorkspaceImport(
   specifier: string,
   ctx: MonorepoContext
 ): string | null {
-  // Handle scoped packages and subpath imports
-  // e.g., "@aurelia/kernel" or "@aurelia/kernel/something"
-  const packageName = getPackageNameFromSpecifier(specifier);
-  const subpath = getSubpathFromSpecifier(specifier);
-
-  const pkg = ctx.packages.get(packageName);
-  if (!pkg || !pkg.srcDir) {
-    return null;
-  }
-
-  // Resolve to source entry point
-  if (subpath) {
-    // Subpath import: @aurelia/kernel/utilities → src/utilities.ts
-    const subpathFile = join(pkg.srcDir, subpath + '.ts');
-    if (existsSync(subpathFile)) {
-      return subpathFile;
-    }
-    // Try index.ts in subdirectory
-    const subpathIndex = join(pkg.srcDir, subpath, 'index.ts');
-    if (existsSync(subpathIndex)) {
-      return subpathIndex;
-    }
-  }
-
-  // Main entry point: src/index.ts
-  const indexPath = join(pkg.srcDir, 'index.ts');
-  if (existsSync(indexPath)) {
-    return indexPath;
-  }
-
-  return null;
+  const result = resolveWorkspaceImportWithReason(specifier, ctx);
+  return result.kind === 'resolved' ? result.path : null;
 }
 
 /**

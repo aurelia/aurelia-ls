@@ -20,7 +20,7 @@ import ts from 'typescript';
 import type { NormalizedPath } from '@aurelia-ls/compiler';
 import type {
   AnalyzableValue,
-  Scope,
+  LexicalScope,
   ImportBinding,
   ParameterInfo,
   StatementValue,
@@ -68,7 +68,7 @@ import { transformExpression, transformParameters, transformBlock } from './tran
 export function buildFileScope(
   sf: ts.SourceFile,
   filePath: NormalizedPath
-): Scope {
+): LexicalScope {
   const bindings = new Map<string, AnalyzableValue>();
   const imports = new Map<string, ImportBinding>();
 
@@ -310,8 +310,8 @@ function collectImportBindings(
  */
 export function enterFunctionScope(
   params: readonly ParameterInfo[],
-  parent: Scope
-): Scope {
+  parent: LexicalScope
+): LexicalScope {
   const bindings = new Map<string, AnalyzableValue>();
 
   // Add parameters as bindings
@@ -347,8 +347,8 @@ export function enterFunctionScope(
  */
 export function createChildScope(
   additionalBindings: ReadonlyMap<string, AnalyzableValue>,
-  parent: Scope
-): Scope {
+  parent: LexicalScope
+): LexicalScope {
   return {
     bindings: new Map(additionalBindings),
     imports: new Map(),
@@ -421,8 +421,8 @@ function collectBlockBindings(body: readonly StatementValue[]): Map<string, Anal
 function enterFunctionScopeWithBindings(
   params: readonly ParameterInfo[],
   blockBindings: Map<string, AnalyzableValue>,
-  parent: Scope
-): Scope {
+  parent: LexicalScope
+): LexicalScope {
   const bindings = new Map<string, AnalyzableValue>();
 
   // Add parameters first (they shadow any block bindings with same name)
@@ -469,7 +469,7 @@ function enterFunctionScopeWithBindings(
  */
 export function lookupBinding(
   name: string,
-  scope: Scope
+  scope: LexicalScope
 ): AnalyzableValue | ImportBinding | undefined {
   // Check bindings first (local variables, parameters)
   const binding = scope.bindings.get(name);
@@ -521,7 +521,7 @@ export function isImportBinding(
  */
 export function resolveInScope(
   value: AnalyzableValue,
-  scope: Scope
+  scope: LexicalScope
 ): AnalyzableValue {
   return resolveValue(value, scope, new Set());
 }
@@ -531,7 +531,7 @@ export function resolveInScope(
  */
 function resolveValue(
   value: AnalyzableValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): AnalyzableValue {
   switch (value.kind) {
@@ -584,7 +584,7 @@ function resolveValue(
  */
 function resolveReference(
   value: ReferenceValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): AnalyzableValue {
   const { name } = value;
@@ -629,7 +629,7 @@ function resolveReference(
  */
 function resolveArray(
   value: ArrayValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): ArrayValue {
   const elements = value.elements.map(el => resolveValue(el, scope, resolving));
@@ -650,7 +650,7 @@ function resolveArray(
  */
 function resolveObject(
   value: ObjectValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): ObjectValue {
   let changed = false;
@@ -698,7 +698,7 @@ function resolveObject(
  */
 function resolveFunction(
   value: FunctionValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): FunctionValue {
   // Collect block-scoped variable bindings from function body
@@ -729,7 +729,7 @@ function resolveFunction(
  */
 function resolveMethod(
   value: MethodValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): MethodValue {
   // Collect block-scoped variable bindings from method body
@@ -757,7 +757,7 @@ function resolveMethod(
  */
 function resolvePropertyAccess(
   value: PropertyAccessValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): AnalyzableValue {
   const base = resolveValue(value.base, scope, resolving);
@@ -811,7 +811,7 @@ function getResolvedBase(value: AnalyzableValue): AnalyzableValue | undefined {
  */
 function resolveCall(
   value: CallValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): CallValue {
   const callee = resolveValue(value.callee, scope, resolving);
@@ -837,7 +837,7 @@ function resolveCall(
  */
 function resolveSpread(
   value: SpreadValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): SpreadValue {
   const target = resolveValue(value.target, scope, resolving);
@@ -868,7 +868,7 @@ function resolveSpread(
  */
 function resolveNew(
   value: NewValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): NewValue {
   const callee = resolveValue(value.callee, scope, resolving);
@@ -897,7 +897,7 @@ function resolveNew(
  */
 function resolveStatement(
   stmt: StatementValue,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): StatementValue {
   switch (stmt.kind) {
@@ -926,7 +926,7 @@ function resolveStatement(
  */
 function resolveReturnStatement(
   stmt: ReturnStatement,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): ReturnStatement {
   if (stmt.value === null) {
@@ -949,7 +949,7 @@ function resolveReturnStatement(
  */
 function resolveExpressionStatement(
   stmt: ExpressionStatement,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): ExpressionStatement {
   const value = resolveValue(stmt.value, scope, resolving);
@@ -971,7 +971,7 @@ function resolveExpressionStatement(
  */
 function resolveVariableStatement(
   stmt: VariableStatement,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): VariableStatement {
   let changed = false;
@@ -1002,7 +1002,7 @@ function resolveVariableStatement(
  */
 function resolveIfStatement(
   stmt: IfStatement,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): IfStatement {
   const condition = resolveValue(stmt.condition, scope, resolving);
@@ -1032,7 +1032,7 @@ function resolveIfStatement(
  */
 function resolveForOfStatement(
   stmt: ForOfStatement,
-  scope: Scope,
+  scope: LexicalScope,
   resolving: Set<string>
 ): ForOfStatement {
   const iterable = resolveValue(stmt.iterable, scope, resolving);
