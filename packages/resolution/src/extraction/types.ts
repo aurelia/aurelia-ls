@@ -52,6 +52,18 @@ export interface SourceFacts {
    * Populated when FileSystemContext is provided and a sibling .html exists.
    */
   readonly templateImports: readonly TemplateImportFact[];
+
+  /**
+   * Gaps encountered during fact extraction.
+   *
+   * Records patterns we couldn't analyze, such as:
+   * - Destructuring exports: `export const { X } = ...`
+   * - Anonymous default function exports: `export default function() {}`
+   *
+   * Follows the gap philosophy: never silently skip, always record what
+   * we couldn't process and why.
+   */
+  readonly gaps: readonly AnalysisGap[];
 }
 
 /**
@@ -434,6 +446,9 @@ export type GapReason =
   | { kind: 'function-return'; functionName: string }
   | { kind: 'computed-property'; expression: string }
   | { kind: 'spread-unknown'; spreadOf: string }
+
+  // Unsupported code patterns
+  | { kind: 'unsupported-pattern'; path: NormalizedPath; reason: string }
 
   // Control flow in register() bodies
   | { kind: 'conditional-registration'; condition: string }

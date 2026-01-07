@@ -1,7 +1,8 @@
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { debug } from "@aurelia-ls/compiler";
-import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact, TemplateImportFact, VariableFact, FunctionFact } from "./types.js";
+import type { SourceFacts, ClassFacts, ImportFact, ExportFact, ImportedName, ExportedName, SiblingFileFact, TemplateImportFact, VariableFact, FunctionFact, AnalysisGap } from "./types.js";
+import { gap } from "./types.js";
 import { extractClassFacts } from "./class-extractor.js";
 import { extractRegistrationCalls } from "./registrations.js";
 import { extractDefineCalls } from "./define-calls.js";
@@ -99,6 +100,7 @@ export function extractSourceFacts(
   const exports: ExportFact[] = [];
   const variables: VariableFact[] = [];
   const functions: FunctionFact[] = [];
+  const gaps: AnalysisGap[] = [];
 
   // Build resolution context for this file.
   // This enables resolving file-local constants in $au properties.
@@ -161,16 +163,40 @@ export function extractSourceFacts(
             } else {
               exports.push({ kind: "named", names: [decl.name.text] });
             }
+          } else {
+            // Q55: Destructuring exports are not analyzed
+            // e.g., `export const { X, Y } = obj` or `export const [a, b] = arr`
+            const patternText = decl.name.getText(sf);
+            gaps.push(gap(
+              `destructuring export: ${patternText}`,
+              { kind: 'unsupported-pattern', path, reason: 'destructuring-export' },
+              `Destructuring export patterns like "export const ${patternText} = ..." are not analyzed`
+            ));
           }
         }
       }
     }
 
     // Handle exported function declarations: export function Foo() {}
-    if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+    if (ts.isFunctionDeclaration(stmt)) {
       const modifiers = ts.canHaveModifiers(stmt) ? ts.getModifiers(stmt) : undefined;
       const hasExport = modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
       const hasDefault = modifiers?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword);
+
+      // Q56: Anonymous default function exports are not analyzed
+      // e.g., `export default function() { ... }`
+      if (ts.isFunctionDeclaration(stmt) && !stmt.name && hasExport && hasDefault) {
+        gaps.push(gap(
+          'anonymous default function export',
+          { kind: 'unsupported-pattern', path, reason: 'anonymous-default-function' },
+          'Anonymous default function exports like "export default function() { ... }" are not analyzed'
+        ));
+      }
+
+      if (!stmt.name) {
+        // Skip anonymous functions (gap already recorded above if it's a default export)
+        continue;
+      }
       if (hasExport) {
         const isAsync = modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword) ?? false;
         const isGenerator = stmt.asteriskToken !== undefined;
@@ -200,7 +226,7 @@ export function extractSourceFacts(
   // Extract template imports from sibling HTML template (with resolution if program available)
   const templateImports = extractSiblingTemplateImports(siblingFiles, options, program);
 
-  return { path, classes, registrationCalls, defineCalls, imports, exports, variables, functions, siblingFiles, templateImports };
+  return { path, classes, registrationCalls, defineCalls, imports, exports, variables, functions, siblingFiles, templateImports, gaps };
 }
 
 /**

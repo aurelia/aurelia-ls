@@ -415,7 +415,40 @@ export interface ResolutionContext {
 
   /** Package root path (for relative path resolution) */
   readonly packagePath: string;
+
+  /**
+   * On-demand import resolution callback.
+   *
+   * Called when the pre-built fileScopes/exportBindings infrastructure
+   * cannot resolve an import. This enables incremental resolution during
+   * class extraction without requiring all files to be pre-analyzed.
+   *
+   * The callback should:
+   * 1. Resolve the module specifier to a file path
+   * 2. Build a scope for that file (caching recommended)
+   * 3. Look up the exported value and resolve it
+   * 4. Return the resolved value, or null to produce a gap
+   *
+   * @param specifier - Module specifier (e.g., './config', '@aurelia/router')
+   * @param exportName - Export name ('default' for default imports)
+   * @param fromFile - File containing the import
+   * @returns Resolved value, or null if unresolvable
+   */
+  readonly onDemandResolve?: OnDemandResolver;
 }
+
+/**
+ * Callback type for on-demand import resolution.
+ *
+ * Implementations typically wrap a TypeScript program for module resolution
+ * and on-demand scope building. See `createProgramResolver()` for a standard
+ * implementation.
+ */
+export type OnDemandResolver = (
+  specifier: string,
+  exportName: string,
+  fromFile: NormalizedPath
+) => AnalyzableValue | null;
 
 // =============================================================================
 // Type Guards

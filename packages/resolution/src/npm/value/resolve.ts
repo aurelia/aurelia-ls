@@ -320,6 +320,10 @@ function resolveStatementCrossFile(
  * 3. Look up the definition in the target file's scope
  * 4. Recursively resolve the definition (for re-exports)
  *
+ * If any step fails and ctx.onDemandResolve is provided, falls back to
+ * on-demand resolution. This enables incremental resolution during class
+ * extraction without requiring all files to be pre-analyzed.
+ *
  * @param imp - The import value to resolve
  * @param ctx - Resolution context
  * @param fromFile - The file containing the import
@@ -334,7 +338,16 @@ export function resolveImport(
   const resolvedPath = imp.resolvedPath ?? lookupImportPath(imp.specifier, imp.exportName, fromFile, ctx);
 
   if (!resolvedPath) {
-    // Cannot resolve the import path - record gap and return unknown
+    // Cannot resolve the import path via pre-built infrastructure
+    // Try on-demand resolution if available
+    if (ctx.onDemandResolve) {
+      const onDemandResult = tryOnDemandResolve(imp, ctx, fromFile);
+      if (onDemandResult) {
+        return onDemandResult;
+      }
+    }
+
+    // Record gap and return unknown
     const reason = gap(
       `import "${imp.exportName}" from "${imp.specifier}"`,
       { kind: 'unresolved-import', path: imp.specifier, reason: 'module not found' },
@@ -370,7 +383,15 @@ export function resolveImport(
     });
 
     if (!exportBinding) {
-      // Export not found in target module
+      // Export not found in target module via pre-built infrastructure
+      // Try on-demand resolution if available
+      if (ctx.onDemandResolve) {
+        const onDemandResult = tryOnDemandResolve(imp, ctx, fromFile);
+        if (onDemandResult) {
+          return onDemandResult;
+        }
+      }
+
       const reason = gap(
         `import "${imp.exportName}" from "${imp.specifier}"`,
         { kind: 'unresolved-import', path: resolvedPath, reason: `"${imp.exportName}" not exported` },
@@ -389,8 +410,16 @@ export function resolveImport(
 
     const definitionScope = ctx.fileScopes.get(exportBinding.definitionPath);
     if (!definitionScope) {
-      // Definition file not analyzed
+      // Definition file not analyzed via pre-built infrastructure
+      // Try on-demand resolution if available
       debug.resolution('resolveImport.step4.failed', { definitionPath: exportBinding.definitionPath });
+      if (ctx.onDemandResolve) {
+        const onDemandResult = tryOnDemandResolve(imp, ctx, fromFile);
+        if (onDemandResult) {
+          return onDemandResult;
+        }
+      }
+
       const reason = gap(
         `import "${imp.exportName}" from "${imp.specifier}"`,
         { kind: 'unresolved-import', path: exportBinding.definitionPath, reason: 'file not analyzed' },
@@ -429,6 +458,63 @@ export function resolveImport(
     // Return import with resolved field populated
     return importVal(imp.specifier, imp.exportName, resolvedPath, fullyResolved, imp.span);
 
+  } finally {
+    ctx.resolving.delete(cycleKey);
+  }
+}
+
+/**
+ * Try on-demand resolution for an import that couldn't be resolved via
+ * pre-built infrastructure.
+ *
+ * This is the unified fallback path that enables incremental resolution
+ * during class extraction. The callback handles module resolution and
+ * scope building using whatever mechanism is appropriate (typically ts.Program).
+ *
+ * @param imp - The import to resolve
+ * @param ctx - Resolution context (must have onDemandResolve)
+ * @param fromFile - File containing the import
+ * @returns ImportValue with resolved field, or null if callback returns null
+ */
+function tryOnDemandResolve(
+  imp: ImportValue,
+  ctx: ResolutionContext,
+  fromFile: NormalizedPath
+): AnalyzableValue | null {
+  if (!ctx.onDemandResolve) {
+    return null;
+  }
+
+  // Cycle detection - reuse the existing resolving set
+  const cycleKey = `onDemand:${imp.specifier}#${imp.exportName}`;
+  if (ctx.resolving.has(cycleKey)) {
+    debug.resolution('tryOnDemandResolve.cycle', { specifier: imp.specifier, exportName: imp.exportName });
+    return null;
+  }
+  ctx.resolving.add(cycleKey);
+
+  try {
+    debug.resolution('tryOnDemandResolve.calling', {
+      specifier: imp.specifier,
+      exportName: imp.exportName,
+      fromFile,
+    });
+
+    const result = ctx.onDemandResolve(imp.specifier, imp.exportName, fromFile);
+
+    debug.resolution('tryOnDemandResolve.result', {
+      specifier: imp.specifier,
+      exportName: imp.exportName,
+      resolved: result !== null,
+      resultKind: result?.kind,
+    });
+
+    if (result === null) {
+      return null;
+    }
+
+    // Return ImportValue with the resolved field populated
+    return importVal(imp.specifier, imp.exportName, imp.resolvedPath, result, imp.span);
   } finally {
     ctx.resolving.delete(cycleKey);
   }

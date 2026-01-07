@@ -54,6 +54,7 @@ export type {
   Scope,
   ImportBinding,
   ResolutionContext,
+  OnDemandResolver,
 } from './types.js';
 
 // Re-export cross-file resolution types from canonical locations

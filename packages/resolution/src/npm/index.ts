@@ -911,6 +911,7 @@ function inferResourceFromClass(
     functions: [],
     siblingFiles: [],
     templateImports: [],
+    gaps: [],
   };
 
   // Run inference resolvers

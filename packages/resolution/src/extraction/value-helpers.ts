@@ -6,22 +6,43 @@
  *
  * Design principle: Don't hard-code identifier mappings. Use the value model
  * to resolve references through scope chains and cross-file imports.
+ *
+ * This module provides:
+ * - PropertyResolutionContext: context for resolving expressions during extraction
+ * - buildSimpleContext: for single-file resolution (Layer 2 only)
+ * - buildContextWithProgram: for cross-file resolution using ts.Program (Layer 2+3)
+ * - createProgramResolver: creates an OnDemandResolver backed by ts.Program
+ * - resolveToString/resolveToBoolean: extract primitive values from expressions
  */
 
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { AnalyzableValue, Scope, ResolutionContext, ImportBinding } from "../npm/value/types.js";
+import type {
+  AnalyzableValue,
+  Scope,
+  ResolutionContext,
+  OnDemandResolver,
+} from "../npm/value/types.js";
 import { transformExpression } from "../npm/value/transform.js";
-import { resolveInScope, buildFileScope, lookupBinding, isImportBinding } from "../npm/value/scope.js";
+import {
+  resolveInScope,
+  buildFileScope,
+  lookupBinding,
+  isImportBinding,
+} from "../npm/value/scope.js";
 import { fullyResolve } from "../npm/value/resolve.js";
 import { canonicalPath } from "../util/naming.js";
+
+// =============================================================================
+// Property Resolution Context
+// =============================================================================
 
 /**
  * Context for resolving property values during class extraction.
  *
  * When available, enables resolution of:
  * - File-local constants (via scope)
- * - Imported values (via cross-file resolution or inline import following)
+ * - Imported values (via cross-file resolution)
  */
 export interface PropertyResolutionContext {
   /** The source file being analyzed */
@@ -30,14 +51,13 @@ export interface PropertyResolutionContext {
   /** Pre-built scope for this file (Layer 2) */
   readonly scope: Scope;
 
-  /** Cross-file resolution context (Layer 3, optional) */
+  /**
+   * Cross-file resolution context (Layer 3).
+   *
+   * If provided with an onDemandResolve callback, enables resolution of
+   * imported identifiers by following imports using ts.Program.
+   */
   readonly resolutionContext?: ResolutionContext;
-
-  /** TypeScript program for inline import resolution (optional) */
-  readonly program?: ts.Program;
-
-  /** Cache of scopes for files we've followed imports to */
-  readonly scopeCache?: Map<NormalizedPath, Scope>;
 }
 
 /**
@@ -47,8 +67,8 @@ export interface PropertyResolutionContext {
  * - Module-level constants: `const TYPE = 'custom-element';`
  * - Identifier references: `type: TYPE` → 'custom-element'
  *
- * Does NOT resolve cross-file imports (Layer 3). For that, pass a full
- * PropertyResolutionContext with resolutionContext.
+ * Does NOT resolve cross-file imports (Layer 3). For that, use
+ * buildContextWithProgram() instead.
  */
 export function buildSimpleContext(
   sf: ts.SourceFile,
@@ -61,145 +81,113 @@ export function buildSimpleContext(
 }
 
 /**
- * Build a resolution context with inline import resolution support.
+ * Build a resolution context with cross-file import resolution support.
  *
  * This creates a file scope that can resolve:
  * - Module-level constants: `const TYPE = 'custom-element';`
  * - Identifier references: `type: TYPE` → 'custom-element'
  * - Imported constants: `type: attrTypeName` → follows import to source
  *
- * Uses TypeScript's module resolution to follow imports on-demand.
+ * Uses TypeScript's module resolution to follow imports on-demand via the
+ * unified Layer 3 infrastructure.
  */
 export function buildContextWithProgram(
   sf: ts.SourceFile,
   filePath: NormalizedPath,
   program: ts.Program
 ): PropertyResolutionContext {
+  const scope = buildFileScope(sf, filePath);
+
+  // Create a minimal ResolutionContext with on-demand resolution
+  // The pre-built maps are empty since we resolve everything on-demand
+  const resolutionContext: ResolutionContext = {
+    fileScopes: new Map([[filePath, scope]]),
+    exportBindings: new Map(),
+    sourceFacts: new Map(),
+    resolving: new Set(),
+    gaps: [],
+    packagePath: "",
+    onDemandResolve: createProgramResolver(program),
+  };
+
   return {
     sourceFile: sf,
-    scope: buildFileScope(sf, filePath),
-    program,
-    scopeCache: new Map(),
+    scope,
+    resolutionContext,
   };
 }
 
+// =============================================================================
+// On-Demand Resolution (Unified Layer 3)
+// =============================================================================
+
 /**
- * Resolve an expression to a string literal value.
+ * Create an OnDemandResolver backed by a TypeScript program.
  *
- * Uses the value model for consistent resolution:
- * 1. Transform expression to AnalyzableValue
- * 2. Resolve local references via scope (Layer 2)
- * 3. Resolve imports via cross-file context (Layer 3) or inline following
- * 4. Extract literal string if fully resolved
+ * This is the unified mechanism for resolving imports during class extraction.
+ * It uses TypeScript's module resolution and builds scopes on-demand.
  *
- * @param expr - The AST expression to resolve
- * @param ctx - Resolution context (null for direct literals only)
- * @returns The string value, or undefined if not statically determinable
+ * The resolver caches scopes for files it visits to avoid rebuilding them.
+ *
+ * @param program - TypeScript program for module resolution
+ * @returns OnDemandResolver callback for use in ResolutionContext
  */
-export function resolveToString(
-  expr: ts.Expression,
-  ctx: PropertyResolutionContext | null
-): string | undefined {
-  // Fast path: direct string literal
-  if (ts.isStringLiteralLike(expr)) {
-    return expr.text;
-  }
+export function createProgramResolver(program: ts.Program): OnDemandResolver {
+  // Cache scopes for files we've visited
+  const scopeCache = new Map<NormalizedPath, Scope>();
 
-  // Fast path: type assertion wrapping a string literal
-  const unwrapped = unwrapAssertions(expr);
-  if (ts.isStringLiteralLike(unwrapped)) {
-    return unwrapped.text;
-  }
-
-  // Without context, can't resolve identifiers
-  if (!ctx) {
-    return undefined;
-  }
-
-  // Transform to value model
-  const value = transformExpression(expr, ctx.sourceFile);
-
-  // Resolve through value model
-  let resolved: AnalyzableValue;
-  if (ctx.resolutionContext) {
-    // Full cross-file resolution (npm-analysis path)
-    resolved = fullyResolve(value, ctx.scope, ctx.resolutionContext);
-  } else {
-    // Scope-based resolution
-    resolved = resolveInScope(value, ctx.scope);
-
-    // If we have a program and got an unresolved import, try inline resolution
-    if (ctx.program && isUnresolvedImport(resolved)) {
-      const inlineResolved = resolveImportInline(resolved, ctx);
-      if (inlineResolved !== undefined) {
-        return inlineResolved;
+  return (
+    specifier: string,
+    exportName: string,
+    fromFile: NormalizedPath
+  ): AnalyzableValue | null => {
+    // Find the containing source file
+    const containingFile = program.getSourceFile(fromFile);
+    if (!containingFile) {
+      // Try normalizing the path
+      for (const sf of program.getSourceFiles()) {
+        if (canonicalPath(sf.fileName) === fromFile) {
+          return resolveFromFile(sf);
+        }
       }
+      return null;
     }
-  }
 
-  return extractLiteralString(resolved);
-}
+    return resolveFromFile(containingFile);
 
-/**
- * Check if a value is an unresolved import.
- *
- * When resolveInScope encounters an import binding, it returns an ImportValue
- * directly (not a ReferenceValue with resolved). The ImportValue is "unresolved"
- * if it doesn't have a `resolved` field populated (Layer 3 hasn't run).
- */
-function isUnresolvedImport(value: AnalyzableValue): value is {
-  kind: "import";
-  specifier: string;
-  exportName: string;
-  resolved?: undefined;
-} {
-  return value.kind === "import" && value.resolved === undefined;
-}
+    function resolveFromFile(containingFile: ts.SourceFile): AnalyzableValue | null {
+      // Resolve the module specifier
+      const importedFile = resolveModuleToSourceFile(
+        specifier,
+        containingFile.fileName,
+        program
+      );
 
-/**
- * Follow an import inline using the TypeScript program to resolve the value.
- *
- * This handles cases like:
- * - `import { attrTypeName } from '../custom-attribute';`
- * - Where `attrTypeName` is `const attrTypeName = 'custom-attribute'` in that file
- */
-function resolveImportInline(
-  value: AnalyzableValue,
-  ctx: PropertyResolutionContext
-): string | undefined {
-  if (!ctx.program) return undefined;
-  if (value.kind !== "import") return undefined;
+      if (!importedFile) {
+        return null;
+      }
 
-  // Get the import binding info directly from the ImportValue
-  const importInfo = value;
+      // Build or get cached scope for the imported file
+      const importedPath = canonicalPath(importedFile.fileName);
+      let importedScope = scopeCache.get(importedPath);
+      if (!importedScope) {
+        importedScope = buildFileScope(importedFile, importedPath);
+        scopeCache.set(importedPath, importedScope);
+      }
 
-  // Find the source file for this import
-  const importedFile = resolveModuleToSourceFile(
-    importInfo.specifier,
-    ctx.sourceFile.fileName,
-    ctx.program
-  );
+      // Look up the exported name in the imported file's scope
+      const binding = lookupBinding(exportName, importedScope);
+      if (!binding || isImportBinding(binding)) {
+        // Not found or is another import (would need to follow further)
+        // For chained imports, we could recursively resolve, but for now
+        // we return null and let the gap be recorded
+        return null;
+      }
 
-  if (!importedFile) return undefined;
-
-  // Build or get cached scope for the imported file
-  const importedPath = canonicalPath(importedFile.fileName);
-  let importedScope = ctx.scopeCache?.get(importedPath);
-  if (!importedScope) {
-    importedScope = buildFileScope(importedFile, importedPath);
-    ctx.scopeCache?.set(importedPath, importedScope);
-  }
-
-  // Look up the exported name in the imported file's scope
-  const binding = lookupBinding(importInfo.exportName, importedScope);
-  if (!binding || isImportBinding(binding)) {
-    // Not found or is another import (would need to follow further)
-    return undefined;
-  }
-
-  // Resolve within that file's scope
-  const resolved = resolveInScope(binding, importedScope);
-  return extractLiteralString(resolved);
+      // Resolve within that file's scope
+      return resolveInScope(binding, importedScope);
+    }
+  };
 }
 
 /**
@@ -235,6 +223,54 @@ function resolveModuleToSourceFile(
   return program.getSourceFile(resolvedPath);
 }
 
+// =============================================================================
+// Value Resolution Functions
+// =============================================================================
+
+/**
+ * Resolve an expression to a string literal value.
+ *
+ * Uses the value model for consistent resolution:
+ * 1. Transform expression to AnalyzableValue
+ * 2. Resolve local references via scope (Layer 2)
+ * 3. Resolve imports via cross-file context (Layer 3) if available
+ * 4. Extract literal string if fully resolved
+ *
+ * @param expr - The AST expression to resolve
+ * @param ctx - Resolution context (null for direct literals only)
+ * @returns The string value, or undefined if not statically determinable
+ */
+export function resolveToString(
+  expr: ts.Expression,
+  ctx: PropertyResolutionContext | null
+): string | undefined {
+  // Fast path: direct string literal
+  if (ts.isStringLiteralLike(expr)) {
+    return expr.text;
+  }
+
+  // Fast path: type assertion wrapping a string literal
+  const unwrapped = unwrapAssertions(expr);
+  if (ts.isStringLiteralLike(unwrapped)) {
+    return unwrapped.text;
+  }
+
+  // Without context, can't resolve identifiers
+  if (!ctx) {
+    return undefined;
+  }
+
+  // Transform to value model
+  const value = transformExpression(expr, ctx.sourceFile);
+
+  // Resolve through value model (unified Layer 2 + 3)
+  const resolved = ctx.resolutionContext
+    ? fullyResolve(value, ctx.scope, ctx.resolutionContext)
+    : resolveInScope(value, ctx.scope);
+
+  return extractLiteralString(resolved);
+}
+
 /**
  * Resolve an expression to a boolean literal value.
  */
@@ -251,7 +287,7 @@ export function resolveToBoolean(
     return undefined;
   }
 
-  // Transform and resolve
+  // Transform and resolve (unified Layer 2 + 3)
   const value = transformExpression(expr, ctx.sourceFile);
   const resolved = ctx.resolutionContext
     ? fullyResolve(value, ctx.scope, ctx.resolutionContext)
@@ -259,6 +295,10 @@ export function resolveToBoolean(
 
   return extractLiteralBoolean(resolved);
 }
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
 
 /**
  * Unwrap type assertions and parentheses.
