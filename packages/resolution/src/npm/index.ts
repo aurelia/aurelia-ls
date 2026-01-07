@@ -58,6 +58,17 @@ export type { PackageInfo, EntryPoint } from './scanner.js';
 export { scanPackage, getSourceEntryPoint } from './scanner.js';
 import { checkIsAureliaPackage, scanPackage, getSourceEntryPoint } from './scanner.js';
 
+// Re-export monorepo types and functions
+export type { MonorepoContext, WorkspacePackage } from './monorepo.js';
+export { detectMonorepo, resolveWorkspaceImport } from './monorepo.js';
+import {
+  detectMonorepo,
+  resolveWorkspaceImport,
+  isRelativeImport,
+  isPackageImport,
+  type MonorepoContext,
+} from './monorepo.js';
+
 // Import ES2022 extraction
 import { extractFromES2022 } from './decorator-es2022.js';
 
@@ -401,8 +412,11 @@ async function extractFromTypeScriptSource(
     return { resources, configurations, gaps };
   }
 
-  // Phase 1: Discover all TypeScript files in the package
-  const discoveredFiles = await discoverPackageFiles(sourceEntryPoint, gaps);
+  // Detect monorepo context for cross-package resolution
+  const monorepoCtx = await detectMonorepo(packagePath);
+
+  // Phase 1: Discover all TypeScript files in the package (and workspace siblings)
+  const discoveredFiles = await discoverPackageFiles(sourceEntryPoint, gaps, monorepoCtx);
   if (discoveredFiles.length === 0) {
     return { resources, configurations, gaps };
   }
@@ -478,10 +492,18 @@ async function extractFromTypeScriptSource(
 /**
  * Discover all TypeScript files in a package starting from the entry point.
  * Walks import/re-export chains to find all reachable files.
+ *
+ * When monorepoCtx is provided, also follows imports to workspace sibling packages,
+ * enabling full cross-package analysis within monorepos.
+ *
+ * @param entryPoint - Path to entry point file (e.g., src/index.ts)
+ * @param gaps - Gap array to accumulate analysis gaps
+ * @param monorepoCtx - Optional monorepo context for cross-package resolution
  */
 async function discoverPackageFiles(
   entryPoint: string,
-  gaps: AnalysisGap[]
+  gaps: AnalysisGap[],
+  monorepoCtx: MonorepoContext | null = null
 ): Promise<string[]> {
   const discoveredFiles: string[] = [];
   const processedFiles = new Set<string>();
@@ -508,7 +530,7 @@ async function discoverPackageFiles(
       discoveredFiles.push(filePath);
 
       // Find imports/re-exports and add to queue
-      const referencedPaths = findTypeScriptImportsAndReExports(sourceFile, filePath);
+      const referencedPaths = findTypeScriptImportsAndReExports(sourceFile, filePath, monorepoCtx);
       for (const referencedPath of referencedPaths) {
         if (!processedFiles.has(referencedPath)) {
           filesToProcess.push(referencedPath);
@@ -995,11 +1017,19 @@ function resolveJavaScriptModulePath(currentDir: string, specifier: string): str
  * Important for packages that import resources into a configuration file
  * (e.g., @aurelia/router imports ViewportCustomElement into configuration.ts).
  *
+ * When monorepoCtx is provided, also resolves workspace package imports
+ * (e.g., `@aurelia/kernel`) to their source files.
+ *
  * @param sourceFile - Already parsed TypeScript source file
  * @param currentFile - Path to the current file (for resolving relative paths)
+ * @param monorepoCtx - Optional monorepo context for cross-package resolution
  * @returns Array of resolved file paths to process
  */
-function findTypeScriptImportsAndReExports(sourceFile: ts.SourceFile, currentFile: string): string[] {
+function findTypeScriptImportsAndReExports(
+  sourceFile: ts.SourceFile,
+  currentFile: string,
+  monorepoCtx: MonorepoContext | null = null
+): string[] {
   const paths: string[] = [];
   const currentDir = dirname(currentFile);
 
@@ -1019,10 +1049,20 @@ function findTypeScriptImportsAndReExports(sourceFile: ts.SourceFile, currentFil
       }
     }
 
-    if (specifier && (specifier.startsWith('./') || specifier.startsWith('../'))) {
+    if (!specifier) continue;
+
+    // Handle relative imports (./path or ../path)
+    if (isRelativeImport(specifier)) {
       const fullPath = resolveTypeScriptModulePath(currentDir, specifier);
       if (fullPath) {
         paths.push(fullPath);
+      }
+    }
+    // Handle workspace package imports when in a monorepo
+    else if (monorepoCtx && isPackageImport(specifier)) {
+      const resolvedPath = resolveWorkspaceImport(specifier, monorepoCtx);
+      if (resolvedPath) {
+        paths.push(resolvedPath);
       }
     }
   }

@@ -1,6 +1,11 @@
 export { extractAllFacts, extractSourceFacts } from "./extractor.js";
 export type { ExtractionOptions } from "./extractor.js";
 export { extractClassFacts } from "./class-extractor.js";
+
+// === Value Resolution Helpers ===
+// Bridges class extraction with the value model for resolving identifier references.
+export type { PropertyResolutionContext } from "./value-helpers.js";
+export { buildSimpleContext, buildContextWithProgram, resolveToString, resolveToBoolean } from "./value-helpers.js";
 export { extractRegistrationCalls } from "./registrations.js";
 export { extractDefineCalls } from "./define-calls.js";
 export { resolveImports } from "./import-resolver.js";

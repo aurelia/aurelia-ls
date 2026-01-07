@@ -48,6 +48,7 @@ describe('aurelia2-plugins: re-export pattern', () => {
       expect(aureliaTable).toBeDefined();
       expect(aureliaTable!.kind).toBe('custom-attribute');
       expect(aureliaTable!.className).toBe('AureliaTableCustomAttribute');
+      expect(aureliaTable!.evidence).toBe('decorator'); // WP 1.10: should be decorator, not convention
       expect(aureliaTable!.bindables).toHaveLength(8);
 
       // Verify specific bindables exist

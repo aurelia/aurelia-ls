@@ -8,6 +8,8 @@ import { extractDefineCalls } from "./define-calls.js";
 import { extractTemplateImports, resolveTemplateImportPaths } from "./template-imports.js";
 import { canonicalPath } from "../util/naming.js";
 import type { FileSystemContext } from "../project/context.js";
+import type { PropertyResolutionContext } from "./value-helpers.js";
+import { buildSimpleContext, buildContextWithProgram } from "./value-helpers.js";
 
 /**
  * Options for fact extraction.
@@ -98,9 +100,16 @@ export function extractSourceFacts(
   const variables: VariableFact[] = [];
   const functions: FunctionFact[] = [];
 
+  // Build resolution context for this file.
+  // This enables resolving file-local constants in $au properties.
+  // When program is available, also enables inline import resolution.
+  const resolutionCtx: PropertyResolutionContext = program
+    ? buildContextWithProgram(sf, path, program)
+    : buildSimpleContext(sf, path);
+
   for (const stmt of sf.statements) {
     if (ts.isClassDeclaration(stmt) && stmt.name) {
-      classes.push(extractClassFacts(stmt, checker));
+      classes.push(extractClassFacts(stmt, checker, resolutionCtx));
     }
 
     if (ts.isImportDeclaration(stmt)) {

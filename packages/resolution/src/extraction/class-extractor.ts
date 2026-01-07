@@ -24,15 +24,26 @@ import {
   hasStaticModifier,
 } from "../util/ast-helpers.js";
 import { canonicalBindableName } from "../util/naming.js";
+import type { PropertyResolutionContext } from "./value-helpers.js";
+import { resolveToString } from "./value-helpers.js";
 
 /**
  * Extract all facts from a class declaration.
+ *
+ * @param node - The class declaration AST node
+ * @param checker - TypeScript type checker
+ * @param resolutionCtx - Optional context for resolving identifier references in $au properties.
+ *                        When provided, enables resolution of imported constants like `attrTypeName`.
  */
-export function extractClassFacts(node: ts.ClassDeclaration, checker: ts.TypeChecker): ClassFacts {
+export function extractClassFacts(
+  node: ts.ClassDeclaration,
+  checker: ts.TypeChecker,
+  resolutionCtx?: PropertyResolutionContext
+): ClassFacts {
   const className = node.name?.text ?? "anonymous";
   const gaps: AnalysisGap[] = [];
 
-  const staticAu = extractStaticAu(node, className, gaps);
+  const staticAu = extractStaticAu(node, className, gaps, resolutionCtx);
   const staticDependencies = extractStaticDependencies(node, className, gaps);
 
   return {
@@ -226,6 +237,129 @@ function parseBindablesArray(
 }
 
 /**
+ * Parse a bindables object, extracting definitions and reporting gaps for unanalyzable patterns.
+ *
+ * Handles Aurelia core's object-style bindable definitions:
+ * - Shorthand: `{ value: true }` → bindable named 'value' with defaults
+ * - Full form: `{ value: { mode: twoWay, primary: true, attribute: 'my-value' } }`
+ * - Spread: `{ ...baseBindables }` → gap (can't statically analyze)
+ */
+function parseBindablesObject(
+  obj: ts.ObjectLiteralExpression,
+  className: string,
+  gaps: AnalysisGap[],
+): BindableDefFact[] {
+  const result: BindableDefFact[] = [];
+
+  for (const prop of obj.properties) {
+    // Spread property: { ...baseBindables }
+    if (ts.isSpreadAssignment(prop)) {
+      const spreadExpr = prop.expression;
+      const spreadName = ts.isIdentifier(spreadExpr)
+        ? spreadExpr.text
+        : spreadExpr.getText().slice(0, 50);
+
+      gaps.push(gap(
+        `bindables for ${className}`,
+        { kind: 'spread-unknown', spreadOf: spreadName },
+        `Replace spread with explicit bindable definitions.`,
+        {
+          file: obj.getSourceFile().fileName,
+          line: getLineNumber(prop),
+          snippet: prop.getText(),
+        }
+      ));
+      continue;
+    }
+
+    // Property assignment: { name: value }
+    if (ts.isPropertyAssignment(prop)) {
+      const propName = ts.isIdentifier(prop.name)
+        ? prop.name.text
+        : ts.isStringLiteral(prop.name)
+          ? prop.name.text
+          : null;
+
+      if (!propName) {
+        // Computed property name
+        gaps.push(gap(
+          `bindables for ${className}`,
+          { kind: 'computed-property', expression: prop.name.getText() },
+          `Use static property names for bindables.`,
+          {
+            file: obj.getSourceFile().fileName,
+            line: getLineNumber(prop),
+            snippet: prop.getText(),
+          }
+        ));
+        continue;
+      }
+
+      const canonName = canonicalBindableName(propName);
+      if (!canonName) continue;
+
+      const init = prop.initializer;
+
+      // Shorthand: { value: true } or { value: {} }
+      if (init.kind === ts.SyntaxKind.TrueKeyword ||
+          (ts.isObjectLiteralExpression(init) && init.properties.length === 0)) {
+        result.push({ name: canonName });
+        continue;
+      }
+
+      // Full form: { value: { mode: twoWay, primary: true, attribute: 'foo' } }
+      if (ts.isObjectLiteralExpression(init)) {
+        const mode = parseBindingModeValue(getProp(init, "mode")?.initializer);
+        const primary = readBooleanProp(init, "primary");
+        const attribute = readStringProp(init, "attribute");
+
+        result.push({
+          name: canonName,
+          ...(mode ? { mode } : {}),
+          ...(primary !== undefined ? { primary } : {}),
+          ...(attribute ? { attribute } : {}),
+        });
+        continue;
+      }
+
+      // Variable reference or other expression - can't statically analyze
+      gaps.push(gap(
+        `bindable "${propName}" for ${className}`,
+        { kind: 'dynamic-value', expression: init.getText().slice(0, 50) },
+        `Use inline object for bindable definition.`,
+        {
+          file: obj.getSourceFile().fileName,
+          line: getLineNumber(prop),
+          snippet: prop.getText(),
+        }
+      ));
+      continue;
+    }
+
+    // Shorthand property: { value } (rare but possible)
+    if (ts.isShorthandPropertyAssignment(prop)) {
+      const propName = prop.name.text;
+      gaps.push(gap(
+        `bindable "${propName}" for ${className}`,
+        { kind: 'dynamic-value', expression: propName },
+        `Use explicit value for bindable definition: { ${propName}: true } or { ${propName}: { mode: ... } }.`,
+        {
+          file: obj.getSourceFile().fileName,
+          line: getLineNumber(prop),
+          snippet: prop.getText(),
+        }
+      ));
+      continue;
+    }
+
+    // Method definition or getter/setter - not valid for bindables
+    // Skip silently as these are likely unrelated to bindables
+  }
+
+  return result;
+}
+
+/**
  * Parse a dependencies array, extracting refs and reporting gaps for unanalyzable patterns.
  *
  * Handles:
@@ -353,6 +487,27 @@ function getLineNumber(node: ts.Node): number {
   return line + 1;
 }
 
+/**
+ * Read the 'type' property from a $au object.
+ *
+ * Uses the value model to resolve identifier references through the scope chain.
+ * This handles:
+ * - `type: 'custom-element'` → direct literal
+ * - `type: 'custom-attribute' as const` → type assertion wrapping literal
+ * - `type: attrTypeName` → identifier resolved through scope/imports
+ *
+ * No hard-coded identifier mappings - resolution goes through the value model
+ * which properly traces imports and file-local constants.
+ */
+function readTypeProp(
+  obj: ts.ObjectLiteralExpression,
+  ctx: PropertyResolutionContext | null
+): string | undefined {
+  const prop = getProp(obj, "type");
+  if (!prop) return undefined;
+  return resolveToString(prop.initializer, ctx);
+}
+
 function parseBindingModeValue(expr: ts.Expression | undefined): BindingMode | undefined {
   if (!expr) return undefined;
   if (ts.isStringLiteralLike(expr)) return toBindingMode(expr.text);
@@ -394,6 +549,7 @@ function extractStaticAu(
   node: ts.ClassDeclaration,
   className: string,
   gaps: AnalysisGap[],
+  resolutionCtx?: PropertyResolutionContext
 ): StaticAuFact | null {
   for (const member of node.members) {
     if (!ts.isPropertyDeclaration(member)) continue;
@@ -403,7 +559,7 @@ function extractStaticAu(
     if (!member.initializer || !ts.isObjectLiteralExpression(member.initializer)) continue;
 
     const obj = member.initializer;
-    const type = readStringProp(obj, "type");
+    const type = readTypeProp(obj, resolutionCtx ?? null);
     const name = readStringProp(obj, "name");
     const aliases = readStringArrayProp(obj, "aliases");
     const template = readStringProp(obj, "template");
@@ -412,10 +568,30 @@ function extractStaticAu(
     const noMultiBindings = readBooleanProp(obj, "noMultiBindings");
 
     // Parse bindables (with gap reporting)
+    // Supports both array style: bindables: ['value', { name: 'count', mode: 'twoWay' }]
+    // And object style: bindables: { value: true, count: { mode: twoWay } }
     const bindablesProp = getProp(obj, "bindables");
     let bindables: BindableDefFact[] | undefined;
-    if (bindablesProp && ts.isArrayLiteralExpression(bindablesProp.initializer)) {
-      bindables = parseBindablesArray(bindablesProp.initializer, className, gaps);
+    if (bindablesProp) {
+      const init = bindablesProp.initializer;
+      if (ts.isArrayLiteralExpression(init)) {
+        bindables = parseBindablesArray(init, className, gaps);
+      } else if (ts.isObjectLiteralExpression(init)) {
+        bindables = parseBindablesObject(init, className, gaps);
+      } else {
+        // Variable reference or other expression - emit gap
+        const exprText = ts.isIdentifier(init) ? init.text : init.getText().slice(0, 50);
+        gaps.push(gap(
+          `bindables for ${className}`,
+          { kind: 'dynamic-value', expression: exprText },
+          `Use inline array or object for bindables definition.`,
+          {
+            file: init.getSourceFile().fileName,
+            line: getLineNumber(init),
+            snippet: init.getText().slice(0, 80),
+          }
+        ));
+      }
     }
 
     // Parse dependencies (with gap reporting)
