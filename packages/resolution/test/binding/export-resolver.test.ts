@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildExportBindingMap, lookupExportBinding } from "@aurelia-ls/resolution";
-import { extractAllFacts, resolveImports } from "@aurelia-ls/resolution";
+import { buildExportBindingMap, lookupExportBinding, extractAllFileFacts } from "@aurelia-ls/resolution";
 import { createProgramFromMemory } from "../_helpers/inline-program.js";
 
 /**
@@ -8,9 +7,8 @@ import { createProgramFromMemory } from "../_helpers/inline-program.js";
  */
 function buildBindings(files: Record<string, string>) {
   const { program, host } = createProgramFromMemory(files);
-  const facts = extractAllFacts(program, { moduleResolutionHost: host });
-  const resolved = resolveImports(facts);
-  return buildExportBindingMap(resolved);
+  const facts = extractAllFileFacts(program, { moduleResolutionHost: host });
+  return buildExportBindingMap(facts);
 }
 
 describe("Export Binding Resolution", () => {

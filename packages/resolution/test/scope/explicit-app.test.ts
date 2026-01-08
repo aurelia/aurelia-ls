@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { extractAllFacts, resolveImports, buildExportBindingMap } from "@aurelia-ls/resolution";
-import { createResolverPipeline } from "@aurelia-ls/resolution";
-import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
-import { buildResourceGraph } from "@aurelia-ls/resolution";
+import {
+  extractAllFileFacts,
+  buildExportBindingMap,
+  createRegistrationAnalyzer,
+  matchFileFacts,
+  buildResourceGraph,
+} from "@aurelia-ls/resolution";
+import type { ResourceAnnotation } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 import {
@@ -18,20 +22,22 @@ describe("Scope: explicit-app", () => {
 
   beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
+    const allFacts = extractAllFileFacts(program);
     const appFacts = filterFactsByPathPattern(allFacts, "/explicit-app/src/");
 
-    // Import resolution phase
-    const resolvedFacts = resolveImports(appFacts);
+    // Run pattern matching on all files to get annotations
+    const allAnnotations: ResourceAnnotation[] = [];
+    for (const [, fileFacts] of appFacts) {
+      const matchResult = matchFileFacts(fileFacts);
+      allAnnotations.push(...matchResult.annotations);
+    }
 
     // Export binding resolution phase
-    const exportBindings = buildExportBindingMap(resolvedFacts);
+    const exportBindings = buildExportBindingMap(appFacts);
 
-    const pipeline = createResolverPipeline();
-    const resolved = pipeline.resolve(resolvedFacts);
-
+    // Analyze registrations
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(resolved.value, resolvedFacts, exportBindings);
+    const registration = analyzer.analyze(allAnnotations, appFacts, exportBindings);
 
     graph = buildResourceGraph(registration);
   });

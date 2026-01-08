@@ -64,12 +64,13 @@ function orphanToDiagnostic(orphan: OrphanResource): ResolutionDiagnostic {
 /**
  * Get a human-readable label for a resource kind.
  */
-function getKindLabel(kind: "element" | "attribute" | "valueConverter" | "bindingBehavior"): string {
+function getKindLabel(kind: "custom-element" | "custom-attribute" | "template-controller" | "value-converter" | "binding-behavior"): string {
   switch (kind) {
-    case "element": return "Custom element";
-    case "attribute": return "Custom attribute";
-    case "valueConverter": return "Value converter";
-    case "bindingBehavior": return "Binding behavior";
+    case "custom-element": return "Custom element";
+    case "custom-attribute": return "Custom attribute";
+    case "template-controller": return "Template controller";
+    case "value-converter": return "Value converter";
+    case "binding-behavior": return "Binding behavior";
   }
 }
 

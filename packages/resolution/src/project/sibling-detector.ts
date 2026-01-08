@@ -20,7 +20,6 @@ import {
   type FilePair,
   type PairingDetection,
 } from "./types.js";
-import type { SiblingFileFact } from "../extraction/types.js";
 import { debug, NOOP_TRACE } from "@aurelia-ls/compiler";
 
 // ============================================================================
@@ -179,21 +178,6 @@ function toPascalCase(name: string): string {
   return parts
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join("");
-}
-
-// ============================================================================
-// Fact Conversion
-// ============================================================================
-
-/**
- * Convert SiblingFile array to SiblingFileFact array for SourceFacts.
- */
-export function toSiblingFacts(siblings: readonly SiblingFile[]): SiblingFileFact[] {
-  return siblings.map((s) => ({
-    path: s.path,
-    extension: s.extension,
-    baseName: s.baseName,
-  }));
 }
 
 // ============================================================================

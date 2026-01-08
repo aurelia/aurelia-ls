@@ -3,16 +3,21 @@
 // This package discovers Aurelia resources in a project and builds a ResourceGraph
 // that the AOT compiler uses for template compilation.
 //
-// Architecture:
+// Architecture (unified value model):
 // - File Discovery (Layer 0): File enumeration, sibling detection
-// - Extraction (Layer 1): AST → SourceFacts (with DependencyRef.resolvedPath: null)
-// - Import Resolution (Layer 1.5): Populate DependencyRef.resolvedPath
-// - Inference (Layer 2): SourceFacts → ResourceCandidate[]
-// - Registration (Layer 3): SourceFacts + ResourceCandidate[] → RegistrationAnalysis
+// - Extraction (Layer 1): AST → FileFacts (classes, imports, exports, registrations)
+// - Pattern Matching (Layer 2): FileFacts → ResourceAnnotation[]
+// - Registration (Layer 3): ResourceAnnotation[] + FileFacts → RegistrationAnalysis
 // - Scope (Layer 4): RegistrationAnalysis → ResourceGraph
+//
+// Key types:
+// - FileFacts: Unified extraction output (replaces SourceFacts)
+// - ClassValue: Enriched class metadata with AnalyzableValue
+// - ResourceAnnotation: Unified resource type (replaces ResourceCandidate)
 //
 // See docs/resolution-architecture.md for details.
 // See docs/registration-analysis-design.md for the three-phase model.
+// See docs/unified-value-model-design.md for the value model.
 
 // === Re-export compiler types for convenience ===
 export type {
@@ -51,7 +56,6 @@ export {
   findTemplateSibling,
   findStylesheetSibling,
   classMatchesFileName,
-  toSiblingFacts,
   buildFilePair,
   detectSiblingsBatch,
   findOrphanTemplates,
@@ -80,7 +84,6 @@ export {
 export type {
   // Core Types
   SiblingFile,
-  SiblingFileFact,
   ProjectFile,
   ProjectFileType,
   ProjectStructure,
@@ -112,21 +115,84 @@ export type {
   ConventionBuilder,
 } from "./project/index.js";
 
-// === Extraction (Layer 1) ===
-export { extractAllFacts, extractSourceFacts, extractDefineCalls, resolveImports } from "./extraction/index.js";
-export type { ExtractionOptions } from "./extraction/index.js";
+// === Unified Types (New) ===
+// ResourceAnnotation is the unified output type for resource resolution.
+// FileFacts is the unified extraction type (replaces SourceFacts).
+// See annotation.ts and file-facts.ts for the new design.
 export type {
-  SourceFacts,
-  ClassFacts,
-  DecoratorFact,
-  StaticAuFact,
-  StaticDependenciesFact,
-  BindableMemberFact,
-  RegistrationCallFact,
-  DefineCallFact,
-  BindingMode,
-  DependencyRef,
-} from "./extraction/index.js";
+  ResourceAnnotation,
+  ResourceKind,
+  BindableAnnotation,
+  AnnotationEvidence,
+  AnalyzedEvidence,
+  DeclaredEvidence,
+  BindableEvidence,
+  ElementAnnotation,
+  AttributeAnnotation,
+} from "./annotation.js";
+export {
+  elementAnnotation,
+  attributeAnnotation,
+  valueConverterAnnotation,
+  bindingBehaviorAnnotation,
+  explicitEvidence,
+  inferredEvidence,
+  declaredEvidence,
+  isAnalyzedEvidence,
+  isDeclaredEvidence,
+  isElementAnnotation,
+  isAttributeAnnotation,
+  isTemplateControllerAnnotation,
+} from "./annotation.js";
+
+export type {
+  FileFacts,
+  ImportDeclaration,
+  ExportDeclaration,
+  VariableDeclaration,
+  FunctionDeclaration,
+  RegistrationCall,
+  DefineCall,
+  FileContext,
+  // SiblingFile exported from project/index.js (canonical source)
+  TemplateImport,
+  MatchContext,
+} from "./file-facts.js";
+export { emptyFileFacts, emptyFileContext } from "./file-facts.js";
+
+// === Value Model Types ===
+// Core types for static value analysis (used by FileFacts.classes)
+export type {
+  AnalyzableValue,
+  ClassValue,
+  DecoratorApplication,
+  BindableMember,
+  LexicalScope,
+} from "./npm/value/index.js";
+
+// === Pattern Matchers (New) ===
+// Pattern matchers operate on ClassValue → ResourceAnnotation.
+export { matchAll, matchFile, matchExpected, matchDefineCalls, matchFileFacts, type MatchResult, type FileMatchResult } from "./patterns/index.js";
+export { matchDecorator, type DecoratorMatchResult } from "./patterns/index.js";
+export { matchStaticAu, type StaticAuMatchResult } from "./patterns/index.js";
+export { matchDefine, type DefineMatchResult } from "./patterns/index.js";
+export { matchConvention, type ConventionMatchResult } from "./patterns/index.js";
+
+// === Unified Resolution API (New) ===
+// Convenient API that combines extraction + pattern matching.
+export {
+  resolveFile,
+  resolveProgram,
+  extractResources,
+  type FileResolutionResult,
+  type ProgramResolutionResult,
+  type FileResolutionOptions,
+} from "./resolve-files.js";
+
+// === Extraction (Layer 1) ===
+// Unified extraction (FileFacts with enriched ClassValue)
+export { extractAllFileFacts, extractFileFacts, extractFileContext } from "./extraction/index.js";
+export type { ExtractionOptions } from "./extraction/index.js";
 
 // === Export Binding Resolution (Layer 1.5) ===
 export { buildExportBindingMap, lookupExportBinding } from "./binding/index.js";
@@ -136,10 +202,6 @@ export type {
   ExportBindingMap,
   ExportLookupResult,
 } from "./binding/index.js";
-
-// === Inference (Layer 2) ===
-export { createResolverPipeline, resolveFromDecorators, resolveFromStaticAu, resolveFromDefine, resolveFromConventions } from "./inference/index.js";
-export type { ResourceCandidate, BindableSpec, ResolverPipeline } from "./inference/index.js";
 
 // === Registration (Layer 3) ===
 export { createRegistrationAnalyzer, buildImportGraph } from "./registration/index.js";
@@ -316,14 +378,9 @@ export type {
   GapReason,
   // Package analysis types
   PackageAnalysis,
-  ExtractedResource,
-  ResourceKind,
-  ResourceSource,
-  ResourceEvidence,
-  ExtractedBindable,
-  BindableEvidence,
   ExtractedConfiguration,
   ConfigurationRegistration,
+  SourceLocation,
   AnalysisOptions,
   // Package scanner types
   PackageInfo,

@@ -1,11 +1,11 @@
 /**
  * NPM Package Analysis Types
  *
- * Types specific to npm package analysis.
- * Shared analysis types (AnalysisResult, Confidence, etc.) are in extraction/types.ts.
+ * Types for extracting Aurelia resources from npm packages.
  */
 
-import type { BindingMode } from '../extraction/types.js';
+import type { NormalizedPath } from '@aurelia-ls/compiler';
+import type { ResourceAnnotation } from '../annotation.js';
 
 // Re-export shared analysis types from extraction
 export type {
@@ -26,7 +26,7 @@ export {
 } from '../extraction/types.js';
 
 // =============================================================================
-// NPM-Specific Types
+// NPM Package Types
 // =============================================================================
 
 /**
@@ -38,85 +38,10 @@ export interface PackageAnalysis {
   /** Package version */
   version: string;
   /** Extracted resources */
-  resources: ExtractedResource[];
+  resources: ResourceAnnotation[];
   /** Configuration exports (IRegistry objects) */
   configurations: ExtractedConfiguration[];
 }
-
-/**
- * A resource extracted from a package.
- */
-export interface ExtractedResource {
-  /** What kind of Aurelia resource */
-  kind: ResourceKind;
-  /** The name used in templates (e.g., 'tooltip', 'my-element') */
-  name: string;
-  /** Original class name in source */
-  className: string;
-  /** Extracted bindables */
-  bindables: ExtractedBindable[];
-  /** Aliases if any */
-  aliases: string[];
-  /** Where this was defined */
-  source: ResourceSource;
-  /** How we determined this is a resource */
-  evidence: ResourceEvidence;
-}
-
-export type ResourceKind =
-  | 'custom-element'
-  | 'custom-attribute'
-  | 'value-converter'
-  | 'binding-behavior'
-  | 'template-controller';
-
-/**
- * Where the resource definition came from.
- */
-export interface ResourceSource {
-  /** File path relative to package root */
-  file: string;
-  /** Line number if available */
-  line?: number;
-  /** Whether this is source (.ts) or compiled (.js) */
-  format: 'typescript' | 'javascript' | 'declaration';
-}
-
-/**
- * How we determined something is a resource.
- * Useful for diagnostics and confidence assessment.
- */
-export type ResourceEvidence =
-  | { kind: 'decorator'; decoratorName: string }
-  | { kind: 'static-au'; }
-  | { kind: 'define'; }
-  | { kind: 'convention'; suffix: string }
-  | { kind: 'manifest'; }
-  | { kind: 'explicit-config'; };
-
-/**
- * An extracted bindable property.
- */
-export interface ExtractedBindable {
-  /** Property name */
-  name: string;
-  /** Attribute name if different (kebab-case) */
-  attribute?: string;
-  /** Binding mode if determinable */
-  mode?: BindingMode;
-  /** Whether this is the primary bindable */
-  primary?: boolean;
-  /** TypeScript type if available */
-  type?: string;
-  /** How we found this bindable */
-  evidence: BindableEvidence;
-}
-
-export type BindableEvidence =
-  | { kind: 'decorator'; hasOptions: boolean }
-  | { kind: 'static-au'; }
-  | { kind: 'convention'; }
-  | { kind: 'manifest'; };
 
 /**
  * A configuration export (IRegistry pattern).
@@ -129,7 +54,7 @@ export interface ExtractedConfiguration {
   /** Whether this is a factory function result */
   isFactory: boolean;
   /** Source location */
-  source: ResourceSource;
+  source: SourceLocation;
 }
 
 /**
@@ -137,11 +62,23 @@ export interface ExtractedConfiguration {
  */
 export interface ConfigurationRegistration {
   /** Reference to the resource (if resolved) */
-  resource?: ExtractedResource;
+  resource?: ResourceAnnotation;
   /** Original identifier in source */
   identifier: string;
   /** Whether we could fully resolve this */
   resolved: boolean;
+}
+
+/**
+ * Source location for npm package analysis.
+ */
+export interface SourceLocation {
+  /** File path relative to package root */
+  file: string;
+  /** Line number if available */
+  line?: number;
+  /** Source format */
+  format: 'typescript' | 'javascript' | 'declaration';
 }
 
 /**
@@ -204,7 +141,6 @@ export interface InspectionResult {
 
 /**
  * Resource in inspection output.
- * Simplified from ExtractedResource for readability.
  */
 export interface InspectedResource {
   kind: string;
@@ -218,7 +154,7 @@ export interface InspectedResource {
     line?: number;
     format: string;
   };
-  evidence: string;  // Simplified: just the kind
+  evidence: string;  // Simplified: just the pattern
 }
 
 /**
@@ -265,7 +201,6 @@ export interface InspectionEdge {
 
 /**
  * Gap in inspection output.
- * Simplified for readability.
  */
 export interface InspectedGap {
   what: string;
@@ -277,3 +212,9 @@ export interface InspectedGap {
   };
   suggestion: string;
 }
+
+// =============================================================================
+// Re-exports for convenience
+// =============================================================================
+
+export type { ResourceAnnotation, BindableAnnotation, ResourceKind } from '../annotation.js';

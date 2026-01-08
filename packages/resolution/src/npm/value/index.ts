@@ -30,6 +30,8 @@ export type {
   ObjectValue,
   FunctionValue,
   ClassValue,
+  DecoratorApplication,
+  BindableMember,
   ReferenceValue,
   ImportValue,
   PropertyAccessValue,
@@ -59,7 +61,6 @@ export type {
 
 // Re-export cross-file resolution types from canonical locations
 export type { ExportBindingMap } from '../../binding/types.js';
-export type { SourceFacts } from '../../extraction/types.js';
 
 // Re-export type guards
 export {
@@ -85,6 +86,17 @@ export {
   classVal,
   unknown,
   method,
+} from './types.js';
+
+// Re-export value extraction helpers (for pattern matching)
+export {
+  extractString,
+  extractBoolean,
+  extractStringArray,
+  getProperty,
+  extractStringProp,
+  extractBooleanProp,
+  extractStringArrayProp,
 } from './types.js';
 
 // Re-export statement constructors
@@ -128,3 +140,6 @@ export {
 } from './resolve.js';
 
 export type { BuildContextOptions } from './resolve.js';
+
+// Re-export class extraction (enriched ClassValue)
+export { extractClassValue } from './class-extraction.js';

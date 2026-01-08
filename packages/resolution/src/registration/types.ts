@@ -12,13 +12,13 @@
  *   (exists)     (available)    (consumed)
  * ```
  *
- * 1. **Declaration** (inference layer): What resources exist in the project?
- *    - Input: Source files
- *    - Output: ResourceCandidate[]
- *    - Complexity: Low — purely syntactic (decorators, static $au, conventions)
+ * 1. **Declaration** (pattern matching layer): What resources exist in the project?
+ *    - Input: Source files (FileFacts)
+ *    - Output: ResourceAnnotation[]
+ *    - Complexity: Low — pattern matching (decorators, static $au, define, conventions)
  *
  * 2. **Registration** (this module): What scope(s) is each resource available in?
- *    - Input: ResourceCandidate[], SourceFacts
+ *    - Input: ResourceAnnotation[], FileFacts
  *    - Output: RegistrationAnalysis
  *    - Complexity: Medium — requires import graph traversal
  *
@@ -49,7 +49,7 @@
  */
 
 import type { NormalizedPath, SourceSpan } from "@aurelia-ls/compiler";
-import type { ResourceCandidate } from "../inference/types.js";
+import type { ResourceAnnotation } from "../annotation.js";
 import type { PluginManifest } from "../plugins/types.js";
 
 // =============================================================================
@@ -193,7 +193,7 @@ export interface RegistrationSite {
 export type ResourceRef =
   | {
       readonly kind: "resolved";
-      readonly resource: ResourceCandidate;
+      readonly resource: ResourceAnnotation;
     }
   | {
       readonly kind: "unresolved";
@@ -313,7 +313,7 @@ export type RegistrationEvidence =
  */
 export interface OrphanResource {
   /** The resource that has no registrations */
-  readonly resource: ResourceCandidate;
+  readonly resource: ResourceAnnotation;
 
   /**
    * Where the resource is defined.
@@ -401,7 +401,7 @@ export interface LocalRegistrationSite extends RegistrationSite {
  * ```
  */
 export interface ResolvedRegistrationSite extends RegistrationSite {
-  readonly resourceRef: { readonly kind: "resolved"; readonly resource: ResourceCandidate };
+  readonly resourceRef: { readonly kind: "resolved"; readonly resource: ResourceAnnotation };
 }
 
 // =============================================================================

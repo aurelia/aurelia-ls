@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { extractAllFacts, resolveImports, buildExportBindingMap } from "@aurelia-ls/resolution";
-import { createResolverPipeline } from "@aurelia-ls/resolution";
-import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
-import type { RegistrationAnalysis, RegistrationSite } from "@aurelia-ls/resolution";
+import {
+  extractAllFileFacts,
+  buildExportBindingMap,
+  createRegistrationAnalyzer,
+  matchFileFacts,
+} from "@aurelia-ls/resolution";
+import type { RegistrationAnalysis, RegistrationSite, ResourceAnnotation } from "@aurelia-ls/resolution";
 import {
   createProgramFromApp,
   getTestAppPath,
@@ -32,19 +35,22 @@ describe("Registration: explicit-app", () => {
 
   beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
+    const allFacts = extractAllFileFacts(program);
+    const appFacts = filterFactsByPathPattern(allFacts, "/explicit-app/src/");
 
-    // Resolve imports to populate DependencyRef.resolvedPath
-    const resolvedFacts = resolveImports(allFacts);
-    const appFacts = filterFactsByPathPattern(resolvedFacts, "/explicit-app/src/");
+    // Run pattern matching on all files to get annotations
+    const allAnnotations: ResourceAnnotation[] = [];
+    for (const [, fileFacts] of appFacts) {
+      const matchResult = matchFileFacts(fileFacts);
+      allAnnotations.push(...matchResult.annotations);
+    }
 
     // Build export binding map
     const exportBindings = buildExportBindingMap(appFacts);
 
-    const pipeline = createResolverPipeline();
-    const resolved = pipeline.resolve(appFacts);
+    // Analyze registrations
     const analyzer = createRegistrationAnalyzer();
-    analysis = analyzer.analyze(resolved.value, appFacts, exportBindings);
+    analysis = analyzer.analyze(allAnnotations, appFacts, exportBindings);
   });
 
   it("analyzes registration sites and orphans for all candidates", () => {
@@ -97,7 +103,7 @@ describe("Registration: explicit-app", () => {
     const dateSites = analysis.sites.filter(s =>
       s.resourceRef.kind === "resolved" &&
       s.resourceRef.resource.name === "date" &&
-      s.resourceRef.resource.kind === "valueConverter"
+      s.resourceRef.resource.kind === "value-converter"
     );
     expect(dateSites.length > 0, "Should find date site").toBe(true);
     expect(dateSites[0]!.scope.kind, "date should be global").toBe("global");

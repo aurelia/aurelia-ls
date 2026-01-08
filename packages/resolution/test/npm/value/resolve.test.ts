@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import ts from 'typescript';
 import type { NormalizedPath } from '@aurelia-ls/compiler';
-import { gap } from '../../../src/extraction/types.js';
 import {
   // Value constructors
   literal,
@@ -25,11 +24,9 @@ import {
   returnStmt,
   // Types
   type AnalyzableValue,
-  type Scope,
+  type LexicalScope,
   type ResolutionContext,
-  type SourceFactsLike,
   type ExportBindingMap,
-  type ResolvedExportLike,
   // Layer 2
   buildFileScope,
   // Layer 3
@@ -38,10 +35,15 @@ import {
   resolveImport,
   fullyResolve,
 } from '../../../src/npm/value/index.js';
+import type { FileFacts, ImportDeclaration } from '../../../src/file-facts.js';
+import type { ResolvedExport } from '../../../src/binding/types.js';
 
 // =============================================================================
 // Test Helpers
 // =============================================================================
+
+/** Default span for test import declarations */
+const SPAN = { start: 0, end: 0 };
 
 /**
  * Parse TypeScript source and return SourceFile.
@@ -57,13 +59,13 @@ function parseSource(code: string, fileName: string = 'test.ts'): ts.SourceFile 
 }
 
 /**
- * Create a minimal Scope for testing.
+ * Create a minimal LexicalScope for testing.
  */
 function createScope(
   bindings: Record<string, AnalyzableValue>,
   imports: Record<string, { specifier: string; exportName: string; resolvedPath: NormalizedPath | null }> = {},
   filePath: NormalizedPath = '/test.ts' as NormalizedPath
-): Scope {
+): LexicalScope {
   return {
     bindings: new Map(Object.entries(bindings)),
     imports: new Map(Object.entries(imports)),
@@ -73,13 +75,26 @@ function createScope(
 }
 
 /**
- * Create SourceFactsLike for testing.
+ * Create FileFacts for testing (minimal version).
+ * Only populates fields needed for cross-file resolution tests.
  */
-function createSourceFacts(
+function createFileFacts(
   path: NormalizedPath,
-  imports: SourceFactsLike['imports']
-): SourceFactsLike {
-  return { path, imports };
+  imports: readonly ImportDeclaration[]
+): FileFacts {
+  return {
+    path,
+    imports,
+    classes: [],
+    exports: [],
+    variables: [],
+    functions: [],
+    registrationCalls: [],
+    defineCalls: [],
+    siblingFiles: [],
+    templateImports: [],
+    gaps: [],
+  };
 }
 
 /**
@@ -91,9 +106,9 @@ function createExportBindings(
     exports: Record<string, { definitionPath: NormalizedPath; definitionName: string }>;
   }>
 ): ExportBindingMap {
-  const map = new Map<NormalizedPath, Map<string, ResolvedExportLike>>();
+  const map = new Map<NormalizedPath, Map<string, ResolvedExport>>();
   for (const entry of entries) {
-    const fileBindings = new Map<string, ResolvedExportLike>();
+    const fileBindings = new Map<string, ResolvedExport>();
     for (const [name, binding] of Object.entries(entry.exports)) {
       fileBindings.set(name, binding);
     }
@@ -106,25 +121,25 @@ function createExportBindings(
  * Create a ResolutionContext for testing.
  */
 function createContext(options: {
-  scopes: Array<{ path: NormalizedPath; scope: Scope }>;
+  scopes: Array<{ path: NormalizedPath; scope: LexicalScope }>;
   exports: Array<{ file: NormalizedPath; exports: Record<string, { definitionPath: NormalizedPath; definitionName: string }> }>;
-  facts: Array<SourceFactsLike>;
+  facts: Array<FileFacts>;
   packagePath?: string;
 }): ResolutionContext {
-  const fileScopes = new Map<NormalizedPath, Scope>();
+  const fileScopes = new Map<NormalizedPath, LexicalScope>();
   for (const { path, scope } of options.scopes) {
     fileScopes.set(path, scope);
   }
 
-  const sourceFacts = new Map<NormalizedPath, SourceFactsLike>();
+  const fileFacts = new Map<NormalizedPath, FileFacts>();
   for (const fact of options.facts) {
-    sourceFacts.set(fact.path, fact);
+    fileFacts.set(fact.path, fact);
   }
 
   return buildResolutionContext({
     fileScopes,
     exportBindings: createExportBindings(options.exports),
-    sourceFacts,
+    fileFacts,
     packagePath: options.packagePath ?? '/pkg',
   });
 }
@@ -143,13 +158,13 @@ describe('Cross-File Resolution (Layer 3)', () => {
       const ctx = buildResolutionContext({
         fileScopes: new Map(),
         exportBindings: new Map(),
-        sourceFacts: new Map(),
+        fileFacts: new Map(),
         packagePath: '/pkg',
       });
 
       expect(ctx.fileScopes.size).toBe(0);
       expect(ctx.exportBindings.size).toBe(0);
-      expect(ctx.sourceFacts.size).toBe(0);
+      expect(ctx.fileFacts.size).toBe(0);
       expect(ctx.resolving.size).toBe(0);
       expect(ctx.gaps).toEqual([]);
       expect(ctx.packagePath).toBe('/pkg');
@@ -163,13 +178,13 @@ describe('Cross-File Resolution (Layer 3)', () => {
           file: '/foo.ts' as NormalizedPath,
           exports: { Foo: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'Foo' } },
         }]),
-        sourceFacts: new Map([['/foo.ts' as NormalizedPath, createSourceFacts('/foo.ts' as NormalizedPath, [])]]),
+        fileFacts: new Map([['/foo.ts' as NormalizedPath, createFileFacts('/foo.ts' as NormalizedPath, [])]]),
         packagePath: '/my-pkg',
       });
 
       expect(ctx.fileScopes.size).toBe(1);
       expect(ctx.exportBindings.size).toBe(1);
-      expect(ctx.sourceFacts.size).toBe(1);
+      expect(ctx.fileFacts.size).toBe(1);
       expect(ctx.packagePath).toBe('/my-pkg');
     });
   });
@@ -189,8 +204,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/foo.ts' as NormalizedPath, exports: { FooElement: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'FooElement' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'FooElement', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'FooElement', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -218,8 +233,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/config.ts' as NormalizedPath, exports: { default: { definitionPath: '/config.ts' as NormalizedPath, definitionName: 'Config' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'default', alias: 'Config', moduleSpecifier: './config', resolvedPath: '/config.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'default', alias: 'Config', moduleSpecifier: './config', resolvedPath: '/config.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -244,7 +259,7 @@ describe('Cross-File Resolution (Layer 3)', () => {
         facts: [],
       });
 
-      // Import already has resolvedPath - doesn't need SourceFacts lookup
+      // Import already has resolvedPath - doesn't need FileFacts lookup
       const imp = importVal('./foo', 'Foo', '/foo.ts' as NormalizedPath);
       const result = resolveImport(imp, ctx, '/main.ts' as NormalizedPath);
 
@@ -276,8 +291,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/index.ts' as NormalizedPath, exports: { FooClass: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'FooClass' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'FooClass', alias: null }], moduleSpecifier: './index', resolvedPath: '/index.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'FooClass', alias: null }], moduleSpecifier: './index', resolvedPath: '/index.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -308,8 +323,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/index.ts' as NormalizedPath, exports: { Aliased: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'Original' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'Aliased', alias: null }], moduleSpecifier: './index', resolvedPath: '/index.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'Aliased', alias: null }], moduleSpecifier: './index', resolvedPath: '/index.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -339,8 +354,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/a.ts' as NormalizedPath, exports: { Deep: { definitionPath: '/c.ts' as NormalizedPath, definitionName: 'Deep' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'Deep', alias: null }], moduleSpecifier: './a', resolvedPath: '/a.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'Deep', alias: null }], moduleSpecifier: './a', resolvedPath: '/a.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -368,7 +383,7 @@ describe('Cross-File Resolution (Layer 3)', () => {
         scopes: [],
         exports: [],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, []),
+          createFileFacts('/main.ts' as NormalizedPath, []),
         ],
       });
 
@@ -389,8 +404,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/foo.ts' as NormalizedPath, exports: { Other: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'Other' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'Missing', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'Missing', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -409,8 +424,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/foo.ts' as NormalizedPath, exports: { Foo: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'Foo' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'Foo', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'Foo', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -431,8 +446,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/foo.ts' as NormalizedPath, exports: { Foo: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'Foo' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'Foo', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'Foo', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -489,14 +504,14 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/b.ts' as NormalizedPath, exports: { B: { definitionPath: '/b.ts' as NormalizedPath, definitionName: 'B' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'A', alias: null }], moduleSpecifier: './a', resolvedPath: '/a.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'A', alias: null }], moduleSpecifier: './a', resolvedPath: '/a.ts' as NormalizedPath, span: SPAN },
           ]),
-          createSourceFacts('/a.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'B', alias: null }], moduleSpecifier: './b', resolvedPath: '/b.ts' as NormalizedPath },
+          createFileFacts('/a.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'B', alias: null }], moduleSpecifier: './b', resolvedPath: '/b.ts' as NormalizedPath, span: SPAN },
           ]),
-          createSourceFacts('/b.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'A', alias: null }], moduleSpecifier: './a', resolvedPath: '/a.ts' as NormalizedPath },
+          createFileFacts('/b.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'A', alias: null }], moduleSpecifier: './a', resolvedPath: '/a.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -523,8 +538,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/foo.ts' as NormalizedPath, exports: { Foo: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'Foo' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'Foo', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'Foo', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -556,9 +571,9 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/bar.ts' as NormalizedPath, exports: { BarClass: { definitionPath: '/bar.ts' as NormalizedPath, definitionName: 'BarClass' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'FooClass', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
-            { kind: 'named', names: [{ name: 'BarClass', alias: null }], moduleSpecifier: './bar', resolvedPath: '/bar.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'FooClass', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
+            { kind: 'named', bindings: [{ name: 'BarClass', alias: null }], moduleSpecifier: './bar', resolvedPath: '/bar.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -695,8 +710,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           }},
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'namespace', alias: 'Mod', moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'namespace', alias: 'Mod', moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -739,8 +754,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/foo.ts' as NormalizedPath, exports: { DefaultComponents: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'DefaultComponents' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'DefaultComponents', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'DefaultComponents', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -783,8 +798,8 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/foo.ts' as NormalizedPath, exports: { ImportedClass: { definitionPath: '/foo.ts' as NormalizedPath, definitionName: 'ImportedClass' } } },
         ],
         facts: [
-          createSourceFacts('/main.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'ImportedClass', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
+          createFileFacts('/main.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'ImportedClass', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });
@@ -858,9 +873,9 @@ describe('Cross-File Resolution (Layer 3)', () => {
           { file: '/bar.ts' as NormalizedPath, exports: { BarAttribute: { definitionPath: '/bar.ts' as NormalizedPath, definitionName: 'BarAttribute' } } },
         ],
         facts: [
-          createSourceFacts('/config.ts' as NormalizedPath, [
-            { kind: 'named', names: [{ name: 'FooElement', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath },
-            { kind: 'named', names: [{ name: 'BarAttribute', alias: null }], moduleSpecifier: './bar', resolvedPath: '/bar.ts' as NormalizedPath },
+          createFileFacts('/config.ts' as NormalizedPath, [
+            { kind: 'named', bindings: [{ name: 'FooElement', alias: null }], moduleSpecifier: './foo', resolvedPath: '/foo.ts' as NormalizedPath, span: SPAN },
+            { kind: 'named', bindings: [{ name: 'BarAttribute', alias: null }], moduleSpecifier: './bar', resolvedPath: '/bar.ts' as NormalizedPath, span: SPAN },
           ]),
         ],
       });

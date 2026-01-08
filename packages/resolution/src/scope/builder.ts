@@ -14,8 +14,7 @@ import {
   type BindingBehaviorSig,
 } from "@aurelia-ls/compiler";
 import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
-import type { ResourceCandidate, BindableSpec } from "../inference/types.js";
-import type { PluginManifest } from "../plugins/types.js";
+import type { ResourceAnnotation, BindableAnnotation } from "../annotation.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
 
 /**
@@ -136,65 +135,71 @@ function createEmptyCollections(): ResourceCollections {
   };
 }
 
-function addToCollections(collections: ResourceCollections, candidate: ResourceCandidate): void {
-  if (candidate.kind === "element") {
-    collections.elements[candidate.name] = candidateToElement(candidate);
-  } else if (candidate.kind === "attribute") {
-    collections.attributes[candidate.name] = candidateToAttribute(candidate);
-  } else if (candidate.kind === "valueConverter") {
-    collections.valueConverters[candidate.name] = candidateToValueConverter(candidate);
-  } else if (candidate.kind === "bindingBehavior") {
-    collections.bindingBehaviors[candidate.name] = candidateToBindingBehavior(candidate);
+function addToCollections(collections: ResourceCollections, annotation: ResourceAnnotation): void {
+  switch (annotation.kind) {
+    case "custom-element":
+      collections.elements[annotation.name] = annotationToElement(annotation);
+      break;
+    case "custom-attribute":
+    case "template-controller":
+      collections.attributes[annotation.name] = annotationToAttribute(annotation);
+      break;
+    case "value-converter":
+      collections.valueConverters[annotation.name] = annotationToValueConverter(annotation);
+      break;
+    case "binding-behavior":
+      collections.bindingBehaviors[annotation.name] = annotationToBindingBehavior(annotation);
+      break;
   }
 }
 
-function candidateToElement(c: ResourceCandidate): ElementRes {
+function annotationToElement(a: ResourceAnnotation): ElementRes {
   return {
     kind: "element",
-    name: c.name,
-    bindables: bindableSpecsToRecord(c.bindables),
-    ...(c.aliases.length > 0 ? { aliases: [...c.aliases] } : {}),
-    ...(c.containerless ? { containerless: true } : {}),
-    ...(c.boundary ? { boundary: true } : {}),
+    name: a.name,
+    bindables: bindableAnnotationsToRecord(a.bindables),
+    ...(a.aliases.length > 0 ? { aliases: [...a.aliases] } : {}),
+    ...(a.element?.containerless ? { containerless: true } : {}),
+    ...(a.element?.boundary ? { boundary: true } : {}),
   };
 }
 
-function candidateToAttribute(c: ResourceCandidate): AttrRes {
+function annotationToAttribute(a: ResourceAnnotation): AttrRes {
   return {
     kind: "attribute",
-    name: c.name,
-    bindables: bindableSpecsToRecord(c.bindables),
-    ...(c.aliases.length > 0 ? { aliases: [...c.aliases] } : {}),
-    ...(c.primary ? { primary: c.primary } : {}),
-    ...(c.isTemplateController ? { isTemplateController: true } : {}),
-    ...(c.noMultiBindings ? { noMultiBindings: true } : {}),
+    name: a.name,
+    bindables: bindableAnnotationsToRecord(a.bindables),
+    ...(a.aliases.length > 0 ? { aliases: [...a.aliases] } : {}),
+    ...(a.attribute?.primary ? { primary: a.attribute.primary } : {}),
+    ...(a.attribute?.isTemplateController ? { isTemplateController: true } : {}),
+    ...(a.attribute?.noMultiBindings ? { noMultiBindings: true } : {}),
   };
 }
 
-function candidateToValueConverter(c: ResourceCandidate): ValueConverterSig {
+function annotationToValueConverter(a: ResourceAnnotation): ValueConverterSig {
   return {
-    name: c.name,
+    name: a.name,
     in: { kind: "unknown" },
     out: { kind: "unknown" },
   };
 }
 
-function candidateToBindingBehavior(c: ResourceCandidate): BindingBehaviorSig {
-  return { name: c.name };
+function annotationToBindingBehavior(a: ResourceAnnotation): BindingBehaviorSig {
+  return { name: a.name };
 }
 
-function bindableSpecsToRecord(specs: readonly BindableSpec[]): Record<string, Bindable> {
+function bindableAnnotationsToRecord(bindables: readonly BindableAnnotation[]): Record<string, Bindable> {
   const record: Record<string, Bindable> = {};
-  for (const spec of specs) {
-    const type: TypeRef = spec.type ? { kind: "ts", name: spec.type } : { kind: "unknown" };
+  for (const b of bindables) {
+    const type: TypeRef = b.type ? { kind: "ts", name: b.type } : { kind: "unknown" };
     const bindable: Bindable = {
-      name: spec.name,
+      name: b.name,
       type,
     };
-    if (spec.mode) {
-      bindable.mode = spec.mode;
+    if (b.mode) {
+      bindable.mode = b.mode;
     }
-    record[spec.name] = bindable;
+    record[b.name] = bindable;
   }
   return record;
 }

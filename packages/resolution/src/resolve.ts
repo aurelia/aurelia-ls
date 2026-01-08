@@ -1,16 +1,16 @@
 import type ts from "typescript";
 import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, CompileTrace } from "@aurelia-ls/compiler";
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
-import type { SourceFacts, AnalysisGap } from "./extraction/types.js";
-import type { ResourceCandidate } from "./inference/types.js";
+import type { FileFacts, FileContext } from "./file-facts.js";
+import type { AnalysisGap } from "./extraction/types.js";
+import type { ResourceAnnotation } from "./annotation.js";
 import type { RegistrationAnalysis, RegistrationSite, RegistrationEvidence } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
-import { extractAllFacts } from "./extraction/extractor.js";
-import { resolveImports } from "./extraction/import-resolver.js";
+import { extractAllFileFacts, extractFileContext } from "./extraction/file-facts-extractor.js";
 import { buildExportBindingMap } from "./binding/export-resolver.js";
-import { createResolverPipeline } from "./inference/resolver-pipeline.js";
+import { matchFileFacts } from "./patterns/pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
 import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
@@ -55,8 +55,8 @@ export interface ResolutionConfig {
 export interface ResolutionResult {
   /** The constructed resource graph */
   resourceGraph: ResourceGraph;
-  /** All resource candidates identified */
-  candidates: readonly ResourceCandidate[];
+  /** All resource annotations identified */
+  resources: readonly ResourceAnnotation[];
   /** Registration analysis results */
   registration: RegistrationAnalysis;
   /** External template files (convention-based: foo.ts → foo.html) */
@@ -66,7 +66,7 @@ export interface ResolutionResult {
   /** Diagnostics from resolution */
   diagnostics: readonly ResolutionDiagnostic[];
   /** Extracted facts (for debugging/tooling) */
-  facts: Map<NormalizedPath, SourceFacts>;
+  facts: Map<NormalizedPath, FileFacts>;
 }
 
 /**
@@ -115,11 +115,10 @@ export interface ResolutionDiagnostic {
  * Main entry point: run the full resolution pipeline.
  *
  * Pipeline:
- * 1. Extraction: AST → SourceFacts (with DependencyRef.resolvedPath: null)
- * 2. Import Resolution: Populate DependencyRef.resolvedPath
- * 3. Inference: SourceFacts → ResourceCandidate[]
- * 4. Registration Analysis: SourceFacts + ResourceCandidate[] → RegistrationAnalysis
- * 5. Scope Construction: RegistrationAnalysis → ResourceGraph
+ * 1. Extraction: AST → FileFacts (with import resolution)
+ * 2. Pattern Matching: FileFacts → ResourceAnnotation[]
+ * 3. Registration Analysis: ResourceAnnotation[] + FileFacts → RegistrationAnalysis
+ * 4. Scope Construction: RegistrationAnalysis → ResourceGraph
  */
 export function resolve(
   program: ts.Program,
@@ -140,33 +139,41 @@ export function resolve(
     // Layer 1: Extraction
     log.info("[resolution] extracting facts...");
     trace.event("resolution.extraction.start");
-    const rawFacts = extractAllFacts(program, {
+    const facts = extractAllFileFacts(program, {
       fileSystem: config?.fileSystem,
       templateExtensions: config?.templateExtensions,
       styleExtensions: config?.styleExtensions,
     });
-    trace.event("resolution.extraction.done", { factCount: rawFacts.size });
-    debug.resolution("extraction.complete", { factCount: rawFacts.size });
+    trace.event("resolution.extraction.done", { factCount: facts.size });
+    debug.resolution("extraction.complete", { factCount: facts.size });
 
-    // Layer 1.5: Import Resolution
-    log.info("[resolution] resolving imports...");
-    trace.event("resolution.importResolution.start");
-    const facts = resolveImports(rawFacts);
-    trace.event("resolution.importResolution.done");
-    debug.resolution("importResolution.complete", { factCount: facts.size });
+    // Layer 2: Pattern Matching
+    log.info("[resolution] matching patterns...");
+    trace.event("resolution.patternMatching.start");
+    const allResources: ResourceAnnotation[] = [];
+    const matcherGaps: AnalysisGap[] = [];
+    const contexts = new Map<NormalizedPath, FileContext>();
 
-    // Layer 2: Inference
-    log.info("[resolution] resolving candidates...");
-    trace.event("resolution.inference.start");
-    const pipeline = createResolverPipeline(config?.conventions);
-    const resolverResult = pipeline.resolve(facts);
-    const candidates = resolverResult.value;
-    const resolverGaps = resolverResult.gaps;
-    trace.event("resolution.inference.done", { candidateCount: candidates.length });
-    debug.resolution("inference.complete", {
-      candidateCount: candidates.length,
-      gapCount: resolverGaps.length,
-      confidence: resolverResult.confidence,
+    for (const [filePath, fileFacts] of facts) {
+      // Get file context for convention matching
+      const context = extractFileContext(filePath, {
+        fileSystem: config?.fileSystem,
+        templateExtensions: config?.templateExtensions,
+        styleExtensions: config?.styleExtensions,
+      }, program);
+
+      // Store context for later use by registration analyzer
+      contexts.set(filePath, context);
+
+      // Run pattern matchers on classes AND define calls
+      const matchResult = matchFileFacts(fileFacts, context);
+      allResources.push(...matchResult.annotations);
+      matcherGaps.push(...matchResult.gaps);
+    }
+    trace.event("resolution.patternMatching.done", { resourceCount: allResources.length });
+    debug.resolution("patternMatching.complete", {
+      resourceCount: allResources.length,
+      gapCount: matcherGaps.length,
     });
 
     // Layer 2.5: Export Binding Resolution
@@ -184,7 +191,7 @@ export function resolve(
     log.info("[resolution] analyzing registration...");
     trace.event("resolution.registration.start");
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(candidates, facts, exportBindings);
+    const registration = analyzer.analyze(allResources, facts, exportBindings, contexts);
     trace.event("resolution.registration.done", {
       siteCount: registration.sites.length,
       orphanCount: registration.orphans.length,
@@ -225,7 +232,7 @@ export function resolve(
     });
 
     log.info(
-      `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
+      `[resolution] complete: ${allResources.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
     );
 
     // Extract unresolved resource refs from registration sites
@@ -239,16 +246,16 @@ export function resolve(
         file: getFileFromEvidence(s.evidence),
       }));
 
-    // Merge all diagnostics: resolver gaps + orphans + unresolved patterns + unresolved refs
+    // Merge all diagnostics: matcher gaps + orphans + unresolved patterns + unresolved refs
     const allDiagnostics: ResolutionDiagnostic[] = [
-      ...resolverGaps.map(gapToDiagnostic),
+      ...matcherGaps.map(gapToDiagnostic),
       ...orphansToDiagnostics(registration.orphans),
       ...unresolvedToDiagnostics(registration.unresolved),
       ...unresolvedRefsToDiagnostics(unresolvedRefs),
     ];
 
     trace.setAttributes({
-      "resolution.candidateCount": candidates.length,
+      "resolution.resourceCount": allResources.length,
       "resolution.globalCount": globalCount,
       "resolution.localCount": localCount,
       "resolution.orphanCount": registration.orphans.length,
@@ -260,7 +267,7 @@ export function resolve(
 
     return {
       resourceGraph,
-      candidates,
+      resources: allResources,
       registration,
       templates,
       inlineTemplates,
@@ -339,7 +346,7 @@ function discoverTemplates(
   const templates: TemplateInfo[] = [];
   const inlineTemplates: InlineTemplateInfo[] = [];
   const sourceFiles = new Set(program.getSourceFiles().map((sf) => normalizePathForId(sf.fileName)));
-  const processedResources = new Set<ResourceCandidate>();
+  const processedResources = new Set<ResourceAnnotation>();
 
   // Process registered resources (from registration sites)
   for (const site of registration.sites) {
@@ -353,15 +360,15 @@ function discoverTemplates(
     processedResources.add(resource);
 
     // Only elements have templates
-    if (resource.kind !== "element") continue;
+    if (resource.kind !== "custom-element") continue;
 
     const componentPath = resource.source;
     const scopeId = computeScopeId(site, resourceGraph);
 
     // Check for inline template first
-    if (resource.inlineTemplate !== undefined) {
+    if (resource.element?.inlineTemplate !== undefined) {
       inlineTemplates.push({
-        content: resource.inlineTemplate,
+        content: resource.element.inlineTemplate,
         componentPath,
         scopeId,
         className: resource.className,
@@ -395,15 +402,15 @@ function discoverTemplates(
     processedResources.add(resource);
 
     // Only elements have templates
-    if (resource.kind !== "element") continue;
+    if (resource.kind !== "custom-element") continue;
 
     const componentPath = resource.source;
     const scopeId = resourceGraph.root; // Orphans go to root scope
 
     // Check for inline template first
-    if (resource.inlineTemplate !== undefined) {
+    if (resource.element?.inlineTemplate !== undefined) {
       inlineTemplates.push({
-        content: resource.inlineTemplate,
+        content: resource.element.inlineTemplate,
         componentPath,
         scopeId,
         className: resource.className,

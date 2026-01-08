@@ -18,22 +18,23 @@ describe("Full Pipeline: explicit-app", () => {
     expect(result.resourceGraph, "Should produce a ResourceGraph").toBeTruthy();
     expect(result.facts.size > 0, "Should produce facts").toBe(true);
 
-    // Assert candidate counts by kind (includes runtime resources from Aurelia)
-    // Full pipeline picks up runtime resources: template controllers (if, repeat, etc.),
-    // custom elements (au-compose, au-slot), custom attributes (focus, show), and more
-    expect(result.candidates.length, "Should find at least 29 candidates (app + runtime)").toBeGreaterThanOrEqual(29);
+    // Filter to only app-defined resources (exclude Aurelia framework source via path mapping)
+    const appResources = result.resources.filter(c => c.source.includes("/explicit-app/src/"));
+
+    // Assert resource counts by kind
+    // App defines: 8 elements, 2 attributes, 2 value converters, 2 binding behaviors = 14 total
+    expect(appResources.length, "Should find exactly 14 app resources").toBe(14);
     const byKind = {
-      elements: result.candidates.filter(c => c.kind === "element").length,
-      attributes: result.candidates.filter(c => c.kind === "attribute").length,
-      valueConverters: result.candidates.filter(c => c.kind === "valueConverter").length,
-      bindingBehaviors: result.candidates.filter(c => c.kind === "bindingBehavior").length,
+      elements: appResources.filter(c => c.kind === "custom-element").length,
+      attributes: appResources.filter(c => c.kind === "custom-attribute").length,
+      valueConverters: appResources.filter(c => c.kind === "value-converter").length,
+      bindingBehaviors: appResources.filter(c => c.kind === "binding-behavior").length,
     };
     // App defines: 8 elements, 2 attributes, 2 value converters, 2 binding behaviors
-    // Runtime provides additional resources that vary as extraction improves
-    expect(byKind.elements, "Should find app elements + runtime elements (au-compose, au-slot)").toBeGreaterThanOrEqual(8);
-    expect(byKind.attributes, "Should find app attributes + runtime TCs").toBeGreaterThanOrEqual(7);
-    expect(byKind.valueConverters, "Should find app VCs + sanitize").toBeGreaterThanOrEqual(3);
-    expect(byKind.bindingBehaviors, "Should find app BBs + runtime BBs").toBeGreaterThanOrEqual(11);
+    expect(byKind.elements, "Should find 8 app elements").toBe(8);
+    expect(byKind.attributes, "Should find 2 app attributes").toBe(2);
+    expect(byKind.valueConverters, "Should find 2 app value converters").toBe(2);
+    expect(byKind.bindingBehaviors, "Should find 2 app binding behaviors").toBe(2);
 
     // Assert registration site counts by scope kind
     const sitesByScope = {
@@ -50,9 +51,13 @@ describe("Full Pipeline: explicit-app", () => {
     // Should have orphan diagnostics for unregistered resources:
     // - my-app: Root component, bootstrapped via .app() not registered
     // - product-card: Test fixture with local deps but not globally registered
-    expect(result.diagnostics.length, "Should have 2 orphan diagnostics").toBe(2);
+    // Filter to app diagnostics only (exclude Aurelia framework via path mapping)
+    const appDiagnostics = result.diagnostics.filter(d =>
+      d.source?.includes("/explicit-app/src/")
+    );
+    expect(appDiagnostics.length, "Should have 2 app orphan diagnostics").toBe(2);
 
-    const orphanNames = result.diagnostics
+    const orphanNames = appDiagnostics
       .filter(d => d.code === "RES0001")
       .map(d => d.message.match(/element '([^']+)'/)?.[1])
       .sort();
@@ -90,17 +95,17 @@ describe("Full Pipeline: explicit-app", () => {
     expect(mainFacts.registrationCalls.length > 0, "main.ts should have registration calls").toBe(true);
   });
 
-  it("exposes candidates for tooling", () => {
-    // Find specific candidates
-    const navBar = result.candidates.find(c => c.name === "nav-bar");
-    expect(navBar, "Should find nav-bar candidate").toBeTruthy();
-    expect(navBar.kind).toBe("element");
-    expect(navBar.resolver).toBe("decorator");
+  it("exposes resources for tooling", () => {
+    // Find specific resources
+    const navBar = result.resources.find(c => c.name === "nav-bar");
+    expect(navBar, "Should find nav-bar resource").toBeTruthy();
+    expect(navBar!.kind).toBe("custom-element");
+    expect(navBar!.evidence.pattern).toBe("decorator");
 
-    const currency = result.candidates.find(c => c.name === "currency");
-    expect(currency, "Should find currency candidate").toBeTruthy();
-    expect(currency.kind).toBe("valueConverter");
-    expect(currency.resolver).toBe("static-au");
+    const currency = result.resources.find(c => c.name === "currency");
+    expect(currency, "Should find currency resource").toBeTruthy();
+    expect(currency!.kind).toBe("value-converter");
+    expect(currency!.evidence.pattern).toBe("static-au");
   });
 
   it("exposes registration sites for tooling", () => {

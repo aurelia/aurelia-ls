@@ -12,13 +12,12 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  extractAllFacts,
-  resolveImports,
+  extractAllFileFacts,
   buildExportBindingMap,
-  createResolverPipeline,
   createRegistrationAnalyzer,
+  matchFileFacts,
 } from "@aurelia-ls/resolution";
-import type { RegistrationAnalysis, RegistrationSite } from "@aurelia-ls/resolution";
+import type { RegistrationAnalysis, RegistrationSite, ResourceAnnotation } from "@aurelia-ls/resolution";
 import { createProgramFromMemory } from "../_helpers/index.js";
 
 // =============================================================================
@@ -30,15 +29,23 @@ import { createProgramFromMemory } from "../_helpers/index.js";
  */
 function analyzeRegistration(files: Record<string, string>): RegistrationAnalysis {
   const { program, host } = createProgramFromMemory(files);
-  // Pass the host for in-memory module resolution
-  const facts = extractAllFacts(program, { moduleResolutionHost: host });
-  const resolvedFacts = resolveImports(facts);
-  // Build export binding map (Layer 1.5)
-  const exportBindings = buildExportBindingMap(resolvedFacts);
-  const pipeline = createResolverPipeline();
-  const resolved = pipeline.resolve(resolvedFacts);
+
+  // 1. Extract facts from all files
+  const facts = extractAllFileFacts(program, { moduleResolutionHost: host });
+
+  // 2. Run pattern matching on all files to get annotations
+  const allAnnotations: ResourceAnnotation[] = [];
+  for (const [, fileFacts] of facts) {
+    const matchResult = matchFileFacts(fileFacts);
+    allAnnotations.push(...matchResult.annotations);
+  }
+
+  // 3. Build export bindings
+  const exportBindings = buildExportBindingMap(facts);
+
+  // 4. Analyze registrations
   const analyzer = createRegistrationAnalyzer();
-  return analyzer.analyze(resolved.value, resolvedFacts, exportBindings);
+  return analyzer.analyze(allAnnotations, facts, exportBindings);
 }
 
 /**

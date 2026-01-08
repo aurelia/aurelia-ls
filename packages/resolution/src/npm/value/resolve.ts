@@ -2,7 +2,7 @@
  * Cross-File Resolution (Layer 3)
  *
  * Resolves ImportValue nodes across file boundaries by:
- * 1. Looking up module specifiers in SourceFacts to get resolved paths
+ * 1. Looking up module specifiers in FileFacts to get resolved paths
  * 2. Following export chains using export-resolver infrastructure
  * 3. Looking up definitions in the target file's scope
  *
@@ -16,7 +16,8 @@
 
 import type { NormalizedPath } from '@aurelia-ls/compiler';
 import { debug } from '@aurelia-ls/compiler';
-import { gap, type SourceFacts } from '../../extraction/types.js';
+import { gap } from '../../extraction/types.js';
+import type { FileFacts } from '../../file-facts.js';
 import { lookupExportBinding } from '../../binding/export-resolver.js';
 import type { ExportBindingMap } from '../../binding/types.js';
 import type {
@@ -47,8 +48,8 @@ export interface BuildContextOptions {
   /** Export binding map from binding/export-resolver.ts */
   readonly exportBindings: ExportBindingMap;
 
-  /** Source facts for import specifier resolution */
-  readonly sourceFacts: ReadonlyMap<NormalizedPath, SourceFacts>;
+  /** File facts for import specifier resolution */
+  readonly fileFacts: ReadonlyMap<NormalizedPath, FileFacts>;
 
   /** Package root path */
   readonly packagePath: string;
@@ -64,7 +65,7 @@ export function buildResolutionContext(options: BuildContextOptions): Resolution
   return {
     fileScopes: options.fileScopes,
     exportBindings: options.exportBindings,
-    sourceFacts: options.sourceFacts,
+    fileFacts: options.fileFacts,
     resolving: new Set(),
     gaps: [],
     packagePath: options.packagePath,
@@ -554,7 +555,7 @@ function resolveNamespacePropertyAccess(
 /**
  * Look up the resolved path for an import specifier.
  *
- * Uses the SourceFacts import information to find the resolved path.
+ * Uses the FileFacts import information to find the resolved path.
  */
 function lookupImportPath(
   specifier: string,
@@ -566,26 +567,26 @@ function lookupImportPath(
     specifier,
     exportName,
     fromFile,
-    availableFiles: [...ctx.sourceFacts.keys()].slice(0, 5),
+    availableFiles: [...ctx.fileFacts.keys()].slice(0, 5),
   });
 
-  const fileFacts = ctx.sourceFacts.get(fromFile);
-  if (!fileFacts) {
+  const facts = ctx.fileFacts.get(fromFile);
+  if (!facts) {
     debug.resolution('lookupImportPath.noFileFacts', { fromFile });
     return null;
   }
 
   debug.resolution('lookupImportPath.fileFacts', {
     fromFile,
-    importCount: fileFacts.imports.length,
-    imports: fileFacts.imports.map(i => ({
+    importCount: facts.imports.length,
+    imports: facts.imports.map(i => ({
       moduleSpecifier: i.moduleSpecifier,
       kind: i.kind,
       resolvedPath: i.resolvedPath,
     })),
   });
 
-  for (const imp of fileFacts.imports) {
+  for (const imp of facts.imports) {
     if (imp.moduleSpecifier !== specifier) continue;
     if (!imp.resolvedPath) {
       debug.resolution('lookupImportPath.noResolvedPath', {
@@ -606,9 +607,9 @@ function lookupImportPath(
       return imp.resolvedPath;
     }
     if (imp.kind === 'named') {
-      // Check if the export name matches any imported name
-      for (const name of imp.names) {
-        if (name.name === exportName || name.alias === exportName) {
+      // Check if the export name matches any imported binding
+      for (const binding of imp.bindings) {
+        if (binding.name === exportName || binding.alias === exportName) {
           debug.resolution('lookupImportPath.found', { specifier, kind: 'named', exportName, resolvedPath: imp.resolvedPath });
           return imp.resolvedPath;
         }

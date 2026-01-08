@@ -14,7 +14,8 @@
  */
 
 import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
-import type { AnalysisGap, SourceFacts } from '../../extraction/types.js';
+import type { AnalysisGap } from '../../extraction/types.js';
+import type { FileFacts } from '../../file-facts.js';
 import type { ExportBindingMap } from '../../binding/types.js';
 
 // =============================================================================
@@ -105,15 +106,51 @@ export interface FunctionValue {
 }
 
 /**
- * Class reference (for resource extraction).
+ * Class definition with metadata for resource extraction.
  *
- * When we see a class identifier in a `container.register()` call,
- * we need to track which class it refers to for resource extraction.
+ * Enriched representation that carries all information needed for
+ * pattern matching: decorators, static members, bindable members.
+ *
+ * Replaces the separate ClassFacts type - everything uses AnalyzableValue.
  */
 export interface ClassValue {
   readonly kind: 'class';
   readonly className: string;
   readonly filePath: NormalizedPath;
+
+  /** Decorators applied to this class */
+  readonly decorators: readonly DecoratorApplication[];
+
+  /** Static members - $au, dependencies, etc. */
+  readonly staticMembers: ReadonlyMap<string, AnalyzableValue>;
+
+  /** @bindable decorated instance members */
+  readonly bindableMembers: readonly BindableMember[];
+
+  /** Gaps encountered during class extraction */
+  readonly gaps: readonly AnalysisGap[];
+
+  readonly span?: TextSpan;
+}
+
+/**
+ * Decorator application on a class or member.
+ */
+export interface DecoratorApplication {
+  readonly name: string;
+  readonly args: readonly AnalyzableValue[];
+  readonly span?: TextSpan;
+}
+
+/**
+ * @bindable decorated instance member.
+ */
+export interface BindableMember {
+  readonly name: string;
+  /** Arguments from @bindable(...) if any */
+  readonly args: readonly AnalyzableValue[];
+  /** Inferred type from TypeScript */
+  readonly type?: string;
   readonly span?: TextSpan;
 }
 
@@ -405,8 +442,8 @@ export interface ResolutionContext {
   /** Export binding map from binding/export-resolver.ts */
   readonly exportBindings: ExportBindingMap;
 
-  /** Source facts for all files (for import specifier resolution) */
-  readonly sourceFacts: ReadonlyMap<NormalizedPath, SourceFacts>;
+  /** File facts for all files (for import specifier resolution) */
+  readonly fileFacts: ReadonlyMap<NormalizedPath, FileFacts>;
 
   /** Currently resolving (for cycle detection) */
   readonly resolving: Set<string>;
@@ -624,13 +661,101 @@ export function spread(target: AnalyzableValue, expanded?: readonly AnalyzableVa
 }
 
 /** Create a class value */
-export function classVal(className: string, filePath: NormalizedPath, span?: TextSpan): ClassValue {
-  return { kind: 'class', className, filePath, span };
+export function classVal(
+  className: string,
+  filePath: NormalizedPath,
+  decorators: readonly DecoratorApplication[] = [],
+  staticMembers: ReadonlyMap<string, AnalyzableValue> = new Map(),
+  bindableMembers: readonly BindableMember[] = [],
+  gaps: readonly AnalysisGap[] = [],
+  span?: TextSpan
+): ClassValue {
+  return {
+    kind: 'class',
+    className,
+    filePath,
+    decorators,
+    staticMembers,
+    bindableMembers,
+    gaps,
+    span,
+  };
 }
 
 /** Create an unknown value */
 export function unknown(reason: AnalysisGap, span?: TextSpan): UnknownValue {
   return { kind: 'unknown', reason, span };
+}
+
+// =============================================================================
+// Value Extraction Helpers (for pattern matching)
+// =============================================================================
+
+/**
+ * Extract a string from an AnalyzableValue.
+ * Returns undefined if not a string literal.
+ */
+export function extractString(value: AnalyzableValue | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value.kind === 'literal' && typeof value.value === 'string') {
+    return value.value;
+  }
+  return undefined;
+}
+
+/**
+ * Extract a boolean from an AnalyzableValue.
+ * Returns undefined if not a boolean literal.
+ */
+export function extractBoolean(value: AnalyzableValue | undefined): boolean | undefined {
+  if (!value) return undefined;
+  if (value.kind === 'literal' && typeof value.value === 'boolean') {
+    return value.value;
+  }
+  return undefined;
+}
+
+/**
+ * Extract a string array from an AnalyzableValue.
+ * Returns empty array if not an array of strings.
+ */
+export function extractStringArray(value: AnalyzableValue | undefined): readonly string[] {
+  if (!value || value.kind !== 'array') return [];
+  const result: string[] = [];
+  for (const el of value.elements) {
+    const s = extractString(el);
+    if (s !== undefined) result.push(s);
+  }
+  return result;
+}
+
+/**
+ * Get a property from an ObjectValue.
+ */
+export function getProperty(value: AnalyzableValue | undefined, key: string): AnalyzableValue | undefined {
+  if (!value || value.kind !== 'object') return undefined;
+  return value.properties.get(key);
+}
+
+/**
+ * Extract a string property from an object.
+ */
+export function extractStringProp(obj: AnalyzableValue | undefined, key: string): string | undefined {
+  return extractString(getProperty(obj, key));
+}
+
+/**
+ * Extract a boolean property from an object.
+ */
+export function extractBooleanProp(obj: AnalyzableValue | undefined, key: string): boolean | undefined {
+  return extractBoolean(getProperty(obj, key));
+}
+
+/**
+ * Extract a string array property from an object.
+ */
+export function extractStringArrayProp(obj: AnalyzableValue | undefined, key: string): readonly string[] {
+  return extractStringArray(getProperty(obj, key));
 }
 
 /** Create a method value */

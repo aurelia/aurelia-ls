@@ -1,9 +1,11 @@
 import { toSourceFileId, type NormalizedPath, type SourceSpan } from "@aurelia-ls/compiler";
-import type { SourceFacts, DependencyRef, ClassFacts, RegistrationCallFact, RegistrationArgFact, ImportFact, TemplateImportFact } from "../extraction/types.js";
-import type { ResourceCandidate } from "../inference/types.js";
+import type { FileFacts, FileContext, ImportDeclaration, RegistrationCall, TemplateImport } from "../file-facts.js";
+import type { ResourceAnnotation } from "../annotation.js";
+import type { ClassValue, AnalyzableValue } from "../npm/value/types.js";
+import { extractStringArrayProp, getProperty } from "../npm/value/types.js";
 import type { ExportBindingMap } from "../binding/types.js";
 import { lookupExportBinding } from "../binding/export-resolver.js";
-import type { PluginManifest, PluginResolver, ImportOrigin } from "../plugins/types.js";
+import type { PluginManifest, PluginResolver } from "../plugins/types.js";
 import {
   createPluginResolver,
   traceIdentifierImport,
@@ -28,9 +30,10 @@ import type {
  */
 export interface RegistrationAnalyzer {
   analyze(
-    candidates: readonly ResourceCandidate[],
-    facts: Map<NormalizedPath, SourceFacts>,
+    annotations: readonly ResourceAnnotation[],
+    facts: Map<NormalizedPath, FileFacts>,
     exportBindings: ExportBindingMap,
+    contexts?: Map<NormalizedPath, FileContext>,
   ): RegistrationAnalysis;
 }
 
@@ -38,13 +41,14 @@ export interface RegistrationAnalyzer {
  * Create a registration analyzer.
  *
  * The analyzer expects:
- * - facts to have DependencyRef.resolvedPath populated (via resolveImports)
+ * - facts to have import resolvedPath populated
  * - exportBindings to be pre-built (via buildExportBindingMap)
+ * - contexts (optional) for template import analysis
  */
 export function createRegistrationAnalyzer(): RegistrationAnalyzer {
   return {
-    analyze(candidates, facts, exportBindings) {
-      const context = new AnalysisContext(facts, candidates, exportBindings);
+    analyze(annotations, facts, exportBindings, contexts) {
+      const context = new AnalysisContext(facts, annotations, exportBindings, contexts);
       return analyzeRegistrations(context);
     },
   };
@@ -60,19 +64,27 @@ class AnalysisContext {
   /** Map from file path to exported class names (for spread resolution) */
   private exportedClasses = new Map<NormalizedPath, Set<string>>();
 
-  /** Map from (source file, class name) to ResourceCandidate for fast lookup */
-  private candidateIndex = new Map<string, ResourceCandidate>();
+  /** Map from (source file, class name) to ResourceAnnotation for fast lookup */
+  private annotationIndex = new Map<string, ResourceAnnotation>();
 
   /** Plugin resolver for known plugin manifests */
   public readonly pluginResolver: PluginResolver;
 
   constructor(
-    public readonly facts: Map<NormalizedPath, SourceFacts>,
-    public readonly candidates: readonly ResourceCandidate[],
+    public readonly facts: Map<NormalizedPath, FileFacts>,
+    public readonly annotations: readonly ResourceAnnotation[],
     public readonly exportBindings: ExportBindingMap,
+    public readonly contexts?: Map<NormalizedPath, FileContext>,
   ) {
     this.pluginResolver = createPluginResolver();
     this.buildIndexes();
+  }
+
+  /**
+   * Get the FileContext for a file path.
+   */
+  getFileContext(filePath: NormalizedPath): FileContext | undefined {
+    return this.contexts?.get(filePath);
   }
 
   private buildIndexes(): void {
@@ -95,10 +107,10 @@ class AnalysisContext {
       this.exportedClasses.set(path, new Set(bindings.keys()));
     }
 
-    // Index candidates by (source, className)
-    for (const candidate of this.candidates) {
-      const key = `${candidate.source}::${candidate.className}`;
-      this.candidateIndex.set(key, candidate);
+    // Index annotations by (source, className)
+    for (const annotation of this.annotations) {
+      const key = `${annotation.source}::${annotation.className}`;
+      this.annotationIndex.set(key, annotation);
     }
   }
 
@@ -117,19 +129,19 @@ class AnalysisContext {
   }
 
   /**
-   * Find a ResourceCandidate by source file and class name.
+   * Find a ResourceAnnotation by source file and class name.
    */
-  findCandidate(source: NormalizedPath, className: string): ResourceCandidate | undefined {
+  findAnnotation(source: NormalizedPath, className: string): ResourceAnnotation | undefined {
     const key = `${source}::${className}`;
-    return this.candidateIndex.get(key);
+    return this.annotationIndex.get(key);
   }
 
   /**
-   * Find a ResourceCandidate by class name, searching all files.
-   * Used when we have a DependencyRef with resolvedPath.
+   * Find a ResourceAnnotation by class name, searching all files.
+   * Used when we have a resolved import path.
    */
-  findCandidateByResolvedPath(resolvedPath: NormalizedPath, className: string): ResourceCandidate | undefined {
-    return this.findCandidate(resolvedPath, className);
+  findAnnotationByResolvedPath(resolvedPath: NormalizedPath, className: string): ResourceAnnotation | undefined {
+    return this.findAnnotation(resolvedPath, className);
   }
 
   /**
@@ -159,7 +171,7 @@ class AnalysisContext {
 function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
   const sites: RegistrationSite[] = [];
   const unresolved: UnresolvedRegistration[] = [];
-  const registeredCandidates = new Set<ResourceCandidate>();
+  const registeredAnnotations = new Set<ResourceAnnotation>();
   const activatedPlugins: PluginManifest[] = [];
   const seenPlugins = new Set<string>(); // Dedupe by package
 
@@ -170,36 +182,41 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
       for (const site of localSites) {
         sites.push(site);
         if (site.resourceRef.kind === "resolved") {
-          registeredCandidates.add(site.resourceRef.resource);
+          registeredAnnotations.add(site.resourceRef.resource);
         }
       }
     }
   }
 
   // 1.5. Find template import registration sites (from <import>/<require> in sibling templates)
-  for (const [filePath, fileFacts] of context.facts) {
-    if (fileFacts.templateImports.length === 0) continue;
+  // Only process if contexts are provided (they come from resolve.ts)
+  if (context.contexts) {
+    for (const [filePath, fileContext] of context.contexts) {
+      if (fileContext.templateImports.length === 0) continue;
 
-    // Find all element candidates from this source file
-    const elementCandidates = context.candidates.filter(
-      (c) => c.source === filePath && c.kind === "element"
-    );
-
-    // Find the sibling template file path (for evidence)
-    const templateFile = fileFacts.siblingFiles.find((s) => s.extension === ".html")?.path ?? filePath;
-
-    for (const candidate of elementCandidates) {
-      const templateSites = findTemplateImportSites(
-        fileFacts.templateImports,
-        filePath,
-        candidate.className,
-        templateFile,
-        context,
+      // Find all element annotations from this source file
+      const elementAnnotations = context.annotations.filter(
+        (a) => a.source === filePath && a.kind === "custom-element"
       );
-      for (const site of templateSites) {
-        sites.push(site);
-        if (site.resourceRef.kind === "resolved") {
-          registeredCandidates.add(site.resourceRef.resource);
+
+      // Find the sibling template file path (for evidence)
+      // Use the .html sibling if available, otherwise fall back to the source path
+      const templateSibling = fileContext.siblings.find(s => s.extension === '.html');
+      const templateFile = templateSibling?.path ?? filePath;
+
+      for (const annotation of elementAnnotations) {
+        const templateSites = findTemplateImportSites(
+          fileContext.templateImports,
+          filePath,
+          annotation.className,
+          templateFile,
+          context,
+        );
+        for (const site of templateSites) {
+          sites.push(site);
+          if (site.resourceRef.kind === "resolved") {
+            registeredAnnotations.add(site.resourceRef.resource);
+          }
         }
       }
     }
@@ -217,7 +234,7 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
       for (const site of result.globalSites) {
         sites.push(site);
         if (site.resourceRef.kind === "resolved") {
-          registeredCandidates.add(site.resourceRef.resource);
+          registeredAnnotations.add(site.resourceRef.resource);
         }
       }
       unresolved.push(...result.unresolvedPatterns);
@@ -232,16 +249,16 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
     }
   }
 
-  // 3. Find orphans - candidates with no registration sites
+  // 3. Find orphans - annotations with no registration sites
   const orphans: OrphanResource[] = [];
-  for (const candidate of context.candidates) {
-    if (!registeredCandidates.has(candidate)) {
+  for (const annotation of context.annotations) {
+    if (!registeredAnnotations.has(annotation)) {
       orphans.push({
-        resource: candidate,
+        resource: annotation,
         definitionSpan: {
-          file: toSourceFileId(candidate.source),
-          start: 0, // TODO: Get actual span from extraction
-          end: 0,
+          file: toSourceFileId(annotation.source),
+          start: annotation.span?.start ?? 0,
+          end: annotation.span?.end ?? 0,
         },
       });
     }
@@ -254,7 +271,7 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
  * Find local registration sites from a class's dependencies.
  */
 function findLocalRegistrationSites(
-  cls: ClassFacts,
+  cls: ClassValue,
   filePath: NormalizedPath,
   context: AnalysisContext,
 ): RegistrationSite[] {
@@ -262,47 +279,266 @@ function findLocalRegistrationSites(
   const scope: RegistrationScope = { kind: "local", owner: filePath };
 
   // 1. static dependencies = [...]
-  if (cls.staticDependencies) {
-    for (const ref of cls.staticDependencies.references) {
-      const site = createSiteFromDependencyRef(ref, scope, {
+  const staticDeps = cls.staticMembers.get('dependencies');
+  if (staticDeps) {
+    const refs = extractDependencyRefs(staticDeps);
+    for (const ref of refs) {
+      const site = createSiteFromValueRef(ref, scope, {
         kind: "static-dependencies",
         component: filePath,
-        className: cls.name,
+        className: cls.className,
       }, filePath, context);
       sites.push(site);
     }
   }
 
   // 2. static $au = { dependencies: [...] }
-  if (cls.staticAu?.dependencies) {
-    for (const ref of cls.staticAu.dependencies) {
-      const site = createSiteFromDependencyRef(ref, scope, {
-        kind: "static-au-dependencies",
-        component: filePath,
-        className: cls.name,
-      }, filePath, context);
-      sites.push(site);
+  const staticAu = cls.staticMembers.get('$au');
+  if (staticAu && staticAu.kind === 'object') {
+    const auDeps = getProperty(staticAu, 'dependencies');
+    if (auDeps) {
+      const refs = extractDependencyRefs(auDeps);
+      for (const ref of refs) {
+        const site = createSiteFromValueRef(ref, scope, {
+          kind: "static-au-dependencies",
+          component: filePath,
+          className: cls.className,
+        }, filePath, context);
+        sites.push(site);
+      }
     }
   }
 
   // 3. @customElement({ dependencies: [...] }) or similar decorators
   for (const dec of cls.decorators) {
-    if (dec.args?.kind === "object") {
-      const depsProp = dec.args.properties["dependencies"];
-      if (depsProp?.kind === "dependencyArray") {
-        for (const ref of depsProp.refs) {
-          const site = createSiteFromDependencyRef(ref, scope, {
-            kind: "decorator-dependencies",
-            component: filePath,
-            className: cls.name,
-          }, filePath, context);
-          sites.push(site);
+    if (dec.args.length > 0) {
+      const firstArg = dec.args[0];
+      if (firstArg?.kind === 'object') {
+        const depsProp = getProperty(firstArg, 'dependencies');
+        if (depsProp) {
+          const refs = extractDependencyRefs(depsProp);
+          for (const ref of refs) {
+            const site = createSiteFromValueRef(ref, scope, {
+              kind: "decorator-dependencies",
+              component: filePath,
+              className: cls.className,
+            }, filePath, context);
+            sites.push(site);
+          }
         }
       }
     }
   }
 
   return sites;
+}
+
+/**
+ * Dependency reference extracted from AnalyzableValue.
+ */
+interface ValueRef {
+  kind: 'identifier' | 'property-access' | 'unknown';
+  name: string;
+  property?: string;
+  resolvedPath?: NormalizedPath | null;
+  span: { start: number; end: number };
+}
+
+/**
+ * Extract the name from an AnalyzableValue that might be a reference or import.
+ * Returns null if the value is not a simple identifier.
+ */
+function extractBaseName(value: AnalyzableValue): string | null {
+  if (value.kind === 'reference') {
+    return value.name;
+  }
+  if (value.kind === 'import') {
+    return value.exportName;
+  }
+  return null;
+}
+
+/**
+ * Extract dependency references from an AnalyzableValue.
+ *
+ * Handles:
+ * - Array of references: [Foo, Bar, Baz]
+ * - Single reference: Foo
+ */
+function extractDependencyRefs(value: AnalyzableValue): ValueRef[] {
+  const refs: ValueRef[] = [];
+
+  if (value.kind === 'array') {
+    for (const element of value.elements) {
+      const ref = extractSingleRef(element);
+      if (ref) refs.push(ref);
+    }
+  } else {
+    const ref = extractSingleRef(value);
+    if (ref) refs.push(ref);
+  }
+
+  return refs;
+}
+
+/**
+ * Extract a single reference from an AnalyzableValue element.
+ */
+function extractSingleRef(value: AnalyzableValue): ValueRef | null {
+  const span = value.span ?? { start: 0, end: 0 };
+
+  if (value.kind === 'reference') {
+    return {
+      kind: 'identifier',
+      name: value.name,
+      // ReferenceValue doesn't have resolvedPath directly, resolution happens via scope
+      resolvedPath: undefined,
+      span,
+    };
+  }
+
+  if (value.kind === 'propertyAccess') {
+    const baseName = extractBaseName(value.base);
+    if (!baseName) {
+      return {
+        kind: 'unknown',
+        name: '(complex property access)',
+        span,
+      };
+    }
+    return {
+      kind: 'property-access',
+      name: baseName,
+      property: value.property,
+      span,
+    };
+  }
+
+  if (value.kind === 'import') {
+    return {
+      kind: 'identifier',
+      name: value.exportName,
+      resolvedPath: value.resolvedPath,
+      span,
+    };
+  }
+
+  // Unknown or complex value
+  return {
+    kind: 'unknown',
+    name: '(unknown)',
+    span,
+  };
+}
+
+/**
+ * Create a RegistrationSite from a ValueRef.
+ */
+function createSiteFromValueRef(
+  ref: ValueRef,
+  scope: RegistrationScope,
+  evidence: RegistrationEvidence,
+  filePath: NormalizedPath,
+  context: AnalysisContext,
+): RegistrationSite {
+  const resourceRef = resolveValueRef(ref, filePath, context);
+  const span: SourceSpan = {
+    file: toSourceFileId(filePath),
+    start: ref.span.start,
+    end: ref.span.end,
+  };
+
+  return {
+    resourceRef,
+    scope,
+    evidence,
+    span,
+  };
+}
+
+/**
+ * Resolve a ValueRef to a ResourceRef.
+ */
+function resolveValueRef(ref: ValueRef, filePath: NormalizedPath, context: AnalysisContext): ResourceRef {
+  if (ref.kind === 'identifier') {
+    // If we have a resolved path, look up the annotation
+    if (ref.resolvedPath) {
+      const annotation = context.findAnnotationByResolvedPath(ref.resolvedPath, ref.name);
+      if (annotation) {
+        return { kind: "resolved", resource: annotation };
+      }
+      return {
+        kind: "unresolved",
+        name: ref.name,
+        reason: `Class '${ref.name}' at '${ref.resolvedPath}' is not a known resource`,
+      };
+    }
+
+    // Try to resolve through file facts imports
+    const fileFacts = context.facts.get(filePath);
+    if (fileFacts) {
+      for (const imp of fileFacts.imports) {
+        if (imp.kind === "named" && imp.resolvedPath) {
+          const found = imp.bindings.find(b => (b.alias ?? b.name) === ref.name);
+          if (found) {
+            const resolved = context.resolveExportedClass(imp.resolvedPath, found.name);
+            const annotation = resolved
+              ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
+              : undefined;
+            if (annotation) {
+              return { kind: "resolved", resource: annotation };
+            }
+          }
+        } else if (imp.kind === "default" && imp.alias === ref.name && imp.resolvedPath) {
+          // For default imports, look up the default export
+          const resolved = context.resolveExportedClass(imp.resolvedPath, 'default');
+          const annotation = resolved
+            ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
+            : undefined;
+          if (annotation) {
+            return { kind: "resolved", resource: annotation };
+          }
+        }
+      }
+    }
+
+    return {
+      kind: "unresolved",
+      name: ref.name,
+      reason: `Could not resolve import for '${ref.name}'`,
+    };
+  }
+
+  if (ref.kind === 'property-access') {
+    // Property access: Module.Component
+    const barrelPath = context.getNamespaceImportPath(filePath, ref.name);
+    if (barrelPath && ref.property) {
+      const resolved = context.resolveExportedClass(barrelPath, ref.property);
+      const annotation = resolved
+        ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
+        : undefined;
+      if (annotation) {
+        return { kind: "resolved", resource: annotation };
+      }
+      return {
+        kind: "unresolved",
+        name: `${ref.name}.${ref.property}`,
+        reason: `Class '${ref.property}' not found in namespace '${ref.name}'`,
+      };
+    }
+    return {
+      kind: "unresolved",
+      name: `${ref.name}.${ref.property ?? '?'}`,
+      reason: `Unknown namespace '${ref.name}'`,
+    };
+  }
+
+  // Unknown
+  return {
+    kind: "unresolved",
+    name: ref.name,
+    reason: "Cannot statically analyze this value",
+  };
 }
 
 /**
@@ -317,7 +553,7 @@ function findLocalRegistrationSites(
  * 3. Plain import: `<import from="./x">` → one site for all module exports
  */
 function findTemplateImportSites(
-  templateImports: readonly TemplateImportFact[],
+  templateImports: readonly TemplateImport[],
   componentPath: NormalizedPath,
   className: string,
   templateFile: NormalizedPath,
@@ -360,7 +596,7 @@ function findTemplateImportSites(
  * Create a RegistrationSite from a template import.
  */
 function createSiteFromTemplateImport(
-  imp: TemplateImportFact,
+  imp: TemplateImport,
   scope: RegistrationScope,
   evidence: RegistrationEvidence,
   _templateFile: NormalizedPath,
@@ -382,7 +618,7 @@ function createSiteFromTemplateImport(
  * For `<import from="./x" Foo.as="f">`, looks up the export `Foo` from module `./x`.
  */
 function resolveNamedAliasImport(
-  imp: TemplateImportFact,
+  imp: TemplateImport,
   exportName: string,
   context: AnalysisContext,
 ): ResourceRef {
@@ -395,9 +631,9 @@ function resolveNamedAliasImport(
   }
 
   // Look up the specific export by name
-  const candidate = context.findCandidateByResolvedPath(imp.resolvedPath, exportName);
-  if (candidate) {
-    return { kind: "resolved", resource: candidate };
+  const annotation = context.findAnnotationByResolvedPath(imp.resolvedPath, exportName);
+  if (annotation) {
+    return { kind: "resolved", resource: annotation };
   }
 
   return {
@@ -417,7 +653,7 @@ function resolveNamedAliasImport(
  * Named aliases are handled separately by resolveNamedAliasImport.
  */
 function resolveTemplateImportRef(
-  imp: TemplateImportFact,
+  imp: TemplateImport,
   context: AnalysisContext,
 ): ResourceRef {
   // If we don't have a resolved path, module resolution failed
@@ -429,24 +665,24 @@ function resolveTemplateImportRef(
     };
   }
 
-  // If we have a default alias, try to find a candidate with that name
+  // If we have a default alias, try to find an annotation with that name
   if (imp.defaultAlias) {
-    const candidate = context.findCandidateByResolvedPath(imp.resolvedPath, imp.defaultAlias);
-    if (candidate) {
-      return { kind: "resolved", resource: candidate };
+    const annotation = context.findAnnotationByResolvedPath(imp.resolvedPath, imp.defaultAlias);
+    if (annotation) {
+      return { kind: "resolved", resource: annotation };
     }
   }
 
-  // Plain import: find any candidate exported from this module
+  // Plain import: find any annotation exported from this module
   // This matches Aurelia runtime behavior where <import from="./foo">
   // makes all resources from ./foo available.
-  for (const candidate of context.candidates) {
-    if (candidate.source === imp.resolvedPath) {
-      return { kind: "resolved", resource: candidate };
+  for (const annotation of context.annotations) {
+    if (annotation.source === imp.resolvedPath) {
+      return { kind: "resolved", resource: annotation };
     }
   }
 
-  // No candidate found in the imported module
+  // No annotation found in the imported module
   return {
     kind: "unresolved",
     name: imp.moduleSpecifier,
@@ -454,96 +690,6 @@ function resolveTemplateImportRef(
   };
 }
 
-
-/**
- * Create a RegistrationSite from a DependencyRef.
- */
-function createSiteFromDependencyRef(
-  ref: DependencyRef,
-  scope: RegistrationScope,
-  evidence: RegistrationEvidence,
-  filePath: NormalizedPath,
-  context: AnalysisContext,
-): RegistrationSite {
-  const resourceRef = resolveResourceRef(ref, context);
-  const span = refToSourceSpan(ref, filePath);
-
-  return {
-    resourceRef,
-    scope,
-    evidence,
-    span,
-  };
-}
-
-/**
- * Resolve a DependencyRef to a ResourceRef.
- */
-function resolveResourceRef(ref: DependencyRef, context: AnalysisContext): ResourceRef {
-  if (ref.kind === "identifier") {
-    // If we have a resolved path, look up the candidate
-    if (ref.resolvedPath) {
-      const candidate = context.findCandidateByResolvedPath(ref.resolvedPath, ref.name);
-      if (candidate) {
-        return { kind: "resolved", resource: candidate };
-      }
-      return {
-        kind: "unresolved",
-        name: ref.name,
-        reason: `Class '${ref.name}' at '${ref.resolvedPath}' is not a known resource`,
-      };
-    }
-    // No resolved path - import resolution failed
-    return {
-      kind: "unresolved",
-      name: ref.name,
-      reason: `Could not resolve import for '${ref.name}'`,
-    };
-  }
-
-  if (ref.kind === "property-access") {
-    // Property access: Module.Component
-    // If we have a resolved path, look up the candidate
-    if (ref.resolvedPath) {
-      const candidate = context.findCandidateByResolvedPath(ref.resolvedPath, ref.property);
-      if (candidate) {
-        return { kind: "resolved", resource: candidate };
-      }
-      return {
-        kind: "unresolved",
-        name: `${ref.object}.${ref.property}`,
-        reason: `Class '${ref.property}' at '${ref.resolvedPath}' is not a known resource`,
-      };
-    }
-    // No resolved path - import resolution needed
-    return {
-      kind: "unresolved",
-      name: `${ref.object}.${ref.property}`,
-      reason: `Could not resolve import for '${ref.object}.${ref.property}'`,
-    };
-  }
-
-  // kind === "import" - direct import reference
-  return {
-    kind: "unresolved",
-    name: ref.moduleSpecifier,
-    reason: `Direct import references not yet supported`,
-  };
-}
-
-/**
- * Convert a DependencyRef to a SourceSpan.
- *
- * Uses toSourceFileId to properly convert NormalizedPath to SourceFileId.
- */
-function refToSourceSpan(ref: DependencyRef, filePath: NormalizedPath): SourceSpan {
-  const file = toSourceFileId(filePath);
-  return {
-    file,
-    start: ref.span.start,
-    end: ref.span.end,
-  };
-}
 
 /**
  * Result from processing global registration sites.
@@ -558,9 +704,9 @@ interface GlobalRegistrationResult {
  * Find global registration sites from a register() call.
  */
 function findGlobalRegistrationSites(
-  call: RegistrationCallFact,
+  call: RegistrationCall,
   filePath: NormalizedPath,
-  imports: readonly ImportFact[],
+  imports: readonly ImportDeclaration[],
   context: AnalysisContext,
 ): GlobalRegistrationResult {
   const globalSites: RegistrationSite[] = [];
@@ -569,7 +715,7 @@ function findGlobalRegistrationSites(
   const scope: RegistrationScope = { kind: "global" };
 
   for (const arg of call.arguments) {
-    const result = processRegistrationArg(arg, scope, filePath, imports, call, context);
+    const result = processRegistrationValue(arg, scope, filePath, imports, call, context);
     globalSites.push(...result.sites);
     unresolvedPatterns.push(...result.unresolved);
     plugins.push(...result.plugins);
@@ -588,14 +734,14 @@ interface ProcessArgResult {
 }
 
 /**
- * Process a registration argument recursively.
+ * Process a registration value recursively.
  */
-function processRegistrationArg(
-  arg: RegistrationArgFact,
+function processRegistrationValue(
+  arg: AnalyzableValue,
   scope: RegistrationScope,
   filePath: NormalizedPath,
-  imports: readonly ImportFact[],
-  call: RegistrationCallFact,
+  imports: readonly ImportDeclaration[],
+  call: RegistrationCall,
   context: AnalysisContext,
 ): ProcessArgResult {
   const sites: RegistrationSite[] = [];
@@ -606,11 +752,11 @@ function processRegistrationArg(
   const file = toSourceFileId(filePath);
   const argSpan: SourceSpan = {
     file,
-    start: arg.span.start,
-    end: arg.span.end,
+    start: arg.span?.start ?? 0,
+    end: arg.span?.end ?? 0,
   };
 
-  if (arg.kind === "identifier") {
+  if (arg.kind === "reference") {
     // Trace the identifier back through imports to get its origin
     const origin = traceIdentifierImport(arg.name, imports);
 
@@ -626,46 +772,20 @@ function processRegistrationArg(
     }
 
     // Direct identifier: Aurelia.register(MyElement)
-    // We need to resolve this identifier to a candidate
-    // First, look it up in the file's imports
-    const fileFacts = context.facts.get(filePath);
-    let resolvedPath: NormalizedPath | null = null;
-    let originalClassName: string = arg.name; // May be aliased
+    // Use ValueRef to resolve
+    // If the reference resolved to a ClassValue, get its filePath
+    const resolvedPath = arg.resolved?.kind === 'class' ? arg.resolved.filePath : undefined;
+    const ref: ValueRef = {
+      kind: 'identifier',
+      name: arg.name,
+      resolvedPath,
+      span: arg.span ?? { start: 0, end: 0 },
+    };
 
-    if (fileFacts) {
-      for (const imp of fileFacts.imports) {
-        if (imp.kind === "named" && imp.resolvedPath) {
-          const found = imp.names.find(n => (n.alias ?? n.name) === arg.name);
-          if (found) {
-            resolvedPath = imp.resolvedPath;
-            // Use the original name from the import, not the alias
-            originalClassName = found.name;
-            break;
-          }
-        } else if (imp.kind === "default" && imp.alias === arg.name && imp.resolvedPath) {
-          resolvedPath = imp.resolvedPath;
-          // For default imports, we need to find what's exported as default
-          originalClassName = arg.name; // Will be resolved via re-export chain
-          break;
-        }
-      }
-    }
-
-    // Resolve through re-export chains if needed
-    const resolved = resolvedPath
-      ? context.resolveExportedClass(resolvedPath, originalClassName)
-      : null;
-
-    const candidate = resolved
-      ? context.findCandidateByResolvedPath(resolved.path, resolved.className)
-      : undefined;
-
-    const resourceRef: ResourceRef = candidate
-      ? { kind: "resolved", resource: candidate }
-      : { kind: "unresolved", name: arg.name, reason: "Could not resolve to a known resource" };
+    const resourceRef = resolveValueRef(ref, filePath, context);
 
     const evidence: RegistrationEvidence = {
-      kind: call.receiver === "Aurelia" ? "aurelia-register" : "container-register",
+      kind: call.receiver === "aurelia" ? "aurelia-register" : "container-register",
       file: filePath,
     };
 
@@ -675,46 +795,66 @@ function processRegistrationArg(
       evidence,
       span: argSpan,
     });
-  } else if (arg.kind === "callExpression") {
+  } else if (arg.kind === "call") {
     // Call expression: X.customize(...) pattern
-    // Trace the receiver through imports
-    const origin = traceIdentifierImport(arg.receiver, imports);
+    const callee = arg.callee;
 
-    if (origin && arg.method === "customize") {
-      // Check if this is a known plugin with .customize()
-      if (context.pluginResolver.supportsCustomize(origin)) {
-        const pluginResolution = context.pluginResolver.resolve(origin);
-        if (pluginResolution.kind === "known") {
-          // Treat X.customize(...) the same as X
-          plugins.push(pluginResolution.manifest);
-          return { sites, unresolved, plugins };
+    // Check for method call pattern: X.customize()
+    if (callee.kind === 'propertyAccess') {
+      const calleeBaseName = extractBaseName(callee.base);
+      const origin = calleeBaseName ? traceIdentifierImport(calleeBaseName, imports) : null;
+
+      if (origin && callee.property === "customize") {
+        // Check if this is a known plugin with .customize()
+        if (context.pluginResolver.supportsCustomize(origin)) {
+          const pluginResolution = context.pluginResolver.resolve(origin);
+          if (pluginResolution.kind === "known") {
+            // Treat X.customize(...) the same as X
+            plugins.push(pluginResolution.manifest);
+            return { sites, unresolved, plugins };
+          }
         }
       }
-    }
 
-    // Unknown call expression - can't analyze statically
-    const pattern: UnresolvedPattern = {
-      kind: "function-call",
-      functionName: `${arg.receiver}.${arg.method}`,
-    };
-    unresolved.push({
-      pattern,
-      file: filePath,
-      span: argSpan,
-      reason: `Cannot statically analyze call to '${arg.receiver}.${arg.method}()'`,
-    });
-  } else if (arg.kind === "arrayLiteral") {
+      // Unknown call expression - can't analyze statically
+      const calleeDesc = calleeBaseName ? `${calleeBaseName}.${callee.property}` : `(unknown).${callee.property}`;
+      const pattern: UnresolvedPattern = {
+        kind: "function-call",
+        functionName: calleeDesc,
+      };
+      unresolved.push({
+        pattern,
+        file: filePath,
+        span: argSpan,
+        reason: `Cannot statically analyze call to '${calleeDesc}()'`,
+      });
+    } else {
+      // Non-method call - can't analyze
+      const pattern: UnresolvedPattern = {
+        kind: "function-call",
+        functionName: "(unknown)",
+      };
+      unresolved.push({
+        pattern,
+        file: filePath,
+        span: argSpan,
+        reason: "Cannot statically analyze this call expression",
+      });
+    }
+  } else if (arg.kind === "array") {
     // Array literal: Aurelia.register([A, B, C])
     for (const el of arg.elements) {
-      const result = processRegistrationArg(el, scope, filePath, imports, call, context);
+      const result = processRegistrationValue(el, scope, filePath, imports, call, context);
       sites.push(...result.sites);
       unresolved.push(...result.unresolved);
       plugins.push(...result.plugins);
     }
-  } else if (arg.kind === "memberAccess") {
-    // Member access: Aurelia.register(Router.RouterConfiguration) or widgets.SpecialWidget
+  } else if (arg.kind === "propertyAccess") {
+    // Property access: Aurelia.register(Router.RouterConfiguration) or widgets.SpecialWidget
+    const argBaseName = extractBaseName(arg.base);
+
     // First, check if this is a plugin via namespace import
-    const origin = traceMemberAccessImport(arg.namespace, arg.member, imports);
+    const origin = argBaseName ? traceMemberAccessImport(argBaseName, arg.property, imports) : null;
     if (origin) {
       const pluginResolution = context.pluginResolver.resolve(origin);
       if (pluginResolution.kind === "known") {
@@ -724,22 +864,24 @@ function processRegistrationArg(
     }
 
     // Not a plugin - resolve the namespace to find the barrel file
-    const barrelPath = context.getNamespaceImportPath(filePath, arg.namespace);
+    const barrelPath = argBaseName ? context.getNamespaceImportPath(filePath, argBaseName) : null;
     if (barrelPath) {
       // Look up the member in the barrel's exports and follow re-export chain
-      const resolved = context.resolveExportedClass(barrelPath, arg.member);
-      const candidate = resolved
-        ? context.findCandidateByResolvedPath(resolved.path, resolved.className)
+      const resolved = context.resolveExportedClass(barrelPath, arg.property);
+      const annotation = resolved
+        ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
         : undefined;
 
       const evidence: RegistrationEvidence = {
-        kind: call.receiver === "Aurelia" ? "aurelia-register" : "container-register",
+        kind: call.receiver === "aurelia" ? "aurelia-register" : "container-register",
         file: filePath,
       };
 
-      if (candidate) {
+      const propAccessDesc = argBaseName ? `${argBaseName}.${arg.property}` : `(unknown).${arg.property}`;
+
+      if (annotation) {
         sites.push({
-          resourceRef: { kind: "resolved", resource: candidate },
+          resourceRef: { kind: "resolved", resource: annotation },
           scope,
           evidence,
           span: argSpan,
@@ -748,8 +890,8 @@ function processRegistrationArg(
         sites.push({
           resourceRef: {
             kind: "unresolved",
-            name: `${arg.namespace}.${arg.member}`,
-            reason: `Could not resolve '${arg.member}' in namespace '${arg.namespace}'`,
+            name: propAccessDesc,
+            reason: `Could not resolve '${arg.property}' in namespace '${argBaseName ?? "(unknown)"}'`,
           },
           scope,
           evidence,
@@ -758,15 +900,16 @@ function processRegistrationArg(
       }
     } else {
       // Namespace not found in imports
+      const propAccessDesc = argBaseName ? `${argBaseName}.${arg.property}` : `(unknown).${arg.property}`;
       sites.push({
         resourceRef: {
           kind: "unresolved",
-          name: `${arg.namespace}.${arg.member}`,
-          reason: `Unknown namespace '${arg.namespace}'`,
+          name: propAccessDesc,
+          reason: `Unknown namespace '${argBaseName ?? "(unknown)"}'`,
         },
         scope,
         evidence: {
-          kind: call.receiver === "Aurelia" ? "aurelia-register" : "container-register",
+          kind: call.receiver === "aurelia" ? "aurelia-register" : "container-register",
           file: filePath,
         },
         span: argSpan,
@@ -774,18 +917,22 @@ function processRegistrationArg(
     }
   } else if (arg.kind === "spread") {
     // Spread: Aurelia.register(...components)
-    const barrelPath = context.getNamespaceImportPath(filePath, arg.name);
+    // Try to get the spread target
+    const spreadTarget = arg.target;
+    const spreadName = spreadTarget.kind === 'reference' ? spreadTarget.name : '(unknown)';
+
+    const barrelPath = context.getNamespaceImportPath(filePath, spreadName);
     if (barrelPath) {
-      // Find all candidates exported from the barrel
-      for (const candidate of context.candidates) {
-        if (context.isClassExportedFrom(candidate.className, barrelPath)) {
+      // Find all annotations exported from the barrel
+      for (const annotation of context.annotations) {
+        if (context.isClassExportedFrom(annotation.className, barrelPath)) {
           const evidence: RegistrationEvidence = {
-            kind: call.receiver === "Aurelia" ? "aurelia-register" : "container-register",
+            kind: call.receiver === "aurelia" ? "aurelia-register" : "container-register",
             file: filePath,
           };
 
           sites.push({
-            resourceRef: { kind: "resolved", resource: candidate },
+            resourceRef: { kind: "resolved", resource: annotation },
             scope,
             evidence,
             span: argSpan,
@@ -796,20 +943,20 @@ function processRegistrationArg(
       // Can't resolve the spread - might be a variable, not a namespace import
       const pattern: UnresolvedPattern = {
         kind: "spread-variable",
-        variableName: arg.name,
+        variableName: spreadName,
       };
       unresolved.push({
         pattern,
         file: filePath,
         span: argSpan,
-        reason: `Cannot statically analyze spread of variable '${arg.name}'`,
+        reason: `Cannot statically analyze spread of variable '${spreadName}'`,
       });
     }
-  } else if (arg.kind === "unknown") {
+  } else {
     // Unknown pattern - could be function call, conditional, etc.
     const pattern: UnresolvedPattern = {
       kind: "other",
-      description: "Unknown registration pattern",
+      description: `Unknown registration pattern: ${arg.kind}`,
     };
     unresolved.push({
       pattern,

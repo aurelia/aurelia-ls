@@ -9,7 +9,7 @@ import {
   type ResourceScopeId,
   type Semantics,
 } from "@aurelia-ls/compiler";
-import { hashObject, normalizeCompilerOptions, resolve, type ResourceCandidate } from "@aurelia-ls/resolution";
+import { hashObject, normalizeCompilerOptions, resolve, type ResourceAnnotation } from "@aurelia-ls/resolution";
 import type { Logger } from "./types.js";
 
 export interface TypeScriptProject {
@@ -110,7 +110,7 @@ export class AureliaProjectIndex {
     );
 
     // Merge discovered resources into semantics.resources
-    const mergedResources = mergeDiscoveredResources(this.#baseSemantics.resources, result.candidates);
+    const mergedResources = mergeDiscoveredResources(this.#baseSemantics.resources, result.resources);
 
     const semantics: Semantics = {
       ...this.#baseSemantics,
@@ -123,12 +123,12 @@ export class AureliaProjectIndex {
       roots: [...this.#ts.getRootFileNames()].sort(),
       semantics,
       resourceGraph: result.resourceGraph,
-      candidates: result.candidates.map((c) => ({
-        kind: c.kind,
-        name: c.name,
-        aliases: [...c.aliases],
-        source: c.source,
-        className: c.className,
+      resources: result.resources.map((r) => ({
+        kind: r.kind,
+        name: r.name,
+        aliases: [...r.aliases],
+        source: r.source,
+        className: r.className,
       })),
     });
 
@@ -137,45 +137,45 @@ export class AureliaProjectIndex {
 }
 
 /**
- * Merge discovered resource candidates into base resources.
+ * Merge discovered resources into base resources.
  */
 function mergeDiscoveredResources(
   base: ResourceCollections,
-  candidates: readonly ResourceCandidate[],
+  resources: readonly ResourceAnnotation[],
 ): ResourceCollections {
   const elements = { ...base.elements };
   const attributes = { ...base.attributes };
   const valueConverters = { ...base.valueConverters };
   const bindingBehaviors = { ...base.bindingBehaviors };
 
-  for (const c of candidates) {
-    if (c.kind === "element") {
-      elements[c.name] = {
+  for (const r of resources) {
+    if (r.kind === "custom-element") {
+      elements[r.name] = {
         kind: "element",
-        name: c.name,
-        bindables: candidateBindablesToRecord(c.bindables),
-        ...(c.aliases.length > 0 ? { aliases: [...c.aliases] } : {}),
-        ...(c.containerless ? { containerless: true } : {}),
-        ...(c.boundary ? { boundary: true } : {}),
+        name: r.name,
+        bindables: annotationBindablesToRecord(r.bindables),
+        ...(r.aliases.length > 0 ? { aliases: [...r.aliases] } : {}),
+        ...(r.element?.containerless ? { containerless: true } : {}),
+        ...(r.element?.boundary ? { boundary: true } : {}),
       };
-    } else if (c.kind === "attribute") {
-      attributes[c.name] = {
+    } else if (r.kind === "custom-attribute" || r.kind === "template-controller") {
+      attributes[r.name] = {
         kind: "attribute",
-        name: c.name,
-        bindables: candidateBindablesToRecord(c.bindables),
-        ...(c.aliases.length > 0 ? { aliases: [...c.aliases] } : {}),
-        ...(c.primary ? { primary: c.primary } : {}),
-        ...(c.isTemplateController ? { isTemplateController: true } : {}),
-        ...(c.noMultiBindings ? { noMultiBindings: true } : {}),
+        name: r.name,
+        bindables: annotationBindablesToRecord(r.bindables),
+        ...(r.aliases.length > 0 ? { aliases: [...r.aliases] } : {}),
+        ...(r.attribute?.primary ? { primary: r.attribute.primary } : {}),
+        ...(r.attribute?.isTemplateController ? { isTemplateController: true } : {}),
+        ...(r.attribute?.noMultiBindings ? { noMultiBindings: true } : {}),
       };
-    } else if (c.kind === "valueConverter") {
-      valueConverters[c.name] = {
-        name: c.name,
+    } else if (r.kind === "value-converter") {
+      valueConverters[r.name] = {
+        name: r.name,
         in: { kind: "unknown" },
         out: { kind: "unknown" },
       };
-    } else if (c.kind === "bindingBehavior") {
-      bindingBehaviors[c.name] = { name: c.name };
+    } else if (r.kind === "binding-behavior") {
+      bindingBehaviors[r.name] = { name: r.name };
     }
   }
 
@@ -188,8 +188,8 @@ function mergeDiscoveredResources(
   };
 }
 
-function candidateBindablesToRecord(
-  bindables: readonly ResourceCandidate["bindables"][number][],
+function annotationBindablesToRecord(
+  bindables: readonly ResourceAnnotation["bindables"][number][],
 ): Record<string, Bindable> {
   const record: Record<string, Bindable> = {};
   for (const b of bindables) {

@@ -103,7 +103,7 @@ export function buildContextWithProgram(
   const resolutionContext: ResolutionContext = {
     fileScopes: new Map([[filePath, scope]]),
     exportBindings: new Map(),
-    sourceFacts: new Map(),
+    fileFacts: new Map(),
     resolving: new Set(),
     gaps: [],
     packagePath: "",

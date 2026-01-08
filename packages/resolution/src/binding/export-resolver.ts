@@ -14,7 +14,7 @@
 
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { debug } from "@aurelia-ls/compiler";
-import type { SourceFacts } from "../extraction/types.js";
+import type { FileFacts } from "../file-facts.js";
 import type { ExportBindingMap, FileExportBindings, ResolvedExport } from "./types.js";
 
 /**
@@ -24,7 +24,7 @@ import type { ExportBindingMap, FileExportBindings, ResolvedExport } from "./typ
  * @returns Map from file path to export bindings
  */
 export function buildExportBindingMap(
-  facts: ReadonlyMap<NormalizedPath, SourceFacts>,
+  facts: ReadonlyMap<NormalizedPath, FileFacts>,
 ): ExportBindingMap {
   const result = new Map<NormalizedPath, Map<string, ResolvedExport>>();
 
@@ -50,7 +50,7 @@ export function buildExportBindingMap(
  */
 function buildFileExportBindings(
   filePath: NormalizedPath,
-  facts: ReadonlyMap<NormalizedPath, SourceFacts>,
+  facts: ReadonlyMap<NormalizedPath, FileFacts>,
   visited: Set<NormalizedPath>,
 ): Map<string, ResolvedExport> {
   // Cycle detection
@@ -76,10 +76,10 @@ function buildFileExportBindings(
 
   // 1. Add locally defined classes as exports
   for (const cls of fileFacts.classes) {
-    if (isNameExported(cls.name)) {
-      bindings.set(cls.name, {
+    if (isNameExported(cls.className)) {
+      bindings.set(cls.className, {
         definitionPath: filePath,
-        definitionName: cls.name,
+        definitionName: cls.className,
       });
     }
   }
@@ -106,7 +106,7 @@ function buildFileExportBindings(
 
   // Helper to check if a name is locally defined (class, variable, or function)
   const isLocallyDefined = (name: string): boolean =>
-    fileFacts.classes.some(c => c.name === name) ||
+    fileFacts.classes.some(c => c.className === name) ||
     fileFacts.variables.some(v => v.name === name) ||
     fileFacts.functions.some(f => f.name === name);
 
@@ -126,7 +126,7 @@ function buildFileExportBindings(
           // Look up in imports
           for (const imp of fileFacts.imports) {
             if (imp.kind === "named" && imp.resolvedPath) {
-              const found = imp.names.find(n => (n.alias ?? n.name) === name);
+              const found = imp.bindings.find(b => (b.alias ?? b.name) === name);
               if (found) {
                 // Resolve through the import's source file
                 const resolved = resolveExportName(
@@ -159,7 +159,7 @@ function buildFileExportBindings(
       }
     } else if (exp.kind === "reexport-named" && exp.resolvedPath) {
       // Re-export specific names: export { Foo, Bar as Baz } from "./other"
-      for (const exported of exp.names) {
+      for (const exported of exp.bindings) {
         const exportedAs = exported.alias ?? exported.name;
         const resolved = resolveExportName(
           exp.resolvedPath,
@@ -197,7 +197,7 @@ function buildFileExportBindings(
 function resolveExportName(
   filePath: NormalizedPath,
   name: string,
-  facts: ReadonlyMap<NormalizedPath, SourceFacts>,
+  facts: ReadonlyMap<NormalizedPath, FileFacts>,
   visited: Set<NormalizedPath>,
 ): ResolvedExport | null {
   if (visited.has(filePath)) {
@@ -212,7 +212,7 @@ function resolveExportName(
 
   // Check if it's a locally defined class, variable, or function
   const isLocallyDefined =
-    fileFacts.classes.some(c => c.name === name) ||
+    fileFacts.classes.some(c => c.className === name) ||
     fileFacts.variables.some(v => v.name === name) ||
     fileFacts.functions.some(f => f.name === name);
 
@@ -226,7 +226,7 @@ function resolveExportName(
   // Check exports for re-exports
   for (const exp of fileFacts.exports) {
     if (exp.kind === "reexport-named" && exp.resolvedPath) {
-      for (const exported of exp.names) {
+      for (const exported of exp.bindings) {
         const exportedAs = exported.alias ?? exported.name;
         if (exportedAs === name) {
           // Follow to the source file with the original name
@@ -248,7 +248,7 @@ function resolveExportName(
       // Find the import
       for (const imp of fileFacts.imports) {
         if (imp.kind === "named" && imp.resolvedPath) {
-          const found = imp.names.find(n => (n.alias ?? n.name) === name);
+          const found = imp.bindings.find(b => (b.alias ?? b.name) === name);
           if (found) {
             return resolveExportName(imp.resolvedPath, found.name, facts, visited);
           }

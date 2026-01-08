@@ -19,14 +19,14 @@
  */
 
 import * as ts from 'typescript';
+import type { NormalizedPath } from '@aurelia-ls/compiler';
 import type {
-  AnalysisResult,
-  AnalysisGap,
-  ExtractedResource,
-  ExtractedBindable,
+  ResourceAnnotation,
+  BindableAnnotation,
   ResourceKind,
-  ResourceSource,
-} from './types.js';
+} from '../annotation.js';
+import { explicitEvidence } from '../annotation.js';
+import type { AnalysisResult, AnalysisGap } from './types.js';
 import { highConfidence, partial, gap } from './types.js';
 
 // =============================================================================
@@ -87,7 +87,7 @@ interface ExtractedClass {
 export function extractFromES2022(
   sourceText: string,
   fileName: string
-): AnalysisResult<ExtractedResource[]> {
+): AnalysisResult<ResourceAnnotation[]> {
   // Parse as JavaScript
   const sourceFile = ts.createSourceFile(
     fileName,
@@ -98,7 +98,7 @@ export function extractFromES2022(
   );
 
   const gaps: AnalysisGap[] = [];
-  const resources: ExtractedResource[] = [];
+  const resources: ResourceAnnotation[] = [];
 
   // Step 1: Find all decorator variable assignments (_dec = customAttribute('x'))
   const decoratorCalls = findDecoratorAssignments(sourceFile);
@@ -112,7 +112,7 @@ export function extractFromES2022(
   // Step 4: Group by class and build extracted classes
   const classes = buildExtractedClasses(esDecorateCalls, decoratorCalls, decoratorArrays);
 
-  // Step 5: Convert to ExtractedResource for each class that's an Aurelia resource
+  // Step 5: Convert to ResourceAnnotation for each class that's an Aurelia resource
   for (const cls of classes.values()) {
     const resource = buildResource(cls, fileName, gaps);
     if (resource) {
@@ -467,21 +467,19 @@ function buildExtractedClasses(
 }
 
 /**
- * Build an ExtractedResource from an extracted class.
+ * Build a ResourceAnnotation from an extracted class.
  */
 function buildResource(
   cls: ExtractedClass,
   fileName: string,
-  gaps: AnalysisGap[]
-): ExtractedResource | null {
+  _gaps: AnalysisGap[]
+): ResourceAnnotation | null {
   // Find the resource type decorator
   const resourceDecorator = cls.classDecorators.find(d =>
     isResourceTypeDecorator(d.decoratorName)
   );
 
   if (!resourceDecorator) {
-    // No resource decorator found - not an Aurelia resource
-    // Could try convention inference here, but that's separate
     return null;
   }
 
@@ -510,29 +508,40 @@ function buildResource(
   }
 
   // Extract bindables from field decorators
-  const bindables: ExtractedBindable[] = [];
+  const bindables: BindableAnnotation[] = [];
   for (const [fieldName, decorators] of cls.fields) {
     for (const decorator of decorators) {
       if (decorator.decoratorName === 'bindable') {
-        const bindable = extractBindable(fieldName, decorator, gaps);
+        const bindable = extractBindable(fieldName, decorator);
         bindables.push(bindable);
       }
     }
   }
 
-  const source: ResourceSource = {
-    file: fileName,
-    format: 'javascript',
-  };
+  // Determine if this is a template controller
+  const isTemplateController = resourceDecorator.decoratorName === 'templateController';
+  const actualKind: ResourceKind = isTemplateController ? 'template-controller' : kind;
 
   return {
-    kind,
+    kind: actualKind,
     name: resourceName,
     className: cls.className,
-    bindables,
+    source: fileName as NormalizedPath,
     aliases: [],
-    source,
-    evidence: { kind: 'decorator', decoratorName: resourceDecorator.decoratorName },
+    bindables,
+    evidence: explicitEvidence('decorator'),
+    ...(kind === 'custom-element' && {
+      element: {
+        containerless: false,
+        boundary: true,
+      },
+    }),
+    ...((kind === 'custom-attribute' || isTemplateController) && {
+      attribute: {
+        isTemplateController,
+        noMultiBindings: false,
+      },
+    }),
   };
 }
 
@@ -541,12 +550,11 @@ function buildResource(
  */
 function extractBindable(
   fieldName: string,
-  decorator: DecoratorCall,
-  _gaps: AnalysisGap[]
-): ExtractedBindable {
-  const bindable: ExtractedBindable = {
+  decorator: DecoratorCall
+): BindableAnnotation {
+  const bindable: BindableAnnotation = {
     name: fieldName,
-    evidence: { kind: 'decorator', hasOptions: decorator.args.length > 0 },
+    evidence: { source: 'analyzed', pattern: 'decorator' },
   };
 
   // Check for options object
@@ -556,39 +564,39 @@ function extractBindable(
     // Primary flag
     const primary = props.get('primary');
     if (primary === true) {
-      bindable.primary = true;
+      (bindable as { primary?: boolean }).primary = true;
     }
 
     // Attribute name
     const attribute = props.get('attribute');
     if (typeof attribute === 'string') {
-      bindable.attribute = attribute;
+      (bindable as { attribute?: string }).attribute = attribute;
     }
 
-    // Binding mode - this is tricky because it might be BindingMode.twoWay or a number
+    // Binding mode
     const mode = props.get('mode');
     if (mode !== undefined) {
-      // For now, store as string - could parse BindingMode enum values
-      // BindingMode.twoWay = 6, oneTime = 1, toView = 2, fromView = 4
+      let bindingMode: 'oneTime' | 'toView' | 'fromView' | 'twoWay' | undefined;
       if (typeof mode === 'string') {
-        // Check for common patterns
         if (mode.includes('twoWay') || mode === '6') {
-          bindable.mode = 'twoWay';
+          bindingMode = 'twoWay';
         } else if (mode.includes('oneTime') || mode === '1') {
-          bindable.mode = 'oneTime';
+          bindingMode = 'oneTime';
         } else if (mode.includes('toView') || mode === '2') {
-          bindable.mode = 'toView';
+          bindingMode = 'toView';
         } else if (mode.includes('fromView') || mode === '4') {
-          bindable.mode = 'fromView';
+          bindingMode = 'fromView';
         }
       } else if (typeof mode === 'number') {
-        // Direct numeric value
         switch (mode) {
-          case 1: bindable.mode = 'oneTime'; break;
-          case 2: bindable.mode = 'toView'; break;
-          case 4: bindable.mode = 'fromView'; break;
-          case 6: bindable.mode = 'twoWay'; break;
+          case 1: bindingMode = 'oneTime'; break;
+          case 2: bindingMode = 'toView'; break;
+          case 4: bindingMode = 'fromView'; break;
+          case 6: bindingMode = 'twoWay'; break;
         }
+      }
+      if (bindingMode) {
+        (bindable as { mode?: string }).mode = bindingMode;
       }
     }
   }
@@ -655,7 +663,7 @@ function classNameToResourceName(className: string, kind: ResourceKind): string 
 
   if (kind === 'custom-element') {
     baseName = className.replace(/CustomElement$/, '').replace(/Element$/, '');
-  } else if (kind === 'custom-attribute') {
+  } else if (kind === 'custom-attribute' || kind === 'template-controller') {
     baseName = className.replace(/CustomAttribute$/, '').replace(/Attribute$/, '');
   } else if (kind === 'value-converter') {
     baseName = className.replace(/ValueConverter$/, '');
@@ -664,7 +672,7 @@ function classNameToResourceName(className: string, kind: ResourceKind): string 
   }
 
   // Convert to kebab-case for elements/attributes, camelCase for VC/BB
-  if (kind === 'custom-element' || kind === 'custom-attribute') {
+  if (kind === 'custom-element' || kind === 'custom-attribute' || kind === 'template-controller') {
     return toKebabCase(baseName);
   } else {
     // camelCase - first letter lowercase

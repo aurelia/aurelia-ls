@@ -25,11 +25,13 @@ describe("Diagnostic Conversion Functions", () => {
       const orphans: OrphanResource[] = [
         {
           resource: {
-            kind: "element",
+            kind: "custom-element",
             name: "my-element",
             className: "MyElement",
             source: "/app/src/my-element.ts" as NormalizedPath,
             bindables: [],
+            aliases: [],
+            evidence: { source: "analyzed", pattern: "decorator" },
           },
           definitionSpan: mockSpan("/app/src/my-element.ts" as NormalizedPath),
         },
@@ -49,21 +51,25 @@ describe("Diagnostic Conversion Functions", () => {
       const orphans: OrphanResource[] = [
         {
           resource: {
-            kind: "element",
+            kind: "custom-element",
             name: "my-element",
             className: "MyElement",
             source: "/node_modules/@aurelia/runtime-html/dist/my-element.ts" as NormalizedPath,
             bindables: [],
+            aliases: [],
+            evidence: { source: "analyzed", pattern: "decorator" },
           },
           definitionSpan: mockSpan("/node_modules/@aurelia/runtime-html/dist/my-element.ts" as NormalizedPath),
         },
         {
           resource: {
-            kind: "element",
+            kind: "custom-element",
             name: "user-element",
             className: "UserElement",
             source: "/app/src/user-element.ts" as NormalizedPath,
             bindables: [],
+            aliases: [],
+            evidence: { source: "analyzed", pattern: "decorator" },
           },
           definitionSpan: mockSpan("/app/src/user-element.ts" as NormalizedPath),
         },

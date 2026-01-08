@@ -1,6 +1,9 @@
-export { extractAllFacts, extractSourceFacts } from "./extractor.js";
-export type { ExtractionOptions } from "./extractor.js";
-export { extractClassFacts } from "./class-extractor.js";
+// === Unified extraction (FileFacts + ClassValue) ===
+export {
+  extractAllFileFacts,
+  extractFileFacts,
+  extractFileContext,
+} from "./file-facts-extractor.js";
 
 // === Value Resolution Helpers ===
 // Bridges class extraction with the value model for resolving identifier references.
@@ -12,9 +15,6 @@ export {
   resolveToString,
   resolveToBoolean,
 } from "./value-helpers.js";
-export { extractRegistrationCalls } from "./registrations.js";
-export { extractDefineCalls } from "./define-calls.js";
-export { resolveImports } from "./import-resolver.js";
 export {
   extractTemplateImports,
   resolveTemplateImportPaths,
@@ -40,28 +40,5 @@ export {
   gap,
 } from "./types.js";
 
-// === Extraction Types ===
-export type {
-  SourceFacts,
-  ClassFacts,
-  DecoratorFact,
-  DecoratorArgFact,
-  PropertyValueFact,
-  StaticAuFact,
-  StaticDependenciesFact,
-  DependencyRef,
-  BindableMemberFact,
-  BindableDefFact,
-  RegistrationCallFact,
-  RegistrationArgFact,
-  DefineCallFact,
-  BindingMode,
-  Position,
-  ImportFact,
-  ImportedName,
-  ExportFact,
-  ExportedName,
-  SiblingFileFact,
-  TemplateImportFact,
-  NamedAlias,
-} from "./types.js";
+// Re-export ExtractionOptions type from file-facts-extractor
+export type { ExtractionOptions } from "./file-facts-extractor.js";

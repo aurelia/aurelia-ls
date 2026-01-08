@@ -18,7 +18,7 @@
  * ```
  */
 
-// Re-export types
+// Re-export analysis types
 export type {
   AnalysisResult,
   Confidence,
@@ -26,15 +26,10 @@ export type {
   GapLocation,
   GapReason,
   PackageAnalysis,
-  ExtractedResource,
-  ResourceKind,
-  ResourceSource,
-  ResourceEvidence,
-  ExtractedBindable,
-  BindableEvidence,
+  AnalysisOptions,
   ExtractedConfiguration,
   ConfigurationRegistration,
-  AnalysisOptions,
+  SourceLocation,
   // Inspection types
   InspectionResult,
   InspectedResource,
@@ -73,15 +68,11 @@ import {
 // Import ES2022 extraction
 import { extractFromES2022 } from './decorator-es2022.js';
 
-// Import TypeScript extraction (existing infrastructure)
-import { extractSourceFacts, extractAllFacts } from '../extraction/extractor.js';
+// Import unified extraction and pattern matching
+import { extractAllFileFacts } from '../extraction/file-facts-extractor.js';
+import { matchFileFacts, matchAll } from '../patterns/pipeline.js';
 import { canonicalPath } from '../util/naming.js';
-import { resolveFromDecorators } from '../inference/decorator-resolver.js';
-import { resolveFromStaticAu } from '../inference/static-au-resolver.js';
-import { resolveFromDefine } from '../inference/define-resolver.js';
-import { resolveFromConventions } from '../inference/convention-resolver.js';
-import type { ResourceCandidate } from '../inference/types.js';
-import type { SourceFacts } from '../extraction/types.js';
+import type { FileFacts } from '../file-facts.js';
 
 // Import export resolver for cross-file resolution
 import { buildExportBindingMap } from '../binding/export-resolver.js';
@@ -112,18 +103,14 @@ import type {
   AnalysisResult,
   AnalysisGap,
   PackageAnalysis,
-  ExtractedResource,
-  ResourceEvidence,
   AnalysisOptions,
-  ExtractedConfiguration as ExtractedConfigurationType,
-  ConfigurationRegistration as ConfigurationRegistrationType,
+  ExtractedConfiguration,
+  ConfigurationRegistration,
+  SourceLocation,
 } from './types.js';
 import { success, partial, highConfidence, gap, combine } from './types.js';
 import { debug, type NormalizedPath } from '@aurelia-ls/compiler';
-
-// Local type aliases to avoid duplicate identifier issues with re-exports
-type ExtractedConfigurationLocal = ExtractedConfigurationType;
-type ConfigurationRegistrationLocal = ConfigurationRegistrationType;
+import type { ResourceAnnotation, BindableAnnotation } from '../annotation.js';
 
 /**
  * Analyze an npm package to extract Aurelia resource semantics.
@@ -160,7 +147,7 @@ export async function analyzePackage(
   //
   // Later strategies fill gaps from earlier ones. Results are merged.
 
-  const allResources: ExtractedResource[] = [];
+  const allResources: ResourceAnnotation[] = [];
   let primaryStrategyUsed: 'typescript' | 'es2022' | 'none' = 'none';
 
   // Determine which strategies to try and in what order
@@ -172,7 +159,7 @@ export async function analyzePackage(
     : ['es2022', 'typescript'];
 
   // Collect configurations from extraction strategies
-  const allConfigurations: ExtractedConfigurationLocal[] = [];
+  const allConfigurations: ExtractedConfiguration[] = [];
 
   for (const strategy of strategies) {
     if (strategy === 'typescript' && hasTypeScript) {
@@ -237,7 +224,7 @@ function hasBlockingGaps(gaps: AnalysisGap[]): boolean {
  * Determine overall confidence based on extraction results.
  */
 function determineConfidence(
-  resources: ExtractedResource[],
+  resources: ResourceAnnotation[],
   gaps: AnalysisGap[],
   primaryStrategy: 'typescript' | 'es2022' | 'none'
 ): 'exact' | 'high' | 'partial' | 'low' | 'manual' {
@@ -258,7 +245,7 @@ function determineConfidence(
 
   // Check if any resources were found via convention only (low confidence)
   const hasConventionOnly = resources.some(r =>
-    r.evidence.kind === 'convention'
+    r.evidence.source === 'analyzed' && r.evidence.pattern === 'convention'
   );
   if (hasConventionOnly && primaryStrategy === 'none') {
     return 'low';
@@ -277,8 +264,8 @@ function determineConfidence(
  * - Merge aliases from both
  */
 function mergeResources(
-  existing: ExtractedResource[],
-  incoming: ExtractedResource[]
+  existing: ResourceAnnotation[],
+  incoming: ResourceAnnotation[]
 ): void {
   for (const newResource of incoming) {
     const existingIndex = existing.findIndex(r => r.className === newResource.className);
@@ -299,22 +286,29 @@ function mergeResources(
  * Merge two resources with the same className.
  * Takes the best data from each.
  */
-function mergeResource(a: ExtractedResource, b: ExtractedResource): ExtractedResource {
+function mergeResource(a: ResourceAnnotation, b: ResourceAnnotation): ResourceAnnotation {
   // Prefer the one with more bindables
   const aBindables = a.bindables.length;
   const bBindables = b.bindables.length;
 
-  // Prefer higher-confidence evidence sources
-  const evidenceRank: Record<ResourceEvidence['kind'], number> = {
-    'manifest': 5,           // Highest - explicit package metadata
-    'explicit-config': 4,    // User-provided configuration
-    'decorator': 3,          // Source-level decorators
-    'define': 3,             // .define() API calls (same as decorator)
-    'static-au': 2,          // Static $au property
-    'convention': 1,         // Naming convention inference
-  };
-  const aRank = evidenceRank[a.evidence.kind];
-  const bRank = evidenceRank[b.evidence.kind];
+  // Rank evidence by confidence
+  function getEvidenceRank(evidence: ResourceAnnotation['evidence']): number {
+    if (evidence.source === 'declared') {
+      return 5; // Highest - explicit declaration/manifest
+    }
+    // Analyzed evidence
+    if (evidence.kind === 'explicit') {
+      // Explicit patterns: decorator, static-au, define
+      if (evidence.pattern === 'decorator') return 4;
+      if (evidence.pattern === 'define') return 4;
+      if (evidence.pattern === 'static-au') return 3;
+      return 3;
+    }
+    // Inferred (convention)
+    return 1;
+  }
+  const aRank = getEvidenceRank(a.evidence);
+  const bRank = getEvidenceRank(b.evidence);
 
   // Choose primary based on evidence, then bindable count
   const primary = (aRank > bRank) ? a : (bRank > aRank) ? b :
@@ -370,8 +364,8 @@ export async function isAureliaPackage(packagePath: string): Promise<boolean> {
 import type { PackageInfo } from './scanner.js';
 
 interface ExtractionResult {
-  resources: ExtractedResource[];
-  configurations: ExtractedConfigurationLocal[];
+  resources: ResourceAnnotation[];
+  configurations: ExtractedConfiguration[];
   gaps: AnalysisGap[];
 }
 
@@ -389,8 +383,8 @@ async function extractFromTypeScriptSource(
   pkgInfo: PackageInfo,
   packagePath: string
 ): Promise<ExtractionResult> {
-  const resources: ExtractedResource[] = [];
-  const configurations: ExtractedConfigurationLocal[] = [];
+  const resources: ResourceAnnotation[] = [];
+  const configurations: ExtractedConfiguration[] = [];
   const gaps: AnalysisGap[] = [];
 
   if (!pkgInfo.sourceDir) {
@@ -425,32 +419,19 @@ async function extractFromTypeScriptSource(
   // Phase 2: Create full TypeScript program with all discovered files
   const { program, host } = createPackageProgram(discoveredFiles);
 
-  // Phase 3: Extract facts using existing infrastructure (with proper resolution!)
+  // Phase 3: Extract facts using unified extraction infrastructure
   // Pass the custom host for .js → .ts module resolution
-  const allFacts = extractAllFacts(program, { moduleResolutionHost: host });
+  const allFacts = extractAllFileFacts(program, { moduleResolutionHost: host });
 
-  // Phase 4: Run inference on each file's facts
+  // Phase 4: Run pattern matching on each file's facts
   for (const [, facts] of allFacts) {
-    const decoratorResult = resolveFromDecorators(facts);
-    const staticAuResult = resolveFromStaticAu(facts);
-    const defineResult = resolveFromDefine(facts);
-    const conventionResult = resolveFromConventions(facts);
+    const matchResult = matchFileFacts(facts);
+    gaps.push(...matchResult.gaps);
 
-    // Combine results - flatten arrays of candidates
-    const combined = combine(
-      [decoratorResult, staticAuResult, defineResult, conventionResult],
-      (arrays) => arrays.flat()
-    );
-    gaps.push(...combined.gaps);
-
-    // Convert ResourceCandidate to ExtractedResource
-    for (const candidate of combined.value) {
-      const extracted = candidateToExtractedResource(candidate, packagePath);
-      if (extracted) {
-        // Avoid duplicates
-        if (!resources.some(r => r.className === extracted.className)) {
-          resources.push(extracted);
-        }
+    for (const annotation of matchResult.annotations) {
+      // Avoid duplicates
+      if (!resources.some(r => r.className === annotation.className)) {
+        resources.push(annotation);
       }
     }
   }
@@ -629,7 +610,7 @@ async function extractFromCompiledJS(
   pkgInfo: PackageInfo,
   packagePath: string
 ): Promise<ExtractionResult> {
-  const resources: ExtractedResource[] = [];
+  const resources: ResourceAnnotation[] = [];
   const gaps: AnalysisGap[] = [];
   const processedFiles = new Set<string>();
 
@@ -695,8 +676,8 @@ async function extractFromCompiledJS(
 // =============================================================================
 
 interface ConfigurationAnalysisResult {
-  configurations: ExtractedConfigurationLocal[];
-  resources: ExtractedResource[];
+  configurations: ExtractedConfiguration[];
+  resources: ResourceAnnotation[];
   gaps: AnalysisGap[];
 }
 
@@ -709,19 +690,19 @@ interface ConfigurationAnalysisResult {
  * - Layer 3: Cross-file import resolution
  * - Layer 4: Pattern matching (IRegistry detection, register body analysis)
  *
- * @param allFacts - SourceFacts for all processed files
+ * @param allFacts - FileFacts for all processed files
  * @param allSourceFiles - Parsed TypeScript source files
  * @param existingResources - Already-extracted resources (for resolveClass callback)
  * @param packagePath - Package root path
  */
 function analyzeConfigurations(
-  allFacts: ReadonlyMap<NormalizedPath, SourceFacts>,
+  allFacts: ReadonlyMap<NormalizedPath, FileFacts>,
   allSourceFiles: ReadonlyMap<NormalizedPath, ts.SourceFile>,
-  existingResources: ExtractedResource[],
+  existingResources: ResourceAnnotation[],
   packagePath: string
 ): ConfigurationAnalysisResult {
-  const configurations: ExtractedConfigurationLocal[] = [];
-  const resources: ExtractedResource[] = [];
+  const configurations: ExtractedConfiguration[] = [];
+  const resources: ResourceAnnotation[] = [];
   const gaps: AnalysisGap[] = [];
 
   // Skip if no files to analyze
@@ -743,7 +724,7 @@ function analyzeConfigurations(
   const resolutionContext = buildResolutionContext({
     fileScopes,
     exportBindings,
-    sourceFacts: allFacts,
+    fileFacts: allFacts,
     packagePath,
   });
 
@@ -812,7 +793,7 @@ function analyzeConfigurations(
       gaps.push(...bodyResult.gaps);
 
       // Build configuration registration list
-      const registers: ConfigurationRegistrationLocal[] = [];
+      const registers: ConfigurationRegistration[] = [];
       for (const resource of bodyResult.value) {
         registers.push({
           resource,
@@ -827,7 +808,7 @@ function analyzeConfigurations(
       }
 
       // Create configuration entry
-      const config: ExtractedConfigurationLocal = {
+      const config: ExtractedConfiguration = {
         exportName,
         registers,
         isFactory,
@@ -849,88 +830,38 @@ function analyzeConfigurations(
 /**
  * Create a resolveClass callback for RegisterBodyContext.
  *
- * This callback maps ClassValue to ExtractedResource by:
+ * This callback maps ClassValue to ResourceAnnotation by:
  * 1. Looking up in already-extracted resources by className
- * 2. Running inference on class facts if not found
+ * 2. Running pattern matching on ClassValue if not found
  */
 function createClassResolver(
-  existingResources: ExtractedResource[],
-  allFacts: ReadonlyMap<NormalizedPath, SourceFacts>,
+  existingResources: ResourceAnnotation[],
+  allFacts: ReadonlyMap<NormalizedPath, FileFacts>,
   packagePath: string
-): (classVal: ClassValue) => ExtractedResource | null {
+): (classVal: ClassValue) => ResourceAnnotation | null {
   // Build lookup map by className
-  const resourceMap = new Map<string, ExtractedResource>();
+  const resourceMap = new Map<string, ResourceAnnotation>();
   for (const resource of existingResources) {
     resourceMap.set(resource.className, resource);
   }
 
-  return (classVal: ClassValue): ExtractedResource | null => {
+  return (classVal: ClassValue): ResourceAnnotation | null => {
     // First check existing resources
     const existing = resourceMap.get(classVal.className);
     if (existing) {
       return existing;
     }
 
-    // Try to infer from class facts
-    if (classVal.filePath) {
-      const facts = allFacts.get(classVal.filePath);
-      if (facts) {
-        const classFacts = facts.classes.find(c => c.name === classVal.className);
-        if (classFacts) {
-          // Run inference to determine if this is a resource
-          const candidate = inferResourceFromClass(classFacts, classVal.filePath, packagePath);
-          if (candidate) {
-            // Cache for future lookups
-            resourceMap.set(classVal.className, candidate);
-            return candidate;
-          }
-        }
-      }
+    // Try to match the ClassValue directly using pattern matchers
+    const matchResult = matchAll(classVal);
+    if (matchResult.annotation) {
+      // Cache for future lookups
+      resourceMap.set(classVal.className, matchResult.annotation);
+      return matchResult.annotation;
     }
 
     return null;
   };
-}
-
-/**
- * Infer resource from class facts using decorator/static-au/convention resolvers.
- */
-function inferResourceFromClass(
-  classFacts: SourceFacts['classes'][0],
-  filePath: NormalizedPath,
-  packagePath: string
-): ExtractedResource | null {
-  // Build minimal SourceFacts for this single class
-  const minimalFacts: SourceFacts = {
-    path: filePath,
-    classes: [classFacts],
-    registrationCalls: [],
-    imports: [],
-    exports: [],
-    defineCalls: [],
-    variables: [],
-    functions: [],
-    siblingFiles: [],
-    templateImports: [],
-    gaps: [],
-  };
-
-  // Run inference resolvers
-  const decoratorResult = resolveFromDecorators(minimalFacts);
-  const staticAuResult = resolveFromStaticAu(minimalFacts);
-  const conventionResult = resolveFromConventions(minimalFacts);
-
-  // Combine and get first candidate
-  const combined = combine(
-    [decoratorResult, staticAuResult, conventionResult],
-    (arrays) => arrays.flat()
-  );
-
-  if (combined.value.length > 0) {
-    return candidateToExtractedResource(combined.value[0]!, packagePath);
-  }
-
-  return null;
 }
 
 /**
@@ -1119,60 +1050,6 @@ function resolveTypeScriptModulePath(currentDir: string, specifier: string): str
   return filePath;
 }
 
-/**
- * Convert a ResourceCandidate to ExtractedResource.
- */
-function candidateToExtractedResource(
-  candidate: ResourceCandidate,
-  packagePath: string
-): ExtractedResource | null {
-  // Map kind
-  let kind: ExtractedResource['kind'];
-  switch (candidate.kind) {
-    case 'element':
-      kind = 'custom-element';
-      break;
-    case 'attribute':
-      kind = 'custom-attribute';
-      break;
-    case 'valueConverter':
-      kind = 'value-converter';
-      break;
-    case 'bindingBehavior':
-      kind = 'binding-behavior';
-      break;
-    default:
-      return null;
-  }
-
-  // Build extracted resource
-  return {
-    kind,
-    name: candidate.name,
-    className: candidate.className,
-    bindables: candidate.bindables.map(b => ({
-      name: b.name,
-      attribute: b.attribute,
-      mode: b.mode,
-      primary: b.primary,
-      evidence: { kind: 'decorator' as const, hasOptions: true },
-    })),
-    aliases: [...candidate.aliases],
-    source: {
-      file: relative(packagePath, candidate.source),
-      format: 'typescript',
-    },
-    evidence: {
-      kind: candidate.resolver === 'decorator' ? 'decorator' :
-            candidate.resolver === 'static-au' ? 'static-au' :
-            candidate.resolver === 'define' ? 'define' :
-            'convention',
-      decoratorName: candidate.resolver === 'decorator' ? 'customElement' : undefined,
-      suffix: candidate.resolver === 'convention' ? 'CustomElement' : undefined,
-    } as ExtractedResource['evidence'],
-  };
-}
-
 // =============================================================================
 // Inspection API
 // =============================================================================
@@ -1247,29 +1124,39 @@ export async function inspect(
 }
 
 /**
- * Transform an ExtractedResource to InspectedResource.
+ * Transform a ResourceAnnotation to InspectedResource.
  */
-function transformResource(resource: ExtractedResource): InspectedResource {
+function transformResource(resource: ResourceAnnotation): InspectedResource {
+  // Infer format from file extension
+  const format = resource.source.endsWith('.ts') ? 'typescript' :
+                 resource.source.endsWith('.js') ? 'javascript' :
+                 resource.source.endsWith('.d.ts') ? 'declaration' : 'typescript';
+
+  // Get evidence pattern
+  const evidencePattern = resource.evidence.source === 'analyzed'
+    ? resource.evidence.pattern
+    : 'declared';
+
   return {
     kind: resource.kind,
     name: resource.name,
     className: resource.className,
-    aliases: resource.aliases,
+    aliases: [...resource.aliases],
     bindables: resource.bindables.map(transformBindable),
     dependencies: [], // TODO: Extract from static dependencies when available
     source: {
-      file: resource.source.file,
-      line: resource.source.line,
-      format: resource.source.format,
+      file: resource.source,
+      line: undefined, // TextSpan has offset, not line number
+      format,
     },
-    evidence: resource.evidence.kind,
+    evidence: evidencePattern,
   };
 }
 
 /**
- * Transform an ExtractedBindable to InspectedBindable.
+ * Transform a BindableAnnotation to InspectedBindable.
  */
-function transformBindable(bindable: ExtractedBindable): InspectedBindable {
+function transformBindable(bindable: BindableAnnotation): InspectedBindable {
   const result: InspectedBindable = {
     name: bindable.name,
   };
@@ -1279,7 +1166,6 @@ function transformBindable(bindable: ExtractedBindable): InspectedBindable {
   }
 
   if (bindable.mode !== undefined) {
-    // BindingMode is already a string literal type ('default' | 'oneTime' | 'toView' | 'fromView' | 'twoWay')
     result.mode = bindable.mode;
   }
 
@@ -1293,7 +1179,7 @@ function transformBindable(bindable: ExtractedBindable): InspectedBindable {
 /**
  * Transform an ExtractedConfiguration to InspectedConfiguration.
  */
-function transformConfiguration(config: ExtractedConfigurationLocal): InspectedConfiguration {
+function transformConfiguration(config: ExtractedConfiguration): InspectedConfiguration {
   return {
     exportName: config.exportName,
     isFactory: config.isFactory,
@@ -1377,8 +1263,8 @@ function formatGapReason(reason: GapReason): string {
  * Build the inspection graph from resources and configurations.
  */
 function buildInspectionGraph(
-  resources: ExtractedResource[],
-  configurations: ExtractedConfigurationLocal[]
+  resources: ResourceAnnotation[],
+  configurations: ExtractedConfiguration[]
 ): InspectionGraph {
   const nodes = resources.map(r => r.className);
   const edges: InspectionEdge[] = [];
@@ -1409,18 +1295,18 @@ function buildInspectionGraph(
  * Determine primary extraction strategy from resources.
  */
 function determinePrimaryStrategy(
-  resources: ExtractedResource[]
+  resources: ResourceAnnotation[]
 ): 'typescript' | 'es2022' | 'none' {
   if (resources.length === 0) {
     return 'none';
   }
 
-  // Check the first resource's source format
-  const firstFormat = resources[0]?.source.format;
-  if (firstFormat === 'typescript') {
+  // Infer format from file extension
+  const firstSource = resources[0]?.source;
+  if (firstSource?.endsWith('.ts') && !firstSource.endsWith('.d.ts')) {
     return 'typescript';
   }
-  if (firstFormat === 'javascript') {
+  if (firstSource?.endsWith('.js')) {
     return 'es2022';
   }
 
@@ -1430,12 +1316,12 @@ function determinePrimaryStrategy(
 /**
  * Collect unique file paths from resources.
  */
-function collectAnalyzedPaths(resources: ExtractedResource[]): string[] {
+function collectAnalyzedPaths(resources: ResourceAnnotation[]): string[] {
   const paths = new Set<string>();
   for (const resource of resources) {
-    paths.add(resource.source.file);
+    paths.add(resource.source);
   }
   return [...paths].sort();
 }
 
-import type { GapReason, ExtractedBindable } from './types.js';
+import type { GapReason } from './types.js';

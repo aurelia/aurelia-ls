@@ -16,8 +16,9 @@ import type { NormalizedPath, CompileTrace } from "@aurelia-ls/compiler";
  *
  * Used for template-pairing convention: `foo.ts` + `foo.html` as siblings.
  *
- * Note: For SourceFacts, use SiblingFileFact from extraction/types.ts.
- * This type is the raw file system result before conversion to facts.
+ * This is the canonical definition. Other modules import from here:
+ * - file-facts.ts re-exports for convenience
+ * - extraction/types.ts has deprecated SiblingFileFact (structurally identical)
  */
 export interface SiblingFile {
   /** Full normalized path to the sibling file */
@@ -265,11 +266,16 @@ export const DEFAULT_SCANNER_OPTIONS: Omit<Required<ProjectScannerOptions>, "roo
 };
 
 // ============================================================================
-// Extraction Options
+// Project-Level Extraction Options
 // ============================================================================
 
 /**
- * Options for extraction with file system context.
+ * Base extraction options for project-level file system operations.
+ *
+ * This is the TypeScript-agnostic version used at the project layer.
+ * For TypeScript-aware extraction, use ExtractionOptions from extraction/.
+ *
+ * Exported as ProjectExtractionOptions from project/index.ts.
  */
 export interface ExtractionOptions {
   /** File system context for sibling detection */
