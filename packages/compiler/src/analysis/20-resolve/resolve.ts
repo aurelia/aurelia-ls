@@ -230,12 +230,12 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
  * ============================================================================ */
 
 function buildLookupOpts(opts: ResolveHostOptions): SemanticsLookupOptions {
-  const out: SemanticsLookupOptions = {};
-  if (opts.resources) out.resources = opts.resources;
-  if (opts.graph !== undefined) out.graph = opts.graph;
-  if (opts.scope !== undefined) out.scope = opts.scope ?? null;
-  if (opts.localImports) out.localImports = opts.localImports;
-  return out;
+  return {
+    ...(opts.resources ? { resources: opts.resources } : {}),
+    ...(opts.graph !== undefined ? { graph: opts.graph } : {}),
+    ...(opts.scope !== undefined ? { scope: opts.scope ?? null } : {}),
+    ...(opts.localImports ? { localImports: opts.localImports } : {}),
+  };
 }
 
 function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {

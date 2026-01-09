@@ -1,7 +1,9 @@
 import {
   buildResourceGraphFromSemantics,
   DEFAULT_SEMANTICS,
+  prepareSemantics,
   type Bindable,
+  type ControllerConfig,
   type TypeRef,
   type ResourceCollections,
   type ResourceGraph,
@@ -16,6 +18,22 @@ import {
 import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
 import type { ResourceAnnotation, BindableAnnotation } from "../annotation.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
+
+type MutableResourceCollections = {
+  elements: Record<string, ElementRes>;
+  attributes: Record<string, AttrRes>;
+  controllers: Record<string, ControllerConfig>;
+  valueConverters: Record<string, ValueConverterSig>;
+  bindingBehaviors: Record<string, BindingBehaviorSig>;
+};
+
+type MutablePartialResourceCollections = {
+  elements?: Record<string, ElementRes>;
+  attributes?: Record<string, AttrRes>;
+  controllers?: Record<string, ControllerConfig>;
+  valueConverters?: Record<string, ValueConverterSig>;
+  bindingBehaviors?: Record<string, BindingBehaviorSig>;
+};
 
 /**
  * Build a ResourceGraph from registration analysis.
@@ -35,7 +53,7 @@ export function buildResourceGraph(
   baseSemantics?: Semantics,
   defaultScope?: ResourceScopeId | null,
 ): ResourceGraph {
-  const semantics = baseSemantics ?? DEFAULT_SEMANTICS;
+  const semantics = prepareSemantics(baseSemantics ?? DEFAULT_SEMANTICS);
 
   // Build set of activated packages from plugins
   const activatedPackages = new Set<string>();
@@ -45,7 +63,7 @@ export function buildResourceGraph(
 
   // Separate sites by scope
   const globalResources = createEmptyCollections();
-  const localScopes = new Map<string, { className: string; resources: ResourceCollections }>();
+  const localScopes = new Map<string, { className: string; resources: MutableResourceCollections }>();
 
   for (const site of registration.sites) {
     // Only process resolved resource references
@@ -80,22 +98,23 @@ export function buildResourceGraph(
 
   // Build the base graph, filtering out plugin resources that aren't activated
   const fullBaseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
-  const graph = cloneResourceGraphWithFilter(fullBaseGraph, activatedPackages);
+  const baseGraph = cloneResourceGraphWithFilter(fullBaseGraph, activatedPackages);
+  const scopes: Record<ResourceScopeId, ResourceScope> = { ...baseGraph.scopes };
 
   // Determine target scope for global resources
-  const targetScopeId = defaultScope ?? semantics.defaultScope ?? graph.root;
-  let targetScope = graph.scopes[targetScopeId];
-
-  // If target scope doesn't exist, fall back to root
-  if (!targetScope) {
-    targetScope = graph.scopes[graph.root];
-  }
+  const targetScopeId = defaultScope ?? semantics.defaultScope ?? baseGraph.root;
+  const targetScope = scopes[targetScopeId] ?? scopes[baseGraph.root];
 
   // Add global resources to target scope
   if (targetScope) {
     const overlay = diffResourceCollections(semantics.resources, globalResources);
     if (!isResourceOverlayEmpty(overlay)) {
-      targetScope.resources = overlayScopeResources(targetScope.resources, overlay);
+      scopes[targetScope.id] = {
+        id: targetScope.id,
+        parent: targetScope.parent,
+        ...(targetScope.label ? { label: targetScope.label } : {}),
+        resources: overlayScopeResources(targetScope.resources, overlay),
+      };
     }
   }
 
@@ -103,39 +122,38 @@ export function buildResourceGraph(
   for (const [componentPath, scopeData] of localScopes) {
     const scopeId = `local:${componentPath}` as ResourceScopeId;
 
-    // Check if scope already exists
-    if (!graph.scopes[scopeId]) {
-      graph.scopes[scopeId] = {
-        id: scopeId,
-        parent: graph.root,
-        label: scopeData.className,
-        resources: {},
-      };
-    }
+    const existing = scopes[scopeId];
+    const baseScope: ResourceScope = existing ?? {
+      id: scopeId,
+      parent: baseGraph.root,
+      label: scopeData.className,
+      resources: {},
+    };
 
-    // Add local resources
-    const localScope = graph.scopes[scopeId];
-    if (localScope) {
-      localScope.resources = overlayScopeResources(localScope.resources, scopeData.resources);
-    }
+    scopes[scopeId] = {
+      id: baseScope.id,
+      parent: baseScope.parent,
+      ...(baseScope.label ? { label: baseScope.label } : {}),
+      resources: overlayScopeResources(baseScope.resources, scopeData.resources),
+    };
   }
 
-  return graph;
+  return { version: baseGraph.version, root: baseGraph.root, scopes };
 }
 
 // --- Helper functions ---
 
-function createEmptyCollections(): ResourceCollections {
+function createEmptyCollections(): MutableResourceCollections {
   return {
     elements: {},
     attributes: {},
-    controllers: DEFAULT_SEMANTICS.resources.controllers,
+    controllers: { ...DEFAULT_SEMANTICS.resources.controllers },
     valueConverters: {},
     bindingBehaviors: {},
   };
 }
 
-function addToCollections(collections: ResourceCollections, annotation: ResourceAnnotation): void {
+function addToCollections(collections: MutableResourceCollections, annotation: ResourceAnnotation): void {
   switch (annotation.kind) {
     case "custom-element":
       collections.elements[annotation.name] = annotationToElement(annotation);
@@ -195,17 +213,15 @@ function bindableAnnotationsToRecord(bindables: readonly BindableAnnotation[]): 
     const bindable: Bindable = {
       name: b.name,
       type,
+      ...(b.mode ? { mode: b.mode } : {}),
     };
-    if (b.mode) {
-      bindable.mode = b.mode;
-    }
     record[b.name] = bindable;
   }
   return record;
 }
 
 function diffResourceCollections(base: ResourceCollections, overlay: ResourceCollections): Partial<ResourceCollections> {
-  const diff: Partial<ResourceCollections> = {};
+  const diff: MutablePartialResourceCollections = {};
   const elements = diffRecords(base.elements, overlay.elements);
   if (elements) diff.elements = elements;
   const attributes = diffRecords(base.attributes, overlay.attributes);
@@ -279,7 +295,7 @@ function filterPartialResources(
   activatedPackages: Set<string>,
 ): Partial<ResourceCollections> {
   if (!resources) return {};
-  const filtered: Partial<ResourceCollections> = {};
+  const filtered: MutablePartialResourceCollections = {};
 
   if (resources.elements) {
     const elements: Record<string, ElementRes> = {};
@@ -320,9 +336,9 @@ function filterPartialResources(
   return filtered;
 }
 
-function clonePartialResources(resources: Partial<ResourceCollections> | undefined): Partial<ResourceCollections> {
+function clonePartialResources(resources: Partial<ResourceCollections> | undefined): MutablePartialResourceCollections {
   if (!resources) return {};
-  const cloned: Partial<ResourceCollections> = {};
+  const cloned: MutablePartialResourceCollections = {};
   if (resources.elements) cloned.elements = { ...resources.elements };
   if (resources.attributes) cloned.attributes = { ...resources.attributes };
   if (resources.controllers) cloned.controllers = { ...resources.controllers };

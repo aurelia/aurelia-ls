@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import ts from "typescript";
-import { DEFAULT_SEMANTICS, normalizePathForId, type BindingMode, type ResourceScopeId, type Semantics, type Bindable, type CompileTrace } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, normalizePathForId, prepareSemantics, type BindingMode, type ResourceScopeId, type Semantics, type SemanticsWithCaches, type Bindable, type CompileTrace } from "@aurelia-ls/compiler";
 import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type ResourceAnnotation, type TemplateInfo, type RouteTree } from "@aurelia-ls/resolution";
 import type { ResolutionContext } from "./types.js";
 
@@ -127,21 +127,22 @@ export async function createResolutionContext(
 /**
  * Merge discovered resources into base semantics.
  */
-function mergeSemantics(base: Semantics, resources: readonly ResourceAnnotation[]): Semantics {
-  const elements = { ...base.resources.elements };
-  const attributes = { ...base.resources.attributes };
-  const valueConverters = { ...base.resources.valueConverters };
-  const bindingBehaviors = { ...base.resources.bindingBehaviors };
+function mergeSemantics(base: Semantics, resources: readonly ResourceAnnotation[]): SemanticsWithCaches {
+  const sem = prepareSemantics(base);
+  const elements = { ...sem.resources.elements };
+  const attributes = { ...sem.resources.attributes };
+  const valueConverters = { ...sem.resources.valueConverters };
+  const bindingBehaviors = { ...sem.resources.bindingBehaviors };
 
   for (const resource of resources) {
     switch (resource.kind) {
       case "custom-element": {
         const bindables: Record<string, Bindable> = {};
         for (const b of resource.bindables) {
-          const bindable: Bindable = { name: b.name };
-          if (b.mode) {
-            bindable.mode = b.mode as BindingMode;
-          }
+          const bindable: Bindable = {
+            name: b.name,
+            ...(b.mode ? { mode: b.mode as BindingMode } : {}),
+          };
           bindables[b.name] = bindable;
         }
         const elementRes: (typeof elements)[string] = {
@@ -149,10 +150,8 @@ function mergeSemantics(base: Semantics, resources: readonly ResourceAnnotation[
           name: resource.name,
           bindables,
           aliases: [...resource.aliases],
+          ...(resource.element?.containerless !== undefined ? { containerless: resource.element.containerless } : {}),
         };
-        if (resource.element?.containerless !== undefined) {
-          elementRes.containerless = resource.element.containerless;
-        }
         elements[resource.name] = elementRes;
         break;
       }
@@ -160,10 +159,10 @@ function mergeSemantics(base: Semantics, resources: readonly ResourceAnnotation[
       case "template-controller": {
         const bindables: Record<string, Bindable> = {};
         for (const b of resource.bindables) {
-          const bindable: Bindable = { name: b.name };
-          if (b.mode) {
-            bindable.mode = b.mode as BindingMode;
-          }
+          const bindable: Bindable = {
+            name: b.name,
+            ...(b.mode ? { mode: b.mode as BindingMode } : {}),
+          };
           bindables[b.name] = bindable;
         }
         attributes[resource.name] = {
@@ -177,7 +176,7 @@ function mergeSemantics(base: Semantics, resources: readonly ResourceAnnotation[
         break;
       }
       case "value-converter":
-        valueConverters[resource.name] = { name: resource.name };
+        valueConverters[resource.name] = { name: resource.name, in: { kind: "unknown" }, out: { kind: "unknown" } };
         break;
       case "binding-behavior":
         bindingBehaviors[resource.name] = { name: resource.name };
@@ -185,17 +184,18 @@ function mergeSemantics(base: Semantics, resources: readonly ResourceAnnotation[
     }
   }
 
-  return {
-    ...base,
-    resources: {
-      elements,
-      attributes,
-      controllers: base.resources.controllers,
-      valueConverters,
-      bindingBehaviors,
-    },
-    resourceGraph: null, // Resource graph is passed separately
+  const mergedResources = {
+    elements,
+    attributes,
+    controllers: sem.resources.controllers,
+    valueConverters,
+    bindingBehaviors,
   };
+
+  return prepareSemantics(
+    { ...sem, resourceGraph: null }, // Resource graph is passed separately
+    { resources: mergedResources },
+  );
 }
 
 /**

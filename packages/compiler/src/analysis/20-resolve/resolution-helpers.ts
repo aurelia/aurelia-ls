@@ -2,6 +2,7 @@ import type { SourceSpan } from "../../model/ir.js";
 import type { BindingMode, HydrateAttributeIR, HydrateElementIR } from "../../model/ir.js";
 import type { Bindable } from "../../language/registry.js";
 import type { SemanticsLookup } from "../../language/registry.js";
+import { toTypeRefOptional } from "../../language/convert.js";
 import {
   getControllerConfig,
   STUB_CONTROLLER_CONFIG,
@@ -229,7 +230,8 @@ export function resolveIteratorAuxSpec(
   if (!accepts.includes(incoming)) return null;
   // .bind overrides default to 'toView' unless spec says otherwise; literals stay as default
   const mode: BindingMode | null = incoming === "bind" ? "toView" : null;
-  return { name: tailSpec.name, mode, type: tailSpec.type ?? null };
+  const type = tailSpec.type ? toTypeRefOptional(tailSpec.type) : undefined;
+  return { name: tailSpec.name, mode, type: type ?? null };
 }
 
 function unreachable(_x: never): never {

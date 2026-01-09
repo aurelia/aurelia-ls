@@ -13,7 +13,15 @@
 import { lowerDocument, resolveHost, bindScopes } from "./analysis/index.js";
 import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
 import { getExpressionParser, DEFAULT_SYNTAX } from "./parsing/index.js";
-import { DEFAULT as DEFAULT_SEMANTICS, type Semantics, type ResourceGraph, type ResourceScopeId, type LocalImportDef } from "./language/index.js";
+import {
+  DEFAULT as DEFAULT_SEMANTICS,
+  materializeSemanticsForScope,
+  prepareSemantics,
+  type Semantics,
+  type ResourceGraph,
+  type ResourceScopeId,
+  type LocalImportDef,
+} from "./language/index.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "./shared/index.js";
 import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";
 
@@ -120,7 +128,10 @@ export function compileAot(
   return trace.span("compiler.compileAot", () => {
     const templatePath = options.templatePath ?? "template.html";
     const name = options.name ?? "template";
-    const semantics = options.semantics ?? DEFAULT_SEMANTICS;
+    const baseSemantics = options.semantics ?? DEFAULT_SEMANTICS;
+    const semantics = options.resourceGraph || options.resourceScope !== undefined
+      ? materializeSemanticsForScope(baseSemantics, options.resourceGraph ?? null, options.resourceScope ?? null)
+      : prepareSemantics(baseSemantics);
 
     trace.setAttributes({
       [CompilerAttributes.TEMPLATE]: templatePath,
@@ -137,7 +148,7 @@ export function compileAot(
       exprParser,
       file: templatePath,
       name,
-      sem: semantics,
+      catalog: semantics.catalog,
       trace,
     });
 

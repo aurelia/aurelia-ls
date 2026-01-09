@@ -294,8 +294,9 @@ function targetTypeToString(target: TargetSem | { kind: "style" } | undefined): 
   }
 }
 
-function typeRefToString(t: TypeRef | undefined | null): string | undefined {
+function typeRefToString(t: TypeRef | string | undefined | null): string | undefined {
   if (!t) return undefined;
+  if (typeof t === "string") return t;
   switch (t.kind) {
     case "ts": return t.name;
     case "any": return "any";

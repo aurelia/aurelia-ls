@@ -2,8 +2,7 @@ import { parseFragment } from "parse5";
 
 import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode } from "../../model/ir.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { Semantics } from "../../language/registry.js";
-import { DEFAULT as DEFAULT_SEMANTICS } from "../../language/registry.js";
+import { DEFAULT as DEFAULT_SEMANTICS, type ResourceCatalog } from "../../language/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
@@ -17,7 +16,7 @@ export interface BuildIrOptions {
   name?: string;
   attrParser: AttributeParser;
   exprParser: IExpressionParser;
-  sem?: Semantics;
+  catalog?: ResourceCatalog;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
@@ -36,7 +35,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
     trace.event("lower.parse.complete");
 
-    const sem = opts.sem ?? DEFAULT_SEMANTICS;
+    const catalog = opts.catalog ?? DEFAULT_SEMANTICS.catalog;
     const source = resolveSourceFile(opts.file ?? opts.name ?? "");
     const ids = new DomIdAllocator();
     const table = new ExprTable(opts.exprParser, source, html);
@@ -58,7 +57,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, sem, skipTags);
+    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, skipTags);
     trace.event("lower.rows.complete");
 
     // Build root template with meta

@@ -1,6 +1,7 @@
 import type ts from "typescript";
 import {
   DEFAULT_SEMANTICS,
+  prepareSemantics,
   type Bindable,
   type BindingMode,
   type NormalizedPath,
@@ -8,6 +9,7 @@ import {
   type ResourceGraph,
   type ResourceScopeId,
   type Semantics,
+  type SemanticsWithCaches,
 } from "@aurelia-ls/compiler";
 import { hashObject, normalizeCompilerOptions, resolve, type ResourceAnnotation } from "@aurelia-ls/resolution";
 import type { Logger } from "./types.js";
@@ -27,7 +29,7 @@ export interface AureliaProjectIndexOptions {
 }
 
 interface IndexSnapshot {
-  readonly semantics: Semantics;
+  readonly semantics: SemanticsWithCaches;
   readonly resourceGraph: ResourceGraph;
   readonly fingerprint: string;
 }
@@ -44,17 +46,17 @@ interface IndexSnapshot {
 export class AureliaProjectIndex {
   #ts: TypeScriptProject;
   #logger: Logger;
-  #baseSemantics: Semantics;
+  #baseSemantics: SemanticsWithCaches;
   #defaultScope: ResourceScopeId | null;
 
-  #semantics: Semantics;
+  #semantics: SemanticsWithCaches;
   #resourceGraph: ResourceGraph;
   #fingerprint: string;
 
   constructor(options: AureliaProjectIndexOptions) {
     this.#ts = options.ts;
     this.#logger = options.logger;
-    this.#baseSemantics = options.baseSemantics ?? DEFAULT_SEMANTICS;
+    this.#baseSemantics = prepareSemantics(options.baseSemantics ?? DEFAULT_SEMANTICS);
     this.#defaultScope = options.defaultScope ?? null;
 
     const snapshot = this.#computeSnapshot();
@@ -77,7 +79,7 @@ export class AureliaProjectIndex {
     return this.#resourceGraph;
   }
 
-  currentSemantics(): Semantics {
+  currentSemantics(): SemanticsWithCaches {
     return this.#semantics;
   }
 
@@ -112,11 +114,10 @@ export class AureliaProjectIndex {
     // Merge discovered resources into semantics.resources
     const mergedResources = mergeDiscoveredResources(this.#baseSemantics.resources, result.resources);
 
-    const semantics: Semantics = {
-      ...this.#baseSemantics,
-      resources: mergedResources,
-      resourceGraph: result.resourceGraph,
-    };
+    const semantics = prepareSemantics(
+      { ...this.#baseSemantics, resourceGraph: result.resourceGraph },
+      { resources: mergedResources },
+    );
 
     const fingerprint = hashObject({
       compilerOptions: normalizeCompilerOptions(this.#ts.compilerOptions()),
@@ -193,10 +194,10 @@ function annotationBindablesToRecord(
 ): Record<string, Bindable> {
   const record: Record<string, Bindable> = {};
   for (const b of bindables) {
-    const bindable: Bindable = { name: b.name };
-    if (b.mode) {
-      bindable.mode = b.mode as BindingMode;
-    }
+    const bindable: Bindable = {
+      name: b.name,
+      ...(b.mode ? { mode: b.mode as BindingMode } : {}),
+    };
     record[b.name] = bindable;
   }
   return record;

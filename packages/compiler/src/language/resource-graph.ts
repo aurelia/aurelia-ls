@@ -1,46 +1,27 @@
 import type {
-  AttrRes,
-  BindingBehaviorSig,
-  ControllerConfig,
-  ElementRes,
+  ResourceCollections,
+  ResourceGraph,
+  ResourceScope,
+  ResourceScopeId,
+  ScopedResources,
   Semantics,
-  ValueConverterSig,
-} from "./registry.js";
-import type { Brand } from "../model/identity.js";
+  SemanticsWithCaches,
+} from "./types.js";
+import {
+  buildAttributePatternConfigs,
+  buildBindingCommandConfigs,
+  buildResourceCollectionsFromSemantics,
+  normalizeResourceCollections,
+} from "./convert.js";
+import { buildResourceCatalog } from "./catalog.js";
 
-export type ResourceScopeId = string & Brand<"ResourceScopeId">;
-
-export interface ResourceCollections {
-  elements: Record<string, ElementRes>;
-  attributes: Record<string, AttrRes>;
-  controllers: Record<string, ControllerConfig>;
-  valueConverters: Record<string, ValueConverterSig>;
-  bindingBehaviors: Record<string, BindingBehaviorSig>;
-}
-
-export interface ResourceScope {
-  id: ResourceScopeId;
-  parent: ResourceScopeId | null;
-  label?: string;
-  resources: Partial<ResourceCollections>;
-}
-
-export interface ResourceGraph {
-  version: "aurelia-resource-graph@1";
-  root: ResourceScopeId;
-  scopes: Record<ResourceScopeId, ResourceScope>;
-}
-
-export interface ScopedResources {
-  scope: ResourceScopeId | null;
-  resources: ResourceCollections;
-}
+export type { ResourceCollections, ResourceGraph, ResourceScope, ResourceScopeId, ScopedResources };
 
 /**
  * Derive a scoped view of resources by walking the graph from root to the
  * requested scope and applying overrides.
  *
- * - When no graph is provided, fall back to the semantics.resources as-is.
+ * - When no graph is provided, fall back to the semantics resources as-is.
  * - When a graph is provided, it's authoritative: the graph's root scope
  *   contains the properly filtered base resources (e.g., plugin resources
  *   are only included when the corresponding plugin is activated).
@@ -55,7 +36,7 @@ export function materializeResourcesForScope(
     const rootScope = graph.scopes[graph.root];
     let acc = rootScope?.resources
       ? partialToFull(rootScope.resources)
-      : cloneResources(sem.resources);
+      : extractResources(sem);
 
     // Local overlay: only the requested scope (no ancestor walk)
     const targetScope = scope ?? graph.root;
@@ -67,7 +48,7 @@ export function materializeResourcesForScope(
   }
 
   // No graph: use semantics resources as-is
-  return { scope: scope ?? null, resources: cloneResources(sem.resources) };
+  return { scope: scope ?? null, resources: extractResources(sem) };
 }
 
 /**
@@ -75,13 +56,15 @@ export function materializeResourcesForScope(
  * Missing categories become empty objects.
  */
 function partialToFull(partial: Partial<ResourceCollections>): ResourceCollections {
-  return {
-    elements: { ...partial.elements },
-    attributes: { ...partial.attributes },
-    controllers: { ...partial.controllers },
-    valueConverters: { ...partial.valueConverters },
-    bindingBehaviors: { ...partial.bindingBehaviors },
-  };
+  return normalizeResourceCollections(partial);
+}
+
+/**
+ * Extract resource collections from semantics.
+ */
+function extractResources(sem: Semantics): ResourceCollections {
+  if (sem.resources) return normalizeResourceCollections(sem.resources);
+  return buildResourceCollectionsFromSemantics(sem);
 }
 
 /**
@@ -91,39 +74,24 @@ function partialToFull(partial: Partial<ResourceCollections>): ResourceCollectio
  * the AOT compiler. It takes base semantics (typically DEFAULT_SEMANTICS),
  * a ResourceGraph from resolution, and an optional scope, then produces
  * complete Semantics with properly merged resources.
- *
- * @param baseSem - Base semantics (built-in Aurelia resources)
- * @param graph - ResourceGraph from resolution (contains project resources)
- * @param scope - Scope to materialize (defaults to graph root)
- * @returns Complete Semantics ready for compilation
- *
- * @example
- * ```typescript
- * // After resolution
- * const { resourceGraph } = resolve(program);
- *
- * // Create scope-specific semantics for compilation
- * const semantics = materializeSemanticsForScope(
- *   DEFAULT_SEMANTICS,
- *   resourceGraph,
- *   localScopeId,
- * );
- *
- * // Use with AOT compilation
- * const result = compileWithAot(markup, { semantics });
- * ```
  */
 export function materializeSemanticsForScope(
   baseSem: Semantics,
   graph?: ResourceGraph | null,
   scope?: ResourceScopeId | null,
-): Semantics {
+): SemanticsWithCaches {
   const { resources } = materializeResourcesForScope(baseSem, graph, scope);
+  const bindingCommands = baseSem.bindingCommands ?? buildBindingCommandConfigs(baseSem);
+  const attributePatterns = baseSem.attributePatterns ?? buildAttributePatternConfigs(baseSem);
+  const catalog = buildResourceCatalog(resources, bindingCommands, attributePatterns);
   return {
     ...baseSem,
     resources,
-    resourceGraph: graph ?? null,
-    defaultScope: scope ?? null,
+    bindingCommands,
+    attributePatterns,
+    catalog,
+    resourceGraph: graph ?? undefined,
+    defaultScope: scope ?? undefined,
   };
 }
 
@@ -133,7 +101,7 @@ export function materializeSemanticsForScope(
  * do not yet have project-driven scopes.
  */
 export function buildResourceGraphFromSemantics(sem: Semantics): ResourceGraph {
-  const root: ResourceScopeId = "root" as ResourceScopeId;
+  const root = "root" as ResourceScopeId;
   return {
     version: "aurelia-resource-graph@1",
     root,
@@ -142,19 +110,9 @@ export function buildResourceGraphFromSemantics(sem: Semantics): ResourceGraph {
         id: root,
         parent: null,
         label: "root",
-        resources: cloneResources(sem.resources),
+        resources: extractResources(sem),
       },
     },
-  };
-}
-
-function cloneResources(res: ResourceCollections): ResourceCollections {
-  return {
-    elements: { ...res.elements },
-    attributes: { ...res.attributes },
-    controllers: { ...res.controllers },
-    valueConverters: { ...res.valueConverters },
-    bindingBehaviors: { ...res.bindingBehaviors },
   };
 }
 

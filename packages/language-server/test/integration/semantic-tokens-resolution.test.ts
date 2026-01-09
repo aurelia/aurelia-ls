@@ -27,7 +27,7 @@ import {
   type NodeSem,
   type DOMNode,
   type ElementNode,
-  type Semantics,
+  type SemanticsWithCaches,
 } from "@aurelia-ls/compiler";
 
 import {
@@ -61,7 +61,7 @@ function createProgramFromApp(appPath: string): ts.Program {
 
 function compileTemplateForSemanticTokens(
   markup: string,
-  semantics: Semantics,
+  semantics: SemanticsWithCaches,
   options?: { templatePath?: string; name?: string },
 ) {
   const templatePath = options?.templatePath ?? "template.html";
@@ -73,7 +73,7 @@ function compileTemplateForSemanticTokens(
     exprParser,
     file: templatePath,
     name,
-    sem: semantics,
+    catalog: semantics.catalog,
   });
 
   const linked = resolveHost(ir, semantics);
@@ -88,7 +88,7 @@ function compileTemplateForSemanticTokens(
 describe("Semantic Tokens + Resolution Integration", () => {
   let program: ts.Program;
   let resolutionResult: ReturnType<typeof resolve>;
-  let rootSemantics: Semantics;
+  let rootSemantics: SemanticsWithCaches;
 
   beforeAll(() => {
     program = createProgramFromApp(EXPLICIT_APP);

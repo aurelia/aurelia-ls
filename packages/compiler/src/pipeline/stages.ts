@@ -4,7 +4,13 @@ import path from "node:path";
 import { resolveSourceFile } from "../model/index.js";
 
 // Language imports (via barrel)
-import { DEFAULT as SEM_DEFAULT, materializeResourcesForScope, type Semantics, type ResourceGraph, type ResourceScopeId } from "../language/index.js";
+import {
+  DEFAULT_SEMANTICS as SEM_DEFAULT,
+  materializeSemanticsForScope,
+  type Semantics,
+  type ResourceGraph,
+  type ResourceScopeId,
+} from "../language/index.js";
 
 // Parsing imports (via barrel)
 import { DEFAULT_SYNTAX, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
@@ -97,11 +103,11 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     const base = options.semantics ?? SEM_DEFAULT;
     const graph = options.resourceGraph ?? base.resourceGraph ?? null;
     const scopeId = options.resourceScope ?? base.defaultScope ?? null;
-    const scoped = materializeResourcesForScope(base, graph, scopeId);
+    const sem = materializeSemanticsForScope(base, graph, scopeId);
     return {
-      sem: { ...base, resources: scoped.resources, resourceGraph: graph ?? null, defaultScope: scopeId ?? null },
-      resources: scoped.resources,
-      scopeId: scoped.scope,
+      sem,
+      resources: sem.resources,
+      scopeId: scopeId ?? null,
     };
   };
 
@@ -118,13 +124,12 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     deps: [],
     fingerprint(ctx) {
       const options = ctx.options;
-      const sem = options.semantics ?? SEM_DEFAULT;
+      const { sem } = scopedSemantics(options);
       const source = resolveSourceFile(options.templateFilePath);
       return {
         html: stableHash(options.html),
         file: source.hashKey,
-        sem: options.fingerprints?.semantics ?? stableHash(sem),
-        resourceGraph: scopeFingerprint(options),
+        catalog: options.fingerprints?.catalog ?? stableHash(sem.catalog),
         attrParser: options.fingerprints?.attrParser ?? (options.attrParser ? "custom" : "default"),
         exprParser: options.fingerprints?.exprParser ?? (options.exprParser ? "custom" : "default"),
       };
@@ -139,7 +144,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         name: path.basename(options.templateFilePath),
         attrParser,
         exprParser,
-        sem,
+        catalog: sem.catalog,
         trace: options.trace,
       });
     },

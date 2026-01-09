@@ -11,6 +11,7 @@ import {
   resolveHost,
   materializeResourcesForScope,
   createSemanticsLookup,
+  prepareSemantics,
 } from "@aurelia-ls/compiler";
 
 // Internal import for direct unit testing of resolveControllerSem
@@ -119,12 +120,10 @@ describe("Resolve (20) - Resource Graph", () => {
     };
 
     const scoped = materializeResourcesForScope(baseSem, graph, "child");
-    const sem = {
-      ...baseSem,
-      resources: scoped.resources,
-      resourceGraph: graph,
-      defaultScope: "child",
-    };
+    const sem = prepareSemantics(
+      { ...baseSem, resourceGraph: graph, defaultScope: "child" },
+      { resources: scoped.resources },
+    );
 
     const ir = lowerDocument(
       `<root-el foo.bind="a"></root-el><feature-el bar.bind="b"></feature-el><child-el baz.bind="c"></child-el>`,
@@ -133,7 +132,7 @@ describe("Resolve (20) - Resource Graph", () => {
         exprParser: getExpressionParser(),
         file: "mem.html",
         name: "mem",
-        sem,
+        catalog: sem.catalog,
       },
     );
 
@@ -190,19 +189,17 @@ describe("Resolve (20) - Resource Graph", () => {
     };
 
     const scoped = materializeResourcesForScope(baseSem, graph, "feature");
-    const sem = {
-      ...baseSem,
-      resources: scoped.resources,
-      resourceGraph: graph,
-      defaultScope: "feature",
-    };
+    const sem = prepareSemantics(
+      { ...baseSem, resourceGraph: graph, defaultScope: "feature" },
+      { resources: scoped.resources },
+    );
 
     const ir = lowerDocument(`<conflict-el from-local.bind="x"></conflict-el><conflict-el from-root.bind="y"></conflict-el>`, {
       attrParser: DEFAULT_SYNTAX,
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      sem,
+      catalog: sem.catalog,
     });
 
     const linked = resolveHost(ir, sem, { graph, scope: "feature" });
@@ -541,7 +538,7 @@ describe("Resolve (20) - Local Imports", () => {
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      sem: DEFAULT,
+      catalog: DEFAULT.catalog,
     });
 
     const linked = resolveHost(ir, DEFAULT, { localImports });
@@ -574,7 +571,7 @@ describe("Resolve (20) - Local Imports", () => {
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      sem: DEFAULT,
+      catalog: DEFAULT.catalog,
     });
 
     const linked = resolveHost(ir, DEFAULT, { localImports });
@@ -613,15 +610,16 @@ describe("Resolve (20) - Local Imports", () => {
       },
     ];
 
+    const sem = prepareSemantics(baseSem);
     const ir = lowerDocument(`<au-compose global-prop.bind="x"></au-compose>`, {
       attrParser: DEFAULT_SYNTAX,
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      sem: baseSem,
+      catalog: sem.catalog,
     });
 
-    const linked = resolveHost(ir, baseSem, { localImports });
+    const linked = resolveHost(ir, sem, { localImports });
     const intent = reduceLinkedIntent(linked);
 
     // Global registration should win, so globalProp resolves as bindable
@@ -645,7 +643,7 @@ describe("Resolve (20) - Local Imports", () => {
         exprParser: getExpressionParser(),
         file: "mem.html",
         name: "mem",
-        sem: DEFAULT,
+        catalog: DEFAULT.catalog,
       }
     );
 
@@ -673,7 +671,7 @@ describe("Resolve (20) - Local Imports", () => {
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      sem: DEFAULT,
+      catalog: DEFAULT.catalog,
     });
 
     const linked = resolveHost(ir, DEFAULT, { localImports: [] });

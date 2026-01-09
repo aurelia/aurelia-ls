@@ -11,7 +11,13 @@ import {
 import type { NormalizedPath } from "../model/index.js";
 
 // Language imports (via barrel)
-import { DEFAULT as SEM_DEFAULT, type Semantics, type ResourceGraph, type ResourceScopeId } from "../language/index.js";
+import {
+  DEFAULT as SEM_DEFAULT,
+  prepareSemantics,
+  type Semantics,
+  type ResourceGraph,
+  type ResourceScopeId,
+} from "../language/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
@@ -589,10 +595,12 @@ function hashSnapshotContent(snap: DocumentSnapshot): string {
 function computeProgramOptionsFingerprint(options: ProgramOptions, hints: FingerprintHints): string {
   const sem = options.semantics ?? SEM_DEFAULT;
   const overlayHint = hints.overlay ?? { isJs: options.isJs, syntheticPrefix: options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_" };
+  const catalogHint = hints.catalog ?? stableHash(prepareSemantics(sem).catalog);
   const fingerprint: Record<string, FingerprintHints[keyof FingerprintHints]> = {
     isJs: options.isJs,
     overlayBaseName: options.overlayBaseName ?? null,
     semantics: hints.semantics ?? stableHash(sem),
+    catalog: catalogHint,
     resourceGraph: fingerprintResourceGraph(options, sem),
     attrParser: hints.attrParser ?? (options.attrParser ? "custom" : "default"),
     exprParser: hints.exprParser ?? (options.exprParser ? "custom" : "default"),
@@ -643,6 +651,7 @@ function extractExtraFingerprintHints(hints: FingerprintHints): Record<string, F
     if (
       key === "attrParser" ||
       key === "exprParser" ||
+      key === "catalog" ||
       key === "semantics" ||
       key === "vm" ||
       key === "overlay" ||

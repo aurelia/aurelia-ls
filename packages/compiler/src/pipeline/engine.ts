@@ -107,6 +107,7 @@ export type FingerprintToken =
 export interface FingerprintHints {
   attrParser?: FingerprintToken;
   exprParser?: FingerprintToken;
+  catalog?: FingerprintToken;
   semantics?: FingerprintToken;
   vm?: FingerprintToken;
   overlay?: FingerprintToken;

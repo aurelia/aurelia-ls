@@ -3,7 +3,8 @@ import type {
   AttrRes,
   BindingCommandConfig,
   ControllerConfig,
-  Semantics,
+  ControllerName as LanguageControllerName,
+  ResourceCatalog,
 } from "../../language/registry.js";
 import { debug } from "../../shared/debug.js";
 import { formatSuggestion } from "../../shared/suggestions.js";
@@ -159,13 +160,13 @@ export function lowerElementAttributes(
   el: P5Element,
   attrParser: AttributeParser,
   table: ExprTable,
-  sem: Semantics
+  catalog: ResourceCatalog
 ): ElementLoweringResult {
   const attrs = el.attrs ?? [];
   const authoredTag = el.nodeName.toLowerCase();
   const asElement = findAttr(el, "as-element");
   const effectiveTag = (asElement?.value ?? authoredTag).toLowerCase();
-  const elementDef = resolveElementDef(effectiveTag, sem);
+  const elementDef = resolveElementDef(effectiveTag, catalog);
   const containerless = !!elementDef?.containerless || !!findAttr(el, "containerless");
 
   debug.lower("element.start", {
@@ -195,7 +196,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to,
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(command, patternMode, sem.bindingCommands),
+        mode: toMode(command, patternMode, catalog.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       return;
@@ -226,14 +227,14 @@ export function lowerElementAttributes(
     const raw = a.value ?? "";
 
     if (a.name === "as-element" || a.name === "containerless") continue;
-    if (isControllerAttr(s, sem)) continue;
+    if (isControllerAttr(s, catalog)) continue;
 
     // Config-driven command handling
     if (s.command) {
-      const cmdConfig = sem.bindingCommands[s.command];
+      const cmdConfig = catalog.bindingCommands[s.command];
       if (!cmdConfig) {
         // Unknown binding command - emit diagnostic with suggestion
-        const knownCommands = Object.keys(sem.bindingCommands);
+        const knownCommands = Object.keys(catalog.bindingCommands);
         const suggestion = formatSuggestion(s.command, knownCommands);
         table.addDiag(
           "AU0705",
@@ -337,7 +338,7 @@ export function lowerElementAttributes(
       continue;
     }
 
-    const attrDef = resolveAttrDef(s.target, sem);
+    const attrDef = resolveAttrDef(s.target, catalog);
     if (attrDef && !attrDef.isTemplateController) {
       debug.lower("attr.customAttribute", { attr: a.name, customAttr: attrDef.name });
       // Check for multi-binding syntax: attr="prop1: val; prop2.bind: expr"
@@ -349,7 +350,7 @@ export function lowerElementAttributes(
 
       let props: AttributeBindableIR[];
       if (isMultiBinding) {
-        props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table, sem.bindingCommands);
+        props = parseMultiBindings(raw, attrDef, attrParser, loc, valueLoc, table, catalog.bindingCommands);
       } else {
         props = [];
         const targetBindableName =
@@ -377,7 +378,7 @@ export function lowerElementAttributes(
         type: "propertyBinding",
         to: camelCase(s.target),
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-        mode: toMode(s.command, s.mode, sem.bindingCommands),
+        mode: toMode(s.command, s.mode, catalog.bindingCommands),
         loc: toSpan(loc, table.source),
       });
       continue;
@@ -440,7 +441,7 @@ export function lowerElementAttributes(
 /**
  * @deprecated Use ControllerConfig.name instead. Retained for backward compatibility.
  */
-export type ControllerName = keyof Semantics["resources"]["controllers"];
+export type ControllerName = LanguageControllerName;
 
 /**
  * Resolve an attribute to its controller configuration.
@@ -448,7 +449,7 @@ export type ControllerName = keyof Semantics["resources"]["controllers"];
  * Resolution order:
  * 1. Built-in controller configs (if, repeat, with, etc.)
  * 2. Custom template controllers in attributes (via @templateController decorator)
- * 3. Legacy controllers in sem.resources.controllers (for backward compat)
+ * 3. Legacy controllers in catalog.resources.controllers (for backward compat)
  *
  * Note: Branch controllers (else, case, then, catch, pending, default-case) are NOT
  * resolved here. They are only valid as children/siblings of their parent controller
@@ -458,7 +459,7 @@ export type ControllerName = keyof Semantics["resources"]["controllers"];
  */
 export function resolveControllerAttr(
   s: { target: string; command: string | null },
-  sem: Semantics
+  catalog: ResourceCatalog
 ): ControllerConfig | null {
   const target = s.target;
 
@@ -481,7 +482,7 @@ export function resolveControllerAttr(
   }
 
   // 2. Check custom TCs in attributes (discovered via @templateController decorator)
-  const customAttr = sem.resources.attributes[target];
+  const customAttr = catalog.resources.attributes[target];
   if (customAttr?.isTemplateController) {
     // Create a config for this custom TC
     return createCustomControllerConfig(
@@ -491,9 +492,9 @@ export function resolveControllerAttr(
     );
   }
 
-  // 3. Legacy fallback: check sem.resources.controllers
+  // 3. Legacy fallback: check catalog.resources.controllers
   // This maintains backward compatibility with existing code that adds to controllers directly
-  const legacyController = sem.resources.controllers[target];
+  const legacyController = catalog.resources.controllers[target];
   if (legacyController) {
     // For legacy controllers, create a minimal config
     // The toControllerConfig() function handles full conversion if needed
@@ -511,9 +512,9 @@ export function resolveControllerAttr(
  */
 export function isControllerAttr(
   s: { target: string; command: string | null },
-  sem: Semantics
+  catalog: ResourceCatalog
 ): boolean {
-  return resolveControllerAttr(s, sem) !== null;
+  return resolveControllerAttr(s, catalog) !== null;
 }
 
 /**
