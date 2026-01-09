@@ -22,10 +22,10 @@ import type {
   TemplateControllerDef,
   ResourceDef,
 } from '@aurelia-ls/compiler';
-import type { AnalysisGap } from '../extraction/types.js';
-import type { ClassValue, BindableMember } from '../npm/value/types.js';
-import { extractStringProp, extractBooleanProp } from '../npm/value/types.js';
-import type { FileContext } from '../file-facts.js';
+import type { AnalysisGap } from '../analysis/types.js';
+import type { ClassValue, BindableMember } from '../analysis/value/types.js';
+import { extractStringProp, extractBooleanProp } from '../analysis/value/types.js';
+import type { FileContext } from '../extraction/file-facts.js';
 import type { BindableInput } from '../semantics/resource-def.js';
 import {
   buildBindableDefs,
@@ -238,3 +238,4 @@ function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
   }
   return undefined;
 }
+

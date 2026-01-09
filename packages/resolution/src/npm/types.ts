@@ -7,14 +7,14 @@
 import type { NormalizedPath } from '@aurelia-ls/compiler';
 import type { ResourceAnnotation } from '../annotation.js';
 
-// Re-export shared analysis types from extraction
+// Re-export shared analysis types from analysis
 export type {
   AnalysisResult,
   Confidence,
   AnalysisGap,
   GapLocation,
   GapReason,
-} from '../extraction/types.js';
+} from '../analysis/types.js';
 
 export {
   success,
@@ -23,7 +23,7 @@ export {
   compareConfidence,
   gap,
   highConfidence,
-} from '../extraction/types.js';
+} from '../analysis/types.js';
 
 // =============================================================================
 // NPM Package Types
@@ -218,3 +218,4 @@ export interface InspectedGap {
 // =============================================================================
 
 export type { ResourceAnnotation, BindableAnnotation, ResourceKind } from '../annotation.js';
+

@@ -9,13 +9,11 @@
  * - Every AST node maps to exactly one AnalyzableValue
  * - Unknown patterns produce UnknownValue with descriptive gaps
  * - Source spans preserved for diagnostics
- *
- * See: partial-evaluation-design.md § "Layer 1: AST Transformation"
  */
 
 import ts from 'typescript';
 import type { TextSpan } from '@aurelia-ls/compiler';
-import { gap } from '../../extraction/types.js';
+import { gap } from '../types.js';
 import type {
   AnalyzableValue,
   MethodValue,
@@ -50,7 +48,7 @@ import {
  * Transform a TypeScript expression to an AnalyzableValue.
  *
  * This is the main entry point for Layer 1 transformation.
- * Handles all expression types relevant to Aurelia package analysis.
+ * Handles all expression types relevant to Aurelia resource analysis.
  */
 export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): AnalyzableValue {
   const span = nodeSpan(expr, sf);
@@ -889,3 +887,4 @@ export function transformModuleExports(
 
   return exports;
 }
+

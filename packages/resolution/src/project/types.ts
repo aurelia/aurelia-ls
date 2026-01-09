@@ -17,8 +17,7 @@ import type { NormalizedPath, CompileTrace } from "@aurelia-ls/compiler";
  * Used for template-pairing convention: `foo.ts` + `foo.html` as siblings.
  *
  * This is the canonical definition. Other modules import from here:
- * - file-facts.ts re-exports for convenience
- * - extraction/types.ts has deprecated SiblingFileFact (structurally identical)
+ * - extraction/file-facts.ts re-exports for convenience
  */
 export interface SiblingFile {
   /** Full normalized path to the sibling file */

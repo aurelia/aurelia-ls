@@ -75,7 +75,7 @@ import { matchStaticAu } from '../patterns/static-au.js';
 import { matchConvention } from '../patterns/convention.js';
 import { matchDefine } from '../patterns/define.js';
 import { canonicalPath } from '../util/naming.js';
-import type { FileFacts, FileContext, DefineCall } from '../file-facts.js';
+import type { FileFacts, FileContext, DefineCall } from '../extraction/file-facts.js';
 
 // Import export resolver for cross-file resolution
 import { buildExportBindingMap } from '../binding/export-resolver.js';
@@ -91,7 +91,7 @@ import {
   getResolvedValue,
   type LexicalScope,
   type ClassValue,
-} from './value/index.js';
+} from '../analysis/value/index.js';
 import { extractRegisterBodyResources, tryResolveAsFactory, type RegisterBodyContext } from './patterns/index.js';
 
 // =============================================================================
@@ -574,7 +574,7 @@ interface ExtractionResult {
  * Extract resources from TypeScript source files.
  * Uses full TypeScript Program for proper cross-file module resolution.
  *
- * This is the "Option B" approach from npm-analysis-design.md:
+ * This is the single-program approach:
  * 1. Discover all TypeScript files starting from entry point
  * 2. Create ONE ts.Program containing all files
  * 3. Use extractAllFacts() for proper import resolution
@@ -1537,3 +1537,4 @@ function collectAnalyzedPaths(resources: ResourceAnnotation[]): string[] {
 }
 
 import type { GapReason } from './types.js';
+

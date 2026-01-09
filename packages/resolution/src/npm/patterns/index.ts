@@ -15,7 +15,7 @@ export {
   isRegistryShape,
   getRegisterMethod,
   hasMethod,
-} from '../value/types.js';
+} from '../../analysis/value/types.js';
 
 // Re-export register body analysis
 export {

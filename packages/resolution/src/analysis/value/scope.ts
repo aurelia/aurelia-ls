@@ -46,7 +46,7 @@ import {
 import { transformExpression, transformParameters, transformBlock } from './transform.js';
 
 // =============================================================================
-// Scope Building (WP 2.3)
+// Scope Building
 // =============================================================================
 
 /**
@@ -143,8 +143,8 @@ function collectVariableBindings(
  * - Rest patterns not supported: `{ a, ...rest }` - 'rest' is not bound
  * - Computed property names not supported: `{ [expr]: x }` skipped
  *
- * These patterns are rare in Aurelia plugin configuration. If encountered in real
- * packages, consider extending this function.
+ * These patterns are rare in typical Aurelia resource registration code.
+ * If encountered, consider extending this function.
  */
 function collectObjectBindingPattern(
   pattern: ts.ObjectBindingPattern,
@@ -183,8 +183,8 @@ function collectObjectBindingPattern(
  * - Rest patterns not supported: `[first, ...rest]` - 'rest' is not bound
  * - Holes are handled correctly: `[, second]` binds 'second' at index 1
  *
- * These patterns are rare in Aurelia plugin configuration. If encountered in real
- * packages, consider extending this function.
+ * These patterns are rare in typical Aurelia resource registration code.
+ * If encountered, consider extending this function.
  */
 function collectArrayBindingPattern(
   pattern: ts.ArrayBindingPattern,
@@ -358,7 +358,7 @@ export function createChildScope(
 }
 
 // =============================================================================
-// Block Binding Collection (WP 3.2)
+// Block Binding Collection
 // =============================================================================
 
 /**
@@ -371,7 +371,7 @@ export function createChildScope(
  * This enables resolving function-local variables like:
  * ```typescript
  * function createConfig() {
- *   const components = [A, B, C];  // ✓ Captured
+ *   const components = [A, B, C];  // Captured
  *   return { register(c) { c.register(...components); } };
  * }
  * ```
@@ -503,7 +503,7 @@ export function isImportBinding(
 }
 
 // =============================================================================
-// Scope Resolution (WP 2.4)
+// Scope Resolution
 // =============================================================================
 
 /**
@@ -685,7 +685,7 @@ function resolveObject(
 /**
  * Resolve a function value (its body).
  *
- * Enhanced (WP 3.2): Also collects variable declarations from the function
+ * Enhanced: Also collects variable declarations from the function
  * body and adds them to the scope. This enables resolving spreads of
  * function-local arrays, e.g.:
  *
@@ -724,7 +724,7 @@ function resolveFunction(
 /**
  * Resolve a method value (its body).
  *
- * Enhanced (WP 3.2): Same as resolveFunction - collects block bindings
+ * Enhanced: Same as resolveFunction - collects block bindings
  * from the method body for scope resolution.
  */
 function resolveMethod(

@@ -11,9 +11,9 @@
  */
 
 import type { NormalizedPath, ResourceDef } from '@aurelia-ls/compiler';
-import type { AnalysisGap } from '../extraction/types.js';
-import type { ClassValue } from '../npm/value/types.js';
-import type { FileContext, FileFacts, DefineCall } from '../file-facts.js';
+import type { AnalysisGap } from '../analysis/types.js';
+import type { ClassValue } from '../analysis/value/types.js';
+import type { FileContext, FileFacts, DefineCall } from '../extraction/file-facts.js';
 import { matchDecorator } from './decorator.js';
 import { matchStaticAu } from './static-au.js';
 import { matchConvention } from './convention.js';
@@ -204,3 +204,4 @@ export function matchFileFacts(
 
   return { resources, gaps };
 }
+

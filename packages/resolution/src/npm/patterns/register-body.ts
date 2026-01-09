@@ -21,8 +21,8 @@
 
 import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
 import { debug } from '@aurelia-ls/compiler';
-import type { AnalysisResult, AnalysisGap } from '../../extraction/types.js';
-import { gap, partial, highConfidence } from '../../extraction/types.js';
+import type { AnalysisResult, AnalysisGap } from '../../analysis/types.js';
+import { gap, partial, highConfidence } from '../../analysis/types.js';
 import type { ResourceAnnotation } from '../../annotation.js';
 import type {
   AnalyzableValue,
@@ -31,8 +31,8 @@ import type {
   CallValue,
   ClassValue,
   SpreadValue,
-} from '../value/types.js';
-import { getResolvedValue } from '../value/types.js';
+} from '../../analysis/value/types.js';
+import { getResolvedValue } from '../../analysis/value/types.js';
 
 // =============================================================================
 // Context Types
@@ -511,3 +511,4 @@ export {
   isRegistrationPattern,
   extractFromValue,
 };
+

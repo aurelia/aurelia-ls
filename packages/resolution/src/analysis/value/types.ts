@@ -1,7 +1,7 @@
 /**
  * Value Model Types for Partial Evaluation
  *
- * Core IR for static value analysis in npm package extraction (Phase 2/3).
+ * Core IR for static value analysis in the resolution pipeline (Layers 1-3).
  * Represents "what we know about a value at compile time."
  *
  * Design principles:
@@ -9,13 +9,11 @@
  * - Optional `resolved` fields for lazy resolution with caching
  * - Source spans on all values for diagnostic provenance
  * - Separate MethodValue for interprocedural analysis
- *
- * See: partial-evaluation-design.md
  */
 
 import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
-import type { AnalysisGap } from '../../extraction/types.js';
-import type { FileFacts } from '../../file-facts.js';
+import type { AnalysisGap } from '../types.js';
+import type { FileFacts } from '../../extraction/file-facts.js';
 import type { ExportBindingMap } from '../../binding/types.js';
 
 // =============================================================================
@@ -367,7 +365,7 @@ export interface IfStatement {
 /**
  * For-of statement: for (const x of arr) { body }
  *
- * Some packages iterate over arrays to register resources.
+ * Some projects iterate over arrays to register resources.
  * We detect this as a gap but try to analyze if the array is known.
  */
 export interface ForOfStatement {
@@ -822,3 +820,4 @@ export function forOfStmt(
 export function unknownStmt(reason: AnalysisGap, span?: TextSpan): UnknownStatement {
   return { kind: 'unknownStatement', reason, span };
 }
+

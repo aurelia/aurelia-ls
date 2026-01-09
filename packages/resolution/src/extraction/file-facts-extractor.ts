@@ -2,9 +2,8 @@
  * File Facts Extractor
  *
  * Extracts FileFacts from TypeScript source files using the unified value model.
- * This replaces extractSourceFacts() with a cleaner, AnalyzableValue-based approach.
  *
- * Key differences from old extractor:
+ * Design notes:
  * - Uses enriched ClassValue (decorators, staticMembers, bindableMembers as AnalyzableValue)
  * - Uses LexicalScope from the value model
  * - Registration/Define calls use AnalyzableValue arguments
@@ -25,14 +24,14 @@ import type {
   FileContext,
   SiblingFile,
   TemplateImport,
-} from '../file-facts.js';
-import { emptyFileFacts, emptyFileContext } from '../file-facts.js';
-import type { ClassValue, LexicalScope, AnalyzableValue } from '../npm/value/types.js';
-import type { AnalysisGap } from './types.js';
-import { gap } from './types.js';
-import { extractClassValue } from '../npm/value/class-extraction.js';
-import { buildFileScope } from '../npm/value/scope.js';
-import { transformExpression } from '../npm/value/transform.js';
+} from './file-facts.js';
+import { emptyFileFacts, emptyFileContext } from './file-facts.js';
+import type { ClassValue, LexicalScope, AnalyzableValue } from '../analysis/value/types.js';
+import type { AnalysisGap } from '../analysis/types.js';
+import { gap } from '../analysis/types.js';
+import { extractClassValue } from '../analysis/value/class-extraction.js';
+import { buildFileScope } from '../analysis/value/scope.js';
+import { transformExpression } from '../analysis/value/transform.js';
 import { canonicalPath } from '../util/naming.js';
 import type { FileSystemContext } from '../project/context.js';
 import { extractTemplateImports, resolveTemplateImportPaths } from './template-imports.js';
@@ -744,3 +743,4 @@ function resolveModulePath(
 
   return null;
 }
+

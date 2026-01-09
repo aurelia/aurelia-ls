@@ -5,20 +5,17 @@
 //
 // Architecture (unified value model):
 // - File Discovery (Layer 0): File enumeration, sibling detection
-// - Extraction (Layer 1): AST → FileFacts (classes, imports, exports, registrations)
-// - Partial Evaluation (Layer 2): FileFacts → resolved FileFacts + gaps
-// - Pattern Matching (Layer 3): FileFacts → ResourceDef[]
-// - Registration (Layer 4): ResourceDef[] + FileFacts → RegistrationAnalysis
-// - Scope (Layer 5): RegistrationAnalysis → ResourceGraph
+// - Extraction (Layer 1): AST -> FileFacts (classes, imports, exports, registrations)
+// - Partial Evaluation (Layer 2): FileFacts -> resolved FileFacts + gaps
+// - Pattern Matching (Layer 3): FileFacts -> ResourceDef[]
+// - Registration (Layer 4): ResourceDef[] + FileFacts -> RegistrationAnalysis
+// - Scope (Layer 5): RegistrationAnalysis -> ResourceGraph
 //
 // Key types:
-// - FileFacts: Unified extraction output (replaces SourceFacts)
+// - FileFacts: Unified extraction output
 // - ClassValue: Enriched class metadata with AnalyzableValue
 // - ResourceDef: Unified resource definition (compiler-facing, Sourced<T>)
 //
-// See docs/resolution-architecture.md for details.
-// See docs/registration-analysis-design.md for the three-phase model.
-// See docs/unified-value-model-design.md for the value model.
 
 // === Re-export compiler types for convenience ===
 export type {
@@ -122,7 +119,7 @@ export type {
   ConventionBuilder,
 } from "./project/index.js";
 
-// === Annotation Types (NPM analysis / legacy) ===
+// === Annotation Types (NPM analysis) ===
 // ResourceAnnotation is still used by npm analysis pipelines.
 // Core resolution outputs ResourceDef.
 export type {
@@ -162,8 +159,8 @@ export type {
   // SiblingFile exported from project/index.js (canonical source)
   TemplateImport,
   MatchContext,
-} from "./file-facts.js";
-export { emptyFileFacts, emptyFileContext } from "./file-facts.js";
+} from "./extraction/file-facts.js";
+export { emptyFileFacts, emptyFileContext } from "./extraction/file-facts.js";
 
 // === Value Model Types ===
 // Core types for static value analysis (used by FileFacts.classes)
@@ -173,10 +170,10 @@ export type {
   DecoratorApplication,
   BindableMember,
   LexicalScope,
-} from "./npm/value/index.js";
+} from "./analysis/index.js";
 
 // === Pattern Matchers (New) ===
-// Pattern matchers operate on ClassValue → ResourceDef.
+// Pattern matchers operate on ClassValue -> ResourceDef.
 export { matchAll, matchFile, matchExpected, matchDefineCalls, matchFileFacts, type MatchResult, type FileMatchResult } from "./patterns/index.js";
 export { matchDecorator, type DecoratorMatchResult } from "./patterns/index.js";
 export { matchStaticAu, type StaticAuMatchResult } from "./patterns/index.js";
@@ -196,8 +193,12 @@ export {
 
 // === Extraction (Layer 1) ===
 // Unified extraction (FileFacts with enriched ClassValue)
-export { extractAllFileFacts, extractFileFacts, extractFileContext, evaluateFileFacts } from "./extraction/index.js";
-export type { ExtractionOptions, PartialEvaluationResult, PartialEvaluationFileResult, PartialEvaluationOptions } from "./extraction/index.js";
+export { extractAllFileFacts, extractFileFacts, extractFileContext } from "./extraction/index.js";
+export type { ExtractionOptions } from "./extraction/index.js";
+
+// === Analysis (Layer 2) ===
+export { evaluateFileFacts } from "./analysis/index.js";
+export type { PartialEvaluationResult, PartialEvaluationFileResult, PartialEvaluationOptions } from "./analysis/index.js";
 
 // === Export Binding Resolution (Layer 1.5) ===
 export { buildExportBindingMap, lookupExportBinding } from "./binding/index.js";
@@ -258,7 +259,7 @@ export {
   // Functions
   getResourceTypeFromClassName,
   stripResourceSuffix,
-  // Normalization (user-friendly → internal)
+  // Normalization (user-friendly -> internal)
   normalizeScope,
   normalizeDirectoryRule,
   normalizeDirectoryConventions,
@@ -360,7 +361,6 @@ export type { PluginHint, PluginHintResult, UnresolvedResourceInfo } from "./dia
 // === NPM Package Analysis ===
 // Extracts Aurelia resource semantics from npm packages.
 // Used by app mode to understand dependencies, and by library mode to generate manifests.
-// See docs/npm-analysis-design.md for architecture.
 export {
   analyzePackage,
   analyzePackages,
@@ -391,3 +391,4 @@ export type {
   PackageInfo,
   EntryPoint,
 } from "./npm/index.js";
+

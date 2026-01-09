@@ -14,7 +14,7 @@
 
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { debug } from "@aurelia-ls/compiler";
-import type { FileFacts } from "../file-facts.js";
+import type { FileFacts } from "../extraction/file-facts.js";
 import type { ExportBindingMap, FileExportBindings, ResolvedExport } from "./types.js";
 
 /**
@@ -279,3 +279,4 @@ export function lookupExportBinding(
   }
   return fileBindings.get(exportName) ?? null;
 }
+

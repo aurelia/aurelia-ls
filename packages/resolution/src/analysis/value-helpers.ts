@@ -2,7 +2,7 @@
  * Value Resolution Helpers for Class Extraction
  *
  * Bridges class extraction (AST-level) with the value model (partial evaluation).
- * Uses the same infrastructure as npm-analysis for consistent identifier resolution.
+ * Uses the unified value model for consistent identifier resolution.
  *
  * Design principle: Don't hard-code identifier mappings. Use the value model
  * to resolve references through scope chains and cross-file imports.
@@ -22,15 +22,15 @@ import type {
   LexicalScope,
   ResolutionContext,
   OnDemandResolver,
-} from "../npm/value/types.js";
-import { transformExpression } from "../npm/value/transform.js";
+} from "./value/types.js";
+import { transformExpression } from "./value/transform.js";
 import {
   resolveInScope,
   buildFileScope,
   lookupBinding,
   isImportBinding,
-} from "../npm/value/scope.js";
-import { fullyResolve } from "../npm/value/resolve.js";
+} from "./value/scope.js";
+import { fullyResolve } from "./value/resolve.js";
 import { canonicalPath } from "../util/naming.js";
 
 // =============================================================================
@@ -65,7 +65,7 @@ export interface PropertyResolutionContext {
  *
  * This creates a file scope that can resolve:
  * - Module-level constants: `const TYPE = 'custom-element';`
- * - Identifier references: `type: TYPE` → 'custom-element'
+ * - Identifier references: `type: TYPE` -> 'custom-element'
  *
  * Does NOT resolve cross-file imports (Layer 3). For that, use
  * buildContextWithProgram() instead.
@@ -85,8 +85,8 @@ export function buildSimpleContext(
  *
  * This creates a file scope that can resolve:
  * - Module-level constants: `const TYPE = 'custom-element';`
- * - Identifier references: `type: TYPE` → 'custom-element'
- * - Imported constants: `type: attrTypeName` → follows import to source
+ * - Identifier references: `type: TYPE` -> 'custom-element'
+ * - Imported constants: `type: attrTypeName` -> follows import to source
  *
  * Uses TypeScript's module resolution to follow imports on-demand via the
  * unified Layer 3 infrastructure.
@@ -211,7 +211,7 @@ function resolveModuleToSourceFile(
 
   let resolvedPath = result.resolvedModule.resolvedFileName;
 
-  // Handle .js → .ts mapping for ESM imports
+  // Handle .js -> .ts mapping for ESM imports
   if (resolvedPath.endsWith(".js")) {
     const tsPath = resolvedPath.slice(0, -3) + ".ts";
     const tsFile = program.getSourceFile(tsPath);
@@ -363,3 +363,4 @@ function extractLiteralBoolean(value: AnalyzableValue): boolean | undefined {
 
   return undefined;
 }
+

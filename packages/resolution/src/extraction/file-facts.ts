@@ -1,7 +1,6 @@
 /**
  * File Facts - Unified File-Level Extraction
  *
- * Replaces SourceFacts with a cleaner separation of concerns.
  * Uses enriched ClassValue (AnalyzableValue-based) throughout.
  *
  * Design:
@@ -10,9 +9,9 @@
  */
 
 import type { NormalizedPath, TextSpan, SourceSpan, BindingMode } from '@aurelia-ls/compiler';
-import type { AnalysisGap } from './extraction/types.js';
-import type { ClassValue, LexicalScope, AnalyzableValue, ResolutionContext } from './npm/value/types.js';
-import type { SiblingFile } from './project/types.js';
+import type { AnalysisGap } from '../analysis/types.js';
+import type { ClassValue, LexicalScope, AnalyzableValue, ResolutionContext } from '../analysis/value/types.js';
+import type { SiblingFile } from '../project/types.js';
 
 // =============================================================================
 // File Facts (Single File Extraction)
@@ -21,7 +20,6 @@ import type { SiblingFile } from './project/types.js';
 /**
  * Facts extracted from a single TypeScript source file.
  *
- * This is the unified extraction output, replacing SourceFacts.
  * All class metadata uses the enriched ClassValue with AnalyzableValue.
  */
 export interface FileFacts {
@@ -263,7 +261,7 @@ export interface FileContext {
 
 // SiblingFile is imported from project/types.ts (canonical definition)
 // Re-export for convenience
-export type { SiblingFile } from './project/types.js';
+export type { SiblingFile } from '../project/types.js';
 
 /**
  * Parsed template content.
@@ -309,9 +307,9 @@ export interface MatchContext {
 
 /**
  * Context for cross-file value resolution.
- * (Re-exported from npm/value/types.ts for convenience)
+ * (Re-exported from analysis/value/types.ts for convenience)
  */
-export type { ResolutionContext } from './npm/value/types.js';
+export type { ResolutionContext } from '../analysis/value/types.js';
 
 // =============================================================================
 // Constructors
@@ -345,3 +343,4 @@ export function emptyFileContext(): FileContext {
     templateImports: [],
   };
 }
+

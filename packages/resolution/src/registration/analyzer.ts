@@ -1,7 +1,7 @@
 import { toSourceFileId, type NormalizedPath, type ResourceDef, type SourceSpan } from "@aurelia-ls/compiler";
-import type { FileFacts, FileContext, ImportDeclaration, RegistrationCall, TemplateImport } from "../file-facts.js";
-import type { ClassValue, AnalyzableValue } from "../npm/value/types.js";
-import { extractStringArrayProp, getProperty } from "../npm/value/types.js";
+import type { FileFacts, FileContext, ImportDeclaration, RegistrationCall, TemplateImport } from "../extraction/file-facts.js";
+import type { ClassValue, AnalyzableValue } from "../analysis/value/types.js";
+import { extractStringArrayProp, getProperty } from "../analysis/value/types.js";
 import type { ExportBindingMap } from "../binding/types.js";
 import { lookupExportBinding } from "../binding/export-resolver.js";
 import type { PluginManifest, PluginResolver } from "../plugins/types.js";
@@ -980,3 +980,4 @@ function processRegistrationValue(
 
   return { sites, unresolved, plugins };
 }
+

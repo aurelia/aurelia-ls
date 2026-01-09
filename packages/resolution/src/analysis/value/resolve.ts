@@ -16,8 +16,8 @@
 
 import type { NormalizedPath } from '@aurelia-ls/compiler';
 import { debug } from '@aurelia-ls/compiler';
-import { gap } from '../../extraction/types.js';
-import type { FileFacts } from '../../file-facts.js';
+import { gap } from '../types.js';
+import type { FileFacts } from '../../extraction/file-facts.js';
 import { lookupExportBinding } from '../../binding/export-resolver.js';
 import type { ExportBindingMap } from '../../binding/types.js';
 import type {
@@ -652,3 +652,4 @@ export function fullyResolve(
   // Layer 3: Cross-file resolution
   return resolveImportsCrossFile(scopeResolved, ctx, scope.filePath);
 }
+

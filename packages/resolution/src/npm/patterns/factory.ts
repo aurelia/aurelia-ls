@@ -26,8 +26,8 @@
  */
 
 import { debug } from '@aurelia-ls/compiler';
-import type { AnalysisGap } from '../../extraction/types.js';
-import { gap } from '../../extraction/types.js';
+import type { AnalysisGap } from '../../analysis/types.js';
+import { gap } from '../../analysis/types.js';
 import type {
   AnalyzableValue,
   CallValue,
@@ -36,10 +36,10 @@ import type {
   StatementValue,
   LexicalScope,
   ResolutionContext,
-} from '../value/types.js';
-import { getResolvedValue } from '../value/types.js';
-import { resolveInScope } from '../value/scope.js';
-import { fullyResolve } from '../value/resolve.js';
+} from '../../analysis/value/types.js';
+import { getResolvedValue } from '../../analysis/value/types.js';
+import { resolveInScope } from '../../analysis/value/scope.js';
+import { fullyResolve } from '../../analysis/value/resolve.js';
 
 // =============================================================================
 // Types
@@ -306,3 +306,4 @@ export function tryResolveAsFactory(
     gaps: result.gaps,
   };
 }
+

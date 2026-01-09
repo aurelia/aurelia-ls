@@ -1,6 +1,6 @@
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { ExportBindingMap } from "../binding/types.js";
-import type { FileFacts } from "../file-facts.js";
+import type { FileFacts } from "../extraction/file-facts.js";
 import type { AnalysisGap } from "./types.js";
 import type {
   AnalyzableValue,
@@ -9,8 +9,8 @@ import type {
   DecoratorApplication,
   LexicalScope,
   ResolutionContext,
-} from "../npm/value/types.js";
-import { buildResolutionContext, fullyResolve } from "../npm/value/resolve.js";
+} from "./value/types.js";
+import { buildResolutionContext, fullyResolve } from "./value/resolve.js";
 
 export interface PartialEvaluationOptions {
   readonly packagePath?: string;
@@ -149,3 +149,4 @@ function resolveOptionalValue(
   if (value === null) return null;
   return fullyResolve(value, scope, ctx);
 }
+

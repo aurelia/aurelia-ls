@@ -5,8 +5,8 @@
  * These are the stable, non-deprecated types from the original file.
  *
  * For file extraction types, use:
- * - FileFacts, ImportDeclaration, ExportDeclaration from file-facts.ts
- * - ClassValue, AnalyzableValue from npm/value/types.ts
+ * - FileFacts, ImportDeclaration, ExportDeclaration from extraction/file-facts.ts
+ * - ClassValue, AnalyzableValue from analysis/value/types.ts
  * - SiblingFile from project/types.ts
  */
 
@@ -77,14 +77,14 @@ export interface GapLocation {
  * Each kind enables targeted diagnostic messages.
  *
  * Categories:
- * - Package structure: Issues with the npm package itself
+ * - Package structure: Issues with a package being analyzed
  * - Import/resolution: Issues resolving imports within code
  * - Dynamic patterns: Code that can't be statically analyzed
  * - Control flow: Complex control flow in registration code
  * - Package format: Limitations of the compiled output format
  */
 export type GapReason =
-  // Package structure issues (npm scanner domain)
+  // Package structure issues (package scanning domain)
   | { kind: 'package-not-found'; packagePath: string }
   | { kind: 'invalid-package-json'; path: string; parseError: string }
   | { kind: 'missing-package-field'; field: 'name' | 'version' | 'main' | 'exports' | string }

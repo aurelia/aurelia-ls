@@ -15,7 +15,7 @@ import {
   type SourceSpan,
 } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "../project/context.js";
-import type { TemplateImport } from "../file-facts.js";
+import type { TemplateImport } from "./file-facts.js";
 
 /**
  * Extract template imports from a template file.
@@ -117,3 +117,4 @@ export function extractComponentTemplateImports(
 
   return extractTemplateImports(siblingTemplatePath, fileSystem);
 }
+

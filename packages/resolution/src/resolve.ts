@@ -13,14 +13,14 @@ import type {
   CompileTrace,
 } from "@aurelia-ls/compiler";
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
-import type { FileFacts, FileContext } from "./file-facts.js";
-import type { AnalysisGap } from "./extraction/types.js";
+import type { FileFacts, FileContext } from "./extraction/file-facts.js";
+import type { AnalysisGap } from "./analysis/types.js";
 import type { RegistrationAnalysis, RegistrationSite, RegistrationEvidence } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
 import { extractAllFileFacts, extractFileContext } from "./extraction/file-facts-extractor.js";
-import { evaluateFileFacts } from "./extraction/partial-evaluation.js";
+import { evaluateFileFacts } from "./analysis/index.js";
 import { buildExportBindingMap } from "./binding/export-resolver.js";
 import { matchFileFacts } from "./patterns/pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
@@ -560,3 +560,4 @@ function computeScopeId(site: RegistrationSite, resourceGraph: ResourceGraph): R
   // Global: use root scope
   return resourceGraph.root;
 }
+

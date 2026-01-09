@@ -13,10 +13,10 @@
 
 import type { NormalizedPath, ResourceDef } from '@aurelia-ls/compiler';
 import type ts from 'typescript';
-import type { FileFacts, FileContext } from './file-facts.js';
-import type { AnalysisGap } from './extraction/types.js';
+import type { FileFacts, FileContext } from './extraction/file-facts.js';
+import type { AnalysisGap } from './analysis/types.js';
 import { extractAllFileFacts, extractFileFacts, extractFileContext, type ExtractionOptions } from './extraction/file-facts-extractor.js';
-import { evaluateFileFacts } from './extraction/partial-evaluation.js';
+import { evaluateFileFacts } from './analysis/index.js';
 import { buildExportBindingMap } from './binding/export-resolver.js';
 import { matchFileFacts } from './patterns/pipeline.js';
 import { canonicalPath } from './util/naming.js';
@@ -191,3 +191,4 @@ export function extractResources(program: ts.Program): readonly ResourceDef[] {
   const result = resolveProgram(program, { skipEmptyFiles: true });
   return result.resources;
 }
+

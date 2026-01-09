@@ -1,8 +1,8 @@
 /**
  * Value Model for Partial Evaluation
  *
- * This module provides the core IR for static value analysis in npm package
- * extraction. It represents "what we know about a value at compile time."
+ * This module provides the core IR for static value analysis in the resolution
+ * pipeline. It represents "what we know about a value at compile time."
  *
  * Usage:
  * ```typescript
@@ -17,8 +17,6 @@
  *   const method = resolved.methods.get('register');
  * }
  * ```
- *
- * See: partial-evaluation-design.md
  */
 
 // Re-export all types

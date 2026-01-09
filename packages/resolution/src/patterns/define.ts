@@ -27,10 +27,10 @@ import type {
   TemplateControllerDef,
   ResourceDef,
 } from '@aurelia-ls/compiler';
-import type { AnalysisGap } from '../extraction/types.js';
-import { gap } from '../extraction/types.js';
-import type { DefineCall } from '../file-facts.js';
-import type { AnalyzableValue } from '../npm/value/types.js';
+import type { AnalysisGap } from '../analysis/types.js';
+import { gap } from '../analysis/types.js';
+import type { DefineCall } from '../extraction/file-facts.js';
+import type { AnalyzableValue } from '../analysis/value/types.js';
 import {
   extractString,
   extractBoolean,
@@ -38,7 +38,7 @@ import {
   extractBooleanProp,
   extractStringArrayProp,
   getProperty,
-} from '../npm/value/types.js';
+} from '../analysis/value/types.js';
 import type { BindableInput } from '../semantics/resource-def.js';
 import {
   buildBindableDefs,
@@ -475,3 +475,4 @@ function invalidNameGap(className: string, resourceType: string): AnalysisGap {
     `Provide an explicit name in the definition object.`,
   );
 }
+

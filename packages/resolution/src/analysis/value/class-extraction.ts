@@ -2,7 +2,6 @@
  * Class Extraction for Enriched ClassValue
  *
  * Extracts class metadata using the value model (AnalyzableValue).
- * This replaces the separate ClassFacts extraction path.
  *
  * Usage:
  * ```typescript
@@ -13,8 +12,8 @@
 
 import * as ts from 'typescript';
 import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
-import type { AnalysisGap } from '../../extraction/types.js';
-import { gap } from '../../extraction/types.js';
+import type { AnalysisGap } from '../types.js';
+import { gap } from '../types.js';
 import type {
   AnalyzableValue,
   ClassValue,
@@ -145,7 +144,7 @@ function extractDecoratorApplication(
 /**
  * Extract static members from a class declaration.
  *
- * Returns a Map of member name → AnalyzableValue.
+ * Returns a Map of member name -> AnalyzableValue.
  * Key members: "$au", "dependencies"
  */
 function extractStaticMembers(
@@ -302,3 +301,4 @@ function nodeSpan(node: ts.Node, sf: ts.SourceFile): TextSpan {
     end: node.getEnd(),
   };
 }
+

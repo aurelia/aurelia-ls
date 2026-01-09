@@ -15,7 +15,7 @@ import type {
   PluginResolution,
   PluginResolver,
 } from "./types.js";
-import type { ImportDeclaration } from "../file-facts.js";
+import type { ImportDeclaration } from "../extraction/file-facts.js";
 import { DEFAULT_PLUGIN_MANIFESTS, getPluginManifest } from "./manifests.js";
 
 /**
@@ -172,3 +172,4 @@ export function traceMemberAccessImport(
 
   return null;
 }
+
