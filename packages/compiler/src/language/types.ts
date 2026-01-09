@@ -50,6 +50,13 @@ export type ResourceKind =
   | 'value-converter'
   | 'binding-behavior';
 
+export interface ResourceKey {
+  readonly kind: ResourceKind;
+  readonly name: string;
+}
+
+export type SymbolId = string & { readonly __brand: 'SymbolId' };
+
 export interface ResourceDefBase {
   readonly className: Sourced<string>;
   readonly file?: NormalizedPath;
@@ -376,6 +383,33 @@ export interface ResourceCatalog {
   readonly confidence?: CatalogConfidence;
 }
 
+// ============================================================================
+// Syntax Registry
+// ============================================================================
+
+export type TemplateSyntaxMatchInput = unknown;
+export type TemplateSyntaxMatch = unknown;
+export type TemplateSyntaxEmitInput = unknown;
+export type TemplateSyntaxEmitResult = unknown;
+
+export interface TemplateSyntaxMatcher {
+  readonly name: string;
+  match(input: TemplateSyntaxMatchInput): TemplateSyntaxMatch | null;
+}
+
+export interface TemplateSyntaxEmitter {
+  readonly name: string;
+  emit(input: TemplateSyntaxEmitInput): TemplateSyntaxEmitResult | null;
+}
+
+export interface TemplateSyntaxRegistry {
+  readonly bindingCommands: Readonly<Record<string, BindingCommandConfig>>;
+  readonly attributePatterns: readonly AttributePatternConfig[];
+  readonly controllers: Readonly<Record<string, ControllerConfig>>;
+  readonly matchers?: readonly TemplateSyntaxMatcher[];
+  readonly emitters?: readonly TemplateSyntaxEmitter[];
+}
+
 export type SemanticsWithCaches = Semantics & {
   readonly resources: ResourceCollections;
   readonly bindingCommands: Readonly<Record<string, BindingCommandConfig>>;
@@ -407,4 +441,85 @@ export interface SemanticsLookup {
   domElement(tag: string): DomElement | null;
   event(name: string, tag?: string): { name: string; type: TypeRef };
   hasPreservedPrefix(attr: string): boolean;
+}
+
+// ============================================================================
+// Pipeline Artifacts
+// ============================================================================
+
+export interface FeatureUsageFlags {
+  readonly usesCompose?: boolean;
+  readonly usesDynamicCompose?: boolean;
+  readonly usesTemplateControllers?: boolean;
+}
+
+export interface FeatureUsageSet {
+  readonly elements: readonly string[];
+  readonly attributes: readonly string[];
+  readonly controllers: readonly string[];
+  readonly commands: readonly string[];
+  readonly patterns: readonly string[];
+  readonly valueConverters: readonly string[];
+  readonly bindingBehaviors: readonly string[];
+  readonly flags?: FeatureUsageFlags;
+}
+
+export interface RegistrationScopePlan {
+  readonly scope: ResourceScopeId;
+  readonly resources: ResourceCollections;
+}
+
+export type RegistrationPlanDirective =
+  | { readonly kind: 'dedupe'; readonly resource: ResourceKey; readonly scopes: readonly ResourceScopeId[] }
+  | { readonly kind: 'hoist'; readonly resource: ResourceKey; readonly from: ResourceScopeId; readonly to: ResourceScopeId }
+  | { readonly kind: 'flatten'; readonly scope: ResourceScopeId };
+
+export interface RegistrationPlan {
+  readonly scopes: Readonly<Record<ResourceScopeId, RegistrationScopePlan>>;
+  readonly directives?: readonly RegistrationPlanDirective[];
+}
+
+export interface StyleProfile {
+  readonly name?: string;
+  readonly template?: Readonly<Record<string, string | number | boolean>>;
+  readonly naming?: Readonly<Record<string, string>>;
+  readonly aliases?: Readonly<Record<string, string | boolean>>;
+}
+
+export interface SemanticSymbolSnapshot {
+  readonly id: SymbolId;
+  readonly kind: ResourceKind | string;
+  readonly name: string;
+  readonly source?: NormalizedPath;
+  readonly data?: Readonly<Record<string, unknown>>;
+}
+
+export interface SemanticSnapshot {
+  readonly version: string;
+  readonly symbols: readonly SemanticSymbolSnapshot[];
+  readonly catalog?: ResourceCatalog;
+  readonly graph?: ResourceGraph | null;
+  readonly gaps?: readonly CatalogGap[];
+  readonly confidence?: CatalogConfidence;
+}
+
+export interface ApiSurfaceBindable {
+  readonly name: string;
+  readonly attribute?: string;
+  readonly mode?: BindingMode;
+  readonly primary?: boolean;
+}
+
+export interface ApiSurfaceSymbol {
+  readonly id: SymbolId;
+  readonly kind: ResourceKind | string;
+  readonly name: string;
+  readonly aliases?: readonly string[];
+  readonly bindables?: readonly ApiSurfaceBindable[];
+  readonly source?: NormalizedPath;
+}
+
+export interface ApiSurfaceSnapshot {
+  readonly version: string;
+  readonly symbols: readonly ApiSurfaceSymbol[];
 }

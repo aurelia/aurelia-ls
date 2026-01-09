@@ -33,7 +33,40 @@ export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing
 
 // === Language / Semantics ===
 export { DEFAULT as DEFAULT_SEMANTICS, prepareSemantics, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
-export type { Semantics, SemanticsWithCaches, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources, SemanticsLookupOptions, LocalImportDef } from "./language/index.js";
+export type {
+  Semantics,
+  SemanticsWithCaches,
+  ResourceGraph,
+  ResourceScope,
+  ResourceScopeId,
+  ResourceCollections,
+  ScopedResources,
+  SemanticsLookupOptions,
+  LocalImportDef,
+  ResourceCatalog,
+  CatalogGap,
+  CatalogConfidence,
+  TemplateSyntaxRegistry,
+  TemplateSyntaxMatcher,
+  TemplateSyntaxEmitter,
+  TemplateSyntaxMatchInput,
+  TemplateSyntaxMatch,
+  TemplateSyntaxEmitInput,
+  TemplateSyntaxEmitResult,
+  FeatureUsageSet,
+  FeatureUsageFlags,
+  RegistrationPlan,
+  RegistrationScopePlan,
+  RegistrationPlanDirective,
+  StyleProfile,
+  SemanticSnapshot,
+  SemanticSymbolSnapshot,
+  ApiSurfaceSnapshot,
+  ApiSurfaceSymbol,
+  ApiSurfaceBindable,
+  ResourceKey,
+  SymbolId,
+} from "./language/index.js";
 
 // Resource definitions (for resolution package and external tooling)
 export type {
