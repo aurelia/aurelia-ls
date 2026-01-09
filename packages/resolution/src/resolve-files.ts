@@ -3,20 +3,23 @@
  *
  * Provides a convenient entry point that:
  * 1. Extracts FileFacts from source files
- * 2. Runs pattern matchers (ClassValue → ResourceAnnotation)
- * 3. Returns resolved resources with provenance
+ * 2. Partially evaluates AnalyzableValue trees
+ * 3. Runs pattern matchers (ClassValue → ResourceDef)
+ * 4. Returns resolved resources with provenance
  *
  * This combines the new extraction pipeline (FileFacts + ClassValue)
  * with the new pattern matchers (patterns/).
  */
 
-import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
+import type { NormalizedPath, ResourceDef } from '@aurelia-ls/compiler';
 import type ts from 'typescript';
 import type { FileFacts, FileContext } from './file-facts.js';
-import type { ResourceAnnotation } from './annotation.js';
 import type { AnalysisGap } from './extraction/types.js';
-import { extractFileFacts, extractFileContext, type ExtractionOptions } from './extraction/file-facts-extractor.js';
+import { extractAllFileFacts, extractFileFacts, extractFileContext, type ExtractionOptions } from './extraction/file-facts-extractor.js';
+import { evaluateFileFacts } from './extraction/partial-evaluation.js';
+import { buildExportBindingMap } from './binding/export-resolver.js';
 import { matchFileFacts } from './patterns/pipeline.js';
+import { canonicalPath } from './util/naming.js';
 
 // =============================================================================
 // Types
@@ -36,9 +39,9 @@ export interface FileResolutionResult {
   readonly context: FileContext;
 
   /** Resources discovered via pattern matching */
-  readonly resources: readonly ResourceAnnotation[];
+  readonly resources: readonly ResourceDef[];
 
-  /** Gaps encountered during extraction and matching */
+  /** Gaps encountered during extraction, evaluation, and matching */
   readonly gaps: readonly AnalysisGap[];
 }
 
@@ -50,7 +53,7 @@ export interface ProgramResolutionResult {
   readonly files: ReadonlyMap<NormalizedPath, FileResolutionResult>;
 
   /** All resources discovered */
-  readonly resources: readonly ResourceAnnotation[];
+  readonly resources: readonly ResourceDef[];
 
   /** All gaps encountered */
   readonly gaps: readonly AnalysisGap[];
@@ -87,8 +90,26 @@ export function resolveFile(
   program?: ts.Program,
   options?: FileResolutionOptions
 ): FileResolutionResult {
+  if (program) {
+    const programResult = resolveProgram(program, options);
+    const targetPath = canonicalPath(sourceFile.fileName);
+    const existing = programResult.files.get(targetPath);
+    if (existing) {
+      return existing;
+    }
+  }
+
   // Extract file facts
-  const facts = extractFileFacts(sourceFile, checker, program, options);
+  const rawFacts = extractFileFacts(sourceFile, checker, program, options);
+  const rawFactsMap = new Map<NormalizedPath, FileFacts>([[rawFacts.path, rawFacts]]);
+
+  // Build export bindings from available facts
+  const exportBindings = buildExportBindingMap(rawFactsMap);
+
+  // Partially evaluate values for this file
+  const evaluation = evaluateFileFacts(rawFactsMap, exportBindings);
+  const facts = evaluation.facts.get(rawFacts.path) ?? rawFacts;
+  const evalGaps = evaluation.files.get(rawFacts.path)?.gaps ?? [];
 
   // Extract file context (siblings, templates)
   const context = extractFileContext(sourceFile.fileName, options, program);
@@ -96,14 +117,14 @@ export function resolveFile(
   // Run pattern matchers on classes AND define calls
   const matchResult = matchFileFacts(facts, context);
 
-  // Combine gaps from extraction and matching
-  const gaps: AnalysisGap[] = [...facts.gaps, ...matchResult.gaps];
+  // Combine gaps from evaluation and matching
+  const gaps: AnalysisGap[] = [...matchResult.gaps, ...evalGaps];
 
   return {
     path: facts.path,
     facts,
     context,
-    resources: matchResult.annotations,
+    resources: matchResult.resources,
     gaps,
   };
 }
@@ -119,27 +140,38 @@ export function resolveProgram(
   options?: FileResolutionOptions
 ): ProgramResolutionResult {
   const files = new Map<NormalizedPath, FileResolutionResult>();
-  const allResources: ResourceAnnotation[] = [];
+  const allResources: ResourceDef[] = [];
   const allGaps: AnalysisGap[] = [];
-  const checker = program.getTypeChecker();
 
-  // Sort files for deterministic output
-  const sourceFiles = program
-    .getSourceFiles()
-    .filter(sf => !sf.isDeclarationFile)
-    .sort((a, b) => a.fileName.localeCompare(b.fileName));
+  const rawFacts = extractAllFileFacts(program, options);
+  const exportBindings = buildExportBindingMap(rawFacts);
+  const evaluation = evaluateFileFacts(rawFacts, exportBindings);
 
-  for (const sf of sourceFiles) {
-    const result = resolveFile(sf, checker, program, options);
+  const sortedFacts = Array.from(evaluation.facts.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
 
-    // Skip empty files if requested
-    if (options?.skipEmptyFiles && result.resources.length === 0) {
+  for (const [path, fileFacts] of sortedFacts) {
+    const context = extractFileContext(path, options, program);
+    const matchResult = matchFileFacts(fileFacts, context);
+    const evalGaps = evaluation.files.get(path)?.gaps ?? [];
+    const gaps: AnalysisGap[] = [...matchResult.gaps, ...evalGaps];
+
+    if (options?.skipEmptyFiles && matchResult.resources.length === 0) {
       continue;
     }
 
-    files.set(result.path, result);
-    allResources.push(...result.resources);
-    allGaps.push(...result.gaps);
+    const result: FileResolutionResult = {
+      path,
+      facts: fileFacts,
+      context,
+      resources: matchResult.resources,
+      gaps,
+    };
+
+    files.set(path, result);
+    allResources.push(...matchResult.resources);
+    allGaps.push(...gaps);
   }
 
   return {
@@ -153,9 +185,9 @@ export function resolveProgram(
  * Quick utility to get all resources from a program.
  *
  * @param program - TypeScript program
- * @returns All ResourceAnnotation found
+ * @returns All ResourceDef found
  */
-export function extractResources(program: ts.Program): readonly ResourceAnnotation[] {
+export function extractResources(program: ts.Program): readonly ResourceDef[] {
   const result = resolveProgram(program, { skipEmptyFiles: true });
   return result.resources;
 }

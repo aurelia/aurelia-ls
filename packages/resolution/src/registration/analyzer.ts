@@ -1,6 +1,5 @@
-import { toSourceFileId, type NormalizedPath, type SourceSpan } from "@aurelia-ls/compiler";
+import { toSourceFileId, type NormalizedPath, type ResourceDef, type SourceSpan } from "@aurelia-ls/compiler";
 import type { FileFacts, FileContext, ImportDeclaration, RegistrationCall, TemplateImport } from "../file-facts.js";
-import type { ResourceAnnotation } from "../annotation.js";
 import type { ClassValue, AnalyzableValue } from "../npm/value/types.js";
 import { extractStringArrayProp, getProperty } from "../npm/value/types.js";
 import type { ExportBindingMap } from "../binding/types.js";
@@ -21,6 +20,7 @@ import type {
   UnresolvedRegistration,
   UnresolvedPattern,
 } from "./types.js";
+import { unwrapSourced } from "../semantics/sourced.js";
 
 /**
  * Registration analyzer interface.
@@ -30,7 +30,7 @@ import type {
  */
 export interface RegistrationAnalyzer {
   analyze(
-    annotations: readonly ResourceAnnotation[],
+    resources: readonly ResourceDef[],
     facts: Map<NormalizedPath, FileFacts>,
     exportBindings: ExportBindingMap,
     contexts?: Map<NormalizedPath, FileContext>,
@@ -47,8 +47,8 @@ export interface RegistrationAnalyzer {
  */
 export function createRegistrationAnalyzer(): RegistrationAnalyzer {
   return {
-    analyze(annotations, facts, exportBindings, contexts) {
-      const context = new AnalysisContext(facts, annotations, exportBindings, contexts);
+    analyze(resources, facts, exportBindings, contexts) {
+      const context = new AnalysisContext(facts, resources, exportBindings, contexts);
       return analyzeRegistrations(context);
     },
   };
@@ -64,15 +64,15 @@ class AnalysisContext {
   /** Map from file path to exported class names (for spread resolution) */
   private exportedClasses = new Map<NormalizedPath, Set<string>>();
 
-  /** Map from (source file, class name) to ResourceAnnotation for fast lookup */
-  private annotationIndex = new Map<string, ResourceAnnotation>();
+  /** Map from (source file, class name) to ResourceDef for fast lookup */
+  private resourceIndex = new Map<string, ResourceDef>();
 
   /** Plugin resolver for known plugin manifests */
   public readonly pluginResolver: PluginResolver;
 
   constructor(
     public readonly facts: Map<NormalizedPath, FileFacts>,
-    public readonly annotations: readonly ResourceAnnotation[],
+    public readonly resources: readonly ResourceDef[],
     public readonly exportBindings: ExportBindingMap,
     public readonly contexts?: Map<NormalizedPath, FileContext>,
   ) {
@@ -107,10 +107,13 @@ class AnalysisContext {
       this.exportedClasses.set(path, new Set(bindings.keys()));
     }
 
-    // Index annotations by (source, className)
-    for (const annotation of this.annotations) {
-      const key = `${annotation.source}::${annotation.className}`;
-      this.annotationIndex.set(key, annotation);
+    // Index resources by (source, className)
+    for (const resource of this.resources) {
+      const file = resource.file;
+      const className = unwrapSourced(resource.className);
+      if (!file || !className) continue;
+      const key = `${file}::${className}`;
+      this.resourceIndex.set(key, resource);
     }
   }
 
@@ -129,19 +132,19 @@ class AnalysisContext {
   }
 
   /**
-   * Find a ResourceAnnotation by source file and class name.
+   * Find a ResourceDef by source file and class name.
    */
-  findAnnotation(source: NormalizedPath, className: string): ResourceAnnotation | undefined {
+  findResource(source: NormalizedPath, className: string): ResourceDef | undefined {
     const key = `${source}::${className}`;
-    return this.annotationIndex.get(key);
+    return this.resourceIndex.get(key);
   }
 
   /**
-   * Find a ResourceAnnotation by class name, searching all files.
+   * Find a ResourceDef by class name, searching all files.
    * Used when we have a resolved import path.
    */
-  findAnnotationByResolvedPath(resolvedPath: NormalizedPath, className: string): ResourceAnnotation | undefined {
-    return this.findAnnotation(resolvedPath, className);
+  findResourceByResolvedPath(resolvedPath: NormalizedPath, className: string): ResourceDef | undefined {
+    return this.findResource(resolvedPath, className);
   }
 
   /**
@@ -171,7 +174,7 @@ class AnalysisContext {
 function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
   const sites: RegistrationSite[] = [];
   const unresolved: UnresolvedRegistration[] = [];
-  const registeredAnnotations = new Set<ResourceAnnotation>();
+  const registeredResources = new Set<ResourceDef>();
   const activatedPlugins: PluginManifest[] = [];
   const seenPlugins = new Set<string>(); // Dedupe by package
 
@@ -182,7 +185,7 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
       for (const site of localSites) {
         sites.push(site);
         if (site.resourceRef.kind === "resolved") {
-          registeredAnnotations.add(site.resourceRef.resource);
+          registeredResources.add(site.resourceRef.resource);
         }
       }
     }
@@ -194,9 +197,9 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
     for (const [filePath, fileContext] of context.contexts) {
       if (fileContext.templateImports.length === 0) continue;
 
-      // Find all element annotations from this source file
-      const elementAnnotations = context.annotations.filter(
-        (a) => a.source === filePath && a.kind === "custom-element"
+      // Find all element resources from this source file
+      const elementResources = context.resources.filter(
+        (r) => r.file === filePath && r.kind === "custom-element"
       );
 
       // Find the sibling template file path (for evidence)
@@ -204,18 +207,18 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
       const templateSibling = fileContext.siblings.find(s => s.extension === '.html');
       const templateFile = templateSibling?.path ?? filePath;
 
-      for (const annotation of elementAnnotations) {
+      for (const resource of elementResources) {
         const templateSites = findTemplateImportSites(
           fileContext.templateImports,
           filePath,
-          annotation.className,
+          unwrapSourced(resource.className) ?? "unknown",
           templateFile,
           context,
         );
         for (const site of templateSites) {
           sites.push(site);
           if (site.resourceRef.kind === "resolved") {
-            registeredAnnotations.add(site.resourceRef.resource);
+            registeredResources.add(site.resourceRef.resource);
           }
         }
       }
@@ -234,7 +237,7 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
       for (const site of result.globalSites) {
         sites.push(site);
         if (site.resourceRef.kind === "resolved") {
-          registeredAnnotations.add(site.resourceRef.resource);
+          registeredResources.add(site.resourceRef.resource);
         }
       }
       unresolved.push(...result.unresolvedPatterns);
@@ -249,22 +252,30 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
     }
   }
 
-  // 3. Find orphans - annotations with no registration sites
+  // 3. Find orphans - resources with no registration sites
   const orphans: OrphanResource[] = [];
-  for (const annotation of context.annotations) {
-    if (!registeredAnnotations.has(annotation)) {
+  for (const resource of context.resources) {
+    if (!registeredResources.has(resource)) {
       orphans.push({
-        resource: annotation,
-        definitionSpan: {
-          file: toSourceFileId(annotation.source),
-          start: annotation.span?.start ?? 0,
-          end: annotation.span?.end ?? 0,
-        },
+        resource,
+        definitionSpan: resourceDefinitionSpan(resource),
       });
     }
   }
 
   return { sites, orphans, unresolved, activatedPlugins };
+}
+
+function resourceDefinitionSpan(resource: ResourceDef): SourceSpan {
+  const classLocation = "location" in resource.className ? resource.className.location : undefined;
+  const nameLocation = "location" in resource.name ? resource.name.location : undefined;
+  const location = classLocation ?? nameLocation;
+  const file = location?.file ?? resource.file;
+  return {
+    file: toSourceFileId(file!),
+    start: location?.pos ?? 0,
+    end: location?.end ?? 0,
+  };
 }
 
 /**
@@ -461,11 +472,11 @@ function createSiteFromValueRef(
  */
 function resolveValueRef(ref: ValueRef, filePath: NormalizedPath, context: AnalysisContext): ResourceRef {
   if (ref.kind === 'identifier') {
-    // If we have a resolved path, look up the annotation
+    // If we have a resolved path, look up the resource
     if (ref.resolvedPath) {
-      const annotation = context.findAnnotationByResolvedPath(ref.resolvedPath, ref.name);
-      if (annotation) {
-        return { kind: "resolved", resource: annotation };
+      const resource = context.findResourceByResolvedPath(ref.resolvedPath, ref.name);
+      if (resource) {
+        return { kind: "resolved", resource };
       }
       return {
         kind: "unresolved",
@@ -482,21 +493,21 @@ function resolveValueRef(ref: ValueRef, filePath: NormalizedPath, context: Analy
           const found = imp.bindings.find(b => (b.alias ?? b.name) === ref.name);
           if (found) {
             const resolved = context.resolveExportedClass(imp.resolvedPath, found.name);
-            const annotation = resolved
-              ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
+            const resource = resolved
+              ? context.findResourceByResolvedPath(resolved.path, resolved.className)
               : undefined;
-            if (annotation) {
-              return { kind: "resolved", resource: annotation };
+            if (resource) {
+              return { kind: "resolved", resource };
             }
           }
         } else if (imp.kind === "default" && imp.alias === ref.name && imp.resolvedPath) {
           // For default imports, look up the default export
           const resolved = context.resolveExportedClass(imp.resolvedPath, 'default');
-          const annotation = resolved
-            ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
+          const resource = resolved
+            ? context.findResourceByResolvedPath(resolved.path, resolved.className)
             : undefined;
-          if (annotation) {
-            return { kind: "resolved", resource: annotation };
+          if (resource) {
+            return { kind: "resolved", resource };
           }
         }
       }
@@ -514,11 +525,11 @@ function resolveValueRef(ref: ValueRef, filePath: NormalizedPath, context: Analy
     const barrelPath = context.getNamespaceImportPath(filePath, ref.name);
     if (barrelPath && ref.property) {
       const resolved = context.resolveExportedClass(barrelPath, ref.property);
-      const annotation = resolved
-        ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
+      const resource = resolved
+        ? context.findResourceByResolvedPath(resolved.path, resolved.className)
         : undefined;
-      if (annotation) {
-        return { kind: "resolved", resource: annotation };
+      if (resource) {
+        return { kind: "resolved", resource };
       }
       return {
         kind: "unresolved",
@@ -631,9 +642,9 @@ function resolveNamedAliasImport(
   }
 
   // Look up the specific export by name
-  const annotation = context.findAnnotationByResolvedPath(imp.resolvedPath, exportName);
-  if (annotation) {
-    return { kind: "resolved", resource: annotation };
+  const resource = context.findResourceByResolvedPath(imp.resolvedPath, exportName);
+  if (resource) {
+    return { kind: "resolved", resource };
   }
 
   return {
@@ -665,24 +676,24 @@ function resolveTemplateImportRef(
     };
   }
 
-  // If we have a default alias, try to find an annotation with that name
+  // If we have a default alias, try to find a resource with that name
   if (imp.defaultAlias) {
-    const annotation = context.findAnnotationByResolvedPath(imp.resolvedPath, imp.defaultAlias);
-    if (annotation) {
-      return { kind: "resolved", resource: annotation };
+    const resource = context.findResourceByResolvedPath(imp.resolvedPath, imp.defaultAlias);
+    if (resource) {
+      return { kind: "resolved", resource };
     }
   }
 
-  // Plain import: find any annotation exported from this module
+  // Plain import: find any resource exported from this module
   // This matches Aurelia runtime behavior where <import from="./foo">
   // makes all resources from ./foo available.
-  for (const annotation of context.annotations) {
-    if (annotation.source === imp.resolvedPath) {
-      return { kind: "resolved", resource: annotation };
+  for (const resource of context.resources) {
+    if (resource.file === imp.resolvedPath) {
+      return { kind: "resolved", resource };
     }
   }
 
-  // No annotation found in the imported module
+  // No resource found in the imported module
   return {
     kind: "unresolved",
     name: imp.moduleSpecifier,
@@ -868,8 +879,8 @@ function processRegistrationValue(
     if (barrelPath) {
       // Look up the member in the barrel's exports and follow re-export chain
       const resolved = context.resolveExportedClass(barrelPath, arg.property);
-      const annotation = resolved
-        ? context.findAnnotationByResolvedPath(resolved.path, resolved.className)
+      const resource = resolved
+        ? context.findResourceByResolvedPath(resolved.path, resolved.className)
         : undefined;
 
       const evidence: RegistrationEvidence = {
@@ -879,9 +890,9 @@ function processRegistrationValue(
 
       const propAccessDesc = argBaseName ? `${argBaseName}.${arg.property}` : `(unknown).${arg.property}`;
 
-      if (annotation) {
+      if (resource) {
         sites.push({
-          resourceRef: { kind: "resolved", resource: annotation },
+          resourceRef: { kind: "resolved", resource },
           scope,
           evidence,
           span: argSpan,
@@ -923,16 +934,17 @@ function processRegistrationValue(
 
     const barrelPath = context.getNamespaceImportPath(filePath, spreadName);
     if (barrelPath) {
-      // Find all annotations exported from the barrel
-      for (const annotation of context.annotations) {
-        if (context.isClassExportedFrom(annotation.className, barrelPath)) {
+      // Find all resources exported from the barrel
+      for (const resource of context.resources) {
+        const className = unwrapSourced(resource.className);
+        if (className && context.isClassExportedFrom(className, barrelPath)) {
           const evidence: RegistrationEvidence = {
             kind: call.receiver === "aurelia" ? "aurelia-register" : "container-register",
             file: filePath,
           };
 
           sites.push({
-            resourceRef: { kind: "resolved", resource: annotation },
+            resourceRef: { kind: "resolved", resource },
             scope,
             evidence,
             span: argSpan,

@@ -70,9 +70,12 @@ import { extractFromES2022 } from './decorator-es2022.js';
 
 // Import unified extraction and pattern matching
 import { extractAllFileFacts } from '../extraction/file-facts-extractor.js';
-import { matchFileFacts, matchAll } from '../patterns/pipeline.js';
+import { matchDecorator } from '../patterns/decorator.js';
+import { matchStaticAu } from '../patterns/static-au.js';
+import { matchConvention } from '../patterns/convention.js';
+import { matchDefine } from '../patterns/define.js';
 import { canonicalPath } from '../util/naming.js';
-import type { FileFacts } from '../file-facts.js';
+import type { FileFacts, FileContext, DefineCall } from '../file-facts.js';
 
 // Import export resolver for cross-file resolution
 import { buildExportBindingMap } from '../binding/export-resolver.js';
@@ -109,8 +112,20 @@ import type {
   SourceLocation,
 } from './types.js';
 import { success, partial, highConfidence, gap, combine } from './types.js';
-import { debug, type NormalizedPath } from '@aurelia-ls/compiler';
-import type { ResourceAnnotation, BindableAnnotation } from '../annotation.js';
+import {
+  debug,
+  type NormalizedPath,
+  type ResourceDef,
+  type BindableDef,
+  type CustomElementDef,
+  type CustomAttributeDef,
+  type TemplateControllerDef,
+  type ValueConverterDef,
+  type BindingBehaviorDef,
+} from '@aurelia-ls/compiler';
+import type { ResourceAnnotation, BindableAnnotation, BindableEvidence } from '../annotation.js';
+import { explicitEvidence, inferredEvidence } from '../annotation.js';
+import { unwrapSourced } from '../semantics/sourced.js';
 
 /**
  * Analyze an npm package to extract Aurelia resource semantics.
@@ -329,6 +344,192 @@ function mergeResource(a: ResourceAnnotation, b: ResourceAnnotation): ResourceAn
   };
 }
 
+// =============================================================================
+// ResourceDef -> ResourceAnnotation conversion
+// =============================================================================
+
+type AnnotationPattern = "decorator" | "static-au" | "define" | "convention" | "unknown";
+
+interface AnnotationMatchResult {
+  annotation: ResourceAnnotation | null;
+  gaps: AnalysisGap[];
+}
+
+function matchClassForAnnotation(cls: ClassValue, context?: FileContext): AnnotationMatchResult {
+  const gaps: AnalysisGap[] = [];
+
+  const decoratorResult = matchDecorator(cls);
+  gaps.push(...decoratorResult.gaps);
+  if (decoratorResult.resource) {
+    return { annotation: resourceDefToAnnotation(decoratorResult.resource, "decorator"), gaps };
+  }
+
+  const staticAuResult = matchStaticAu(cls);
+  gaps.push(...staticAuResult.gaps);
+  if (staticAuResult.resource) {
+    return { annotation: resourceDefToAnnotation(staticAuResult.resource, "static-au"), gaps };
+  }
+
+  const conventionResult = matchConvention(cls, context);
+  gaps.push(...conventionResult.gaps);
+  if (conventionResult.resource) {
+    return { annotation: resourceDefToAnnotation(conventionResult.resource, "convention"), gaps };
+  }
+
+  return { annotation: null, gaps };
+}
+
+function matchDefineForAnnotation(call: DefineCall, filePath: NormalizedPath): AnnotationMatchResult {
+  const result = matchDefine(call, filePath);
+  return {
+    annotation: result.resource ? resourceDefToAnnotation(result.resource, "define") : null,
+    gaps: result.gaps,
+  };
+}
+
+function resourceDefToAnnotation(resource: ResourceDef, pattern: AnnotationPattern): ResourceAnnotation | null {
+  const source = resource.file;
+  const className = unwrapSourced(resource.className);
+  const name = unwrapSourced(resource.name);
+  if (!source || !className || !name) {
+    return null;
+  }
+
+  const evidence = pattern === "convention"
+    ? inferredEvidence("convention")
+    : explicitEvidence(pattern);
+
+  switch (resource.kind) {
+    case "custom-element": {
+      const bindables = bindableDefsToAnnotations(resource.bindables, pattern);
+      return {
+        kind: "custom-element",
+        name,
+        className,
+        source,
+        aliases: resourceAliases(resource),
+        bindables,
+        evidence,
+        element: {
+          containerless: unwrapSourced(resource.containerless) ?? false,
+          boundary: unwrapSourced(resource.boundary) ?? true,
+          inlineTemplate: unwrapSourced(resource.inlineTemplate),
+        },
+      };
+    }
+    case "custom-attribute": {
+      const bindables = bindableDefsToAnnotations(resource.bindables, pattern);
+      return {
+        kind: "custom-attribute",
+        name,
+        className,
+        source,
+        aliases: resourceAliases(resource),
+        bindables,
+        evidence,
+        attribute: {
+          isTemplateController: false,
+          noMultiBindings: unwrapSourced(resource.noMultiBindings) ?? false,
+          primary: unwrapSourced(resource.primary) ?? findPrimaryBindableName(resource.bindables) ?? undefined,
+        },
+      };
+    }
+    case "template-controller": {
+      const bindables = bindableDefsToAnnotations(resource.bindables, pattern);
+      return {
+        kind: "template-controller",
+        name,
+        className,
+        source,
+        aliases: resourceAliases(resource),
+        bindables,
+        evidence,
+        attribute: {
+          isTemplateController: true,
+          noMultiBindings: unwrapSourced(resource.noMultiBindings) ?? false,
+          primary: findPrimaryBindableName(resource.bindables) ?? undefined,
+        },
+      };
+    }
+    case "value-converter":
+      return {
+        kind: "value-converter",
+        name,
+        className,
+        source,
+        aliases: [],
+        bindables: [],
+        evidence,
+      };
+    case "binding-behavior":
+      return {
+        kind: "binding-behavior",
+        name,
+        className,
+        source,
+        aliases: [],
+        bindables: [],
+        evidence,
+      };
+  }
+  return null;
+}
+
+function resourceAliases(
+  resource: CustomElementDef | CustomAttributeDef | TemplateControllerDef,
+): string[] {
+  if (resource.kind === "template-controller") {
+    const aliases = unwrapSourced(resource.aliases);
+    return aliases ? [...aliases] : [];
+  }
+  return resource.aliases
+    .map((alias) => unwrapSourced(alias))
+    .filter((alias): alias is string => !!alias);
+}
+
+function bindableDefsToAnnotations(
+  bindables: Readonly<Record<string, BindableDef>>,
+  pattern: AnnotationPattern,
+): BindableAnnotation[] {
+  const evidence = bindableEvidenceForPattern(pattern);
+  const result: BindableAnnotation[] = [];
+  for (const [key, def] of Object.entries(bindables)) {
+    const name = unwrapSourced(def.property) ?? key;
+    const attribute = unwrapSourced(def.attribute);
+    const mode = unwrapSourced(def.mode);
+    const primary = unwrapSourced(def.primary);
+    const type = unwrapSourced(def.type);
+
+    result.push({
+      name,
+      ...(attribute ? { attribute } : {}),
+      ...(mode !== undefined ? { mode } : {}),
+      ...(primary !== undefined ? { primary } : {}),
+      ...(type ? { type } : {}),
+      evidence,
+    });
+  }
+  return result;
+}
+
+function bindableEvidenceForPattern(pattern: AnnotationPattern): BindableEvidence {
+  if (pattern === "static-au") {
+    return { source: "analyzed", pattern: "static-au" };
+  }
+  if (pattern === "define") {
+    return { source: "analyzed", pattern: "define" };
+  }
+  return { source: "analyzed", pattern: "decorator" };
+}
+
+function findPrimaryBindableName(defs: Readonly<Record<string, BindableDef>>): string | null {
+  for (const [key, def] of Object.entries(defs)) {
+    const primary = unwrapSourced(def.primary);
+    if (primary) return unwrapSourced(def.property) ?? key;
+  }
+  return null;
+}
+
 /**
  * Analyze multiple packages, potentially in parallel.
  *
@@ -425,13 +626,24 @@ async function extractFromTypeScriptSource(
 
   // Phase 4: Run pattern matching on each file's facts
   for (const [, facts] of allFacts) {
-    const matchResult = matchFileFacts(facts);
-    gaps.push(...matchResult.gaps);
+    gaps.push(...facts.gaps);
 
-    for (const annotation of matchResult.annotations) {
-      // Avoid duplicates
-      if (!resources.some(r => r.className === annotation.className)) {
-        resources.push(annotation);
+    for (const cls of facts.classes) {
+      gaps.push(...cls.gaps);
+      const matchResult = matchClassForAnnotation(cls);
+      gaps.push(...matchResult.gaps);
+
+      if (matchResult.annotation && !resources.some(r => r.className === matchResult.annotation!.className)) {
+        resources.push(matchResult.annotation);
+      }
+    }
+
+    for (const call of facts.defineCalls) {
+      const matchResult = matchDefineForAnnotation(call, facts.path);
+      gaps.push(...matchResult.gaps);
+
+      if (matchResult.annotation && !resources.some(r => r.className === matchResult.annotation!.className)) {
+        resources.push(matchResult.annotation);
       }
     }
   }
@@ -853,7 +1065,7 @@ function createClassResolver(
     }
 
     // Try to match the ClassValue directly using pattern matchers
-    const matchResult = matchAll(classVal);
+    const matchResult = matchClassForAnnotation(classVal);
     if (matchResult.annotation) {
       // Cache for future lookups
       resourceMap.set(classVal.className, matchResult.annotation);

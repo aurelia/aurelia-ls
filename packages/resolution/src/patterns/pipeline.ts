@@ -10,11 +10,10 @@
  * First match wins. Gaps from all matchers are accumulated.
  */
 
-import type { NormalizedPath } from '@aurelia-ls/compiler';
+import type { NormalizedPath, ResourceDef } from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../extraction/types.js';
 import type { ClassValue } from '../npm/value/types.js';
 import type { FileContext, FileFacts, DefineCall } from '../file-facts.js';
-import type { ResourceAnnotation } from '../annotation.js';
 import { matchDecorator } from './decorator.js';
 import { matchStaticAu } from './static-au.js';
 import { matchConvention } from './convention.js';
@@ -28,8 +27,8 @@ import { matchDefine } from './define.js';
  * Result of pattern matching on a single class.
  */
 export interface MatchResult {
-  /** The matched annotation, or null if no match */
-  annotation: ResourceAnnotation | null;
+  /** The matched resource definition, or null if no match */
+  resource: ResourceDef | null;
 
   /** All gaps encountered during matching */
   gaps: AnalysisGap[];
@@ -39,8 +38,8 @@ export interface MatchResult {
  * Result of matching all classes in a file.
  */
 export interface FileMatchResult {
-  /** Successfully matched annotations */
-  annotations: ResourceAnnotation[];
+  /** Successfully matched resource definitions */
+  resources: ResourceDef[];
 
   /** All gaps encountered */
   gaps: AnalysisGap[];
@@ -58,7 +57,7 @@ export interface FileMatchResult {
  *
  * @param cls - The enriched ClassValue to match
  * @param context - File context (for convention matching)
- * @returns Match result with annotation (or null) and all gaps
+ * @returns Match result with resource (or null) and all gaps
  */
 export function matchAll(cls: ClassValue, context?: FileContext): MatchResult {
   const gaps: AnalysisGap[] = [];
@@ -66,26 +65,26 @@ export function matchAll(cls: ClassValue, context?: FileContext): MatchResult {
   // 1. Try decorator pattern (highest priority)
   const decoratorResult = matchDecorator(cls);
   gaps.push(...decoratorResult.gaps);
-  if (decoratorResult.annotation) {
-    return { annotation: decoratorResult.annotation, gaps };
+  if (decoratorResult.resource) {
+    return { resource: decoratorResult.resource, gaps };
   }
 
   // 2. Try static $au pattern
   const staticAuResult = matchStaticAu(cls);
   gaps.push(...staticAuResult.gaps);
-  if (staticAuResult.annotation) {
-    return { annotation: staticAuResult.annotation, gaps };
+  if (staticAuResult.resource) {
+    return { resource: staticAuResult.resource, gaps };
   }
 
   // 3. Try convention pattern (lowest priority)
   const conventionResult = matchConvention(cls, context);
   gaps.push(...conventionResult.gaps);
-  if (conventionResult.annotation) {
-    return { annotation: conventionResult.annotation, gaps };
+  if (conventionResult.resource) {
+    return { resource: conventionResult.resource, gaps };
   }
 
   // No match
-  return { annotation: null, gaps };
+  return { resource: null, gaps };
 }
 
 /**
@@ -93,13 +92,13 @@ export function matchAll(cls: ClassValue, context?: FileContext): MatchResult {
  *
  * @param classes - Classes from FileFacts
  * @param context - File context
- * @returns All matched annotations and gaps
+ * @returns All matched resources and gaps
  */
 export function matchFile(
   classes: readonly ClassValue[],
   context?: FileContext
 ): FileMatchResult {
-  const annotations: ResourceAnnotation[] = [];
+  const resources: ResourceDef[] = [];
   const gaps: AnalysisGap[] = [];
 
   for (const cls of classes) {
@@ -109,12 +108,12 @@ export function matchFile(
     const result = matchAll(cls, context);
     gaps.push(...result.gaps);
 
-    if (result.annotation) {
-      annotations.push(result.annotation);
+    if (result.resource) {
+      resources.push(result.resource);
     }
   }
 
-  return { annotations, gaps };
+  return { resources, gaps };
 }
 
 /**
@@ -125,18 +124,18 @@ export function matchFile(
  *
  * @param cls - The enriched ClassValue to match
  * @param context - File context
- * @returns The matched annotation
+ * @returns The matched resource
  * @throws If no pattern matches
  */
-export function matchExpected(cls: ClassValue, context?: FileContext): ResourceAnnotation {
+export function matchExpected(cls: ClassValue, context?: FileContext): ResourceDef {
   const result = matchAll(cls, context);
-  if (!result.annotation) {
+  if (!result.resource) {
     throw new Error(
       `Class ${cls.className} does not match any Aurelia resource pattern. ` +
       `Expected decorator, static $au, or naming convention.`
     );
   }
-  return result.annotation;
+  return result.resource;
 }
 
 // =============================================================================
@@ -148,25 +147,25 @@ export function matchExpected(cls: ClassValue, context?: FileContext): ResourceA
  *
  * @param defineCalls - Define calls from FileFacts.defineCalls
  * @param filePath - File path where the define calls are located
- * @returns All matched annotations and gaps
+ * @returns All matched resources and gaps
  */
 export function matchDefineCalls(
   defineCalls: readonly DefineCall[],
   filePath: NormalizedPath
 ): FileMatchResult {
-  const annotations: ResourceAnnotation[] = [];
+  const resources: ResourceDef[] = [];
   const gaps: AnalysisGap[] = [];
 
   for (const call of defineCalls) {
     const result = matchDefine(call, filePath);
     gaps.push(...result.gaps);
 
-    if (result.annotation) {
-      annotations.push(result.annotation);
+    if (result.resource) {
+      resources.push(result.resource);
     }
   }
 
-  return { annotations, gaps };
+  return { resources, gaps };
 }
 
 // =============================================================================
@@ -181,27 +180,27 @@ export function matchDefineCalls(
  *
  * @param facts - FileFacts containing classes and defineCalls
  * @param context - File context (for convention matching)
- * @returns All matched annotations and gaps
+ * @returns All matched resources and gaps
  */
 export function matchFileFacts(
   facts: FileFacts,
   context?: FileContext
 ): FileMatchResult {
-  const annotations: ResourceAnnotation[] = [];
+  const resources: ResourceDef[] = [];
   const gaps: AnalysisGap[] = [];
 
   // 1. Match class-based patterns (decorator, static $au, convention)
   const classResult = matchFile(facts.classes, context);
-  annotations.push(...classResult.annotations);
+  resources.push(...classResult.resources);
   gaps.push(...classResult.gaps);
 
   // 2. Match define calls
   const defineResult = matchDefineCalls(facts.defineCalls, facts.path);
-  annotations.push(...defineResult.annotations);
+  resources.push(...defineResult.resources);
   gaps.push(...defineResult.gaps);
 
   // 3. Include file-level gaps
   gaps.push(...facts.gaps);
 
-  return { annotations, gaps };
+  return { resources, gaps };
 }

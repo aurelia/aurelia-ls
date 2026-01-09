@@ -2,7 +2,7 @@
  * Pattern Matchers - Resource Recognition
  *
  * Pattern matchers take an enriched ClassValue and determine if it's
- * an Aurelia resource, extracting metadata to produce ResourceAnnotation.
+ * an Aurelia resource, extracting metadata to produce ResourceDef.
  *
  * Patterns are tried in priority order:
  * 1. Decorator (@customElement, @customAttribute, etc.)

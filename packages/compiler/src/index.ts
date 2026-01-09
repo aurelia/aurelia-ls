@@ -32,8 +32,11 @@ export {
 export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
 
 // === Language / Semantics ===
-export { DEFAULT as DEFAULT_SEMANTICS, prepareSemantics, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
+export { DEFAULT as DEFAULT_SEMANTICS, prepareSemantics, createSemanticsLookup, buildResourceCatalog, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
 export type {
+  SourceLocation,
+  Configured,
+  Sourced,
   Semantics,
   SemanticsWithCaches,
   ResourceGraph,
@@ -64,6 +67,15 @@ export type {
   ApiSurfaceSnapshot,
   ApiSurfaceSymbol,
   ApiSurfaceBindable,
+  ResourceDef,
+  ResourceDefBase,
+  ResourceKind,
+  CustomElementDef,
+  CustomAttributeDef,
+  TemplateControllerDef,
+  ValueConverterDef,
+  BindingBehaviorDef,
+  BindableDef,
   ResourceKey,
   SymbolId,
 } from "./language/index.js";

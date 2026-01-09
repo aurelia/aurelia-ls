@@ -5,6 +5,16 @@ export {
   extractFileContext,
 } from "./file-facts-extractor.js";
 
+// === Partial Evaluation (Layer 2) ===
+export {
+  evaluateFileFacts,
+} from "./partial-evaluation.js";
+export type {
+  PartialEvaluationResult,
+  PartialEvaluationFileResult,
+  PartialEvaluationOptions,
+} from "./partial-evaluation.js";
+
 // === Value Resolution Helpers ===
 // Bridges class extraction with the value model for resolving identifier references.
 export type { PropertyResolutionContext } from "./value-helpers.js";

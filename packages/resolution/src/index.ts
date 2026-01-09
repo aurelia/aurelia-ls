@@ -6,14 +6,15 @@
 // Architecture (unified value model):
 // - File Discovery (Layer 0): File enumeration, sibling detection
 // - Extraction (Layer 1): AST → FileFacts (classes, imports, exports, registrations)
-// - Pattern Matching (Layer 2): FileFacts → ResourceAnnotation[]
-// - Registration (Layer 3): ResourceAnnotation[] + FileFacts → RegistrationAnalysis
-// - Scope (Layer 4): RegistrationAnalysis → ResourceGraph
+// - Partial Evaluation (Layer 2): FileFacts → resolved FileFacts + gaps
+// - Pattern Matching (Layer 3): FileFacts → ResourceDef[]
+// - Registration (Layer 4): ResourceDef[] + FileFacts → RegistrationAnalysis
+// - Scope (Layer 5): RegistrationAnalysis → ResourceGraph
 //
 // Key types:
 // - FileFacts: Unified extraction output (replaces SourceFacts)
 // - ClassValue: Enriched class metadata with AnalyzableValue
-// - ResourceAnnotation: Unified resource type (replaces ResourceCandidate)
+// - ResourceDef: Unified resource definition (compiler-facing, Sourced<T>)
 //
 // See docs/resolution-architecture.md for details.
 // See docs/registration-analysis-design.md for the three-phase model.
@@ -25,6 +26,8 @@ export type {
   ResourceScope,
   ResourceScopeId,
   ResourceCollections,
+  ResourceDef,
+  ResourceKind,
   ElementRes,
   AttrRes,
   Bindable,
@@ -119,13 +122,11 @@ export type {
   ConventionBuilder,
 } from "./project/index.js";
 
-// === Unified Types (New) ===
-// ResourceAnnotation is the unified output type for resource resolution.
-// FileFacts is the unified extraction type (replaces SourceFacts).
-// See annotation.ts and file-facts.ts for the new design.
+// === Annotation Types (NPM analysis / legacy) ===
+// ResourceAnnotation is still used by npm analysis pipelines.
+// Core resolution outputs ResourceDef.
 export type {
   ResourceAnnotation,
-  ResourceKind,
   BindableAnnotation,
   AnnotationEvidence,
   AnalyzedEvidence,
@@ -175,7 +176,7 @@ export type {
 } from "./npm/value/index.js";
 
 // === Pattern Matchers (New) ===
-// Pattern matchers operate on ClassValue → ResourceAnnotation.
+// Pattern matchers operate on ClassValue → ResourceDef.
 export { matchAll, matchFile, matchExpected, matchDefineCalls, matchFileFacts, type MatchResult, type FileMatchResult } from "./patterns/index.js";
 export { matchDecorator, type DecoratorMatchResult } from "./patterns/index.js";
 export { matchStaticAu, type StaticAuMatchResult } from "./patterns/index.js";
@@ -195,8 +196,8 @@ export {
 
 // === Extraction (Layer 1) ===
 // Unified extraction (FileFacts with enriched ClassValue)
-export { extractAllFileFacts, extractFileFacts, extractFileContext } from "./extraction/index.js";
-export type { ExtractionOptions } from "./extraction/index.js";
+export { extractAllFileFacts, extractFileFacts, extractFileContext, evaluateFileFacts } from "./extraction/index.js";
+export type { ExtractionOptions, PartialEvaluationResult, PartialEvaluationFileResult, PartialEvaluationOptions } from "./extraction/index.js";
 
 // === Export Binding Resolution (Layer 1.5) ===
 export { buildExportBindingMap, lookupExportBinding } from "./binding/index.js";

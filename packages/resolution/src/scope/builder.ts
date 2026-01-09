@@ -3,7 +3,12 @@ import {
   DEFAULT_SEMANTICS,
   prepareSemantics,
   type Bindable,
+  type BindableDef,
   type ControllerConfig,
+  type CustomAttributeDef,
+  type CustomElementDef,
+  type BindingBehaviorDef,
+  type ResourceDef,
   type TypeRef,
   type ResourceCollections,
   type ResourceGraph,
@@ -12,12 +17,14 @@ import {
   type Semantics,
   type ElementRes,
   type AttrRes,
+  type TemplateControllerDef,
+  type ValueConverterDef,
   type ValueConverterSig,
   type BindingBehaviorSig,
 } from "@aurelia-ls/compiler";
 import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
-import type { ResourceAnnotation, BindableAnnotation } from "../annotation.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
+import { unwrapSourced } from "../semantics/sourced.js";
 
 type MutableResourceCollections = {
   elements: Record<string, ElementRes>;
@@ -153,83 +160,170 @@ function createEmptyCollections(): MutableResourceCollections {
   };
 }
 
-function addToCollections(collections: MutableResourceCollections, annotation: ResourceAnnotation): void {
-  switch (annotation.kind) {
+function addToCollections(collections: MutableResourceCollections, resource: ResourceDef): void {
+  const name = unwrapSourced(resource.name);
+  if (!name) return;
+  switch (resource.kind) {
     case "custom-element":
-      collections.elements[annotation.name] = annotationToElement(annotation);
+      collections.elements[name] = resourceToElement(resource);
       break;
     case "custom-attribute":
+      collections.attributes[name] = resourceToAttribute(resource);
+      break;
     case "template-controller":
-      collections.attributes[annotation.name] = annotationToAttribute(annotation);
+      collections.attributes[name] = resourceToTemplateController(resource);
       break;
     case "value-converter":
-      collections.valueConverters[annotation.name] = annotationToValueConverter(annotation);
+      collections.valueConverters[name] = resourceToValueConverter(resource);
       break;
     case "binding-behavior":
-      collections.bindingBehaviors[annotation.name] = annotationToBindingBehavior(annotation);
+      collections.bindingBehaviors[name] = resourceToBindingBehavior(resource);
       break;
   }
 }
 
-function annotationToElement(a: ResourceAnnotation): ElementRes {
+function resourceToElement(def: CustomElementDef): ElementRes {
+  const name = unwrapSourced(def.name) ?? "";
+  const aliases = def.aliases
+    .map((alias) => unwrapSourced(alias))
+    .filter((alias): alias is string => !!alias);
+  const containerless = unwrapSourced(def.containerless);
+  const shadowOptions = unwrapSourced(def.shadowOptions);
+  const capture = unwrapSourced(def.capture);
+  const processContent = unwrapSourced(def.processContent);
+  const boundary = unwrapSourced(def.boundary);
+  const dependencies = def.dependencies
+    .map((dep) => unwrapSourced(dep))
+    .filter((dep): dep is string => !!dep);
+  const className = unwrapSourced(def.className);
+
   return {
     kind: "element",
-    name: a.name,
-    bindables: bindableAnnotationsToRecord(a.bindables),
-    ...(a.aliases.length > 0 ? { aliases: [...a.aliases] } : {}),
-    ...(a.element?.containerless ? { containerless: true } : {}),
-    ...(a.element?.boundary ? { boundary: true } : {}),
-    ...(a.className ? { className: a.className } : {}),
-    ...(a.source ? { file: a.source } : {}),
+    name,
+    bindables: bindableDefsToRecord(def.bindables),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    ...(containerless !== undefined ? { containerless } : {}),
+    ...(shadowOptions !== undefined ? { shadowOptions } : {}),
+    ...(capture !== undefined ? { capture } : {}),
+    ...(processContent !== undefined ? { processContent } : {}),
+    ...(boundary !== undefined ? { boundary } : {}),
+    ...(dependencies.length > 0 ? { dependencies } : {}),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
   };
 }
 
-function annotationToAttribute(a: ResourceAnnotation): AttrRes {
+function resourceToAttribute(def: CustomAttributeDef): AttrRes {
+  const name = unwrapSourced(def.name) ?? "";
+  const aliases = def.aliases
+    .map((alias) => unwrapSourced(alias))
+    .filter((alias): alias is string => !!alias);
+  const primary = unwrapSourced(def.primary) ?? findPrimaryBindableName(def.bindables) ?? undefined;
+  const noMultiBindings = unwrapSourced(def.noMultiBindings);
+  const className = unwrapSourced(def.className);
+
   return {
     kind: "attribute",
-    name: a.name,
-    bindables: bindableAnnotationsToRecord(a.bindables),
-    ...(a.aliases.length > 0 ? { aliases: [...a.aliases] } : {}),
-    ...(a.attribute?.primary ? { primary: a.attribute.primary } : {}),
-    ...(a.attribute?.isTemplateController ? { isTemplateController: true } : {}),
-    ...(a.attribute?.noMultiBindings ? { noMultiBindings: true } : {}),
-    ...(a.className ? { className: a.className } : {}),
-    ...(a.source ? { file: a.source } : {}),
+    name,
+    bindables: bindableDefsToRecord(def.bindables),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    ...(primary ? { primary } : {}),
+    ...(noMultiBindings !== undefined ? { noMultiBindings } : {}),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
   };
 }
 
-function annotationToValueConverter(a: ResourceAnnotation): ValueConverterSig {
+function resourceToTemplateController(def: TemplateControllerDef): AttrRes {
+  const name = unwrapSourced(def.name) ?? "";
+  const aliases = (unwrapSourced(def.aliases) ?? []).filter((alias): alias is string => !!alias);
+  const primary = findPrimaryBindableName(def.bindables) ?? undefined;
+  const noMultiBindings = unwrapSourced(def.noMultiBindings);
+  const className = unwrapSourced(def.className);
+
   return {
-    name: a.name,
-    in: { kind: "unknown" },
-    out: { kind: "unknown" },
-    ...(a.className ? { className: a.className } : {}),
-    ...(a.source ? { file: a.source } : {}),
+    kind: "attribute",
+    name,
+    bindables: bindableDefsToRecord(def.bindables),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    ...(primary ? { primary } : {}),
+    isTemplateController: true,
+    ...(noMultiBindings !== undefined ? { noMultiBindings } : {}),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
   };
 }
 
-function annotationToBindingBehavior(a: ResourceAnnotation): BindingBehaviorSig {
+function resourceToValueConverter(def: ValueConverterDef): ValueConverterSig {
+  const name = unwrapSourced(def.name) ?? "";
+  const className = unwrapSourced(def.className);
   return {
-    name: a.name,
-    ...(a.className ? { className: a.className } : {}),
-    ...(a.source ? { file: a.source } : {}),
+    name,
+    in: toTypeRef(unwrapSourced(def.fromType)),
+    out: toTypeRef(unwrapSourced(def.toType)),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
   };
 }
 
-function bindableAnnotationsToRecord(bindables: readonly BindableAnnotation[]): Record<string, Bindable> {
+function resourceToBindingBehavior(def: BindingBehaviorDef): BindingBehaviorSig {
+  const name = unwrapSourced(def.name) ?? "";
+  const className = unwrapSourced(def.className);
+  return {
+    name,
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
+  };
+}
+
+function toTypeRefOptional(typeName: string | undefined): TypeRef | undefined {
+  if (!typeName) return undefined;
+  const trimmed = typeName.trim();
+  if (!trimmed) return undefined;
+  if (trimmed === "any") return { kind: "any" };
+  if (trimmed === "unknown") return { kind: "unknown" };
+  return { kind: "ts", name: trimmed };
+}
+
+function toTypeRef(typeName: string | undefined): TypeRef {
+  return toTypeRefOptional(typeName) ?? { kind: "unknown" };
+}
+
+function bindableDefsToRecord(bindables: Readonly<Record<string, BindableDef>>): Record<string, Bindable> {
   const record: Record<string, Bindable> = {};
-  for (const b of bindables) {
-    const type: TypeRef = b.type ? { kind: "ts", name: b.type } : { kind: "unknown" };
+  for (const [key, def] of Object.entries(bindables)) {
+    const name = unwrapSourced(def.property) ?? key;
+    const attribute = unwrapSourced(def.attribute);
+    const mode = unwrapSourced(def.mode);
+    const primary = unwrapSourced(def.primary);
+    const type = toTypeRefOptional(unwrapSourced(def.type));
+    const doc = unwrapSourced(def.doc);
+
     const bindable: Bindable = {
-      name: b.name,
-      type,
-      ...(b.mode ? { mode: b.mode } : {}),
-      ...(b.attribute ? { attribute: b.attribute } : {}),
-      ...(b.primary !== undefined ? { primary: b.primary } : {}),
+      name,
+      ...(attribute ? { attribute } : {}),
+      ...(mode ? { mode } : {}),
+      ...(primary !== undefined ? { primary } : {}),
+      ...(type ? { type } : {}),
+      ...(doc ? { doc } : {}),
     };
-    record[b.name] = bindable;
+
+    record[bindable.name] = bindable;
   }
   return record;
+}
+
+function findPrimaryBindableName(defs: Readonly<Record<string, BindableDef>>): string | null {
+  for (const [key, def] of Object.entries(defs)) {
+    const primary = unwrapSourced(def.primary);
+    if (primary) return unwrapSourced(def.property) ?? key;
+  }
+  return null;
 }
 
 function diffResourceCollections(base: ResourceCollections, overlay: ResourceCollections): Partial<ResourceCollections> {

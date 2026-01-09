@@ -3,15 +3,16 @@ import {
   DEFAULT_SEMANTICS,
   prepareSemantics,
   type Bindable,
-  type BindingMode,
+  type BindableDef,
   type NormalizedPath,
   type ResourceCollections,
   type ResourceGraph,
   type ResourceScopeId,
   type Semantics,
   type SemanticsWithCaches,
+  type TypeRef,
 } from "@aurelia-ls/compiler";
-import { hashObject, normalizeCompilerOptions, resolve, type ResourceAnnotation } from "@aurelia-ls/resolution";
+import { hashObject, normalizeCompilerOptions, resolve, type ResourceDef } from "@aurelia-ls/resolution";
 import type { Logger } from "./types.js";
 
 export interface TypeScriptProject {
@@ -126,10 +127,10 @@ export class AureliaProjectIndex {
       resourceGraph: result.resourceGraph,
       resources: result.resources.map((r) => ({
         kind: r.kind,
-        name: r.name,
-        aliases: [...r.aliases],
-        source: r.source,
-        className: r.className,
+        name: unwrapSourcedValue(r.name),
+        aliases: resourceAliasesForFingerprint(r),
+        source: r.file,
+        className: unwrapSourcedValue(r.className),
       })),
     });
 
@@ -142,7 +143,7 @@ export class AureliaProjectIndex {
  */
 function mergeDiscoveredResources(
   base: ResourceCollections,
-  resources: readonly ResourceAnnotation[],
+  resources: readonly ResourceDef[],
 ): ResourceCollections {
   const elements = { ...base.elements };
   const attributes = { ...base.attributes };
@@ -150,33 +151,49 @@ function mergeDiscoveredResources(
   const bindingBehaviors = { ...base.bindingBehaviors };
 
   for (const r of resources) {
+    const name = unwrapSourcedValue(r.name) ?? "";
+    if (!name) continue;
     if (r.kind === "custom-element") {
-      elements[r.name] = {
+      const aliases = aliasesFromSourcedList(r.aliases);
+      elements[name] = {
         kind: "element",
-        name: r.name,
-        bindables: annotationBindablesToRecord(r.bindables),
-        ...(r.aliases.length > 0 ? { aliases: [...r.aliases] } : {}),
-        ...(r.element?.containerless ? { containerless: true } : {}),
-        ...(r.element?.boundary ? { boundary: true } : {}),
+        name,
+        bindables: bindableDefsToRecord(r.bindables),
+        ...(aliases.length > 0 ? { aliases } : {}),
+        ...(unwrapSourcedValue(r.containerless) ? { containerless: true } : {}),
+        ...(unwrapSourcedValue(r.boundary) ? { boundary: true } : {}),
       };
-    } else if (r.kind === "custom-attribute" || r.kind === "template-controller") {
-      attributes[r.name] = {
+    } else if (r.kind === "custom-attribute") {
+      const aliases = aliasesFromSourcedList(r.aliases);
+      const primary = unwrapSourcedValue(r.primary) ?? findPrimaryBindableName(r.bindables) ?? undefined;
+      attributes[name] = {
         kind: "attribute",
-        name: r.name,
-        bindables: annotationBindablesToRecord(r.bindables),
-        ...(r.aliases.length > 0 ? { aliases: [...r.aliases] } : {}),
-        ...(r.attribute?.primary ? { primary: r.attribute.primary } : {}),
-        ...(r.attribute?.isTemplateController ? { isTemplateController: true } : {}),
-        ...(r.attribute?.noMultiBindings ? { noMultiBindings: true } : {}),
+        name,
+        bindables: bindableDefsToRecord(r.bindables),
+        ...(aliases.length > 0 ? { aliases } : {}),
+        ...(primary ? { primary } : {}),
+        ...(unwrapSourcedValue(r.noMultiBindings) ? { noMultiBindings: true } : {}),
+      };
+    } else if (r.kind === "template-controller") {
+      const aliases = aliasesFromSourcedValue(r.aliases);
+      const primary = findPrimaryBindableName(r.bindables) ?? undefined;
+      attributes[name] = {
+        kind: "attribute",
+        name,
+        bindables: bindableDefsToRecord(r.bindables),
+        ...(aliases.length > 0 ? { aliases } : {}),
+        ...(primary ? { primary } : {}),
+        isTemplateController: true,
+        ...(unwrapSourcedValue(r.noMultiBindings) ? { noMultiBindings: true } : {}),
       };
     } else if (r.kind === "value-converter") {
-      valueConverters[r.name] = {
-        name: r.name,
+      valueConverters[name] = {
+        name,
         in: { kind: "unknown" },
         out: { kind: "unknown" },
       };
     } else if (r.kind === "binding-behavior") {
-      bindingBehaviors[r.name] = { name: r.name };
+      bindingBehaviors[name] = { name };
     }
   }
 
@@ -189,16 +206,69 @@ function mergeDiscoveredResources(
   };
 }
 
-function annotationBindablesToRecord(
-  bindables: readonly ResourceAnnotation["bindables"][number][],
+function bindableDefsToRecord(
+  bindables: Readonly<Record<string, BindableDef>>,
 ): Record<string, Bindable> {
   const record: Record<string, Bindable> = {};
-  for (const b of bindables) {
+  for (const [key, def] of Object.entries(bindables)) {
+    const name = unwrapSourcedValue(def.property) ?? key;
+    const attribute = unwrapSourcedValue(def.attribute);
+    const mode = unwrapSourcedValue(def.mode);
+    const primary = unwrapSourcedValue(def.primary);
+    const type = toTypeRefOptional(unwrapSourcedValue(def.type));
+    const doc = unwrapSourcedValue(def.doc);
+
     const bindable: Bindable = {
-      name: b.name,
-      ...(b.mode ? { mode: b.mode as BindingMode } : {}),
+      name,
+      ...(attribute ? { attribute } : {}),
+      ...(mode ? { mode } : {}),
+      ...(primary !== undefined ? { primary } : {}),
+      ...(type ? { type } : {}),
+      ...(doc ? { doc } : {}),
     };
-    record[b.name] = bindable;
+
+    record[bindable.name] = bindable;
   }
   return record;
+}
+
+function findPrimaryBindableName(defs: Readonly<Record<string, BindableDef>>): string | null {
+  for (const [key, def] of Object.entries(defs)) {
+    const primary = unwrapSourcedValue(def.primary);
+    if (primary) return unwrapSourcedValue(def.property) ?? key;
+  }
+  return null;
+}
+
+function toTypeRefOptional(typeName: string | undefined): TypeRef | undefined {
+  if (!typeName) return undefined;
+  const trimmed = typeName.trim();
+  if (!trimmed) return undefined;
+  if (trimmed === "any") return { kind: "any" };
+  if (trimmed === "unknown") return { kind: "unknown" };
+  return { kind: "ts", name: trimmed };
+}
+
+function resourceAliasesForFingerprint(resource: ResourceDef): string[] {
+  switch (resource.kind) {
+    case "custom-element":
+    case "custom-attribute":
+      return aliasesFromSourcedList(resource.aliases);
+    case "template-controller":
+      return aliasesFromSourcedValue(resource.aliases);
+    default:
+      return [];
+  }
+}
+
+function aliasesFromSourcedList(aliases: readonly { value?: string }[]): string[] {
+  return aliases.map(alias => alias.value).filter((alias): alias is string => !!alias);
+}
+
+function aliasesFromSourcedValue(aliases: { value?: readonly string[] } | undefined): string[] {
+  return aliases?.value ? [...aliases.value] : [];
+}
+
+function unwrapSourcedValue<T>(value: { value?: T } | undefined): T | undefined {
+  return value?.value;
 }

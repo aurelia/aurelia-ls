@@ -9,6 +9,7 @@ import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { OrphanResource, UnresolvedRegistration, UnresolvedPattern } from "../registration/types.js";
 import type { ResolutionDiagnostic } from "../resolve.js";
 import { getOrphanCode, getUnanalyzableCode } from "./codes.js";
+import { unwrapSourced } from "../semantics/sourced.js";
 
 // =============================================================================
 // Orphan Conversion
@@ -44,19 +45,21 @@ function isExternalPackage(source: NormalizedPath): boolean {
  */
 export function orphansToDiagnostics(orphans: readonly OrphanResource[]): ResolutionDiagnostic[] {
   return orphans
-    .filter(o => !isExternalPackage(o.resource.source))
+    .filter(o => !o.resource.file || !isExternalPackage(o.resource.file))
     .map(orphanToDiagnostic);
 }
 
 function orphanToDiagnostic(orphan: OrphanResource): ResolutionDiagnostic {
   const { resource } = orphan;
   const kindLabel = getKindLabel(resource.kind);
+  const name = unwrapSourced(resource.name) ?? "<unknown>";
+  const className = unwrapSourced(resource.className) ?? "<unknown>";
 
   return {
     code: getOrphanCode(resource.kind),
-    message: `${kindLabel} '${resource.name}' (class ${resource.className}) is defined but never registered. ` +
+    message: `${kindLabel} '${name}' (class ${className}) is defined but never registered. ` +
       `Add it to Aurelia.register() or a component's dependencies array.`,
-    source: resource.source,
+    source: resource.file,
     severity: "warning",
   };
 }

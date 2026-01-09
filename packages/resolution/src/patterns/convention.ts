@@ -14,21 +14,27 @@
  * Convention matching is deterministic in-project but lower confidence for npm.
  */
 
+import type {
+  BindingBehaviorDef,
+  CustomAttributeDef,
+  CustomElementDef,
+  ValueConverterDef,
+  TemplateControllerDef,
+  ResourceDef,
+} from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../extraction/types.js';
 import type { ClassValue, BindableMember } from '../npm/value/types.js';
 import { extractStringProp, extractBooleanProp } from '../npm/value/types.js';
 import type { FileContext } from '../file-facts.js';
-import type {
-  ResourceAnnotation,
-  BindableAnnotation,
-} from '../annotation.js';
+import type { BindableInput } from '../semantics/resource-def.js';
 import {
-  elementAnnotation,
-  attributeAnnotation,
-  valueConverterAnnotation,
-  bindingBehaviorAnnotation,
-  inferredEvidence,
-} from '../annotation.js';
+  buildBindableDefs,
+  buildBindingBehaviorDef,
+  buildCustomAttributeDef,
+  buildCustomElementDef,
+  buildTemplateControllerDef,
+  buildValueConverterDef,
+} from '../semantics/resource-def.js';
 import {
   canonicalElementName,
   canonicalAttrName,
@@ -40,7 +46,7 @@ import {
 // =============================================================================
 
 export interface ConventionMatchResult {
-  annotation: ResourceAnnotation | null;
+  resource: ResourceDef | null;
   gaps: AnalysisGap[];
 }
 
@@ -51,7 +57,7 @@ export interface ConventionMatchResult {
  *
  * @param cls - The enriched ClassValue to match
  * @param context - File context with sibling information
- * @returns Match result with annotation (or null) and any gaps
+ * @returns Match result with resource (or null) and any gaps
  */
 export function matchConvention(
   cls: ClassValue,
@@ -66,8 +72,8 @@ export function matchConvention(
     const baseName = className.slice(0, -'CustomElement'.length);
     const name = canonicalElementName(baseName);
     if (name) {
-      const annotation = buildElementAnnotation(cls, name, 'suffix');
-      return { annotation, gaps };
+      const resource = buildElementDef(cls, name);
+      return { resource, gaps };
     }
   }
 
@@ -76,8 +82,8 @@ export function matchConvention(
     const baseName = className.slice(0, -'CustomAttribute'.length);
     const name = canonicalAttrName(baseName);
     if (name) {
-      const annotation = buildAttributeAnnotation(cls, name, 'suffix');
-      return { annotation, gaps };
+      const resource = buildAttributeDef(cls, name);
+      return { resource, gaps };
     }
   }
 
@@ -86,8 +92,8 @@ export function matchConvention(
     const baseName = className.slice(0, -'ValueConverter'.length);
     const name = canonicalSimpleName(baseName);
     if (name) {
-      const annotation = buildValueConverterAnnotation(cls, name, 'suffix');
-      return { annotation, gaps };
+      const resource = buildValueConverterDefFromConvention(cls, name);
+      return { resource, gaps };
     }
   }
 
@@ -96,8 +102,8 @@ export function matchConvention(
     const baseName = className.slice(0, -'BindingBehavior'.length);
     const name = canonicalSimpleName(baseName);
     if (name) {
-      const annotation = buildBindingBehaviorAnnotation(cls, name, 'suffix');
-      return { annotation, gaps };
+      const resource = buildBindingBehaviorDefFromConvention(cls, name);
+      return { resource, gaps };
     }
   }
 
@@ -109,74 +115,75 @@ export function matchConvention(
       // Derive element name from class name
       const name = canonicalElementName(className);
       if (name) {
-        const annotation = buildElementAnnotation(cls, name, 'sibling-template');
-        return { annotation, gaps };
+        const resource = buildElementDef(cls, name);
+        return { resource, gaps };
       }
     }
   }
 
   // No convention match
-  return { annotation: null, gaps };
+  return { resource: null, gaps };
 }
 
 // =============================================================================
-// Annotation Building
+// Definition Building
 // =============================================================================
 
-function buildElementAnnotation(
+function buildElementDef(
   cls: ClassValue,
-  name: string,
-  convention: string
-): ResourceAnnotation {
-  const evidence = inferredEvidence(convention);
-  const bindables = buildBindableAnnotations(cls.bindableMembers);
+  name: string
+): CustomElementDef {
+  const bindables = buildBindableInputs(cls.bindableMembers);
 
-  return elementAnnotation(name, cls.className, cls.filePath, evidence, {
-    bindables,
+  return buildCustomElementDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
+    span: cls.span,
+    bindables: buildBindableDefs(bindables, cls.filePath, cls.span),
     containerless: false,
     boundary: true,
-    span: cls.span,
   });
 }
 
-function buildAttributeAnnotation(
+function buildAttributeDef(
   cls: ClassValue,
-  name: string,
-  convention: string
-): ResourceAnnotation {
-  const evidence = inferredEvidence(convention);
-  const bindables = buildBindableAnnotations(cls.bindableMembers);
+  name: string
+): CustomAttributeDef | TemplateControllerDef {
+  const bindables = buildBindableInputs(cls.bindableMembers);
   const primary = findPrimaryBindable(bindables);
 
-  return attributeAnnotation(name, cls.className, cls.filePath, evidence, {
-    bindables,
-    isTemplateController: false,
-    noMultiBindings: false,
+  return buildCustomAttributeDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
+    span: cls.span,
+    bindables: buildBindableDefs(bindables, cls.filePath, cls.span),
     primary,
+    noMultiBindings: false,
+  });
+}
+
+function buildValueConverterDefFromConvention(
+  cls: ClassValue,
+  name: string
+): ValueConverterDef {
+  return buildValueConverterDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
   });
 }
 
-function buildValueConverterAnnotation(
+function buildBindingBehaviorDefFromConvention(
   cls: ClassValue,
-  name: string,
-  convention: string
-): ResourceAnnotation {
-  const evidence = inferredEvidence(convention);
-
-  return valueConverterAnnotation(name, cls.className, cls.filePath, evidence, {
-    span: cls.span,
-  });
-}
-
-function buildBindingBehaviorAnnotation(
-  cls: ClassValue,
-  name: string,
-  convention: string
-): ResourceAnnotation {
-  const evidence = inferredEvidence(convention);
-
-  return bindingBehaviorAnnotation(name, cls.className, cls.filePath, evidence, {
+  name: string
+): BindingBehaviorDef {
+  return buildBindingBehaviorDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
   });
 }
@@ -186,13 +193,13 @@ function buildBindingBehaviorAnnotation(
 // =============================================================================
 
 /**
- * Build bindable annotations from @bindable members only.
+ * Build bindable inputs from @bindable members only.
  * (Convention resources don't have decorator-level bindables config)
  */
-function buildBindableAnnotations(
+function buildBindableInputs(
   members: readonly BindableMember[]
-): BindableAnnotation[] {
-  const result: BindableAnnotation[] = [];
+): BindableInput[] {
+  const result: BindableInput[] = [];
 
   for (const member of members) {
     // Extract mode/primary from @bindable(...) args if present
@@ -209,10 +216,10 @@ function buildBindableAnnotations(
 
     result.push({
       name: member.name,
-      mode: mode as BindableAnnotation['mode'],
+      mode: mode as BindableInput['mode'],
       primary,
       type: member.type,
-      evidence: { source: 'analyzed', pattern: 'decorator' },
+      span: member.span,
     });
   }
 
@@ -222,7 +229,7 @@ function buildBindableAnnotations(
 /**
  * Find the primary bindable name.
  */
-function findPrimaryBindable(bindables: BindableAnnotation[]): string | undefined {
+function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
   for (const b of bindables) {
     if (b.primary) return b.name;
   }

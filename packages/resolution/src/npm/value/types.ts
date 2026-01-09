@@ -697,8 +697,9 @@ export function unknown(reason: AnalysisGap, span?: TextSpan): UnknownValue {
  */
 export function extractString(value: AnalyzableValue | undefined): string | undefined {
   if (!value) return undefined;
-  if (value.kind === 'literal' && typeof value.value === 'string') {
-    return value.value;
+  const resolved = getResolvedValue(value);
+  if (resolved.kind === 'literal' && typeof resolved.value === 'string') {
+    return resolved.value;
   }
   return undefined;
 }
@@ -709,8 +710,9 @@ export function extractString(value: AnalyzableValue | undefined): string | unde
  */
 export function extractBoolean(value: AnalyzableValue | undefined): boolean | undefined {
   if (!value) return undefined;
-  if (value.kind === 'literal' && typeof value.value === 'boolean') {
-    return value.value;
+  const resolved = getResolvedValue(value);
+  if (resolved.kind === 'literal' && typeof resolved.value === 'boolean') {
+    return resolved.value;
   }
   return undefined;
 }
@@ -720,9 +722,11 @@ export function extractBoolean(value: AnalyzableValue | undefined): boolean | un
  * Returns empty array if not an array of strings.
  */
 export function extractStringArray(value: AnalyzableValue | undefined): readonly string[] {
-  if (!value || value.kind !== 'array') return [];
+  if (!value) return [];
+  const resolved = getResolvedValue(value);
+  if (resolved.kind !== 'array') return [];
   const result: string[] = [];
-  for (const el of value.elements) {
+  for (const el of resolved.elements) {
     const s = extractString(el);
     if (s !== undefined) result.push(s);
   }
@@ -733,8 +737,10 @@ export function extractStringArray(value: AnalyzableValue | undefined): readonly
  * Get a property from an ObjectValue.
  */
 export function getProperty(value: AnalyzableValue | undefined, key: string): AnalyzableValue | undefined {
-  if (!value || value.kind !== 'object') return undefined;
-  return value.properties.get(key);
+  if (!value) return undefined;
+  const resolved = getResolvedValue(value);
+  if (resolved.kind !== 'object') return undefined;
+  return resolved.properties.get(key);
 }
 
 /**

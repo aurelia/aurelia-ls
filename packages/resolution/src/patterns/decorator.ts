@@ -12,7 +12,17 @@
  * This is the highest-priority pattern matcher.
  */
 
-import type { NormalizedPath, TextSpan, BindingMode } from '@aurelia-ls/compiler';
+import type {
+  BindingBehaviorDef,
+  BindingMode,
+  CustomAttributeDef,
+  CustomElementDef,
+  NormalizedPath,
+  TextSpan,
+  ValueConverterDef,
+  TemplateControllerDef,
+  ResourceDef,
+} from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../extraction/types.js';
 import type {
   ClassValue,
@@ -29,18 +39,15 @@ import {
   extractStringArrayProp,
   getProperty,
 } from '../npm/value/types.js';
-import type {
-  ResourceAnnotation,
-  BindableAnnotation,
-  AnnotationEvidence,
-} from '../annotation.js';
+import type { BindableInput } from '../semantics/resource-def.js';
 import {
-  elementAnnotation,
-  attributeAnnotation,
-  valueConverterAnnotation,
-  bindingBehaviorAnnotation,
-  explicitEvidence,
-} from '../annotation.js';
+  buildBindableDefs,
+  buildBindingBehaviorDef,
+  buildCustomAttributeDef,
+  buildCustomElementDef,
+  buildTemplateControllerDef,
+  buildValueConverterDef,
+} from '../semantics/resource-def.js';
 import {
   canonicalElementName,
   canonicalAttrName,
@@ -53,7 +60,7 @@ import {
 // =============================================================================
 
 export interface DecoratorMatchResult {
-  annotation: ResourceAnnotation | null;
+  resource: ResourceDef | null;
   gaps: AnalysisGap[];
 }
 
@@ -64,7 +71,7 @@ export interface DecoratorMatchResult {
  * decorators and extracts resource metadata.
  *
  * @param cls - The enriched ClassValue to match
- * @returns Match result with annotation (or null) and any gaps
+ * @returns Match result with resource (or null) and any gaps
  */
 export function matchDecorator(cls: ClassValue): DecoratorMatchResult {
   const gaps: AnalysisGap[] = [];
@@ -74,27 +81,27 @@ export function matchDecorator(cls: ClassValue): DecoratorMatchResult {
 
   // Check for resource decorators in priority order
   if (meta.element) {
-    const annotation = buildElementAnnotation(cls, meta, gaps);
-    return { annotation, gaps };
+    const resource = buildElementDef(cls, meta, gaps);
+    return { resource, gaps };
   }
 
   if (meta.attribute) {
-    const annotation = buildAttributeAnnotation(cls, meta, gaps);
-    return { annotation, gaps };
+    const resource = buildAttributeDef(cls, meta, gaps);
+    return { resource, gaps };
   }
 
   if (meta.valueConverter) {
-    const annotation = buildValueConverterAnnotation(cls, meta.valueConverter, gaps);
-    return { annotation, gaps };
+    const resource = buildValueConverterDefFromMeta(cls, meta.valueConverter, gaps);
+    return { resource, gaps };
   }
 
   if (meta.bindingBehavior) {
-    const annotation = buildBindingBehaviorAnnotation(cls, meta.bindingBehavior, gaps);
-    return { annotation, gaps };
+    const resource = buildBindingBehaviorDefFromMeta(cls, meta.bindingBehavior, gaps);
+    return { resource, gaps };
   }
 
   // No resource decorator found
-  return { annotation: null, gaps };
+  return { resource: null, gaps };
 }
 
 // =============================================================================
@@ -385,11 +392,11 @@ function mergeSimpleMeta(
 // Annotation Building
 // =============================================================================
 
-function buildElementAnnotation(
+function buildElementDef(
   cls: ClassValue,
   meta: DecoratorMeta,
   gaps: AnalysisGap[]
-): ResourceAnnotation | null {
+): CustomElementDef | null {
   const elementMeta = meta.element!;
 
   // Derive name
@@ -404,26 +411,26 @@ function buildElementAnnotation(
   }
 
   // Merge bindables from decorator and @bindable members
-  const bindables = buildBindableAnnotations(elementMeta.bindables, cls.bindableMembers);
+  const bindables = buildBindableInputs(elementMeta.bindables, cls.bindableMembers);
 
-  // Build evidence
-  const evidence = explicitEvidence('decorator', elementMeta.decoratorSpan);
-
-  return elementAnnotation(name, cls.className, cls.filePath, evidence, {
+  return buildCustomElementDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
+    span: cls.span,
     aliases: canonicalAliases(elementMeta.aliases),
-    bindables,
+    bindables: buildBindableDefs(bindables, cls.filePath, elementMeta.decoratorSpan ?? cls.span),
     containerless: elementMeta.containerless || meta.containerless,
     boundary: true,
     inlineTemplate: elementMeta.template,
-    span: cls.span,
   });
 }
 
-function buildAttributeAnnotation(
+function buildAttributeDef(
   cls: ClassValue,
   meta: DecoratorMeta,
   gaps: AnalysisGap[]
-): ResourceAnnotation | null {
+): CustomAttributeDef | TemplateControllerDef | null {
   const attrMeta = meta.attribute!;
 
   // Derive name
@@ -438,28 +445,39 @@ function buildAttributeAnnotation(
   }
 
   // Merge bindables
-  const bindables = buildBindableAnnotations(attrMeta.bindables, cls.bindableMembers);
+  const bindables = buildBindableInputs(attrMeta.bindables, cls.bindableMembers);
   const primary = findPrimaryBindable(bindables);
-
-  // Build evidence
-  const evidence = explicitEvidence('decorator', attrMeta.decoratorSpan);
   const isTC = attrMeta.isTemplateController || meta.templateController;
 
-  return attributeAnnotation(name, cls.className, cls.filePath, evidence, {
-    aliases: canonicalAliases(attrMeta.aliases),
-    bindables,
-    isTemplateController: isTC,
-    noMultiBindings: attrMeta.noMultiBindings,
-    primary,
+  if (isTC) {
+    return buildTemplateControllerDef({
+      name,
+      className: cls.className,
+      file: cls.filePath,
+      span: cls.span,
+      aliases: canonicalAliases(attrMeta.aliases),
+      bindables: buildBindableDefs(bindables, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
+      noMultiBindings: attrMeta.noMultiBindings,
+    });
+  }
+
+  return buildCustomAttributeDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
+    aliases: canonicalAliases(attrMeta.aliases),
+    bindables: buildBindableDefs(bindables, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
+    primary,
+    noMultiBindings: attrMeta.noMultiBindings,
   });
 }
 
-function buildValueConverterAnnotation(
+function buildValueConverterDefFromMeta(
   cls: ClassValue,
   meta: SimpleResourceMeta,
   gaps: AnalysisGap[]
-): ResourceAnnotation | null {
+): ValueConverterDef | null {
   const name = canonicalSimpleName(meta.name ?? cls.className);
   if (!name) {
     gaps.push({
@@ -470,19 +488,19 @@ function buildValueConverterAnnotation(
     return null;
   }
 
-  const evidence = explicitEvidence('decorator', meta.decoratorSpan);
-
-  return valueConverterAnnotation(name, cls.className, cls.filePath, evidence, {
-    aliases: canonicalAliases(meta.aliases),
+  return buildValueConverterDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
   });
 }
 
-function buildBindingBehaviorAnnotation(
+function buildBindingBehaviorDefFromMeta(
   cls: ClassValue,
   meta: SimpleResourceMeta,
   gaps: AnalysisGap[]
-): ResourceAnnotation | null {
+): BindingBehaviorDef | null {
   const name = canonicalSimpleName(meta.name ?? cls.className);
   if (!name) {
     gaps.push({
@@ -493,10 +511,10 @@ function buildBindingBehaviorAnnotation(
     return null;
   }
 
-  const evidence = explicitEvidence('decorator', meta.decoratorSpan);
-
-  return bindingBehaviorAnnotation(name, cls.className, cls.filePath, evidence, {
-    aliases: canonicalAliases(meta.aliases),
+  return buildBindingBehaviorDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
   });
 }
@@ -506,13 +524,13 @@ function buildBindingBehaviorAnnotation(
 // =============================================================================
 
 /**
- * Build bindable annotations from decorator config and @bindable members.
+ * Build bindable inputs from decorator config and @bindable members.
  */
-function buildBindableAnnotations(
+function buildBindableInputs(
   fromDecorator: BindableConfig[],
   fromMembers: readonly BindableMember[]
-): BindableAnnotation[] {
-  const merged = new Map<string, BindableAnnotation>();
+): BindableInput[] {
+  const merged = new Map<string, BindableInput>();
 
   // First, add decorator bindables
   for (const config of fromDecorator) {
@@ -521,7 +539,6 @@ function buildBindableAnnotations(
       mode: config.mode,
       primary: config.primary,
       attribute: config.attribute,
-      evidence: { source: 'analyzed', pattern: 'decorator' },
     });
   }
 
@@ -547,18 +564,24 @@ function buildBindableAnnotations(
       primary,
       attribute: existing?.attribute,
       type: member.type,
-      evidence: { source: 'analyzed', pattern: 'decorator' },
+      span: member.span,
     });
   }
 
-  // Sort by name for deterministic output
-  return Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const inputs = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  const only = inputs.length === 1 ? inputs[0] : undefined;
+  if (only && !inputs.some((b) => b.primary)) {
+    inputs[0] = { ...only, primary: true };
+  }
+
+  return inputs;
 }
 
 /**
  * Find the primary bindable name.
  */
-function findPrimaryBindable(bindables: BindableAnnotation[]): string | undefined {
+function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
   // Explicit primary
   for (const b of bindables) {
     if (b.primary) return b.name;

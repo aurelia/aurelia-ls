@@ -71,6 +71,7 @@ export interface CustomElementDef extends ResourceDefBase {
   readonly shadowOptions: Sourced<{ readonly mode: 'open' | 'closed' } | undefined>;
   readonly capture: Sourced<boolean>;
   readonly processContent: Sourced<boolean>;
+  readonly inlineTemplate?: Sourced<string>;
   readonly boundary: Sourced<boolean>;
   readonly bindables: Readonly<Record<string, BindableDef>>;
   readonly dependencies: readonly Sourced<string>[];

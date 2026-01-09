@@ -5,6 +5,10 @@ import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 
 const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
 
+function resourceName(resource: { name: { value?: string } }): string {
+  return resource.name.value ?? "";
+}
+
 describe("Full Pipeline: explicit-app", () => {
   let result: ReturnType<typeof resolve>;
 
@@ -19,7 +23,7 @@ describe("Full Pipeline: explicit-app", () => {
     expect(result.facts.size > 0, "Should produce facts").toBe(true);
 
     // Filter to only app-defined resources (exclude Aurelia framework source via path mapping)
-    const appResources = result.resources.filter(c => c.source.includes("/explicit-app/src/"));
+    const appResources = result.resources.filter(c => c.file?.includes("/explicit-app/src/"));
 
     // Assert resource counts by kind
     // App defines: 8 elements, 2 attributes, 2 value converters, 2 binding behaviors = 14 total
@@ -97,21 +101,21 @@ describe("Full Pipeline: explicit-app", () => {
 
   it("exposes resources for tooling", () => {
     // Find specific resources
-    const navBar = result.resources.find(c => c.name === "nav-bar");
+    const navBar = result.resources.find(c => resourceName(c) === "nav-bar");
     expect(navBar, "Should find nav-bar resource").toBeTruthy();
     expect(navBar!.kind).toBe("custom-element");
-    expect(navBar!.evidence.pattern).toBe("decorator");
+    expect(navBar!.className.value, "nav-bar should have a class name").toBeTruthy();
 
-    const currency = result.resources.find(c => c.name === "currency");
+    const currency = result.resources.find(c => resourceName(c) === "currency");
     expect(currency, "Should find currency resource").toBeTruthy();
     expect(currency!.kind).toBe("value-converter");
-    expect(currency!.evidence.pattern).toBe("static-au");
+    expect(currency!.className.value, "currency should have a class name").toBeTruthy();
   });
 
   it("exposes registration sites for tooling", () => {
     // Check global registration site evidence
     const navBarSite = result.registration.sites.find(
-      s => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === "nav-bar"
+      s => s.resourceRef.kind === "resolved" && resourceName(s.resourceRef.resource) === "nav-bar"
     );
     expect(navBarSite, "Should have nav-bar registration site").toBeTruthy();
     expect(navBarSite!.scope.kind).toBe("global");
@@ -119,7 +123,7 @@ describe("Full Pipeline: explicit-app", () => {
 
     // Check local registration site evidence
     const priceTagSite = result.registration.sites.find(
-      s => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === "price-tag"
+      s => s.resourceRef.kind === "resolved" && resourceName(s.resourceRef.resource) === "price-tag"
     );
     expect(priceTagSite, "Should have price-tag registration site").toBeTruthy();
     expect(priceTagSite!.scope.kind).toBe("local");

@@ -352,7 +352,8 @@ export function resolveImport(
     const reason = gap(
       `import "${imp.exportName}" from "${imp.specifier}"`,
       { kind: 'unresolved-import', path: imp.specifier, reason: 'module not found' },
-      `Cannot resolve module "${imp.specifier}" from ${fromFile}`
+      `Cannot resolve module "${imp.specifier}" from ${fromFile}`,
+      { file: fromFile }
     );
     ctx.gaps.push(reason);
     return unknown(reason, imp.span);
@@ -396,7 +397,8 @@ export function resolveImport(
       const reason = gap(
         `import "${imp.exportName}" from "${imp.specifier}"`,
         { kind: 'unresolved-import', path: resolvedPath, reason: `"${imp.exportName}" not exported` },
-        `Module "${resolvedPath}" does not export "${imp.exportName}"`
+        `Module "${resolvedPath}" does not export "${imp.exportName}"`,
+        { file: fromFile }
       );
       ctx.gaps.push(reason);
       return unknown(reason, imp.span);
@@ -424,7 +426,8 @@ export function resolveImport(
       const reason = gap(
         `import "${imp.exportName}" from "${imp.specifier}"`,
         { kind: 'unresolved-import', path: exportBinding.definitionPath, reason: 'file not analyzed' },
-        `Definition file "${exportBinding.definitionPath}" not in analysis scope`
+        `Definition file "${exportBinding.definitionPath}" not in analysis scope`,
+        { file: fromFile }
       );
       ctx.gaps.push(reason);
       return unknown(reason, imp.span);
@@ -444,7 +447,8 @@ export function resolveImport(
       const reason = gap(
         `import "${imp.exportName}" from "${imp.specifier}"`,
         { kind: 'unresolved-import', path: exportBinding.definitionPath, reason: `"${exportBinding.definitionName}" not found in scope` },
-        `Cannot find "${exportBinding.definitionName}" in "${exportBinding.definitionPath}"`
+        `Cannot find "${exportBinding.definitionName}" in "${exportBinding.definitionPath}"`,
+        { file: fromFile }
       );
       ctx.gaps.push(reason);
       return unknown(reason, imp.span);

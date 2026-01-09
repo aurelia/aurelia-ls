@@ -16,7 +16,16 @@
  * This is the second-priority pattern matcher after decorators.
  */
 
-import type { TextSpan, BindingMode } from '@aurelia-ls/compiler';
+import type {
+  BindingBehaviorDef,
+  BindingMode,
+  CustomAttributeDef,
+  CustomElementDef,
+  TextSpan,
+  ValueConverterDef,
+  TemplateControllerDef,
+  ResourceDef,
+} from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../extraction/types.js';
 import type { ClassValue, AnalyzableValue } from '../npm/value/types.js';
 import {
@@ -28,17 +37,15 @@ import {
   extractStringArrayProp,
   getProperty,
 } from '../npm/value/types.js';
-import type {
-  ResourceAnnotation,
-  BindableAnnotation,
-} from '../annotation.js';
+import type { BindableInput } from '../semantics/resource-def.js';
 import {
-  elementAnnotation,
-  attributeAnnotation,
-  valueConverterAnnotation,
-  bindingBehaviorAnnotation,
-  explicitEvidence,
-} from '../annotation.js';
+  buildBindableDefs,
+  buildBindingBehaviorDef,
+  buildCustomAttributeDef,
+  buildCustomElementDef,
+  buildTemplateControllerDef,
+  buildValueConverterDef,
+} from '../semantics/resource-def.js';
 import {
   canonicalElementName,
   canonicalAttrName,
@@ -51,7 +58,7 @@ import {
 // =============================================================================
 
 export interface StaticAuMatchResult {
-  annotation: ResourceAnnotation | null;
+  resource: ResourceDef | null;
   gaps: AnalysisGap[];
 }
 
@@ -61,7 +68,7 @@ export interface StaticAuMatchResult {
  * Looks for a `static $au` property and extracts resource metadata.
  *
  * @param cls - The enriched ClassValue to match
- * @returns Match result with annotation (or null) and any gaps
+ * @returns Match result with resource (or null) and any gaps
  */
 export function matchStaticAu(cls: ClassValue): StaticAuMatchResult {
   const gaps: AnalysisGap[] = [];
@@ -69,7 +76,7 @@ export function matchStaticAu(cls: ClassValue): StaticAuMatchResult {
   // Look for static $au property
   const auValue = cls.staticMembers.get('$au');
   if (!auValue) {
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Must be an object
@@ -79,41 +86,41 @@ export function matchStaticAu(cls: ClassValue): StaticAuMatchResult {
       why: { kind: 'dynamic-value', expression: 'static $au' },
       suggestion: 'Ensure static $au is an object literal, not a computed value.',
     });
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract type
   const type = extractStringProp(auValue, 'type');
   if (!type) {
     // No type - not an Aurelia resource definition
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Dispatch based on type
   switch (type) {
     case 'custom-element':
-      return buildElementAnnotation(cls, auValue, gaps);
+      return buildElementDef(cls, auValue, gaps);
 
     case 'custom-attribute':
-      return buildAttributeAnnotation(cls, auValue, gaps);
+      return buildAttributeDef(cls, auValue, gaps);
 
     case 'value-converter':
-      return buildValueConverterAnnotation(cls, auValue, gaps);
+      return buildValueConverterDefFromAu(cls, auValue, gaps);
 
     case 'binding-behavior':
-      return buildBindingBehaviorAnnotation(cls, auValue, gaps);
+      return buildBindingBehaviorDefFromAu(cls, auValue, gaps);
 
     default:
       // Unknown type
-      return { annotation: null, gaps };
+      return { resource: null, gaps };
   }
 }
 
 // =============================================================================
-// Element Annotation Building
+// Element Definition Building
 // =============================================================================
 
-function buildElementAnnotation(
+function buildElementDef(
   cls: ClassValue,
   au: AnalyzableValue,
   gaps: AnalysisGap[]
@@ -127,7 +134,7 @@ function buildElementAnnotation(
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid element name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
     });
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract metadata
@@ -137,25 +144,26 @@ function buildElementAnnotation(
   const containerless = extractBooleanProp(au, 'containerless') ?? false;
   const template = extractStringProp(au, 'template');
 
-  const evidence = explicitEvidence('static-au', au.span);
-
-  const annotation = elementAnnotation(name, cls.className, cls.filePath, evidence, {
+  const resource = buildCustomElementDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
+    span: cls.span,
     aliases: canonicalAliases([...aliases]),
-    bindables,
+    bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
     containerless,
     boundary: true,
     inlineTemplate: template,
-    span: cls.span,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
-// Attribute Annotation Building
+// Attribute Definition Building
 // =============================================================================
 
-function buildAttributeAnnotation(
+function buildAttributeDef(
   cls: ClassValue,
   au: AnalyzableValue,
   gaps: AnalysisGap[]
@@ -169,7 +177,7 @@ function buildAttributeAnnotation(
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid attribute name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
     });
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract metadata
@@ -182,25 +190,38 @@ function buildAttributeAnnotation(
   // Find primary
   const primary = findPrimaryBindable(bindables);
 
-  const evidence = explicitEvidence('static-au', au.span);
+  if (isTemplateController) {
+    const resource = buildTemplateControllerDef({
+      name,
+      className: cls.className,
+      file: cls.filePath,
+      span: cls.span,
+      aliases: canonicalAliases([...aliases]),
+      bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
+      noMultiBindings,
+    });
+    return { resource, gaps };
+  }
 
-  const annotation = attributeAnnotation(name, cls.className, cls.filePath, evidence, {
-    aliases: canonicalAliases([...aliases]),
-    bindables,
-    isTemplateController,
-    noMultiBindings,
-    primary,
+  const resource = buildCustomAttributeDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
+    aliases: canonicalAliases([...aliases]),
+    bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
+    primary,
+    noMultiBindings,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
-// Value Converter Annotation Building
+// Value Converter Definition Building
 // =============================================================================
 
-function buildValueConverterAnnotation(
+function buildValueConverterDefFromAu(
   cls: ClassValue,
   au: AnalyzableValue,
   gaps: AnalysisGap[]
@@ -214,25 +235,24 @@ function buildValueConverterAnnotation(
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid value converter name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
     });
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
-  const aliases = extractStringArrayProp(au, 'aliases');
-  const evidence = explicitEvidence('static-au', au.span);
-
-  const annotation = valueConverterAnnotation(name, cls.className, cls.filePath, evidence, {
-    aliases: canonicalAliases([...aliases]),
+  const resource = buildValueConverterDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
-// Binding Behavior Annotation Building
+// Binding Behavior Definition Building
 // =============================================================================
 
-function buildBindingBehaviorAnnotation(
+function buildBindingBehaviorDefFromAu(
   cls: ClassValue,
   au: AnalyzableValue,
   gaps: AnalysisGap[]
@@ -246,18 +266,17 @@ function buildBindingBehaviorAnnotation(
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid binding behavior name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
     });
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
-  const aliases = extractStringArrayProp(au, 'aliases');
-  const evidence = explicitEvidence('static-au', au.span);
-
-  const annotation = bindingBehaviorAnnotation(name, cls.className, cls.filePath, evidence, {
-    aliases: canonicalAliases([...aliases]),
+  const resource = buildBindingBehaviorDef({
+    name,
+    className: cls.className,
+    file: cls.filePath,
     span: cls.span,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
@@ -267,8 +286,8 @@ function buildBindingBehaviorAnnotation(
 /**
  * Parse bindables from static $au.
  */
-function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
-  const result: BindableAnnotation[] = [];
+function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
+  const result: BindableInput[] = [];
 
   // Array form: bindables: ['prop1', 'prop2'] or bindables: [{ name: 'prop1', mode: 'twoWay' }]
   if (value.kind === 'array') {
@@ -276,10 +295,7 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
       // String element
       const stringName = extractString(element);
       if (stringName !== undefined) {
-        result.push({
-          name: stringName,
-          evidence: { source: 'analyzed', pattern: 'static-au' },
-        });
+        result.push({ name: stringName });
         continue;
       }
 
@@ -292,7 +308,6 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
             mode: extractStringProp(element, 'mode') as BindingMode | undefined,
             primary: extractBooleanProp(element, 'primary'),
             attribute: extractStringProp(element, 'attribute'),
-            evidence: { source: 'analyzed', pattern: 'static-au' },
           });
         }
       }
@@ -308,13 +323,9 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
           mode: extractStringProp(propValue, 'mode') as BindingMode | undefined,
           primary: extractBooleanProp(propValue, 'primary'),
           attribute: extractStringProp(propValue, 'attribute'),
-          evidence: { source: 'analyzed', pattern: 'static-au' },
         });
       } else {
-        result.push({
-          name,
-          evidence: { source: 'analyzed', pattern: 'static-au' },
-        });
+        result.push({ name });
       }
     }
   }
@@ -325,7 +336,7 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
 /**
  * Find the primary bindable name.
  */
-function findPrimaryBindable(bindables: BindableAnnotation[]): string | undefined {
+function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
   for (const b of bindables) {
     if (b.primary) return b.name;
   }

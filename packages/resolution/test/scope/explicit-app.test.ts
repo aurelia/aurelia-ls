@@ -6,7 +6,7 @@ import {
   matchFileFacts,
   buildResourceGraph,
 } from "@aurelia-ls/resolution";
-import type { ResourceAnnotation } from "@aurelia-ls/resolution";
+import type { ResourceDef } from "@aurelia-ls/resolution";
 import { materializeResourcesForScope } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 import {
@@ -25,11 +25,11 @@ describe("Scope: explicit-app", () => {
     const allFacts = extractAllFileFacts(program);
     const appFacts = filterFactsByPathPattern(allFacts, "/explicit-app/src/");
 
-    // Run pattern matching on all files to get annotations
-    const allAnnotations: ResourceAnnotation[] = [];
+    // Run pattern matching on all files to get resources
+    const allResources: ResourceDef[] = [];
     for (const [, fileFacts] of appFacts) {
       const matchResult = matchFileFacts(fileFacts);
-      allAnnotations.push(...matchResult.annotations);
+      allResources.push(...matchResult.resources);
     }
 
     // Export binding resolution phase
@@ -37,7 +37,7 @@ describe("Scope: explicit-app", () => {
 
     // Analyze registrations
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(allAnnotations, appFacts, exportBindings);
+    const registration = analyzer.analyze(allResources, appFacts, exportBindings);
 
     graph = buildResourceGraph(registration);
   });

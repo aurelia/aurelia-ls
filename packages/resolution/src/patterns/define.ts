@@ -16,7 +16,17 @@
  * Unlike class-based matchers, this operates on DefineCall from FileFacts.
  */
 
-import type { NormalizedPath, TextSpan, BindingMode } from '@aurelia-ls/compiler';
+import type {
+  BindingBehaviorDef,
+  BindingMode,
+  CustomAttributeDef,
+  CustomElementDef,
+  NormalizedPath,
+  TextSpan,
+  ValueConverterDef,
+  TemplateControllerDef,
+  ResourceDef,
+} from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../extraction/types.js';
 import { gap } from '../extraction/types.js';
 import type { DefineCall } from '../file-facts.js';
@@ -29,17 +39,15 @@ import {
   extractStringArrayProp,
   getProperty,
 } from '../npm/value/types.js';
-import type {
-  ResourceAnnotation,
-  BindableAnnotation,
-} from '../annotation.js';
+import type { BindableInput } from '../semantics/resource-def.js';
 import {
-  elementAnnotation,
-  attributeAnnotation,
-  valueConverterAnnotation,
-  bindingBehaviorAnnotation,
-  explicitEvidence,
-} from '../annotation.js';
+  buildBindableDefs,
+  buildBindingBehaviorDef,
+  buildCustomAttributeDef,
+  buildCustomElementDef,
+  buildTemplateControllerDef,
+  buildValueConverterDef,
+} from '../semantics/resource-def.js';
 import {
   canonicalElementName,
   canonicalAttrName,
@@ -52,16 +60,16 @@ import {
 // =============================================================================
 
 export interface DefineMatchResult {
-  annotation: ResourceAnnotation | null;
+  resource: ResourceDef | null;
   gaps: AnalysisGap[];
 }
 
 /**
- * Match a define call to produce a ResourceAnnotation.
+ * Match a define call to produce a ResourceDef.
  *
  * @param defineCall - The define call from FileFacts.defineCalls
  * @param filePath - File path where the define call is located
- * @returns Match result with annotation (or null) and any gaps
+ * @returns Match result with resource (or null) and any gaps
  */
 export function matchDefine(
   defineCall: DefineCall,
@@ -77,22 +85,22 @@ export function matchDefine(
       { kind: 'dynamic-value', expression: 'classRef' },
       'The class reference in .define() must be a simple identifier.',
     ));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Dispatch based on resource type
   switch (defineCall.resourceType) {
     case 'CustomElement':
-      return buildElementAnnotation(defineCall, className, filePath, gaps);
+      return buildElementDef(defineCall, className, filePath, gaps);
 
     case 'CustomAttribute':
-      return buildAttributeAnnotation(defineCall, className, filePath, gaps);
+      return buildAttributeDef(defineCall, className, filePath, gaps);
 
     case 'ValueConverter':
-      return buildValueConverterAnnotation(defineCall, className, filePath, gaps);
+      return buildValueConverterDefFromDefine(defineCall, className, filePath, gaps);
 
     case 'BindingBehavior':
-      return buildBindingBehaviorAnnotation(defineCall, className, filePath, gaps);
+      return buildBindingBehaviorDefFromDefine(defineCall, className, filePath, gaps);
   }
 }
 
@@ -118,10 +126,10 @@ function extractClassName(classRef: AnalyzableValue): string | null {
 }
 
 // =============================================================================
-// Element Annotation Building
+// Element Definition Building
 // =============================================================================
 
-function buildElementAnnotation(
+function buildElementDef(
   defineCall: DefineCall,
   className: string,
   filePath: NormalizedPath,
@@ -135,16 +143,18 @@ function buildElementAnnotation(
     const name = canonicalElementName(stringName);
     if (!name) {
       gaps.push(invalidNameGap(className, 'element'));
-      return { annotation: null, gaps };
+      return { resource: null, gaps };
     }
 
-    const evidence = explicitEvidence('define', defineCall.span);
-    const annotation = elementAnnotation(name, className, filePath, evidence, {
+    const resource = buildCustomElementDef({
+      name,
+      className,
+      file: filePath,
+      span: defineCall.span,
       boundary: true,
       containerless: false,
-      span: defineCall.span,
     });
-    return { annotation, gaps };
+    return { resource, gaps };
   }
 
   // Object definition: CustomElement.define({ name: '...', ... }, MyClass)
@@ -154,7 +164,7 @@ function buildElementAnnotation(
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
     ));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract name
@@ -162,7 +172,7 @@ function buildElementAnnotation(
   const name = canonicalElementName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'element'));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract metadata
@@ -172,25 +182,26 @@ function buildElementAnnotation(
   const containerless = extractBooleanProp(def, 'containerless') ?? false;
   const template = extractStringProp(def, 'template');
 
-  const evidence = explicitEvidence('define', defineCall.span);
-
-  const annotation = elementAnnotation(name, className, filePath, evidence, {
+  const resource = buildCustomElementDef({
+    name,
+    className,
+    file: filePath,
+    span: defineCall.span,
     aliases: canonicalAliases([...aliases]),
-    bindables,
+    bindables: buildBindableDefs(bindables, filePath, defineCall.span),
     containerless,
     boundary: true,
     inlineTemplate: template,
-    span: defineCall.span,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
-// Attribute Annotation Building
+// Attribute Definition Building
 // =============================================================================
 
-function buildAttributeAnnotation(
+function buildAttributeDef(
   defineCall: DefineCall,
   className: string,
   filePath: NormalizedPath,
@@ -204,16 +215,17 @@ function buildAttributeAnnotation(
     const name = canonicalAttrName(stringName);
     if (!name) {
       gaps.push(invalidNameGap(className, 'attribute'));
-      return { annotation: null, gaps };
+      return { resource: null, gaps };
     }
 
-    const evidence = explicitEvidence('define', defineCall.span);
-    const annotation = attributeAnnotation(name, className, filePath, evidence, {
-      isTemplateController: false,
-      noMultiBindings: false,
+    const resource = buildCustomAttributeDef({
+      name,
+      className,
+      file: filePath,
       span: defineCall.span,
+      noMultiBindings: false,
     });
-    return { annotation, gaps };
+    return { resource, gaps };
   }
 
   // Object definition
@@ -223,7 +235,7 @@ function buildAttributeAnnotation(
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
     ));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract name
@@ -231,7 +243,7 @@ function buildAttributeAnnotation(
   const name = canonicalAttrName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'attribute'));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract metadata
@@ -242,25 +254,38 @@ function buildAttributeAnnotation(
   const noMultiBindings = extractBooleanProp(def, 'noMultiBindings') ?? false;
   const primary = findPrimaryBindable(bindables);
 
-  const evidence = explicitEvidence('define', defineCall.span);
+  if (isTemplateController) {
+    const resource = buildTemplateControllerDef({
+      name,
+      className,
+      file: filePath,
+      span: defineCall.span,
+      aliases: canonicalAliases([...aliases]),
+      bindables: buildBindableDefs(bindables, filePath, defineCall.span),
+      noMultiBindings,
+    });
+    return { resource, gaps };
+  }
 
-  const annotation = attributeAnnotation(name, className, filePath, evidence, {
-    aliases: canonicalAliases([...aliases]),
-    bindables,
-    isTemplateController,
-    noMultiBindings,
-    primary,
+  const resource = buildCustomAttributeDef({
+    name,
+    className,
+    file: filePath,
     span: defineCall.span,
+    aliases: canonicalAliases([...aliases]),
+    bindables: buildBindableDefs(bindables, filePath, defineCall.span),
+    primary,
+    noMultiBindings,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
-// Value Converter Annotation Building
+// Value Converter Definition Building
 // =============================================================================
 
-function buildValueConverterAnnotation(
+function buildValueConverterDefFromDefine(
   defineCall: DefineCall,
   className: string,
   filePath: NormalizedPath,
@@ -274,14 +299,16 @@ function buildValueConverterAnnotation(
     const name = canonicalSimpleName(stringName);
     if (!name) {
       gaps.push(invalidNameGap(className, 'value converter'));
-      return { annotation: null, gaps };
+      return { resource: null, gaps };
     }
 
-    const evidence = explicitEvidence('define', defineCall.span);
-    const annotation = valueConverterAnnotation(name, className, filePath, evidence, {
+    const resource = buildValueConverterDef({
+      name,
+      className,
+      file: filePath,
       span: defineCall.span,
     });
-    return { annotation, gaps };
+    return { resource, gaps };
   }
 
   // Object definition
@@ -291,7 +318,7 @@ function buildValueConverterAnnotation(
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
     ));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract name
@@ -299,25 +326,24 @@ function buildValueConverterAnnotation(
   const name = canonicalSimpleName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'value converter'));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
-  const aliases = extractStringArrayProp(def, 'aliases');
-  const evidence = explicitEvidence('define', defineCall.span);
-
-  const annotation = valueConverterAnnotation(name, className, filePath, evidence, {
-    aliases: canonicalAliases([...aliases]),
+  const resource = buildValueConverterDef({
+    name,
+    className,
+    file: filePath,
     span: defineCall.span,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
-// Binding Behavior Annotation Building
+// Binding Behavior Definition Building
 // =============================================================================
 
-function buildBindingBehaviorAnnotation(
+function buildBindingBehaviorDefFromDefine(
   defineCall: DefineCall,
   className: string,
   filePath: NormalizedPath,
@@ -331,14 +357,16 @@ function buildBindingBehaviorAnnotation(
     const name = canonicalSimpleName(stringName);
     if (!name) {
       gaps.push(invalidNameGap(className, 'binding behavior'));
-      return { annotation: null, gaps };
+      return { resource: null, gaps };
     }
 
-    const evidence = explicitEvidence('define', defineCall.span);
-    const annotation = bindingBehaviorAnnotation(name, className, filePath, evidence, {
+    const resource = buildBindingBehaviorDef({
+      name,
+      className,
+      file: filePath,
       span: defineCall.span,
     });
-    return { annotation, gaps };
+    return { resource, gaps };
   }
 
   // Object definition
@@ -348,7 +376,7 @@ function buildBindingBehaviorAnnotation(
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
     ));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
   // Extract name
@@ -356,18 +384,17 @@ function buildBindingBehaviorAnnotation(
   const name = canonicalSimpleName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'binding behavior'));
-    return { annotation: null, gaps };
+    return { resource: null, gaps };
   }
 
-  const aliases = extractStringArrayProp(def, 'aliases');
-  const evidence = explicitEvidence('define', defineCall.span);
-
-  const annotation = bindingBehaviorAnnotation(name, className, filePath, evidence, {
-    aliases: canonicalAliases([...aliases]),
+  const resource = buildBindingBehaviorDef({
+    name,
+    className,
+    file: filePath,
     span: defineCall.span,
   });
 
-  return { annotation, gaps };
+  return { resource, gaps };
 }
 
 // =============================================================================
@@ -377,8 +404,8 @@ function buildBindingBehaviorAnnotation(
 /**
  * Parse bindables from definition object.
  */
-function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
-  const result: BindableAnnotation[] = [];
+function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
+  const result: BindableInput[] = [];
 
   // Array form: bindables: ['prop1', 'prop2'] or bindables: [{ name: 'prop1', mode: 'twoWay' }]
   if (value.kind === 'array') {
@@ -386,10 +413,7 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
       // String element
       const stringName = extractString(element);
       if (stringName !== undefined) {
-        result.push({
-          name: stringName,
-          evidence: { source: 'analyzed', pattern: 'define' },
-        });
+        result.push({ name: stringName });
         continue;
       }
 
@@ -402,7 +426,6 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
             mode: extractStringProp(element, 'mode') as BindingMode | undefined,
             primary: extractBooleanProp(element, 'primary'),
             attribute: extractStringProp(element, 'attribute'),
-            evidence: { source: 'analyzed', pattern: 'define' },
           });
         }
       }
@@ -418,13 +441,9 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
           mode: extractStringProp(propValue, 'mode') as BindingMode | undefined,
           primary: extractBooleanProp(propValue, 'primary'),
           attribute: extractStringProp(propValue, 'attribute'),
-          evidence: { source: 'analyzed', pattern: 'define' },
         });
       } else {
-        result.push({
-          name,
-          evidence: { source: 'analyzed', pattern: 'define' },
-        });
+        result.push({ name });
       }
     }
   }
@@ -435,7 +454,7 @@ function parseBindablesValue(value: AnalyzableValue): BindableAnnotation[] {
 /**
  * Find the primary bindable name.
  */
-function findPrimaryBindable(bindables: BindableAnnotation[]): string | undefined {
+function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
   for (const b of bindables) {
     if (b.primary) return b.name;
   }

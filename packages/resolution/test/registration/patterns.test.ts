@@ -17,7 +17,7 @@ import {
   createRegistrationAnalyzer,
   matchFileFacts,
 } from "@aurelia-ls/resolution";
-import type { RegistrationAnalysis, RegistrationSite, ResourceAnnotation } from "@aurelia-ls/resolution";
+import type { RegistrationAnalysis, RegistrationSite, ResourceDef } from "@aurelia-ls/resolution";
 import { createProgramFromMemory } from "../_helpers/index.js";
 
 // =============================================================================
@@ -33,11 +33,11 @@ function analyzeRegistration(files: Record<string, string>): RegistrationAnalysi
   // 1. Extract facts from all files
   const facts = extractAllFileFacts(program, { moduleResolutionHost: host });
 
-  // 2. Run pattern matching on all files to get annotations
-  const allAnnotations: ResourceAnnotation[] = [];
+  // 2. Run pattern matching on all files to get resources
+  const allResources: ResourceDef[] = [];
   for (const [, fileFacts] of facts) {
     const matchResult = matchFileFacts(fileFacts);
-    allAnnotations.push(...matchResult.annotations);
+    allResources.push(...matchResult.resources);
   }
 
   // 3. Build export bindings
@@ -45,7 +45,11 @@ function analyzeRegistration(files: Record<string, string>): RegistrationAnalysi
 
   // 4. Analyze registrations
   const analyzer = createRegistrationAnalyzer();
-  return analyzer.analyze(allAnnotations, facts, exportBindings);
+  return analyzer.analyze(allResources, facts, exportBindings);
+}
+
+function resourceName(resource: ResourceDef): string {
+  return resource.name.value ?? "";
 }
 
 /**
@@ -56,7 +60,7 @@ function findSiteByName(
   name: string
 ): RegistrationSite | undefined {
   return sites.find(
-    (s) => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === name
+    (s) => s.resourceRef.kind === "resolved" && resourceName(s.resourceRef.resource) === name
   );
 }
 
@@ -66,7 +70,7 @@ function findSiteByName(
 function getSiteNames(sites: readonly RegistrationSite[]): string[] {
   return sites
     .filter((s) => s.resourceRef.kind === "resolved")
-    .map((s) => (s.resourceRef as { kind: "resolved"; resource: { name: string } }).resource.name)
+    .map((s) => resourceName((s.resourceRef as { kind: "resolved"; resource: ResourceDef }).resource))
     .sort();
 }
 
@@ -74,7 +78,7 @@ function getSiteNames(sites: readonly RegistrationSite[]): string[] {
  * Get all orphan names.
  */
 function getOrphanNames(analysis: RegistrationAnalysis): string[] {
-  return analysis.orphans.map((o) => o.resource.name).sort();
+  return analysis.orphans.map((o) => resourceName(o.resource)).sort();
 }
 
 // =============================================================================
@@ -244,7 +248,7 @@ describe("Registration Patterns: Global", () => {
     // 1. Global via Aurelia.register
     // 2. Local via PageA's static dependencies
     const sharedWidgetSites = analysis.sites.filter(
-      (s) => s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === "shared-widget"
+      (s) => s.resourceRef.kind === "resolved" && resourceName(s.resourceRef.resource) === "shared-widget"
     );
 
     expect(sharedWidgetSites.length, "Should have 2 registration sites").toBe(2);
