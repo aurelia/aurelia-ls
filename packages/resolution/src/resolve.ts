@@ -1,5 +1,5 @@
 import type ts from "typescript";
-import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, CompileTrace } from "@aurelia-ls/compiler";
+import type { NormalizedPath, ResourceCatalog, ResourceGraph, Semantics, ResourceScopeId, TemplateSyntaxRegistry, CompileTrace } from "@aurelia-ls/compiler";
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
 import type { FileFacts, FileContext } from "./file-facts.js";
 import type { AnalysisGap } from "./extraction/types.js";
@@ -14,6 +14,7 @@ import { matchFileFacts } from "./patterns/pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
 import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
+import { buildSemanticsArtifacts } from "./semantics/build.js";
 import { dirname, resolve as resolvePath, basename } from "node:path";
 
 /**
@@ -53,6 +54,12 @@ export interface ResolutionConfig {
  * Result of running resolution.
  */
 export interface ResolutionResult {
+  /** Full semantics with provenance */
+  semantics: Semantics;
+  /** Minimal catalog for lowering */
+  catalog: ResourceCatalog;
+  /** Syntax registry for parsing and emitting */
+  syntax: TemplateSyntaxRegistry;
   /** The constructed resource graph */
   resourceGraph: ResourceGraph;
   /** All resource annotations identified */
@@ -187,6 +194,14 @@ export function resolve(
       fileCount: exportBindings.size,
     });
 
+    // Layer 2.7: Semantics + Catalog + Syntax
+    log.info("[resolution] building semantics artifacts...");
+    trace.event("resolution.semantics.start");
+    const { semantics, catalog, syntax } = buildSemanticsArtifacts(allResources, config?.baseSemantics);
+    trace.event("resolution.semantics.done", {
+      resourceCount: allResources.length,
+    });
+
     // Layer 3: Registration Analysis
     log.info("[resolution] analyzing registration...");
     trace.event("resolution.registration.start");
@@ -266,6 +281,9 @@ export function resolve(
     });
 
     return {
+      semantics,
+      catalog,
+      syntax,
       resourceGraph,
       resources: allResources,
       registration,

@@ -179,6 +179,8 @@ function annotationToElement(a: ResourceAnnotation): ElementRes {
     ...(a.aliases.length > 0 ? { aliases: [...a.aliases] } : {}),
     ...(a.element?.containerless ? { containerless: true } : {}),
     ...(a.element?.boundary ? { boundary: true } : {}),
+    ...(a.className ? { className: a.className } : {}),
+    ...(a.source ? { file: a.source } : {}),
   };
 }
 
@@ -191,6 +193,8 @@ function annotationToAttribute(a: ResourceAnnotation): AttrRes {
     ...(a.attribute?.primary ? { primary: a.attribute.primary } : {}),
     ...(a.attribute?.isTemplateController ? { isTemplateController: true } : {}),
     ...(a.attribute?.noMultiBindings ? { noMultiBindings: true } : {}),
+    ...(a.className ? { className: a.className } : {}),
+    ...(a.source ? { file: a.source } : {}),
   };
 }
 
@@ -199,11 +203,17 @@ function annotationToValueConverter(a: ResourceAnnotation): ValueConverterSig {
     name: a.name,
     in: { kind: "unknown" },
     out: { kind: "unknown" },
+    ...(a.className ? { className: a.className } : {}),
+    ...(a.source ? { file: a.source } : {}),
   };
 }
 
 function annotationToBindingBehavior(a: ResourceAnnotation): BindingBehaviorSig {
-  return { name: a.name };
+  return {
+    name: a.name,
+    ...(a.className ? { className: a.className } : {}),
+    ...(a.source ? { file: a.source } : {}),
+  };
 }
 
 function bindableAnnotationsToRecord(bindables: readonly BindableAnnotation[]): Record<string, Bindable> {
@@ -214,6 +224,8 @@ function bindableAnnotationsToRecord(bindables: readonly BindableAnnotation[]): 
       name: b.name,
       type,
       ...(b.mode ? { mode: b.mode } : {}),
+      ...(b.attribute ? { attribute: b.attribute } : {}),
+      ...(b.primary !== undefined ? { primary: b.primary } : {}),
     };
     record[b.name] = bindable;
   }

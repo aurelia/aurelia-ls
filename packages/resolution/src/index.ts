@@ -31,11 +31,15 @@ export type {
   ValueConverterSig,
   BindingBehaviorSig,
   Semantics,
+  SemanticsWithCaches,
+  ResourceCatalog,
+  TemplateSyntaxRegistry,
   NormalizedPath,
 } from "@aurelia-ls/compiler";
 
 // === Main entry point ===
 export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic, type TemplateInfo, type InlineTemplateInfo } from "./resolve.js";
+export { buildSemanticsArtifacts, type SemanticsArtifacts } from "./semantics/build.js";
 
 // === Shared types ===
 export type { Logger } from "./types.js";
