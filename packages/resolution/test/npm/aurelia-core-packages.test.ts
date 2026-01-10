@@ -13,7 +13,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { inspect, type InspectionResult } from '../../src/npm/index.js';
+import type { InspectionResult } from '../../src/npm/index.js';
+import { inspectCached as inspect } from '../_helpers/npm-analysis-cache.js';
 
 // =============================================================================
 // Test Infrastructure

@@ -10,7 +10,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { inspect, type InspectionResult, detectMonorepo } from '../../src/npm/index.js';
+import type { InspectionResult } from '../../src/npm/index.js';
+import { detectMonorepo } from '../../src/npm/index.js';
+import { inspectCached as inspect } from '../_helpers/npm-analysis-cache.js';
 
 // Path to aurelia submodule
 const AURELIA_ROOT = resolve(import.meta.dirname, '../../../../aurelia');

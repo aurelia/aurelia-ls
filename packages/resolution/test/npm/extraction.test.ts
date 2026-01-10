@@ -7,11 +7,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';
-import {
-  analyzePackage,
-  type AnalysisResult,
-  type PackageAnalysis,
-} from '../../src/npm/index.js';
+import type { AnalysisResult, PackageAnalysis } from '../../src/npm/index.js';
+import { analyzePackageCached as analyzePackage } from '../_helpers/npm-analysis-cache.js';
 import {
   resourceBindables,
   resourceClassName,
