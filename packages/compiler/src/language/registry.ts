@@ -6,6 +6,7 @@ import type {
   BindableDef,
   BindingCommandConfig,
   TemplateControllerDef,
+  TemplateSyntaxRegistry,
   ControllerConfig,
   ControllerSemantics,
   BindingCommandDef,
@@ -644,7 +645,13 @@ export function prepareSemantics(
   );
   const bindingCommands = overrides?.bindingCommands ?? sem.bindingCommands ?? buildBindingCommandConfigs(sem);
   const attributePatterns = overrides?.attributePatterns ?? sem.attributePatterns ?? buildAttributePatternConfigs(sem);
-  const catalog = overrides?.catalog ?? buildResourceCatalog(resources, bindingCommands, attributePatterns);
+  const catalog = overrides?.catalog
+    ?? buildResourceCatalog(
+      resources,
+      bindingCommands,
+      attributePatterns,
+      sem.catalog ? { gaps: sem.catalog.gaps, confidence: sem.catalog.confidence } : undefined,
+    );
   return { ...sem, resources, bindingCommands, attributePatterns, catalog };
 }
 
@@ -719,23 +726,31 @@ export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOpti
   };
 }
 
+export function buildTemplateSyntaxRegistry(sem: SemanticsWithCaches): TemplateSyntaxRegistry {
+  return {
+    bindingCommands: sem.bindingCommands,
+    attributePatterns: sem.attributePatterns,
+    controllers: sem.resources.controllers,
+  };
+}
+
 export function getBindingCommandConfig(
   name: string,
-  sem: Semantics = DEFAULT_SEMANTICS,
+  sem: Semantics,
 ): BindingCommandConfig | null {
   return prepareSemantics(sem).bindingCommands[name] ?? null;
 }
 
 export function isPropertyBindingCommand(
   name: string,
-  sem: Semantics = DEFAULT_SEMANTICS,
+  sem: Semantics,
 ): boolean {
   return getBindingCommandConfig(name, sem)?.kind === "property";
 }
 
 export function getCommandMode(
   name: string,
-  sem: Semantics = DEFAULT_SEMANTICS,
+  sem: Semantics,
 ): BindingMode | null {
   return getBindingCommandConfig(name, sem)?.mode ?? null;
 }
@@ -875,6 +890,7 @@ export type {
   Sourced,
   Configured,
   TemplateControllerDef,
+  TemplateSyntaxRegistry,
   TwoWayDefaults,
   TypeRef,
   ValueConverterDef,

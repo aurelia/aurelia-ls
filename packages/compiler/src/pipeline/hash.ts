@@ -14,6 +14,10 @@ export function stableHash(value: unknown): string {
   return createHash("sha256").update(stableSerialize(value)).digest("hex");
 }
 
+export function stableHashSemantics(value: unknown): string {
+  return stableHash(sanitizeForHash(value, new Set(["node"])));
+}
+
 function serialize(value: unknown): string {
   switch (typeof value) {
     case "string":
@@ -69,4 +73,40 @@ function serializeObject(obj: Record<string, unknown>): string {
     parts.push(`${JSON.stringify(k)}:${serialize(obj[k])}`);
   }
   return `{${parts.join(",")}}`;
+}
+
+function sanitizeForHash(
+  value: unknown,
+  omitKeys: ReadonlySet<string>,
+  seen: WeakSet<object> = new WeakSet(),
+): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (seen.has(value)) return "<cycle>";
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeForHash(entry, omitKeys, seen));
+  }
+  if (value instanceof Map) {
+    const next = new Map<unknown, unknown>();
+    for (const [key, entry] of value) {
+      next.set(sanitizeForHash(key, omitKeys, seen), sanitizeForHash(entry, omitKeys, seen));
+    }
+    return next;
+  }
+  if (value instanceof Set) {
+    const next = new Set<unknown>();
+    for (const entry of value) {
+      next.add(sanitizeForHash(entry, omitKeys, seen));
+    }
+    return next;
+  }
+
+  const obj = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(obj)) {
+    if (omitKeys.has(key)) continue;
+    out[key] = sanitizeForHash(obj[key], omitKeys, seen);
+  }
+  return out;
 }

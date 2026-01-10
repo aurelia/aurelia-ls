@@ -482,7 +482,7 @@ export function resolveControllerAttr(
   }
 
   // 2. Check custom TCs in attributes (discovered via @templateController decorator)
-  const customAttr = catalog.resources.attributes[target];
+  const customAttr = resolveAttrDef(target, catalog);
   if (customAttr?.isTemplateController) {
     // Create a config for this custom TC
     return createCustomControllerConfig(

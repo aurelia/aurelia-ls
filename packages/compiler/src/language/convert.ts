@@ -133,6 +133,27 @@ export function toAttrRes(def: CustomAttributeDef): AttrRes {
   };
 }
 
+export function toTemplateControllerAttrRes(def: TemplateControllerDef): AttrRes {
+  const name = unwrapSourced(def.name) ?? "";
+  const aliases = (unwrapSourced(def.aliases) ?? [])
+    .filter((a): a is string => !!a);
+  const primary = findPrimaryBindableName(def.bindables) ?? undefined;
+  const noMultiBindings = unwrapSourced(def.noMultiBindings);
+  const className = unwrapSourced(def.className);
+  return {
+    kind: "attribute",
+    name,
+    bindables: toBindableRecord(def.bindables),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    ...(primary ? { primary } : {}),
+    ...(noMultiBindings !== undefined ? { noMultiBindings } : {}),
+    isTemplateController: true,
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
+  };
+}
+
 export function toControllerConfig(def: TemplateControllerDef): ControllerConfig {
   const name = unwrapSourced(def.name) ?? "";
   const bindables = toBindableRecord(def.bindables);
@@ -220,16 +241,29 @@ export function normalizeResourceCollections(resources?: Partial<ResourceCollect
 }
 
 export function buildResourceCollectionsFromSemantics(sem: Semantics): ResourceCollections {
+  const elements = Object.fromEntries(
+    Object.entries(sem.elements).map(([key, def]) => [key, toElementRes(def)]),
+  );
+  const attributes = Object.fromEntries(
+    Object.entries(sem.attributes).map(([key, def]) => [key, toAttrRes(def)]),
+  );
+  const controllers = Object.fromEntries(
+    Object.entries(sem.controllers).map(([key, def]) => [key, toControllerConfig(def)]),
+  );
+
+  // Template controllers are modeled as attributes with an explicit flag.
+  for (const [key, def] of Object.entries(sem.controllers)) {
+    if (!attributes[key]) {
+      attributes[key] = toTemplateControllerAttrRes(def);
+      continue;
+    }
+    attributes[key] = { ...attributes[key], isTemplateController: true };
+  }
+
   return {
-    elements: Object.fromEntries(
-      Object.entries(sem.elements).map(([key, def]) => [key, toElementRes(def)]),
-    ),
-    attributes: Object.fromEntries(
-      Object.entries(sem.attributes).map(([key, def]) => [key, toAttrRes(def)]),
-    ),
-    controllers: Object.fromEntries(
-      Object.entries(sem.controllers).map(([key, def]) => [key, toControllerConfig(def)]),
-    ),
+    elements,
+    attributes,
+    controllers,
     valueConverters: Object.fromEntries(
       Object.entries(sem.valueConverters).map(([key, def]) => [key, toValueConverterSig(def)]),
     ),

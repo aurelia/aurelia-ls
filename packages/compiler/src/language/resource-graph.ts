@@ -83,7 +83,13 @@ export function materializeSemanticsForScope(
   const { resources } = materializeResourcesForScope(baseSem, graph, scope);
   const bindingCommands = baseSem.bindingCommands ?? buildBindingCommandConfigs(baseSem);
   const attributePatterns = baseSem.attributePatterns ?? buildAttributePatternConfigs(baseSem);
-  const catalog = buildResourceCatalog(resources, bindingCommands, attributePatterns);
+  const catalogBase = baseSem.catalog;
+  const catalog = buildResourceCatalog(
+    resources,
+    bindingCommands,
+    attributePatterns,
+    catalogBase ? { gaps: catalogBase.gaps, confidence: catalogBase.confidence } : undefined,
+  );
   return {
     ...baseSem,
     resources,

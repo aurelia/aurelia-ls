@@ -12,11 +12,12 @@ import type { NormalizedPath } from "../model/index.js";
 
 // Language imports (via barrel)
 import {
-  DEFAULT as SEM_DEFAULT,
   prepareSemantics,
-  type Semantics,
+  type ResourceCatalog,
   type ResourceGraph,
   type ResourceScopeId,
+  type Semantics,
+  type TemplateSyntaxRegistry,
 } from "../language/index.js";
 
 // Parsing imports (via barrel)
@@ -27,7 +28,7 @@ import type { VmReflection } from "../shared/index.js";
 
 // Pipeline imports (via barrel)
 import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../pipeline/index.js";
-import { stableHash } from "../pipeline/index.js";
+import { stableHash, stableHashSemantics } from "../pipeline/index.js";
 
 // Synthesis imports (via barrel)
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../synthesis/index.js";
@@ -41,7 +42,9 @@ import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type C
 export interface TemplateProgramOptions {
   readonly vm: VmReflection;
   readonly isJs: boolean;
-  readonly semantics?: Semantics;
+  readonly semantics: Semantics;
+  readonly catalog?: ResourceCatalog;
+  readonly syntax?: TemplateSyntaxRegistry;
   readonly resourceGraph?: ResourceGraph;
   readonly resourceScope?: ResourceScopeId | null;
   readonly attrParser?: AttributeParser;
@@ -525,7 +528,9 @@ export class DefaultTemplateProgram implements TemplateProgram {
       templateFilePath: string;
       isJs: boolean;
       vm: VmReflection;
-      semantics?: Semantics;
+      semantics: Semantics;
+      catalog?: ResourceCatalog;
+      syntax?: TemplateSyntaxRegistry;
       resourceGraph?: ResourceGraph;
       resourceScope?: ResourceScopeId | null;
       attrParser?: AttributeParser;
@@ -538,9 +543,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
       templateFilePath: templatePath,
       isJs: this.options.isJs,
       vm: this.options.vm,
+      semantics: this.options.semantics,
     };
 
-    if (this.options.semantics !== undefined) opts.semantics = this.options.semantics;
+    if (this.options.catalog !== undefined) opts.catalog = this.options.catalog;
+    if (this.options.syntax !== undefined) opts.syntax = this.options.syntax;
     if (this.options.resourceGraph !== undefined) opts.resourceGraph = this.options.resourceGraph;
     if (this.options.resourceScope !== undefined) opts.resourceScope = this.options.resourceScope ?? null;
     if (this.options.attrParser !== undefined) opts.attrParser = this.options.attrParser;
@@ -593,14 +600,17 @@ function hashSnapshotContent(snap: DocumentSnapshot): string {
 }
 
 function computeProgramOptionsFingerprint(options: ProgramOptions, hints: FingerprintHints): string {
-  const sem = options.semantics ?? SEM_DEFAULT;
+  const sem = options.semantics;
   const overlayHint = hints.overlay ?? { isJs: options.isJs, syntheticPrefix: options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_" };
-  const catalogHint = hints.catalog ?? stableHash(prepareSemantics(sem).catalog);
+  const catalogHint = hints.catalog
+    ?? (options.catalog ? stableHash(options.catalog) : stableHash(prepareSemantics(sem).catalog));
+  const syntaxHint = hints.syntax ?? (options.syntax ? stableHash(options.syntax) : null);
   const fingerprint: Record<string, FingerprintHints[keyof FingerprintHints]> = {
     isJs: options.isJs,
     overlayBaseName: options.overlayBaseName ?? null,
-    semantics: hints.semantics ?? stableHash(sem),
+    semantics: hints.semantics ?? stableHashSemantics(sem),
     catalog: catalogHint,
+    syntax: syntaxHint,
     resourceGraph: fingerprintResourceGraph(options, sem),
     attrParser: hints.attrParser ?? (options.attrParser ? "custom" : "default"),
     exprParser: hints.exprParser ?? (options.exprParser ? "custom" : "default"),
@@ -614,8 +624,10 @@ function computeProgramOptionsFingerprint(options: ProgramOptions, hints: Finger
 
 function normalizeFingerprintHints(options: ProgramOptions): FingerprintHints {
   const base: FingerprintHints = { ...(options.fingerprints ?? {}) };
-  const sem = options.semantics ?? SEM_DEFAULT;
-  if (base.semantics === undefined) base.semantics = stableHash(sem);
+  const sem = options.semantics;
+  if (base.semantics === undefined) base.semantics = stableHashSemantics(sem);
+  if (base.catalog === undefined && options.catalog) base.catalog = stableHash(options.catalog);
+  if (base.syntax === undefined && options.syntax) base.syntax = stableHash(options.syntax);
   if (base.attrParser === undefined) base.attrParser = options.attrParser ? "custom" : "default";
   if (base.exprParser === undefined) base.exprParser = options.exprParser ? "custom" : "default";
   if (base.vm === undefined) base.vm = fingerprintVm(options.vm);
@@ -652,6 +664,7 @@ function extractExtraFingerprintHints(hints: FingerprintHints): Record<string, F
       key === "attrParser" ||
       key === "exprParser" ||
       key === "catalog" ||
+      key === "syntax" ||
       key === "semantics" ||
       key === "vm" ||
       key === "overlay" ||

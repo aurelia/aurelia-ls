@@ -27,12 +27,22 @@ export {
   AttrSyntax,
   AttributeParser,
   createDefaultSyntax,
+  createAttributeParserFromRegistry,
   registerBuiltins,
 } from "./parsing/index.js";
 export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
 
 // === Language / Semantics ===
-export { DEFAULT as DEFAULT_SEMANTICS, prepareSemantics, createSemanticsLookup, buildResourceCatalog, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
+export {
+  DEFAULT as DEFAULT_SEMANTICS,
+  prepareSemantics,
+  createSemanticsLookup,
+  buildResourceCatalog,
+  buildResourceGraphFromSemantics,
+  materializeResourcesForScope,
+  materializeSemanticsForScope,
+  buildTemplateSyntaxRegistry,
+} from "./language/index.js";
 export type {
   SourceLocation,
   Configured,
@@ -287,6 +297,7 @@ export type {
 
 // === Pipeline ===
 export type { StageKey, StageArtifactMeta } from "./pipeline/index.js";
+export { stableHash, stableHashSemantics } from "./pipeline/index.js";
 
 // === Model (Foundation) ===
 export {

@@ -1,5 +1,5 @@
 import type { BindingMode } from "../model/ir.js";
-import type { AttributePatternConfig } from "../language/registry.js";
+import type { AttributePatternConfig, TemplateSyntaxRegistry } from "../language/registry.js";
 import { BUILTIN_ATTRIBUTE_PATTERNS } from "../language/registry.js";
 
 /** Result of parsing an attribute name. */
@@ -258,3 +258,10 @@ export function createDefaultSyntax(): AttributeParser {
 }
 
 export const DEFAULT_SYNTAX = createDefaultSyntax();
+
+/** Factory producing a parser preloaded from a TemplateSyntaxRegistry. */
+export function createAttributeParserFromRegistry(registry: TemplateSyntaxRegistry): AttributeParser {
+  const parser = new AttributeParser();
+  parser.registerPatterns(registry.attributePatterns);
+  return parser;
+}

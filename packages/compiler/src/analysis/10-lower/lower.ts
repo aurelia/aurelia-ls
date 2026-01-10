@@ -2,7 +2,7 @@ import { parseFragment } from "parse5";
 
 import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode } from "../../model/ir.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import { DEFAULT as DEFAULT_SEMANTICS, type ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../language/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
@@ -16,7 +16,7 @@ export interface BuildIrOptions {
   name?: string;
   attrParser: AttributeParser;
   exprParser: IExpressionParser;
-  catalog?: ResourceCatalog;
+  catalog: ResourceCatalog;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
@@ -35,7 +35,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
     trace.event("lower.parse.complete");
 
-    const catalog = opts.catalog ?? DEFAULT_SEMANTICS.catalog;
+    const catalog = opts.catalog;
     const source = resolveSourceFile(opts.file ?? opts.name ?? "");
     const ids = new DomIdAllocator();
     const table = new ExprTable(opts.exprParser, source, html);

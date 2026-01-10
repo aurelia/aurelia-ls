@@ -5,7 +5,7 @@ import { createDefaultEngine } from "./pipeline/index.js";
 import type { ExprTableEntry, SourceSpan, ExprIdMap } from "./model/index.js";
 
 // Language imports (via barrel)
-import type { Semantics, ResourceGraph, ResourceScopeId } from "./language/index.js";
+import type { ResourceCatalog, ResourceGraph, ResourceScopeId, Semantics, TemplateSyntaxRegistry } from "./language/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
@@ -30,7 +30,9 @@ export interface CompileOptions {
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  semantics?: Semantics;
+  semantics: Semantics;
+  catalog?: ResourceCatalog;
+  syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
   attrParser?: AttributeParser;
@@ -72,13 +74,15 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
+    semantics: opts.semantics,
     overlay: {
       isJs: opts.isJs,
       filename: overlayBaseName,
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
   };
-  if (opts.semantics) base.semantics = opts.semantics;
+  if (opts.catalog) base.catalog = opts.catalog;
+  if (opts.syntax) base.syntax = opts.syntax;
   if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
   if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
   if (opts.cache) base.cache = opts.cache;
@@ -159,4 +163,3 @@ function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMeta
   }
   return meta;
 }
-

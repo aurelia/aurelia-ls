@@ -5,15 +5,17 @@ import { resolveSourceFile } from "../model/index.js";
 
 // Language imports (via barrel)
 import {
-  DEFAULT_SEMANTICS as SEM_DEFAULT,
+  buildTemplateSyntaxRegistry,
   materializeSemanticsForScope,
-  type Semantics,
+  type ResourceCatalog,
   type ResourceGraph,
   type ResourceScopeId,
+  type Semantics,
+  type TemplateSyntaxRegistry,
 } from "../language/index.js";
 
 // Parsing imports (via barrel)
-import { DEFAULT_SYNTAX, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
+import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
 
 // Shared imports (via barrel)
 import type { VmReflection, SynthesisOptions } from "../shared/index.js";
@@ -27,7 +29,7 @@ import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type Ao
 // Local imports
 import { PipelineEngine } from "./engine.js";
 import type { StageDefinition, StageKey, StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./engine.js";
-import { stableHash } from "./hash.js";
+import { stableHash, stableHashSemantics } from "./hash.js";
 
 /* =======================================================================================
  * CORE PIPELINE TYPES & FACTORIES
@@ -36,7 +38,9 @@ import { stableHash } from "./hash.js";
 export interface CoreCompileOptions {
   html: string;
   templateFilePath: string;
-  semantics?: Semantics;
+  semantics: Semantics;
+  catalog?: ResourceCatalog;
+  syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
   attrParser?: AttributeParser;
@@ -69,8 +73,10 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
+    semantics: opts.semantics,
   };
-  if (opts.semantics) pipelineOpts.semantics = opts.semantics;
+  if (opts.catalog) pipelineOpts.catalog = opts.catalog;
+  if (opts.syntax) pipelineOpts.syntax = opts.syntax;
   if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
   if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
   if (opts.cache) pipelineOpts.cache = opts.cache;
@@ -99,22 +105,27 @@ function assertOption<T>(value: T | undefined, name: string): T {
 export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   const definitions: StageDefinition<StageKey>[] = [];
 
-  const scopedSemantics = (options: PipelineOptions) => {
-    const base = options.semantics ?? SEM_DEFAULT;
+  const resolveSemanticsInputs = (options: PipelineOptions) => {
+    const base = assertOption(options.semantics, "semantics");
     const graph = options.resourceGraph ?? base.resourceGraph ?? null;
     const scopeId = options.resourceScope ?? base.defaultScope ?? null;
     const sem = materializeSemanticsForScope(base, graph, scopeId);
+    const catalog = options.catalog ?? sem.catalog;
+    const semWithCatalog = options.catalog ? { ...sem, catalog } : sem;
+    const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
     return {
-      sem,
+      sem: semWithCatalog,
       resources: sem.resources,
+      catalog,
+      syntax,
       scopeId: scopeId ?? null,
     };
   };
 
   const scopeFingerprint = (options: PipelineOptions) => {
-    const graph = options.resourceGraph ?? options.semantics?.resourceGraph ?? null;
+    const graph = options.resourceGraph ?? options.semantics.resourceGraph ?? null;
     if (!graph) return null;
-    const scope = options.resourceScope ?? options.semantics?.defaultScope ?? graph.root ?? null;
+    const scope = options.resourceScope ?? options.semantics.defaultScope ?? graph.root ?? null;
     return { graph: stableHash(graph), scope };
   };
 
@@ -124,27 +135,30 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     deps: [],
     fingerprint(ctx) {
       const options = ctx.options;
-      const { sem } = scopedSemantics(options);
+      const { catalog, syntax } = resolveSemanticsInputs(options);
       const source = resolveSourceFile(options.templateFilePath);
+      const attrParserFingerprint = options.fingerprints?.attrParser
+        ?? options.fingerprints?.syntax
+        ?? (options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
       return {
         html: stableHash(options.html),
         file: source.hashKey,
-        catalog: options.fingerprints?.catalog ?? stableHash(sem.catalog),
-        attrParser: options.fingerprints?.attrParser ?? (options.attrParser ? "custom" : "default"),
+        catalog: options.fingerprints?.catalog ?? stableHash(catalog),
+        attrParser: attrParserFingerprint,
         exprParser: options.fingerprints?.exprParser ?? (options.exprParser ? "custom" : "default"),
       };
     },
     run(ctx) {
       const options = ctx.options;
       const exprParser = options.exprParser ?? getExpressionParser();
-      const attrParser = options.attrParser ?? DEFAULT_SYNTAX;
-      const { sem } = scopedSemantics(options);
+      const { catalog, syntax } = resolveSemanticsInputs(options);
+      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
       return lowerDocument(options.html, {
         file: options.templateFilePath,
         name: path.basename(options.templateFilePath),
         attrParser,
         exprParser,
-        catalog: sem.catalog,
+        catalog,
         trace: options.trace,
       });
     },
@@ -155,14 +169,14 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     version: "2",
     deps: ["10-lower"],
     fingerprint(ctx) {
-      const sem = ctx.options.semantics ?? SEM_DEFAULT;
+      const { sem } = resolveSemanticsInputs(ctx.options);
       return {
-        sem: ctx.options.fingerprints?.semantics ?? stableHash(sem),
+        sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(sem),
         resourceGraph: scopeFingerprint(ctx.options),
       };
     },
     run(ctx) {
-      const scoped = scopedSemantics(ctx.options);
+      const scoped = resolveSemanticsInputs(ctx.options);
       const ir = ctx.require("10-lower");
       return resolveHost(ir, scoped.sem, {
         resources: scoped.resources,

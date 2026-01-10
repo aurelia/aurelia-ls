@@ -2,7 +2,7 @@
 import type { IrModule, ScopeModule } from "../model/index.js";
 
 // Language imports (via barrel)
-import type { Semantics, ResourceGraph, ResourceScopeId } from "../language/index.js";
+import type { ResourceCatalog, ResourceGraph, ResourceScopeId, Semantics, TemplateSyntaxRegistry } from "../language/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
@@ -55,7 +55,9 @@ export interface PipelineOptions {
   templateFilePath: string;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
-  semantics?: Semantics;
+  semantics: Semantics;
+  catalog?: ResourceCatalog;
+  syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
   vm?: VmReflection;
@@ -108,6 +110,7 @@ export interface FingerprintHints {
   attrParser?: FingerprintToken;
   exprParser?: FingerprintToken;
   catalog?: FingerprintToken;
+  syntax?: FingerprintToken;
   semantics?: FingerprintToken;
   vm?: FingerprintToken;
   overlay?: FingerprintToken;

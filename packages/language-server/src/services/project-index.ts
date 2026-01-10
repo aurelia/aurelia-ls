@@ -1,16 +1,17 @@
 import type ts from "typescript";
 import {
   DEFAULT_SEMANTICS,
+  buildTemplateSyntaxRegistry,
   prepareSemantics,
-  type Bindable,
-  type BindableDef,
+  stableHash,
+  stableHashSemantics,
   type NormalizedPath,
-  type ResourceCollections,
+  type ResourceCatalog,
   type ResourceGraph,
   type ResourceScopeId,
   type Semantics,
   type SemanticsWithCaches,
-  type TypeRef,
+  type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
 import { hashObject, normalizeCompilerOptions, resolve, type ResourceDef } from "@aurelia-ls/resolution";
 import type { Logger } from "./types.js";
@@ -31,6 +32,8 @@ export interface AureliaProjectIndexOptions {
 
 interface IndexSnapshot {
   readonly semantics: SemanticsWithCaches;
+  readonly catalog: ResourceCatalog;
+  readonly syntax: TemplateSyntaxRegistry;
   readonly resourceGraph: ResourceGraph;
   readonly fingerprint: string;
 }
@@ -51,6 +54,8 @@ export class AureliaProjectIndex {
   #defaultScope: ResourceScopeId | null;
 
   #semantics: SemanticsWithCaches;
+  #catalog: ResourceCatalog;
+  #syntax: TemplateSyntaxRegistry;
   #resourceGraph: ResourceGraph;
   #fingerprint: string;
 
@@ -62,6 +67,8 @@ export class AureliaProjectIndex {
 
     const snapshot = this.#computeSnapshot();
     this.#semantics = snapshot.semantics;
+    this.#catalog = snapshot.catalog;
+    this.#syntax = snapshot.syntax;
     this.#resourceGraph = snapshot.resourceGraph;
     this.#fingerprint = snapshot.fingerprint;
   }
@@ -70,6 +77,8 @@ export class AureliaProjectIndex {
     const snapshot = this.#computeSnapshot();
     const changed = snapshot.fingerprint !== this.#fingerprint;
     this.#semantics = snapshot.semantics;
+    this.#catalog = snapshot.catalog;
+    this.#syntax = snapshot.syntax;
     this.#resourceGraph = snapshot.resourceGraph;
     this.#fingerprint = snapshot.fingerprint;
     const status = changed ? "updated" : "unchanged";
@@ -78,6 +87,14 @@ export class AureliaProjectIndex {
 
   currentResourceGraph(): ResourceGraph {
     return this.#resourceGraph;
+  }
+
+  currentCatalog(): ResourceCatalog {
+    return this.#catalog;
+  }
+
+  currentSyntax(): TemplateSyntaxRegistry {
+    return this.#syntax;
   }
 
   currentSemantics(): SemanticsWithCaches {
@@ -93,14 +110,27 @@ export class AureliaProjectIndex {
 
     if (!program) {
       // No program available - return base semantics with empty graph
-      const semantics = this.#baseSemantics;
-      const resourceGraph: ResourceGraph = semantics.resourceGraph ?? {
+      const base = this.#baseSemantics;
+      const resourceGraph: ResourceGraph = base.resourceGraph ?? {
         version: "aurelia-resource-graph@1",
         root: "aurelia:root" as ResourceScopeId,
         scopes: {},
       };
-      const fingerprint = hashObject({ empty: true });
-      return { semantics, resourceGraph, fingerprint };
+      const semantics: SemanticsWithCaches = {
+        ...base,
+        resourceGraph,
+        defaultScope: this.#defaultScope ?? base.defaultScope ?? null,
+      };
+      const catalog = base.catalog;
+      const syntax = buildTemplateSyntaxRegistry(semantics);
+      const fingerprint = hashObject({
+        empty: true,
+        semantics: stableHashSemantics(semantics),
+        catalog: stableHash(catalog),
+        syntax: stableHash(syntax),
+        resourceGraph: stableHash(resourceGraph),
+      });
+      return { semantics, catalog, syntax, resourceGraph, fingerprint };
     }
 
     const result = resolve(
@@ -112,19 +142,19 @@ export class AureliaProjectIndex {
       this.#logger,
     );
 
-    // Merge discovered resources into semantics.resources
-    const mergedResources = mergeDiscoveredResources(this.#baseSemantics.resources, result.resources);
-
-    const semantics = prepareSemantics(
-      { ...this.#baseSemantics, resourceGraph: result.resourceGraph },
-      { resources: mergedResources },
-    );
+    const semantics: SemanticsWithCaches = {
+      ...result.semantics,
+      resourceGraph: result.resourceGraph,
+      defaultScope: this.#defaultScope ?? result.semantics.defaultScope ?? null,
+    };
 
     const fingerprint = hashObject({
       compilerOptions: normalizeCompilerOptions(this.#ts.compilerOptions()),
       roots: [...this.#ts.getRootFileNames()].sort(),
-      semantics,
-      resourceGraph: result.resourceGraph,
+      semantics: stableHashSemantics(semantics),
+      catalog: stableHash(result.catalog),
+      syntax: stableHash(result.syntax),
+      resourceGraph: stableHash(result.resourceGraph),
       resources: result.resources.map((r) => ({
         kind: r.kind,
         name: unwrapSourcedValue(r.name),
@@ -134,120 +164,16 @@ export class AureliaProjectIndex {
       })),
     });
 
-    return { semantics, resourceGraph: result.resourceGraph, fingerprint };
-  }
-}
-
-/**
- * Merge discovered resources into base resources.
- */
-function mergeDiscoveredResources(
-  base: ResourceCollections,
-  resources: readonly ResourceDef[],
-): ResourceCollections {
-  const elements = { ...base.elements };
-  const attributes = { ...base.attributes };
-  const valueConverters = { ...base.valueConverters };
-  const bindingBehaviors = { ...base.bindingBehaviors };
-
-  for (const r of resources) {
-    const name = unwrapSourcedValue(r.name) ?? "";
-    if (!name) continue;
-    if (r.kind === "custom-element") {
-      const aliases = aliasesFromSourcedList(r.aliases);
-      elements[name] = {
-        kind: "element",
-        name,
-        bindables: bindableDefsToRecord(r.bindables),
-        ...(aliases.length > 0 ? { aliases } : {}),
-        ...(unwrapSourcedValue(r.containerless) ? { containerless: true } : {}),
-        ...(unwrapSourcedValue(r.boundary) ? { boundary: true } : {}),
-      };
-    } else if (r.kind === "custom-attribute") {
-      const aliases = aliasesFromSourcedList(r.aliases);
-      const primary = unwrapSourcedValue(r.primary) ?? findPrimaryBindableName(r.bindables) ?? undefined;
-      attributes[name] = {
-        kind: "attribute",
-        name,
-        bindables: bindableDefsToRecord(r.bindables),
-        ...(aliases.length > 0 ? { aliases } : {}),
-        ...(primary ? { primary } : {}),
-        ...(unwrapSourcedValue(r.noMultiBindings) ? { noMultiBindings: true } : {}),
-      };
-    } else if (r.kind === "template-controller") {
-      const aliases = aliasesFromSourcedValue(r.aliases);
-      const primary = findPrimaryBindableName(r.bindables) ?? undefined;
-      attributes[name] = {
-        kind: "attribute",
-        name,
-        bindables: bindableDefsToRecord(r.bindables),
-        ...(aliases.length > 0 ? { aliases } : {}),
-        ...(primary ? { primary } : {}),
-        isTemplateController: true,
-        ...(unwrapSourcedValue(r.noMultiBindings) ? { noMultiBindings: true } : {}),
-      };
-    } else if (r.kind === "value-converter") {
-      valueConverters[name] = {
-        name,
-        in: { kind: "unknown" },
-        out: { kind: "unknown" },
-      };
-    } else if (r.kind === "binding-behavior") {
-      bindingBehaviors[name] = { name };
-    }
-  }
-
-  return {
-    elements,
-    attributes,
-    controllers: base.controllers,
-    valueConverters,
-    bindingBehaviors,
-  };
-}
-
-function bindableDefsToRecord(
-  bindables: Readonly<Record<string, BindableDef>>,
-): Record<string, Bindable> {
-  const record: Record<string, Bindable> = {};
-  for (const [key, def] of Object.entries(bindables)) {
-    const name = unwrapSourcedValue(def.property) ?? key;
-    const attribute = unwrapSourcedValue(def.attribute);
-    const mode = unwrapSourcedValue(def.mode);
-    const primary = unwrapSourcedValue(def.primary);
-    const type = toTypeRefOptional(unwrapSourcedValue(def.type));
-    const doc = unwrapSourcedValue(def.doc);
-
-    const bindable: Bindable = {
-      name,
-      ...(attribute ? { attribute } : {}),
-      ...(mode ? { mode } : {}),
-      ...(primary !== undefined ? { primary } : {}),
-      ...(type ? { type } : {}),
-      ...(doc ? { doc } : {}),
+    return {
+      semantics,
+      catalog: result.catalog,
+      syntax: result.syntax,
+      resourceGraph: result.resourceGraph,
+      fingerprint,
     };
-
-    record[bindable.name] = bindable;
   }
-  return record;
 }
 
-function findPrimaryBindableName(defs: Readonly<Record<string, BindableDef>>): string | null {
-  for (const [key, def] of Object.entries(defs)) {
-    const primary = unwrapSourcedValue(def.primary);
-    if (primary) return unwrapSourcedValue(def.property) ?? key;
-  }
-  return null;
-}
-
-function toTypeRefOptional(typeName: string | undefined): TypeRef | undefined {
-  if (!typeName) return undefined;
-  const trimmed = typeName.trim();
-  if (!trimmed) return undefined;
-  if (trimmed === "any") return { kind: "any" };
-  if (trimmed === "unknown") return { kind: "unknown" };
-  return { kind: "ts", name: trimmed };
-}
 
 function resourceAliasesForFingerprint(resource: ResourceDef): string[] {
   switch (resource.kind) {
