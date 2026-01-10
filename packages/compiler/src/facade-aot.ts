@@ -165,11 +165,11 @@ export function compileAot(
     });
 
     // Build resolve options for resource graph and local imports
-    const resolveOpts = options.resourceGraph || options.localImports
+    const resolveOpts = options.resourceGraph || options.localImports || options.resourceScope !== undefined
       ? {
-          graph: options.resourceGraph ?? null,
-          scope: options.resourceScope ?? null,
-          localImports: options.localImports,
+          ...(options.resourceGraph ? { graph: options.resourceGraph } : {}),
+          ...(options.resourceScope !== undefined ? { scope: options.resourceScope ?? null } : {}),
+          ...(options.localImports ? { localImports: options.localImports } : {}),
         }
       : undefined;
 

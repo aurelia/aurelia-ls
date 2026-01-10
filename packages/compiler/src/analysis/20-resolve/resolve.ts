@@ -174,10 +174,11 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
 
     const diags: SemDiagnostic[] = [];
     const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
+    const ctxGraph = opts && opts.graph !== undefined ? opts.graph : (sem.resourceGraph ?? null);
     const ctx: ResolverContext = {
       lookup: createSemanticsLookup(sem, lookupOpts),
       diags,
-      graph: opts?.graph ?? null,
+      graph: ctxGraph,
     };
 
     // Link all templates

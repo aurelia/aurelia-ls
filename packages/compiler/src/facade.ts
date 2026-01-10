@@ -7,6 +7,7 @@ import type { ExprTableEntry, SourceSpan, ExprIdMap } from "./model/index.js";
 // Language imports (via barrel)
 import type {
   FeatureUsageSet,
+  LocalImportDef,
   ResourceCatalog,
   ResourceGraph,
   ResourceScopeId,
@@ -42,6 +43,7 @@ export interface CompileOptions {
   syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
+  localImports?: readonly LocalImportDef[];
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   overlayBaseName?: string;
@@ -93,6 +95,7 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
   if (opts.syntax) base.syntax = opts.syntax;
   if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
   if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
+  if (opts.localImports) base.localImports = opts.localImports;
   if (opts.cache) base.cache = opts.cache;
   if (opts.fingerprints) base.fingerprints = opts.fingerprints;
   if (opts.attrParser) base.attrParser = opts.attrParser;

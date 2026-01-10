@@ -7,6 +7,7 @@ import { resolveSourceFile } from "../model/index.js";
 import {
   buildTemplateSyntaxRegistry,
   materializeSemanticsForScope,
+  type LocalImportDef,
   type ResourceCatalog,
   type ResourceGraph,
   type ResourceScopeId,
@@ -43,6 +44,7 @@ export interface CoreCompileOptions {
   syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
+  localImports?: readonly LocalImportDef[];
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   vm: VmReflection;
@@ -79,6 +81,7 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
   if (opts.syntax) pipelineOpts.syntax = opts.syntax;
   if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
   if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
+  if (opts.localImports) pipelineOpts.localImports = opts.localImports;
   if (opts.cache) pipelineOpts.cache = opts.cache;
   if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
@@ -173,17 +176,20 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       return {
         sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(sem),
         resourceGraph: scopeFingerprint(ctx.options),
+        localImports: ctx.options.localImports ? stableHash(ctx.options.localImports) : null,
       };
     },
     run(ctx) {
       const scoped = resolveSemanticsInputs(ctx.options);
       const ir = ctx.require("10-lower");
-      return resolveHost(ir, scoped.sem, {
+      const resolveOpts = {
         resources: scoped.resources,
-        graph: ctx.options.resourceGraph ?? null,
         scope: scoped.scopeId,
+        ...(ctx.options.resourceGraph !== undefined ? { graph: ctx.options.resourceGraph } : {}),
+        ...(ctx.options.localImports ? { localImports: ctx.options.localImports } : {}),
         trace: ctx.options.trace,
-      });
+      };
+      return resolveHost(ir, scoped.sem, resolveOpts);
     },
   });
 

@@ -4,6 +4,7 @@ import type { IrModule, ScopeModule } from "../model/index.js";
 // Language imports (via barrel)
 import type {
   FeatureUsageSet,
+  LocalImportDef,
   ResourceCatalog,
   ResourceGraph,
   ResourceScopeId,
@@ -69,6 +70,7 @@ export interface PipelineOptions {
   syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
+  localImports?: readonly LocalImportDef[];
   vm?: VmReflection;
   /** Pipeline-wide cache knobs. */
   cache?: CacheOptions;

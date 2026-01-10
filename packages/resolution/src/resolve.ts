@@ -367,7 +367,39 @@ function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
 }
 
 function catalogConfidenceFromGaps(gaps: AnalysisGap[]): CatalogConfidence {
-  return gaps.length === 0 ? "complete" : "partial";
+  if (gaps.length === 0) return "complete";
+  for (const gap of gaps) {
+    if (isConservativeGap(gap.why.kind)) {
+      return "conservative";
+    }
+  }
+  return "partial";
+}
+
+function isConservativeGap(kind: AnalysisGap["why"]["kind"]): boolean {
+  switch (kind) {
+    // Package structure failures: analysis could not proceed reliably.
+    case "package-not-found":
+    case "invalid-package-json":
+    case "missing-package-field":
+    case "entry-point-not-found":
+    case "no-entry-points":
+    case "complex-exports":
+    case "workspace-no-source-dir":
+    case "workspace-entry-not-found":
+    // Import/resolution failures.
+    case "unresolved-import":
+    case "circular-import":
+    case "external-package":
+    // Format/parse failures.
+    case "unsupported-format":
+    case "no-source":
+    case "minified-code":
+    case "parse-error":
+      return true;
+    default:
+      return false;
+  }
 }
 
 /**
