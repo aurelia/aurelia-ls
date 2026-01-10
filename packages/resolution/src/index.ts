@@ -38,6 +38,12 @@ export type {
   Semantics,
   SemanticsWithCaches,
   ResourceCatalog,
+  SemanticSnapshot,
+  SemanticSymbolSnapshot,
+  ApiSurfaceSnapshot,
+  ApiSurfaceSymbol,
+  ApiSurfaceBindable,
+  SymbolId,
   TemplateSyntaxRegistry,
   NormalizedPath,
 } from "@aurelia-ls/compiler";
@@ -45,6 +51,9 @@ export type {
 // === Main entry point ===
 export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic, type TemplateInfo, type InlineTemplateInfo } from "./resolve.js";
 export { buildSemanticsArtifacts, type SemanticsArtifacts } from "./semantics/build.js";
+
+// === Snapshots ===
+export { buildSemanticSnapshot, buildApiSurfaceSnapshot, type SemanticSnapshotOptions, type SnapshotIdOptions } from "./snapshots/index.js";
 
 // === Shared types ===
 export type { Logger } from "./types.js";

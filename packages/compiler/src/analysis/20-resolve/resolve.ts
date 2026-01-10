@@ -157,7 +157,7 @@ export interface ResolveHostOptions {
    * These are resolved as local element definitions for this template,
    * allowing resolution of elements imported via `<import from="./foo">`.
    */
-  localImports?: LocalImportDef[];
+  localImports?: readonly LocalImportDef[];
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }

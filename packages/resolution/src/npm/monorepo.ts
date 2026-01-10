@@ -267,6 +267,19 @@ async function buildWorkspaceMap(
 }
 
 /**
+ * Build a package root map from a monorepo context.
+ *
+ * Maps package name -> package root path for stable snapshot ids.
+ */
+export function buildPackageRootMap(ctx: MonorepoContext): ReadonlyMap<string, string> {
+  const map = new Map<string, string>();
+  for (const [name, pkg] of ctx.packages) {
+    map.set(name, pkg.path);
+  }
+  return map;
+}
+
+/**
  * Expand workspace glob patterns to absolute directory paths.
  *
  * Handles common workspace patterns:

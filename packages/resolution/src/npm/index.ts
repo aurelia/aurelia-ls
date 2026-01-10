@@ -55,7 +55,7 @@ import { checkIsAureliaPackage, scanPackage, getSourceEntryPoint } from './scann
 
 // Re-export monorepo types and functions
 export type { MonorepoContext, WorkspacePackage, WorkspaceResolutionResult } from './monorepo.js';
-export { detectMonorepo, resolveWorkspaceImport, resolveWorkspaceImportWithReason } from './monorepo.js';
+export { detectMonorepo, resolveWorkspaceImport, resolveWorkspaceImportWithReason, buildPackageRootMap } from './monorepo.js';
 import {
   detectMonorepo,
   resolveWorkspaceImport,

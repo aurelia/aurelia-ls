@@ -2,11 +2,13 @@ import type ts from "typescript";
 import type {
   CatalogConfidence,
   CatalogGap,
+  ApiSurfaceSnapshot,
   NormalizedPath,
   ResourceCatalog,
   ResourceGraph,
   ResourceDef,
   ResourceScopeId,
+  SemanticSnapshot,
   Semantics,
   SemanticsWithCaches,
   TemplateSyntaxRegistry,
@@ -28,6 +30,7 @@ import { buildResourceGraph } from "./scope/builder.js";
 import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
 import { buildSemanticsArtifacts } from "./semantics/build.js";
 import { unwrapSourced } from "./semantics/sourced.js";
+import { buildApiSurfaceSnapshot, buildSemanticSnapshot } from "./snapshots/index.js";
 import { dirname, resolve as resolvePath, basename } from "node:path";
 
 /**
@@ -44,6 +47,8 @@ export interface ResolutionConfig {
   trace?: CompileTrace;
   /** Optional package root (for resolution context metadata) */
   packagePath?: string;
+  /** Optional package root mapping for stable snapshot ids */
+  packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   /**
    * File system context for sibling detection.
    *
@@ -77,6 +82,10 @@ export interface ResolutionResult {
   syntax: TemplateSyntaxRegistry;
   /** The constructed resource graph */
   resourceGraph: ResourceGraph;
+  /** Stable semantic snapshot (for diffing/manifests) */
+  semanticSnapshot: SemanticSnapshot;
+  /** API surface summary snapshot */
+  apiSurfaceSnapshot: ApiSurfaceSnapshot;
   /** All resource definitions identified */
   resources: readonly ResourceDef[];
   /** Registration analysis results */
@@ -137,14 +146,15 @@ export interface ResolutionDiagnostic {
  * Main entry point: run the full resolution pipeline.
  *
  * Pipeline:
- * 1. Extraction (Layer 1): AST → FileFacts (with import resolution)
- * 2. Export Binding (Layer 1.5): FileFacts → ExportBindingMap
- * 3. Partial Evaluation (Layer 2): FileFacts → resolved FileFacts + gaps
- * 4. Pattern Matching (Layer 3): FileFacts → ResourceDef[]
- * 5. Semantics (Layer 4): ResourceDef[] → Semantics + Catalog + Syntax
- * 6. Registration Analysis (Layer 5): ResourceDef[] + FileFacts → RegistrationAnalysis
- * 7. Scope Construction (Layer 6): RegistrationAnalysis → ResourceGraph
- * 8. Template Discovery (Layer 7): RegistrationAnalysis + ResourceGraph → templates
+ * 1. Extraction (Layer 1): AST -> FileFacts (with import resolution)
+ * 2. Export Binding (Layer 1.5): FileFacts -> ExportBindingMap
+ * 3. Partial Evaluation (Layer 2): FileFacts -> resolved FileFacts + gaps
+ * 4. Pattern Matching (Layer 3): FileFacts -> ResourceDef[]
+ * 5. Semantics (Layer 4): ResourceDef[] -> Semantics + Catalog + Syntax
+ * 6. Registration Analysis (Layer 5): ResourceDef[] + FileFacts -> RegistrationAnalysis
+ * 7. Scope Construction (Layer 6): RegistrationAnalysis -> ResourceGraph
+ * 8. Snapshot Export (Layer 7): Semantics + ResourceGraph -> snapshots
+ * 9. Template Discovery (Layer 8): RegistrationAnalysis + ResourceGraph -> templates
  */
 export function resolve(
   program: ts.Program,
@@ -276,7 +286,25 @@ export function resolve(
       orphanCount: registration.orphans.length,
     });
 
-    // Layer 7: Template Discovery
+    // Layer 7: Snapshot Export
+    log.info("[resolution] building snapshots...");
+    trace.event("resolution.snapshots.start");
+    const snapshotIdOptions = {
+      rootDir: config?.packagePath ?? program.getCurrentDirectory(),
+      packageRoots: config?.packageRoots,
+    };
+    const semanticSnapshot = buildSemanticSnapshot(semantics, {
+      ...snapshotIdOptions,
+      graph: resourceGraph,
+      catalog,
+    });
+    const apiSurfaceSnapshot = buildApiSurfaceSnapshot(semantics, snapshotIdOptions);
+    trace.event("resolution.snapshots.done", {
+      semanticSymbolCount: semanticSnapshot.symbols.length,
+      apiSymbolCount: apiSurfaceSnapshot.symbols.length,
+    });
+
+    // Layer 8: Template Discovery
     log.info("[resolution] discovering templates...");
     trace.event("resolution.templates.start");
     const { templates, inlineTemplates } = discoverTemplates(registration, program, resourceGraph);
@@ -323,6 +351,8 @@ export function resolve(
       "resolution.analysisGapCount": analysisGaps.length,
       "resolution.partialEvaluationGapCount": evaluation.gaps.length,
       "resolution.diagnosticCount": allDiagnostics.length,
+      "resolution.semanticSnapshotSymbolCount": semanticSnapshot.symbols.length,
+      "resolution.apiSnapshotSymbolCount": apiSurfaceSnapshot.symbols.length,
     });
 
     return {
@@ -330,6 +360,8 @@ export function resolve(
       catalog,
       syntax,
       resourceGraph,
+      semanticSnapshot,
+      apiSurfaceSnapshot,
       resources: allResources,
       registration,
       templates,
