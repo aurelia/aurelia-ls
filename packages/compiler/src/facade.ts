@@ -5,7 +5,14 @@ import { createDefaultEngine } from "./pipeline/index.js";
 import type { ExprTableEntry, SourceSpan, ExprIdMap } from "./model/index.js";
 
 // Language imports (via barrel)
-import type { ResourceCatalog, ResourceGraph, ResourceScopeId, Semantics, TemplateSyntaxRegistry } from "./language/index.js";
+import type {
+  FeatureUsageSet,
+  ResourceCatalog,
+  ResourceGraph,
+  ResourceScopeId,
+  Semantics,
+  TemplateSyntaxRegistry,
+} from "./language/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
@@ -58,6 +65,7 @@ export interface TemplateCompilation {
   linked: StageOutputs["20-resolve"];
   scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
+  usage: FeatureUsageSet;
   overlayPlan: StageOutputs["overlay:plan"];
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
@@ -107,6 +115,7 @@ export function compileTemplate(
   const linked = session.run("20-resolve");
   const scope = session.run("30-bind");
   const typecheck = session.run("40-typecheck");
+  const usage = session.run("50-usage");
   const overlayPlan = overlayArtifacts.plan;
 
   return {
@@ -114,6 +123,7 @@ export function compileTemplate(
     linked,
     scope,
     typecheck,
+    usage,
     overlayPlan,
     overlay: overlayArtifacts.overlay,
     mapping: overlayArtifacts.mapping,
@@ -126,6 +136,7 @@ export function compileTemplate(
       "20-resolve",
       "30-bind",
       "40-typecheck",
+      "50-usage",
       "overlay:plan",
       "overlay:emit",
     ]),

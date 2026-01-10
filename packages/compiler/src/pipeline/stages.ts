@@ -21,7 +21,7 @@ import { createAttributeParserFromRegistry, getExpressionParser, type AttributeP
 import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 
 // Analysis imports (via barrel)
-import { lowerDocument, resolveHost, bindScopes, typecheck } from "../analysis/index.js";
+import { lowerDocument, resolveHost, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
 import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
@@ -218,6 +218,25 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
       return typecheck({ linked, scope, ir, rootVmType: rootVm, trace: ctx.options.trace });
+    },
+  });
+
+  definitions.push({
+    key: "50-usage",
+    version: "1",
+    deps: ["20-resolve"],
+    fingerprint(ctx) {
+      const { syntax } = resolveSemanticsInputs(ctx.options);
+      const attrParserFingerprint = ctx.options.fingerprints?.attrParser
+        ?? ctx.options.fingerprints?.syntax
+        ?? (ctx.options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
+      return { attrParser: attrParserFingerprint };
+    },
+    run(ctx) {
+      const scoped = resolveSemanticsInputs(ctx.options);
+      const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(scoped.syntax);
+      const linked = ctx.require("20-resolve");
+      return collectFeatureUsage(linked, { syntax: scoped.syntax, attrParser });
     },
   });
 

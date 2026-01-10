@@ -23,6 +23,11 @@ export type {
   ResourceScope,
   ResourceScopeId,
   ResourceCollections,
+  FeatureUsageSet,
+  FeatureUsageFlags,
+  RegistrationPlan,
+  RegistrationScopePlan,
+  RegistrationPlanDirective,
   ResourceDef,
   ResourceKind,
   ElementRes,
@@ -210,8 +215,9 @@ export type {
 } from "./binding/index.js";
 
 // === Registration (Layer 3) ===
-export { createRegistrationAnalyzer, buildImportGraph } from "./registration/index.js";
+export { createRegistrationAnalyzer, buildImportGraph, buildRegistrationPlan } from "./registration/index.js";
 export type { RegistrationAnalyzer, ImportGraph } from "./registration/index.js";
+export type { UsageByScope } from "./registration/index.js";
 // New registration model (see types.ts for design rationale)
 export type {
   RegistrationAnalysis,

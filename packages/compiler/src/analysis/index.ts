@@ -71,6 +71,9 @@ export {
   type TypeCompatibilityResult,
 } from "./40-typecheck/typecheck.js";
 
+// Stage 50: Feature usage (LinkedSemantics -> FeatureUsageSet)
+export { collectFeatureUsage, type FeatureUsageOptions } from "./50-usage/usage.js";
+
 // Shared analysis utilities
 export { buildScopeLookup, type ScopeLookup } from "./shared/scope-lookup.js";
 export {

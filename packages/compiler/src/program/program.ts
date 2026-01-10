@@ -79,6 +79,7 @@ const STAGE_ORDER: readonly StageKey[] = [
   "20-resolve",
   "30-bind",
   "40-typecheck",
+  "50-usage",
   "overlay:plan",
   "overlay:emit",
 ] as const;

@@ -220,6 +220,7 @@ export {
   resolveHost,
   bindScopes,
   typecheck,
+  collectFeatureUsage,
   // Typecheck configuration
   resolveTypecheckConfig,
   checkTypeCompatibility,
@@ -230,7 +231,7 @@ export {
   extractTemplateMeta,
   stripMetaFromHtml,
 } from "./analysis/index.js";
-export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
+export type { BuildIrOptions, FeatureUsageOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {
   // Linked semantics (for semantic tokens, etc.)
   LinkedSemanticsModule,

@@ -16,6 +16,8 @@ export class AttrSyntax {
      * Used by `:PART` pattern which produces command="bind" but mode="toView".
      */
     public mode: BindingMode | null = null,
+    /** Pattern string that matched (from registry), or null for identity fallback. */
+    public pattern: string | null = null,
   ) {}
 }
 
@@ -129,26 +131,26 @@ function interpretConfig(
       // All parts except the last are joined by "." to form the target
       const target = parts.slice(0, -1).join(".");
       const command = parts[parts.length - 1]!;
-      return new AttrSyntax(rawName, rawValue, target, command);
+      return new AttrSyntax(rawName, rawValue, target, command, null, null, config.pattern);
     }
 
     case "fixed": {
       // Fixed target and command (e.g., "ref" → target="element", command="ref")
-      return new AttrSyntax(rawName, rawValue, interpret.target, interpret.command);
+      return new AttrSyntax(rawName, rawValue, interpret.target, interpret.command, null, null, config.pattern);
     }
 
     case "fixed-command": {
       // First part becomes target, command is fixed
       // Mode override is passed through if specified (e.g., `:PART` → mode="toView")
       const target = parts[0] ?? rawName;
-      return new AttrSyntax(rawName, rawValue, target, interpret.command, null, interpret.mode ?? null);
+      return new AttrSyntax(rawName, rawValue, target, interpret.command, null, interpret.mode ?? null, config.pattern);
     }
 
     case "mapped-fixed-command": {
       // First part becomes target (with optional mapping), command is fixed
       const part = parts[0] ?? "";
       const target = interpret.targetMap?.[part] ?? part;
-      return new AttrSyntax(rawName, rawValue, target, interpret.command);
+      return new AttrSyntax(rawName, rawValue, target, interpret.command, null, null, config.pattern);
     }
 
     case "event-modifier": {
@@ -162,12 +164,12 @@ function interpretConfig(
       const normalizedParts = interpret.injectCommand && parts.length > 1
         ? [event, command, ...parts.slice(1)]
         : parts;
-      return new AttrSyntax(rawName, rawValue, event, command, normalizedParts);
+      return new AttrSyntax(rawName, rawValue, event, command, normalizedParts, null, config.pattern);
     }
 
     case "passthrough": {
       // Fixed target/command but preserve parts (useful for testing pattern matching)
-      return new AttrSyntax(rawName, rawValue, interpret.target, interpret.command, parts);
+      return new AttrSyntax(rawName, rawValue, interpret.target, interpret.command, parts, null, config.pattern);
     }
   }
 }
