@@ -1,4 +1,6 @@
 import type {
+  ElementRes,
+  LocalImportDef,
   ResourceCollections,
   ResourceGraph,
   ResourceScope,
@@ -30,6 +32,7 @@ export function materializeResourcesForScope(
   sem: Semantics,
   graph?: ResourceGraph | null,
   scope?: ResourceScopeId | null,
+  localImports?: readonly LocalImportDef[],
 ): ScopedResources {
   if (graph) {
     // When graph is provided, it's authoritative (includes package-filtered resources)
@@ -44,11 +47,12 @@ export function materializeResourcesForScope(
       const localScope = graph.scopes[targetScope];
       acc = applyOverlay(acc, localScope?.resources);
     }
-    return { scope: scope ?? null, resources: acc };
+    return { scope: scope ?? null, resources: applyLocalImports(acc, localImports) };
   }
 
   // No graph: use semantics resources as-is
-  return { scope: scope ?? null, resources: extractResources(sem) };
+  const resources = extractResources(sem);
+  return { scope: scope ?? null, resources: applyLocalImports(resources, localImports) };
 }
 
 /**
@@ -79,8 +83,9 @@ export function materializeSemanticsForScope(
   baseSem: Semantics,
   graph?: ResourceGraph | null,
   scope?: ResourceScopeId | null,
+  localImports?: readonly LocalImportDef[],
 ): SemanticsWithCaches {
-  const { resources } = materializeResourcesForScope(baseSem, graph, scope);
+  const { resources } = materializeResourcesForScope(baseSem, graph, scope, localImports);
   const bindingCommands = baseSem.bindingCommands ?? buildBindingCommandConfigs(baseSem);
   const attributePatterns = baseSem.attributePatterns ?? buildAttributePatternConfigs(baseSem);
   const catalogBase = baseSem.catalog;
@@ -133,5 +138,47 @@ function applyOverlay(
     controllers: overlay.controllers ? { ...base.controllers, ...overlay.controllers } : base.controllers,
     valueConverters: overlay.valueConverters ? { ...base.valueConverters, ...overlay.valueConverters } : base.valueConverters,
     bindingBehaviors: overlay.bindingBehaviors ? { ...base.bindingBehaviors, ...overlay.bindingBehaviors } : base.bindingBehaviors,
+  };
+}
+
+export function applyLocalImports(
+  resources: ResourceCollections,
+  localImports: readonly LocalImportDef[] | undefined,
+): ResourceCollections {
+  if (!localImports || localImports.length === 0) {
+    return resources;
+  }
+
+  const elements: Record<string, ElementRes> = { ...resources.elements };
+
+  for (const local of localImports) {
+    const name = local.name.toLowerCase();
+    const existing = elements[name];
+    const aliases = [
+      ...(existing?.aliases ?? []),
+      local.alias,
+      ...(local.aliases ?? []),
+    ].filter((alias): alias is string => !!alias).map(alias => alias.toLowerCase());
+    const mergedAliases = Array.from(new Set(aliases));
+
+    if (existing) {
+      elements[name] = mergedAliases.length
+        ? { ...existing, aliases: mergedAliases }
+        : existing;
+      continue;
+    }
+
+    const bindables = local.bindables ?? {};
+    elements[name] = {
+      kind: "element",
+      name,
+      bindables,
+      ...(mergedAliases.length ? { aliases: mergedAliases } : {}),
+    };
+  }
+
+  return {
+    ...resources,
+    elements,
   };
 }

@@ -93,6 +93,10 @@ function collectNestedFromNodeTree(
   switch (node.kind) {
     case "element":
       return collectNestedFromElementTree(node, ctx);
+    case "comment":
+      return node.controllers.length > 0
+        ? collectNestedFromControllers(node.controllers, ctx)
+        : [];
     case "fragment": {
       // Collect from all children and flatten
       const results: NestedTemplateHtmlNode[] = [];
@@ -123,29 +127,32 @@ function collectNestedFromElementTree(
   node: PlanElementNode,
   ctx: TemplateEmitContext,
 ): NestedTemplateHtmlNode[] {
+  const results = collectNestedFromControllers(node.controllers, ctx);
+
+  // Also collect from element's children
+  // (empty when controllers exist, but still check)
+  for (const child of node.children) {
+    results.push(...collectNestedFromNodeTree(child, ctx));
+  }
+
+  return results;
+}
+
+function collectNestedFromControllers(
+  controllers: readonly PlanController[],
+  ctx: TemplateEmitContext,
+): NestedTemplateHtmlNode[] {
   const results: NestedTemplateHtmlNode[] = [];
 
-  // Process controllers - each controller creates one nested definition
-  for (const ctrl of node.controllers) {
+  for (const ctrl of controllers) {
     const nestedCtx = ctx.forNestedTemplate();
-
-    // Emit HTML for the controller's main template
     const html = emitNode(ctrl.template, nestedCtx);
-
-    // Collect nested templates:
-    // - For controllers with branches (switch/promise): branches ARE the nested content
-    // - For other controllers: recursively collect from the template tree
     const nested: NestedTemplateHtmlNode[] = [];
 
     if (ctrl.branches) {
-      // Add branch templates (these match emit.ts emitControllerBranches)
-      // The branches contain all nested controllers for this controller.
-      // Don't also walk ctrl.template - it would find the same case/branch controllers
-      // again since they're attached to elements in the template tree.
       for (const branchCtrl of ctrl.branches) {
         const branchCtx = ctx.forNestedTemplate();
         const branchHtml = emitNode(branchCtrl.template, branchCtx);
-        // Recursively collect nested templates within the branch
         const branchNested = collectNestedFromNodeTree(branchCtrl.template, branchCtx);
         nested.push({ html: branchHtml, nested: branchNested });
       }
@@ -155,7 +162,6 @@ function collectNestedFromElementTree(
         branchHtmlLengths: nested.map(n => n.html.length),
       });
     } else {
-      // No branches - collect nested templates from within the main template
       nested.push(...collectNestedFromNodeTree(ctrl.template, nestedCtx));
     }
 
@@ -165,12 +171,6 @@ function collectNestedFromElementTree(
       nestedCount: nested.length,
     });
     results.push({ html, nested });
-  }
-
-  // Also collect from element's children
-  // (empty when controllers exist, but still check)
-  for (const child of node.children) {
-    results.push(...collectNestedFromNodeTree(child, ctx));
   }
 
   return results;
@@ -267,20 +267,7 @@ function emitElementWithControllers(
   node: PlanElementNode,
   ctx: TemplateEmitContext,
 ): string {
-  // Controllers are stored in inside-out order, but we emit outside-in
-  // So we reverse to get the outermost controller first
-  const controllers = [...node.controllers].reverse();
-
-  // Start with empty content - the actual element goes in the nested template
-  // The au-start/au-end markers are placeholders that the runtime replaces
-  let content = "";
-
-  // Wrap with each controller's markers (inside-out → outside-in)
-  for (const ctrl of controllers) {
-    content = emitControllerWrapper(ctrl, content, ctx);
-  }
-
-  return content;
+  return emitControllerMarkers(node.controllers, ctx);
 }
 
 /**
@@ -373,7 +360,23 @@ function emitText(node: PlanTextNode, _ctx: TemplateEmitContext): string {
  * Emit a comment node.
  */
 function emitComment(node: PlanCommentNode, _ctx: TemplateEmitContext): string {
+  if (node.controllers.length > 0) {
+    return emitControllerMarkers(node.controllers, _ctx);
+  }
   return `<!--${node.content}-->`;
+}
+
+function emitControllerMarkers(
+  controllers: readonly PlanController[],
+  ctx: TemplateEmitContext,
+): string {
+  // Controllers are stored in inside-out order, but we emit outside-in
+  const ordered = [...controllers].reverse();
+  let content = "";
+  for (const ctrl of ordered) {
+    content = emitControllerWrapper(ctrl, content, ctx);
+  }
+  return content;
 }
 
 /**

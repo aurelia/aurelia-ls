@@ -23,7 +23,7 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { normalizePathForId, debug, extractTemplateMeta, type CompileTrace, type ImportMetaIR, type LocalImportDef } from "@aurelia-ls/compiler";
+import { normalizePathForId, debug, extractTemplateMeta, type CompileTrace, type ImportMetaIR } from "@aurelia-ls/compiler";
 import {
   transform,
   transformEntryPoint,
@@ -39,6 +39,7 @@ import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
 import { resolveTraceOptions, createBuildTrace, type ManagedTrace } from "./trace.js";
 import type { AureliaPluginOptions, PluginState, ResolutionContext, ResolvedTraceOptions } from "./types.js";
+import { convertToLocalImports } from "./local-imports.js";
 
 /**
  * Virtual file suffix for Aurelia templates in production builds.
@@ -94,29 +95,6 @@ function convertToTemplateImports(imports: ImportMetaIR[]): TemplateImport[] {
   }));
 }
 
-/**
- * Convert template imports to LocalImportDef for compiler resolution.
- *
- * This allows the compiler to resolve elements referenced via `<import from="...">`.
- * The element name is derived from the module specifier (e.g., "./all-table" → "all-table").
- */
-function convertToLocalImports(imports: ImportMetaIR[]): LocalImportDef[] {
-  return imports.map((imp) => {
-    // Derive element name from module specifier
-    // "./views/all-table" → "all-table"
-    // "@scope/pkg/my-component" → "my-component"
-    const specifier = imp.from.value;
-    const lastSegment = specifier.split(/[/\\]/).pop() ?? specifier;
-    // Remove any extension if present
-    const name = lastSegment.replace(/\.(ts|js|html)$/, "");
-
-    return {
-      name,
-      bindables: {}, // TODO: Get bindables from resolution analysis
-      alias: imp.defaultAlias?.value ?? undefined,
-    };
-  });
-}
 
 /**
  * Transform a component file to inject $au definition.
@@ -137,7 +115,10 @@ function transformComponent(
     // Extract template meta (imports, bindables, etc.)
     const templateMeta = extractTemplateMeta(templateHtml, templateInfo.templatePath);
     const templateImports = convertToTemplateImports(templateMeta.imports);
-    const localImports = convertToLocalImports(templateMeta.imports);
+    const localImports = convertToLocalImports(
+      templateMeta.imports,
+      resolutionContext.semantics.resources.elements,
+    );
 
     // Compile with AOT
     const aot = compileWithAot(templateHtml, {
@@ -459,7 +440,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         );
       }
 
-      // Normalize SSR options (boolean | object | undefined → object)
+      // Normalize SSR options (boolean | object | undefined ΓåÆ object)
       const ssrOptions = typeof options.ssr === "object" ? options.ssr : {};
       // Set closure variable - SSR is enabled if explicitly true or object without enabled:false
       ssrEnabled = options.ssr === true || (typeof options.ssr === "object" && options.ssr.enabled !== false);
@@ -467,7 +448,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         ? mergeDefines(ssrDefines(), ssrOptions.defines)
         : ssrOptions.defines;
 
-      // Normalize SSG options (boolean | object | undefined → object)
+      // Normalize SSG options (boolean | object | undefined ΓåÆ object)
       const ssgInput = typeof options.ssg === "object" ? options.ssg : {};
       const ssgEnabled = options.ssg === true || (typeof options.ssg === "object" && ssgInput.enabled !== false);
       const resolvedSSG = {
@@ -562,6 +543,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
           logger,
           undefined,
           resolutionDefines,
+          options.thirdParty?.resources,
         ).then((ctx) => {
           resolutionContext = ctx;
           pluginState.resolution = ctx;
@@ -938,7 +920,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       if (result.expandedRoutes.length > 0) {
         for (const expanded of result.expandedRoutes) {
           resolvedConfig.logger.info(
-            `[aurelia-ssr] Expanded ${expanded.parameterizedRoute.fullPath} → ${expanded.staticPaths.length} pages`,
+            `[aurelia-ssr] Expanded ${expanded.parameterizedRoute.fullPath} ΓåÆ ${expanded.staticPaths.length} pages`,
           );
         }
       }

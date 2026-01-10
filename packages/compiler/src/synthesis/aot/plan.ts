@@ -392,7 +392,7 @@ function transformNode(
     case "text":
       return transformText(node, instructions, ctx);
     case "comment":
-      return transformComment(node, ctx);
+      return transformComment(node, instructions, instructionsByTarget, currentFrame, ctx);
   }
 }
 
@@ -715,11 +715,26 @@ function transformText(
   };
 }
 
-function transformComment(node: CommentNode, ctx: PlanningContext): PlanCommentNode {
+function transformComment(
+  node: CommentNode,
+  instructions: LinkedInstruction[],
+  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+  currentFrame: FrameId,
+  ctx: PlanningContext,
+): PlanCommentNode {
+  const controllers: PlanController[] = [];
+
+  for (const ins of instructions) {
+    if (ins.kind === "hydrateTemplateController") {
+      controllers.push(transformController(ins, instructionsByTarget, currentFrame, ctx));
+    }
+  }
+
   const result: PlanCommentNode = {
     kind: "comment",
     nodeId: node.id,
     content: node.text,
+    controllers,
   };
   if (ctx.options.includeLocations && node.loc) {
     result.loc = node.loc;

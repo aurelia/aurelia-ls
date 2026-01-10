@@ -27,7 +27,6 @@ import type {
   Semantics,
   SemanticsLookup,
   SemanticsLookupOptions,
-  LocalImportDef,
   SemanticsWithCaches,
   TypeRef,
 } from "./types.js";
@@ -46,7 +45,7 @@ import {
   toValueConverterSig,
 } from "./convert.js";
 import { buildResourceCatalog } from "./catalog.js";
-import { materializeResourcesForScope } from "./resource-graph.js";
+import { applyLocalImports, materializeResourcesForScope } from "./resource-graph.js";
 
 // ============================================================================
 // Builders
@@ -666,8 +665,14 @@ export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOpti
   const scope = opts?.scope ?? base.defaultScope ?? null;
 
   let resources = opts?.resources;
-  if (!resources && (graph || scope != null)) {
-    resources = materializeResourcesForScope(base, graph, scope).resources;
+  if (!resources) {
+    if (graph || scope != null) {
+      resources = materializeResourcesForScope(base, graph, scope, opts?.localImports).resources;
+    } else if (opts?.localImports && opts.localImports.length > 0) {
+      resources = applyLocalImports(base.resources, opts.localImports);
+    }
+  } else if (opts?.localImports && opts.localImports.length > 0) {
+    resources = applyLocalImports(resources, opts.localImports);
   }
 
   const semWithCaches = resources
@@ -677,7 +682,6 @@ export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOpti
       )
     : { ...base, resourceGraph: graph ?? undefined, defaultScope: scope ?? undefined };
 
-  const locals = buildLocalImportIndex(opts?.localImports);
   const catalog = semWithCaches.catalog;
 
   return {
@@ -690,7 +694,7 @@ export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOpti
       if (direct) return direct;
       const byAlias = findByAlias(semWithCaches.resources.elements, normalized);
       if (byAlias) return byAlias;
-      return locals.byName[normalized] ?? locals.byAlias[normalized] ?? null;
+      return null;
     },
     attribute(name: string): AttrRes | null {
       const normalized = name.toLowerCase();
@@ -753,38 +757,6 @@ export function getCommandMode(
   sem: Semantics,
 ): BindingMode | null {
   return getBindingCommandConfig(name, sem)?.mode ?? null;
-}
-
-function buildLocalImportIndex(
-  locals: readonly LocalImportDef[] | undefined,
-): { byName: Record<string, ElementRes>; byAlias: Record<string, ElementRes> } {
-  const byName: Record<string, ElementRes> = {};
-  const byAlias: Record<string, ElementRes> = {};
-  if (!locals) return { byName, byAlias };
-
-  for (const local of locals) {
-    const name = local.name.toLowerCase();
-    const bindables = local.bindables ?? {};
-    const aliases = [
-      local.alias,
-      ...(local.aliases ?? []),
-    ].filter((alias): alias is string => !!alias);
-    const normalizedAliases = aliases.map(a => a.toLowerCase());
-
-    const element: ElementRes = {
-      kind: "element",
-      name,
-      bindables,
-      ...(normalizedAliases.length ? { aliases: normalizedAliases } : {}),
-    };
-
-    if (!byName[name]) byName[name] = element;
-    for (const alias of normalizedAliases) {
-      if (!byAlias[alias]) byAlias[alias] = element;
-    }
-  }
-
-  return { byName, byAlias };
 }
 
 function findByAlias<T extends { aliases?: readonly string[] }>(

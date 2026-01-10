@@ -8,9 +8,25 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import ts from "typescript";
-import { DEFAULT_SEMANTICS, normalizePathForId, type ResourceScopeId, type CompileTrace } from "@aurelia-ls/compiler";
-import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type TemplateInfo, type RouteTree, type DefineMap } from "@aurelia-ls/resolution";
-import type { ResolutionContext } from "./types.js";
+import {
+  DEFAULT_SEMANTICS,
+  buildTemplateSyntaxRegistry,
+  normalizePathForId,
+  prepareSemantics,
+  type ResourceScopeId,
+  type CompileTrace,
+} from "@aurelia-ls/compiler";
+import {
+  resolve,
+  buildRouteTree,
+  createNodeFileSystem,
+  type ResolutionResult,
+  type TemplateInfo,
+  type RouteTree,
+  type DefineMap,
+} from "@aurelia-ls/resolution";
+import type { ExplicitResourceConfig, ResolutionContext } from "./types.js";
+import { buildThirdPartyResources, hasThirdPartyResources, mergeResourceCollections, mergeScopeResources } from "./third-party.js";
 
 /**
  * Logger interface for resolution output.
@@ -41,6 +57,7 @@ export async function createResolutionContext(
   logger: Logger,
   trace?: CompileTrace,
   defines?: DefineMap,
+  explicitResources?: ExplicitResourceConfig,
 ): Promise<ResolutionContext | null> {
   // Dynamically import TypeScript (peer dependency)
   let ts: typeof import("typescript");
@@ -95,35 +112,78 @@ export async function createResolutionContext(
 
   const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace, fileSystem, defines }, resolutionLogger);
 
+  const thirdPartyResources = buildThirdPartyResources(explicitResources);
+  const nextResult = hasThirdPartyResources(thirdPartyResources)
+    ? applyThirdPartyResources(result, thirdPartyResources)
+    : result;
+
   // Log resolution results
-  const globalCount = result.registration.sites.filter(s => s.scope.kind === "global").length;
-  const localCount = result.registration.sites.filter(s => s.scope.kind === "local").length;
-  logger.info(`[aurelia-ssr] Resolved ${result.resources.length} resources (${globalCount} global, ${localCount} local)`);
-  logger.info(`[aurelia-ssr] Discovered ${result.templates.length} external + ${result.inlineTemplates.length} inline templates`);
+  const globalCount = nextResult.registration.sites.filter(s => s.scope.kind === "global").length;
+  const localCount = nextResult.registration.sites.filter(s => s.scope.kind === "local").length;
+  logger.info(
+    `[aurelia-ssr] Resolved ${nextResult.resources.length} resources (${globalCount} global, ${localCount} local)`,
+  );
+  logger.info(
+    `[aurelia-ssr] Discovered ${nextResult.templates.length} external + ${nextResult.inlineTemplates.length} inline templates`,
+  );
 
   // Build template lookup map
   const templates = new Map<string, TemplateInfo>();
-  for (const template of result.templates) {
+  for (const template of nextResult.templates) {
     templates.set(normalizePathForId(template.templatePath), template);
   }
 
   // Build merged semantics with discovered resources
-  const semantics = result.semantics;
+  const semantics = nextResult.semantics;
 
   // Create context
   const context: ResolutionContext = {
-    result,
-    resourceGraph: result.resourceGraph,
+    result: nextResult,
+    resourceGraph: nextResult.resourceGraph,
     semantics,
     templates,
     getScopeForTemplate(templatePath: string): ResourceScopeId {
       const normalized = normalizePathForId(templatePath);
       const info = templates.get(normalized);
-      return info?.scopeId ?? result.resourceGraph.root;
+      return info?.scopeId ?? nextResult.resourceGraph.root;
     },
   };
 
   return context;
+}
+
+function applyThirdPartyResources(
+  result: ResolutionResult,
+  extra: Partial<ResolutionResult["semantics"]["resources"]>,
+): ResolutionResult {
+  const mergedResources = mergeResourceCollections(result.semantics.resources, extra);
+  const rootId = result.resourceGraph.root;
+  const rootScope = result.resourceGraph.scopes[rootId];
+  const mergedRootResources = mergeScopeResources(rootScope?.resources, extra);
+  const nextGraph = {
+    ...result.resourceGraph,
+    scopes: {
+      ...result.resourceGraph.scopes,
+      [rootId]: {
+        id: rootId,
+        parent: rootScope?.parent ?? null,
+        ...(rootScope?.label ? { label: rootScope.label } : {}),
+        resources: mergedRootResources,
+      },
+    },
+  };
+  const semantics = prepareSemantics(
+    { ...result.semantics, resourceGraph: nextGraph },
+    { resources: mergedResources },
+  );
+  const syntax = buildTemplateSyntaxRegistry(semantics);
+  return {
+    ...result,
+    semantics,
+    catalog: semantics.catalog,
+    syntax,
+    resourceGraph: nextGraph,
+  };
 }
 
 /**

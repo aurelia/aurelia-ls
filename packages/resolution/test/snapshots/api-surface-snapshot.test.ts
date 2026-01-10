@@ -57,13 +57,13 @@ describe("buildApiSurfaceSnapshot", () => {
     const elementSymbol = snapshot.symbols.find((symbol) => symbol.name === "alpha-element");
     expect(elementSymbol?.aliases).toEqual(["alpha", "alpha-alt"]);
     expect(elementSymbol?.bindables).toEqual([
-      { name: "bar", attribute: "bar", mode: "default" },
+      { name: "bar", attribute: "bar" },
       { name: "foo", attribute: "foo-bar", mode: "twoWay", primary: true },
     ]);
 
     const attributeSymbol = snapshot.symbols.find((symbol) => symbol.name === "beta-attr");
     expect(attributeSymbol?.bindables).toEqual([
-      { name: "value", attribute: "value", mode: "default", primary: true },
+      { name: "value", attribute: "value", primary: true },
     ]);
 
     const semanticId = semanticSnapshot.symbols.find((symbol) => symbol.name === "alpha-element")?.id;

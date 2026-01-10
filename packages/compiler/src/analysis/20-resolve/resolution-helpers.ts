@@ -157,10 +157,14 @@ export function resolveEffectiveMode(
   if (mode !== "default") return mode;
 
   const sem = lookup.sem;
+  const bindableMode = (value: BindingMode | undefined): BindingMode => {
+    if (!value || value === "default") return "toView";
+    return value;
+  };
 
   switch (target.kind) {
     case "element.bindable":
-      return target.bindable.mode ?? "toView";
+      return bindableMode(target.bindable.mode);
 
     case "element.nativeProp": {
       const explicit = target.prop.mode;
@@ -177,10 +181,10 @@ export function resolveEffectiveMode(
     }
 
     case "controller.prop":
-      return target.bindable.mode ?? "toView";
+      return bindableMode(target.bindable.mode);
 
     case "attribute.bindable":
-      return target.bindable.mode ?? "toView";
+      return bindableMode(target.bindable.mode);
 
     case "attribute":
       return "toView";
@@ -214,7 +218,9 @@ export function resolveAttrBindable(attr: AttrResRef, to: string): Bindable | nu
 
 export function resolveBindableMode(mode: BindingMode, bindable: Bindable | null | undefined): BindingMode {
   if (mode !== "default") return mode;
-  return bindable?.mode ?? "toView";
+  const bindableMode = bindable?.mode;
+  if (!bindableMode || bindableMode === "default") return "toView";
+  return bindableMode;
 }
 
 export function resolveIteratorAuxSpec(

@@ -131,6 +131,9 @@ export interface PlanCommentNode extends PlanNodeBase {
 
   /** Comment content */
   content: string;
+
+  /** Template controllers anchored on this comment */
+  controllers: PlanController[];
 }
 
 export interface PlanFragmentNode extends PlanNodeBase {

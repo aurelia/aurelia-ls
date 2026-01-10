@@ -16,9 +16,10 @@
 
 import type { ViteDevServer } from "vite";
 import { readFile } from "node:fs/promises";
-import { debug, type CompileTrace } from "@aurelia-ls/compiler";
+import { debug, extractTemplateMeta, type CompileTrace } from "@aurelia-ls/compiler";
 import type { ResolutionContext } from "./types.js";
 import { compileWithAot, type AotCompileResult, type ComponentClass } from "@aurelia-ls/ssr";
+import { convertToLocalImports } from "./local-imports.js";
 
 /**
  * A loaded component with its class and compiled template.
@@ -248,6 +249,12 @@ export async function loadProjectComponents(
       // Read template HTML
       const templateHtml = await readFile(templateInfo.templatePath, "utf-8");
 
+      const templateMeta = extractTemplateMeta(templateHtml, templateInfo.templatePath);
+      const localImports = convertToLocalImports(
+        templateMeta.imports,
+        resolution.semantics.resources.elements,
+      );
+
       // Compile with AOT using project semantics and scope
       const aot = compileWithAot(templateHtml, {
         templatePath: templateInfo.templatePath,
@@ -255,6 +262,7 @@ export async function loadProjectComponents(
         semantics: resolution.semantics,
         resourceGraph: resolution.resourceGraph,
         resourceScope: templateInfo.scopeId,
+        localImports,
         trace,
       });
 
@@ -407,12 +415,19 @@ export async function loadComponent(
   try {
     // Read and compile
     const templateHtml = await readFile(templateInfo.templatePath, "utf-8");
+    const templateMeta = extractTemplateMeta(templateHtml, templateInfo.templatePath);
+    const localImports = convertToLocalImports(
+      templateMeta.imports,
+      resolution.semantics.resources.elements,
+    );
+
     const aot = compileWithAot(templateHtml, {
       templatePath: templateInfo.templatePath,
       name: templateInfo.resourceName,
       semantics: resolution.semantics,
       resourceGraph: resolution.resourceGraph,
       resourceScope: templateInfo.scopeId,
+      localImports,
       trace,
     });
 

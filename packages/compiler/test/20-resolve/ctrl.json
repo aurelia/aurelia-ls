@@ -4,7 +4,7 @@
     "markup": "<div with.bind=\"ctx\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -13,7 +13,7 @@
     "markup": "<div if.bind=\"cond\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -22,7 +22,7 @@
     "markup": "<div promise.bind=\"p\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -31,7 +31,7 @@
     "markup": "<div switch.bind=\"x\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -40,7 +40,7 @@
     "markup": "<div portal.bind=\"t\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -58,7 +58,7 @@
     "markup": "<div with></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -67,7 +67,7 @@
     "markup": "<div if></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -76,7 +76,7 @@
     "markup": "<div portal></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "portal", "to": "target", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -85,7 +85,7 @@
     "markup": "<div promise></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -94,7 +94,7 @@
     "markup": "<div switch></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ]
     }
   },
@@ -112,7 +112,7 @@
     "markup": "<div if foo.bind=\"x\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
@@ -125,7 +125,7 @@
     "markup": "<div with.bind=\"ctx\" foo.bind=\"x\"></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "with", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
@@ -150,8 +150,8 @@
     "markup": "<div switch.bind=\"mode\"><template case.bind=\"when\"><b>hit</b></template><template default-case><i>default</i></template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
         { "kind": "branch", "res": "default-case", "branch": "default" }
       ]

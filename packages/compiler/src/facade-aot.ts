@@ -137,11 +137,18 @@ export function compileAot(
     const templatePath = options.templatePath ?? "template.html";
     const name = options.name ?? "template";
     const baseSemantics = options.semantics;
-    const semantics = options.resourceGraph || options.resourceScope !== undefined
-      ? materializeSemanticsForScope(baseSemantics, options.resourceGraph ?? null, options.resourceScope ?? null)
+    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
+    const semantics = options.resourceGraph || options.resourceScope !== undefined || hasLocalImports
+      ? materializeSemanticsForScope(
+          baseSemantics,
+          options.resourceGraph ?? null,
+          options.resourceScope ?? null,
+          options.localImports,
+        )
       : prepareSemantics(baseSemantics);
-    const catalog = options.catalog ?? semantics.catalog;
-    const semWithCatalog = options.catalog ? { ...semantics, catalog } : semantics;
+    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
+    const catalog = useCatalogOverride ? options.catalog! : semantics.catalog;
+    const semWithCatalog = useCatalogOverride ? { ...semantics, catalog } : semantics;
     const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
     const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
 

@@ -40,7 +40,7 @@ export function buildBindableDef(
   fallbackSpan?: TextSpan,
 ): BindableDef {
   const span = bindable.span ?? fallbackSpan;
-  const mode = bindable.mode ?? "default";
+  const mode = bindable.mode;
   const primary = bindable.primary ?? false;
   const attribute = bindable.attribute ?? bindable.name;
   debug.resolution("bindable.def", {

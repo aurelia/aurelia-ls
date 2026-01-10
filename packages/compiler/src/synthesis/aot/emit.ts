@@ -33,6 +33,7 @@ import type {
   AotMappingEntry,
   PlanNode,
   PlanElementNode,
+  PlanCommentNode,
   PlanTextNode,
   PlanBinding,
   PlanCustomElement,
@@ -203,7 +204,7 @@ class EmitContext {
         this.emitText(node, instructions);
         break;
       case "comment":
-        // Comments don't produce instructions
+        this.emitComment(node, instructions, nestedTemplates);
         break;
       case "fragment":
         for (const child of node.children) {
@@ -288,7 +289,7 @@ class EmitContext {
    */
   private emitController(
     ctrl: PlanController,
-    hostNode: PlanElementNode,
+    hostNode: PlanElementNode | PlanCommentNode,
     instructions: SerializedInstruction[][],
     nestedTemplates: SerializedDefinition[],
   ): void {
@@ -333,7 +334,7 @@ class EmitContext {
    */
   private emitControllerTemplate(
     ctrl: PlanController,
-    _hostNode: PlanElementNode,
+    _hostNode: PlanElementNode | PlanCommentNode,
     name: string,
   ): SerializedDefinition {
     const innerInstructions: SerializedInstruction[][] = [];
@@ -418,6 +419,19 @@ class EmitContext {
     // Recurse into children
     for (const child of node.children) {
       this.emitNode(child, instructions, nestedTemplates);
+    }
+  }
+
+  /**
+   * Emit instructions for a comment node (controllers only).
+   */
+  private emitComment(
+    node: PlanCommentNode,
+    instructions: SerializedInstruction[][],
+    nestedTemplates: SerializedDefinition[],
+  ): void {
+    for (const ctrl of node.controllers) {
+      this.emitController(ctrl, node, instructions, nestedTemplates);
     }
   }
 

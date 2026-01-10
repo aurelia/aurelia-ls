@@ -38,7 +38,7 @@
     "markup": "<div if.bind=\"x\">yes</div><div else>no</div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" }
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "toView" }
       ],
       "diags": []
     }
@@ -48,7 +48,7 @@
     "markup": "<div promise.bind=\"p\"><template then>resolved</template><template catch>error</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "then", "branch": "then" },
         { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
@@ -62,7 +62,7 @@
     "markup": "<template case.bind=\"x\">orphan case</template>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": [
@@ -87,8 +87,8 @@
     "markup": "<div switch.bind=\"x\"><template case.bind=\"1\">one</template><template default-case>other</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
         { "kind": "branch", "res": "default-case", "branch": "default" }
       ],
@@ -100,7 +100,7 @@
     "markup": "<div switch.bind=\"x\"><template default-case>one</template><template default-case>two</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "default-case", "branch": "default" },
         { "kind": "branch", "res": "default-case", "branch": "default" }
       ],
@@ -380,12 +380,12 @@
     "markup": "<div switch.bind=\"x\"><template case.bind=\"1\">one</template><template case.bind=\"2\">two</template><template case.bind=\"3\">three</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": []

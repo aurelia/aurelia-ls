@@ -505,11 +505,17 @@
       "name": "repeat_22",
       "instructions": [
         {
-          "kind": "bind",
+          "kind": "attribute",
           "target": 0,
-          "property": "href",
-          "expr": "link.url",
-          "mode": "toView"
+          "name": "href",
+          "alias": null,
+          "bindings": [
+            {
+              "property": "value",
+              "expr": "link.url",
+              "mode": "toView"
+            }
+          ]
         },
         {
           "kind": "text",

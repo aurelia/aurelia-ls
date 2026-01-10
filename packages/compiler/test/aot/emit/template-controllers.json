@@ -180,6 +180,104 @@
     }
   },
   {
+    "name": "AOT-TC-018: repeat with if on same element",
+    "markup": "<div repeat.for=\"item of items\" if.bind=\"item.active\">${item.name}</div>",
+    "expect": {
+      "targetCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "repeat_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-019: repeat with with on same element",
+    "markup": "<div repeat.for=\"item of items\" with.bind=\"item\">${name}</div>",
+    "expect": {
+      "targetCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "repeat_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "with", "templateIndex": 0, "propCount": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-020: if with repeat on same element",
+    "markup": "<div if.bind=\"show\" repeat.for=\"item of items\">${item}</div>",
+    "expect": {
+      "targetCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "if_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-021: repeat + if + with stacked",
+    "markup": "<div repeat.for=\"item of items\" if.bind=\"item.active\" with.bind=\"item\">${name}</div>",
+    "expect": {
+      "targetCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "repeat_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+          ],
+          "nested": [
+            {
+              "name": "if_1",
+              "instructions": [
+                { "type": "hydrateTemplateController", "target": 0, "resource": "with", "templateIndex": 0, "propCount": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-TC-022: template repeat with if",
+    "markup": "<template repeat.for=\"item of items\" if.bind=\"item.active\">${item}</template>",
+    "expect": {
+      "targetCount": 1,
+      "instructions": [
+        { "type": "hydrateTemplateController", "target": 0, "resource": "repeat", "templateIndex": 0, "propCount": 1 }
+      ],
+      "nested": [
+        {
+          "name": "repeat_0",
+          "instructions": [
+            { "type": "hydrateTemplateController", "target": 0, "resource": "if", "templateIndex": 0, "propCount": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  {
     "name": "AOT-TC-015: repeat with multiple bindings on host",
     "markup": "<li repeat.for=\"item of items\" class.bind=\"item.cls\" title.bind=\"item.title\">${item.text}</li>",
     "expect": {

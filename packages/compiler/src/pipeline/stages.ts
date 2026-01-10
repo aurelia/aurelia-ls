@@ -112,9 +112,11 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     const base = assertOption(options.semantics, "semantics");
     const graph = options.resourceGraph ?? base.resourceGraph ?? null;
     const scopeId = options.resourceScope ?? base.defaultScope ?? null;
-    const sem = materializeSemanticsForScope(base, graph, scopeId);
-    const catalog = options.catalog ?? sem.catalog;
-    const semWithCatalog = options.catalog ? { ...sem, catalog } : sem;
+    const sem = materializeSemanticsForScope(base, graph, scopeId, options.localImports);
+    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
+    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
+    const catalog = useCatalogOverride ? options.catalog! : sem.catalog;
+    const semWithCatalog = useCatalogOverride ? { ...sem, catalog } : sem;
     const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
     return {
       sem: semWithCatalog,
