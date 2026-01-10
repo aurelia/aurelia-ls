@@ -17,8 +17,8 @@ import {
   pickNarrowestContaining,
   toSourceSpan,
   toSourceLoc,
-  toSourceFileId,
 } from "../../src/model/span.js";
+import { toSourceFileId } from "../../src/model/identity.js";
 
 describe("span utilities", () => {
   test("spanLength and empties", () => {

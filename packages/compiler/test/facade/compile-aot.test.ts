@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import path from "node:path";
 
 import {
   compileAot,
@@ -53,7 +54,9 @@ describe("compileAot facade", () => {
     const expr = result.codeResult.expressions[0];
     expect(expr).toBeDefined();
     expect(hasSpan(expr?.ast)).toBe(true);
-    expect(expr?.ast.span?.file).toBe(toSourceFileId(templatePath));
+    const resolved = path.resolve(process.cwd(), templatePath);
+    const relative = path.isAbsolute(resolved) ? path.relative(process.cwd(), resolved) : resolved;
+    expect(expr?.ast.span?.file).toBe(toSourceFileId(relative));
   });
 
   test("deduplicates expressions when enabled", () => {
