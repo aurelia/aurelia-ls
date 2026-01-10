@@ -1,6 +1,7 @@
 import { test, expect } from "vitest";
 
 import {
+  DEFAULT_SEMANTICS,
   DefaultTemplateBuildService,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
@@ -115,6 +116,7 @@ function createProgram(opts = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
+    semantics: DEFAULT_SEMANTICS,
     ...opts,
   });
 }

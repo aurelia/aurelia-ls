@@ -12,13 +12,13 @@
  *   (exists)     (available)    (consumed)
  * ```
  *
- * 1. **Declaration** (inference layer): What resources exist in the project?
- *    - Input: Source files
- *    - Output: ResourceCandidate[]
- *    - Complexity: Low — purely syntactic (decorators, static $au, conventions)
+ * 1. **Declaration** (pattern matching layer): What resources exist in the project?
+ *    - Input: Source files (FileFacts)
+ *    - Output: ResourceDef[]
+ *    - Complexity: Low — pattern matching (decorators, static $au, define, conventions)
  *
  * 2. **Registration** (this module): What scope(s) is each resource available in?
- *    - Input: ResourceCandidate[], SourceFacts
+ *    - Input: ResourceDef[], FileFacts
  *    - Output: RegistrationAnalysis
  *    - Complexity: Medium — requires import graph traversal
  *
@@ -33,7 +33,7 @@
  *    A resource appearing in three `dependencies` arrays = three sites.
  *
  * 2. **ResourceRef can fail**: An identifier like `Foo` in `dependencies: [Foo]`
- *    might not resolve to a known ResourceCandidate. We model this explicitly
+ *    might not resolve to a known ResourceDef. We model this explicitly
  *    rather than silently dropping it.
  *
  * 3. **Scope is structured**: `{ kind: "local"; owner: NormalizedPath }` not just a path.
@@ -48,8 +48,7 @@
  * @module
  */
 
-import type { NormalizedPath, SourceSpan } from "@aurelia-ls/compiler";
-import type { ResourceCandidate } from "../inference/types.js";
+import type { NormalizedPath, ResourceDef, SourceSpan } from "@aurelia-ls/compiler";
 import type { PluginManifest } from "../plugins/types.js";
 
 // =============================================================================
@@ -140,7 +139,7 @@ export interface RegistrationSite {
   /**
    * What's being registered.
    *
-   * Can be resolved (we found the ResourceCandidate) or unresolved
+   * Can be resolved (we found the ResourceDef) or unresolved
    * (identifier doesn't map to a known resource).
    */
   readonly resourceRef: ResourceRef;
@@ -185,7 +184,7 @@ export interface RegistrationSite {
  * ```
  *
  * `NotAResource` is a valid identifier, but if it's not a custom element,
- * attribute, etc., we can't resolve it to a ResourceCandidate.
+ * attribute, etc., we can't resolve it to a ResourceDef.
  *
  * We still record the site (it's a registration attempt) but mark the
  * resource reference as unresolved with a reason.
@@ -193,7 +192,7 @@ export interface RegistrationSite {
 export type ResourceRef =
   | {
       readonly kind: "resolved";
-      readonly resource: ResourceCandidate;
+      readonly resource: ResourceDef;
     }
   | {
       readonly kind: "unresolved";
@@ -313,7 +312,7 @@ export type RegistrationEvidence =
  */
 export interface OrphanResource {
   /** The resource that has no registrations */
-  readonly resource: ResourceCandidate;
+  readonly resource: ResourceDef;
 
   /**
    * Where the resource is defined.
@@ -401,7 +400,7 @@ export interface LocalRegistrationSite extends RegistrationSite {
  * ```
  */
 export interface ResolvedRegistrationSite extends RegistrationSite {
-  readonly resourceRef: { readonly kind: "resolved"; readonly resource: ResourceCandidate };
+  readonly resourceRef: { readonly kind: "resolved"; readonly resource: ResourceDef };
 }
 
 // =============================================================================

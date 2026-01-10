@@ -1,5 +1,5 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { Semantics } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../language/registry.js";
 import type {
   HydrateTemplateControllerIR,
   InstructionRow,
@@ -19,7 +19,7 @@ export type RowCollector = (
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[],
-  sem: Semantics
+  catalog: ResourceCatalog
 ) => void;
 
 export function templateOfElementChildren(
@@ -27,12 +27,12 @@ export function templateOfElementChildren(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   collectRows: RowCollector
 ): TemplateIR {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
-  const host = stripControllerAttrsFromElement(el, attrParser, sem);
+  const host = stripControllerAttrsFromElement(el, attrParser, catalog);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
   return buildTemplateFrom(
     syntheticRoot,
@@ -41,7 +41,7 @@ export function templateOfElementChildren(
     attrParser,
     table,
     nestedTemplates,
-    sem,
+    catalog,
     collectRows
   );
 }
@@ -51,12 +51,12 @@ export function templateOfElementChildrenWithMap(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   collectRows: RowCollector
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
-  const host = stripControllerAttrsFromElement(el, attrParser, sem);
+  const host = stripControllerAttrsFromElement(el, attrParser, catalog);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
 
   const def = buildTemplateFrom(
@@ -66,7 +66,7 @@ export function templateOfElementChildrenWithMap(
     attrParser,
     table,
     nestedTemplates,
-    sem,
+    catalog,
     collectRows
   );
   return { def, idMap };
@@ -75,10 +75,10 @@ export function templateOfElementChildrenWithMap(
 export function stripControllerAttrsFromElement(
   el: P5Element,
   attrParser: AttributeParser,
-  sem: Semantics
+  catalog: ResourceCatalog
 ): P5Element {
   const filteredAttrs = (el.attrs ?? []).filter(
-    (a) => !isControllerAttr(attrParser.parse(a.name, a.value ?? ""), sem)
+    (a) => !isControllerAttr(attrParser.parse(a.name, a.value ?? ""), catalog)
   );
 
   if (el.nodeName.toLowerCase() === "template") {
@@ -108,7 +108,7 @@ export function templateOfTemplateContent(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   collectRows: RowCollector
 ): TemplateIR {
   const ids = new DomIdAllocator();
@@ -119,7 +119,7 @@ export function templateOfTemplateContent(
     attrParser,
     table,
     nestedTemplates,
-    sem,
+    catalog,
     collectRows
   );
 }
@@ -156,7 +156,7 @@ export function buildTemplateFrom(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   collectRows: RowCollector
 ): TemplateIR {
   const dom: TemplateNode = {
@@ -175,7 +175,7 @@ export function buildTemplateFrom(
     table,
     nestedTemplates,
     rows,
-    sem
+    catalog
   );
   const t: TemplateIR = { dom, rows };
   nestedTemplates.push(t);

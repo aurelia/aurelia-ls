@@ -43,7 +43,7 @@ export function getProp(obj: ts.ObjectLiteralExpression, name: string): ts.Prope
 /**
  * Unwrap type assertions (e.g., `"value" as const` → `"value"`).
  */
-function unwrapTypeAssertion(expr: ts.Expression): ts.Expression {
+export function unwrapTypeAssertion(expr: ts.Expression): ts.Expression {
   // Handle: "value" as const, "value" as SomeType
   if (ts.isAsExpression(expr)) {
     return unwrapTypeAssertion(expr.expression);

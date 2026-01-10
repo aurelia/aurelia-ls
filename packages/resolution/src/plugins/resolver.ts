@@ -15,7 +15,7 @@ import type {
   PluginResolution,
   PluginResolver,
 } from "./types.js";
-import type { ImportFact } from "../extraction/types.js";
+import type { ImportDeclaration } from "../extraction/file-facts.js";
 import { DEFAULT_PLUGIN_MANIFESTS, getPluginManifest } from "./manifests.js";
 
 /**
@@ -116,18 +116,18 @@ export function mightBePluginByName(name: string): boolean {
  */
 export function traceIdentifierImport(
   localName: string,
-  imports: readonly ImportFact[]
+  imports: readonly ImportDeclaration[]
 ): ImportOrigin | null {
   for (const imp of imports) {
     if (imp.kind === "named") {
-      // Check each named import
-      for (const name of imp.names) {
+      // Check each named import binding
+      for (const binding of imp.bindings) {
         // Match by alias (local name) or original name if no alias
-        const effectiveLocalName = name.alias ?? name.name;
+        const effectiveLocalName = binding.alias ?? binding.name;
         if (effectiveLocalName === localName) {
           return {
             moduleSpecifier: imp.moduleSpecifier,
-            exportName: name.name, // Original export name, not alias
+            exportName: binding.name, // Original export name, not alias
           };
         }
       }
@@ -141,6 +141,7 @@ export function traceIdentifierImport(
       }
     }
     // Namespace imports handled separately via traceMemberAccessImport
+    // Side-effect imports have no bindings to trace
   }
 
   return null;
@@ -156,7 +157,7 @@ export function traceIdentifierImport(
 export function traceMemberAccessImport(
   namespace: string,
   member: string,
-  imports: readonly ImportFact[]
+  imports: readonly ImportDeclaration[]
 ): ImportOrigin | null {
   for (const imp of imports) {
     if (imp.kind === "namespace") {
@@ -171,3 +172,4 @@ export function traceMemberAccessImport(
 
   return null;
 }
+

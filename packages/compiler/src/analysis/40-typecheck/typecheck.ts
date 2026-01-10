@@ -398,8 +398,9 @@ function isTypeRef(x: unknown): x is TypeRef {
   return k === "ts" || k === "any" || k === "unknown";
 }
 
-function typeRefToString(t: TypeRef | undefined): string {
+function typeRefToString(t: TypeRef | string | undefined | null): string {
   if (!t) return "unknown";
+  if (typeof t === "string") return t;
   switch (t.kind) {
     case "ts": return t.name;
     case "any": return "any";

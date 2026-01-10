@@ -1,0 +1,10 @@
+{
+  "name": "factory-arguments-test",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "peerDependencies": {
+    "aurelia": "^2.0.0"
+  }
+}

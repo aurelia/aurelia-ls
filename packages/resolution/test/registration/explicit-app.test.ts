@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { extractAllFacts, resolveImports, buildExportBindingMap } from "@aurelia-ls/resolution";
-import { createResolverPipeline } from "@aurelia-ls/resolution";
-import { createRegistrationAnalyzer } from "@aurelia-ls/resolution";
-import type { RegistrationAnalysis, RegistrationSite } from "@aurelia-ls/resolution";
+import {
+  extractAllFileFacts,
+  buildExportBindingMap,
+  createRegistrationAnalyzer,
+  matchFileFacts,
+} from "@aurelia-ls/resolution";
+import type { RegistrationAnalysis, RegistrationSite, ResourceDef } from "@aurelia-ls/resolution";
 import {
   createProgramFromApp,
   getTestAppPath,
@@ -11,12 +14,16 @@ import {
 
 const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
 
+function resourceName(resource: ResourceDef): string {
+  return resource.name.value ?? "";
+}
+
 /**
  * Find a resolved site by resource name.
  */
 function findSiteByName(sites: readonly RegistrationSite[], name: string): RegistrationSite | undefined {
   return sites.find(s =>
-    s.resourceRef.kind === "resolved" && s.resourceRef.resource.name === name
+    s.resourceRef.kind === "resolved" && resourceName(s.resourceRef.resource) === name
   );
 }
 
@@ -24,7 +31,7 @@ function findSiteByName(sites: readonly RegistrationSite[], name: string): Regis
  * Get resource name from a site (only for resolved refs).
  */
 function getResourceName(site: RegistrationSite): string | undefined {
-  return site.resourceRef.kind === "resolved" ? site.resourceRef.resource.name : undefined;
+  return site.resourceRef.kind === "resolved" ? resourceName(site.resourceRef.resource) : undefined;
 }
 
 describe("Registration: explicit-app", () => {
@@ -32,19 +39,22 @@ describe("Registration: explicit-app", () => {
 
   beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
+    const allFacts = extractAllFileFacts(program);
+    const appFacts = filterFactsByPathPattern(allFacts, "/explicit-app/src/");
 
-    // Resolve imports to populate DependencyRef.resolvedPath
-    const resolvedFacts = resolveImports(allFacts);
-    const appFacts = filterFactsByPathPattern(resolvedFacts, "/explicit-app/src/");
+    // Run pattern matching on all files to get resources
+    const allResources: ResourceDef[] = [];
+    for (const [, fileFacts] of appFacts) {
+      const matchResult = matchFileFacts(fileFacts);
+      allResources.push(...matchResult.resources);
+    }
 
     // Build export binding map
     const exportBindings = buildExportBindingMap(appFacts);
 
-    const pipeline = createResolverPipeline();
-    const resolved = pipeline.resolve(appFacts);
+    // Analyze registrations
     const analyzer = createRegistrationAnalyzer();
-    analysis = analyzer.analyze(resolved.candidates, appFacts, exportBindings);
+    analysis = analyzer.analyze(allResources, appFacts, exportBindings);
   });
 
   it("analyzes registration sites and orphans for all candidates", () => {
@@ -54,7 +64,7 @@ describe("Registration: explicit-app", () => {
 
     // Get unique resource names from sites
     const registeredNames = new Set(resolvedSites.map(getResourceName).filter(Boolean));
-    const orphanNames = new Set(analysis.orphans.map(o => o.resource.name));
+    const orphanNames = new Set(analysis.orphans.map(o => resourceName(o.resource)));
 
     // Assert site breakdown by scope
     const globalSites = resolvedSites.filter(s => s.scope.kind === "global");
@@ -96,8 +106,8 @@ describe("Registration: explicit-app", () => {
     // date value converter should be global
     const dateSites = analysis.sites.filter(s =>
       s.resourceRef.kind === "resolved" &&
-      s.resourceRef.resource.name === "date" &&
-      s.resourceRef.resource.kind === "valueConverter"
+      resourceName(s.resourceRef.resource) === "date" &&
+      s.resourceRef.resource.kind === "value-converter"
     );
     expect(dateSites.length > 0, "Should find date site").toBe(true);
     expect(dateSites[0]!.scope.kind, "date should be global").toBe("global");

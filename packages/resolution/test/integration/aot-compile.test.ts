@@ -467,7 +467,7 @@ function compileTemplate(markup, options = {}) {
     exprParser,
     file: templatePath,
     name,
-    sem: semantics,
+    catalog: semantics.catalog,
   });
 
   const resolveOpts = options.resourceGraph

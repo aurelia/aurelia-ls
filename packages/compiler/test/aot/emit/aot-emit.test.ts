@@ -25,6 +25,7 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS as SEM_DEFAULT,
+  prepareSemantics,
   INSTRUCTION_TYPE,
   BINDING_MODE,
 } from "@aurelia-ls/compiler";
@@ -115,9 +116,10 @@ function loadVectors(): TestVector[] {
 
 // Create compiler context
 function createCompilerContext(vector: TestVector): CompilerContext {
-  const sem = vector.semOverrides
+  const baseSem = vector.semOverrides
     ? deepMergeSemantics(SEM_DEFAULT, vector.semOverrides)
     : SEM_DEFAULT;
+  const sem = prepareSemantics(baseSem);
 
   return {
     sem,
@@ -133,7 +135,7 @@ function runPipeline(markup: string, ctx: CompilerContext): unknown {
     exprParser: ctx.exprParser,
     file: "test.html",
     name: "test",
-    sem: ctx.sem,
+    catalog: ctx.sem.catalog,
   });
   const linked = resolveHost(ir, ctx.sem);
   const scope = bindScopes(linked);

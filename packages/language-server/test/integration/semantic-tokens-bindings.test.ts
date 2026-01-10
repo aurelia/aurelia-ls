@@ -49,7 +49,7 @@ function getBindingTokens(markup: string): { tokens: RawToken[]; text: string; r
     exprParser,
     file: "test.html",
     name: "test",
-    sem: DEFAULT_SEMANTICS,
+    catalog: DEFAULT_SEMANTICS.catalog,
   });
 
   const linked = resolveHost(ir, DEFAULT_SEMANTICS);
@@ -501,7 +501,7 @@ describe("Semantic Tokens - CRLF/LF Mismatch (simulates VS Code behavior)", () =
       exprParser,
       file: "test.html",
       name: "test",
-      sem: DEFAULT_SEMANTICS,
+      catalog: DEFAULT_SEMANTICS.catalog,
     });
     const linked = resolveHost(ir, DEFAULT_SEMANTICS);
     const template = linked.templates[0]!;
@@ -535,7 +535,7 @@ describe("Semantic Tokens - CRLF/LF Mismatch (simulates VS Code behavior)", () =
       exprParser,
       file: "test.html",
       name: "test",
-      sem: DEFAULT_SEMANTICS,
+      catalog: DEFAULT_SEMANTICS.catalog,
     });
     const linked = resolveHost(ir, DEFAULT_SEMANTICS);
     const template = linked.templates[0]!;
@@ -568,7 +568,7 @@ describe("Diagnostic: Slice positions", () => {
       exprParser,
       file: "test.html",
       name: "test",
-      sem: DEFAULT_SEMANTICS,
+      catalog: DEFAULT_SEMANTICS.catalog,
     });
     const linked = resolveHost(ir, DEFAULT_SEMANTICS);
     const template = linked.templates[0]!;
@@ -613,7 +613,7 @@ describe("Diagnostic: Slice positions", () => {
       exprParser,
       file: "test.html",
       name: "test",
-      sem: DEFAULT_SEMANTICS,
+      catalog: DEFAULT_SEMANTICS.catalog,
     });
     const linked = resolveHost(ir, DEFAULT_SEMANTICS);
     const template = linked.templates[0]!;
@@ -640,7 +640,7 @@ describe("Diagnostic: Slice positions", () => {
       exprParser,
       file: "test.html",
       name: "test",
-      sem: DEFAULT_SEMANTICS,
+      catalog: DEFAULT_SEMANTICS.catalog,
     });
     const linked = resolveHost(ir, DEFAULT_SEMANTICS);
     const template = linked.templates[0]!;
@@ -702,7 +702,7 @@ function getInterpolationTokens(markup: string): { tokens: RawToken[]; text: str
     exprParser,
     file: "test.html",
     name: "test",
-    sem: DEFAULT_SEMANTICS,
+    catalog: DEFAULT_SEMANTICS.catalog,
   });
 
   const linked = resolveHost(ir, DEFAULT_SEMANTICS);

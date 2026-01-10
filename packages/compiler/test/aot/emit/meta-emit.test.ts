@@ -25,7 +25,7 @@ function compileTemplate(markup: string) {
     exprParser,
     file: "test.html",
     name: "test",
-    sem: DEFAULT_SEMANTICS,
+    catalog: DEFAULT_SEMANTICS.catalog,
   });
   const linked = resolveHost(ir, DEFAULT_SEMANTICS);
   const scope = bindScopes(linked);

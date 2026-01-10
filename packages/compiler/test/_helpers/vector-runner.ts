@@ -29,6 +29,7 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS as SEM_DEFAULT,
+  prepareSemantics,
 } from "@aurelia-ls/compiler";
 
 /**
@@ -95,9 +96,10 @@ export function getDirname(importMetaUrl: string): string {
  * Create common compiler context (parsers, semantics).
  */
 export function createCompilerContext(vector: TestVector): CompilerContext {
-  const sem = vector.semOverrides
+  const baseSem = vector.semOverrides
     ? deepMergeSemantics(SEM_DEFAULT, vector.semOverrides)
     : SEM_DEFAULT;
+  const sem = prepareSemantics(baseSem);
 
   return {
     sem,
@@ -115,7 +117,7 @@ export function lowerOpts(ctx: CompilerContext) {
     exprParser: ctx.exprParser,
     file: "mem.html",
     name: "mem",
-    sem: ctx.sem,
+    catalog: ctx.sem.catalog,
   };
 }
 

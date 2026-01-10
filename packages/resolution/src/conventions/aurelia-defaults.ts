@@ -32,7 +32,6 @@ export const RESOURCE_DECORATOR_NAMES = [
  * Default Aurelia class name suffix patterns.
  *
  * Based on @aurelia/plugin-conventions.
- * See docs/aurelia-conventions.md for details.
  */
 export const DEFAULT_SUFFIXES: Required<SuffixConfig> = {
   element: ["CustomElement", "Element"],

@@ -8,8 +8,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import ts from "typescript";
-import { DEFAULT_SEMANTICS, normalizePathForId, type BindingMode, type ResourceScopeId, type Semantics, type Bindable, type CompileTrace } from "@aurelia-ls/compiler";
-import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type ResourceCandidate, type TemplateInfo, type RouteTree } from "@aurelia-ls/resolution";
+import { DEFAULT_SEMANTICS, normalizePathForId, type ResourceScopeId, type CompileTrace } from "@aurelia-ls/compiler";
+import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type TemplateInfo, type RouteTree, type DefineMap } from "@aurelia-ls/resolution";
 import type { ResolutionContext } from "./types.js";
 
 /**
@@ -33,12 +33,14 @@ interface Logger {
  * @param tsconfigPath - Absolute path to tsconfig.json
  * @param logger - Logger for output
  * @param trace - Optional compile trace
+ * @param defines - Optional compile-time defines for conditional registration guards
  * @returns Resolution context or null if resolution fails
  */
 export async function createResolutionContext(
   tsconfigPath: string,
   logger: Logger,
   trace?: CompileTrace,
+  defines?: DefineMap,
 ): Promise<ResolutionContext | null> {
   // Dynamically import TypeScript (peer dependency)
   let ts: typeof import("typescript");
@@ -91,12 +93,12 @@ export async function createResolutionContext(
   // This enables discovery of foo.ts + foo.html as a custom element without @customElement decorator
   const fileSystem = createNodeFileSystem({ root: basePath });
 
-  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace, fileSystem }, resolutionLogger);
+  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace, fileSystem, defines }, resolutionLogger);
 
   // Log resolution results
   const globalCount = result.registration.sites.filter(s => s.scope.kind === "global").length;
   const localCount = result.registration.sites.filter(s => s.scope.kind === "local").length;
-  logger.info(`[aurelia-ssr] Resolved ${result.candidates.length} resources (${globalCount} global, ${localCount} local)`);
+  logger.info(`[aurelia-ssr] Resolved ${result.resources.length} resources (${globalCount} global, ${localCount} local)`);
   logger.info(`[aurelia-ssr] Discovered ${result.templates.length} external + ${result.inlineTemplates.length} inline templates`);
 
   // Build template lookup map
@@ -106,7 +108,7 @@ export async function createResolutionContext(
   }
 
   // Build merged semantics with discovered resources
-  const semantics = mergeSemantics(DEFAULT_SEMANTICS, result.candidates);
+  const semantics = result.semantics;
 
   // Create context
   const context: ResolutionContext = {
@@ -122,79 +124,6 @@ export async function createResolutionContext(
   };
 
   return context;
-}
-
-/**
- * Merge discovered resources into base semantics.
- */
-function mergeSemantics(base: Semantics, candidates: readonly ResourceCandidate[]): Semantics {
-  const elements = { ...base.resources.elements };
-  const attributes = { ...base.resources.attributes };
-  const valueConverters = { ...base.resources.valueConverters };
-  const bindingBehaviors = { ...base.resources.bindingBehaviors };
-
-  for (const candidate of candidates) {
-    switch (candidate.kind) {
-      case "element": {
-        const bindables: Record<string, Bindable> = {};
-        for (const b of candidate.bindables) {
-          const bindable: Bindable = { name: b.name };
-          if (b.mode) {
-            bindable.mode = b.mode as BindingMode;
-          }
-          bindables[b.name] = bindable;
-        }
-        const elementRes: (typeof elements)[string] = {
-          kind: "element",
-          name: candidate.name,
-          bindables,
-          aliases: [...candidate.aliases],
-        };
-        if (candidate.containerless !== undefined) {
-          elementRes.containerless = candidate.containerless;
-        }
-        elements[candidate.name] = elementRes;
-        break;
-      }
-      case "attribute": {
-        const bindables: Record<string, Bindable> = {};
-        for (const b of candidate.bindables) {
-          const bindable: Bindable = { name: b.name };
-          if (b.mode) {
-            bindable.mode = b.mode as BindingMode;
-          }
-          bindables[b.name] = bindable;
-        }
-        attributes[candidate.name] = {
-          kind: "attribute",
-          name: candidate.name,
-          bindables,
-          aliases: [...candidate.aliases],
-          isTemplateController: candidate.isTemplateController ?? false,
-          noMultiBindings: candidate.noMultiBindings ?? false,
-        };
-        break;
-      }
-      case "valueConverter":
-        valueConverters[candidate.name] = { name: candidate.name };
-        break;
-      case "bindingBehavior":
-        bindingBehaviors[candidate.name] = { name: candidate.name };
-        break;
-    }
-  }
-
-  return {
-    ...base,
-    resources: {
-      elements,
-      attributes,
-      controllers: base.resources.controllers,
-      valueConverters,
-      bindingBehaviors,
-    },
-    resourceGraph: null, // Resource graph is passed separately
-  };
 }
 
 /**

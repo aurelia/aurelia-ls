@@ -9,7 +9,14 @@
     ".": {
       "import": "./out/index.js",
       "types": "./out/index.d.ts"
+    },
+    "./npm": {
+      "import": "./out/npm/index.js",
+      "types": "./out/npm/index.d.ts"
     }
+  },
+  "bin": {
+    "aurelia-inspect": "./out/bin/aurelia-inspect.js"
   },
   "scripts": {
     "build": "tsc -b"

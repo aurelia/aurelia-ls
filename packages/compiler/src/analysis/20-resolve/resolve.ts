@@ -157,7 +157,7 @@ export interface ResolveHostOptions {
    * These are resolved as local element definitions for this template,
    * allowing resolution of elements imported via `<import from="./foo">`.
    */
-  localImports?: LocalImportDef[];
+  localImports?: readonly LocalImportDef[];
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
@@ -174,10 +174,11 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
 
     const diags: SemDiagnostic[] = [];
     const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
+    const ctxGraph = opts && opts.graph !== undefined ? opts.graph : (sem.resourceGraph ?? null);
     const ctx: ResolverContext = {
       lookup: createSemanticsLookup(sem, lookupOpts),
       diags,
-      graph: opts?.graph ?? null,
+      graph: ctxGraph,
     };
 
     // Link all templates
@@ -230,12 +231,12 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts?: ResolveHostOpti
  * ============================================================================ */
 
 function buildLookupOpts(opts: ResolveHostOptions): SemanticsLookupOptions {
-  const out: SemanticsLookupOptions = {};
-  if (opts.resources) out.resources = opts.resources;
-  if (opts.graph !== undefined) out.graph = opts.graph;
-  if (opts.scope !== undefined) out.scope = opts.scope ?? null;
-  if (opts.localImports) out.localImports = opts.localImports;
-  return out;
+  return {
+    ...(opts.resources ? { resources: opts.resources } : {}),
+    ...(opts.graph !== undefined ? { graph: opts.graph } : {}),
+    ...(opts.scope !== undefined ? { scope: opts.scope ?? null } : {}),
+    ...(opts.localImports ? { localImports: opts.localImports } : {}),
+  };
 }
 
 function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {

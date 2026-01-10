@@ -1,0 +1,9 @@
+{
+  "name": "@test/multi-class",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "keywords": ["aurelia"],
+  "dependencies": {
+    "@aurelia/runtime-html": "*"
+  }
+}

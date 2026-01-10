@@ -1,34 +1,29 @@
-export { extractAllFacts, extractSourceFacts } from "./extractor.js";
-export type { ExtractionOptions } from "./extractor.js";
-export { extractClassFacts } from "./class-extractor.js";
-export { extractRegistrationCalls } from "./registrations.js";
-export { resolveImports } from "./import-resolver.js";
+// === FileFacts extraction ===
+export {
+  extractAllFileFacts,
+  extractFileFacts,
+  extractFileContext,
+} from "./file-facts-extractor.js";
+
+export type { ExtractionOptions } from "./file-facts-extractor.js";
+
+export type {
+  FileFacts,
+  ImportDeclaration,
+  ExportDeclaration,
+  VariableDeclaration,
+  FunctionDeclaration,
+  RegistrationCall,
+  DefineCall,
+  FileContext,
+  TemplateImport,
+  MatchContext,
+} from "./file-facts.js";
+
+export { emptyFileFacts, emptyFileContext } from "./file-facts.js";
+
 export {
   extractTemplateImports,
   resolveTemplateImportPaths,
   extractComponentTemplateImports,
 } from "./template-imports.js";
-
-export type {
-  SourceFacts,
-  ClassFacts,
-  DecoratorFact,
-  DecoratorArgFact,
-  PropertyValueFact,
-  StaticAuFact,
-  StaticDependenciesFact,
-  DependencyRef,
-  BindableMemberFact,
-  BindableDefFact,
-  RegistrationCallFact,
-  RegistrationArgFact,
-  BindingMode,
-  Position,
-  ImportFact,
-  ImportedName,
-  ExportFact,
-  ExportedName,
-  SiblingFileFact,
-  TemplateImportFact,
-  NamedAlias,
-} from "./types.js";

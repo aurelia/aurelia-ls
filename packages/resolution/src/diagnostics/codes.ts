@@ -76,12 +76,13 @@ export const RES0030_PLUGIN_REQUIRED = "RES0030";
 /**
  * Get the orphan error code for a resource kind.
  */
-export function getOrphanCode(kind: "element" | "attribute" | "valueConverter" | "bindingBehavior"): string {
+export function getOrphanCode(kind: "custom-element" | "custom-attribute" | "template-controller" | "value-converter" | "binding-behavior"): string {
   switch (kind) {
-    case "element": return RES0001_ORPHAN_ELEMENT;
-    case "attribute": return RES0002_ORPHAN_ATTRIBUTE;
-    case "valueConverter": return RES0003_ORPHAN_VALUE_CONVERTER;
-    case "bindingBehavior": return RES0004_ORPHAN_BINDING_BEHAVIOR;
+    case "custom-element": return RES0001_ORPHAN_ELEMENT;
+    case "custom-attribute": return RES0002_ORPHAN_ATTRIBUTE;
+    case "template-controller": return RES0002_ORPHAN_ATTRIBUTE; // Template controllers are a kind of attribute
+    case "value-converter": return RES0003_ORPHAN_VALUE_CONVERTER;
+    case "binding-behavior": return RES0004_ORPHAN_BINDING_BEHAVIOR;
   }
 }
 

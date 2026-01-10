@@ -1,0 +1,9 @@
+{
+  "name": "local-spread-fixture",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "peerDependencies": {
+    "aurelia": "^2.0.0"
+  }
+}

@@ -111,6 +111,7 @@ export const DEFAULT_SSR_OPTIONS: ResolvedSSRConfig = {
   baseHref: "/",
   ssrEntry: null,
   register: null,
+  defines: {},
   manifest: DEFAULT_SSR_MANIFEST_OPTIONS,
   hydration: DEFAULT_SSR_HYDRATION_OPTIONS,
 };
@@ -319,6 +320,7 @@ export function normalizeSSROptions(
     baseHref: options.baseHref ?? DEFAULT_SSR_OPTIONS.baseHref,
     ssrEntry: options.ssrEntry ?? DEFAULT_SSR_OPTIONS.ssrEntry,
     register: options.register ?? null,
+    defines: options.defines ?? DEFAULT_SSR_OPTIONS.defines,
     manifest: normalizeSSRManifestOptions(options.manifest, isDev),
     hydration: normalizeSSRHydrationOptions(options.hydration, isDev),
   };

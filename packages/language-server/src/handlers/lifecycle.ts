@@ -120,17 +120,23 @@ export async function refreshDocument(
 
 function createWorkspaceFromIndex(ctx: ServerContext): TemplateWorkspace {
   const semantics = ctx.projectIndex.currentSemantics();
+  const catalog = ctx.projectIndex.currentCatalog();
+  const syntax = ctx.projectIndex.currentSyntax();
   const resourceGraph = ctx.projectIndex.currentResourceGraph();
   const options: {
     vm: typeof ctx.vmReflection;
     isJs: boolean;
     semantics: typeof semantics;
+    catalog: typeof catalog;
+    syntax: typeof syntax;
     resourceGraph: typeof resourceGraph;
     resourceScope?: typeof resourceGraph.root | null;
   } = {
     vm: ctx.vmReflection,
     isJs: false,
     semantics,
+    catalog,
+    syntax,
     resourceGraph,
   };
   const resourceScope = semantics.defaultScope ?? resourceGraph.root ?? null;

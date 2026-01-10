@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 
-import { DefaultTemplateProgram } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, DefaultTemplateProgram } from "@aurelia-ls/compiler";
 
 test("cache stats track hits and invalidation", () => {
   const program = createProgram();
@@ -173,6 +173,7 @@ function createProgram(overrides = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
+    semantics: DEFAULT_SEMANTICS,
     ...overrides,
   });
 }

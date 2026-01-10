@@ -5,13 +5,12 @@ import {
   findTemplateSibling,
   findStylesheetSibling,
   classMatchesFileName,
-  toSiblingFacts,
   buildFilePair,
   detectSiblingsBatch,
   findOrphanTemplates,
   findSourcesWithoutTemplates,
 } from "@aurelia-ls/resolution";
-import type { MockFileSystemContext, SiblingFile } from "@aurelia-ls/resolution";
+import type { MockFileSystemContext } from "@aurelia-ls/resolution";
 
 /**
  * Unit tests for sibling file detection.
@@ -200,32 +199,6 @@ describe("Sibling Detection", () => {
     it("handles multi-segment kebab-case", () => {
       expect(classMatchesFileName("CortexDeviceList", "/src/cortex-device-list.ts")).toBe(true);
       expect(classMatchesFileName("CortexDeviceListCustomElement", "/src/cortex-device-list.ts")).toBe(true);
-    });
-  });
-
-  // ==========================================================================
-  // toSiblingFacts
-  // ==========================================================================
-
-  describe("toSiblingFacts", () => {
-    it("converts SiblingFile array to SiblingFileFact array", () => {
-      const siblings: SiblingFile[] = [
-        { path: "/src/foo.html" as any, extension: ".html", baseName: "foo" },
-        { path: "/src/foo.css" as any, extension: ".css", baseName: "foo" },
-      ];
-
-      const facts = toSiblingFacts(siblings);
-
-      expect(facts).toEqual([
-        { path: "/src/foo.html", extension: ".html", baseName: "foo" },
-        { path: "/src/foo.css", extension: ".css", baseName: "foo" },
-      ]);
-    });
-
-    it("returns empty array for empty input", () => {
-      const facts = toSiblingFacts([]);
-
-      expect(facts).toEqual([]);
     });
   });
 

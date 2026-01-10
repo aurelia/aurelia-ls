@@ -1,5 +1,5 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { Semantics } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../language/registry.js";
 import type { InstructionRow, TemplateIR } from "../../model/ir.js";
 import { collectControllers } from "./controller-lowering.js";
 import { lowerElementAttributes } from "./element-lowering.js";
@@ -15,7 +15,7 @@ export function collectRows(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   skipTags?: Set<string>
 ): void {
   ids.withinChildren(() => {
@@ -28,7 +28,7 @@ export function collectRows(
         // But process their children - parse5 may have nested content inside them
         if (skipTags?.has(tag)) {
           // Recursively process children
-          collectRows(n, ids, attrParser, table, nestedTemplates, rows, sem, skipTags);
+          collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags);
           continue;
         }
 
@@ -42,15 +42,15 @@ export function collectRows(
         if (tag === "let") {
           rows.push({
             target,
-            instructions: [lowerLetElement(n, attrParser, table, sem)],
+            instructions: [lowerLetElement(n, attrParser, table, catalog)],
           });
           ids.exitElement();
           continue;
         }
 
-        const ctrlRows = collectControllers(n, attrParser, table, nestedTemplates, sem, collectRows);
+        const ctrlRows = collectControllers(n, attrParser, table, nestedTemplates, catalog, collectRows);
         const nodeRows =
-          ctrlRows.length > 0 ? ctrlRows : lowerElementAttributes(n, attrParser, table, sem).instructions;
+          ctrlRows.length > 0 ? ctrlRows : lowerElementAttributes(n, attrParser, table, catalog).instructions;
         if (nodeRows.length) rows.push({ target, instructions: nodeRows });
 
         if (!ctrlRows.length) {
@@ -65,12 +65,12 @@ export function collectRows(
                 table,
                 nestedTemplates,
                 rows,
-                sem,
+                catalog,
                 skipTags
               );
             }
           } else {
-            collectRows(n, ids, attrParser, table, nestedTemplates, rows, sem, skipTags);
+            collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags);
           }
         }
         ids.exitElement();

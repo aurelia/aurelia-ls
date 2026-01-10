@@ -26,7 +26,7 @@ function lower(html: string) {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    sem: DEFAULT_SEMANTICS,
+    catalog: DEFAULT_SEMANTICS.catalog,
   });
 }
 

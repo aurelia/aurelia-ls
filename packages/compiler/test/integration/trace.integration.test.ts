@@ -77,6 +77,7 @@ function createProgram(trace?: CompileTrace) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
+    semantics: DEFAULT_SEMANTICS,
     trace,
   });
 }
@@ -105,6 +106,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
+        catalog: DEFAULT_SEMANTICS.catalog,
       });
 
       expect(ir.diags?.length ?? 0).toBe(0);
@@ -159,6 +161,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
+        catalog: DEFAULT_SEMANTICS.catalog,
       });
 
       resolveHost(ir, DEFAULT_SEMANTICS, {
@@ -187,6 +190,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
+        catalog: DEFAULT_SEMANTICS.catalog,
       });
 
       resolveHost(ir, DEFAULT_SEMANTICS, {
@@ -215,6 +219,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
+        catalog: DEFAULT_SEMANTICS.catalog,
       });
     });
 
@@ -245,6 +250,7 @@ describe("Trace Integration: AOT Synthesis", () => {
         exprParser,
         attrParser,
         file: "test.html",
+        catalog: DEFAULT_SEMANTICS.catalog,
       });
 
       const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
@@ -303,6 +309,7 @@ describe("Trace Integration: Overlay Synthesis", () => {
         exprParser,
         attrParser,
         file: "test.html",
+        catalog: DEFAULT_SEMANTICS.catalog,
       });
 
       const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
@@ -579,6 +586,7 @@ describe("Trace Integration: NOOP_TRACE Zero-Cost", () => {
       exprParser,
       attrParser,
       file: "test.html",
+      catalog: DEFAULT_SEMANTICS.catalog,
     });
 
     expect(ir).toBeDefined();
@@ -861,6 +869,7 @@ describe("Trace Integration: Multiple Template Compilation", () => {
             exprParser,
             attrParser,
             file,
+            catalog: DEFAULT_SEMANTICS.catalog,
           });
 
           resolveHost(ir, DEFAULT_SEMANTICS, { trace });

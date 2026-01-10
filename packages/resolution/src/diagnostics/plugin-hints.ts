@@ -8,7 +8,7 @@
  */
 
 import type { Semantics, ElementRes, AttrRes } from "@aurelia-ls/compiler";
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, prepareSemantics } from "@aurelia-ls/compiler";
 import { getManifestByPackage } from "../plugins/manifests.js";
 import type { PluginManifest } from "../plugins/types.js";
 
@@ -63,7 +63,7 @@ export function lookupElementPluginHint(
   elementName: string,
   semantics: Semantics = DEFAULT_SEMANTICS,
 ): PluginHintResult {
-  const element = semantics.resources.elements[elementName];
+  const element = prepareSemantics(semantics).resources.elements[elementName];
   return resourceToHint(element);
 }
 
@@ -81,7 +81,7 @@ export function lookupAttributePluginHint(
   attrName: string,
   semantics: Semantics = DEFAULT_SEMANTICS,
 ): PluginHintResult {
-  const attr = semantics.resources.attributes[attrName];
+  const attr = prepareSemantics(semantics).resources.attributes[attrName];
   return resourceToHint(attr);
 }
 

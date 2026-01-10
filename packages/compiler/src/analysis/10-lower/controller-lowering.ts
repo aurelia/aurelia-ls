@@ -1,6 +1,6 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { BindingCommandConfig, ControllerConfig, Semantics } from "../../language/registry.js";
+import type { BindingCommandConfig, ControllerConfig, ResourceCatalog } from "../../language/registry.js";
 import { debug } from "../../shared/debug.js";
 import type {
   BindingMode,
@@ -197,13 +197,13 @@ export function collectControllers(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   collectRows: RowCollector
 ): HydrateTemplateControllerIR[] {
   const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; config: ControllerConfig }[] = [];
   for (const a of el.attrs ?? []) {
     const s = attrParser.parse(a.name, a.value ?? "");
-    const config = resolveControllerAttr(s, sem);
+    const config = resolveControllerAttr(s, catalog);
     if (config) {
       debug.lower("controller.candidate", {
         element: el.nodeName,
@@ -226,7 +226,7 @@ export function collectControllers(
   const rightmost = candidates[candidates.length - 1];
   if (!rightmost) return [];
 
-  let current = buildRightmostController(el, rightmost, attrParser, table, nestedTemplates, sem, collectRows);
+  let current = buildRightmostController(el, rightmost, attrParser, table, nestedTemplates, catalog, collectRows);
 
   for (let i = candidates.length - 2; i >= 0; i--) {
     const candidate = candidates[i];
@@ -234,7 +234,7 @@ export function collectControllers(
     const { a, s, config } = candidate;
     const loc = attrLoc(el, a.name);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
-    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, sem.bindingCommands);
+    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, catalog.bindingCommands);
 
     // Build switch branch info for case/default-case controllers
     const branch = buildSwitchBranchInfo(config, proto.props);
@@ -318,7 +318,7 @@ function buildRightmostController(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   collectRows: RowCollector
 ): HydrateTemplateControllerIR[] {
   const { a, s, config } = rightmost;
@@ -329,15 +329,15 @@ function buildRightmostController(
   const name = config.name;
 
   // Build props based on controller type
-  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command, s.mode, sem.bindingCommands);
+  const props = buildPropsForConfig(config, raw, valueLoc, loc, table, s.command, s.mode, catalog.bindingCommands);
 
   // Promise needs special handling for branch injection
   if (hasPromiseBranches(config)) {
-    return buildPromiseController(el, props as PropertyBindingIR[], locSpan, attrParser, table, nestedTemplates, sem, collectRows);
+    return buildPromiseController(el, props as PropertyBindingIR[], locSpan, attrParser, table, nestedTemplates, catalog, collectRows);
   }
 
   // All other controllers just need the template definition
-  const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, sem, collectRows);
+  const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, catalog, collectRows);
 
   // Build switch branch info for case/default-case controllers
   const branch = buildSwitchBranchInfo(config, props);
@@ -400,11 +400,11 @@ function buildPromiseController(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   collectRows: RowCollector
 ): HydrateTemplateControllerIR[] {
-  const { def, idMap } = templateOfElementChildrenWithMap(el, attrParser, table, nestedTemplates, sem, collectRows);
-  injectPromiseBranchesIntoDef(el, def, idMap, attrParser, table, nestedTemplates, sem, props[0]!, collectRows);
+  const { def, idMap } = templateOfElementChildrenWithMap(el, attrParser, table, nestedTemplates, catalog, collectRows);
+  injectPromiseBranchesIntoDef(el, def, idMap, attrParser, table, nestedTemplates, catalog, props[0]!, collectRows);
   return [createHydrateInstruction("promise", def, props, locSpan)];
 }
 
@@ -457,7 +457,7 @@ function injectPromiseBranchesIntoDef(
   attrParser: AttributeParser,
   table: ExprTable,
   nestedTemplates: TemplateIR[],
-  sem: Semantics,
+  catalog: ResourceCatalog,
   valueProp: PropertyBindingIR,
   collectRows: RowCollector
 ): void {
@@ -483,8 +483,8 @@ function injectPromiseBranchesIntoDef(
 
     // Build branch definition
     const branchDef = branch.isTemplate
-      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, sem, collectRows)
-      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, sem, collectRows);
+      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows)
+      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows);
 
     for (const row of branchDef.rows) {
       row.instructions = row.instructions.filter((ins) => !isBranchMarker(ins));

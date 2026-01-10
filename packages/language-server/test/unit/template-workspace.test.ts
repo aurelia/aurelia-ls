@@ -2,7 +2,7 @@ import { test, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { TemplateWorkspace } from "../../out/services/template-workspace.js";
-import { canonicalDocumentUri, asDocumentUri } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, buildTemplateSyntaxRegistry, canonicalDocumentUri, asDocumentUri } from "@aurelia-ls/compiler";
 
 function createWorkspace(programOverrides = {}, options = {}) {
   return new TemplateWorkspace({
@@ -12,6 +12,9 @@ function createWorkspace(programOverrides = {}, options = {}) {
         getSyntheticPrefix: () => "__AU_TTC_",
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
+      catalog: DEFAULT_SEMANTICS.catalog,
+      syntax: buildTemplateSyntaxRegistry(DEFAULT_SEMANTICS),
       ...programOverrides,
     },
     ...options,

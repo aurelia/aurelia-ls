@@ -8,14 +8,35 @@ import {
   RES0021_NOT_A_RESOURCE,
 } from "@aurelia-ls/resolution";
 import type { OrphanResource, UnresolvedRegistration, UnresolvedResourceInfo } from "@aurelia-ls/resolution";
-import type { NormalizedPath, SourceSpan } from "@aurelia-ls/compiler";
+import { toSourceFileId, type CustomElementDef, type NormalizedPath, type SourceSpan, type Sourced } from "@aurelia-ls/compiler";
 
 // Helper to create a mock source span
 function mockSpan(file: NormalizedPath): SourceSpan {
   return {
-    start: { line: 1, column: 0, offset: 0 },
-    end: { line: 1, column: 10, offset: 10 },
-    sourceFileId: file,
+    file: toSourceFileId(file),
+    start: 0,
+    end: 10,
+  };
+}
+
+function sourced<T>(value: T): Sourced<T> {
+  return { origin: "source", value };
+}
+
+function elementDef(name: string, className: string, file: NormalizedPath): CustomElementDef {
+  return {
+    kind: "custom-element",
+    className: sourced(className),
+    name: sourced(name),
+    aliases: [],
+    containerless: sourced(false),
+    shadowOptions: sourced(undefined),
+    capture: sourced(false),
+    processContent: sourced(false),
+    boundary: sourced(true),
+    bindables: {},
+    dependencies: [],
+    file,
   };
 }
 
@@ -24,13 +45,7 @@ describe("Diagnostic Conversion Functions", () => {
     it("converts orphan elements to diagnostics", () => {
       const orphans: OrphanResource[] = [
         {
-          resource: {
-            kind: "element",
-            name: "my-element",
-            className: "MyElement",
-            source: "/app/src/my-element.ts" as NormalizedPath,
-            bindables: [],
-          },
+          resource: elementDef("my-element", "MyElement", "/app/src/my-element.ts" as NormalizedPath),
           definitionSpan: mockSpan("/app/src/my-element.ts" as NormalizedPath),
         },
       ];
@@ -48,23 +63,15 @@ describe("Diagnostic Conversion Functions", () => {
     it("filters out orphans from external packages", () => {
       const orphans: OrphanResource[] = [
         {
-          resource: {
-            kind: "element",
-            name: "my-element",
-            className: "MyElement",
-            source: "/node_modules/@aurelia/runtime-html/dist/my-element.ts" as NormalizedPath,
-            bindables: [],
-          },
+          resource: elementDef(
+            "my-element",
+            "MyElement",
+            "/node_modules/@aurelia/runtime-html/dist/my-element.ts" as NormalizedPath,
+          ),
           definitionSpan: mockSpan("/node_modules/@aurelia/runtime-html/dist/my-element.ts" as NormalizedPath),
         },
         {
-          resource: {
-            kind: "element",
-            name: "user-element",
-            className: "UserElement",
-            source: "/app/src/user-element.ts" as NormalizedPath,
-            bindables: [],
-          },
+          resource: elementDef("user-element", "UserElement", "/app/src/user-element.ts" as NormalizedPath),
           definitionSpan: mockSpan("/app/src/user-element.ts" as NormalizedPath),
         },
       ];

@@ -2,7 +2,15 @@
 import type { IrModule, ScopeModule } from "../model/index.js";
 
 // Language imports (via barrel)
-import type { Semantics, ResourceGraph, ResourceScopeId } from "../language/index.js";
+import type {
+  FeatureUsageSet,
+  LocalImportDef,
+  ResourceCatalog,
+  ResourceGraph,
+  ResourceScopeId,
+  Semantics,
+  TemplateSyntaxRegistry,
+} from "../language/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
@@ -29,6 +37,7 @@ export type StageKey =
   | "20-resolve"
   | "30-bind"
   | "40-typecheck"
+  | "50-usage"
   | "overlay:plan"
   | "overlay:emit"
   | "aot:plan";
@@ -41,6 +50,7 @@ export interface StageOutputs {
   "20-resolve": LinkedSemanticsModule;
   "30-bind": ScopeModule;
   "40-typecheck": TypecheckModule;
+  "50-usage": FeatureUsageSet;
   "overlay:plan": OverlayPlanModule;
   "overlay:emit": OverlayEmitResult;
   "aot:plan": AotPlanModule;
@@ -55,9 +65,12 @@ export interface PipelineOptions {
   templateFilePath: string;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
-  semantics?: Semantics;
+  semantics: Semantics;
+  catalog?: ResourceCatalog;
+  syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
+  localImports?: readonly LocalImportDef[];
   vm?: VmReflection;
   /** Pipeline-wide cache knobs. */
   cache?: CacheOptions;
@@ -107,6 +120,8 @@ export type FingerprintToken =
 export interface FingerprintHints {
   attrParser?: FingerprintToken;
   exprParser?: FingerprintToken;
+  catalog?: FingerprintToken;
+  syntax?: FingerprintToken;
   semantics?: FingerprintToken;
   vm?: FingerprintToken;
   overlay?: FingerprintToken;

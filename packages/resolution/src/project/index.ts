@@ -43,9 +43,6 @@ export type {
   ExtractionOptions as ProjectExtractionOptions,
 } from "./types.js";
 
-// Re-export SiblingFileFact from extraction layer for convenience
-export type { SiblingFileFact } from "../extraction/types.js";
-
 export {
   FILE_EXTENSIONS,
   DEFAULT_TEMPLATE_EXTENSIONS,
@@ -89,7 +86,6 @@ export {
   findTemplateSibling,
   findStylesheetSibling,
   classMatchesFileName,
-  toSiblingFacts,
   buildFilePair,
   detectSiblingsBatch,
   findOrphanTemplates,

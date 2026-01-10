@@ -1,5 +1,6 @@
 export { createRegistrationAnalyzer, type RegistrationAnalyzer } from "./analyzer.js";
 export { buildImportGraph, type ImportGraph } from "./import-graph.js";
+export { buildRegistrationPlan, type UsageByScope } from "./plan.js";
 
 // Registration model (see types.ts for design rationale)
 export type {
