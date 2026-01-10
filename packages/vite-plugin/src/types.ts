@@ -10,7 +10,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
+import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -315,6 +315,15 @@ export interface SSROptions {
    * @example './src/ssr-register.ts'
    */
   register?: string;
+
+  /**
+   * Compile-time defines for conditional registration guards.
+   * Used by resolution partial evaluation (e.g. window.__AU_DEF__).
+   *
+   * @example
+   * defines: ssrDefines()
+   */
+  defines?: DefineMap;
 
   /**
    * Manifest configuration.
@@ -1048,6 +1057,8 @@ export interface ResolvedSSRConfig {
   ssrEntry: string | null;
   /** Path to module with register export */
   register: string | null;
+  /** Compile-time defines for conditional registration guards */
+  defines: DefineMap;
   manifest: Required<SSRManifestOptions>;
   hydration: Required<SSRHydrationOptions>;
 }

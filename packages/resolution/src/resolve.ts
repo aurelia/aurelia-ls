@@ -17,6 +17,7 @@ import type {
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
 import type { FileFacts, FileContext } from "./extraction/file-facts.js";
 import type { AnalysisGap } from "./analysis/types.js";
+import type { DefineMap } from "./defines.js";
 import type { RegistrationAnalysis, RegistrationSite, RegistrationEvidence } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
@@ -49,6 +50,8 @@ export interface ResolutionConfig {
   packagePath?: string;
   /** Optional package root mapping for stable snapshot ids */
   packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
+  /** Compile-time constant definitions (e.g. window.__AU_DEF__ = true) */
+  defines?: DefineMap;
   /**
    * File system context for sibling detection.
    *
@@ -199,6 +202,7 @@ export function resolve(
     trace.event("resolution.partialEvaluation.start");
     const evaluation = evaluateFileFacts(rawFacts, exportBindings, {
       packagePath: config?.packagePath,
+      defines: config?.defines,
     });
     trace.event("resolution.partialEvaluation.done", {
       factCount: evaluation.facts.size,

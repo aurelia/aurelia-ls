@@ -20,6 +20,7 @@ import type {
   VariableDeclaration,
   FunctionDeclaration,
   RegistrationCall,
+  RegistrationGuard,
   DefineCall,
   FileContext,
   SiblingFile,
@@ -177,22 +178,23 @@ export function extractFileFacts(
       if (funcGap) gaps.push(funcGap);
     }
 
-    // Registration calls - need to traverse call chains
+    // Registration/define calls can appear anywhere in the AST.
+    // Define calls are still collected from top-level expressions/initializers.
     if (ts.isExpressionStatement(stmt)) {
-      findRegistrationCalls(stmt.expression, sf, registrationCalls);
       findDefineCalls(stmt.expression, sf, defineCalls);
     }
 
-    // Variable statements can also contain registration calls in initializers
     if (ts.isVariableStatement(stmt)) {
       for (const decl of stmt.declarationList.declarations) {
         if (decl.initializer) {
-          findRegistrationCalls(decl.initializer, sf, registrationCalls);
           findDefineCalls(decl.initializer, sf, defineCalls);
         }
       }
     }
   }
+
+  // Collect registration calls across the full AST with guard tracking.
+  collectRegistrationCalls(sf, sf, registrationCalls, []);
 
   return {
     path,
@@ -483,27 +485,44 @@ function extractFunctionDeclaration(
 // =============================================================================
 
 /**
- * Find all registration calls in an expression, including nested in method chains.
- * Handles patterns like: Aurelia.register(...).app(...).start()
+ * Collect registration calls across the full AST with guard tracking.
  */
-function findRegistrationCalls(
-  expr: ts.Expression,
+function collectRegistrationCalls(
+  node: ts.Node,
   sf: ts.SourceFile,
-  results: RegistrationCall[]
+  results: RegistrationCall[],
+  guards: readonly RegistrationGuard[]
 ): void {
-  // Check if this expression is a registration call
-  const regCall = extractRegistrationCall(expr, sf);
-  if (regCall) {
-    results.push(regCall);
+  if (ts.isIfStatement(node)) {
+    const conditionText = node.expression.getText(sf);
+    const conditionSpan: TextSpan = { start: node.expression.getStart(sf), end: node.expression.getEnd() };
+    const conditionValue = transformExpression(node.expression, sf);
+    const guard: RegistrationGuard = {
+      kind: 'if',
+      condition: conditionValue,
+      negated: false,
+      span: conditionSpan,
+      conditionText,
+    };
+
+    collectRegistrationCalls(node.thenStatement, sf, results, guards.concat(guard));
+
+    if (node.elseStatement) {
+      const elseGuard: RegistrationGuard = { ...guard, negated: true };
+      collectRegistrationCalls(node.elseStatement, sf, results, guards.concat(elseGuard));
+    }
+
+    return;
   }
 
-  // Recursively check call chain: A.register(...).app(...).start()
-  if (ts.isCallExpression(expr)) {
-    if (ts.isPropertyAccessExpression(expr.expression)) {
-      // The receiver of this call might contain register() calls
-      findRegistrationCalls(expr.expression.expression, sf, results);
+  if (ts.isCallExpression(node)) {
+    const regCall = createRegistrationCall(node, sf, guards);
+    if (regCall) {
+      results.push(regCall);
     }
   }
+
+  ts.forEachChild(node, child => collectRegistrationCalls(child, sf, results, guards));
 }
 
 /**
@@ -528,12 +547,12 @@ function findDefineCalls(
   }
 }
 
-function extractRegistrationCall(
-  expr: ts.Expression,
-  sf: ts.SourceFile
+function createRegistrationCall(
+  expr: ts.CallExpression,
+  sf: ts.SourceFile,
+  guards: readonly RegistrationGuard[]
 ): RegistrationCall | null {
   // Look for .register(...) calls
-  if (!ts.isCallExpression(expr)) return null;
   if (!ts.isPropertyAccessExpression(expr.expression)) return null;
   if (expr.expression.name.text !== 'register') return null;
 
@@ -541,7 +560,7 @@ function extractRegistrationCall(
   const args = expr.arguments.map(arg => transformExpression(arg, sf));
   const span: TextSpan = { start: expr.getStart(sf), end: expr.getEnd() };
 
-  return { receiver, arguments: args, span };
+  return { receiver, arguments: args, guards, span };
 }
 
 function determineRegisterReceiver(

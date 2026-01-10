@@ -58,6 +58,10 @@ export { buildSemanticSnapshot, buildApiSurfaceSnapshot, type SemanticSnapshotOp
 // === Shared types ===
 export type { Logger } from "./types.js";
 
+// === Compile-time Defines ===
+export type { DefineMap, DefineValue } from "./defines.js";
+export { ssrDefines, csrDefines, mergeDefines } from "./defines.js";
+
 // === File Discovery (Layer 0) ===
 export {
   // File System Context

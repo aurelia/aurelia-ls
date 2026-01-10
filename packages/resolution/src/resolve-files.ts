@@ -20,6 +20,7 @@ import { evaluateFileFacts } from './analysis/index.js';
 import { buildExportBindingMap } from './binding/export-resolver.js';
 import { matchFileFacts } from './patterns/pipeline.js';
 import { canonicalPath } from './util/naming.js';
+import type { DefineMap } from './defines.js';
 
 // =============================================================================
 // Types
@@ -68,6 +69,8 @@ export interface FileResolutionOptions extends ExtractionOptions {
    * @default false
    */
   readonly skipEmptyFiles?: boolean;
+  /** Compile-time constant definitions (e.g. window.__AU_DEF__ = true) */
+  readonly defines?: DefineMap;
 }
 
 // =============================================================================
@@ -107,7 +110,9 @@ export function resolveFile(
   const exportBindings = buildExportBindingMap(rawFactsMap);
 
   // Partially evaluate values for this file
-  const evaluation = evaluateFileFacts(rawFactsMap, exportBindings);
+  const evaluation = evaluateFileFacts(rawFactsMap, exportBindings, {
+    defines: options?.defines,
+  });
   const facts = evaluation.facts.get(rawFacts.path) ?? rawFacts;
   const evalGaps = evaluation.files.get(rawFacts.path)?.gaps ?? [];
 
@@ -145,7 +150,9 @@ export function resolveProgram(
 
   const rawFacts = extractAllFileFacts(program, options);
   const exportBindings = buildExportBindingMap(rawFacts);
-  const evaluation = evaluateFileFacts(rawFacts, exportBindings);
+  const evaluation = evaluateFileFacts(rawFacts, exportBindings, {
+    defines: options?.defines,
+  });
 
   const sortedFacts = Array.from(evaluation.facts.entries()).sort((a, b) =>
     a[0].localeCompare(b[0]),

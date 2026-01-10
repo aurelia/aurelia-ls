@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import ts from "typescript";
 import { DEFAULT_SEMANTICS, normalizePathForId, type ResourceScopeId, type CompileTrace } from "@aurelia-ls/compiler";
-import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type TemplateInfo, type RouteTree } from "@aurelia-ls/resolution";
+import { resolve, buildRouteTree, createNodeFileSystem, type ResolutionResult, type TemplateInfo, type RouteTree, type DefineMap } from "@aurelia-ls/resolution";
 import type { ResolutionContext } from "./types.js";
 
 /**
@@ -33,12 +33,14 @@ interface Logger {
  * @param tsconfigPath - Absolute path to tsconfig.json
  * @param logger - Logger for output
  * @param trace - Optional compile trace
+ * @param defines - Optional compile-time defines for conditional registration guards
  * @returns Resolution context or null if resolution fails
  */
 export async function createResolutionContext(
   tsconfigPath: string,
   logger: Logger,
   trace?: CompileTrace,
+  defines?: DefineMap,
 ): Promise<ResolutionContext | null> {
   // Dynamically import TypeScript (peer dependency)
   let ts: typeof import("typescript");
@@ -91,7 +93,7 @@ export async function createResolutionContext(
   // This enables discovery of foo.ts + foo.html as a custom element without @customElement decorator
   const fileSystem = createNodeFileSystem({ root: basePath });
 
-  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace, fileSystem }, resolutionLogger);
+  const result = resolve(program, { baseSemantics: DEFAULT_SEMANTICS, trace, fileSystem, defines }, resolutionLogger);
 
   // Log resolution results
   const globalCount = result.registration.sites.filter(s => s.scope.kind === "global").length;

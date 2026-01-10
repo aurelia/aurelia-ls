@@ -216,8 +216,30 @@ export interface RegistrationCall {
   /** Arguments to register() as AnalyzableValue */
   readonly arguments: readonly AnalyzableValue[];
 
+  /**
+   * Guard conditions that must hold for this registration to execute.
+   * Populated for control-flow like if/else (e.g., SSR bootstraps).
+   */
+  readonly guards: readonly RegistrationGuard[];
+
   /** Source span for diagnostics */
   readonly span: TextSpan;
+}
+
+/**
+ * Guard condition for a registration call (control-flow context).
+ */
+export interface RegistrationGuard {
+  /** Guard kind (currently only if/else). */
+  readonly kind: 'if';
+  /** Condition expression as AnalyzableValue. */
+  readonly condition: AnalyzableValue;
+  /** True when guard is for an else branch. */
+  readonly negated: boolean;
+  /** Source span of the condition. */
+  readonly span: TextSpan;
+  /** Original condition text for diagnostics. */
+  readonly conditionText: string;
 }
 
 /**

@@ -33,12 +33,12 @@ import {
 } from "@aurelia-ls/transform";
 import { compileWithAot, isSSRHandler, type SSRHandler } from "@aurelia-ls/ssr";
 import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
+import { mergeDefines, ssrDefines, type TemplateInfo, type RouteTree } from "@aurelia-ls/resolution";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
 import { resolveTraceOptions, createBuildTrace, type ManagedTrace } from "./trace.js";
 import type { AureliaPluginOptions, PluginState, ResolutionContext, ResolvedTraceOptions } from "./types.js";
-import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
 
 /**
  * Virtual file suffix for Aurelia templates in production builds.
@@ -463,6 +463,9 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       const ssrOptions = typeof options.ssr === "object" ? options.ssr : {};
       // Set closure variable - SSR is enabled if explicitly true or object without enabled:false
       ssrEnabled = options.ssr === true || (typeof options.ssr === "object" && options.ssr.enabled !== false);
+      const resolutionDefines = ssrEnabled
+        ? mergeDefines(ssrDefines(), ssrOptions.defines)
+        : ssrOptions.defines;
 
       // Normalize SSG options (boolean | object | undefined → object)
       const ssgInput = typeof options.ssg === "object" ? options.ssg : {};
@@ -554,7 +557,12 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         };
 
         // Start async resolution (will complete before first request)
-        resolutionPromise = createResolutionContext(tsconfigPath, logger).then((ctx) => {
+        resolutionPromise = createResolutionContext(
+          tsconfigPath,
+          logger,
+          undefined,
+          resolutionDefines,
+        ).then((ctx) => {
           resolutionContext = ctx;
           pluginState.resolution = ctx;
           if (ctx) {

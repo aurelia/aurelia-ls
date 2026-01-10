@@ -13,7 +13,7 @@ import {
   type SemanticsWithCaches,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
-import { hashObject, normalizeCompilerOptions, resolve, type ResourceDef } from "@aurelia-ls/resolution";
+import { hashObject, normalizeCompilerOptions, resolve, type ResourceDef, type DefineMap } from "@aurelia-ls/resolution";
 import type { Logger } from "./types.js";
 
 export interface TypeScriptProject {
@@ -28,6 +28,7 @@ export interface AureliaProjectIndexOptions {
   readonly logger: Logger;
   readonly baseSemantics?: Semantics;
   readonly defaultScope?: ResourceScopeId | null;
+  readonly defines?: DefineMap;
 }
 
 interface IndexSnapshot {
@@ -52,6 +53,7 @@ export class AureliaProjectIndex {
   #logger: Logger;
   #baseSemantics: SemanticsWithCaches;
   #defaultScope: ResourceScopeId | null;
+  #defines: DefineMap | undefined;
 
   #semantics: SemanticsWithCaches;
   #catalog: ResourceCatalog;
@@ -64,6 +66,7 @@ export class AureliaProjectIndex {
     this.#logger = options.logger;
     this.#baseSemantics = prepareSemantics(options.baseSemantics ?? DEFAULT_SEMANTICS);
     this.#defaultScope = options.defaultScope ?? null;
+    this.#defines = options.defines;
 
     const snapshot = this.#computeSnapshot();
     this.#semantics = snapshot.semantics;
@@ -138,6 +141,7 @@ export class AureliaProjectIndex {
       {
         baseSemantics: this.#baseSemantics,
         defaultScope: this.#defaultScope,
+        defines: this.#defines,
       },
       this.#logger,
     );
