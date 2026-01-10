@@ -4,8 +4,7 @@
  * Types for extracting Aurelia resources from npm packages.
  */
 
-import type { NormalizedPath } from '@aurelia-ls/compiler';
-import type { ResourceAnnotation } from '../annotation.js';
+import type { ResourceDef, ResourceKind, TextSpan } from '@aurelia-ls/compiler';
 
 // Re-export shared analysis types from analysis
 export type {
@@ -29,6 +28,25 @@ export {
 // NPM Package Types
 // =============================================================================
 
+export type ResourcePattern = 'decorator' | 'static-au' | 'define' | 'convention' | 'unknown';
+
+export type ResourceEvidence =
+  | {
+      readonly source: 'analyzed';
+      readonly kind: 'explicit' | 'inferred';
+      readonly pattern: ResourcePattern;
+      readonly span?: TextSpan;
+    }
+  | {
+      readonly source: 'declared';
+      readonly origin: string;
+    };
+
+export interface AnalyzedResource {
+  resource: ResourceDef;
+  evidence: ResourceEvidence;
+}
+
 /**
  * Result of analyzing a package.
  */
@@ -38,7 +56,7 @@ export interface PackageAnalysis {
   /** Package version */
   version: string;
   /** Extracted resources */
-  resources: ResourceAnnotation[];
+  resources: AnalyzedResource[];
   /** Configuration exports (IRegistry objects) */
   configurations: ExtractedConfiguration[];
 }
@@ -62,7 +80,7 @@ export interface ExtractedConfiguration {
  */
 export interface ConfigurationRegistration {
   /** Reference to the resource (if resolved) */
-  resource?: ResourceAnnotation;
+  resource?: AnalyzedResource;
   /** Original identifier in source */
   identifier: string;
   /** Whether we could fully resolve this */
@@ -217,5 +235,5 @@ export interface InspectedGap {
 // Re-exports for convenience
 // =============================================================================
 
-export type { ResourceAnnotation, BindableAnnotation, ResourceKind } from '../annotation.js';
+export type { ResourceDef, ResourceKind };
 

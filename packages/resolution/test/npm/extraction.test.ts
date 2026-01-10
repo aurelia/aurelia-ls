@@ -12,6 +12,13 @@ import {
   type AnalysisResult,
   type PackageAnalysis,
 } from '../../src/npm/index.js';
+import {
+  resourceBindables,
+  resourceClassName,
+  resourceKind,
+  resourceName,
+  resourceSource,
+} from './resource-helpers.js';
 
 const FIXTURES = resolve(import.meta.dirname, 'fixtures');
 
@@ -31,22 +38,23 @@ describe('npm extraction', () => {
       expect(result.value.resources).toHaveLength(1);
 
       const tooltip = result.value.resources[0]!;
-      expect(tooltip.kind).toBe('custom-attribute');
-      expect(tooltip.name).toBe('tooltip');
-      expect(tooltip.className).toBe('TooltipCustomAttribute');
+      expect(resourceKind(tooltip)).toBe('custom-attribute');
+      expect(resourceName(tooltip)).toBe('tooltip');
+      expect(resourceClassName(tooltip)).toBe('TooltipCustomAttribute');
 
       // Verify bindables
-      expect(tooltip.bindables).toHaveLength(3);
+      const bindables = resourceBindables(tooltip);
+      expect(bindables).toHaveLength(3);
 
-      const content = tooltip.bindables.find(b => b.name === 'content');
+      const content = bindables.find(b => b.name === 'content');
       expect(content).toBeDefined();
       expect(content!.primary).toBe(true);
 
-      const position = tooltip.bindables.find(b => b.name === 'position');
+      const position = bindables.find(b => b.name === 'position');
       expect(position).toBeDefined();
       expect(position!.primary).toBeFalsy();
 
-      const visible = tooltip.bindables.find(b => b.name === 'visible');
+      const visible = bindables.find(b => b.name === 'visible');
       expect(visible).toBeDefined();
     });
 
@@ -58,10 +66,10 @@ describe('npm extraction', () => {
       expect(result.value.resources).toHaveLength(1);
 
       const tooltip = result.value.resources[0]!;
-      expect(tooltip.name).toBe('tooltip');
+      expect(resourceName(tooltip)).toBe('tooltip');
 
       // Should still find primary bindable from decorator call
-      const content = tooltip.bindables.find(b => b.name === 'content');
+      const content = resourceBindables(tooltip).find(b => b.name === 'content');
       expect(content?.primary).toBe(true);
     });
 
@@ -86,7 +94,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBe('high');
       expect(result.value.resources).toHaveLength(2);
 
-      const names = result.value.resources.map(r => r.name).sort();
+      const names = result.value.resources.map(resourceName).sort();
       expect(names).toEqual(['action-button', 'info-card']);
     });
 
@@ -94,20 +102,22 @@ describe('npm extraction', () => {
       const result = await analyzePackage(fixturePath, { preferSource: true });
 
       // ActionButton
-      const actionButton = result.value.resources.find(r => r.name === 'action-button');
+      const actionButton = result.value.resources.find((r) => resourceName(r) === 'action-button');
       expect(actionButton).toBeDefined();
-      expect(actionButton!.kind).toBe('custom-element');
-      expect(actionButton!.className).toBe('ActionButton');
-      expect(actionButton!.bindables).toHaveLength(2);
-      expect(actionButton!.bindables.map(b => b.name).sort()).toEqual(['disabled', 'label']);
+      expect(resourceKind(actionButton!)).toBe('custom-element');
+      expect(resourceClassName(actionButton!)).toBe('ActionButton');
+      const actionBindables = resourceBindables(actionButton!);
+      expect(actionBindables).toHaveLength(2);
+      expect(actionBindables.map(b => b.name).sort()).toEqual(['disabled', 'label']);
 
       // InfoCard
-      const infoCard = result.value.resources.find(r => r.name === 'info-card');
+      const infoCard = result.value.resources.find((r) => resourceName(r) === 'info-card');
       expect(infoCard).toBeDefined();
-      expect(infoCard!.kind).toBe('custom-element');
-      expect(infoCard!.className).toBe('InfoCard');
-      expect(infoCard!.bindables).toHaveLength(2);
-      expect(infoCard!.bindables.map(b => b.name).sort()).toEqual(['content', 'title']);
+      expect(resourceKind(infoCard!)).toBe('custom-element');
+      expect(resourceClassName(infoCard!)).toBe('InfoCard');
+      const infoBindables = resourceBindables(infoCard!);
+      expect(infoBindables).toHaveLength(2);
+      expect(infoBindables.map(b => b.name).sort()).toEqual(['content', 'title']);
     });
 
     it('follows the full import chain', async () => {
@@ -119,7 +129,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBe('high');
 
       // Source files should be in the components directory (proves chain was followed)
-      const sources = result.value.resources.map(r => r.source);
+      const sources = result.value.resources.map(resourceSource);
       expect(sources.every(s => s.includes('components'))).toBe(true);
     });
   });
@@ -138,7 +148,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBe('high');
       expect(result.value.resources).toHaveLength(2);
 
-      const names = result.value.resources.map(r => r.name).sort();
+      const names = result.value.resources.map(resourceName).sort();
       expect(names).toEqual(['highlight', 'user-card']);
     });
 
@@ -146,21 +156,23 @@ describe('npm extraction', () => {
       const result = await analyzePackage(fixturePath, { preferSource: false });
 
       // UserCard should have name and avatar bindables
-      const userCard = result.value.resources.find(r => r.name === 'user-card');
+      const userCard = result.value.resources.find((r) => resourceName(r) === 'user-card');
       expect(userCard).toBeDefined();
-      expect(userCard!.className).toBe('UserCard');
-      expect(userCard!.kind).toBe('custom-element');
-      expect(userCard!.bindables).toHaveLength(2);
-      expect(userCard!.bindables.map(b => b.name).sort()).toEqual(['avatar', 'name']);
+      expect(resourceClassName(userCard!)).toBe('UserCard');
+      expect(resourceKind(userCard!)).toBe('custom-element');
+      const userBindables = resourceBindables(userCard!);
+      expect(userBindables).toHaveLength(2);
+      expect(userBindables.map(b => b.name).sort()).toEqual(['avatar', 'name']);
 
       // HighlightAttribute should have color bindable (with primary: true)
-      const highlight = result.value.resources.find(r => r.name === 'highlight');
+      const highlight = result.value.resources.find((r) => resourceName(r) === 'highlight');
       expect(highlight).toBeDefined();
-      expect(highlight!.className).toBe('HighlightAttribute');
-      expect(highlight!.kind).toBe('custom-attribute');
-      expect(highlight!.bindables).toHaveLength(1);
-      expect(highlight!.bindables[0]!.name).toBe('color');
-      expect(highlight!.bindables[0]!.primary).toBe(true);
+      expect(resourceClassName(highlight!)).toBe('HighlightAttribute');
+      expect(resourceKind(highlight!)).toBe('custom-attribute');
+      const highlightBindables = resourceBindables(highlight!);
+      expect(highlightBindables).toHaveLength(1);
+      expect(highlightBindables[0]!.name).toBe('color');
+      expect(highlightBindables[0]!.primary).toBe(true);
     });
 
     it('TypeScript extraction also works with multi-class files', async () => {
@@ -168,7 +180,7 @@ describe('npm extraction', () => {
 
       // Should find the same resources from TypeScript source
       expect(result.value.resources).toHaveLength(2);
-      const names = result.value.resources.map(r => r.name).sort();
+      const names = result.value.resources.map(resourceName).sort();
       expect(names).toEqual(['highlight', 'user-card']);
     });
   });
@@ -186,7 +198,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBeOneOf(['exact', 'high']);
       expect(result.value.resources).toHaveLength(2);
 
-      const names = result.value.resources.map(r => r.name).sort();
+      const names = result.value.resources.map(resourceName).sort();
       expect(names).toEqual(['data-grid', 'grid-sort']);
     });
 
@@ -201,21 +213,22 @@ describe('npm extraction', () => {
     it('extracts bindables with binding modes', async () => {
       const result = await analyzePackage(fixturePath);
 
-      const dataGrid = result.value.resources.find(r => r.name === 'data-grid');
+      const dataGrid = result.value.resources.find((r) => resourceName(r) === 'data-grid');
       expect(dataGrid).toBeDefined();
 
       // Should have 4 bindables
-      expect(dataGrid!.bindables).toHaveLength(4);
+      const dataBindables = resourceBindables(dataGrid!);
+      expect(dataBindables).toHaveLength(4);
 
       // 'data' should be two-way
-      const data = dataGrid!.bindables.find(b => b.name === 'data');
+      const data = dataBindables.find(b => b.name === 'data');
       expect(data).toBeDefined();
       // BindingMode.twoWay = 6 in Aurelia
       expect(data!.mode).toBeDefined();
 
       // grid-sort should have primary bindable
-      const gridSort = result.value.resources.find(r => r.name === 'grid-sort');
-      const key = gridSort!.bindables.find(b => b.name === 'key');
+      const gridSort = result.value.resources.find((r) => resourceName(r) === 'grid-sort');
+      const key = resourceBindables(gridSort!).find(b => b.name === 'key');
       expect(key?.primary).toBe(true);
     });
 
@@ -241,7 +254,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBeOneOf(['exact', 'high']);
       expect(result.value.resources).toHaveLength(3);
 
-      const names = result.value.resources.map(r => r.name).sort();
+      const names = result.value.resources.map(resourceName).sort();
       expect(names).toEqual(['currency', 'modal', 'tooltip']);
     });
 
@@ -257,27 +270,29 @@ describe('npm extraction', () => {
       const result = await analyzePackage(fixturePath);
 
       // Custom element
-      const modal = result.value.resources.find(r => r.name === 'modal');
+      const modal = result.value.resources.find((r) => resourceName(r) === 'modal');
       expect(modal).toBeDefined();
-      expect(modal!.kind).toBe('custom-element');
-      expect(modal!.className).toBe('ModalCustomElement');
-      expect(modal!.bindables).toHaveLength(3);
-      expect(modal!.bindables.map(b => b.name).sort()).toEqual(['isOpen', 'size', 'title']);
+      expect(resourceKind(modal!)).toBe('custom-element');
+      expect(resourceClassName(modal!)).toBe('ModalCustomElement');
+      const modalBindables = resourceBindables(modal!);
+      expect(modalBindables).toHaveLength(3);
+      expect(modalBindables.map(b => b.name).sort()).toEqual(['isOpen', 'size', 'title']);
 
       // Custom attribute
-      const tooltip = result.value.resources.find(r => r.name === 'tooltip');
+      const tooltip = result.value.resources.find((r) => resourceName(r) === 'tooltip');
       expect(tooltip).toBeDefined();
-      expect(tooltip!.kind).toBe('custom-attribute');
-      expect(tooltip!.className).toBe('TooltipCustomAttribute');
-      expect(tooltip!.bindables).toHaveLength(2);
-      const primaryBindable = tooltip!.bindables.find(b => b.primary);
+      expect(resourceKind(tooltip!)).toBe('custom-attribute');
+      expect(resourceClassName(tooltip!)).toBe('TooltipCustomAttribute');
+      const tooltipBindables = resourceBindables(tooltip!);
+      expect(tooltipBindables).toHaveLength(2);
+      const primaryBindable = tooltipBindables.find(b => b.primary);
       expect(primaryBindable?.name).toBe('text');
 
       // Value converter
-      const currency = result.value.resources.find(r => r.name === 'currency');
+      const currency = result.value.resources.find((r) => resourceName(r) === 'currency');
       expect(currency).toBeDefined();
-      expect(currency!.kind).toBe('value-converter');
-      expect(currency!.className).toBe('CurrencyValueConverter');
+      expect(resourceKind(currency!)).toBe('value-converter');
+      expect(resourceClassName(currency!)).toBe('CurrencyValueConverter');
     });
 
     it('links factory configuration to registered resources', async () => {
@@ -306,7 +321,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBeOneOf(['exact', 'high']);
       expect(result.value.resources).toHaveLength(3);
 
-      const names = result.value.resources.map(r => r.name).sort();
+      const names = result.value.resources.map(resourceName).sort();
       expect(names).toEqual(['badge', 'card', 'icon']);
     });
 
@@ -322,28 +337,31 @@ describe('npm extraction', () => {
       const result = await analyzePackage(fixturePath);
 
       // Custom elements
-      const card = result.value.resources.find(r => r.name === 'card');
+      const card = result.value.resources.find((r) => resourceName(r) === 'card');
       expect(card).toBeDefined();
-      expect(card!.kind).toBe('custom-element');
-      expect(card!.className).toBe('CardCustomElement');
-      expect(card!.bindables).toHaveLength(3);
-      expect(card!.bindables.map(b => b.name).sort()).toEqual(['subtitle', 'title', 'variant']);
+      expect(resourceKind(card!)).toBe('custom-element');
+      expect(resourceClassName(card!)).toBe('CardCustomElement');
+      const cardBindables = resourceBindables(card!);
+      expect(cardBindables).toHaveLength(3);
+      expect(cardBindables.map(b => b.name).sort()).toEqual(['subtitle', 'title', 'variant']);
 
-      const badge = result.value.resources.find(r => r.name === 'badge');
+      const badge = result.value.resources.find((r) => resourceName(r) === 'badge');
       expect(badge).toBeDefined();
-      expect(badge!.kind).toBe('custom-element');
-      expect(badge!.className).toBe('BadgeCustomElement');
-      expect(badge!.bindables).toHaveLength(2);
-      const primaryBadge = badge!.bindables.find(b => b.primary);
+      expect(resourceKind(badge!)).toBe('custom-element');
+      expect(resourceClassName(badge!)).toBe('BadgeCustomElement');
+      const badgeBindables = resourceBindables(badge!);
+      expect(badgeBindables).toHaveLength(2);
+      const primaryBadge = badgeBindables.find(b => b.primary);
       expect(primaryBadge?.name).toBe('value');
 
       // Custom attribute
-      const icon = result.value.resources.find(r => r.name === 'icon');
+      const icon = result.value.resources.find((r) => resourceName(r) === 'icon');
       expect(icon).toBeDefined();
-      expect(icon!.kind).toBe('custom-attribute');
-      expect(icon!.className).toBe('IconCustomAttribute');
-      expect(icon!.bindables).toHaveLength(2);
-      const primaryIcon = icon!.bindables.find(b => b.primary);
+      expect(resourceKind(icon!)).toBe('custom-attribute');
+      expect(resourceClassName(icon!)).toBe('IconCustomAttribute');
+      const iconBindables = resourceBindables(icon!);
+      expect(iconBindables).toHaveLength(2);
+      const primaryIcon = iconBindables.find(b => b.primary);
       expect(primaryIcon?.name).toBe('name');
     });
 
@@ -390,7 +408,7 @@ describe('npm extraction', () => {
       // They should be found even if the configuration analysis has gaps
       expect(result.value.resources.length).toBeGreaterThanOrEqual(2);
 
-      const names = result.value.resources.map(r => r.name).sort();
+      const names = result.value.resources.map(resourceName).sort();
       expect(names).toContain('advanced-element');
       expect(names).toContain('basic-element');
     });
@@ -413,9 +431,9 @@ describe('npm extraction', () => {
       // 2. Report a gap explaining the nested factory limitation
 
       // At minimum, MyWidget should be found via direct export
-      const widget = result.value.resources.find(r => r.name === 'my-widget');
+      const widget = result.value.resources.find((r) => resourceName(r) === 'my-widget');
       expect(widget).toBeDefined();
-      expect(widget!.kind).toBe('custom-element');
+      expect(resourceKind(widget!)).toBe('custom-element');
     });
 
     it('identifies configuration from nested factory', async () => {
@@ -502,7 +520,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBe('high');
       expect(result.value.resources).toHaveLength(1);
       // TypeScript path should use a .ts source file
-      expect(result.value.resources[0]!.source.endsWith('.ts')).toBe(true);
+      expect(resourceSource(result.value.resources[0]!).endsWith('.ts')).toBe(true);
     });
 
     it('uses ES2022 when preferSource is false', async () => {
@@ -511,7 +529,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBe('high');
       expect(result.value.resources).toHaveLength(1);
       // ES2022 path should use a .js source file
-      expect(result.value.resources[0]!.source.endsWith('.js')).toBe(true);
+      expect(resourceSource(result.value.resources[0]!).endsWith('.js')).toBe(true);
     });
 
     it('both strategies find the same resource', async () => {
@@ -526,12 +544,12 @@ describe('npm extraction', () => {
       const es2022Tooltip = es2022Result.value.resources[0]!;
 
       // Same resource identity
-      expect(tsTooltip.name).toBe(es2022Tooltip.name);
-      expect(tsTooltip.className).toBe(es2022Tooltip.className);
-      expect(tsTooltip.kind).toBe(es2022Tooltip.kind);
+      expect(resourceName(tsTooltip)).toBe(resourceName(es2022Tooltip));
+      expect(resourceClassName(tsTooltip)).toBe(resourceClassName(es2022Tooltip));
+      expect(resourceKind(tsTooltip)).toBe(resourceKind(es2022Tooltip));
 
       // Same bindables discovered
-      expect(tsTooltip.bindables.length).toBe(es2022Tooltip.bindables.length);
+      expect(resourceBindables(tsTooltip).length).toBe(resourceBindables(es2022Tooltip).length);
     });
 
     it('deduplicates resources by className when strategies overlap', async () => {
@@ -541,7 +559,7 @@ describe('npm extraction', () => {
 
       // Should have exactly 1 tooltip, not 2
       expect(result.value.resources).toHaveLength(1);
-      expect(result.value.resources[0]!.className).toBe('TooltipCustomAttribute');
+      expect(resourceClassName(result.value.resources[0]!)).toBe('TooltipCustomAttribute');
     });
 
     it('follows re-export chains in TypeScript source', async () => {
@@ -552,10 +570,10 @@ describe('npm extraction', () => {
 
       // Should find the tooltip despite it being re-exported
       expect(result.value.resources).toHaveLength(1);
-      expect(result.value.resources[0]!.name).toBe('tooltip');
+      expect(resourceName(result.value.resources[0]!)).toBe('tooltip');
 
       // Source should reference the actual file, not the entry point
-      expect(result.value.resources[0]!.source).toContain('tooltip');
+      expect(resourceSource(result.value.resources[0]!)).toContain('tooltip');
     });
 
     it('follows re-export chains in ES2022 compiled output', async () => {
@@ -563,8 +581,8 @@ describe('npm extraction', () => {
       const result = await analyzePackage(fixturePath, { preferSource: false });
 
       expect(result.value.resources).toHaveLength(1);
-      expect(result.value.resources[0]!.name).toBe('tooltip');
-      expect(result.value.resources[0]!.source).toContain('tooltip');
+      expect(resourceName(result.value.resources[0]!)).toBe('tooltip');
+      expect(resourceSource(result.value.resources[0]!)).toContain('tooltip');
     });
   });
 });
@@ -582,7 +600,7 @@ describe.skip('real-world validation', () => {
     expect(result.confidence).toBeOneOf(['exact', 'high']);
     expect(result.value.resources).toHaveLength(4);
 
-    const names = result.value.resources.map(r => r.name).sort();
+    const names = result.value.resources.map(resourceName).sort();
     expect(names).toContain('aurelia-table');
     expect(names).toContain('aut-sort');
   });
@@ -601,11 +619,11 @@ describe.skip('real-world validation', () => {
   it('aurelia2-google-maps handles large component', async () => {
     const result = await analyzePackage(resolve(AURELIA2_PLUGINS, 'aurelia2-google-maps'));
 
-    const googleMap = result.value.resources.find(r => r.name === 'google-map');
+    const googleMap = result.value.resources.find((r) => resourceName(r) === 'google-map');
     expect(googleMap).toBeDefined();
 
     // Should handle 20+ bindables
-    expect(googleMap!.bindables.length).toBeGreaterThanOrEqual(20);
+    expect(resourceBindables(googleMap!).length).toBeGreaterThanOrEqual(20);
   });
 });
 

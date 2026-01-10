@@ -19,15 +19,12 @@
  */
 
 import * as ts from 'typescript';
-import type { NormalizedPath } from '@aurelia-ls/compiler';
-import type {
-  ResourceAnnotation,
-  BindableAnnotation,
-  ResourceKind,
-} from '../annotation.js';
-import { explicitEvidence } from '../annotation.js';
+import type { NormalizedPath, ResourceKind } from '@aurelia-ls/compiler';
+import { buildBindableDefs, buildBindingBehaviorDef, buildCustomAttributeDef, buildCustomElementDef, buildTemplateControllerDef, buildValueConverterDef, type BindableInput } from '../semantics/resource-def.js';
 import type { AnalysisResult, AnalysisGap } from './types.js';
-import { highConfidence, partial, gap } from './types.js';
+import { highConfidence, partial } from './types.js';
+import type { AnalyzedResource } from './types.js';
+import { explicitEvidence } from './evidence.js';
 
 // =============================================================================
 // Types
@@ -87,7 +84,7 @@ interface ExtractedClass {
 export function extractFromES2022(
   sourceText: string,
   fileName: string
-): AnalysisResult<ResourceAnnotation[]> {
+): AnalysisResult<AnalyzedResource[]> {
   // Parse as JavaScript
   const sourceFile = ts.createSourceFile(
     fileName,
@@ -98,7 +95,7 @@ export function extractFromES2022(
   );
 
   const gaps: AnalysisGap[] = [];
-  const resources: ResourceAnnotation[] = [];
+  const resources: AnalyzedResource[] = [];
 
   // Step 1: Find all decorator variable assignments (_dec = customAttribute('x'))
   const decoratorCalls = findDecoratorAssignments(sourceFile);
@@ -112,7 +109,7 @@ export function extractFromES2022(
   // Step 4: Group by class and build extracted classes
   const classes = buildExtractedClasses(esDecorateCalls, decoratorCalls, decoratorArrays);
 
-  // Step 5: Convert to ResourceAnnotation for each class that's an Aurelia resource
+  // Step 5: Convert to AnalyzedResource for each class that's an Aurelia resource
   for (const cls of classes.values()) {
     const resource = buildResource(cls, fileName, gaps);
     if (resource) {
@@ -467,13 +464,13 @@ function buildExtractedClasses(
 }
 
 /**
- * Build a ResourceAnnotation from an extracted class.
+ * Build an AnalyzedResource from an extracted class.
  */
 function buildResource(
   cls: ExtractedClass,
   fileName: string,
   _gaps: AnalysisGap[]
-): ResourceAnnotation | null {
+): AnalyzedResource | null {
   // Find the resource type decorator
   const resourceDecorator = cls.classDecorators.find(d =>
     isResourceTypeDecorator(d.decoratorName)
@@ -508,7 +505,7 @@ function buildResource(
   }
 
   // Extract bindables from field decorators
-  const bindables: BindableAnnotation[] = [];
+  const bindables: BindableInput[] = [];
   for (const [fieldName, decorators] of cls.fields) {
     for (const decorator of decorators) {
       if (decorator.decoratorName === 'bindable') {
@@ -518,30 +515,66 @@ function buildResource(
     }
   }
 
-  // Determine if this is a template controller
+  const file = fileName as NormalizedPath;
+  const bindableInputs = bindables;
+  const bindableDefs = buildBindableDefs(bindableInputs, file);
+  const primaryBindable = findPrimaryBindableName(bindableInputs);
   const isTemplateController = resourceDecorator.decoratorName === 'templateController';
-  const actualKind: ResourceKind = isTemplateController ? 'template-controller' : kind;
+
+  let resource = null;
+  switch (kind) {
+    case 'custom-element':
+      resource = buildCustomElementDef({
+        name: resourceName,
+        className: cls.className,
+        file,
+        bindables: bindableDefs,
+        boundary: true,
+      });
+      break;
+    case 'custom-attribute':
+      if (isTemplateController) {
+        resource = buildTemplateControllerDef({
+          name: resourceName,
+          className: cls.className,
+          file,
+          bindables: bindableDefs,
+          noMultiBindings: false,
+        });
+      } else {
+        resource = buildCustomAttributeDef({
+          name: resourceName,
+          className: cls.className,
+          file,
+          bindables: bindableDefs,
+          primary: primaryBindable,
+          noMultiBindings: false,
+        });
+      }
+      break;
+    case 'value-converter':
+      resource = buildValueConverterDef({
+        name: resourceName,
+        className: cls.className,
+        file,
+      });
+      break;
+    case 'binding-behavior':
+      resource = buildBindingBehaviorDef({
+        name: resourceName,
+        className: cls.className,
+        file,
+      });
+      break;
+  }
+
+  if (!resource) {
+    return null;
+  }
 
   return {
-    kind: actualKind,
-    name: resourceName,
-    className: cls.className,
-    source: fileName as NormalizedPath,
-    aliases: [],
-    bindables,
+    resource,
     evidence: explicitEvidence('decorator'),
-    ...(kind === 'custom-element' && {
-      element: {
-        containerless: false,
-        boundary: true,
-      },
-    }),
-    ...((kind === 'custom-attribute' || isTemplateController) && {
-      attribute: {
-        isTemplateController,
-        noMultiBindings: false,
-      },
-    }),
   };
 }
 
@@ -551,44 +584,43 @@ function buildResource(
 function extractBindable(
   fieldName: string,
   decorator: DecoratorCall
-): BindableAnnotation {
-  const bindable: BindableAnnotation = {
-    name: fieldName,
-    evidence: { source: 'analyzed', pattern: 'decorator' },
-  };
+): BindableInput {
+  let primary: boolean | undefined;
+  let attribute: string | undefined;
+  let mode: BindableInput["mode"];
 
   // Check for options object
   if (decorator.args.length > 0 && decorator.args[0]?.kind === 'object') {
     const props = decorator.args[0].properties;
 
     // Primary flag
-    const primary = props.get('primary');
-    if (primary === true) {
-      (bindable as { primary?: boolean }).primary = true;
+    const primaryValue = props.get('primary');
+    if (primaryValue === true) {
+      primary = true;
     }
 
     // Attribute name
-    const attribute = props.get('attribute');
-    if (typeof attribute === 'string') {
-      (bindable as { attribute?: string }).attribute = attribute;
+    const attributeValue = props.get('attribute');
+    if (typeof attributeValue === 'string') {
+      attribute = attributeValue;
     }
 
     // Binding mode
-    const mode = props.get('mode');
-    if (mode !== undefined) {
+    const modeValue = props.get('mode');
+    if (modeValue !== undefined) {
       let bindingMode: 'oneTime' | 'toView' | 'fromView' | 'twoWay' | undefined;
-      if (typeof mode === 'string') {
-        if (mode.includes('twoWay') || mode === '6') {
+      if (typeof modeValue === 'string') {
+        if (modeValue.includes('twoWay') || modeValue === '6') {
           bindingMode = 'twoWay';
-        } else if (mode.includes('oneTime') || mode === '1') {
+        } else if (modeValue.includes('oneTime') || modeValue === '1') {
           bindingMode = 'oneTime';
-        } else if (mode.includes('toView') || mode === '2') {
+        } else if (modeValue.includes('toView') || modeValue === '2') {
           bindingMode = 'toView';
-        } else if (mode.includes('fromView') || mode === '4') {
+        } else if (modeValue.includes('fromView') || modeValue === '4') {
           bindingMode = 'fromView';
         }
-      } else if (typeof mode === 'number') {
-        switch (mode) {
+      } else if (typeof modeValue === 'number') {
+        switch (modeValue) {
           case 1: bindingMode = 'oneTime'; break;
           case 2: bindingMode = 'toView'; break;
           case 4: bindingMode = 'fromView'; break;
@@ -596,12 +628,26 @@ function extractBindable(
         }
       }
       if (bindingMode) {
-        (bindable as { mode?: string }).mode = bindingMode;
+        mode = bindingMode;
       }
     }
   }
 
-  return bindable;
+  return {
+    name: fieldName,
+    ...(primary ? { primary } : {}),
+    ...(attribute ? { attribute } : {}),
+    ...(mode ? { mode } : {}),
+  };
+}
+
+function findPrimaryBindableName(bindables: BindableInput[]): string | undefined {
+  for (const bindable of bindables) {
+    if (bindable.primary) {
+      return bindable.name;
+    }
+  }
+  return bindables.length === 1 ? bindables[0]?.name : undefined;
 }
 
 // =============================================================================

@@ -85,7 +85,6 @@ export { planAot } from "./plan.js";
 export { emitAotCode } from "./emit.js";
 export {
   emitTemplate,
-  collectNestedTemplateHtml,
   collectNestedTemplateHtmlTree,
 } from "./emit-template.js";
 

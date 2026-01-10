@@ -156,7 +156,6 @@ export {
   planAot,
   emitAotCode,
   emitTemplate,
-  collectNestedTemplateHtml,
   collectNestedTemplateHtmlTree,
   // Constants for transform package
   INSTRUCTION_TYPE,

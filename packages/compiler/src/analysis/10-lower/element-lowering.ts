@@ -3,7 +3,7 @@ import type {
   AttrRes,
   BindingCommandConfig,
   ControllerConfig,
-  ControllerName as LanguageControllerName,
+  ControllerName,
   ResourceCatalog,
 } from "../../language/registry.js";
 import { debug } from "../../shared/debug.js";
@@ -437,11 +437,6 @@ export function lowerElementAttributes(
 
   return { instructions, containerless };
 }
-
-/**
- * @deprecated Use ControllerConfig.name instead. Retained for backward compatibility.
- */
-export type ControllerName = LanguageControllerName;
 
 /**
  * Resolve an attribute to its controller configuration.

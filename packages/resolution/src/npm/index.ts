@@ -111,6 +111,13 @@ import type {
   ExtractedConfiguration,
   ConfigurationRegistration,
   SourceLocation,
+  InspectionResult,
+  InspectedResource,
+  InspectedBindable,
+  InspectedConfiguration,
+  InspectionGraph,
+  InspectionEdge,
+  InspectedGap,
 } from './types.js';
 import { success, partial, highConfidence, gap, combine } from './types.js';
 import {
@@ -118,15 +125,14 @@ import {
   type NormalizedPath,
   type ResourceDef,
   type BindableDef,
-  type CustomElementDef,
   type CustomAttributeDef,
+  type CustomElementDef,
   type TemplateControllerDef,
-  type ValueConverterDef,
-  type BindingBehaviorDef,
+  type Sourced,
 } from '@aurelia-ls/compiler';
-import type { ResourceAnnotation, BindableAnnotation, BindableEvidence } from '../annotation.js';
-import { explicitEvidence, inferredEvidence } from '../annotation.js';
-import { unwrapSourced } from '../semantics/sourced.js';
+import type { AnalyzedResource, ResourceEvidence, ResourcePattern } from './types.js';
+import { explicitEvidence, inferredEvidence } from './evidence.js';
+import { sourcedValue, unwrapSourced } from '../semantics/sourced.js';
 
 /**
  * Analyze an npm package to extract Aurelia resource semantics.
@@ -163,7 +169,7 @@ export async function analyzePackage(
   //
   // Later strategies fill gaps from earlier ones. Results are merged.
 
-  const allResources: ResourceAnnotation[] = [];
+  const allResources: AnalyzedResource[] = [];
   let primaryStrategyUsed: 'typescript' | 'es2022' | 'none' = 'none';
 
   // Determine which strategies to try and in what order
@@ -240,7 +246,7 @@ function hasBlockingGaps(gaps: AnalysisGap[]): boolean {
  * Determine overall confidence based on extraction results.
  */
 function determineConfidence(
-  resources: ResourceAnnotation[],
+  resources: AnalyzedResource[],
   gaps: AnalysisGap[],
   primaryStrategy: 'typescript' | 'es2022' | 'none'
 ): 'exact' | 'high' | 'partial' | 'low' | 'manual' {
@@ -280,11 +286,14 @@ function determineConfidence(
  * - Merge aliases from both
  */
 function mergeResources(
-  existing: ResourceAnnotation[],
-  incoming: ResourceAnnotation[]
+  existing: AnalyzedResource[],
+  incoming: AnalyzedResource[]
 ): void {
   for (const newResource of incoming) {
-    const existingIndex = existing.findIndex(r => r.className === newResource.className);
+    const newClassName = getResourceClassName(newResource.resource);
+    const existingIndex = newClassName
+      ? existing.findIndex(r => getResourceClassName(r.resource) === newClassName)
+      : -1;
 
     if (existingIndex === -1) {
       // New resource - add it
@@ -302,13 +311,12 @@ function mergeResources(
  * Merge two resources with the same className.
  * Takes the best data from each.
  */
-function mergeResource(a: ResourceAnnotation, b: ResourceAnnotation): ResourceAnnotation {
-  // Prefer the one with more bindables
-  const aBindables = a.bindables.length;
-  const bBindables = b.bindables.length;
+function mergeResource(a: AnalyzedResource, b: AnalyzedResource): AnalyzedResource {
+  const aBindables = countBindables(a.resource);
+  const bBindables = countBindables(b.resource);
 
   // Rank evidence by confidence
-  function getEvidenceRank(evidence: ResourceAnnotation['evidence']): number {
+  function getEvidenceRank(evidence: ResourceEvidence): number {
     if (evidence.source === 'declared') {
       return 5; // Highest - explicit declaration/manifest
     }
@@ -332,203 +340,183 @@ function mergeResource(a: ResourceAnnotation, b: ResourceAnnotation): ResourceAn
   const secondary = primary === a ? b : a;
 
   // Merge aliases from both
-  const mergedAliases = [...new Set([...primary.aliases, ...secondary.aliases])];
-
-  // Merge bindables - take primary's bindables, add any unique ones from secondary
-  const primaryBindableNames = new Set(primary.bindables.map(b => b.name));
-  const additionalBindables = secondary.bindables.filter(b => !primaryBindableNames.has(b.name));
-
   return {
-    ...primary,
-    aliases: mergedAliases,
-    bindables: [...primary.bindables, ...additionalBindables],
+    resource: mergeResourceDefs(primary.resource, secondary.resource),
+    evidence: primary.evidence,
   };
 }
 
 // =============================================================================
-// ResourceDef -> ResourceAnnotation conversion
+// ResourceDef -> AnalyzedResource conversion
 // =============================================================================
 
-type AnnotationPattern = "decorator" | "static-au" | "define" | "convention" | "unknown";
+type MatchPattern = ResourcePattern;
 
-interface AnnotationMatchResult {
-  annotation: ResourceAnnotation | null;
+interface AnalysisMatchResult {
+  analyzed: AnalyzedResource | null;
   gaps: AnalysisGap[];
 }
 
-function matchClassForAnnotation(cls: ClassValue, context?: FileContext): AnnotationMatchResult {
+function matchClassForResource(cls: ClassValue, context?: FileContext): AnalysisMatchResult {
   const gaps: AnalysisGap[] = [];
 
   const decoratorResult = matchDecorator(cls);
   gaps.push(...decoratorResult.gaps);
   if (decoratorResult.resource) {
-    return { annotation: resourceDefToAnnotation(decoratorResult.resource, "decorator"), gaps };
+    return { analyzed: wrapAnalyzedResource(decoratorResult.resource, "decorator"), gaps };
   }
 
   const staticAuResult = matchStaticAu(cls);
   gaps.push(...staticAuResult.gaps);
   if (staticAuResult.resource) {
-    return { annotation: resourceDefToAnnotation(staticAuResult.resource, "static-au"), gaps };
+    return { analyzed: wrapAnalyzedResource(staticAuResult.resource, "static-au"), gaps };
   }
 
   const conventionResult = matchConvention(cls, context);
   gaps.push(...conventionResult.gaps);
   if (conventionResult.resource) {
-    return { annotation: resourceDefToAnnotation(conventionResult.resource, "convention"), gaps };
+    return { analyzed: wrapAnalyzedResource(conventionResult.resource, "convention"), gaps };
   }
 
-  return { annotation: null, gaps };
+  return { analyzed: null, gaps };
 }
 
-function matchDefineForAnnotation(call: DefineCall, filePath: NormalizedPath): AnnotationMatchResult {
+function matchDefineForResource(call: DefineCall, filePath: NormalizedPath): AnalysisMatchResult {
   const result = matchDefine(call, filePath);
   return {
-    annotation: result.resource ? resourceDefToAnnotation(result.resource, "define") : null,
+    analyzed: result.resource ? wrapAnalyzedResource(result.resource, "define") : null,
     gaps: result.gaps,
   };
 }
 
-function resourceDefToAnnotation(resource: ResourceDef, pattern: AnnotationPattern): ResourceAnnotation | null {
-  const source = resource.file;
-  const className = unwrapSourced(resource.className);
-  const name = unwrapSourced(resource.name);
-  if (!source || !className || !name) {
-    return null;
-  }
-
+function wrapAnalyzedResource(resource: ResourceDef, pattern: MatchPattern): AnalyzedResource {
   const evidence = pattern === "convention"
     ? inferredEvidence("convention")
     : explicitEvidence(pattern);
-
-  switch (resource.kind) {
-    case "custom-element": {
-      const bindables = bindableDefsToAnnotations(resource.bindables, pattern);
-      return {
-        kind: "custom-element",
-        name,
-        className,
-        source,
-        aliases: resourceAliases(resource),
-        bindables,
-        evidence,
-        element: {
-          containerless: unwrapSourced(resource.containerless) ?? false,
-          boundary: unwrapSourced(resource.boundary) ?? true,
-          inlineTemplate: unwrapSourced(resource.inlineTemplate),
-        },
-      };
-    }
-    case "custom-attribute": {
-      const bindables = bindableDefsToAnnotations(resource.bindables, pattern);
-      return {
-        kind: "custom-attribute",
-        name,
-        className,
-        source,
-        aliases: resourceAliases(resource),
-        bindables,
-        evidence,
-        attribute: {
-          isTemplateController: false,
-          noMultiBindings: unwrapSourced(resource.noMultiBindings) ?? false,
-          primary: unwrapSourced(resource.primary) ?? findPrimaryBindableName(resource.bindables) ?? undefined,
-        },
-      };
-    }
-    case "template-controller": {
-      const bindables = bindableDefsToAnnotations(resource.bindables, pattern);
-      return {
-        kind: "template-controller",
-        name,
-        className,
-        source,
-        aliases: resourceAliases(resource),
-        bindables,
-        evidence,
-        attribute: {
-          isTemplateController: true,
-          noMultiBindings: unwrapSourced(resource.noMultiBindings) ?? false,
-          primary: findPrimaryBindableName(resource.bindables) ?? undefined,
-        },
-      };
-    }
-    case "value-converter":
-      return {
-        kind: "value-converter",
-        name,
-        className,
-        source,
-        aliases: [],
-        bindables: [],
-        evidence,
-      };
-    case "binding-behavior":
-      return {
-        kind: "binding-behavior",
-        name,
-        className,
-        source,
-        aliases: [],
-        bindables: [],
-        evidence,
-      };
-  }
-  return null;
+  return { resource, evidence };
 }
 
-function resourceAliases(
-  resource: CustomElementDef | CustomAttributeDef | TemplateControllerDef,
-): string[] {
+function getResourceClassName(resource: ResourceDef): string | null {
+  return unwrapSourced(resource.className) ?? null;
+}
+
+function getResourceName(resource: ResourceDef): string | null {
+  return unwrapSourced(resource.name) ?? null;
+}
+
+function getResourceAliases(resource: ResourceDef): string[] {
   if (resource.kind === "template-controller") {
     const aliases = unwrapSourced(resource.aliases);
     return aliases ? [...aliases] : [];
   }
-  return resource.aliases
-    .map((alias) => unwrapSourced(alias))
-    .filter((alias): alias is string => !!alias);
+  if (resource.kind === "custom-element" || resource.kind === "custom-attribute") {
+    return resource.aliases
+      .map((alias) => unwrapSourced(alias))
+      .filter((alias): alias is string => !!alias);
+  }
+  return [];
 }
 
-function bindableDefsToAnnotations(
-  bindables: Readonly<Record<string, BindableDef>>,
-  pattern: AnnotationPattern,
-): BindableAnnotation[] {
-  const evidence = bindableEvidenceForPattern(pattern);
-  const result: BindableAnnotation[] = [];
-  for (const [key, def] of Object.entries(bindables)) {
+function getResourceBindables(resource: ResourceDef): InspectedBindable[] {
+  if (resource.kind === "value-converter" || resource.kind === "binding-behavior") {
+    return [];
+  }
+  const result: InspectedBindable[] = [];
+  for (const [key, def] of Object.entries(resource.bindables)) {
     const name = unwrapSourced(def.property) ?? key;
     const attribute = unwrapSourced(def.attribute);
     const mode = unwrapSourced(def.mode);
     const primary = unwrapSourced(def.primary);
-    const type = unwrapSourced(def.type);
-
-    result.push({
-      name,
-      ...(attribute ? { attribute } : {}),
-      ...(mode !== undefined ? { mode } : {}),
-      ...(primary !== undefined ? { primary } : {}),
-      ...(type ? { type } : {}),
-      evidence,
-    });
+    const entry: InspectedBindable = { name };
+    if (attribute) entry.attribute = attribute;
+    if (mode !== undefined) entry.mode = mode;
+    if (primary) entry.primary = true;
+    result.push(entry);
   }
+  return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function countBindables(resource: ResourceDef): number {
+  if (resource.kind === "value-converter" || resource.kind === "binding-behavior") {
+    return 0;
+  }
+  return Object.keys(resource.bindables).length;
+}
+
+function mergeResourceDefs(primary: ResourceDef, secondary: ResourceDef): ResourceDef {
+  if (primary.kind !== secondary.kind) return primary;
+
+  switch (primary.kind) {
+    case "custom-element": {
+      const other = secondary as CustomElementDef;
+      return {
+        ...primary,
+        aliases: mergeSourcedAliases(primary.aliases, other.aliases),
+        bindables: mergeBindableDefs(primary.bindables, other.bindables),
+      };
+    }
+    case "custom-attribute": {
+      const other = secondary as CustomAttributeDef;
+      return {
+        ...primary,
+        aliases: mergeSourcedAliases(primary.aliases, other.aliases),
+        bindables: mergeBindableDefs(primary.bindables, other.bindables),
+      };
+    }
+    case "template-controller": {
+      const other = secondary as TemplateControllerDef;
+      const mergedAliases = mergeStringList(
+        unwrapSourced(primary.aliases) ?? [],
+        unwrapSourced(other.aliases) ?? [],
+      );
+      const file = primary.file ?? other.file;
+      return {
+        ...primary,
+        aliases: file ? sourcedValue(mergedAliases, file) : primary.aliases,
+        bindables: mergeBindableDefs(primary.bindables, other.bindables),
+      };
+    }
+    case "value-converter":
+    case "binding-behavior":
+      return primary;
+  }
+}
+
+function mergeSourcedAliases(
+  primary: readonly Sourced<string>[],
+  secondary: readonly Sourced<string>[],
+): readonly Sourced<string>[] {
+  const result: Sourced<string>[] = [];
+  const seen = new Set<string>();
+  const append = (aliases: readonly Sourced<string>[]) => {
+    for (const alias of aliases) {
+      const value = unwrapSourced(alias);
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      result.push(alias);
+    }
+  };
+  append(primary);
+  append(secondary);
   return result;
 }
 
-function bindableEvidenceForPattern(pattern: AnnotationPattern): BindableEvidence {
-  if (pattern === "static-au") {
-    return { source: "analyzed", pattern: "static-au" };
-  }
-  if (pattern === "define") {
-    return { source: "analyzed", pattern: "define" };
-  }
-  return { source: "analyzed", pattern: "decorator" };
+function mergeBindableDefs(
+  primary: Readonly<Record<string, BindableDef>>,
+  secondary: Readonly<Record<string, BindableDef>>,
+): Readonly<Record<string, BindableDef>> {
+  return { ...secondary, ...primary };
 }
 
-function findPrimaryBindableName(defs: Readonly<Record<string, BindableDef>>): string | null {
-  for (const [key, def] of Object.entries(defs)) {
-    const primary = unwrapSourced(def.primary);
-    if (primary) return unwrapSourced(def.property) ?? key;
+function mergeStringList(primary: readonly string[], secondary: readonly string[]): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of [...primary, ...secondary]) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
   }
-  return null;
+  return result;
 }
 
 /**
@@ -566,7 +554,7 @@ export async function isAureliaPackage(packagePath: string): Promise<boolean> {
 import type { PackageInfo } from './scanner.js';
 
 interface ExtractionResult {
-  resources: ResourceAnnotation[];
+  resources: AnalyzedResource[];
   configurations: ExtractedConfiguration[];
   gaps: AnalysisGap[];
 }
@@ -585,7 +573,7 @@ async function extractFromTypeScriptSource(
   pkgInfo: PackageInfo,
   packagePath: string
 ): Promise<ExtractionResult> {
-  const resources: ResourceAnnotation[] = [];
+  const resources: AnalyzedResource[] = [];
   const configurations: ExtractedConfiguration[] = [];
   const gaps: AnalysisGap[] = [];
 
@@ -636,20 +624,20 @@ async function extractFromTypeScriptSource(
 
     for (const cls of facts.classes) {
       gaps.push(...cls.gaps);
-      const matchResult = matchClassForAnnotation(cls);
+      const matchResult = matchClassForResource(cls);
       gaps.push(...matchResult.gaps);
 
-      if (matchResult.annotation && !resources.some(r => r.className === matchResult.annotation!.className)) {
-        resources.push(matchResult.annotation);
+      if (matchResult.analyzed) {
+        mergeResources(resources, [matchResult.analyzed]);
       }
     }
 
     for (const call of facts.defineCalls) {
-      const matchResult = matchDefineForAnnotation(call, facts.path);
+      const matchResult = matchDefineForResource(call, facts.path);
       gaps.push(...matchResult.gaps);
 
-      if (matchResult.annotation) {
-        mergeResources(resources, [matchResult.annotation]);
+      if (matchResult.analyzed) {
+        mergeResources(resources, [matchResult.analyzed]);
       }
     }
   }
@@ -828,7 +816,7 @@ async function extractFromCompiledJS(
   pkgInfo: PackageInfo,
   packagePath: string
 ): Promise<ExtractionResult> {
-  const resources: ResourceAnnotation[] = [];
+  const resources: AnalyzedResource[] = [];
   const gaps: AnalysisGap[] = [];
   const processedFiles = new Set<string>();
 
@@ -895,7 +883,7 @@ async function extractFromCompiledJS(
 
 interface ConfigurationAnalysisResult {
   configurations: ExtractedConfiguration[];
-  resources: ResourceAnnotation[];
+  resources: AnalyzedResource[];
   gaps: AnalysisGap[];
 }
 
@@ -916,11 +904,11 @@ interface ConfigurationAnalysisResult {
 function analyzeConfigurations(
   allFacts: ReadonlyMap<NormalizedPath, FileFacts>,
   allSourceFiles: ReadonlyMap<NormalizedPath, ts.SourceFile>,
-  existingResources: ResourceAnnotation[],
+  existingResources: AnalyzedResource[],
   packagePath: string
 ): ConfigurationAnalysisResult {
   const configurations: ExtractedConfiguration[] = [];
-  const resources: ResourceAnnotation[] = [];
+  const resources: AnalyzedResource[] = [];
   const gaps: AnalysisGap[] = [];
 
   // Skip if no files to analyze
@@ -1013,16 +1001,15 @@ function analyzeConfigurations(
       // Build configuration registration list
       const registers: ConfigurationRegistration[] = [];
       for (const resource of bodyResult.value) {
+        const className = getResourceClassName(resource.resource);
         registers.push({
           resource,
-          identifier: resource.className,
+          identifier: className ?? getResourceName(resource.resource) ?? "unknown",
           resolved: true,
         });
 
         // Add resource to discovered resources if not already in existing
-        if (!existingResources.some(r => r.className === resource.className)) {
-          resources.push(resource);
-        }
+        mergeResources(resources, [resource]);
       }
 
       // Create configuration entry
@@ -1048,22 +1035,25 @@ function analyzeConfigurations(
 /**
  * Create a resolveClass callback for RegisterBodyContext.
  *
- * This callback maps ClassValue to ResourceAnnotation by:
+ * This callback maps ClassValue to AnalyzedResource by:
  * 1. Looking up in already-extracted resources by className
  * 2. Running pattern matching on ClassValue if not found
  */
 function createClassResolver(
-  existingResources: ResourceAnnotation[],
+  existingResources: AnalyzedResource[],
   allFacts: ReadonlyMap<NormalizedPath, FileFacts>,
   packagePath: string
-): (classVal: ClassValue) => ResourceAnnotation | null {
+): (classVal: ClassValue) => AnalyzedResource | null {
   // Build lookup map by className
-  const resourceMap = new Map<string, ResourceAnnotation>();
+  const resourceMap = new Map<string, AnalyzedResource>();
   for (const resource of existingResources) {
-    resourceMap.set(resource.className, resource);
+    const className = getResourceClassName(resource.resource);
+    if (className) {
+      resourceMap.set(className, resource);
+    }
   }
 
-  return (classVal: ClassValue): ResourceAnnotation | null => {
+  return (classVal: ClassValue): AnalyzedResource | null => {
     // First check existing resources
     const existing = resourceMap.get(classVal.className);
     if (existing) {
@@ -1071,11 +1061,11 @@ function createClassResolver(
     }
 
     // Try to match the ClassValue directly using pattern matchers
-    const matchResult = matchClassForAnnotation(classVal);
-    if (matchResult.annotation) {
+    const matchResult = matchClassForResource(classVal);
+    if (matchResult.analyzed) {
       // Cache for future lookups
-      resourceMap.set(classVal.className, matchResult.annotation);
-      return matchResult.annotation;
+      resourceMap.set(classVal.className, matchResult.analyzed);
+      return matchResult.analyzed;
     }
 
     return null;
@@ -1272,16 +1262,6 @@ function resolveTypeScriptModulePath(currentDir: string, specifier: string): str
 // Inspection API
 // =============================================================================
 
-import type {
-  InspectionResult,
-  InspectedResource,
-  InspectedBindable,
-  InspectedConfiguration,
-  InspectionGraph,
-  InspectionEdge,
-  InspectedGap,
-} from './types.js';
-
 /**
  * Inspect a package and return a human-readable analysis result.
  *
@@ -1342,56 +1322,36 @@ export async function inspect(
 }
 
 /**
- * Transform a ResourceAnnotation to InspectedResource.
+ * Transform an AnalyzedResource to InspectedResource.
  */
-function transformResource(resource: ResourceAnnotation): InspectedResource {
-  // Infer format from file extension
-  const format = resource.source.endsWith('.ts') ? 'typescript' :
-                 resource.source.endsWith('.js') ? 'javascript' :
-                 resource.source.endsWith('.d.ts') ? 'declaration' : 'typescript';
-
-  // Get evidence pattern
-  const evidencePattern = resource.evidence.source === 'analyzed'
+function transformResource(resource: AnalyzedResource): InspectedResource {
+  const def = resource.resource;
+  const file = def.file ?? "unknown";
+  const format = file.endsWith(".ts")
+    ? "typescript"
+    : file.endsWith(".js")
+      ? "javascript"
+      : file.endsWith(".d.ts")
+        ? "declaration"
+        : "typescript";
+  const evidencePattern = resource.evidence.source === "analyzed"
     ? resource.evidence.pattern
-    : 'declared';
+    : "declared";
 
   return {
-    kind: resource.kind,
-    name: resource.name,
-    className: resource.className,
-    aliases: [...resource.aliases],
-    bindables: resource.bindables.map(transformBindable),
+    kind: def.kind,
+    name: getResourceName(def) ?? "unknown",
+    className: getResourceClassName(def) ?? "unknown",
+    aliases: getResourceAliases(def),
+    bindables: getResourceBindables(def),
     dependencies: [], // TODO: Extract from static dependencies when available
     source: {
-      file: resource.source,
+      file,
       line: undefined, // TextSpan has offset, not line number
       format,
     },
     evidence: evidencePattern,
   };
-}
-
-/**
- * Transform a BindableAnnotation to InspectedBindable.
- */
-function transformBindable(bindable: BindableAnnotation): InspectedBindable {
-  const result: InspectedBindable = {
-    name: bindable.name,
-  };
-
-  if (bindable.attribute) {
-    result.attribute = bindable.attribute;
-  }
-
-  if (bindable.mode !== undefined) {
-    result.mode = bindable.mode;
-  }
-
-  if (bindable.primary) {
-    result.primary = true;
-  }
-
-  return result;
 }
 
 /**
@@ -1481,10 +1441,12 @@ function formatGapReason(reason: GapReason): string {
  * Build the inspection graph from resources and configurations.
  */
 function buildInspectionGraph(
-  resources: ResourceAnnotation[],
+  resources: AnalyzedResource[],
   configurations: ExtractedConfiguration[]
 ): InspectionGraph {
-  const nodes = resources.map(r => r.className);
+  const nodes = resources
+    .map(r => getResourceClassName(r.resource))
+    .filter((value): value is string => !!value);
   const edges: InspectionEdge[] = [];
 
   // TODO: Add edges from static dependencies arrays when we extract them
@@ -1494,8 +1456,8 @@ function buildInspectionGraph(
     for (const registration of config.registers) {
       if (registration.resolved && registration.resource) {
         // Find if this resource is in our nodes
-        const targetClassName = registration.resource.className;
-        if (nodes.includes(targetClassName)) {
+        const targetClassName = getResourceClassName(registration.resource.resource);
+        if (targetClassName && nodes.includes(targetClassName)) {
           edges.push({
             from: config.exportName,
             to: targetClassName,
@@ -1513,14 +1475,14 @@ function buildInspectionGraph(
  * Determine primary extraction strategy from resources.
  */
 function determinePrimaryStrategy(
-  resources: ResourceAnnotation[]
+  resources: AnalyzedResource[]
 ): 'typescript' | 'es2022' | 'none' {
   if (resources.length === 0) {
     return 'none';
   }
 
   // Infer format from file extension
-  const firstSource = resources[0]?.source;
+  const firstSource = resources[0]?.resource.file;
   if (firstSource?.endsWith('.ts') && !firstSource.endsWith('.d.ts')) {
     return 'typescript';
   }
@@ -1534,10 +1496,12 @@ function determinePrimaryStrategy(
 /**
  * Collect unique file paths from resources.
  */
-function collectAnalyzedPaths(resources: ResourceAnnotation[]): string[] {
+function collectAnalyzedPaths(resources: AnalyzedResource[]): string[] {
   const paths = new Set<string>();
   for (const resource of resources) {
-    paths.add(resource.source);
+    if (resource.resource.file) {
+      paths.add(resource.resource.file);
+    }
   }
   return [...paths].sort();
 }

@@ -65,27 +65,6 @@ export interface NestedTemplateHtmlNode {
 }
 
 /**
- * Collect HTML for all nested templates (controller content).
- *
- * Returns HTML strings in the same order that emit.ts creates
- * nested template definitions (depth-first tree walk order).
- *
- * Each nested template HTML is the content that goes inside
- * `<!--au-start-->...<!--au-end-->` markers.
- *
- * @deprecated Use collectNestedTemplateHtmlTree for hierarchical structure
- */
-export function collectNestedTemplateHtml(
-  plan: AotPlanModule,
-  options: TemplateEmitOptions = {},
-): string[] {
-  const ctx = new TemplateEmitContext(options);
-  const htmlStrings: string[] = [];
-  collectNestedFromNode(plan.root, htmlStrings, ctx);
-  return htmlStrings;
-}
-
-/**
  * Collect HTML for nested templates in a hierarchical structure.
  *
  * Returns a structure that matches SerializedDefinition.nestedTemplates,
@@ -97,62 +76,6 @@ export function collectNestedTemplateHtmlTree(
 ): NestedTemplateHtmlNode[] {
   const ctx = new TemplateEmitContext(options);
   return collectNestedFromNodeTree(plan.root, ctx);
-}
-
-/**
- * Walk the tree and collect nested template HTML in order.
- */
-function collectNestedFromNode(
-  node: PlanNode,
-  htmlStrings: string[],
-  ctx: TemplateEmitContext,
-): void {
-  switch (node.kind) {
-    case "element":
-      collectNestedFromElement(node, htmlStrings, ctx);
-      break;
-    case "fragment":
-      for (const child of node.children) {
-        collectNestedFromNode(child, htmlStrings, ctx);
-      }
-      break;
-    // text and comment nodes don't have nested templates
-  }
-}
-
-/**
- * Collect nested template HTML from an element and its children.
- */
-function collectNestedFromElement(
-  node: PlanElementNode,
-  htmlStrings: string[],
-  ctx: TemplateEmitContext,
-): void {
-  // Process controllers - each controller has template(s) that become nested definitions
-  for (const ctrl of node.controllers) {
-    // Get template(s) from this controller
-    const templates = getControllerTemplates(ctrl);
-
-    for (const template of templates) {
-      // Create a child context with fresh local-to-global mapping
-      // but shared global counter for unique marker IDs
-      const nestedCtx = ctx.forNestedTemplate();
-
-      // Emit the template content
-      const content = emitNode(template, nestedCtx);
-      htmlStrings.push(content);
-
-      // Recurse into the template to find more nested controllers
-      // Use the nested context to continue with the same global counter
-      collectNestedFromNode(template, htmlStrings, nestedCtx);
-    }
-  }
-
-  // Recurse into children (will be empty when controllers exist,
-  // but handled via ctrl.template above)
-  for (const child of node.children) {
-    collectNestedFromNode(child, htmlStrings, ctx);
-  }
 }
 
 /* =============================================================================
@@ -338,7 +261,7 @@ function emitElement(node: PlanElementNode, ctx: TemplateEmitContext): string {
  *
  * IMPORTANT: The element content is NOT included in the parent template.
  * The content (including the element itself) goes in the nested template,
- * which is collected separately via collectNestedTemplateHtml().
+ * which is collected separately via collectNestedTemplateHtmlTree().
  */
 function emitElementWithControllers(
   node: PlanElementNode,

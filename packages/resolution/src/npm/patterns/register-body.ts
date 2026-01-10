@@ -3,7 +3,7 @@
  *
  * Extracts resources from IRegistry `register(container)` method bodies.
  * Finds `container.register(...)` calls and resolves their arguments
- * to ResourceAnnotation definitions.
+ * to AnalyzedResource definitions.
  *
  * This is the core of Phase 2 plugin configuration analysis.
  *
@@ -19,11 +19,11 @@
  * - Unknown/unresolvable: produces gaps
  */
 
-import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
 import { debug } from '@aurelia-ls/compiler';
 import type { AnalysisResult, AnalysisGap } from '../../analysis/types.js';
 import { gap, partial, highConfidence } from '../../analysis/types.js';
-import type { ResourceAnnotation } from '../../annotation.js';
+import type { AnalyzedResource } from '../types.js';
+import { unwrapSourced } from '../../semantics/sourced.js';
 import type {
   AnalyzableValue,
   MethodValue,
@@ -46,14 +46,14 @@ import { getResolvedValue } from '../../analysis/value/types.js';
  */
 export interface RegisterBodyContext {
   /**
-   * Resolve a ClassValue to a ResourceAnnotation.
+   * Resolve a ClassValue to an AnalyzedResource.
    *
    * This callback should:
    * 1. Look up class metadata
    * 2. Run pattern matching (decorators, static $au, conventions)
-   * 3. Return ResourceAnnotation or null if not a resource
+   * 3. Return AnalyzedResource or null if not a resource
    */
-  readonly resolveClass: (classVal: ClassValue) => ResourceAnnotation | null;
+  readonly resolveClass: (classVal: ClassValue) => AnalyzedResource | null;
 
   /**
    * Package path for diagnostic messages.
@@ -78,8 +78,8 @@ export interface RegisterBodyContext {
 export function extractRegisterBodyResources(
   method: MethodValue,
   ctx: RegisterBodyContext
-): AnalysisResult<ResourceAnnotation[]> {
-  const resources: ResourceAnnotation[] = [];
+): AnalysisResult<AnalyzedResource[]> {
+  const resources: AnalyzedResource[] = [];
   const gaps: AnalysisGap[] = [];
 
   // Find the container parameter (first param, usually 'container' or 'c')
@@ -127,7 +127,7 @@ export function extractRegisterBodyResources(
 function extractFromStatement(
   stmt: StatementValue,
   containerParam: string,
-  resources: ResourceAnnotation[],
+  resources: AnalyzedResource[],
   gaps: AnalysisGap[],
   ctx: RegisterBodyContext
 ): void {
@@ -203,7 +203,7 @@ function extractFromStatement(
 function extractFromExpression(
   expr: AnalyzableValue,
   containerParam: string,
-  resources: ResourceAnnotation[],
+  resources: AnalyzedResource[],
   gaps: AnalysisGap[],
   ctx: RegisterBodyContext
 ): void {
@@ -249,7 +249,7 @@ function extractFromExpression(
  */
 function extractFromValue(
   value: AnalyzableValue,
-  resources: ResourceAnnotation[],
+  resources: AnalyzedResource[],
   gaps: AnalysisGap[],
   ctx: RegisterBodyContext
 ): void {
@@ -348,14 +348,15 @@ function extractFromValue(
  */
 function extractClassResource(
   classVal: ClassValue,
-  resources: ResourceAnnotation[],
+  resources: AnalyzedResource[],
   gaps: AnalysisGap[],
   ctx: RegisterBodyContext
 ): void {
   const resource = ctx.resolveClass(classVal);
   if (resource) {
+    const className = getResourceClassName(resource);
     // Check for duplicates
-    if (!resources.some(r => r.className === resource.className)) {
+    if (!className || !resources.some(r => getResourceClassName(r) === className)) {
       resources.push(resource);
     }
   } else {
@@ -373,7 +374,7 @@ function extractClassResource(
  */
 function extractFromSpread(
   spread: SpreadValue,
-  resources: ResourceAnnotation[],
+  resources: AnalyzedResource[],
   gaps: AnalysisGap[],
   ctx: RegisterBodyContext
 ): void {
@@ -511,4 +512,8 @@ export {
   isRegistrationPattern,
   extractFromValue,
 };
+
+function getResourceClassName(resource: AnalyzedResource): string | null {
+  return unwrapSourced(resource.resource.className) ?? null;
+}
 

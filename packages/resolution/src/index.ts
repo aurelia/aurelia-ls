@@ -133,34 +133,6 @@ export type {
   ConventionBuilder,
 } from "./project/index.js";
 
-// === Annotation Types (NPM analysis) ===
-// ResourceAnnotation is still used by npm analysis pipelines.
-// Core resolution outputs ResourceDef.
-export type {
-  ResourceAnnotation,
-  BindableAnnotation,
-  AnnotationEvidence,
-  AnalyzedEvidence,
-  DeclaredEvidence,
-  BindableEvidence,
-  ElementAnnotation,
-  AttributeAnnotation,
-} from "./annotation.js";
-export {
-  elementAnnotation,
-  attributeAnnotation,
-  valueConverterAnnotation,
-  bindingBehaviorAnnotation,
-  explicitEvidence,
-  inferredEvidence,
-  declaredEvidence,
-  isAnalyzedEvidence,
-  isDeclaredEvidence,
-  isElementAnnotation,
-  isAttributeAnnotation,
-  isTemplateControllerAnnotation,
-} from "./annotation.js";
-
 export type {
   FileFacts,
   ImportDeclaration,

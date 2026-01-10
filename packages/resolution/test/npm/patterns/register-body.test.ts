@@ -6,8 +6,10 @@
 
 import { describe, it, expect } from 'vitest';
 import type { NormalizedPath } from '@aurelia-ls/compiler';
-import type { ResourceAnnotation } from '../../../src/annotation.js';
-import { explicitEvidence } from '../../../src/annotation.js';
+import type { AnalyzedResource } from '../../../src/npm/types.js';
+import { explicitEvidence } from '../../../src/npm/evidence.js';
+import { buildCustomAttributeDef, buildCustomElementDef } from '../../../src/semantics/resource-def.js';
+import { unwrapSourced } from '../../../src/semantics/sourced.js';
 import {
   extractRegisterBodyResources,
   isContainerRegisterCall,
@@ -45,10 +47,10 @@ import { gap } from '../../../src/analysis/types.js';
 const TEST_FILE = '/pkg/src/test.ts' as NormalizedPath;
 
 /**
- * Create a mock context that resolves classes to ResourceAnnotation.
+ * Create a mock context that resolves classes to AnalyzedResource.
  */
 function createMockContext(
-  classMap: Map<string, ResourceAnnotation> = new Map()
+  classMap: Map<string, AnalyzedResource> = new Map()
 ): RegisterBodyContext {
   return {
     resolveClass: (classVal: ClassValue) => classMap.get(classVal.className) ?? null,
@@ -57,19 +59,22 @@ function createMockContext(
 }
 
 /**
- * Create a simple ResourceAnnotation for testing.
+ * Create a simple AnalyzedResource for testing.
  */
 function createResource(
   className: string,
   kind: 'custom-element' | 'custom-attribute' = 'custom-element'
-): ResourceAnnotation {
+): AnalyzedResource {
+  const name = className
+    .replace(/Element$|CustomAttribute$/, '')
+    .toLowerCase()
+    .replace(/([A-Z])/g, '-$1')
+    .replace(/^-/, '');
+  const resource = kind === 'custom-element'
+    ? buildCustomElementDef({ name, className, file: TEST_FILE })
+    : buildCustomAttributeDef({ name, className, file: TEST_FILE });
   return {
-    kind,
-    name: className.replace(/Element$|CustomAttribute$/, '').toLowerCase().replace(/([A-Z])/g, '-$1').replace(/^-/, ''),
-    className,
-    bindables: [],
-    aliases: [],
-    source: TEST_FILE,
+    resource,
     evidence: explicitEvidence('static-au'),
   };
 }
@@ -113,7 +118,7 @@ describe('extractRegisterBodyResources', () => {
       expect(result.confidence).toBe('high');
       expect(result.gaps.length).toBe(0);
       expect(result.value.length).toBe(1);
-      expect(result.value[0]!.className).toBe('FooElement');
+      expect(getClassName(result.value[0]!)).toBe('FooElement');
     });
 
     it('extracts multiple direct class references', () => {
@@ -132,7 +137,7 @@ describe('extractRegisterBodyResources', () => {
 
       expect(result.confidence).toBe('high');
       expect(result.value.length).toBe(2);
-      expect(result.value.map(r => r.className).sort()).toEqual(['BarAttribute', 'FooElement']);
+      expect(result.value.map(getClassName).sort()).toEqual(['BarAttribute', 'FooElement']);
     });
 
     it('extracts class from resolved reference', () => {
@@ -148,7 +153,7 @@ describe('extractRegisterBodyResources', () => {
 
       expect(result.confidence).toBe('high');
       expect(result.value.length).toBe(1);
-      expect(result.value[0]!.className).toBe('FooElement');
+      expect(getClassName(result.value[0]!)).toBe('FooElement');
     });
 
     it('extracts class from resolved import', () => {
@@ -164,7 +169,7 @@ describe('extractRegisterBodyResources', () => {
 
       expect(result.confidence).toBe('high');
       expect(result.value.length).toBe(1);
-      expect(result.value[0]!.className).toBe('FooElement');
+      expect(getClassName(result.value[0]!)).toBe('FooElement');
     });
 
     it('handles custom container parameter name', () => {
@@ -584,7 +589,7 @@ describe('extractRegisterBodyResources', () => {
       expect(result.value.length).toBe(2);
 
       // Verify both resources are extracted
-      const names = result.value.map(r => r.className).sort();
+      const names = result.value.map(getClassName).sort();
       expect(names).toEqual(['BarElement', 'FooElement']);
     });
 
@@ -617,7 +622,7 @@ describe('extractRegisterBodyResources', () => {
       expect(result.confidence).toBe('high');
       expect(result.value.length).toBe(3);
 
-      const names = result.value.map(r => r.className).sort();
+      const names = result.value.map(getClassName).sort();
       expect(names).toEqual(['AElement', 'BElement', 'CElement']);
     });
   });
@@ -705,3 +710,7 @@ describe('isRegistrationPattern', () => {
     expect(isRegistrationPattern(callExpr)).toBe(false);
   });
 });
+
+function getClassName(resource: AnalyzedResource): string {
+  return unwrapSourced(resource.resource.className) ?? 'unknown';
+}
