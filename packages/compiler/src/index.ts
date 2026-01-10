@@ -80,6 +80,7 @@ export type {
   ResourceDef,
   ResourceDefBase,
   ResourceKind,
+  ResourceKindLike,
   CustomElementDef,
   CustomAttributeDef,
   TemplateControllerDef,

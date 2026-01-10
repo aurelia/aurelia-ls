@@ -50,6 +50,9 @@ export type ResourceKind =
   | 'value-converter'
   | 'binding-behavior';
 
+// Extensible string type that preserves ResourceKind literals.
+export type ResourceKindLike = ResourceKind | (string & {});
+
 export interface ResourceKey {
   readonly kind: ResourceKind;
   readonly name: string;
@@ -393,14 +396,20 @@ export type TemplateSyntaxMatch = unknown;
 export type TemplateSyntaxEmitInput = unknown;
 export type TemplateSyntaxEmitResult = unknown;
 
-export interface TemplateSyntaxMatcher {
+export interface TemplateSyntaxMatcher<
+  TInput = TemplateSyntaxMatchInput,
+  TMatch = TemplateSyntaxMatch,
+> {
   readonly name: string;
-  match(input: TemplateSyntaxMatchInput): TemplateSyntaxMatch | null;
+  match(input: TInput): TMatch | null;
 }
 
-export interface TemplateSyntaxEmitter {
+export interface TemplateSyntaxEmitter<
+  TInput = TemplateSyntaxEmitInput,
+  TResult = TemplateSyntaxEmitResult,
+> {
   readonly name: string;
-  emit(input: TemplateSyntaxEmitInput): TemplateSyntaxEmitResult | null;
+  emit(input: TInput): TResult | null;
 }
 
 export interface TemplateSyntaxRegistry {
@@ -489,7 +498,7 @@ export interface StyleProfile {
 
 export interface SemanticSymbolSnapshot {
   readonly id: SymbolId;
-  readonly kind: ResourceKind | string;
+  readonly kind: ResourceKindLike;
   readonly name: string;
   readonly source?: NormalizedPath;
   readonly data?: Readonly<Record<string, unknown>>;
@@ -513,7 +522,7 @@ export interface ApiSurfaceBindable {
 
 export interface ApiSurfaceSymbol {
   readonly id: SymbolId;
-  readonly kind: ResourceKind | string;
+  readonly kind: ResourceKindLike;
   readonly name: string;
   readonly aliases?: readonly string[];
   readonly bindables?: readonly ApiSurfaceBindable[];
