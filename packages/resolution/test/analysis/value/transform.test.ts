@@ -13,7 +13,7 @@ import {
   transformModuleExports,
   type AnalyzableValue,
   type StatementValue,
-} from '../../../src/npm/value/index.js';
+} from '../../../src/analysis/value/index.js';
 
 // =============================================================================
 // Test Helpers
@@ -749,3 +749,4 @@ describe('complex patterns', () => {
     }
   });
 });
+

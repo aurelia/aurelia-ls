@@ -11,7 +11,7 @@
  * - Separate MethodValue for interprocedural analysis
  */
 
-import type { NormalizedPath, TextSpan } from '@aurelia-ls/compiler';
+import { debug, type BindingMode, type NormalizedPath, type TextSpan } from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../types.js';
 import type { FileFacts } from '../../extraction/file-facts.js';
 import type { ExportBindingMap } from '../../binding/types.js';
@@ -749,6 +749,40 @@ export function extractStringProp(obj: AnalyzableValue | undefined, key: string)
 }
 
 /**
+ * Extract a binding mode from an AnalyzableValue.
+ */
+export function extractBindingMode(value: AnalyzableValue | undefined): BindingMode | undefined {
+  if (!value) return undefined;
+  const resolved = getResolvedValue(value);
+
+  let mode: BindingMode | undefined;
+  if (resolved.kind === 'literal') {
+    if (typeof resolved.value === 'string') {
+      mode = normalizeBindingMode(resolved.value);
+    } else if (typeof resolved.value === 'number') {
+      mode = numberToBindingMode(resolved.value);
+    }
+  } else if (resolved.kind === 'propertyAccess') {
+    mode = normalizeBindingMode(resolved.property);
+  }
+
+  debug.resolution('bindable.mode.extract', {
+    kind: resolved.kind,
+    value: resolved.kind === 'literal' ? resolved.value : resolved.kind === 'propertyAccess' ? resolved.property : undefined,
+    mode,
+  });
+
+  return mode;
+}
+
+/**
+ * Extract a binding mode property from an object.
+ */
+export function extractBindingModeProp(obj: AnalyzableValue | undefined, key: string): BindingMode | undefined {
+  return extractBindingMode(getProperty(obj, key));
+}
+
+/**
  * Extract a boolean property from an object.
  */
 export function extractBooleanProp(obj: AnalyzableValue | undefined, key: string): boolean | undefined {
@@ -760,6 +794,34 @@ export function extractBooleanProp(obj: AnalyzableValue | undefined, key: string
  */
 export function extractStringArrayProp(obj: AnalyzableValue | undefined, key: string): readonly string[] {
   return extractStringArray(getProperty(obj, key));
+}
+
+function normalizeBindingMode(value: string): BindingMode | undefined {
+  switch (value) {
+    case 'default':
+    case 'oneTime':
+    case 'toView':
+    case 'fromView':
+    case 'twoWay':
+      return value;
+  }
+  return undefined;
+}
+
+function numberToBindingMode(value: number): BindingMode | undefined {
+  switch (value) {
+    case 0:
+      return 'default';
+    case 1:
+      return 'oneTime';
+    case 2:
+      return 'toView';
+    case 4:
+      return 'fromView';
+    case 6:
+      return 'twoWay';
+  }
+  return undefined;
 }
 
 /** Create a method value */

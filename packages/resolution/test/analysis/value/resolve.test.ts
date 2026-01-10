@@ -27,15 +27,13 @@ import {
   type LexicalScope,
   type ResolutionContext,
   type ExportBindingMap,
-  // Layer 2
-  buildFileScope,
   // Layer 3
   buildResolutionContext,
   resolveImportsCrossFile,
   resolveImport,
   fullyResolve,
-} from '../../../src/npm/value/index.js';
-import type { FileFacts, ImportDeclaration } from '../../../src/file-facts.js';
+} from '../../../src/analysis/value/index.js';
+import type { FileFacts, ImportDeclaration } from '../../../src/extraction/file-facts.js';
 import type { ResolvedExport } from '../../../src/binding/types.js';
 
 // =============================================================================
@@ -85,14 +83,13 @@ function createFileFacts(
   return {
     path,
     imports,
+    scope: createScope({}, {}, path),
     classes: [],
     exports: [],
     variables: [],
     functions: [],
     registrationCalls: [],
     defineCalls: [],
-    siblingFiles: [],
-    templateImports: [],
     gaps: [],
   };
 }
@@ -914,3 +911,5 @@ describe('Cross-File Resolution (Layer 3)', () => {
     });
   });
 });
+
+

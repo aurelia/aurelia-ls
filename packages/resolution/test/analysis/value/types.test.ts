@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { NormalizedPath } from '@aurelia-ls/compiler';
-import { gap } from '../../../src/extraction/types.js';
+import { gap } from '../../../src/analysis/types.js';
 import {
   // Value constructors
   literal,
@@ -39,7 +39,7 @@ import {
   type AnalyzableValue,
   type ObjectValue,
   type MethodValue,
-} from '../../../src/npm/value/index.js';
+} from '../../../src/analysis/value/index.js';
 
 describe('Value Model Types', () => {
   // ===========================================================================
@@ -490,3 +490,5 @@ describe('Value Model Types', () => {
     });
   });
 });
+
+

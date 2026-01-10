@@ -76,6 +76,7 @@ import { matchConvention } from '../patterns/convention.js';
 import { matchDefine } from '../patterns/define.js';
 import { canonicalPath } from '../util/naming.js';
 import type { FileFacts, FileContext, DefineCall } from '../extraction/file-facts.js';
+import { evaluateFileFacts } from '../analysis/index.js';
 
 // Import export resolver for cross-file resolution
 import { buildExportBindingMap } from '../binding/export-resolver.js';
@@ -624,8 +625,13 @@ async function extractFromTypeScriptSource(
   // Pass the custom host for .js → .ts module resolution
   const allFacts = extractAllFileFacts(program, { moduleResolutionHost: host });
 
-  // Phase 4: Run pattern matching on each file's facts
-  for (const [, facts] of allFacts) {
+  // Phase 4: Partial evaluation (Layers 2-3) to resolve imports/constants
+  const exportBindings = buildExportBindingMap(allFacts);
+  const evaluation = evaluateFileFacts(allFacts, exportBindings, { packagePath });
+  gaps.push(...evaluation.gaps);
+
+  // Phase 5: Run pattern matching on each file's facts
+  for (const [, facts] of evaluation.facts) {
     gaps.push(...facts.gaps);
 
     for (const cls of facts.classes) {
@@ -642,13 +648,13 @@ async function extractFromTypeScriptSource(
       const matchResult = matchDefineForAnnotation(call, facts.path);
       gaps.push(...matchResult.gaps);
 
-      if (matchResult.annotation && !resources.some(r => r.className === matchResult.annotation!.className)) {
-        resources.push(matchResult.annotation);
+      if (matchResult.annotation) {
+        mergeResources(resources, [matchResult.annotation]);
       }
     }
   }
 
-  // Phase 5: Analyze configurations using the value model
+  // Phase 6: Analyze configurations using the value model
   // Build source file map from program (use same canonicalization as extractAllFacts)
   const allSourceFiles = new Map<NormalizedPath, ts.SourceFile>();
   for (const sf of program.getSourceFiles()) {
@@ -659,7 +665,7 @@ async function extractFromTypeScriptSource(
   }
 
   const configResult = analyzeConfigurations(
-    allFacts,
+    evaluation.facts,
     allSourceFiles,
     resources,
     packagePath

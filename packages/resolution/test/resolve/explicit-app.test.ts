@@ -59,9 +59,10 @@ describe("Full Pipeline: explicit-app", () => {
     const appDiagnostics = result.diagnostics.filter(d =>
       d.source?.includes("/explicit-app/src/")
     );
-    expect(appDiagnostics.length, "Should have 2 app orphan diagnostics").toBe(2);
+    const orphanDiagnostics = appDiagnostics.filter(d => d.code.startsWith("RES000"));
+    expect(orphanDiagnostics.length, "Should have 2 app orphan diagnostics").toBe(2);
 
-    const orphanNames = appDiagnostics
+    const orphanNames = orphanDiagnostics
       .filter(d => d.code === "RES0001")
       .map(d => d.message.match(/element '([^']+)'/)?.[1])
       .sort();

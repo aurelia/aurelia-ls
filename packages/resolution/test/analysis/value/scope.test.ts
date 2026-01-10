@@ -1,5 +1,5 @@
 /**
- * Scope Building and Resolution Tests (WP 2.3 + WP 2.4)
+ * Scope Building and Resolution Tests
  *
  * Tests for Layer 2 scope building, lookup, and resolution functions.
  */
@@ -14,7 +14,7 @@ import {
   lookupBinding,
   isImportBinding,
   resolveInScope,
-  type Scope,
+  type LexicalScope,
   type ImportBinding,
   type AnalyzableValue,
   type ParameterInfo,
@@ -33,7 +33,7 @@ import {
   varDecl,
   ifStmt,
   forOfStmt,
-} from '../../../src/npm/value/index.js';
+} from '../../../src/analysis/value/index.js';
 
 // =============================================================================
 // Test Helpers
@@ -359,7 +359,7 @@ describe('buildFileScope', () => {
 // =============================================================================
 
 describe('enterFunctionScope', () => {
-  const parentScope: Scope = {
+  const parentScope: LexicalScope = {
     bindings: new Map([['outer', { kind: 'literal', value: 'parent' }]]),
     imports: new Map(),
     parent: null,
@@ -432,7 +432,7 @@ describe('enterFunctionScope', () => {
 // =============================================================================
 
 describe('createChildScope', () => {
-  const parentScope: Scope = {
+  const parentScope: LexicalScope = {
     bindings: new Map([['outer', { kind: 'literal', value: 'parent' }]]),
     imports: new Map([['Foo', { specifier: './foo', exportName: 'Foo', resolvedPath: null }]]),
     parent: null,
@@ -467,7 +467,7 @@ describe('createChildScope', () => {
 
 describe('lookupBinding', () => {
   describe('single scope', () => {
-    const scope: Scope = {
+    const scope: LexicalScope = {
       bindings: new Map([
         ['x', { kind: 'literal', value: 42 }],
         ['y', { kind: 'reference', name: 'z' }],
@@ -500,21 +500,21 @@ describe('lookupBinding', () => {
   });
 
   describe('scope chain', () => {
-    const grandparentScope: Scope = {
+    const grandparentScope: LexicalScope = {
       bindings: new Map([['grandparent', { kind: 'literal', value: 'gp' }]]),
       imports: new Map(),
       parent: null,
       filePath: TEST_PATH,
     };
 
-    const parentScope: Scope = {
+    const parentScope: LexicalScope = {
       bindings: new Map([['parent', { kind: 'literal', value: 'p' }]]),
       imports: new Map([['ImportedFoo', { specifier: './foo', exportName: 'Foo', resolvedPath: null }]]),
       parent: grandparentScope,
       filePath: TEST_PATH,
     };
 
-    const childScope: Scope = {
+    const childScope: LexicalScope = {
       bindings: new Map([['child', { kind: 'literal', value: 'c' }]]),
       imports: new Map(),
       parent: parentScope,
@@ -548,14 +548,14 @@ describe('lookupBinding', () => {
   });
 
   describe('shadowing', () => {
-    const parentScope: Scope = {
+    const parentScope: LexicalScope = {
       bindings: new Map([['x', { kind: 'literal', value: 'parent' }]]),
       imports: new Map(),
       parent: null,
       filePath: TEST_PATH,
     };
 
-    const childScope: Scope = {
+    const childScope: LexicalScope = {
       bindings: new Map([['x', { kind: 'literal', value: 'child' }]]),
       imports: new Map(),
       parent: parentScope,
@@ -574,7 +574,7 @@ describe('lookupBinding', () => {
   });
 
   describe('bindings vs imports priority', () => {
-    const scope: Scope = {
+    const scope: LexicalScope = {
       bindings: new Map([['Foo', { kind: 'literal', value: 'local' }]]),
       imports: new Map([['Foo', { specifier: './foo', exportName: 'Foo', resolvedPath: null }]]),
       parent: null,
@@ -728,7 +728,7 @@ describe('scope building integration', () => {
 
 describe('resolveInScope', () => {
   describe('leaf values', () => {
-    const scope: Scope = {
+    const scope: LexicalScope = {
       bindings: new Map(),
       imports: new Map(),
       parent: null,
@@ -759,7 +759,7 @@ describe('resolveInScope', () => {
 
   describe('reference resolution', () => {
     it('resolves reference to literal binding', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['x', literal(42)]]),
         imports: new Map(),
         parent: null,
@@ -778,7 +778,7 @@ describe('resolveInScope', () => {
 
     it('resolves reference to class binding', () => {
       const cls: AnalyzableValue = { kind: 'class', className: 'Foo', filePath: TEST_PATH };
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['Foo', cls]]),
         imports: new Map(),
         parent: null,
@@ -795,7 +795,7 @@ describe('resolveInScope', () => {
     });
 
     it('leaves unresolved references unchanged', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map(),
         imports: new Map(),
         parent: null,
@@ -809,13 +809,13 @@ describe('resolveInScope', () => {
     });
 
     it('resolves reference in parent scope', () => {
-      const parentScope: Scope = {
+      const parentScope: LexicalScope = {
         bindings: new Map([['parent', literal('from-parent')]]),
         imports: new Map(),
         parent: null,
         filePath: TEST_PATH,
       };
-      const childScope: Scope = {
+      const childScope: LexicalScope = {
         bindings: new Map([['child', literal('from-child')]]),
         imports: new Map(),
         parent: parentScope,
@@ -833,7 +833,7 @@ describe('resolveInScope', () => {
 
     it('handles cyclic references gracefully', () => {
       // a = b, b = a (would cause infinite loop without cycle detection)
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([
           ['a', ref('b')],
           ['b', ref('a')],
@@ -853,7 +853,7 @@ describe('resolveInScope', () => {
 
   describe('import conversion', () => {
     it('converts reference to import binding into ImportValue', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map(),
         imports: new Map([['Foo', { specifier: './foo', exportName: 'Foo', resolvedPath: null }]]),
         parent: null,
@@ -871,7 +871,7 @@ describe('resolveInScope', () => {
     });
 
     it('converts aliased import correctly', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map(),
         imports: new Map([['MyFoo', { specifier: './foo', exportName: 'Foo', resolvedPath: null }]]),
         parent: null,
@@ -889,7 +889,7 @@ describe('resolveInScope', () => {
     });
 
     it('converts default import correctly', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map(),
         imports: new Map([['Config', { specifier: './config', exportName: 'default', resolvedPath: null }]]),
         parent: null,
@@ -908,7 +908,7 @@ describe('resolveInScope', () => {
 
   describe('array resolution', () => {
     it('resolves references inside arrays', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([
           ['a', literal(1)],
           ['b', literal(2)],
@@ -937,7 +937,7 @@ describe('resolveInScope', () => {
     });
 
     it('returns same array if nothing changed', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map(),
         imports: new Map(),
         parent: null,
@@ -953,7 +953,7 @@ describe('resolveInScope', () => {
 
   describe('object resolution', () => {
     it('resolves references in object properties', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['x', literal(42)]]),
         imports: new Map(),
         parent: null,
@@ -978,7 +978,7 @@ describe('resolveInScope', () => {
     });
 
     it('resolves references in object methods', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['Foo', { kind: 'class', className: 'Foo', filePath: TEST_PATH } as AnalyzableValue]]),
         imports: new Map(),
         parent: null,
@@ -1014,7 +1014,7 @@ describe('resolveInScope', () => {
   describe('property access resolution', () => {
     it('resolves base of property access', () => {
       const obj = object(new Map([['x', literal(42)]]));
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['obj', obj]]),
         imports: new Map(),
         parent: null,
@@ -1030,7 +1030,7 @@ describe('resolveInScope', () => {
 
     it('resolves array element access', () => {
       const arr = array([literal('a'), literal('b'), literal('c')]);
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['arr', arr]]),
         imports: new Map(),
         parent: null,
@@ -1045,7 +1045,7 @@ describe('resolveInScope', () => {
 
     it('keeps property access if property not found', () => {
       const obj = object(new Map([['x', literal(42)]]));
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['obj', obj]]),
         imports: new Map(),
         parent: null,
@@ -1066,7 +1066,7 @@ describe('resolveInScope', () => {
 
   describe('call resolution', () => {
     it('resolves callee and arguments', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([
           ['fn', { kind: 'function', name: 'fn', params: [], body: [] } as AnalyzableValue],
           ['arg', literal('value')],
@@ -1096,7 +1096,7 @@ describe('resolveInScope', () => {
   describe('spread resolution', () => {
     it('resolves spread target', () => {
       const arr = array([literal(1), literal(2)]);
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['items', arr]]),
         imports: new Map(),
         parent: null,
@@ -1116,7 +1116,7 @@ describe('resolveInScope', () => {
     });
 
     it('expands array directly if spread target is array', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map(),
         imports: new Map(),
         parent: null,
@@ -1135,7 +1135,7 @@ describe('resolveInScope', () => {
 
   describe('statement resolution', () => {
     it('resolves references in return statements', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['x', literal(42)]]),
         imports: new Map(),
         parent: null,
@@ -1161,7 +1161,7 @@ describe('resolveInScope', () => {
     });
 
     it('resolves references in variable declarations', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['x', literal(42)]]),
         imports: new Map(),
         parent: null,
@@ -1191,7 +1191,7 @@ describe('resolveInScope', () => {
     });
 
     it('resolves references in if statements', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([
           ['cond', literal(true)],
           ['x', literal(1)],
@@ -1231,7 +1231,7 @@ describe('resolveInScope', () => {
 
     it('resolves references in for-of statements with loop scope', () => {
       const arr = array([literal(1), literal(2)]);
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['items', arr]]),
         imports: new Map(),
         parent: null,
@@ -1269,7 +1269,7 @@ describe('resolveInScope', () => {
     it('resolves function parameters in body', () => {
       // Function with parameter that's used in body
       // But parameters don't resolve to anything - they're runtime values
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map(),
         imports: new Map(),
         parent: null,
@@ -1297,7 +1297,7 @@ describe('resolveInScope', () => {
     });
 
     it('resolves module bindings in function body', () => {
-      const scope: Scope = {
+      const scope: LexicalScope = {
         bindings: new Map([['MODULE_CONST', literal('module-value')]]),
         imports: new Map(),
         parent: null,
@@ -1386,3 +1386,5 @@ describe('resolveInScope', () => {
     });
   });
 });
+
+

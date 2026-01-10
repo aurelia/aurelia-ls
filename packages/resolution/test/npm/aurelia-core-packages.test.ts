@@ -288,8 +288,7 @@ describe('aurelia-core: @aurelia/runtime-html', () => {
     for (const className of templateControllers) {
       const found = result.resources.find(r => r.className === className);
       expect(found, `Missing template controller: ${className}`).toBeDefined();
-      // Template controllers are detected as custom-attribute
-      expect(found!.kind).toBe('custom-attribute');
+      expect(found!.kind).toBe('template-controller');
     }
   });
 

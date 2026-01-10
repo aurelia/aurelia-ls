@@ -24,7 +24,7 @@ import type {
 } from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../analysis/types.js';
 import type { ClassValue, BindableMember } from '../analysis/value/types.js';
-import { extractStringProp, extractBooleanProp } from '../analysis/value/types.js';
+import { extractBindingModeProp, extractBooleanProp } from '../analysis/value/types.js';
 import type { FileContext } from '../extraction/file-facts.js';
 import type { BindableInput } from '../semantics/resource-def.js';
 import {
@@ -203,20 +203,20 @@ function buildBindableInputs(
 
   for (const member of members) {
     // Extract mode/primary from @bindable(...) args if present
-    let mode: string | undefined;
+    let mode: BindableInput['mode'];
     let primary: boolean | undefined;
 
     if (member.args.length > 0) {
       const arg = member.args[0];
       if (arg?.kind === 'object') {
-        mode = extractStringProp(arg, 'mode');
+        mode = extractBindingModeProp(arg, 'mode');
         primary = extractBooleanProp(arg, 'primary');
       }
     }
 
     result.push({
       name: member.name,
-      mode: mode as BindableInput['mode'],
+      mode,
       primary,
       type: member.type,
       span: member.span,

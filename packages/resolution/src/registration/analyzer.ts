@@ -1,4 +1,4 @@
-import { toSourceFileId, type NormalizedPath, type ResourceDef, type SourceSpan } from "@aurelia-ls/compiler";
+import { debug, toSourceFileId, type NormalizedPath, type ResourceDef, type SourceSpan } from "@aurelia-ls/compiler";
 import type { FileFacts, FileContext, ImportDeclaration, RegistrationCall, TemplateImport } from "../extraction/file-facts.js";
 import type { ClassValue, AnalyzableValue } from "../analysis/value/types.js";
 import { extractStringArrayProp, getProperty } from "../analysis/value/types.js";
@@ -725,6 +725,12 @@ function findGlobalRegistrationSites(
   const plugins: PluginManifest[] = [];
   const scope: RegistrationScope = { kind: "global" };
 
+  debug.resolution("registration.global.call", {
+    filePath,
+    receiver: call.receiver,
+    argCount: call.arguments.length,
+  });
+
   for (const arg of call.arguments) {
     const result = processRegistrationValue(arg, scope, filePath, imports, call, context);
     globalSites.push(...result.sites);
@@ -766,6 +772,79 @@ function processRegistrationValue(
     start: arg.span?.start ?? 0,
     end: arg.span?.end ?? 0,
   };
+
+  if (arg.kind === "import") {
+    const evidence: RegistrationEvidence = {
+      kind: call.receiver === "aurelia" ? "aurelia-register" : "container-register",
+      file: filePath,
+    };
+
+    const origin = { moduleSpecifier: arg.specifier, exportName: arg.exportName };
+    const pluginResolution = context.pluginResolver.resolve(origin);
+    if (pluginResolution.kind === "known") {
+      plugins.push(pluginResolution.manifest);
+      return { sites, unresolved, plugins };
+    }
+
+    const resolvedClass = arg.resolved?.kind === "class" ? arg.resolved : undefined;
+    let resolvedPath = arg.resolvedPath ?? resolvedClass?.filePath;
+    let className = resolvedClass?.className;
+
+    if (!className && resolvedPath) {
+      const resolvedExport = context.resolveExportedClass(resolvedPath, arg.exportName);
+      if (resolvedExport) {
+        resolvedPath = resolvedExport.path;
+        className = resolvedExport.className;
+      } else if (arg.exportName !== "default") {
+        className = arg.exportName;
+      }
+    }
+
+    debug.resolution("registration.global.import", {
+      filePath,
+      exportName: arg.exportName,
+      resolvedPath,
+      resolvedKind: arg.resolved?.kind,
+      className,
+    });
+
+    if (resolvedPath && className) {
+      const resource = context.findResourceByResolvedPath(resolvedPath, className);
+      if (resource) {
+        sites.push({
+          resourceRef: { kind: "resolved", resource },
+          scope,
+          evidence,
+          span: argSpan,
+        });
+      } else {
+        sites.push({
+          resourceRef: {
+            kind: "unresolved",
+            name: className,
+            reason: `Class '${className}' at '${resolvedPath}' is not a known resource`,
+          },
+          scope,
+          evidence,
+          span: argSpan,
+        });
+      }
+      return { sites, unresolved, plugins };
+    }
+
+    sites.push({
+      resourceRef: {
+        kind: "unresolved",
+        name: arg.exportName,
+        reason: `Cannot resolve import '${arg.exportName}' from '${arg.specifier}'`,
+      },
+      scope,
+      evidence,
+      span: argSpan,
+    });
+
+    return { sites, unresolved, plugins };
+  }
 
   if (arg.kind === "reference") {
     // Trace the identifier back through imports to get its origin
@@ -928,11 +1007,34 @@ function processRegistrationValue(
     }
   } else if (arg.kind === "spread") {
     // Spread: Aurelia.register(...components)
-    // Try to get the spread target
-    const spreadTarget = arg.target;
-    const spreadName = spreadTarget.kind === 'reference' ? spreadTarget.name : '(unknown)';
+    if (arg.expanded) {
+      for (const el of arg.expanded) {
+        const result = processRegistrationValue(el, scope, filePath, imports, call, context);
+        sites.push(...result.sites);
+        unresolved.push(...result.unresolved);
+        plugins.push(...result.plugins);
+      }
+      return { sites, unresolved, plugins };
+    }
 
-    const barrelPath = context.getNamespaceImportPath(filePath, spreadName);
+    const spreadTarget = arg.target;
+    let barrelPath: NormalizedPath | null = null;
+    let spreadName = '(unknown)';
+
+    if (spreadTarget.kind === 'reference') {
+      spreadName = spreadTarget.name;
+      barrelPath = context.getNamespaceImportPath(filePath, spreadTarget.name);
+    } else if (spreadTarget.kind === 'import' && spreadTarget.exportName === '*') {
+      spreadName = spreadTarget.specifier;
+      barrelPath = spreadTarget.resolvedPath ?? null;
+      if (!barrelPath) {
+        const namespaceImport = imports.find(
+          (imp) => imp.kind === "namespace" && imp.moduleSpecifier === spreadTarget.specifier
+        );
+        barrelPath = namespaceImport?.resolvedPath ?? null;
+      }
+    }
+
     if (barrelPath) {
       // Find all resources exported from the barrel
       for (const resource of context.resources) {

@@ -35,6 +35,7 @@ import {
   extractBoolean,
   extractStringArray,
   extractStringProp,
+  extractBindingModeProp,
   extractBooleanProp,
   extractStringArrayProp,
   getProperty,
@@ -316,7 +317,7 @@ function parseBindablesValue(value: AnalyzableValue): BindableConfig[] {
         if (name) {
           result.push({
             name,
-            mode: extractStringProp(element, 'mode') as BindingMode | undefined,
+            mode: extractBindingModeProp(element, 'mode'),
             primary: extractBooleanProp(element, 'primary'),
             attribute: extractStringProp(element, 'attribute'),
           });
@@ -331,7 +332,7 @@ function parseBindablesValue(value: AnalyzableValue): BindableConfig[] {
       if (propValue.kind === 'object') {
         result.push({
           name,
-          mode: extractStringProp(propValue, 'mode') as BindingMode | undefined,
+          mode: extractBindingModeProp(propValue, 'mode'),
           primary: extractBooleanProp(propValue, 'primary'),
           attribute: extractStringProp(propValue, 'attribute'),
         });
@@ -553,7 +554,7 @@ function buildBindableInputs(
     if (member.args.length > 0) {
       const arg = member.args[0];
       if (arg?.kind === 'object') {
-        mode = mode ?? extractStringProp(arg, 'mode') as BindingMode | undefined;
+        mode = mode ?? extractBindingModeProp(arg, 'mode');
         primary = primary ?? extractBooleanProp(arg, 'primary');
       }
     }

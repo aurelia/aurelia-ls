@@ -11,7 +11,6 @@ import {
   analyzePackage,
   type AnalysisResult,
   type PackageAnalysis,
-  type ExtractedResource,
 } from '../../src/npm/index.js';
 
 const FIXTURES = resolve(import.meta.dirname, 'fixtures');
@@ -120,7 +119,7 @@ describe('npm extraction', () => {
       expect(result.confidence).toBe('high');
 
       // Source files should be in the components directory (proves chain was followed)
-      const sources = result.value.resources.map(r => r.source.file);
+      const sources = result.value.resources.map(r => r.source);
       expect(sources.every(s => s.includes('components'))).toBe(true);
     });
   });
@@ -502,8 +501,8 @@ describe('npm extraction', () => {
 
       expect(result.confidence).toBe('high');
       expect(result.value.resources).toHaveLength(1);
-      // TypeScript path uses 'typescript' format in source evidence
-      expect(result.value.resources[0]!.source.format).toBe('typescript');
+      // TypeScript path should use a .ts source file
+      expect(result.value.resources[0]!.source.endsWith('.ts')).toBe(true);
     });
 
     it('uses ES2022 when preferSource is false', async () => {
@@ -511,8 +510,8 @@ describe('npm extraction', () => {
 
       expect(result.confidence).toBe('high');
       expect(result.value.resources).toHaveLength(1);
-      // ES2022 path uses 'javascript' format in source evidence
-      expect(result.value.resources[0]!.source.format).toBe('javascript');
+      // ES2022 path should use a .js source file
+      expect(result.value.resources[0]!.source.endsWith('.js')).toBe(true);
     });
 
     it('both strategies find the same resource', async () => {
@@ -556,7 +555,7 @@ describe('npm extraction', () => {
       expect(result.value.resources[0]!.name).toBe('tooltip');
 
       // Source should reference the actual file, not the entry point
-      expect(result.value.resources[0]!.source.file).toContain('tooltip');
+      expect(result.value.resources[0]!.source).toContain('tooltip');
     });
 
     it('follows re-export chains in ES2022 compiled output', async () => {
@@ -565,7 +564,7 @@ describe('npm extraction', () => {
 
       expect(result.value.resources).toHaveLength(1);
       expect(result.value.resources[0]!.name).toBe('tooltip');
-      expect(result.value.resources[0]!.source.file).toContain('tooltip');
+      expect(result.value.resources[0]!.source).toContain('tooltip');
     });
   });
 });

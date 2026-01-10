@@ -6,7 +6,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { NormalizedPath } from '@aurelia-ls/compiler';
-import type { ExtractedResource } from '../../../src/npm/types.js';
+import type { ResourceAnnotation } from '../../../src/annotation.js';
+import { explicitEvidence } from '../../../src/annotation.js';
 import {
   extractRegisterBodyResources,
   isContainerRegisterCall,
@@ -34,8 +35,8 @@ import {
   unknown,
   type MethodValue,
   type ClassValue,
-} from '../../../src/npm/value/types.js';
-import { gap } from '../../../src/extraction/types.js';
+} from '../../../src/analysis/value/types.js';
+import { gap } from '../../../src/analysis/types.js';
 
 // =============================================================================
 // Test Helpers
@@ -44,10 +45,10 @@ import { gap } from '../../../src/extraction/types.js';
 const TEST_FILE = '/pkg/src/test.ts' as NormalizedPath;
 
 /**
- * Create a mock context that resolves classes to ExtractedResource.
+ * Create a mock context that resolves classes to ResourceAnnotation.
  */
 function createMockContext(
-  classMap: Map<string, ExtractedResource> = new Map()
+  classMap: Map<string, ResourceAnnotation> = new Map()
 ): RegisterBodyContext {
   return {
     resolveClass: (classVal: ClassValue) => classMap.get(classVal.className) ?? null,
@@ -56,17 +57,20 @@ function createMockContext(
 }
 
 /**
- * Create a simple ExtractedResource for testing.
+ * Create a simple ResourceAnnotation for testing.
  */
-function createResource(className: string, kind: 'custom-element' | 'custom-attribute' = 'custom-element'): ExtractedResource {
+function createResource(
+  className: string,
+  kind: 'custom-element' | 'custom-attribute' = 'custom-element'
+): ResourceAnnotation {
   return {
     kind,
     name: className.replace(/Element$|CustomAttribute$/, '').toLowerCase().replace(/([A-Z])/g, '-$1').replace(/^-/, ''),
     className,
     bindables: [],
     aliases: [],
-    source: { file: TEST_FILE, format: 'typescript' },
-    evidence: { kind: 'static-au' },
+    source: TEST_FILE,
+    evidence: explicitEvidence('static-au'),
   };
 }
 

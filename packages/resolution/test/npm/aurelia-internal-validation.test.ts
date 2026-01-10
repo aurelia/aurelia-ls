@@ -128,7 +128,7 @@ describe('aurelia-internal: @aurelia/i18n analysis', () => {
 
     // else is from @aurelia/runtime-html (template controller)
     const hasElse = result.resources.some(r =>
-      r.kind === 'custom-attribute' && r.className === 'Else'
+      r.kind === 'template-controller' && r.className === 'Else'
     );
     expect(hasElse).toBe(true);
 

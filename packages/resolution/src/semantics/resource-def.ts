@@ -10,6 +10,7 @@ import type {
   NormalizedPath,
   TextSpan,
 } from "@aurelia-ls/compiler";
+import { debug } from "@aurelia-ls/compiler";
 import { sourcedValue } from "./sourced.js";
 
 export interface BindableInput {
@@ -42,6 +43,12 @@ export function buildBindableDef(
   const mode = bindable.mode ?? "default";
   const primary = bindable.primary ?? false;
   const attribute = bindable.attribute ?? bindable.name;
+  debug.resolution("bindable.def", {
+    name: bindable.name,
+    mode,
+    primary,
+    file,
+  });
   return {
     property: sourcedValue(bindable.name, file, span),
     attribute: sourcedValue(attribute, file, span),
