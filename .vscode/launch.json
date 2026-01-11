@@ -23,6 +23,21 @@
       "restart": true,
       "protocol": "inspector",
       "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Debug Integration Harness Tests",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": [
+        "run",
+        "packages/integration-harness/test/harness.integration.test.ts",
+        "--threads=false"
+      ],
+      "console": "integratedTerminal",
+      "autoAttachChildProcesses": true,
+      "preLaunchTask": "build:tsc"
     }
   ]
 }

@@ -1,6 +1,6 @@
 import type ts from "typescript";
-import type { DefineMap, ResourceScopeId } from "@aurelia-ls/compiler";
-import type { ConventionConfig } from "@aurelia-ls/resolution";
+import type { ResourceScopeId } from "@aurelia-ls/compiler";
+import type { ConventionConfig, DefineMap } from "@aurelia-ls/resolution";
 
 export type ScenarioTag = string;
 

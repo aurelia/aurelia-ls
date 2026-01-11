@@ -208,13 +208,15 @@ function collectInstructionSummaries(run: IntegrationRun): InstructionSummary[] 
   return summaries;
 }
 
-function extractResName(inst: Record<string, unknown>): string | undefined {
-  const res = inst.res as { name?: string } | string | undefined;
+function extractResName(inst: unknown): string | undefined {
+  if (!inst || typeof inst !== "object") return undefined;
+  const record = inst as Record<string, unknown>;
+  const res = record.res as { name?: string } | string | undefined;
   if (typeof res === "string") return res;
   if (res && typeof res === "object" && "name" in res) {
     return String(res.name ?? "");
   }
-  if ("name" in inst && typeof inst.name === "string") return inst.name;
+  if ("name" in record && typeof record.name === "string") return record.name;
   return undefined;
 }
 
@@ -246,7 +248,7 @@ function resolveScopeKey(key: string, run: IntegrationRun): string {
   if (byName) {
     return `local:${byName.componentPath}`;
   }
-  if (run.resourceGraph.scopes[key]) {
+  if (run.resourceGraph.scopes[key as keyof typeof run.resourceGraph.scopes]) {
     return key;
   }
   return key;
@@ -258,8 +260,5 @@ function findResource(
 ): { bindables?: Record<string, { attribute?: string; mode?: string; primary?: boolean }> } | null {
   if (collections.elements[name]) return collections.elements[name];
   if (collections.attributes[name]) return collections.attributes[name];
-  if (collections.controllers[name]) return collections.controllers[name];
-  if (collections.valueConverters[name]) return collections.valueConverters[name];
-  if (collections.bindingBehaviors[name]) return collections.bindingBehaviors[name];
   return null;
 }

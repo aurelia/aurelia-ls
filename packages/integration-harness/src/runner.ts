@@ -516,7 +516,7 @@ function mergeScopeResources(
   base: Partial<ResourceCollections> | undefined,
   extra: Partial<ResourceCollections>,
 ): Partial<ResourceCollections> {
-  const merged: Partial<ResourceCollections> = { ...(base ?? {}) };
+  const merged: MutableResourceCollections = { ...(base ?? {}) };
   if (extra.elements) merged.elements = { ...(base?.elements ?? {}), ...extra.elements };
   if (extra.attributes) merged.attributes = { ...(base?.attributes ?? {}), ...extra.attributes };
   if (extra.controllers) merged.controllers = { ...(base?.controllers ?? {}), ...extra.controllers };
@@ -526,7 +526,7 @@ function mergeScopeResources(
   if (extra.bindingBehaviors) {
     merged.bindingBehaviors = { ...(base?.bindingBehaviors ?? {}), ...extra.bindingBehaviors };
   }
-  return merged;
+  return merged as Partial<ResourceCollections>;
 }
 
 function collectResourceOverlay(resources: readonly ResourceDef[]): Partial<ResourceCollections> {
@@ -565,13 +565,21 @@ function collectResourceOverlay(resources: readonly ResourceDef[]): Partial<Reso
     }
   }
 
-  const overlay: Partial<ResourceCollections> = {};
+  const overlay: MutableResourceCollections = {};
   if (Object.keys(elements).length) overlay.elements = elements;
   if (Object.keys(attributes).length) overlay.attributes = attributes;
   if (Object.keys(valueConverters).length) overlay.valueConverters = valueConverters;
   if (Object.keys(bindingBehaviors).length) overlay.bindingBehaviors = bindingBehaviors;
-  return overlay;
+  return overlay as Partial<ResourceCollections>;
 }
+
+type MutableResourceCollections = {
+  elements?: Record<string, unknown>;
+  attributes?: Record<string, unknown>;
+  controllers?: Record<string, unknown>;
+  valueConverters?: Record<string, unknown>;
+  bindingBehaviors?: Record<string, unknown>;
+};
 
 function resourceToElement(def: CustomElementDef) {
   const name = unwrapSourced(def.name) ?? "";
@@ -605,7 +613,6 @@ function resourceToAttribute(def: CustomAttributeDef) {
     bindables: bindableDefsToRecord(def.bindables),
     ...(aliases.length ? { aliases } : {}),
     ...(primary ? { primary } : {}),
-    ...(unwrapSourced(def.isTemplateController) !== undefined ? { isTemplateController: unwrapSourced(def.isTemplateController) } : {}),
     ...(noMultiBindings !== undefined ? { noMultiBindings } : {}),
     ...(unwrapSourced(def.className) ? { className: unwrapSourced(def.className) } : {}),
     ...(def.file ? { file: def.file } : {}),
