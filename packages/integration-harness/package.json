@@ -1,0 +1,25 @@
+{
+  "name": "@aurelia-ls/integration-harness",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Unified integration harness for Aurelia LS pipeline tests",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aurelia-ls/compiler": "workspace:*",
+    "@aurelia-ls/resolution": "workspace:*"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

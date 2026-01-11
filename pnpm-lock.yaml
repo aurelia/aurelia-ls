@@ -207,6 +207,18 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
+  packages/integration-harness:
+    dependencies:
+      '@aurelia-ls/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@aurelia-ls/resolution':
+        specifier: workspace:*
+        version: link:../resolution
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
   packages/language-server:
     dependencies:
       '@aurelia-ls/compiler':
