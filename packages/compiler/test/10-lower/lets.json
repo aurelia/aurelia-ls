@@ -86,10 +86,7 @@
   {
     "name": "LL-08 static let value is currently dropped (no interpolation, no command)",
     "markup": "<let foo=\"bar\"></let>",
-    "expect": {
-      "lets": [],
-      "expressions": []
-    }
+    "expect": { "lets": [], "expressions": [] }
   },
   {
     "name": "LL-09 invalid let command (.trigger) emits AU0704",
@@ -97,7 +94,9 @@
     "expect": {
       "lets": [],
       "expressions": [],
-      "diags": [{ "code": "AU0704" }]
+      "diags": [
+        { "code": "AU0704" }
+      ]
     }
   },
   {
@@ -106,7 +105,9 @@
     "expect": {
       "lets": [],
       "expressions": [],
-      "diags": [{ "code": "AU0704" }]
+      "diags": [
+        { "code": "AU0704" }
+      ]
     }
   },
   {

@@ -77,7 +77,7 @@
     "test:playground": "pnpm -w build && vitest run --config playground/vitest.config.ts",
     "test:playground:watch": "pnpm -w build && vitest --config playground/vitest.config.ts",
     "dump:overlay": "pnpm -w build && node scripts/dump-overlays.mjs",
-    "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test"
+    "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test packages/resolution/test/routes/vectors packages/resolution/test/integration/expected packages/resolution/test/apps/explicit-app/expected-graph.json packages/resolution/test/apps/routed-app/expected.json packages/integration-harness/test/snapshots"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

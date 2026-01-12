@@ -2,21 +2,14 @@
   "targets": 3,
   "expressions": 4,
   "instructions": [
-    {
-      "kind": "text",
-      "target": 0,
-      "text": "${section.name}"
-    },
+    { "kind": "text", "target": 0, "text": "${section.name}" },
     {
       "kind": "controller",
       "target": 1,
       "name": "repeat",
       "template": 0,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of section.items"
-        }
+        { "iterator": "items", "expr": "item of section.items" }
       ]
     },
     {
@@ -24,11 +17,7 @@
       "target": 2,
       "tag": "info-tag",
       "bindings": [
-        {
-          "property": "count",
-          "expr": "section.items.length",
-          "mode": "toView"
-        }
+        { "property": "count", "expr": "section.items.length", "mode": "toView" }
       ],
       "containerless": true
     }
@@ -42,11 +31,7 @@
           "target": 0,
           "tag": "item-card",
           "bindings": [
-            {
-              "property": "item",
-              "expr": "item",
-              "mode": "toView"
-            }
+            { "property": "item", "expr": "item", "mode": "toView" }
           ],
           "containerless": false
         }

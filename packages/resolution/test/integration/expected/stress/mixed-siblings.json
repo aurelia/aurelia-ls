@@ -8,11 +8,7 @@
       "name": "if",
       "template": 0,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showA",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showA", "mode": "toView" }
       ]
     },
     {
@@ -21,11 +17,7 @@
       "name": "if",
       "template": 1,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showB",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showB", "mode": "toView" }
       ]
     },
     {
@@ -34,11 +26,7 @@
       "name": "if",
       "template": 2,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showC",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showC", "mode": "toView" }
       ]
     },
     {
@@ -47,70 +35,37 @@
       "name": "if",
       "template": 3,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "hasHeader",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "hasHeader", "mode": "toView" }
       ]
     },
-    {
-      "kind": "controller",
-      "target": 4,
-      "name": "else",
-      "template": 4,
-      "bindings": []
-    },
+    { "kind": "controller", "target": 4, "name": "else", "template": 4, "bindings": [] },
     {
       "kind": "controller",
       "target": 5,
       "name": "if",
       "template": 5,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "hasContent",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "hasContent", "mode": "toView" }
       ]
     },
-    {
-      "kind": "controller",
-      "target": 6,
-      "name": "else",
-      "template": 6,
-      "bindings": []
-    },
+    { "kind": "controller", "target": 6, "name": "else", "template": 6, "bindings": [] },
     {
       "kind": "controller",
       "target": 7,
       "name": "if",
       "template": 7,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "hasFooter",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "hasFooter", "mode": "toView" }
       ]
     },
-    {
-      "kind": "controller",
-      "target": 8,
-      "name": "else",
-      "template": 8,
-      "bindings": []
-    },
+    { "kind": "controller", "target": 8, "name": "else", "template": 8, "bindings": [] },
     {
       "kind": "controller",
       "target": 9,
       "name": "repeat",
       "template": 9,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of listA"
-        }
+        { "iterator": "items", "expr": "item of listA" }
       ]
     },
     {
@@ -119,10 +74,7 @@
       "name": "repeat",
       "template": 10,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of listB"
-        }
+        { "iterator": "items", "expr": "item of listB" }
       ]
     },
     {
@@ -131,10 +83,7 @@
       "name": "repeat",
       "template": 11,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of listC"
-        }
+        { "iterator": "items", "expr": "item of listC" }
       ]
     },
     {
@@ -143,11 +92,7 @@
       "name": "if",
       "template": 12,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showFirst",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showFirst", "mode": "toView" }
       ]
     },
     {
@@ -156,10 +101,7 @@
       "name": "repeat",
       "template": 13,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of items"
-        }
+        { "iterator": "items", "expr": "item of items" }
       ]
     },
     {
@@ -168,11 +110,7 @@
       "name": "switch",
       "template": 14,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "type",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "type", "mode": "toView" }
       ]
     },
     {
@@ -181,11 +119,7 @@
       "name": "if",
       "template": 15,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showLast",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showLast", "mode": "toView" }
       ]
     },
     {
@@ -194,10 +128,7 @@
       "name": "repeat",
       "template": 16,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "row of rows"
-        }
+        { "iterator": "items", "expr": "row of rows" }
       ]
     },
     {
@@ -206,111 +137,58 @@
       "name": "if",
       "template": 17,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showMain",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showMain", "mode": "toView" }
       ]
     }
   ],
   "templates": [
-    {
-      "name": "if_0",
-      "instructions": []
-    },
-    {
-      "name": "if_1",
-      "instructions": []
-    },
-    {
-      "name": "if_2",
-      "instructions": []
-    },
+    { "name": "if_0", "instructions": [] },
+    { "name": "if_1", "instructions": [] },
+    { "name": "if_2", "instructions": [] },
     {
       "name": "if_3",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "Header: ${header}"
-        }
+        { "kind": "text", "target": 0, "text": "Header: ${header}" }
       ]
     },
-    {
-      "name": "else_4",
-      "instructions": []
-    },
+    { "name": "else_4", "instructions": [] },
     {
       "name": "if_5",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "Content: ${content}"
-        }
+        { "kind": "text", "target": 0, "text": "Content: ${content}" }
       ]
     },
-    {
-      "name": "else_6",
-      "instructions": []
-    },
+    { "name": "else_6", "instructions": [] },
     {
       "name": "if_7",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "Footer: ${footer}"
-        }
+        { "kind": "text", "target": 0, "text": "Footer: ${footer}" }
       ]
     },
-    {
-      "name": "else_8",
-      "instructions": []
-    },
+    { "name": "else_8", "instructions": [] },
     {
       "name": "repeat_9",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${item}"
-        }
+        { "kind": "text", "target": 0, "text": "${item}" }
       ]
     },
     {
       "name": "repeat_10",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${item}"
-        }
+        { "kind": "text", "target": 0, "text": "${item}" }
       ]
     },
     {
       "name": "repeat_11",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${item}"
-        }
+        { "kind": "text", "target": 0, "text": "${item}" }
       ]
     },
-    {
-      "name": "if_12",
-      "instructions": []
-    },
+    { "name": "if_12", "instructions": [] },
     {
       "name": "repeat_13",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${item}"
-        }
+        { "kind": "text", "target": 0, "text": "${item}" }
       ]
     },
     {
@@ -322,11 +200,7 @@
           "name": "case",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"x\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"x\"", "mode": "toView" }
           ]
         },
         {
@@ -335,42 +209,22 @@
           "name": "case",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"y\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"y\"", "mode": "toView" }
           ]
         }
       ],
       "templates": [
-        {
-          "name": "case_15",
-          "instructions": []
-        },
-        {
-          "name": "case_16",
-          "instructions": []
-        }
+        { "name": "case_15", "instructions": [] },
+        { "name": "case_16", "instructions": [] }
       ]
     },
-    {
-      "name": "if_17",
-      "instructions": []
-    },
+    { "name": "if_17", "instructions": [] },
     {
       "name": "repeat_18",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${row}"
-        }
+        { "kind": "text", "target": 0, "text": "${row}" }
       ]
     },
-    {
-      "name": "if_19",
-      "instructions": []
-    }
+    { "name": "if_19", "instructions": [] }
   ]
 }

@@ -34,6 +34,26 @@ const EXPLICIT_APP_TSCONFIG = path.resolve(
   "explicit-app",
   "tsconfig.json",
 );
+const CONVENTION_APP_TSCONFIG = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "resolution",
+  "test",
+  "apps",
+  "convention-app",
+  "tsconfig.json",
+);
+const SIBLING_APP_TSCONFIG = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "resolution",
+  "test",
+  "apps",
+  "sibling-app",
+  "tsconfig.json",
+);
 const AURELIA_TABLE_PACKAGE = path.resolve(
   REPO_ROOT,
   "aurelia2-plugins",
@@ -91,6 +111,162 @@ const SCENARIOS: IntegrationScenario[] = [
         instructions: [
           { type: "hydrateElement", res: "price-tag" },
           { type: "hydrateElement", res: "stock-badge" },
+        ],
+      },
+    },
+  },
+  {
+    id: "explicit-app-aot-suite",
+    title: "Explicit app templates compile across root + local scopes",
+    tags: ["tsconfig", "aot", "scope", "template-controller"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: EXPLICIT_APP_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+    },
+    compile: [
+      {
+        id: "explicit-product-card",
+        templatePath: "src/widgets/product-card.html",
+        scope: { localOf: "product-card" },
+        aot: true,
+      },
+      {
+        id: "explicit-my-app",
+        templatePath: "src/my-app.html",
+        scope: "root",
+        aot: true,
+      },
+      {
+        id: "explicit-repeat-with-child",
+        templatePath: "/src/repeat-with-child.html",
+        markup: [
+          "<div repeat.for=\"item of items\">",
+          "  <nav-bar></nav-bar>",
+          "  <span>${item}</span>",
+          "</div>",
+        ].join("\n"),
+        scope: "root",
+        aot: true,
+      },
+      {
+        id: "explicit-if-else-with-child",
+        templatePath: "/src/if-else-with-child.html",
+        markup: [
+          "<div>",
+          "  <div if.bind=\"show\">",
+          "    <user-card name.bind=\"userName\"></user-card>",
+          "  </div>",
+          "  <div else>",
+          "    <span>No user</span>",
+          "  </div>",
+          "</div>",
+        ].join("\n"),
+        scope: "root",
+        aot: true,
+      },
+      {
+        id: "explicit-multiple-elements",
+        templatePath: "/src/multiple-elements.html",
+        markup: [
+          "<div>",
+          "  <nav-bar></nav-bar>",
+          "  <user-card name.bind=\"userName\" avatar.bind=\"avatarUrl\"></user-card>",
+          "</div>",
+        ].join("\n"),
+        scope: "root",
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["nav-bar", "data-grid", "user-card"],
+        local: {
+          "product-card": ["price-tag", "stock-badge"],
+        },
+      },
+      aot: {
+        instructions: [
+          { type: "hydrateElement", res: "nav-bar" },
+          { type: "hydrateElement", res: "user-card" },
+          { type: "hydrateTemplateController", res: "repeat" },
+          { type: "hydrateTemplateController", res: "if" },
+        ],
+      },
+    },
+  },
+  {
+    id: "convention-app",
+    title: "Convention-based resources flow into compilation",
+    tags: ["tsconfig", "conventions", "aot"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: CONVENTION_APP_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+    },
+    compile: [
+      {
+        id: "convention-my-app",
+        templatePath: "src/my-app.html",
+        scope: "root",
+        aot: true,
+      },
+      {
+        id: "convention-cortex-devices",
+        templatePath: "src/cortex-devices.html",
+        scope: { localOf: "cortex-devices" },
+        aot: true,
+      },
+      {
+        id: "convention-user-profile",
+        templatePath: "src/user-profile.html",
+        scope: { localOf: "user-profile" },
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["cortex-devices", "user-profile"],
+      },
+      aot: {
+        instructions: [
+          { type: "hydrateElement", res: "cortex-devices" },
+          { type: "hydrateElement", res: "user-profile" },
+        ],
+      },
+    },
+  },
+  {
+    id: "sibling-app",
+    title: "Sibling template pairing feeds custom element semantics",
+    tags: ["tsconfig", "conventions", "aot"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: SIBLING_APP_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+    },
+    compile: [
+      {
+        id: "sibling-my-app",
+        templatePath: "src/my-app.html",
+        scope: "root",
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["nav-bar", "user-card"],
+      },
+      aot: {
+        instructions: [
+          { type: "hydrateElement", res: "nav-bar" },
+          { type: "hydrateElement", res: "user-card" },
         ],
       },
     },

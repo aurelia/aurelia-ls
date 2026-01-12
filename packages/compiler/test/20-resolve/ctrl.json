@@ -167,7 +167,9 @@
             "kind": "attribute",
             "name": "my-tc",
             "isTemplateController": true,
-            "bindables": { "value": { "name": "value" } },
+            "bindables": {
+              "value": { "name": "value" }
+            },
             "primary": "value"
           }
         }
@@ -189,7 +191,9 @@
             "kind": "attribute",
             "name": "my-attr",
             "isTemplateController": false,
-            "bindables": { "value": { "name": "value" } },
+            "bindables": {
+              "value": { "name": "value" }
+            },
             "primary": "value"
           }
         }

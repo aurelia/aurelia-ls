@@ -132,10 +132,7 @@
             { "type": "hydrateTemplateController", "target": 2, "resource": "catch", "templateIndex": 2, "propCount": 1 }
           ],
           "nested": [
-            {
-              "name": "pending_1",
-              "instructions": []
-            },
+            { "name": "pending_1", "instructions": [] },
             {
               "name": "then_2",
               "instructions": [

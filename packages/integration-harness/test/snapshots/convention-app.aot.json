@@ -1,0 +1,75 @@
+{
+  "convention-cortex-devices": {
+    "definition": { "instructions": [], "name": "convention-cortex-devices", "nestedTemplates": [], "targetCount": 0 },
+    "expressions": [],
+    "template": "\n  <div class=\"cortex-container\">\n    <h1>Cortex Devices</h1>\n    <div class=\"device-list\">\n      <!-- Device list content -->\n    </div>\n  </div>\n\n"
+  },
+  "convention-my-app": {
+    "definition": {
+      "instructions": [
+        [
+          { "exprIds": [ "expr_8bd332801b09de00" ], "parts": [ "", "" ], "type": 30 }
+        ],
+        [
+          { "instructions": [], "res": "cortex-devices", "type": 0 }
+        ],
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_7f1d1dc045ef4f40", "mode": 2, "to": "name", "type": 12 }
+            ],
+            "res": "user-profile",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "convention-my-app",
+      "nestedTemplates": [],
+      "targetCount": 3
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "message" },
+        "id": "expr_8bd332801b09de00"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
+        "id": "expr_7f1d1dc045ef4f40"
+      }
+    ],
+    "template": "\n  <div class=\"app\">\n    <h1><!--au--> </h1>\n    <!--au--><cortex-devices></cortex-devices>\n    <!--au--><user-profile></user-profile>\n  </div>\n\n"
+  },
+  "convention-user-profile": {
+    "definition": {
+      "instructions": [
+        [
+          { "exprIds": [ "expr_25afa9000a8dbdb8" ], "parts": [ "", "" ], "type": 30 }
+        ],
+        [
+          { "exprIds": [ "expr_9c8ce500e2d24a60" ], "parts": [ "", "" ], "type": 30 }
+        ],
+        [
+          { "exprIds": [ "expr_4027780095bff1c0" ], "parts": [ "", "" ], "type": 30 }
+        ]
+      ],
+      "name": "convention-user-profile",
+      "nestedTemplates": [],
+      "targetCount": 3
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "name" },
+        "id": "expr_25afa9000a8dbdb8"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "bio" },
+        "id": "expr_9c8ce500e2d24a60"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "age" },
+        "id": "expr_4027780095bff1c0"
+      }
+    ],
+    "template": "\n  <div class=\"user-profile\">\n    <h2><!--au--> </h2>\n    <p><!--au--> </p>\n    <span class=\"age\"><!--au--> </span>\n  </div>\n\n"
+  }
+}

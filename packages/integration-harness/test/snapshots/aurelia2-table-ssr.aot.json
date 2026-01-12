@@ -1,1 +1,43 @@
-{"aurelia2-table-ssr":{"definition":{"instructions":[[{"instructions":[{"exprId":"expr_67607048dad90f00","mode":2,"to":"totalItems","type":12},{"exprId":"expr_8b1597d0bf324c80","mode":2,"to":"pageSize","type":12},{"exprId":"expr_33d64160736ddd60","mode":6,"to":"currentPage","type":12},{"exprId":"expr_4abc79001d6a64e0","mode":2,"to":"directionLinks","type":12},{"exprId":"expr_4abc79001d6a64e0","mode":2,"to":"boundaryLinks","type":12}],"res":"aut-pagination","type":0}]],"name":"aurelia2-table-ssr","nestedTemplates":[],"targetCount":1},"expressions":[{"ast":{"$kind":"PrimitiveLiteral","value":12},"id":"expr_67607048dad90f00"},{"ast":{"$kind":"PrimitiveLiteral","value":5},"id":"expr_8b1597d0bf324c80"},{"ast":{"$kind":"PrimitiveLiteral","value":1},"id":"expr_33d64160736ddd60"},{"ast":{"$kind":"PrimitiveLiteral","value":false},"id":"expr_4abc79001d6a64e0"}],"template":"<!--au--><aut-pagination>\n</aut-pagination>"}}
+{
+  "aurelia2-table-ssr": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_67607048dad90f00", "mode": 2, "to": "totalItems", "type": 12 },
+              { "exprId": "expr_8b1597d0bf324c80", "mode": 2, "to": "pageSize", "type": 12 },
+              { "exprId": "expr_33d64160736ddd60", "mode": 6, "to": "currentPage", "type": 12 },
+              { "exprId": "expr_4abc79001d6a64e0", "mode": 2, "to": "directionLinks", "type": 12 },
+              { "exprId": "expr_4abc79001d6a64e0", "mode": 2, "to": "boundaryLinks", "type": 12 }
+            ],
+            "res": "aut-pagination",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "aurelia2-table-ssr",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 12 },
+        "id": "expr_67607048dad90f00"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 5 },
+        "id": "expr_8b1597d0bf324c80"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 1 },
+        "id": "expr_33d64160736ddd60"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": false },
+        "id": "expr_4abc79001d6a64e0"
+      }
+    ],
+    "template": "<!--au--><aut-pagination>\n</aut-pagination>"
+  }
+}

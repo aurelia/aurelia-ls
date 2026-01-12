@@ -299,7 +299,9 @@
           "my-component": {
             "kind": "element",
             "name": "my-component",
-            "bindables": { "value": { "name": "value" } }
+            "bindables": {
+              "value": { "name": "value" }
+            }
           }
         }
       }
@@ -321,7 +323,9 @@
           "my-component": {
             "kind": "element",
             "name": "my-component",
-            "bindables": { "value": { "name": "value" } }
+            "bindables": {
+              "value": { "name": "value" }
+            }
           }
         }
       }
@@ -401,7 +405,9 @@
             "kind": "attribute",
             "name": "tooltip",
             "isTemplateController": false,
-            "bindables": { "message": { "name": "message" } },
+            "bindables": {
+              "message": { "name": "message" }
+            },
             "primary": "message"
           }
         }

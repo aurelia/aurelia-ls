@@ -2,31 +2,17 @@
   "targets": 3,
   "expressions": 4,
   "instructions": [
-    {
-      "kind": "text",
-      "target": 0,
-      "text": "${item.label}"
-    },
+    { "kind": "text", "target": 0, "text": "${item.label}" },
     {
       "kind": "controller",
       "target": 1,
       "name": "if",
       "template": 0,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "item.active",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "item.active", "mode": "toView" }
       ]
     },
-    {
-      "kind": "controller",
-      "target": 2,
-      "name": "else",
-      "template": 1,
-      "bindings": []
-    }
+    { "kind": "controller", "target": 2, "name": "else", "template": 1, "bindings": [] }
   ],
   "templates": [
     {
@@ -37,11 +23,7 @@
           "target": 0,
           "tag": "status-badge",
           "bindings": [
-            {
-              "property": "active",
-              "expr": "true",
-              "mode": "toView"
-            }
+            { "property": "active", "expr": "true", "mode": "toView" }
           ],
           "containerless": false
         }
@@ -55,11 +37,7 @@
           "target": 0,
           "tag": "status-badge",
           "bindings": [
-            {
-              "property": "active",
-              "expr": "false",
-              "mode": "toView"
-            }
+            { "property": "active", "expr": "false", "mode": "toView" }
           ],
           "containerless": false
         }

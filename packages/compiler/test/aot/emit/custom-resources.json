@@ -145,7 +145,7 @@
               "color": { "name": "color", "mode": "toView" }
             },
             "primary": "color",
-            "aliases": ["hl"]
+            "aliases": [ "hl" ]
           }
         }
       }

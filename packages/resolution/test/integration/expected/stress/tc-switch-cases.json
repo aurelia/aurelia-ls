@@ -8,11 +8,7 @@
       "name": "switch",
       "template": 0,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "type",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "type", "mode": "toView" }
       ]
     },
     {
@@ -21,11 +17,7 @@
       "name": "switch",
       "template": 1,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "status",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "status", "mode": "toView" }
       ]
     },
     {
@@ -34,11 +26,7 @@
       "name": "switch",
       "template": 2,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "view",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "view", "mode": "toView" }
       ]
     },
     {
@@ -47,11 +35,7 @@
       "name": "switch",
       "template": 3,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "size",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "size", "mode": "toView" }
       ]
     }
   ],
@@ -65,11 +49,7 @@
           "name": "case",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"a\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"a\"", "mode": "toView" }
           ]
         },
         {
@@ -78,11 +58,7 @@
           "name": "case",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"b\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"b\"", "mode": "toView" }
           ]
         },
         {
@@ -91,38 +67,16 @@
           "name": "case",
           "template": 2,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"c\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"c\"", "mode": "toView" }
           ]
         },
-        {
-          "kind": "controller",
-          "target": 3,
-          "name": "default-case",
-          "template": 3,
-          "bindings": []
-        }
+        { "kind": "controller", "target": 3, "name": "default-case", "template": 3, "bindings": [] }
       ],
       "templates": [
-        {
-          "name": "case_1",
-          "instructions": []
-        },
-        {
-          "name": "case_2",
-          "instructions": []
-        },
-        {
-          "name": "case_3",
-          "instructions": []
-        },
-        {
-          "name": "default-case_4",
-          "instructions": []
-        }
+        { "name": "case_1", "instructions": [] },
+        { "name": "case_2", "instructions": [] },
+        { "name": "case_3", "instructions": [] },
+        { "name": "default-case_4", "instructions": [] }
       ]
     },
     {
@@ -134,11 +88,7 @@
           "name": "case",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"loading\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"loading\"", "mode": "toView" }
           ]
         },
         {
@@ -147,11 +97,7 @@
           "name": "case",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"success\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"success\"", "mode": "toView" }
           ]
         },
         {
@@ -160,56 +106,31 @@
           "name": "case",
           "template": 2,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"error\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"error\"", "mode": "toView" }
           ]
         },
-        {
-          "kind": "controller",
-          "target": 3,
-          "name": "default-case",
-          "template": 3,
-          "bindings": []
-        }
+        { "kind": "controller", "target": 3, "name": "default-case", "template": 3, "bindings": [] }
       ],
       "templates": [
         {
           "name": "case_6",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "Loading... ${progress}%"
-            }
+            { "kind": "text", "target": 0, "text": "Loading... ${progress}%" }
           ]
         },
         {
           "name": "case_7",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "Success: ${result}"
-            }
+            { "kind": "text", "target": 0, "text": "Success: ${result}" }
           ]
         },
         {
           "name": "case_8",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "Error: ${errorMessage}"
-            }
+            { "kind": "text", "target": 0, "text": "Error: ${errorMessage}" }
           ]
         },
-        {
-          "name": "default-case_9",
-          "instructions": []
-        }
+        { "name": "default-case_9", "instructions": [] }
       ]
     },
     {
@@ -221,11 +142,7 @@
           "name": "case",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"list\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"list\"", "mode": "toView" }
           ]
         },
         {
@@ -234,20 +151,10 @@
           "name": "case",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"grid\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"grid\"", "mode": "toView" }
           ]
         },
-        {
-          "kind": "controller",
-          "target": 2,
-          "name": "default-case",
-          "template": 2,
-          "bindings": []
-        }
+        { "kind": "controller", "target": 2, "name": "default-case", "template": 2, "bindings": [] }
       ],
       "templates": [
         {
@@ -259,10 +166,7 @@
               "name": "repeat",
               "template": 0,
               "bindings": [
-                {
-                  "iterator": "items",
-                  "expr": "item of items"
-                }
+                { "iterator": "items", "expr": "item of items" }
               ]
             }
           ],
@@ -270,11 +174,7 @@
             {
               "name": "repeat_12",
               "instructions": [
-                {
-                  "kind": "text",
-                  "target": 0,
-                  "text": "${item}"
-                }
+                { "kind": "text", "target": 0, "text": "${item}" }
               ]
             }
           ]
@@ -288,10 +188,7 @@
               "name": "repeat",
               "template": 0,
               "bindings": [
-                {
-                  "iterator": "items",
-                  "expr": "item of items"
-                }
+                { "iterator": "items", "expr": "item of items" }
               ]
             }
           ],
@@ -299,19 +196,12 @@
             {
               "name": "repeat_14",
               "instructions": [
-                {
-                  "kind": "text",
-                  "target": 0,
-                  "text": "${item}"
-                }
+                { "kind": "text", "target": 0, "text": "${item}" }
               ]
             }
           ]
         },
-        {
-          "name": "default-case_15",
-          "instructions": []
-        }
+        { "name": "default-case_15", "instructions": [] }
       ]
     },
     {
@@ -323,11 +213,7 @@
           "name": "case",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"xs\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"xs\"", "mode": "toView" }
           ]
         },
         {
@@ -336,11 +222,7 @@
           "name": "case",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"sm\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"sm\"", "mode": "toView" }
           ]
         },
         {
@@ -349,11 +231,7 @@
           "name": "case",
           "template": 2,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"md\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"md\"", "mode": "toView" }
           ]
         },
         {
@@ -362,11 +240,7 @@
           "name": "case",
           "template": 3,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"lg\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"lg\"", "mode": "toView" }
           ]
         },
         {
@@ -375,35 +249,16 @@
           "name": "case",
           "template": 4,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"xl\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"xl\"", "mode": "toView" }
           ]
         }
       ],
       "templates": [
-        {
-          "name": "case_17",
-          "instructions": []
-        },
-        {
-          "name": "case_18",
-          "instructions": []
-        },
-        {
-          "name": "case_19",
-          "instructions": []
-        },
-        {
-          "name": "case_20",
-          "instructions": []
-        },
-        {
-          "name": "case_21",
-          "instructions": []
-        }
+        { "name": "case_17", "instructions": [] },
+        { "name": "case_18", "instructions": [] },
+        { "name": "case_19", "instructions": [] },
+        { "name": "case_20", "instructions": [] },
+        { "name": "case_21", "instructions": [] }
       ]
     }
   ]

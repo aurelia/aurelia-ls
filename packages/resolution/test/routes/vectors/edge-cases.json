@@ -1,54 +1,32 @@
 {
   "name": "Edge cases and special patterns",
   "cases": [
-    {
-      "name": "no routes defined",
-      "source": "export class SimpleComponent {}",
-      "expected": null
-    },
+    { "name": "no routes defined", "source": "export class SimpleComponent {}", "expected": null },
     {
       "name": "getRouteConfig method (dynamic)",
       "source": "export class DynamicApp {\n  getRouteConfig() {\n    return { routes: [] };\n  }\n}",
-      "expected": {
-        "isDynamic": true,
-        "method": "getRouteConfig"
-      }
+      "expected": { "isDynamic": true, "method": "getRouteConfig" }
     },
     {
       "name": "async getRouteConfig method",
       "source": "export class AsyncApp {\n  async getRouteConfig() {\n    const routes = await fetchRoutes();\n    return { routes };\n  }\n}",
-      "expected": {
-        "isDynamic": true,
-        "method": "getRouteConfig"
-      }
+      "expected": { "isDynamic": true, "method": "getRouteConfig" }
     },
     {
       "name": "both decorator and static property (decorator wins)",
       "source": "@route({ path: 'decorator-path' })\nexport class Both {\n  static routes = [{ path: 'static-path', component: X }];\n}",
-      "expected": {
-        "path": "decorator-path",
-        "routes": [],
-        "definitionType": "decorator"
-      },
+      "expected": { "path": "decorator-path", "routes": [], "definitionType": "decorator" },
       "note": "Decorator takes precedence over static property"
     },
     {
       "name": "empty routes array",
       "source": "@route({ routes: [] })\nexport class EmptyRoutes {}",
-      "expected": {
-        "routes": [],
-        "definitionType": "decorator"
-      }
+      "expected": { "routes": [], "definitionType": "decorator" }
     },
     {
       "name": "route with only redirectTo",
       "source": "@route({ path: 'legacy', redirectTo: '/new' })\nexport class Legacy {}",
-      "expected": {
-        "path": "legacy",
-        "redirectTo": "/new",
-        "routes": [],
-        "definitionType": "decorator"
-      }
+      "expected": { "path": "legacy", "redirectTo": "/new", "routes": [], "definitionType": "decorator" }
     },
     {
       "name": "inline component definition",
@@ -79,12 +57,7 @@
     {
       "name": "optional parameter",
       "source": "@route(':id?')\nexport class OptionalParam {}",
-      "expected": {
-        "path": ":id?",
-        "routes": [],
-        "definitionType": "decorator",
-        "params": ["id"]
-      },
+      "expected": { "path": ":id?", "routes": [], "definitionType": "decorator", "params": [ "id" ] },
       "note": "Optional params still extracted, runtime handles optionality"
     }
   ]

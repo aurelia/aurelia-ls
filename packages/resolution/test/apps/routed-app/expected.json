@@ -1,8 +1,6 @@
 {
   "$schema": "Route tree expected output for routed-app test fixture",
-
-  "entryPoints": ["App"],
-
+  "entryPoints": [ "App" ],
   "roots": [
     {
       "path": "",
@@ -12,7 +10,7 @@
       "children": []
     },
     {
-      "path": ["about", "about-us"],
+      "path": [ "about", "about-us" ],
       "fullPath": "/about",
       "component": { "kind": "class", "className": "AboutComponent" },
       "title": "About Us",
@@ -34,7 +32,7 @@
           "fullPath": "/products/:id",
           "component": { "kind": "class", "className": "ProductDetailComponent" },
           "children": [],
-          "params": ["id"]
+          "params": [ "id" ]
         }
       ]
     },
@@ -56,39 +54,16 @@
           "component": { "kind": "class", "className": "BlogPostComponent" },
           "title": "Blog Post",
           "children": [],
-          "params": ["slug"]
+          "params": [ "slug" ]
         }
       ]
     },
-    {
-      "path": "old-home",
-      "fullPath": "/old-home",
-      "redirectTo": "",
-      "children": []
-    }
+    { "path": "old-home", "fullPath": "/old-home", "redirectTo": "", "children": [] }
   ],
-
   "parameterizedRoutes": [
-    {
-      "fullPath": "/products/:id",
-      "params": ["id"],
-      "hasStaticPaths": true
-    },
-    {
-      "fullPath": "/blog/:slug",
-      "params": ["slug"],
-      "hasStaticPaths": true
-    }
+    { "fullPath": "/products/:id", "params": [ "id" ], "hasStaticPaths": true },
+    { "fullPath": "/blog/:slug", "params": [ "slug" ], "hasStaticPaths": true }
   ],
-
-  "allStaticPaths": [
-    "/",
-    "/about",
-    "/about-us",
-    "/products",
-    "/blog",
-    "/old-home"
-  ],
-
+  "allStaticPaths": [ "/", "/about", "/about-us", "/products", "/blog", "/old-home" ],
   "dynamicComponents": []
 }
