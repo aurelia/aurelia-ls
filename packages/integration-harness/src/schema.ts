@@ -1,5 +1,5 @@
 import type ts from "typescript";
-import type { ResourceScopeId } from "@aurelia-ls/compiler";
+import type { LocalImportDef, ResourceCollections, ResourceScopeId } from "@aurelia-ls/compiler";
 import type { ConventionConfig, DefineMap } from "@aurelia-ls/resolution";
 
 export type ScenarioTag = string;
@@ -25,6 +25,7 @@ export interface ResolutionHarnessOptions {
   templateExtensions?: readonly string[];
   styleExtensions?: readonly string[];
   packageRoots?: Readonly<Record<string, string>>;
+  explicitResources?: Partial<ResourceCollections>;
 }
 
 export interface CompilerHarnessOptions {
@@ -56,6 +57,7 @@ export interface CompileTargetSpec {
   scope?: CompileScope;
   aot?: boolean;
   overlay?: boolean;
+  localImports?: readonly LocalImportDef[];
 }
 
 export interface ResourceExpectation {
@@ -96,12 +98,29 @@ export interface AotExpectation {
   };
 }
 
+export interface RegistrationPlanResourceSet {
+  elements?: readonly string[];
+  attributes?: readonly string[];
+  controllers?: readonly string[];
+  valueConverters?: readonly string[];
+  bindingBehaviors?: readonly string[];
+}
+
+export interface RegistrationPlanScopeExpectation extends RegistrationPlanResourceSet {
+  exclude?: RegistrationPlanResourceSet;
+}
+
+export interface RegistrationPlanExpectation {
+  scopes: Readonly<Record<string, RegistrationPlanScopeExpectation>>;
+}
+
 export interface ScenarioExpectations {
   resources?: ResourceExpectation;
   bindables?: readonly BindableExpectation[];
   diagnostics?: readonly DiagnosticExpectation[];
   gaps?: readonly GapExpectation[];
   aot?: AotExpectation;
+  registrationPlan?: RegistrationPlanExpectation;
 }
 
 export interface IntegrationScenario {

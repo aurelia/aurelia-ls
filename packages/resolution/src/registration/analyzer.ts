@@ -595,9 +595,16 @@ function findTemplateImportSites(
       continue;
     }
 
-    // Case 2 & 3: Default alias or plain import - single site
-    const site = createSiteFromTemplateImport(imp, scope, evidence, templateFile, context);
-    sites.push(site);
+    // Case 2: Default alias - single site
+    if (imp.defaultAlias) {
+      const site = createSiteFromTemplateImport(imp, scope, evidence, templateFile, context);
+      sites.push(site);
+      continue;
+    }
+
+    // Case 3: Plain import - one site per exported resource
+    const plainSites = createSitesFromPlainTemplateImport(imp, scope, evidence, context);
+    sites.push(...plainSites);
   }
 
   return sites;
@@ -621,6 +628,52 @@ function createSiteFromTemplateImport(
     evidence,
     span: imp.span, // Already a SourceSpan, no conversion needed
   };
+}
+
+/**
+ * Create RegistrationSites for a plain template import.
+ *
+ * `<import from="./x">` registers all resources exported by the module.
+ */
+function createSitesFromPlainTemplateImport(
+  imp: TemplateImport,
+  scope: RegistrationScope,
+  evidence: RegistrationEvidence,
+  context: AnalysisContext,
+): RegistrationSite[] {
+  if (!imp.resolvedPath) {
+    return [{
+      resourceRef: {
+        kind: "unresolved",
+        name: imp.moduleSpecifier,
+        reason: `Could not resolve module '${imp.moduleSpecifier}'`,
+      },
+      scope,
+      evidence,
+      span: imp.span,
+    }];
+  }
+
+  const resources = context.resources.filter((resource) => resource.file === imp.resolvedPath);
+  if (resources.length === 0) {
+    return [{
+      resourceRef: {
+        kind: "unresolved",
+        name: imp.moduleSpecifier,
+        reason: `No resources found in '${imp.moduleSpecifier}'`,
+      },
+      scope,
+      evidence,
+      span: imp.span,
+    }];
+  }
+
+  return resources.map((resource) => ({
+    resourceRef: { kind: "resolved", resource },
+    scope,
+    evidence,
+    span: imp.span,
+  }));
 }
 
 /**

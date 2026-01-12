@@ -1,5 +1,6 @@
 import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler";
-import type { AssertionFailure, ScenarioExpectations } from "./schema.js";
+import type { ResourceCollections } from "@aurelia-ls/compiler";
+import type { AssertionFailure, RegistrationPlanResourceSet, RegistrationPlanScopeExpectation, ScenarioExpectations } from "./schema.js";
 import type { IntegrationRun } from "./runner.js";
 
 type InstructionSummary = { type: string; res?: string; target?: number };
@@ -20,6 +21,7 @@ export function evaluateExpectations(
   failures.push(...assertDiagnostics(run, expectations));
   failures.push(...assertGaps(run, expectations));
   failures.push(...assertAot(run, expectations));
+  failures.push(...assertRegistrationPlan(run, expectations));
   return failures;
 }
 
@@ -185,6 +187,40 @@ function assertAot(run: IntegrationRun, expectations: ScenarioExpectations): Ass
   return failures;
 }
 
+function assertRegistrationPlan(
+  run: IntegrationRun,
+  expectations: ScenarioExpectations,
+): AssertionFailure[] {
+  const planExpectations = expectations.registrationPlan;
+  if (!planExpectations) return [];
+  const failures: AssertionFailure[] = [];
+  const plan = run.registrationPlan;
+
+  if (!plan) {
+    failures.push({
+      kind: "registration-plan",
+      message: "Registration plan missing from integration run.",
+    });
+    return failures;
+  }
+
+  for (const [scopeKey, expected] of Object.entries(planExpectations.scopes)) {
+    const scopeId = resolveScopeKey(scopeKey, run);
+    const scopePlan = plan.scopes[scopeId as keyof typeof plan.scopes];
+    if (!scopePlan) {
+      failures.push({
+        kind: "registration-plan",
+        message: `Registration plan scope "${scopeId}" not found.`,
+      });
+      continue;
+    }
+
+    failures.push(...assertPlanResources(scopeId, scopePlan.resources, expected));
+  }
+
+  return failures;
+}
+
 function collectInstructionSummaries(run: IntegrationRun): InstructionSummary[] {
   const summaries: InstructionSummary[] = [];
 
@@ -252,6 +288,71 @@ function resolveScopeKey(key: string, run: IntegrationRun): string {
     return key;
   }
   return key;
+}
+
+function assertPlanResources(
+  scopeId: string,
+  resources: ResourceCollections,
+  expected: RegistrationPlanScopeExpectation,
+): AssertionFailure[] {
+  const failures: AssertionFailure[] = [];
+  const actual = collectPlanResources(resources);
+
+  failures.push(...assertPlanResourceSet(scopeId, actual, expected, "include"));
+  if (expected.exclude) {
+    failures.push(...assertPlanResourceSet(scopeId, actual, expected.exclude, "exclude"));
+  }
+
+  return failures;
+}
+
+function assertPlanResourceSet(
+  scopeId: string,
+  actual: RegistrationPlanResourceSet,
+  expected: RegistrationPlanResourceSet,
+  mode: "include" | "exclude",
+): AssertionFailure[] {
+  const failures: AssertionFailure[] = [];
+  const verb = mode === "include" ? "Missing" : "Unexpected";
+
+  const check = (kind: keyof RegistrationPlanResourceSet, label: string) => {
+    const expectedList = expected[kind];
+    if (!expectedList || expectedList.length === 0) return;
+    const actualList = actual[kind] ?? [];
+    for (const name of expectedList) {
+      const present = actualList.includes(name);
+      if (mode === "include" && !present) {
+        failures.push({
+          kind: "registration-plan",
+          message: `${verb} ${label} "${name}" in scope "${scopeId}".`,
+        });
+      }
+      if (mode === "exclude" && present) {
+        failures.push({
+          kind: "registration-plan",
+          message: `${verb} ${label} "${name}" in scope "${scopeId}".`,
+        });
+      }
+    }
+  };
+
+  check("elements", "element");
+  check("attributes", "attribute");
+  check("controllers", "controller");
+  check("valueConverters", "value-converter");
+  check("bindingBehaviors", "binding-behavior");
+
+  return failures;
+}
+
+function collectPlanResources(resources: ResourceCollections): RegistrationPlanResourceSet {
+  return {
+    elements: Object.keys(resources.elements),
+    attributes: Object.keys(resources.attributes),
+    controllers: Object.keys(resources.controllers),
+    valueConverters: Object.keys(resources.valueConverters),
+    bindingBehaviors: Object.keys(resources.bindingBehaviors),
+  };
 }
 
 function findResource(

@@ -54,6 +54,18 @@ const SIBLING_APP_TSCONFIG = path.resolve(
   "sibling-app",
   "tsconfig.json",
 );
+const TEMPLATE_IMPORTS_TSCONFIG = path.resolve(
+  REPO_ROOT,
+  "playground",
+  "template-imports",
+  "tsconfig.json",
+);
+const TEMPLATE_IMPORTS_PKG_TSCONFIG = path.resolve(
+  __dirname,
+  "fixtures",
+  "template-imports-pkg",
+  "tsconfig.json",
+);
 const AURELIA_TABLE_PACKAGE = path.resolve(
   REPO_ROOT,
   "aurelia2-plugins",
@@ -73,6 +85,18 @@ const FIXTURE_MULTI_CLASS = path.resolve(
   "fixtures",
   "multi-class",
 );
+
+const EXPLICIT_THIRD_PARTY_RESOURCES = {
+  elements: {
+    "third-party-card": {
+      kind: "element",
+      name: "third-party-card",
+      bindables: {
+        items: { name: "items" },
+      },
+    },
+  },
+} as const;
 
 const UPDATE_SNAPSHOTS = process.env.AURELIA_INTEGRATION_GOLDEN === "1";
 
@@ -272,6 +296,78 @@ const SCENARIOS: IntegrationScenario[] = [
     },
   },
   {
+    id: "template-imports",
+    title: "Template <import> elements create local scope resources",
+    tags: ["tsconfig", "template-imports", "local-scope", "aot"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: TEMPLATE_IMPORTS_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+    },
+    compile: [
+      {
+        id: "template-imports-my-app",
+        templatePath: "src/my-app.html",
+        scope: { localOf: "my-app" },
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        local: {
+          "my-app": ["counter"],
+        },
+      },
+      bindables: [{ resource: "counter", name: "label" }],
+      aot: {
+        instructions: [{ type: "hydrateElement", res: "counter" }],
+      },
+    },
+  },
+  {
+    id: "template-imports-third-party",
+    title: "Template <import> from package adds third-party resources locally",
+    tags: ["tsconfig", "template-imports", "third-party", "local-scope", "aot"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: TEMPLATE_IMPORTS_PKG_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+      packageRoots: {
+        "@test/multi-class": FIXTURE_MULTI_CLASS,
+      },
+    },
+    compile: [
+      {
+        id: "template-imports-third-party-my-app",
+        templatePath: "src/my-app.html",
+        scope: { localOf: "my-app" },
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        local: {
+          "my-app": ["user-card", "highlight"],
+        },
+      },
+      bindables: [
+        { resource: "user-card", name: "name" },
+        { resource: "user-card", name: "avatar" },
+        { resource: "highlight", name: "color", primary: true },
+      ],
+      aot: {
+        instructions: [
+          { type: "hydrateElement", res: "user-card" },
+          { type: "hydrateAttribute", res: "highlight" },
+        ],
+      },
+    },
+  },
+  {
     id: "conditional-define",
     title: "Defines resolve conditional registration guards",
     tags: ["memory", "defines", "registration"],
@@ -361,6 +457,125 @@ const SCENARIOS: IntegrationScenario[] = [
       },
       aot: {
         instructions: [{ type: "hydrateElement", res: "guarded-el" }],
+      },
+    },
+  },
+  {
+    id: "local-import-defs",
+    title: "Local import overlays allow template-only resources",
+    tags: ["memory", "local-imports", "aot"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    compile: [
+      {
+        id: "local-imports-template",
+        templatePath: "/src/local-imports.html",
+        markup: "<local-chip label.bind=\"label\"></local-chip>",
+        aot: true,
+        localImports: [
+          {
+            name: "local-chip",
+            bindables: {
+              label: { name: "label" },
+            },
+          },
+        ],
+      },
+    ],
+    expect: {
+      aot: {
+        instructions: [{ type: "hydrateElement", res: "local-chip" }],
+      },
+    },
+  },
+  {
+    id: "registration-plan",
+    title: "Registration plan filters to used resources per scope",
+    tags: ["memory", "registration-plan", "usage"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": [
+          "import { customElement } from \"aurelia\";",
+          "",
+          "const Aurelia = { register: (..._args: unknown[]) => {} };",
+          "",
+          "@customElement(\"alpha-el\")",
+          "export class AlphaElement {}",
+          "",
+          "@customElement(\"beta-el\")",
+          "export class BetaElement {}",
+          "",
+          "Aurelia.register(AlphaElement, BetaElement);",
+        ].join("\n"),
+      },
+    },
+    compile: [
+      {
+        id: "registration-plan-root",
+        templatePath: "/src/registration-plan.html",
+        markup: "<alpha-el></alpha-el>",
+        scope: "root",
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["alpha-el", "beta-el"],
+      },
+      aot: {
+        instructions: [{ type: "hydrateElement", res: "alpha-el" }],
+      },
+      registrationPlan: {
+        scopes: {
+          root: {
+            elements: ["alpha-el"],
+            exclude: {
+              elements: ["beta-el"],
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    id: "explicit-third-party",
+    title: "Explicit third-party config merges into root scope",
+    tags: ["memory", "explicit-resources", "aot"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    resolution: {
+      explicitResources: EXPLICIT_THIRD_PARTY_RESOURCES,
+    },
+    compile: [
+      {
+        id: "explicit-third-party-root",
+        templatePath: "/src/explicit-third-party.html",
+        markup: "<third-party-card items.bind=\"items\"></third-party-card>",
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["third-party-card"],
+      },
+      aot: {
+        instructions: [{ type: "hydrateElement", res: "third-party-card" }],
+      },
+      registrationPlan: {
+        scopes: {
+          root: {
+            elements: ["third-party-card"],
+          },
+        },
       },
     },
   },

@@ -11,20 +11,25 @@ import {
   createMockFileSystem,
   createNodeFileSystem,
   resolve,
+  buildRegistrationPlan,
   type AnalysisResult,
   type FileSystemContext,
   type PackageAnalysis,
   type ResolutionConfig,
   type ResolutionDiagnostic,
   type ResolutionResult,
+  type UsageByScope,
 } from "@aurelia-ls/resolution";
 import {
   compileAot,
   compileTemplate,
   buildResourceGraphFromSemantics,
+  buildTemplateSyntaxRegistry,
+  prepareSemantics,
   type ApiSurfaceSnapshot,
   type AotCodeResult,
   type CompileAotResult,
+  type FeatureUsageSet,
   type ResourceCatalog,
   type ResourceCollections,
   type ResourceDef,
@@ -69,6 +74,7 @@ export interface CompileRunResult {
   scopeId: ResourceScopeId;
   aot?: CompileAotResult;
   overlay?: TemplateCompilation;
+  usage?: FeatureUsageSet;
 }
 
 export interface IntegrationSnapshots {
@@ -96,6 +102,8 @@ export interface IntegrationRun {
   compile: Readonly<Record<string, CompileRunResult>>;
   snapshots: IntegrationSnapshots;
   diagnostics: readonly ResolutionDiagnostic[];
+  usageByScope?: UsageByScope;
+  registrationPlan?: ReturnType<typeof buildRegistrationPlan>;
   timings: IntegrationTimings;
 }
 
@@ -136,12 +144,22 @@ export async function runIntegrationScenario(
     external.flatMap((pkg) => pkg.resources),
     normalized.externalResourcePolicy,
   );
+  const augmented = applyExplicitResources(merged, normalized.resolution.explicitResources);
 
   const compileStart = performance.now();
-  const compile = compileTargets(normalized, resolution, merged, fileMap);
+  const compile = compileTargets(normalized, resolution, augmented, fileMap, {
+    computeUsage: !!normalized.expect?.registrationPlan,
+  });
   timings.compileMs = performance.now() - compileStart;
 
-  const snapshots = buildSnapshots(merged, normalized);
+  const snapshots = buildSnapshots(augmented, normalized);
+
+  const usageByScope = normalized.expect?.registrationPlan
+    ? collectUsageByScope(compile)
+    : undefined;
+  const registrationPlan = usageByScope
+    ? buildRegistrationPlan(augmented.resourceGraph, usageByScope)
+    : undefined;
 
   timings.totalMs = performance.now() - startTotal;
 
@@ -150,14 +168,16 @@ export async function runIntegrationScenario(
     program,
     fileSystem,
     resolution,
-    semantics: merged.semantics,
-    resourceGraph: merged.resourceGraph,
-    catalog: merged.catalog,
-    syntax: merged.syntax,
+    semantics: augmented.semantics,
+    resourceGraph: augmented.resourceGraph,
+    catalog: augmented.catalog,
+    syntax: augmented.syntax,
     external,
     compile,
     snapshots,
     diagnostics: resolution.diagnostics,
+    usageByScope,
+    registrationPlan,
     timings,
   };
 }
@@ -279,6 +299,7 @@ function compileTargets(
     syntax: TemplateSyntaxRegistry;
   },
   fileMap?: Record<string, string>,
+  options: { computeUsage?: boolean } = {},
 ): Record<string, CompileRunResult> {
   const results: Record<string, CompileRunResult> = {};
   const targets = scenario.compile.map(ensureCompileTarget);
@@ -286,6 +307,7 @@ function compileTargets(
   for (const target of targets) {
     const { markup, templatePath } = resolveTemplateSource(target, scenario, fileMap);
     const scopeId = resolveScopeId(target, scenario, resolution, merged.resourceGraph);
+    const localImports = target.localImports ? [...target.localImports] : undefined;
 
     const compileResult: CompileRunResult = {
       id: target.id,
@@ -293,6 +315,26 @@ function compileTargets(
       markup,
       scopeId,
     };
+
+    const needsAnalysis = options.computeUsage || target.overlay;
+    if (needsAnalysis) {
+      const analysis = compileTemplate({
+        html: markup,
+        templateFilePath: templatePath,
+        isJs: false,
+        vm: createDefaultVmReflection(),
+        semantics: merged.semantics,
+        catalog: merged.catalog,
+        syntax: merged.syntax,
+        resourceGraph: merged.resourceGraph,
+        resourceScope: scopeId,
+        localImports,
+      });
+      compileResult.usage = analysis.usage;
+      if (target.overlay) {
+        compileResult.overlay = analysis;
+      }
+    }
 
     if (target.aot !== false) {
       compileResult.aot = compileAot(markup, {
@@ -303,20 +345,7 @@ function compileTargets(
         syntax: merged.syntax,
         resourceGraph: merged.resourceGraph,
         resourceScope: scopeId,
-      });
-    }
-
-    if (target.overlay) {
-      compileResult.overlay = compileTemplate({
-        html: markup,
-        templateFilePath: templatePath,
-        isJs: false,
-        vm: createDefaultVmReflection(),
-        semantics: merged.semantics,
-        catalog: merged.catalog,
-        syntax: merged.syntax,
-        resourceGraph: merged.resourceGraph,
-        resourceScope: scopeId,
+        localImports,
       });
     }
 
@@ -405,6 +434,104 @@ function buildSnapshots(
     packageRoots: scenario.resolution.packageRoots,
   });
   return { semantic, apiSurface };
+}
+
+function collectUsageByScope(compiles: Record<string, CompileRunResult>): UsageByScope {
+  const usageByScope: Record<ResourceScopeId, FeatureUsageSet> = {};
+
+  for (const compile of Object.values(compiles)) {
+    const usage = compile.usage;
+    if (!usage) continue;
+    const scope = compile.scopeId;
+    usageByScope[scope] = mergeUsageSets(usageByScope[scope], usage);
+  }
+
+  return usageByScope;
+}
+
+function mergeUsageSets(
+  base: FeatureUsageSet | undefined,
+  next: FeatureUsageSet,
+): FeatureUsageSet {
+  if (!base) return next;
+
+  return {
+    elements: mergeUsageList(base.elements, next.elements),
+    attributes: mergeUsageList(base.attributes, next.attributes),
+    controllers: mergeUsageList(base.controllers, next.controllers),
+    commands: mergeUsageList(base.commands, next.commands),
+    patterns: mergeUsageList(base.patterns, next.patterns),
+    valueConverters: mergeUsageList(base.valueConverters, next.valueConverters),
+    bindingBehaviors: mergeUsageList(base.bindingBehaviors, next.bindingBehaviors),
+    ...(mergeUsageFlags(base.flags, next.flags) ?? {}),
+  };
+}
+
+function mergeUsageFlags(
+  base: FeatureUsageSet["flags"] | undefined,
+  next: FeatureUsageSet["flags"] | undefined,
+): FeatureUsageSet["flags"] | undefined {
+  if (!base && !next) return undefined;
+  return {
+    usesCompose: base?.usesCompose || next?.usesCompose || undefined,
+    usesDynamicCompose: base?.usesDynamicCompose || next?.usesDynamicCompose || undefined,
+    usesTemplateControllers: base?.usesTemplateControllers || next?.usesTemplateControllers || undefined,
+  };
+}
+
+function mergeUsageList(base: readonly string[], next: readonly string[]): string[] {
+  const merged = new Set<string>(base);
+  for (const entry of next) merged.add(entry);
+  return Array.from(merged).sort((a, b) => a.localeCompare(b));
+}
+
+function applyExplicitResources(
+  merged: {
+    semantics: SemanticsWithCaches;
+    resourceGraph: ResourceGraph;
+    catalog: ResourceCatalog;
+    syntax: TemplateSyntaxRegistry;
+  },
+  explicit: Partial<ResourceCollections> | undefined,
+): {
+  semantics: SemanticsWithCaches;
+  resourceGraph: ResourceGraph;
+  catalog: ResourceCatalog;
+  syntax: TemplateSyntaxRegistry;
+} {
+  if (!explicit || !hasExplicitResources(explicit)) {
+    return merged;
+  }
+
+  const mergedResources = mergeResourceCollections(merged.semantics.resources, explicit);
+  const rootId = merged.resourceGraph.root;
+  const rootScope = merged.resourceGraph.scopes[rootId];
+  const mergedRootResources = mergeScopeResources(rootScope?.resources, explicit);
+  const nextGraph: ResourceGraph = {
+    ...merged.resourceGraph,
+    scopes: {
+      ...merged.resourceGraph.scopes,
+      [rootId]: {
+        id: rootId,
+        parent: rootScope?.parent ?? null,
+        ...(rootScope?.label ? { label: rootScope.label } : {}),
+        resources: mergedRootResources,
+      },
+    },
+  };
+
+  const semantics = prepareSemantics(
+    { ...merged.semantics, resourceGraph: nextGraph },
+    { resources: mergedResources },
+  );
+  const syntax = buildTemplateSyntaxRegistry(semantics);
+
+  return {
+    semantics,
+    catalog: semantics.catalog,
+    syntax,
+    resourceGraph: nextGraph,
+  };
 }
 
 function normalizeFileMap(files: Record<string, string>): Record<string, string> {
@@ -527,6 +654,33 @@ function mergeScopeResources(
     merged.bindingBehaviors = { ...(base?.bindingBehaviors ?? {}), ...extra.bindingBehaviors };
   }
   return merged as Partial<ResourceCollections>;
+}
+
+function mergeResourceCollections(
+  base: ResourceCollections,
+  extra: Partial<ResourceCollections>,
+): ResourceCollections {
+  return {
+    elements: extra.elements ? { ...base.elements, ...extra.elements } : base.elements,
+    attributes: extra.attributes ? { ...base.attributes, ...extra.attributes } : base.attributes,
+    controllers: extra.controllers ? { ...base.controllers, ...extra.controllers } : base.controllers,
+    valueConverters: extra.valueConverters
+      ? { ...base.valueConverters, ...extra.valueConverters }
+      : base.valueConverters,
+    bindingBehaviors: extra.bindingBehaviors
+      ? { ...base.bindingBehaviors, ...extra.bindingBehaviors }
+      : base.bindingBehaviors,
+  };
+}
+
+function hasExplicitResources(extra: Partial<ResourceCollections>): boolean {
+  return Boolean(
+    (extra.elements && Object.keys(extra.elements).length > 0) ||
+    (extra.attributes && Object.keys(extra.attributes).length > 0) ||
+    (extra.controllers && Object.keys(extra.controllers).length > 0) ||
+    (extra.valueConverters && Object.keys(extra.valueConverters).length > 0) ||
+    (extra.bindingBehaviors && Object.keys(extra.bindingBehaviors).length > 0),
+  );
 }
 
 function collectResourceOverlay(resources: readonly ResourceDef[]): Partial<ResourceCollections> {
