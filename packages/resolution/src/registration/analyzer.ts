@@ -148,6 +148,14 @@ class AnalysisContext {
   }
 
   /**
+   * Get exported class names for a module file.
+   */
+  getExportedClassNames(filePath: NormalizedPath): string[] {
+    const names = this.exportedClasses.get(filePath);
+    return names ? Array.from(names) : [];
+  }
+
+  /**
    * Resolve an exported class name through the pre-built export binding map.
    *
    * Uses the export binding map built in a prior phase, so this is O(1) lookup
@@ -654,7 +662,20 @@ function createSitesFromPlainTemplateImport(
     }];
   }
 
-  const resources = context.resources.filter((resource) => resource.file === imp.resolvedPath);
+  const seen = new Set<ResourceDef>();
+  const resources: ResourceDef[] = [];
+  const exportedNames = context.getExportedClassNames(imp.resolvedPath);
+  for (const exportName of exportedNames) {
+    const resolved = context.resolveExportedClass(imp.resolvedPath, exportName);
+    const resource = resolved
+      ? context.findResourceByResolvedPath(resolved.path, resolved.className)
+      : context.findResourceByResolvedPath(imp.resolvedPath, exportName);
+    if (resource && !seen.has(resource)) {
+      seen.add(resource);
+      resources.push(resource);
+    }
+  }
+
   if (resources.length === 0) {
     return [{
       resourceRef: {
@@ -694,8 +715,10 @@ function resolveNamedAliasImport(
     };
   }
 
-  // Look up the specific export by name
-  const resource = context.findResourceByResolvedPath(imp.resolvedPath, exportName);
+  const resolved = context.resolveExportedClass(imp.resolvedPath, exportName);
+  const resource = resolved
+    ? context.findResourceByResolvedPath(resolved.path, resolved.className)
+    : context.findResourceByResolvedPath(imp.resolvedPath, exportName);
   if (resource) {
     return { kind: "resolved", resource };
   }
@@ -731,7 +754,11 @@ function resolveTemplateImportRef(
 
   // If we have a default alias, try to find a resource with that name
   if (imp.defaultAlias) {
-    const resource = context.findResourceByResolvedPath(imp.resolvedPath, imp.defaultAlias);
+    const resolved = context.resolveExportedClass(imp.resolvedPath, "default")
+      ?? context.resolveExportedClass(imp.resolvedPath, imp.defaultAlias);
+    const resource = resolved
+      ? context.findResourceByResolvedPath(resolved.path, resolved.className)
+      : context.findResourceByResolvedPath(imp.resolvedPath, imp.defaultAlias);
     if (resource) {
       return { kind: "resolved", resource };
     }

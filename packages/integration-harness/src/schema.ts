@@ -98,6 +98,22 @@ export interface AotExpectation {
   };
 }
 
+export type RuntimePatch = "bridge-bind-to-bound";
+
+export interface RuntimeExpectation {
+  kind: "ssr-module";
+  modulePath: string;
+  entry?: string;
+  configExport: string;
+  componentName: string;
+  template: string;
+  elementName: string;
+  patchElementExport?: string;
+  patches?: readonly RuntimePatch[];
+  vm?: Record<string, unknown>;
+  htmlLinks?: readonly string[];
+}
+
 export interface RegistrationPlanResourceSet {
   elements?: readonly string[];
   attributes?: readonly string[];
@@ -120,6 +136,7 @@ export interface ScenarioExpectations {
   diagnostics?: readonly DiagnosticExpectation[];
   gaps?: readonly GapExpectation[];
   aot?: AotExpectation;
+  runtime?: RuntimeExpectation;
   registrationPlan?: RegistrationPlanExpectation;
 }
 

@@ -14,7 +14,7 @@ import {
   runIntegrationScenario,
   writeSnapshot,
 } from "@aurelia-ls/integration-harness";
-import type { IntegrationScenario } from "@aurelia-ls/integration-harness";
+import type { IntegrationScenario, RuntimeExpectation } from "@aurelia-ls/integration-harness";
 import {
   compileWithAot,
   patchComponentDefinition,
@@ -60,6 +60,12 @@ const TEMPLATE_IMPORTS_TSCONFIG = path.resolve(
   "template-imports",
   "tsconfig.json",
 );
+const TEMPLATE_IMPORTS_AURELIA_TABLE_TSCONFIG = path.resolve(
+  __dirname,
+  "fixtures",
+  "template-imports-aurelia2-table",
+  "tsconfig.json",
+);
 const TEMPLATE_IMPORTS_PKG_TSCONFIG = path.resolve(
   __dirname,
   "fixtures",
@@ -97,6 +103,16 @@ const EXPLICIT_THIRD_PARTY_RESOURCES = {
     },
   },
 } as const;
+
+const AURELIA_TABLE_RUNTIME_TEMPLATE = [
+  "<aut-pagination",
+  "  total-items.bind=\"12\"",
+  "  page-size.bind=\"5\"",
+  "  current-page.bind=\"1\"",
+  "  direction-links.bind=\"false\"",
+  "  boundary-links.bind=\"false\">",
+  "</aut-pagination>",
+].join("\n");
 
 const UPDATE_SNAPSHOTS = process.env.AURELIA_INTEGRATION_GOLDEN === "1";
 
@@ -543,6 +559,51 @@ const SCENARIOS: IntegrationScenario[] = [
     },
   },
   {
+    id: "registration-plan-third-party",
+    title: "Registration plan includes used third-party resources",
+    tags: ["external", "registration-plan", "usage"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    externalPackages: [
+      {
+        path: FIXTURE_MULTI_CLASS,
+        preferSource: true,
+      },
+    ],
+    externalResourcePolicy: "root-scope",
+    resolution: {
+      packageRoots: {
+        "@test/multi-class": FIXTURE_MULTI_CLASS,
+      },
+    },
+    compile: [
+      {
+        id: "registration-plan-third-party-root",
+        templatePath: "/src/third-party-plan.html",
+        markup: "<user-card highlight.bind=\"color\"></user-card>",
+        scope: "root",
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["user-card", "highlight"],
+      },
+      registrationPlan: {
+        scopes: {
+          root: {
+            elements: ["user-card"],
+            attributes: ["highlight"],
+          },
+        },
+      },
+    },
+  },
+  {
     id: "explicit-third-party",
     title: "Explicit third-party config merges into root scope",
     tags: ["memory", "explicit-resources", "aot"],
@@ -627,6 +688,43 @@ const SCENARIOS: IntegrationScenario[] = [
 
 if (HAS_AURELIA_TABLE) {
   SCENARIOS.push({
+    id: "template-imports-aurelia2-table",
+    title: "Template import pulls aurelia2-table resources into local scope",
+    tags: ["tsconfig", "template-imports", "third-party", "local-scope", "aot"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: TEMPLATE_IMPORTS_AURELIA_TABLE_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+      packageRoots: {
+        "aurelia2-table": AURELIA_TABLE_PACKAGE,
+      },
+    },
+    compile: [
+      {
+        id: "template-imports-aurelia2-table-my-app",
+        templatePath: "src/my-app.html",
+        scope: { localOf: "my-app" },
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        local: {
+          "my-app": ["aut-pagination", "aurelia-table"],
+        },
+      },
+      aot: {
+        instructions: [
+          { type: "hydrateElement", res: "aut-pagination" },
+          { type: "hydrateAttribute", res: "aurelia-table" },
+        ],
+      },
+    },
+  });
+
+  SCENARIOS.push({
     id: "aurelia2-table-ssr",
     title: "aurelia2-table resources compile and render with SSR",
     tags: ["external", "runtime", "ssr", "aot"],
@@ -670,6 +768,23 @@ if (HAS_AURELIA_TABLE) {
       },
       aot: {
         instructions: [{ type: "hydrateElement", res: "aut-pagination" }],
+      },
+      runtime: {
+        kind: "ssr-module",
+        modulePath: AURELIA_TABLE_PACKAGE,
+        configExport: "AureliaTableConfiguration",
+        elementName: "aut-pagination",
+        componentName: "aurelia2-table-runtime",
+        template: AURELIA_TABLE_RUNTIME_TEMPLATE,
+        patchElementExport: "AutPaginationCustomElement",
+        patches: ["bridge-bind-to-bound"],
+        vm: {
+          totalItems: 12,
+          pageSize: 5,
+          totalPages: 3,
+          displayPages: ["1", "2", "3"],
+        },
+        htmlLinks: ["1", "2", "3"],
       },
     },
   });
@@ -722,59 +837,59 @@ describe("integration harness scenarios", () => {
 });
 
 async function runRuntimeAssertions(run: Awaited<ReturnType<typeof runIntegrationScenario>>): Promise<void> {
-  if (run.scenario.id !== "aurelia2-table-ssr") {
+  const runtime = run.scenario.expect?.runtime;
+  if (!runtime) {
     return;
   }
 
-  const runtimeTemplate = [
-    "<aut-pagination",
-    "  total-items.bind=\"12\"",
-    "  page-size.bind=\"5\"",
-    "  current-page.bind=\"1\"",
-    "  direction-links.bind=\"false\"",
-    "  boundary-links.bind=\"false\">",
-    "</aut-pagination>",
-  ].join("\n");
+  if (runtime.kind === "ssr-module") {
+    await runSsrModuleAssertions(run, runtime);
+  }
+}
 
-  class AureliaTableRuntimeApp {
+async function runSsrModuleAssertions(
+  run: Awaited<ReturnType<typeof runIntegrationScenario>>,
+  runtime: RuntimeExpectation,
+): Promise<void> {
+  class RuntimeApp {
     static $au = {
       type: "custom-element",
-      name: "aurelia2-table-runtime",
-      template: runtimeTemplate,
+      name: runtime.componentName,
+      template: runtime.template,
     };
   }
 
-  const aot = compileWithAot(runtimeTemplate, {
-    name: "aurelia2-table-runtime",
+  const aot = compileWithAot(runtime.template, {
+    name: runtime.componentName,
     semantics: run.semantics,
     resourceGraph: run.resourceGraph,
     resourceScope: run.resourceGraph.root,
     stripSpans: false,
   });
 
-  patchComponentDefinition(AureliaTableRuntimeApp, aot, { name: "aurelia2-table-runtime" });
+  patchComponentDefinition(RuntimeApp, aot, { name: runtime.componentName });
 
-  const pluginModule = await loadAureliaTableModule();
-  const configuration = pluginModule.AureliaTableConfiguration;
+  const pluginModule = await loadExternalModule(runtime.modulePath, runtime.entry);
+  const configuration = pluginModule[runtime.configExport];
   if (!configuration) {
-    throw new Error("AureliaTableConfiguration not found in aurelia2-table module.");
+    throw new Error(`Runtime config export "${runtime.configExport}" not found.`);
   }
 
-  const autPagination = pluginModule.AutPaginationCustomElement as unknown;
-
-  if (autPagination && typeof autPagination === "function") {
-    const proto = (autPagination as { prototype?: { bind?: (...args: unknown[]) => void; bound?: (...args: unknown[]) => void } }).prototype;
-    if (proto?.bind && !proto.bound) {
-      // Bridge legacy bind() to the v2 bound() hook so initial calculations run post-bindings.
-      const originalBind = proto.bind;
-      proto.bound = function (...args: unknown[]) {
-        return originalBind.apply(this, args);
-      };
+  if (runtime.patchElementExport && runtime.patches?.includes("bridge-bind-to-bound")) {
+    const elementCtor = pluginModule[runtime.patchElementExport] as unknown;
+    if (elementCtor && typeof elementCtor === "function") {
+      const proto = (elementCtor as { prototype?: { bind?: (...args: unknown[]) => void; bound?: (...args: unknown[]) => void } }).prototype;
+      if (proto?.bind && !proto.bound) {
+        const originalBind = proto.bind;
+        proto.bound = function (...args: unknown[]) {
+          return originalBind.apply(this, args);
+        };
+      }
     }
   }
 
-  let paginationVm: Record<string, unknown> | null = null;
-  const result = await render(AureliaTableRuntimeApp, {
+  let targetVm: Record<string, unknown> | null = null;
+  const result = await render(RuntimeApp, {
     register: (container) => {
       container.register(configuration);
     },
@@ -783,8 +898,8 @@ async function runRuntimeAssertions(run: Awaited<ReturnType<typeof runIntegratio
       while (stack.length > 0) {
         const current = stack.pop();
         if (!current) continue;
-        if (current.vmKind === "customElement" && current.definition?.name === "aut-pagination") {
-          paginationVm = (current.viewModel ?? null) as Record<string, unknown> | null;
+        if (current.vmKind === "customElement" && current.definition?.name === runtime.elementName) {
+          targetVm = (current.viewModel ?? null) as Record<string, unknown> | null;
           break;
         }
         const children = current.children ?? [];
@@ -795,18 +910,28 @@ async function runRuntimeAssertions(run: Awaited<ReturnType<typeof runIntegratio
     },
   });
 
-  if (!paginationVm) {
-    throw new Error("AutPaginationCustomElement controller not found in SSR tree.");
+  if (!targetVm) {
+    throw new Error(`Runtime controller "${runtime.elementName}" not found in SSR tree.`);
   }
-  expect(paginationVm.totalItems).toBe(12);
-  expect(paginationVm.pageSize).toBe(5);
-  expect(paginationVm.totalPages).toBe(3);
-  const displayPages = paginationVm.displayPages as Array<{ title?: string }> | undefined;
-  expect(displayPages?.map((entry) => entry.title)).toEqual(["1", "2", "3"]);
 
-  const links = extractPageLinks(result.html);
+  if (runtime.vm) {
+    for (const [key, expected] of Object.entries(runtime.vm)) {
+      const actual = targetVm[key];
+      if (Array.isArray(expected) && Array.isArray(actual)) {
+        const titles = actual.every((entry) => entry && typeof entry === "object" && "title" in (entry as Record<string, unknown>))
+          ? actual.map((entry) => (entry as { title?: string }).title).filter(Boolean)
+          : actual;
+        expect(titles).toEqual(expected);
+        continue;
+      }
+      expect(actual).toBe(expected);
+    }
+  }
 
-  expect(links).toEqual(["1", "2", "3"]);
+  if (runtime.htmlLinks) {
+    const links = extractPageLinks(result.html);
+    expect(links).toEqual(runtime.htmlLinks);
+  }
 }
 
 function extractPageLinks(html: string): string[] {
@@ -822,22 +947,26 @@ function extractPageLinks(html: string): string[] {
   return links;
 }
 
-let aureliaTableModulePromise: Promise<Record<string, unknown>> | null = null;
+const runtimeModuleCache = new Map<string, Promise<Record<string, unknown>>>();
 
-async function loadAureliaTableModule(): Promise<Record<string, unknown>> {
-  if (!HAS_AURELIA_TABLE) {
-    throw new Error("aurelia2-table package not available.");
+async function loadExternalModule(
+  modulePath: string,
+  entry?: string,
+): Promise<Record<string, unknown>> {
+  const cacheKey = entry ? `${modulePath}::${entry}` : modulePath;
+  if (!runtimeModuleCache.has(cacheKey)) {
+    runtimeModuleCache.set(cacheKey, buildExternalModuleBundle(modulePath, entry));
   }
-
-  if (!aureliaTableModulePromise) {
-    aureliaTableModulePromise = buildAureliaTableBundle();
-  }
-
-  return aureliaTableModulePromise;
+  return runtimeModuleCache.get(cacheKey)!;
 }
 
-async function buildAureliaTableBundle(): Promise<Record<string, unknown>> {
-  const entry = path.join(AURELIA_TABLE_PACKAGE, "src", "index.ts");
+async function buildExternalModuleBundle(
+  modulePath: string,
+  entry?: string,
+): Promise<Record<string, unknown>> {
+  const entryPath = entry
+    ? (path.isAbsolute(entry) ? entry : path.join(modulePath, entry))
+    : path.join(modulePath, "src", "index.ts");
   const buildDir = path.join(REPO_ROOT, ".temp", "aurelia2-table-build");
   const outfile = path.join(buildDir, "index.mjs");
 
@@ -845,7 +974,7 @@ async function buildAureliaTableBundle(): Promise<Record<string, unknown>> {
   await ensureAureliaWorkspaceModules(buildDir);
 
   await build({
-    entryPoints: [entry],
+    entryPoints: [entryPath],
     outfile,
     bundle: true,
     format: "esm",
