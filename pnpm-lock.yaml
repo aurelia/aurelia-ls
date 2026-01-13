@@ -218,6 +218,22 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
+    devDependencies:
+      '@aurelia/kernel':
+        specifier: link:../../aurelia/packages/kernel
+        version: link:../../aurelia/packages/kernel
+      '@aurelia/platform-browser':
+        specifier: link:../../aurelia/packages/platform-browser
+        version: link:../../aurelia/packages/platform-browser
+      '@aurelia/runtime-html':
+        specifier: link:../../aurelia/packages/runtime-html
+        version: link:../../aurelia/packages/runtime-html
+      '@types/jsdom':
+        specifier: ^21.1.7
+        version: 21.1.7
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
 
   packages/language-server:
     dependencies:

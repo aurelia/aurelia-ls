@@ -11,17 +11,16 @@
  *   <span default-case>Default content</span>
  * </div>
  *
- * The switch controller stores _ssrViewScopes for hydration, and each case
- * consumes from it. See ssr-architecture.md for details.
+ * Hydration uses the tree-shaped SSR manifest:
+ * - switch entry records its own view scope
+ * - case/default-case entries are nested under the switch view and adopt directly
  *
  * Key difference from if/else:
  * - if/else: branches.relationship === "sibling" → each gets top-level definition
  * - switch: branches.relationship === "child" → branches collected inside parent
  *
- * The fix for switch/case involved three components:
- * 1. plan.ts: Always generate markers for switch's template (not empty fragment)
- * 2. emit-template.ts: Produce hierarchical nestedHtmlTree matching nestedTemplates
- * 3. instruction-translator.ts: Include nestedTemplates in NestedDefinition
+ * The fix for switch/case involves SSR markers, nested template emission,
+ * and tree-based manifest recording for switch + case scopes.
  */
 
 import { describe, it, expect } from "vitest";

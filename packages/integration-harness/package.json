@@ -19,6 +19,13 @@
     "@aurelia-ls/compiler": "workspace:*",
     "@aurelia-ls/resolution": "workspace:*"
   },
+  "devDependencies": {
+    "@aurelia/kernel": "file:../../aurelia/packages/kernel",
+    "@aurelia/platform-browser": "file:../../aurelia/packages/platform-browser",
+    "@aurelia/runtime-html": "file:../../aurelia/packages/runtime-html",
+    "@types/jsdom": "^21.1.7",
+    "jsdom": "^25.0.1"
+  },
   "peerDependencies": {
     "typescript": "^5.0.0"
   }

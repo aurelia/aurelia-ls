@@ -114,6 +114,62 @@ export interface RuntimeExpectation {
   htmlLinks?: readonly string[];
 }
 
+export type DomScope = "host" | "document";
+
+export interface DomExpectation {
+  selector: string;
+  scope?: DomScope;
+  count?: number;
+  texts?: readonly string[];
+  contains?: readonly string[];
+}
+
+export interface ParityExpectation {
+  selector: string;
+  scope?: DomScope;
+}
+
+export interface DoubleRenderExpectation {
+  selector: string;
+  scope?: DomScope;
+  expectedTexts?: readonly string[];
+  expectDuplicates?: boolean;
+  minDuplicates?: number;
+}
+
+export interface ManifestExpectation {
+  root?: string;
+  controllers?: Readonly<Record<string, number>>;
+}
+
+export interface HydrationMutation {
+  description?: string;
+  mutate: (vm: Record<string, unknown>) => void | Promise<void>;
+  expect: readonly DomExpectation[];
+}
+
+export interface SsrHydrationExpectation {
+  id: string;
+  target: string;
+  componentName: string;
+  host?: string;
+  ssrState: Record<string, unknown>;
+  clientState?: Record<string, unknown>;
+  componentClass?: new () => Record<string, unknown>;
+  ssrOptions?: {
+    stripMarkers?: boolean;
+  };
+  expectMarkers?: "present" | "absent";
+  expectHydrationError?: boolean;
+  hydrationErrorContains?: string;
+  manifest?: ManifestExpectation;
+  ssrDom?: readonly DomExpectation[];
+  hydrateDom?: readonly DomExpectation[];
+  parity?: readonly ParityExpectation[];
+  doubleRender?: readonly DoubleRenderExpectation[];
+  mutations?: readonly HydrationMutation[];
+}
+
 export interface RegistrationPlanResourceSet {
   elements?: readonly string[];
   attributes?: readonly string[];
@@ -137,6 +193,7 @@ export interface ScenarioExpectations {
   gaps?: readonly GapExpectation[];
   aot?: AotExpectation;
   runtime?: RuntimeExpectation;
+  ssr?: readonly SsrHydrationExpectation[];
   registrationPlan?: RegistrationPlanExpectation;
 }
 

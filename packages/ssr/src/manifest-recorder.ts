@@ -143,11 +143,15 @@ function buildTCEntry(ctrl: ICustomAttributeController): ISSRTemplateController 
 
     case "switch": {
       const vm = ctrl.viewModel as Switch;
-      const activeCases = (vm as unknown as { activeCases: { view?: ISyntheticView }[] }).activeCases;
-      const views: ISSRScope[] = [];
-      for (const c of activeCases) {
-        if (c.view) views.push(buildViewScope(c.view));
-      }
+      const view = (vm as unknown as { view?: ISyntheticView }).view;
+      const views: ISSRScope[] = view ? [buildViewScope(view)] : [];
+      return { type, views };
+    }
+
+    case "case":
+    case "default-case": {
+      const vm = ctrl.viewModel as { view?: ISyntheticView };
+      const views: ISSRScope[] = vm.view ? [buildViewScope(vm.view)] : [];
       return { type, views };
     }
 
