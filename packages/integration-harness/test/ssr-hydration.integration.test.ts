@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { compileAndRenderAot } from "@aurelia-ls/ssr";
+import {
+  compileAndRenderAot,
+  compileWithAot,
+  patchComponentDefinition,
+  renderWithComponents,
+} from "@aurelia-ls/ssr";
 
 import {
   runIntegrationScenario,
@@ -20,12 +25,30 @@ import {
   hydrateSsr,
 } from "./_helpers/ssr-hydration.js";
 
+type HydrationCase = SsrHydrationExpectation & {
+  dependencies?: Array<new () => Record<string, unknown>>;
+};
+
 const BASE_SOURCE: IntegrationScenario["source"] = {
   kind: "memory",
   files: {
     "/src/entry.ts": "export const marker = 0;",
   },
 };
+
+const EXPLICIT_CE_RESOURCES = {
+  elements: {
+    "child-panel": {
+      kind: "element",
+      name: "child-panel",
+      bindables: {
+        items: { name: "items" },
+        label: { name: "label" },
+      },
+      boundary: true,
+    },
+  },
+} as const;
 
 const TEMPLATE_MAP: Record<string, string> = {
   "repeat-basic": [
@@ -78,6 +101,11 @@ const TEMPLATE_MAP: Record<string, string> = {
     "  <span class=\"label\">${label}</span>",
     "</div>",
   ].join("\n"),
+  "ce-boundary-repeat": [
+    "<section class=\"parent-shell\">",
+    "  <child-panel items.bind=\"items\" label.bind=\"label\"></child-panel>",
+    "</section>",
+  ].join("\n"),
 };
 
 class ComputedSummaryVm {
@@ -86,7 +114,30 @@ class ComputedSummaryVm {
   }
 }
 
-const HYDRATION_CASES: SsrHydrationExpectation[] = [
+const CHILD_PANEL_TEMPLATE = [
+  "<div class=\"child-panel\">",
+  "  <h4 class=\"child-label\">${label}</h4>",
+  "  <ul>",
+  "    <li repeat.for=\"item of items\" class=\"child-item\">${item}</li>",
+  "  </ul>",
+  "  <div if.bind=\"!items.length\" class=\"child-empty\">Empty</div>",
+  "</div>",
+].join("\n");
+
+const ChildPanel = createComponent(
+  "child-panel",
+  CHILD_PANEL_TEMPLATE,
+  {},
+  class {},
+  {
+    bindables: {
+      items: {},
+      label: {},
+    },
+  },
+);
+
+const HYDRATION_CASES: HydrationCase[] = [
   {
     id: "repeat-basic",
     target: "repeat-basic",
@@ -449,6 +500,61 @@ const HYDRATION_CASES: SsrHydrationExpectation[] = [
     expectMarkers: "absent",
     expectHydrationError: true,
   },
+  {
+    id: "ce-boundary-repeat",
+    target: "ce-boundary-repeat",
+    componentName: "ce-boundary-repeat",
+    ssrState: {
+      items: ["North", "South"],
+      label: "Regions",
+    },
+    expectMarkers: "present",
+    manifest: {
+      root: "ce-boundary-repeat",
+      controllers: {
+        repeat: 1,
+        if: 1,
+      },
+    },
+    ssrDom: [
+      { selector: ".child-label", texts: ["Regions"] },
+      { selector: ".child-item", count: 2, texts: ["North", "South"] },
+      { selector: ".child-empty", count: 0 },
+    ],
+    hydrateDom: [
+      { selector: ".child-label", texts: ["Regions"] },
+      { selector: ".child-item", count: 2 },
+    ],
+    parity: [
+      { selector: ".child-item" },
+    ],
+    doubleRender: [
+      { selector: ".child-item", expectedTexts: ["North", "South"] },
+    ],
+    mutations: [
+      {
+        description: "remove all items",
+        mutate: (vm) => {
+          vm.items = [];
+        },
+        expect: [
+          { selector: ".child-item", count: 0 },
+          { selector: ".child-empty", count: 1 },
+        ],
+      },
+      {
+        description: "restore items",
+        mutate: (vm) => {
+          vm.items = ["East"];
+        },
+        expect: [
+          { selector: ".child-item", count: 1, texts: ["East"] },
+          { selector: ".child-empty", count: 0 },
+        ],
+      },
+    ],
+    dependencies: [ChildPanel],
+  },
 ];
 
 const MATRIX_SCENARIO: IntegrationScenario = {
@@ -456,6 +562,9 @@ const MATRIX_SCENARIO: IntegrationScenario = {
   title: "SSR + hydration parity matrix",
   tags: ["ssr", "hydration", "aot"],
   source: BASE_SOURCE,
+  resolution: {
+    explicitResources: EXPLICIT_CE_RESOURCES,
+  },
   compile: Object.entries(TEMPLATE_MAP).map(([id, markup]) => ({
     id,
     templatePath: `/src/${id}.html`,
@@ -479,7 +588,7 @@ describe("integration harness: SSR + hydration parity", () => {
 
 async function runSsrHydrationCase(
   run: Awaited<ReturnType<typeof runIntegrationScenario>>,
-  expectation: SsrHydrationExpectation,
+  expectation: HydrationCase,
 ): Promise<void> {
   const compile = run.compile[expectation.target];
   if (!compile) {
@@ -487,18 +596,72 @@ async function runSsrHydrationCase(
   }
 
   const componentName = expectation.componentName;
+  const dependencies = expectation.dependencies ?? [];
   const Component = expectation.componentClass
-    ? createComponent(componentName, compile.markup, expectation.ssrState, expectation.componentClass)
-    : createComponent(componentName, compile.markup, expectation.ssrState);
+    ? createComponent(
+      componentName,
+      compile.markup,
+      expectation.ssrState,
+      expectation.componentClass,
+      dependencies.length ? { dependencies } : {},
+    )
+    : createComponent(
+      componentName,
+      compile.markup,
+      expectation.ssrState,
+      class {},
+      dependencies.length ? { dependencies } : {},
+    );
 
-  const ssrResult = await compileAndRenderAot(Component, {
-    name: componentName,
-    templatePath: compile.templatePath,
-    semantics: run.semantics,
-    resourceGraph: run.resourceGraph,
-    resourceScope: compile.scopeId,
-    ssr: expectation.ssrOptions,
-  });
+  let ssrResult: {
+    html: string;
+    aot: ReturnType<typeof compileWithAot>;
+    manifest: { root?: string; manifest?: unknown };
+  };
+  if (dependencies.length > 0) {
+    for (const Dep of dependencies) {
+      const def = (Dep as { $au?: { name?: string; template?: string } }).$au;
+      if (!def?.name || typeof def.template !== "string") {
+        throw new Error(`Dependency for SSR case "${expectation.id}" is missing $au.name or $au.template.`);
+      }
+      const depAot = compileWithAot(def.template, {
+        name: def.name,
+        semantics: run.semantics,
+        resourceGraph: run.resourceGraph,
+        resourceScope: run.resourceGraph.root,
+      });
+      patchComponentDefinition(Dep, depAot, { name: def.name });
+    }
+
+    const rootAot = compileWithAot(compile.markup, {
+      name: componentName,
+      templatePath: compile.templatePath,
+      semantics: run.semantics,
+      resourceGraph: run.resourceGraph,
+      resourceScope: compile.scopeId,
+    });
+    patchComponentDefinition(Component, rootAot, { name: componentName });
+
+    const renderResult = await renderWithComponents(Component, {
+      childComponents: dependencies,
+      ssr: expectation.ssrOptions,
+    });
+
+    ssrResult = {
+      html: renderResult.html,
+      aot: rootAot,
+      manifest: renderResult.manifest,
+    };
+  } else {
+    ssrResult = await compileAndRenderAot(Component, {
+      name: componentName,
+      templatePath: compile.templatePath,
+      semantics: run.semantics,
+      resourceGraph: run.resourceGraph,
+      resourceScope: compile.scopeId,
+      ssr: expectation.ssrOptions,
+    });
+  }
 
   if (expectation.expectMarkers === "present") {
     expect(ssrResult.html.includes("<!--au-->")).toBe(true);
@@ -536,7 +699,8 @@ async function runSsrHydrationCase(
       {
         componentName,
         hostElement: expectation.host,
-        componentClass: expectation.componentClass,
+        componentClass: Component,
+        childComponents: dependencies.length ? dependencies : undefined,
       },
     );
   } catch (error) {

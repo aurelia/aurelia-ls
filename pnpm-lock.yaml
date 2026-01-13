@@ -225,6 +225,9 @@ importers:
       '@aurelia/platform-browser':
         specifier: link:../../aurelia/packages/platform-browser
         version: link:../../aurelia/packages/platform-browser
+      '@aurelia/router':
+        specifier: link:../../aurelia/packages/router
+        version: link:../../aurelia/packages/router
       '@aurelia/runtime-html':
         specifier: link:../../aurelia/packages/runtime-html
         version: link:../../aurelia/packages/runtime-html

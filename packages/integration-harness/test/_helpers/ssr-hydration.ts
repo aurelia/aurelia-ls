@@ -1,7 +1,7 @@
 import { JSDOM } from "jsdom";
 import { BrowserPlatform } from "@aurelia/platform-browser";
 import { DI, Registration } from "@aurelia/kernel";
-import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
+import { Aurelia, CustomElement, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
 import type { AotCompileResult } from "@aurelia-ls/ssr";
 
 export interface HydrationContextOptions {
@@ -28,11 +28,17 @@ export interface HydrationResult {
   stop(): Promise<void>;
 }
 
+export interface ComponentOptions {
+  dependencies?: readonly unknown[];
+  bindables?: Record<string, unknown>;
+}
+
 export function createComponent(
   name: string,
   template: string,
   state: Record<string, unknown> = {},
   Base: new () => Record<string, unknown> = class {} as new () => Record<string, unknown>,
+  options: ComponentOptions = {},
 ): new () => Record<string, unknown> {
   const ComponentClass = class extends Base {
     constructor() {
@@ -40,11 +46,18 @@ export function createComponent(
       Object.assign(this, cloneState(state));
     }
   } as unknown as new () => Record<string, unknown>;
-  (ComponentClass as { $au?: unknown }).$au = {
+  const au: Record<string, unknown> = {
     type: "custom-element",
     name,
     template,
   };
+  if (options.dependencies?.length) {
+    au.dependencies = options.dependencies;
+  }
+  if (options.bindables) {
+    au.bindables = options.bindables;
+  }
+  (ComponentClass as { $au?: unknown }).$au = au;
   return ComponentClass;
 }
 
@@ -105,6 +118,8 @@ export async function hydrateSsr(
     componentName: string;
     hostElement?: string;
     componentClass?: new () => Record<string, unknown>;
+    register?: (container: ReturnType<typeof DI.createContainer>) => void;
+    childComponents?: Array<new () => Record<string, unknown>>;
   },
 ): Promise<HydrationResult> {
   const ctx = createHydrationContext(ssrHtml, state, ssrManifest, {
@@ -116,8 +131,10 @@ export async function hydrateSsr(
   });
 
   const Base = options.componentClass ?? (class {} as new () => Record<string, unknown>);
+  const baseAu = (Base as { $au?: Record<string, unknown> }).$au ?? {};
   const HydrateComponent = class extends Base {
     static $au = {
+      ...baseAu,
       type: "custom-element",
       name: options.componentName,
       template: aot.template,
@@ -135,6 +152,15 @@ export async function hydrateSsr(
     StandardConfiguration,
     Registration.instance(IPlatform, ctx.platform),
   );
+  if (options.register) {
+    options.register(container);
+  }
+  if (options.childComponents) {
+    for (const ChildComponent of options.childComponents) {
+      CustomElement.clearDefinition(ChildComponent);
+      container.register(ChildComponent);
+    }
+  }
 
   const au = new Aurelia(container);
   let appRoot: Awaited<ReturnType<Aurelia["hydrate"]>>;

@@ -22,6 +22,7 @@
   "devDependencies": {
     "@aurelia/kernel": "file:../../aurelia/packages/kernel",
     "@aurelia/platform-browser": "file:../../aurelia/packages/platform-browser",
+    "@aurelia/router": "file:../../aurelia/packages/router",
     "@aurelia/runtime-html": "file:../../aurelia/packages/runtime-html",
     "@types/jsdom": "^21.1.7",
     "jsdom": "^25.0.1"
