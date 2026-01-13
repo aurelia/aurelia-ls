@@ -5,6 +5,7 @@
  */
 
 import type { ResourceDef, ResourceKind, TextSpan } from '@aurelia-ls/compiler';
+import type { Logger } from '../types.js';
 
 // Re-export shared analysis types from analysis
 export type {
@@ -111,6 +112,21 @@ export interface AnalysisOptions {
   maxDepth?: number;
   /** Patterns to skip (e.g., internal packages) */
   exclude?: string[];
+  /** Optional analysis cache configuration */
+  cache?: AnalysisCacheOptions;
+  /** Optional logger for warnings/info */
+  logger?: Logger;
+}
+
+export interface AnalysisCacheOptions {
+  /** Directory to store analysis cache files */
+  dir?: string;
+  /** Cache schema version for invalidation */
+  schemaVersion?: number;
+  /** Additional fingerprint for cache invalidation (lockfile/config hash) */
+  fingerprint?: string;
+  /** Cache read/write mode */
+  mode?: "read" | "write" | "read-write" | "off";
 }
 
 // =============================================================================

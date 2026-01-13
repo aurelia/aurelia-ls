@@ -405,6 +405,25 @@ export interface ExplicitAttributeConfig {
 }
 
 /**
+ * Policy for merging third-party resources into semantics.
+ *
+ * Experimental. Use to control how aggressively the resource graph
+ * and semantics are rebuilt when third-party resources are added.
+ */
+export type ThirdPartyPolicy = "root-scope" | "rebuild-graph" | "semantics";
+
+/**
+ * Package spec for third-party scanning.
+ * Accepts a direct path to a package root.
+ */
+export interface ThirdPartyPackageSpec {
+  /** Absolute path or workspace-relative path to the package root */
+  path: string;
+  /** Prefer TypeScript source over compiled output */
+  preferSource?: boolean;
+}
+
+/**
  * Explicit resource declarations.
  * Manually declare resources from packages that don't expose Aurelia metadata.
  */
@@ -460,28 +479,25 @@ export interface ExplicitResourceConfig {
 
 /**
  * Third-party resource configuration.
- *
- * @future Auto-scanning is not yet implemented. Use `resources` for explicit declarations.
- *
- * @see {@link https://aurelia.io/docs/vite/third-party | Third-Party Resources} — TODO: docs not yet published
+ * @see {@link https://aurelia.io/docs/vite/third-party | Third-Party Resources} - TODO: docs not yet published
  */
 export interface ThirdPartyOptions {
   /**
    * Auto-scan node_modules for Aurelia resources.
    * Looks for packages with `aurelia` in their package.json.
    *
-   * @future Not yet implemented.
-   * @default false
+   * @default true (prerelease)
    */
   scan?: boolean;
 
   /**
    * Specific packages to scan for resources.
    *
-   * @future Not yet implemented.
-   * @example ['@aurelia-ui/components', 'aurelia-table']
+   * Accepts package names or explicit package roots.
+   *
+   * @example ['@aurelia-ui/components', 'aurelia-table', { path: './packages/ui', preferSource: true }]
    */
-  packages?: string[];
+  packages?: Array<string | ThirdPartyPackageSpec>;
 
   /**
    * Explicit resource declarations.
@@ -490,6 +506,13 @@ export interface ThirdPartyOptions {
    * Note: This is the recommended approach for declaring third-party resources.
    */
   resources?: ExplicitResourceConfig;
+
+  /**
+   * Experimental policy for how analysis results are merged into semantics.
+   *
+   * @experimental
+   */
+  policy?: ThirdPartyPolicy;
 }
 
 // NOTE: Convention types (ConventionConfig, DirectoryConventionConfig, etc.)
@@ -845,6 +868,18 @@ export interface AureliaPluginOptions {
    */
   tsconfig?: string;
 
+  /**
+   * Package root path for resolution snapshots and npm analysis context.
+   * Defaults to the Vite project root when not provided.
+   */
+  packagePath?: string;
+
+  /**
+   * Map of package name to package root path for stable snapshot IDs.
+   * Useful in monorepos to keep symbol IDs stable across packages.
+   */
+  packageRoots?: Record<string, string>;
+
   // ---------------------------------------------------------------------------
   // Development
   // ---------------------------------------------------------------------------
@@ -1079,7 +1114,10 @@ export interface ResolvedConventionOptions {
     stylesheetPairing: StylesheetPairingConfig;
   };
   /** Third-party resources (not part of ConventionConfig) */
-  thirdParty: Required<Omit<ThirdPartyOptions, "resources">> & {
+  thirdParty: {
+    scan: boolean;
+    packages: Array<string | ThirdPartyPackageSpec>;
+    policy?: ThirdPartyPolicy;
     resources: ExplicitResourceConfig;
   };
 }
@@ -1104,6 +1142,12 @@ export interface ResolvedAureliaOptions {
 
   /** tsconfig path (null if not provided) */
   tsconfig: string | null;
+
+  /** Package root path for snapshots/analysis */
+  packagePath: string;
+
+  /** Optional map of package roots for stable snapshot ids */
+  packageRoots?: Record<string, string>;
 
   /** Use development bundles */
   useDev: boolean;

@@ -53,6 +53,7 @@ export function hasThirdPartyResources(resources: Partial<ResourceCollections>):
   return Boolean(
     (resources.elements && Object.keys(resources.elements).length > 0) ||
     (resources.attributes && Object.keys(resources.attributes).length > 0) ||
+    (resources.controllers && Object.keys(resources.controllers).length > 0) ||
     (resources.valueConverters && Object.keys(resources.valueConverters).length > 0) ||
     (resources.bindingBehaviors && Object.keys(resources.bindingBehaviors).length > 0),
   );

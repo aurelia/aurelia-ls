@@ -58,6 +58,7 @@ interface PackageJson {
   types?: string;
   typings?: string;
   exports?: PackageExports;
+  aurelia?: unknown;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
@@ -206,6 +207,15 @@ export async function checkIsAureliaPackage(packagePath: string): Promise<boolea
  * package provides Aurelia functionality.
  */
 function hasAureliaDependency(pkgJson: PackageJson): boolean {
+  const packageName = pkgJson.name ?? "";
+  if (packageName === "aurelia" || packageName.startsWith("@aurelia/") || packageName.includes("aurelia")) {
+    return true;
+  }
+
+  if (pkgJson.aurelia !== undefined) {
+    return true;
+  }
+
   const allDeps = {
     ...pkgJson.dependencies,
     ...pkgJson.peerDependencies,

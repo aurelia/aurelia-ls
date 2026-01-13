@@ -99,9 +99,9 @@ import { extractRegisterBodyResources, tryResolveAsFactory, type RegisterBodyCon
 // Main API
 // =============================================================================
 
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, relative, basename, dirname } from 'node:path';
+import { join, relative, basename, dirname, resolve as resolvePath } from 'node:path';
 import * as ts from 'typescript';
 import type {
   AnalysisResult,
@@ -119,6 +119,7 @@ import type {
   InspectionEdge,
   InspectedGap,
 } from './types.js';
+import type { Logger } from '../types.js';
 import { success, partial, highConfidence, gap, combine } from './types.js';
 import {
   debug,
@@ -133,6 +134,7 @@ import {
 import type { AnalyzedResource, ResourceEvidence, ResourcePattern } from './types.js';
 import { explicitEvidence, inferredEvidence } from './evidence.js';
 import { sourcedValue, unwrapSourced } from '../semantics/sourced.js';
+import { hashObject } from '../fingerprint/fingerprint.js';
 
 /**
  * Analyze an npm package to extract Aurelia resource semantics.
@@ -527,12 +529,177 @@ function mergeStringList(primary: readonly string[], secondary: readonly string[
  * @returns Map of package path to analysis result
  */
 export async function analyzePackages(
-  _packagePaths: string[],
-  _options?: AnalysisOptions
+  packagePaths: string[],
+  options?: AnalysisOptions
 ): Promise<Map<string, AnalysisResult<PackageAnalysis>>> {
-  // TODO: Implement with parallelization
-  throw new Error('analyzePackages not yet implemented');
+  const results = new Map<string, AnalysisResult<PackageAnalysis>>();
+  if (packagePaths.length === 0) {
+    return results;
+  }
+
+  const cache = normalizeCacheOptions(options?.cache);
+  const mode = cache.mode;
+  const logger = options?.logger ?? nullLogger;
+  const preferSource = options?.preferSource ?? true;
+
+  for (const inputPath of dedupe(packagePaths)) {
+    const packagePath = resolvePath(inputPath);
+    const cacheMeta = await readPackageMeta(packagePath);
+
+    const cacheKey = cacheMeta
+      ? buildCacheKey(cacheMeta, cache.schemaVersion, cache.fingerprint)
+      : null;
+
+    if (mode !== "off" && mode !== "write" && cacheKey && cacheMeta) {
+      const cached = await readCacheEntry(cache.dir, cacheKey);
+      if (cached && cached.schemaVersion === cache.schemaVersion) {
+        if (cached.packagePath === packagePath &&
+            cached.packageName === cacheMeta.name &&
+            cached.version === cacheMeta.version &&
+            cached.manifestHash === cacheMeta.manifestHash &&
+            cached.fingerprint === cache.fingerprint &&
+            cached.preferSource === preferSource) {
+          results.set(packagePath, cached.result);
+          continue;
+        }
+      }
+    }
+
+    const result = await analyzePackage(packagePath, options);
+    results.set(packagePath, result);
+
+    if (mode !== "off" && mode !== "read" && cacheKey && cacheMeta) {
+      const entry: PackageAnalysisCacheEntry = {
+        schemaVersion: cache.schemaVersion,
+        packagePath,
+        packageName: cacheMeta.name,
+        version: cacheMeta.version,
+        manifestHash: cacheMeta.manifestHash,
+        fingerprint: cache.fingerprint,
+        preferSource,
+        timestamp: new Date().toISOString(),
+        result,
+      };
+      try {
+        await writeCacheEntry(cache.dir, cacheKey, entry);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`[npm-analysis] Failed to write cache for ${cacheMeta.name}: ${message}`);
+      }
+    }
+  }
+
+  return results;
 }
+
+interface PackageAnalysisCacheEntry {
+  schemaVersion: number;
+  packagePath: string;
+  packageName: string;
+  version: string;
+  manifestHash: string;
+  fingerprint: string;
+  preferSource: boolean;
+  timestamp: string;
+  result: AnalysisResult<PackageAnalysis>;
+}
+
+interface PackageMeta {
+  name: string;
+  version: string;
+  rootPath: string;
+  manifestHash: string;
+}
+
+function normalizeCacheOptions(cache?: AnalysisOptions["cache"]): Required<NonNullable<AnalysisOptions["cache"]>> {
+  return {
+    dir: cache?.dir ?? join(process.cwd(), ".aurelia-cache", "npm-analysis"),
+    schemaVersion: cache?.schemaVersion ?? 1,
+    fingerprint: cache?.fingerprint ?? "",
+    mode: cache?.mode ?? "read-write",
+  };
+}
+
+function dedupe(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+async function readPackageMeta(packagePath: string): Promise<PackageMeta | null> {
+  try {
+    const pkgJsonPath = join(packagePath, "package.json");
+    const content = await readFile(pkgJsonPath, "utf-8");
+    const pkg = JSON.parse(content) as {
+      name?: string;
+      version?: string;
+      exports?: unknown;
+      aurelia?: unknown;
+    };
+    if (!pkg.name || !pkg.version) {
+      return null;
+    }
+    const manifestHash = hashObject({
+      exports: pkg.exports ?? null,
+      aurelia: pkg.aurelia ?? null,
+    });
+    return {
+      name: pkg.name,
+      version: pkg.version,
+      rootPath: packagePath,
+      manifestHash,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildCacheKey(meta: PackageMeta, schemaVersion: number, fingerprint: string): string {
+  const hash = hashObject({
+    name: meta.name,
+    version: meta.version,
+    rootPath: meta.rootPath,
+    manifestHash: meta.manifestHash,
+    schemaVersion,
+    fingerprint,
+  }).slice(0, 12);
+  return `${sanitizePackageName(meta.name)}.${hash}`;
+}
+
+function sanitizePackageName(name: string): string {
+  return name.replace(/[\\/]/g, "__");
+}
+
+async function readCacheEntry(
+  dir: string,
+  key: string,
+): Promise<PackageAnalysisCacheEntry | null> {
+  const path = join(dir, `${key}.json`);
+  if (!existsSync(path)) {
+    return null;
+  }
+  try {
+    const content = await readFile(path, "utf-8");
+    return JSON.parse(content) as PackageAnalysisCacheEntry;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCacheEntry(
+  dir: string,
+  key: string,
+  entry: PackageAnalysisCacheEntry,
+): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, `${key}.json`);
+  await writeFile(path, JSON.stringify(entry, null, 2), "utf-8");
+}
+
+const nullLogger: Logger = {
+  log: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
 
 /**
  * Check if a package likely contains Aurelia resources.

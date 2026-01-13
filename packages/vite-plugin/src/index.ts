@@ -170,6 +170,8 @@ export type {
   StylesheetPairingConfig,
   // vite-plugin specific
   ThirdPartyOptions,
+  ThirdPartyPolicy,
+  ThirdPartyPackageSpec,
   ExplicitResourceConfig,
   ExplicitElementConfig,
   ExplicitAttributeConfig,

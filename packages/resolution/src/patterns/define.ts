@@ -52,6 +52,7 @@ import {
   canonicalElementName,
   canonicalAttrName,
   canonicalSimpleName,
+  canonicalBindableName,
   canonicalAliases,
 } from '../util/naming.js';
 
@@ -252,7 +253,9 @@ function buildAttributeDef(
   const bindables = bindablesProp ? parseBindablesValue(bindablesProp) : [];
   const isTemplateController = extractBooleanProp(def, 'isTemplateController') ?? false;
   const noMultiBindings = extractBooleanProp(def, 'noMultiBindings') ?? false;
-  const primary = findPrimaryBindable(bindables);
+  const defaultProperty = extractStringProp(def, 'defaultProperty');
+  const primary = resolvePrimaryName(bindables, defaultProperty);
+  const bindablesWithPrimary = applyPrimaryBindable(bindables, primary);
 
   if (isTemplateController) {
     const resource = buildTemplateControllerDef({
@@ -261,7 +264,7 @@ function buildAttributeDef(
       file: filePath,
       span: defineCall.span,
       aliases: canonicalAliases([...aliases]),
-      bindables: buildBindableDefs(bindables, filePath, defineCall.span),
+      bindables: buildBindableDefs(bindablesWithPrimary, filePath, defineCall.span),
       noMultiBindings,
     });
     return { resource, gaps };
@@ -273,7 +276,7 @@ function buildAttributeDef(
     file: filePath,
     span: defineCall.span,
     aliases: canonicalAliases([...aliases]),
-    bindables: buildBindableDefs(bindables, filePath, defineCall.span),
+    bindables: buildBindableDefs(bindablesWithPrimary, filePath, defineCall.span),
     primary,
     noMultiBindings,
   });
@@ -462,6 +465,41 @@ function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
     return bindables[0]?.name;
   }
   return undefined;
+}
+
+function resolvePrimaryName(
+  bindables: BindableInput[],
+  defaultProperty: string | undefined,
+): string | undefined {
+  const canonical = defaultProperty ? canonicalBindableName(defaultProperty) ?? defaultProperty.trim() : undefined;
+  if (canonical) {
+    return canonical;
+  }
+  return findPrimaryBindable(bindables);
+}
+
+function applyPrimaryBindable(
+  bindables: BindableInput[],
+  primary: string | undefined,
+): BindableInput[] {
+  if (!primary) {
+    return bindables;
+  }
+
+  let found = false;
+  const updated = bindables.map((bindable) => {
+    const isPrimary = bindable.name === primary;
+    if (isPrimary) {
+      found = true;
+    }
+    return { ...bindable, primary: isPrimary };
+  });
+
+  if (!found) {
+    updated.push({ name: primary, primary: true });
+  }
+
+  return updated;
 }
 
 // =============================================================================
