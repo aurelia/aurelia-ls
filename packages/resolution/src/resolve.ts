@@ -30,6 +30,7 @@ import { createRegistrationAnalyzer } from "./registration/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
 import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
 import { buildSemanticsArtifacts } from "./semantics/build.js";
+import { stripSourcedNodes } from "./semantics/strip.js";
 import { unwrapSourced } from "./semantics/sourced.js";
 import { buildApiSurfaceSnapshot, buildSemanticSnapshot } from "./snapshots/index.js";
 import { dirname, resolve as resolvePath, basename } from "node:path";
@@ -52,6 +53,12 @@ export interface ResolutionConfig {
   packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   /** Compile-time constant definitions (e.g. window.__AU_DEF__ = true) */
   defines?: DefineMap;
+  /**
+   * Memory profiling knob.
+   * When enabled, drops ts.Node references from Sourced<T> after analysis.
+   * Keeps location/value provenance but reduces heap retention from AST graphs.
+   */
+  stripSourcedNodes?: boolean;
   /**
    * File system context for sibling detection.
    *
@@ -358,6 +365,12 @@ export function resolve(
       "resolution.semanticSnapshotSymbolCount": semanticSnapshot.symbols.length,
       "resolution.apiSnapshotSymbolCount": apiSurfaceSnapshot.symbols.length,
     });
+
+    if (config?.stripSourcedNodes) {
+      const stripped = stripSourcedNodes(allResources);
+      trace.event("resolution.stripSourcedNodes", { removed: stripped.removed });
+      debug.resolution("stripSourcedNodes.complete", { removed: stripped.removed });
+    }
 
     return {
       semantics,

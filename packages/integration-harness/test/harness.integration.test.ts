@@ -115,6 +115,10 @@ const AURELIA_TABLE_RUNTIME_TEMPLATE = [
 ].join("\n");
 
 const UPDATE_SNAPSHOTS = process.env.AURELIA_INTEGRATION_GOLDEN === "1";
+const LOG_MEMORY = process.env.AURELIA_HARNESS_MEMORY_LOG === "1";
+const SHOULD_GC = process.env.AURELIA_HARNESS_GC === "1";
+const MEMORY_OUTPUT_PATH = process.env.AURELIA_HARNESS_MEMORY_PATH;
+let warnedGcUnavailable = false;
 
 const SCENARIOS: IntegrationScenario[] = [
   {
@@ -795,9 +799,11 @@ describe("integration harness scenarios", () => {
     const reports = [];
 
     for (const scenario of SCENARIOS) {
-      const run = await runIntegrationScenario(scenario);
+      let run = await runIntegrationScenario(scenario);
+      const scenarioId = run.scenario.id;
       const failures = evaluateExpectations(run, scenario.expect);
       reports.push(buildScenarioReport(run, failures));
+      logMemoryTrace(run);
 
       if (scenario.id === "conditional-define") {
         const hasConditionalGap = (run.catalog.gaps ?? []).some(
@@ -822,6 +828,11 @@ describe("integration harness scenarios", () => {
       if (normalized.aot) {
         assertSnapshot(`${scenario.id}:aot`, paths.aot ?? "", normalized.aot);
       }
+
+      if (SHOULD_GC) {
+        run = null;
+        await logGcBaseline(scenarioId);
+      }
     }
 
     const report = buildHarnessReport(reports);
@@ -844,6 +855,105 @@ async function runRuntimeAssertions(run: Awaited<ReturnType<typeof runIntegratio
 
   if (runtime.kind === "ssr-module") {
     await runSsrModuleAssertions(run, runtime);
+  }
+}
+
+function logMemoryTrace(run: Awaited<ReturnType<typeof runIntegrationScenario>>): void {
+  if (!LOG_MEMORY) return;
+  const trace = run.memory;
+  if (!trace || trace.samples.length === 0) return;
+  const lines: string[] = [];
+  lines.push(`[memory] scenario=${run.scenario.id}`);
+  for (const sample of trace.samples) {
+    const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+    lines.push(
+      `  ${sample.label.padEnd(12)} heap=${mb(sample.heapUsed)} rss=${mb(sample.rss)} ext=${mb(sample.external)} time=${sample.timeMs.toFixed(1)}ms`,
+    );
+  }
+  if (trace.peak) {
+    lines.push(
+      `  peak heap=${(trace.peak.heapUsed / (1024 * 1024)).toFixed(2)}MB at ${trace.peak.label}`,
+    );
+  }
+  writeMemoryLog(lines);
+}
+
+async function logGcBaseline(scenarioId: string): Promise<void> {
+  const gcFn = getGc();
+  if (!gcFn) {
+    if (!warnedGcUnavailable) {
+      warnedGcUnavailable = true;
+      const message = "[memory] GC requested but global.gc is not available (enable --expose-gc).";
+      writeMemoryLog([message]);
+    }
+    return;
+  }
+
+  const before = takeMemorySample(`gc:before:${scenarioId}`);
+  gcFn();
+  gcFn();
+  await new Promise((resolve) => setImmediate(resolve));
+  const after = takeMemorySample(`gc:after:${scenarioId}`);
+
+  const lines = [
+    `[memory] scenario=${scenarioId} (gc)`,
+    formatMemorySample(before),
+    formatMemorySample(after),
+    formatMemoryDelta(before, after),
+  ];
+  writeMemoryLog(lines);
+}
+
+function getGc(): (() => void) | null {
+  const gc = (globalThis as { gc?: () => void }).gc;
+  return typeof gc === "function" ? gc : null;
+}
+
+function takeMemorySample(label: string) {
+  const usage = process.memoryUsage();
+  return {
+    label,
+    rss: usage.rss,
+    heapUsed: usage.heapUsed,
+    heapTotal: usage.heapTotal,
+    external: usage.external,
+    arrayBuffers: usage.arrayBuffers ?? 0,
+  };
+}
+
+function formatMemorySample(sample: ReturnType<typeof takeMemorySample>): string {
+  return [
+    "  ",
+    sample.label.padEnd(18),
+    `heap=${formatBytes(sample.heapUsed)}`,
+    `rss=${formatBytes(sample.rss)}`,
+    `ext=${formatBytes(sample.external)}`,
+  ].join(" ");
+}
+
+function formatMemoryDelta(
+  before: ReturnType<typeof takeMemorySample>,
+  after: ReturnType<typeof takeMemorySample>,
+): string {
+  return [
+    "  ",
+    "gc:delta".padEnd(18),
+    `heap=${formatBytes(after.heapUsed - before.heapUsed)}`,
+    `rss=${formatBytes(after.rss - before.rss)}`,
+    `ext=${formatBytes(after.external - before.external)}`,
+  ].join(" ");
+}
+
+function formatBytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+}
+
+function writeMemoryLog(lines: string[]): void {
+  const output = lines.join("\n") + "\n";
+  process.stdout.write(output);
+  if (MEMORY_OUTPUT_PATH) {
+    fs.mkdirSync(path.dirname(MEMORY_OUTPUT_PATH), { recursive: true });
+    fs.appendFileSync(MEMORY_OUTPUT_PATH, output);
   }
 }
 

@@ -53,6 +53,7 @@ import {
   ensureCompileTarget,
   normalizeScenario,
 } from "./scenario.js";
+import { createMemoryTracker, type MemoryTrace } from "./memory.js";
 import type {
   AssertionFailure,
   CompileTargetSpec,
@@ -64,7 +65,7 @@ import type {
 
 export interface ExternalPackageResult {
   spec: ExternalPackageSpec;
-  analysis: AnalysisResult<PackageAnalysis>;
+  analysis?: AnalysisResult<PackageAnalysis>;
   resources: readonly ResourceDef[];
 }
 
@@ -92,7 +93,7 @@ export interface IntegrationTimings {
 
 export interface IntegrationRun {
   scenario: NormalizedScenario;
-  program: ts.Program;
+  program?: ts.Program;
   fileSystem?: FileSystemContext;
   resolution: ResolutionResult;
   semantics: SemanticsWithCaches;
@@ -106,6 +107,7 @@ export interface IntegrationRun {
   usageByScope?: UsageByScope;
   registrationPlan?: ReturnType<typeof buildRegistrationPlan>;
   timings: IntegrationTimings;
+  memory?: MemoryTrace;
 }
 
 export interface HarnessRunOptions {
@@ -115,6 +117,18 @@ export interface HarnessRunOptions {
     warn(message: string): void;
     error(message: string): void;
   };
+  memory?: {
+    enabled?: boolean;
+    logSamples?: boolean;
+    logDeltas?: boolean;
+  };
+  retain?: {
+    program?: boolean;
+    fileSystem?: boolean;
+    resolutionFacts?: boolean;
+    resolutionRegistration?: boolean;
+    externalAnalysis?: boolean;
+  };
 }
 
 export async function runIntegrationScenario(
@@ -122,6 +136,7 @@ export async function runIntegrationScenario(
   options: HarnessRunOptions = {},
 ): Promise<IntegrationRun> {
   const normalized = normalizeScenario(scenario);
+  const retention = resolveRetentionOptions(options.retain);
   const timings: IntegrationTimings = {
     totalMs: 0,
     resolutionMs: 0,
@@ -129,17 +144,27 @@ export async function runIntegrationScenario(
     compileMs: 0,
   };
   const startTotal = performance.now();
+  const memoryTracker = createMemoryTracker({
+    enabled: options.memory?.enabled ?? process.env.AURELIA_HARNESS_MEMORY === "1",
+    logger: options.logger,
+    logSamples: options.memory?.logSamples ?? process.env.AURELIA_HARNESS_MEMORY_LOG === "1",
+    logDeltas: options.memory?.logDeltas ?? process.env.AURELIA_HARNESS_MEMORY_DELTAS === "1",
+  });
+  memoryTracker.mark("start");
 
   const { program, fileSystem, fileMap } = createProgramFromScenario(normalized);
+  memoryTracker.mark("program");
 
   const resolutionStart = performance.now();
   const baseResolution = resolve(program, buildResolutionConfig(normalized, fileSystem), options.logger);
   const resolution = applyResolutionPolicy(baseResolution, normalized.resolution.policy);
   timings.resolutionMs = performance.now() - resolutionStart;
+  memoryTracker.mark("resolution");
 
   const externalStart = performance.now();
-  const external = await analyzeExternalPackages(normalized.externalPackages);
+  const external = await analyzeExternalPackages(normalized.externalPackages, retention.externalAnalysis);
   timings.externalMs = performance.now() - externalStart;
+  memoryTracker.mark("external");
 
   const merged = applyExternalResources(
     resolution,
@@ -147,14 +172,17 @@ export async function runIntegrationScenario(
     normalized.externalResourcePolicy,
   );
   const augmented = applyExplicitResources(merged, normalized.resolution.explicitResources);
+  memoryTracker.mark("merge");
 
   const compileStart = performance.now();
   const compile = compileTargets(normalized, resolution, augmented, fileMap, {
     computeUsage: !!normalized.expect?.registrationPlan,
   });
   timings.compileMs = performance.now() - compileStart;
+  memoryTracker.mark("compile");
 
   const snapshots = buildSnapshots(augmented, normalized);
+  memoryTracker.mark("snapshots");
 
   const usageByScope = normalized.expect?.registrationPlan
     ? collectUsageByScope(compile)
@@ -162,14 +190,18 @@ export async function runIntegrationScenario(
   const registrationPlan = usageByScope
     ? buildRegistrationPlan(augmented.resourceGraph, usageByScope)
     : undefined;
+  memoryTracker.mark("registration");
 
   timings.totalMs = performance.now() - startTotal;
+  memoryTracker.mark("done");
+  const memory = memoryTracker.trace();
+  const trimmedResolution = trimResolutionResult(resolution, retention);
 
   return {
     scenario: normalized,
-    program,
-    fileSystem,
-    resolution,
+    program: retention.program ? program : undefined,
+    fileSystem: retention.fileSystem ? fileSystem : undefined,
+    resolution: trimmedResolution,
     semantics: augmented.semantics,
     resourceGraph: augmented.resourceGraph,
     catalog: augmented.catalog,
@@ -177,10 +209,11 @@ export async function runIntegrationScenario(
     external,
     compile,
     snapshots,
-    diagnostics: resolution.diagnostics,
+    diagnostics: trimmedResolution.diagnostics,
     usageByScope,
     registrationPlan,
     timings,
+    memory,
   };
 }
 
@@ -224,17 +257,75 @@ function buildResolutionConfig(
     templateExtensions: scenario.resolution.templateExtensions,
     styleExtensions: scenario.resolution.styleExtensions,
     packageRoots: scenario.resolution.packageRoots,
+    stripSourcedNodes: process.env.AURELIA_RESOLUTION_STRIP_SOURCED_NODES === "1",
+  };
+}
+
+function resolveRetentionOptions(
+  overrides?: HarnessRunOptions["retain"],
+): Required<NonNullable<HarnessRunOptions["retain"]>> {
+  const trimAll = readEnvFlag("AURELIA_HARNESS_TRIM") ?? false;
+  const defaultRetain = !trimAll;
+  return {
+    program: resolveRetention("AURELIA_HARNESS_RETAIN_PROGRAM", overrides?.program, defaultRetain),
+    fileSystem: resolveRetention("AURELIA_HARNESS_RETAIN_FILESYSTEM", overrides?.fileSystem, defaultRetain),
+    resolutionFacts: resolveRetention("AURELIA_HARNESS_RETAIN_FACTS", overrides?.resolutionFacts, defaultRetain),
+    resolutionRegistration: resolveRetention(
+      "AURELIA_HARNESS_RETAIN_REGISTRATION",
+      overrides?.resolutionRegistration,
+      defaultRetain,
+    ),
+    externalAnalysis: resolveRetention("AURELIA_HARNESS_RETAIN_EXTERNAL", overrides?.externalAnalysis, defaultRetain),
+  };
+}
+
+function resolveRetention(
+  envKey: string,
+  explicit: boolean | undefined,
+  fallback: boolean,
+): boolean {
+  if (explicit !== undefined) return explicit;
+  const env = readEnvFlag(envKey);
+  return env ?? fallback;
+}
+
+function readEnvFlag(key: string): boolean | undefined {
+  const value = process.env[key];
+  if (value === "1") return true;
+  if (value === "0") return false;
+  return undefined;
+}
+
+function trimResolutionResult(
+  result: ResolutionResult,
+  retention: Required<NonNullable<HarnessRunOptions["retain"]>>,
+): ResolutionResult {
+  if (retention.resolutionFacts && retention.resolutionRegistration) {
+    return result;
+  }
+
+  return {
+    ...result,
+    facts: retention.resolutionFacts ? result.facts : new Map(),
+    registration: retention.resolutionRegistration
+      ? result.registration
+      : { sites: [], orphans: [], unresolved: [], activatedPlugins: [] },
   };
 }
 
 async function analyzeExternalPackages(
   specs: readonly ExternalPackageSpec[],
+  retainAnalysis: boolean,
 ): Promise<ExternalPackageResult[]> {
   const results: ExternalPackageResult[] = [];
   for (const spec of specs) {
     const analysis = await analyzePackage(spec.path, { preferSource: spec.preferSource });
     const resources = analysis.value.resources.map((entry) => entry.resource);
-    results.push({ spec, analysis, resources });
+    results.push({
+      spec,
+      resources,
+      ...(retainAnalysis ? { analysis } : {}),
+    });
   }
   return results;
 }
