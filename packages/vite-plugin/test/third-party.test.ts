@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import { tmpdir } from "node:os";
 import type { AureliaPluginOptions, ResolutionContext } from "../src/types.js";
@@ -68,6 +68,25 @@ describe("third-party scanning (vite plugin)", () => {
       const resources = ctx?.resourceGraph.scopes[ctx.resourceGraph.root]?.resources?.elements ?? {};
       expect(resources["external-thing"]).toBeDefined();
       expect(resources["example-widget"]).toBeUndefined();
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("resolves scoped packages via packageRoots mapping", async () => {
+    const workspace = createWorkspaceWithScopedPackage();
+    try {
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        packageRoots: workspace.packageRoots,
+        thirdParty: {
+          scan: false,
+          packages: ["@test/scoped-fixture"],
+        },
+      });
+
+      const resources = ctx?.resourceGraph.scopes[ctx.resourceGraph.root]?.resources?.elements ?? {};
+      expect(resources["scoped-thing"]).toBeDefined();
     } finally {
       cleanupWorkspace(workspace);
     }
@@ -475,6 +494,27 @@ function createWorkspaceWithLocalScope(): Workspace {
   return workspace;
 }
 
+function createWorkspaceWithScopedPackage(): Workspace {
+  const workspace = createWorkspace();
+  const scopedRoot = join(workspace.root, "packages", "@test", "scoped-fixture");
+  mkdirSync(join(scopedRoot, "src"), { recursive: true });
+  writePackageJson(scopedRoot, {
+    name: "@test/scoped-fixture",
+    version: "1.0.0",
+    hasAureliaDeps: true,
+  });
+  writeResource(scopedRoot, "scoped-thing");
+  addDependency(workspace.appRoot, "@test/scoped-fixture", "1.0.0");
+
+  return {
+    ...workspace,
+    packageRoots: {
+      ...workspace.packageRoots,
+      "@test/scoped-fixture": scopedRoot,
+    },
+  };
+}
+
 function cleanupWorkspace(workspace: Workspace): void {
   rmSync(workspace.root, { recursive: true, force: true });
 }
@@ -517,6 +557,16 @@ function writePackageJson(
     dependencies: data.hasAureliaDeps ? { aurelia: "^2.0.0" } : {},
   };
   writeFileSync(join(packageRoot, "package.json"), JSON.stringify(pkg, null, 2), "utf-8");
+}
+
+function addDependency(appRoot: string, name: string, version: string): void {
+  const pkgPath = join(appRoot, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+    dependencies?: Record<string, string>;
+  };
+  const deps = { ...(pkg.dependencies ?? {}) };
+  deps[name] = version;
+  writeFileSync(pkgPath, JSON.stringify({ ...pkg, dependencies: deps }, null, 2), "utf-8");
 }
 
 function createPackageRoot(root: string, name: string): string {

@@ -23,6 +23,7 @@ type Workspace = {
   appPath: string;
   appTemplatePath: string;
   packageRoot: string;
+  packageName: string;
   tsconfigPath: string;
 };
 
@@ -30,6 +31,11 @@ describe("vite plugin transform integration", () => {
   const thirdPartyBinding = {
     resource: "user-card",
     bindable: "name",
+    mode: 2,
+  };
+  const scopedBinding = {
+    resource: "scoped-thing",
+    bindable: "value",
     mode: 2,
   };
 
@@ -164,6 +170,49 @@ describe("vite plugin transform integration", () => {
       cleanupWorkspace(workspace);
     }
   });
+
+  it("builds client bundle output for scoped packages", async () => {
+    const workspace = createScopedWorkspace();
+    try {
+      const outDir = await runViteBuild(workspace, "client", {
+        packageRoots: { [workspace.packageName]: workspace.packageRoot },
+        thirdParty: { scan: false, packages: [workspace.packageName] },
+      });
+      const output = readBuildOutput(outDir);
+      expect(hasThirdPartyBinding(output, scopedBinding)).toBe(true);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("builds SSR bundle output for scoped packages", async () => {
+    const workspace = createScopedWorkspace();
+    try {
+      const outDir = await runViteBuild(workspace, "ssr", {
+        packageRoots: { [workspace.packageName]: workspace.packageRoot },
+        thirdParty: { scan: false, packages: [workspace.packageName] },
+      });
+      const output = readBuildOutput(outDir);
+      expect(hasThirdPartyBinding(output, scopedBinding)).toBe(true);
+      expect(output).toMatch(/__app/);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("builds client bundle without scoped package config and omits bindable metadata", async () => {
+    const workspace = createScopedWorkspace();
+    try {
+      const outDir = await runViteBuild(workspace, "client", {
+        packageRoots: { [workspace.packageName]: workspace.packageRoot },
+        thirdParty: { scan: false, packages: [] },
+      });
+      const output = readBuildOutput(outDir);
+      expect(hasThirdPartyBinding(output, scopedBinding)).toBe(false);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
 });
 
 function createResolvedConfig(root: string): ResolvedConfig {
@@ -184,10 +233,11 @@ function createWorkspace(): Workspace {
   const root = mkdtempSync(join(tmpdir(), "aurelia-vite-transform-"));
   const appRoot = join(root, "app");
   const packageRoot = join(root, "packages", "user-card");
+  const packageName = "user-card";
   mkdirSync(join(appRoot, "src"), { recursive: true });
   mkdirSync(join(packageRoot, "src"), { recursive: true });
 
-  writeAppPackageJson(appRoot);
+  writeAppPackageJson(appRoot, { [packageName]: "1.0.0" });
   writeTsconfig(appRoot);
 
   const appCode = [
@@ -205,24 +255,65 @@ function createWorkspace(): Workspace {
   writeFileSync(appTemplatePath, "<user-card name.bind=\"name\"></user-card>\n", "utf-8");
   writeViteEntrypoints(appRoot);
 
-  writeThirdPartyPackage(packageRoot);
+  writeThirdPartyPackage(packageRoot, {
+    packageName,
+    elementName: "user-card",
+    bindableName: "name",
+    className: "UserCard",
+  });
 
   const tsconfigPath = resolvePath(appRoot, "tsconfig.json");
 
-  return { root, appRoot, appCode, appPath, appTemplatePath, packageRoot, tsconfigPath };
+  return { root, appRoot, appCode, appPath, appTemplatePath, packageRoot, packageName, tsconfigPath };
+}
+
+function createScopedWorkspace(): Workspace {
+  const root = mkdtempSync(join(tmpdir(), "aurelia-vite-scoped-"));
+  const appRoot = join(root, "app");
+  const packageName = "@test/scoped-card";
+  const packageRoot = join(root, "packages", "@test", "scoped-card");
+  mkdirSync(join(appRoot, "src"), { recursive: true });
+  mkdirSync(join(packageRoot, "src"), { recursive: true });
+
+  writeAppPackageJson(appRoot, { [packageName]: "1.0.0" });
+  writeTsconfig(appRoot);
+
+  const appCode = [
+    'import { customElement } from "aurelia";',
+    "",
+    '@customElement("app")',
+    "export class App {",
+    "  value = \"Scoped\";",
+    "}",
+    "",
+  ].join("\n");
+  const appPath = join(appRoot, "src", "app.ts");
+  const appTemplatePath = join(appRoot, "src", "app.html");
+  writeFileSync(appPath, appCode, "utf-8");
+  writeFileSync(appTemplatePath, "<scoped-thing value.bind=\"value\"></scoped-thing>\n", "utf-8");
+  writeViteEntrypoints(appRoot);
+
+  writeThirdPartyPackage(packageRoot, {
+    packageName,
+    elementName: "scoped-thing",
+    bindableName: "value",
+    className: "ScopedThing",
+  });
+
+  const tsconfigPath = resolvePath(appRoot, "tsconfig.json");
+
+  return { root, appRoot, appCode, appPath, appTemplatePath, packageRoot, packageName, tsconfigPath };
 }
 
 function cleanupWorkspace(workspace: Workspace): void {
   rmSync(workspace.root, { recursive: true, force: true });
 }
 
-function writeAppPackageJson(appRoot: string): void {
+function writeAppPackageJson(appRoot: string, dependencies: Record<string, string>): void {
   const pkg = {
     name: "vite-transform-app",
     version: "0.0.0",
-    dependencies: {
-      "user-card": "1.0.0",
-    },
+    dependencies,
   };
   writeFileSync(join(appRoot, "package.json"), JSON.stringify(pkg, null, 2), "utf-8");
 }
@@ -242,9 +333,18 @@ function writeTsconfig(appRoot: string): void {
   writeFileSync(join(appRoot, "tsconfig.json"), JSON.stringify(tsconfig, null, 2), "utf-8");
 }
 
-function writeThirdPartyPackage(packageRoot: string): void {
+function writeThirdPartyPackage(
+  packageRoot: string,
+  options: {
+    packageName: string;
+    elementName: string;
+    bindableName: string;
+    className: string;
+  },
+): void {
+  const interpolation = "${" + options.bindableName + "}";
   const pkg = {
-    name: "user-card",
+    name: options.packageName,
     version: "1.0.0",
     exports: "./src/index.ts",
     dependencies: {
@@ -279,11 +379,11 @@ function writeThirdPartyPackage(packageRoot: string): void {
     "}",
     "",
     "@customElement({",
-    "  name: \"user-card\",",
-    "  template: \"<span class=\\\"user-card\\\">${name}</span>\",",
+    `  name: \"${options.elementName}\",`,
+    `  template: \"<span class=\\\"${options.elementName}\\\">${interpolation}</span>\",`,
     "})",
-    "export class UserCard {",
-    "  @bindable name = \"\";",
+    `export class ${options.className} {`,
+    `  @bindable ${options.bindableName} = \"\";`,
     "}",
     "",
   ].join("\n");
