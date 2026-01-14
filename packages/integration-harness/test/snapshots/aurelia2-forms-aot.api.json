@@ -12,6 +12,21 @@
     { "id": "sym:955beefbe8ec3f23bfec6a3478b177f237e964ec54b594cb8c4c7545a3c79d60", "kind": "binding-behavior", "name": "updateTrigger" },
     {
       "bindables": [
+        { "attribute": "form", "name": "form" },
+        { "attribute": "name", "name": "name", "primary": true },
+        { "attribute": "validateOn", "name": "validateOn" },
+        { "attribute": "validationModel", "name": "validationModel" },
+        { "attribute": "validationProperty", "name": "validationProperty" },
+        { "attribute": "validators", "name": "validators" },
+        { "attribute": "value", "mode": "twoWay", "name": "value" }
+      ],
+      "id": "sym:b38823c7c5e35875172405945be83387c630d1febb09ae35c0e971a0c3067fc4",
+      "kind": "custom-attribute",
+      "name": "au-field",
+      "source": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts"
+    },
+    {
+      "bindables": [
         { "attribute": "value", "mode": "twoWay", "name": "value", "primary": true }
       ],
       "id": "sym:bd3ca4f1e46fc9f524e069b140137d20d9391868e4fb43577125209b75dcad7b",
@@ -60,6 +75,19 @@
       "id": "sym:b13d833a60050dfbfcdf6a67c81b49c24062b337ca76151521de39f85f76510d",
       "kind": "custom-element",
       "name": "au-compose"
+    },
+    {
+      "bindables": [
+        { "attribute": "form", "mode": "twoWay", "name": "form" },
+        { "attribute": "submit", "name": "submit" },
+        { "attribute": "validateOnSubmit", "name": "validateOnSubmit" },
+        { "attribute": "validationModel", "name": "validationModel" },
+        { "attribute": "validationObjectTag", "name": "validationObjectTag" }
+      ],
+      "id": "sym:c4c96f97f19b3410278c7daafb8e3dbdec1d89c464f5d3feaa951977a170697d",
+      "kind": "custom-element",
+      "name": "au-form",
+      "source": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts"
     },
     {
       "bindables": [

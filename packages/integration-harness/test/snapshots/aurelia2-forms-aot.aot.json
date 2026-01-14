@@ -1,0 +1,36 @@
+{
+  "aurelia2-forms-aot": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_608c35000e02a080", "mode": 6, "to": "form", "type": 12 }
+            ],
+            "res": "au-form",
+            "type": 0
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "to": "name", "type": 10, "value": "email" }
+            ],
+            "res": "au-field",
+            "type": 1
+          }
+        ]
+      ],
+      "name": "aurelia2-forms-aot",
+      "nestedTemplates": [],
+      "targetCount": 2
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "form" },
+        "id": "expr_608c35000e02a080"
+      }
+    ],
+    "template": "<!--au--><au-form>\n  <!--au--><input au-field=\"email\">\n</au-form>"
+  }
+}

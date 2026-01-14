@@ -94,14 +94,6 @@
       "trigger": { "capture": false, "kind": "listener", "name": "trigger" },
       "two-way": { "kind": "property", "mode": "twoWay", "name": "two-way" }
     },
-    "confidence": "partial",
-    "gaps": [
-      {
-        "kind": "conditional-registration",
-        "message": "registration guarded by \"__SSR__\": Cannot statically determine whether this registration executes. Consider hoisting register() or providing explicit AOT/SSR configuration.",
-        "resource": "/src/entry.ts"
-      }
-    ],
     "resources": {
       "attributes": {
         "case": {
@@ -661,15 +653,112 @@
           "package": "@aurelia/router",
           "processContent": false
         },
-        "guarded-el": {
-          "bindables": {},
+        "google-map": {
+          "bindables": {
+            "autoInfoWindow": {
+              "attribute": "autoInfoWindow",
+              "name": "autoInfoWindow",
+              "primary": false,
+              "type": { "kind": "ts", "name": "boolean" }
+            },
+            "autoUpdateBounds": {
+              "attribute": "autoUpdateBounds",
+              "name": "autoUpdateBounds",
+              "primary": false,
+              "type": { "kind": "ts", "name": "boolean" }
+            },
+            "disableDefaultUi": {
+              "attribute": "disableDefaultUi",
+              "name": "disableDefaultUi",
+              "primary": false,
+              "type": { "kind": "ts", "name": "boolean" }
+            },
+            "drawEnabled": {
+              "attribute": "drawEnabled",
+              "name": "drawEnabled",
+              "primary": false,
+              "type": { "kind": "ts", "name": "boolean" }
+            },
+            "drawingControl": {
+              "attribute": "drawingControl",
+              "name": "drawingControl",
+              "primary": false,
+              "type": { "kind": "ts", "name": "boolean" }
+            },
+            "drawingControlOptions": {
+              "attribute": "drawingControlOptions",
+              "name": "drawingControlOptions",
+              "primary": false,
+              "type": { "kind": "ts", "name": "google.maps.drawing.DrawingControlOptions" }
+            },
+            "drawMode": {
+              "attribute": "drawMode",
+              "name": "drawMode",
+              "primary": false,
+              "type": { "kind": "ts", "name": "string" }
+            },
+            "latitude": {
+              "attribute": "latitude",
+              "name": "latitude",
+              "primary": false,
+              "type": { "kind": "ts", "name": "number" }
+            },
+            "longitude": {
+              "attribute": "longitude",
+              "name": "longitude",
+              "primary": false,
+              "type": { "kind": "ts", "name": "number" }
+            },
+            "mapLoaded": {
+              "attribute": "mapLoaded",
+              "name": "mapLoaded",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(map: google.maps.Map) => void" }
+            },
+            "mapType": {
+              "attribute": "mapType",
+              "name": "mapType",
+              "primary": false,
+              "type": { "kind": "ts", "name": "string" }
+            },
+            "markers": {
+              "attribute": "markers",
+              "name": "markers",
+              "primary": false,
+              "type": { "kind": "ts", "name": "MarkerInput[]" }
+            },
+            "onEvent": {
+              "attribute": "onEvent",
+              "name": "onEvent",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(event: GoogleMapsEvent) => void" }
+            },
+            "options": {
+              "attribute": "options",
+              "name": "options",
+              "primary": false,
+              "type": { "kind": "ts", "name": "google.maps.MapOptions" }
+            },
+            "polygons": {
+              "attribute": "polygons",
+              "name": "polygons",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(string | PolygonInput)[]" }
+            },
+            "zoom": {
+              "attribute": "zoom",
+              "name": "zoom",
+              "primary": false,
+              "type": { "kind": "ts", "name": "number" }
+            }
+          },
           "boundary": true,
           "capture": false,
-          "className": "GuardedElement",
+          "className": "GoogleMaps",
           "containerless": false,
-          "file": "/src/entry.ts",
+          "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts",
           "kind": "element",
-          "name": "guarded-el",
+          "name": "google-map",
           "processContent": false
         }
       },
@@ -683,14 +772,6 @@
       }
     }
   },
-  "confidence": "partial",
-  "gaps": [
-    {
-      "kind": "conditional-registration",
-      "message": "registration guarded by \"__SSR__\": Cannot statically determine whether this registration executes. Consider hoisting register() or providing explicit AOT/SSR configuration.",
-      "resource": "/src/entry.ts"
-    }
-  ],
   "graph": {
     "root": "root",
     "scopes": {
@@ -1002,15 +1083,112 @@
               "name": "au-slot",
               "processContent": false
             },
-            "guarded-el": {
-              "bindables": {},
+            "google-map": {
+              "bindables": {
+                "autoInfoWindow": {
+                  "attribute": "autoInfoWindow",
+                  "name": "autoInfoWindow",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "boolean" }
+                },
+                "autoUpdateBounds": {
+                  "attribute": "autoUpdateBounds",
+                  "name": "autoUpdateBounds",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "boolean" }
+                },
+                "disableDefaultUi": {
+                  "attribute": "disableDefaultUi",
+                  "name": "disableDefaultUi",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "boolean" }
+                },
+                "drawEnabled": {
+                  "attribute": "drawEnabled",
+                  "name": "drawEnabled",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "boolean" }
+                },
+                "drawingControl": {
+                  "attribute": "drawingControl",
+                  "name": "drawingControl",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "boolean" }
+                },
+                "drawingControlOptions": {
+                  "attribute": "drawingControlOptions",
+                  "name": "drawingControlOptions",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "google.maps.drawing.DrawingControlOptions" }
+                },
+                "drawMode": {
+                  "attribute": "drawMode",
+                  "name": "drawMode",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "string" }
+                },
+                "latitude": {
+                  "attribute": "latitude",
+                  "name": "latitude",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "number" }
+                },
+                "longitude": {
+                  "attribute": "longitude",
+                  "name": "longitude",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "number" }
+                },
+                "mapLoaded": {
+                  "attribute": "mapLoaded",
+                  "name": "mapLoaded",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(map: google.maps.Map) => void" }
+                },
+                "mapType": {
+                  "attribute": "mapType",
+                  "name": "mapType",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "string" }
+                },
+                "markers": {
+                  "attribute": "markers",
+                  "name": "markers",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "MarkerInput[]" }
+                },
+                "onEvent": {
+                  "attribute": "onEvent",
+                  "name": "onEvent",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(event: GoogleMapsEvent) => void" }
+                },
+                "options": {
+                  "attribute": "options",
+                  "name": "options",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "google.maps.MapOptions" }
+                },
+                "polygons": {
+                  "attribute": "polygons",
+                  "name": "polygons",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(string | PolygonInput)[]" }
+                },
+                "zoom": {
+                  "attribute": "zoom",
+                  "name": "zoom",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "number" }
+                }
+              },
               "boundary": true,
               "capture": false,
-              "className": "GuardedElement",
+              "className": "GoogleMaps",
               "containerless": false,
-              "file": "/src/entry.ts",
+              "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts",
               "kind": "element",
-              "name": "guarded-el",
+              "name": "google-map",
               "processContent": false
             }
           },
@@ -1394,49 +1572,466 @@
     {
       "data": {
         "aliases": [],
-        "bindables": {},
+        "bindables": {
+          "autoInfoWindow": {
+            "attribute": {
+              "location": { "end": 1115, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1074 },
+              "origin": "source",
+              "value": "autoInfoWindow"
+            },
+            "mode": {
+              "location": { "end": 1115, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1074 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1115, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1074 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1115, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1074 },
+              "origin": "source",
+              "value": "autoInfoWindow"
+            },
+            "type": {
+              "location": { "end": 1115, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1074 },
+              "origin": "source",
+              "value": "boolean"
+            }
+          },
+          "autoUpdateBounds": {
+            "attribute": {
+              "location": { "end": 1071, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1027 },
+              "origin": "source",
+              "value": "autoUpdateBounds"
+            },
+            "mode": {
+              "location": { "end": 1071, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1027 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1071, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1027 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1071, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1027 },
+              "origin": "source",
+              "value": "autoUpdateBounds"
+            },
+            "type": {
+              "location": { "end": 1071, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1027 },
+              "origin": "source",
+              "value": "boolean"
+            }
+          },
+          "disableDefaultUi": {
+            "attribute": {
+              "location": { "end": 983, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 939 },
+              "origin": "source",
+              "value": "disableDefaultUi"
+            },
+            "mode": {
+              "location": { "end": 983, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 939 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 983, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 939 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 983, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 939 },
+              "origin": "source",
+              "value": "disableDefaultUi"
+            },
+            "type": {
+              "location": { "end": 983, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 939 },
+              "origin": "source",
+              "value": "boolean"
+            }
+          },
+          "drawEnabled": {
+            "attribute": {
+              "location": { "end": 1352, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1313 },
+              "origin": "source",
+              "value": "drawEnabled"
+            },
+            "mode": {
+              "location": { "end": 1352, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1313 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1352, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1313 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1352, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1313 },
+              "origin": "source",
+              "value": "drawEnabled"
+            },
+            "type": {
+              "location": { "end": 1352, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1313 },
+              "origin": "source",
+              "value": "boolean"
+            }
+          },
+          "drawingControl": {
+            "attribute": {
+              "location": { "end": 1477, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1445 },
+              "origin": "source",
+              "value": "drawingControl"
+            },
+            "mode": {
+              "location": { "end": 1477, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1445 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1477, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1445 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1477, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1445 },
+              "origin": "source",
+              "value": "drawingControl"
+            },
+            "type": {
+              "location": { "end": 1477, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1445 },
+              "origin": "source",
+              "value": "boolean"
+            }
+          },
+          "drawingControlOptions": {
+            "attribute": {
+              "location": { "end": 1564, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1480 },
+              "origin": "source",
+              "value": "drawingControlOptions"
+            },
+            "mode": {
+              "location": { "end": 1564, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1480 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1564, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1480 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1564, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1480 },
+              "origin": "source",
+              "value": "drawingControlOptions"
+            },
+            "type": {
+              "location": { "end": 1564, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1480 },
+              "origin": "source",
+              "value": "google.maps.drawing.DrawingControlOptions"
+            }
+          },
+          "drawMode": {
+            "attribute": {
+              "location": { "end": 1385, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1355 },
+              "origin": "source",
+              "value": "drawMode"
+            },
+            "mode": {
+              "location": { "end": 1385, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1355 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1385, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1355 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1385, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1355 },
+              "origin": "source",
+              "value": "drawMode"
+            },
+            "type": {
+              "location": { "end": 1385, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1355 },
+              "origin": "source",
+              "value": "string"
+            }
+          },
+          "latitude": {
+            "attribute": {
+              "location": { "end": 906, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 875 },
+              "origin": "source",
+              "value": "latitude"
+            },
+            "mode": {
+              "location": { "end": 906, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 875 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 906, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 875 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 906, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 875 },
+              "origin": "source",
+              "value": "latitude"
+            },
+            "type": {
+              "location": { "end": 906, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 875 },
+              "origin": "source",
+              "value": "number"
+            }
+          },
+          "longitude": {
+            "attribute": {
+              "location": { "end": 872, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 840 },
+              "origin": "source",
+              "value": "longitude"
+            },
+            "mode": {
+              "location": { "end": 872, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 840 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 872, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 840 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 872, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 840 },
+              "origin": "source",
+              "value": "longitude"
+            },
+            "type": {
+              "location": { "end": 872, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 840 },
+              "origin": "source",
+              "value": "number"
+            }
+          },
+          "mapLoaded": {
+            "attribute": {
+              "location": { "end": 1254, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1201 },
+              "origin": "source",
+              "value": "mapLoaded"
+            },
+            "mode": {
+              "location": { "end": 1254, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1201 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1254, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1201 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1254, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1201 },
+              "origin": "source",
+              "value": "mapLoaded"
+            },
+            "type": {
+              "location": { "end": 1254, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1201 },
+              "origin": "source",
+              "value": "(map: google.maps.Map) => void"
+            }
+          },
+          "mapType": {
+            "attribute": {
+              "location": { "end": 1148, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1118 },
+              "origin": "source",
+              "value": "mapType"
+            },
+            "mode": {
+              "location": { "end": 1148, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1118 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1148, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1118 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1148, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1118 },
+              "origin": "source",
+              "value": "mapType"
+            },
+            "type": {
+              "location": { "end": 1148, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1118 },
+              "origin": "source",
+              "value": "string"
+            }
+          },
+          "markers": {
+            "attribute": {
+              "location": { "end": 1024, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 986 },
+              "origin": "source",
+              "value": "markers"
+            },
+            "mode": {
+              "location": { "end": 1024, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 986 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1024, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 986 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1024, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 986 },
+              "origin": "source",
+              "value": "markers"
+            },
+            "type": {
+              "location": { "end": 1024, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 986 },
+              "origin": "source",
+              "value": "MarkerInput[]"
+            }
+          },
+          "onEvent": {
+            "attribute": {
+              "location": { "end": 1310, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1257 },
+              "origin": "source",
+              "value": "onEvent"
+            },
+            "mode": {
+              "location": { "end": 1310, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1257 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1310, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1257 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1310, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1257 },
+              "origin": "source",
+              "value": "onEvent"
+            },
+            "type": {
+              "location": { "end": 1310, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1257 },
+              "origin": "source",
+              "value": "(event: GoogleMapsEvent) => void"
+            }
+          },
+          "options": {
+            "attribute": {
+              "location": { "end": 1198, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1151 },
+              "origin": "source",
+              "value": "options"
+            },
+            "mode": {
+              "location": { "end": 1198, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1151 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1198, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1151 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1198, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1151 },
+              "origin": "source",
+              "value": "options"
+            },
+            "type": {
+              "location": { "end": 1198, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1151 },
+              "origin": "source",
+              "value": "google.maps.MapOptions"
+            }
+          },
+          "polygons": {
+            "attribute": {
+              "location": { "end": 1442, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1388 },
+              "origin": "source",
+              "value": "polygons"
+            },
+            "mode": {
+              "location": { "end": 1442, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1388 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 1442, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1388 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 1442, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1388 },
+              "origin": "source",
+              "value": "polygons"
+            },
+            "type": {
+              "location": { "end": 1442, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1388 },
+              "origin": "source",
+              "value": "(string | PolygonInput)[]"
+            }
+          },
+          "zoom": {
+            "attribute": {
+              "location": { "end": 936, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 909 },
+              "origin": "source",
+              "value": "zoom"
+            },
+            "mode": {
+              "location": { "end": 936, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 909 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 936, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 909 },
+              "origin": "source",
+              "value": false
+            },
+            "property": {
+              "location": { "end": 936, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 909 },
+              "origin": "source",
+              "value": "zoom"
+            },
+            "type": {
+              "location": { "end": 936, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 909 },
+              "origin": "source",
+              "value": "number"
+            }
+          }
+        },
         "boundary": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
           "origin": "source",
-          "value": "GuardedElement"
+          "value": "GoogleMaps"
         },
         "containerless": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "/src/entry.ts",
+        "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
           "origin": "source",
-          "value": "guarded-el"
+          "value": "google-map"
         },
         "processContent": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
           "origin": "source"
         }
       },
-      "id": "sym:00cd9fa8b7e4267ffa0ed0b9a0123610732c71905518efa52cf0a96d91bd9fd3",
+      "id": "sym:4634c7bf8f89495a1f9cdaed01c2feff825b0fd04487941b79941e38e1679fd8",
       "kind": "custom-element",
-      "name": "guarded-el",
-      "source": "/src/entry.ts"
+      "name": "google-map",
+      "source": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts"
     },
     {
       "data": {

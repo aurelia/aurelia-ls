@@ -83,6 +83,30 @@
     },
     {
       "bindables": [
+        { "attribute": "autoInfoWindow", "name": "autoInfoWindow" },
+        { "attribute": "autoUpdateBounds", "name": "autoUpdateBounds" },
+        { "attribute": "disableDefaultUi", "name": "disableDefaultUi" },
+        { "attribute": "drawEnabled", "name": "drawEnabled" },
+        { "attribute": "drawingControl", "name": "drawingControl" },
+        { "attribute": "drawingControlOptions", "name": "drawingControlOptions" },
+        { "attribute": "drawMode", "name": "drawMode" },
+        { "attribute": "latitude", "name": "latitude" },
+        { "attribute": "longitude", "name": "longitude" },
+        { "attribute": "mapLoaded", "name": "mapLoaded" },
+        { "attribute": "mapType", "name": "mapType" },
+        { "attribute": "markers", "name": "markers" },
+        { "attribute": "onEvent", "name": "onEvent" },
+        { "attribute": "options", "name": "options" },
+        { "attribute": "polygons", "name": "polygons" },
+        { "attribute": "zoom", "name": "zoom" }
+      ],
+      "id": "sym:4634c7bf8f89495a1f9cdaed01c2feff825b0fd04487941b79941e38e1679fd8",
+      "kind": "custom-element",
+      "name": "google-map",
+      "source": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts"
+    },
+    {
+      "bindables": [
         { "attribute": "fallThrough", "mode": "default", "name": "fallThrough" },
         { "attribute": "value", "mode": "default", "name": "value", "primary": true }
       ],

@@ -212,6 +212,199 @@ describe("analysis fingerprint triggers", () => {
   });
 });
 
+describe("third-party policy merge strategies", () => {
+  it("root-scope policy merges external resources into graph and keeps locals", async () => {
+    const workspace = createWorkspaceWithLocalScope();
+    try {
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        packageRoots: workspace.packageRoots,
+        thirdParty: {
+          scan: false,
+          packages: ["aurelia-fixture"],
+          policy: "root-scope",
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const rootResources = ctx!.resourceGraph.scopes[ctx!.resourceGraph.root]?.resources?.elements ?? {};
+      expect(rootResources["external-thing"]).toBeDefined();
+      const localScopes = collectLocalScopes(ctx!);
+      expect(localScopes.length).toBeGreaterThan(0);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("semantics policy keeps locals but does not alter resource graph", async () => {
+    const workspace = createWorkspaceWithLocalScope();
+    try {
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        packageRoots: workspace.packageRoots,
+        thirdParty: {
+          scan: false,
+          packages: ["aurelia-fixture"],
+          policy: "semantics",
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const rootResources = ctx!.resourceGraph.scopes[ctx!.resourceGraph.root]?.resources?.elements ?? {};
+      expect(rootResources["external-thing"]).toBeUndefined();
+      const localScopes = collectLocalScopes(ctx!);
+      expect(localScopes.length).toBeGreaterThan(0);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("rebuild-graph policy rebuilds root graph and drops locals", async () => {
+    const workspace = createWorkspaceWithLocalScope();
+    try {
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        packageRoots: workspace.packageRoots,
+        thirdParty: {
+          scan: false,
+          packages: ["aurelia-fixture"],
+          policy: "rebuild-graph",
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const rootResources = ctx!.resourceGraph.scopes[ctx!.resourceGraph.root]?.resources?.elements ?? {};
+      expect(rootResources["external-thing"]).toBeDefined();
+      const localScopes = collectLocalScopes(ctx!);
+      expect(localScopes.length).toBe(0);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+});
+
+describe("third-party error paths", () => {
+  it("emits package-not-found gap when package.json is missing", async () => {
+    const workspace = createWorkspace();
+    try {
+      const missingPackage = createPackageRoot(workspace.root, "missing-package");
+
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: missingPackage }],
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const codes = ctx!.result.diagnostics.map((d) => d.code);
+      expect(codes).toContain("gap:package-not-found");
+      expect(ctx!.result.catalog.confidence).toBe("conservative");
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("emits invalid-package-json gap for malformed package.json", async () => {
+    const workspace = createWorkspace();
+    try {
+      const invalidPackage = createPackageRoot(workspace.root, "invalid-package");
+      writeFileSync(
+        join(invalidPackage, "package.json"),
+        "{ invalid json",
+        "utf-8",
+      );
+
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: invalidPackage }],
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const codes = ctx!.result.diagnostics.map((d) => d.code);
+      expect(codes).toContain("gap:invalid-package-json");
+      expect(ctx!.result.catalog.confidence).toBe("conservative");
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("emits entry-point-not-found gap for missing exports target", async () => {
+    const workspace = createWorkspace();
+    try {
+      const brokenPackage = createPackageRoot(workspace.root, "broken-entry");
+      writeFileSync(
+        join(brokenPackage, "package.json"),
+        JSON.stringify(
+          {
+            name: "broken-entry",
+            version: "1.0.0",
+            exports: "./dist/index.js",
+            dependencies: { aurelia: "^2.0.0" },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: brokenPackage }],
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const codes = ctx!.result.diagnostics.map((d) => d.code);
+      expect(codes).toContain("gap:entry-point-not-found");
+      expect(ctx!.result.catalog.confidence).toBe("conservative");
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("flags packages with no resources as no-source gaps", async () => {
+    const workspace = createWorkspace();
+    try {
+      const emptyPackage = createPackageRoot(workspace.root, "empty-package");
+      writePackageJson(emptyPackage, {
+        name: "empty-package",
+        version: "1.0.0",
+        hasAureliaDeps: true,
+      });
+      writeFileSync(
+        join(emptyPackage, "src", "index.ts"),
+        "export const marker = 0;\n",
+        "utf-8",
+      );
+
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: emptyPackage }],
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const codes = ctx!.result.diagnostics.map((d) => d.code);
+      expect(codes).toContain("gap:no-source");
+      expect(ctx!.result.catalog.confidence).toBe("conservative");
+
+      const resources = ctx!.resourceGraph.scopes[ctx!.resourceGraph.root]?.resources?.elements ?? {};
+      expect(resources["empty-widget"]).toBeUndefined();
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+});
+
 function resolveWithOptions(
   workspace: Workspace,
   options: AureliaPluginOptions,
@@ -276,6 +469,12 @@ function createWorkspace(): Workspace {
   return { root, appRoot, tsconfigPath, packageRoots };
 }
 
+function createWorkspaceWithLocalScope(): Workspace {
+  const workspace = createWorkspace();
+  writeLocalResources(workspace.appRoot);
+  return workspace;
+}
+
 function cleanupWorkspace(workspace: Workspace): void {
   rmSync(workspace.root, { recursive: true, force: true });
 }
@@ -320,6 +519,12 @@ function writePackageJson(
   writeFileSync(join(packageRoot, "package.json"), JSON.stringify(pkg, null, 2), "utf-8");
 }
 
+function createPackageRoot(root: string, name: string): string {
+  const pkgRoot = join(root, "packages", name);
+  mkdirSync(join(pkgRoot, "src"), { recursive: true });
+  return pkgRoot;
+}
+
 function writeLockfile(appRoot: string, marker: string): void {
   const contents = [
     `# ${marker}`,
@@ -345,6 +550,32 @@ function writeResource(packageRoot: string, elementName: string): void {
 
 function updateResource(packageRoot: string, elementName: string): void {
   writeResource(packageRoot, elementName);
+}
+
+function writeLocalResources(appRoot: string): void {
+  const contents = [
+    "import { customElement } from \"aurelia\";",
+    "",
+    "@customElement(\"local-part\")",
+    "export class LocalPart {}",
+    "",
+  ].join("\n");
+  writeFileSync(join(appRoot, "src", "local-part.ts"), contents, "utf-8");
+
+  const appContents = [
+    "import { customElement } from \"aurelia\";",
+    "import { LocalPart } from \"./local-part\";",
+    "",
+    "@customElement({ name: \"my-app\", dependencies: [LocalPart] })",
+    "export class MyApp {}",
+    "",
+  ].join("\n");
+  writeFileSync(join(appRoot, "src", "my-app.ts"), appContents, "utf-8");
+  writeFileSync(join(appRoot, "src", "main.ts"), "import \"./my-app\";\n", "utf-8");
+}
+
+function collectLocalScopes(ctx: ResolutionContext): string[] {
+  return Object.keys(ctx.resourceGraph.scopes).filter((id) => id.startsWith("local:"));
 }
 
 function writeConfigFile(appRoot: string, config: Record<string, unknown>): void {

@@ -1,1 +1,27 @@
-{"explicit-third-party-root":{"definition":{"instructions":[[{"instructions":[{"exprId":"expr_06e27a808192c000","mode":2,"to":"items","type":12}],"res":"third-party-card","type":0}]],"name":"explicit-third-party-root","nestedTemplates":[],"targetCount":1},"expressions":[{"ast":{"$kind":"AccessScope","ancestor":0,"name":"items"},"id":"expr_06e27a808192c000"}],"template":"<!--au--><third-party-card></third-party-card>"}}
+{
+  "explicit-third-party-root": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_06e27a808192c000", "mode": 2, "to": "items", "type": 12 }
+            ],
+            "res": "third-party-card",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "explicit-third-party-root",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "items" },
+        "id": "expr_06e27a808192c000"
+      }
+    ],
+    "template": "<!--au--><third-party-card></third-party-card>"
+  }
+}

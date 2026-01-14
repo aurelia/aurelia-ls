@@ -1,1 +1,45 @@
-{"template-imports-aurelia2-table-my-app":{"definition":{"instructions":[[{"instructions":[{"exprId":"expr_e2db2700c26b7100","mode":2,"to":"totalItems","type":12},{"exprId":"expr_c85a2c00cd384280","mode":2,"to":"pageSize","type":12},{"exprId":"expr_e3c99a000c998ad8","mode":6,"to":"currentPage","type":12}],"res":"aut-pagination","type":0}],[{"instructions":[],"res":"aurelia-table","type":1},{"exprId":"expr_a9d491c09cf1b700","mode":2,"to":"data","type":12}]],"name":"template-imports-aurelia2-table-my-app","nestedTemplates":[],"targetCount":2},"expressions":[{"ast":{"$kind":"AccessScope","ancestor":0,"name":"totalItems"},"id":"expr_e2db2700c26b7100"},{"ast":{"$kind":"AccessScope","ancestor":0,"name":"pageSize"},"id":"expr_c85a2c00cd384280"},{"ast":{"$kind":"AccessScope","ancestor":0,"name":"currentPage"},"id":"expr_e3c99a000c998ad8"},{"ast":{"$kind":"AccessScope","ancestor":0,"name":"items"},"id":"expr_a9d491c09cf1b700"}],"template":"\n\n<div class=\"app\">\n  <!--au--><aut-pagination>\n  </aut-pagination>\n\n  <!--au--><div aurelia-table=\"\"></div>\n</div>\n"}}
+{
+  "template-imports-aurelia2-table-my-app": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_e2db2700c26b7100", "mode": 2, "to": "totalItems", "type": 12 },
+              { "exprId": "expr_c85a2c00cd384280", "mode": 2, "to": "pageSize", "type": 12 },
+              { "exprId": "expr_e3c99a000c998ad8", "mode": 6, "to": "currentPage", "type": 12 }
+            ],
+            "res": "aut-pagination",
+            "type": 0
+          }
+        ],
+        [
+          { "instructions": [], "res": "aurelia-table", "type": 1 },
+          { "exprId": "expr_a9d491c09cf1b700", "mode": 2, "to": "data", "type": 12 }
+        ]
+      ],
+      "name": "template-imports-aurelia2-table-my-app",
+      "nestedTemplates": [],
+      "targetCount": 2
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "totalItems" },
+        "id": "expr_e2db2700c26b7100"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "pageSize" },
+        "id": "expr_c85a2c00cd384280"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "currentPage" },
+        "id": "expr_e3c99a000c998ad8"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "items" },
+        "id": "expr_a9d491c09cf1b700"
+      }
+    ],
+    "template": "\n\n<div class=\"app\">\n  <!--au--><aut-pagination>\n  </aut-pagination>\n\n  <!--au--><div aurelia-table=\"\"></div>\n</div>\n"
+  }
+}

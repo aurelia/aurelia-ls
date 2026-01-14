@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { join, resolve as resolvePath } from "node:path";
+import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import type { ResolvedConfig } from "vite";
 import { aurelia } from "../src/plugin.js";
 import type { AureliaPluginOptions } from "../src/types.js";
+import { createResolutionContext } from "../src/resolution.js";
+import { normalizeOptions } from "../src/defaults.js";
+import { compileWithAot, patchComponentDefinition, render } from "@aurelia-ls/ssr";
 
 const LOGGER = {
   info: () => {},
@@ -17,6 +21,9 @@ type Workspace = {
   appRoot: string;
   appCode: string;
   appPath: string;
+  appTemplatePath: string;
+  packageRoot: string;
+  tsconfigPath: string;
 };
 
 describe("vite plugin transform integration", () => {
@@ -45,6 +52,72 @@ describe("vite plugin transform integration", () => {
       expect(result).not.toBeNull();
       const code = (result as { code: string }).code;
       expect(code).toContain('res: "user-card"');
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("threads third-party config through resolution into SSR output", async () => {
+    const workspace = createWorkspace();
+    try {
+      const options: AureliaPluginOptions = {
+        entry: "./src/app.html",
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: "../packages/user-card" }],
+        },
+      };
+
+      const resolved = normalizeOptions(options, {
+        command: "serve",
+        mode: "development",
+        root: workspace.appRoot,
+      });
+
+      const ctx = await createResolutionContext(workspace.tsconfigPath, LOGGER, {
+        thirdParty: resolved.conventions.thirdParty,
+        conventions: resolved.conventions.config,
+        packagePath: resolved.packagePath,
+        packageRoots: resolved.packageRoots,
+        templateExtensions: resolved.conventions.config.templateExtensions,
+        styleExtensions: resolved.conventions.config.styleExtensions,
+      });
+
+      expect(ctx).not.toBeNull();
+      const elements = ctx!.resourceGraph.scopes[ctx!.resourceGraph.root]?.resources?.elements ?? {};
+      expect(elements["user-card"]).toBeDefined();
+
+      const markup = readFileSync(workspace.appTemplatePath, "utf-8");
+      const aot = compileWithAot(markup, {
+        name: "app",
+        semantics: ctx!.semantics,
+        resourceGraph: ctx!.resourceGraph,
+        resourceScope: ctx!.resourceGraph.root,
+      });
+
+      const serialized = JSON.stringify(aot.raw.codeResult.definition.instructions);
+      expect(serialized).toContain("\"res\":\"user-card\"");
+
+      const moduleUrl = pathToFileURL(join(workspace.packageRoot, "src", "index.ts")).href;
+      const thirdParty = await import(moduleUrl) as { UserCard: new () => { name: string } };
+      const UserCard = thirdParty.UserCard;
+
+      class App {
+        name = "Jane";
+        static $au = {
+          type: "custom-element",
+          name: "app",
+          template: markup,
+          dependencies: [UserCard],
+        };
+      }
+
+      patchComponentDefinition(App, aot, { name: "app" });
+      const result = await render(App, { childComponents: [UserCard] });
+      expect(result.html).toContain("Jane");
+      expect(result.html).toContain("user-card");
+      expect(result.html).toContain("class=\"user-card\"");
     } finally {
       cleanupWorkspace(workspace);
     }
@@ -85,13 +158,16 @@ function createWorkspace(): Workspace {
     "",
   ].join("\n");
   const appPath = join(appRoot, "src", "app.ts");
+  const appTemplatePath = join(appRoot, "src", "app.html");
   writeFileSync(appPath, appCode, "utf-8");
-  writeFileSync(join(appRoot, "src", "app.html"), "<user-card name.bind=\"name\"></user-card>\n", "utf-8");
+  writeFileSync(appTemplatePath, "<user-card name.bind=\"name\"></user-card>\n", "utf-8");
   writeFileSync(join(appRoot, "src", "main.ts"), "export const marker = 0;\n", "utf-8");
 
   writeThirdPartyPackage(packageRoot);
 
-  return { root, appRoot, appCode, appPath };
+  const tsconfigPath = resolvePath(appRoot, "tsconfig.json");
+
+  return { root, appRoot, appCode, appPath, appTemplatePath, packageRoot, tsconfigPath };
 }
 
 function cleanupWorkspace(workspace: Workspace): void {
@@ -136,9 +212,34 @@ function writeThirdPartyPackage(packageRoot: string): void {
   writeFileSync(join(packageRoot, "package.json"), JSON.stringify(pkg, null, 2), "utf-8");
 
   const source = [
-    'import { customElement, bindable } from "aurelia";',
+    "function customElement(def) {",
+    "  return function(target) {",
+    "    const existing = target.$au ?? {};",
+    "    const name = typeof def === \"string\" ? def : def.name;",
+    "    const template = typeof def === \"string\" ? existing.template : def.template;",
+    "    target.$au = {",
+    "      ...existing,",
+    "      type: \"custom-element\",",
+    "      name,",
+    "      template,",
+    "      bindables: existing.bindables ?? {},",
+    "    };",
+    "  };",
+    "}",
     "",
-    '@customElement("user-card")',
+    "function bindable() {",
+    "  return function(target, key) {",
+    "    const ctor = target.constructor;",
+    "    const existing = ctor.$au ?? {};",
+    "    const bindables = { ...(existing.bindables ?? {}), [key]: { mode: 2 } };",
+    "    ctor.$au = { ...existing, bindables };",
+    "  };",
+    "}",
+    "",
+    "@customElement({",
+    "  name: \"user-card\",",
+    "  template: \"<span class=\\\"user-card\\\">${name}</span>\",",
+    "})",
     "export class UserCard {",
     "  @bindable name = \"\";",
     "}",

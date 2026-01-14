@@ -39,6 +39,15 @@
       "name": "load"
     },
     {
+      "bindables": [
+        { "attribute": "fn", "name": "fn", "primary": true }
+      ],
+      "id": "sym:c2576bd98a940d28f929577553424a3ea568761926ac2174e044301c1920be6e",
+      "kind": "custom-attribute",
+      "name": "outclick",
+      "source": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts"
+    },
+    {
       "aliases": [ "hide" ],
       "bindables": [
         { "attribute": "value", "mode": "toView", "name": "value", "primary": true }

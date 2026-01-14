@@ -1,1 +1,43 @@
-{"template-imports-third-party-my-app":{"definition":{"instructions":[[{"instructions":[{"exprId":"expr_cee6608011046000","mode":2,"to":"name","type":12},{"exprId":"expr_1317360015e78a00","mode":2,"to":"avatar","type":12}],"res":"user-card","type":0},{"instructions":[{"exprId":"expr_2dd8e60000b71300","mode":2,"to":"color","type":12}],"res":"highlight","type":1}]],"name":"template-imports-third-party-my-app","nestedTemplates":[],"targetCount":1},"expressions":[{"ast":{"$kind":"AccessScope","ancestor":0,"name":"userName"},"id":"expr_cee6608011046000"},{"ast":{"$kind":"AccessScope","ancestor":0,"name":"avatarUrl"},"id":"expr_1317360015e78a00"},{"ast":{"$kind":"AccessScope","ancestor":0,"name":"accent"},"id":"expr_2dd8e60000b71300"}],"template":"\n\n<div class=\"app\">\n  <!--au--><user-card></user-card>\n</div>\n"}}
+{
+  "template-imports-third-party-my-app": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_cee6608011046000", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_1317360015e78a00", "mode": 2, "to": "avatar", "type": 12 }
+            ],
+            "res": "user-card",
+            "type": 0
+          },
+          {
+            "instructions": [
+              { "exprId": "expr_2dd8e60000b71300", "mode": 2, "to": "color", "type": 12 }
+            ],
+            "res": "highlight",
+            "type": 1
+          }
+        ]
+      ],
+      "name": "template-imports-third-party-my-app",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
+        "id": "expr_cee6608011046000"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "avatarUrl" },
+        "id": "expr_1317360015e78a00"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "accent" },
+        "id": "expr_2dd8e60000b71300"
+      }
+    ],
+    "template": "\n\n<div class=\"app\">\n  <!--au--><user-card></user-card>\n</div>\n"
+  }
+}

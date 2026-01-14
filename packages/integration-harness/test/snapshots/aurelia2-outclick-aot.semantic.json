@@ -94,14 +94,6 @@
       "trigger": { "capture": false, "kind": "listener", "name": "trigger" },
       "two-way": { "kind": "property", "mode": "twoWay", "name": "two-way" }
     },
-    "confidence": "partial",
-    "gaps": [
-      {
-        "kind": "conditional-registration",
-        "message": "registration guarded by \"__SSR__\": Cannot statically determine whether this registration executes. Consider hoisting register() or providing explicit AOT/SSR configuration.",
-        "resource": "/src/entry.ts"
-      }
-    ],
     "resources": {
       "attributes": {
         "case": {
@@ -243,6 +235,22 @@
           "noMultiBindings": false,
           "package": "@aurelia/router",
           "primary": "route"
+        },
+        "outclick": {
+          "bindables": {
+            "fn": {
+              "attribute": "fn",
+              "name": "fn",
+              "primary": true,
+              "type": { "kind": "ts", "name": "(event?: any) => string" }
+            }
+          },
+          "className": "Outclick",
+          "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
+          "kind": "attribute",
+          "name": "outclick",
+          "noMultiBindings": false,
+          "primary": "fn"
         },
         "pending": {
           "bindables": {},
@@ -660,17 +668,6 @@
           "name": "au-viewport",
           "package": "@aurelia/router",
           "processContent": false
-        },
-        "guarded-el": {
-          "bindables": {},
-          "boundary": true,
-          "capture": false,
-          "className": "GuardedElement",
-          "containerless": false,
-          "file": "/src/entry.ts",
-          "kind": "element",
-          "name": "guarded-el",
-          "processContent": false
         }
       },
       "valueConverters": {
@@ -683,14 +680,6 @@
       }
     }
   },
-  "confidence": "partial",
-  "gaps": [
-    {
-      "kind": "conditional-registration",
-      "message": "registration guarded by \"__SSR__\": Cannot statically determine whether this registration executes. Consider hoisting register() or providing explicit AOT/SSR configuration.",
-      "resource": "/src/entry.ts"
-    }
-  ],
   "graph": {
     "root": "root",
     "scopes": {
@@ -715,6 +704,22 @@
               "name": "focus",
               "noMultiBindings": false,
               "primary": "value"
+            },
+            "outclick": {
+              "bindables": {
+                "fn": {
+                  "attribute": "fn",
+                  "name": "fn",
+                  "primary": true,
+                  "type": { "kind": "ts", "name": "(event?: any) => string" }
+                }
+              },
+              "className": "Outclick",
+              "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
+              "kind": "attribute",
+              "name": "outclick",
+              "noMultiBindings": false,
+              "primary": "fn"
             },
             "show": {
               "aliases": [ "hide" ],
@@ -1001,17 +1006,6 @@
               "kind": "element",
               "name": "au-slot",
               "processContent": false
-            },
-            "guarded-el": {
-              "bindables": {},
-              "boundary": true,
-              "capture": false,
-              "className": "GuardedElement",
-              "containerless": false,
-              "file": "/src/entry.ts",
-              "kind": "element",
-              "name": "guarded-el",
-              "processContent": false
             }
           },
           "valueConverters": {
@@ -1222,6 +1216,65 @@
     },
     {
       "data": {
+        "aliases": [],
+        "bindables": {
+          "fn": {
+            "attribute": {
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 253 },
+              "origin": "source",
+              "value": "fn"
+            },
+            "mode": {
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 253 },
+              "origin": "source"
+            },
+            "primary": {
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 253 },
+              "origin": "source",
+              "value": true
+            },
+            "property": {
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 253 },
+              "origin": "source",
+              "value": "fn"
+            },
+            "type": {
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 253 },
+              "origin": "source",
+              "value": "(event?: any) => string"
+            }
+          }
+        },
+        "className": {
+          "location": { "end": 710, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "origin": "source",
+          "value": "Outclick"
+        },
+        "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
+        "kind": "custom-attribute",
+        "name": {
+          "location": { "end": 710, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "origin": "source",
+          "value": "outclick"
+        },
+        "noMultiBindings": {
+          "location": { "end": 710, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "origin": "source",
+          "value": false
+        },
+        "primary": {
+          "location": { "end": 710, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "origin": "source",
+          "value": "fn"
+        }
+      },
+      "id": "sym:c2576bd98a940d28f929577553424a3ea568761926ac2174e044301c1920be6e",
+      "kind": "custom-attribute",
+      "name": "outclick",
+      "source": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts"
+    },
+    {
+      "data": {
         "aliases": [
           { "origin": "builtin", "value": "hide" }
         ],
@@ -1390,53 +1443,6 @@
       "id": "sym:b3998e6001ce1c8747e672714aabba60d2ce4efc5596c8898e793d1df492e1bb",
       "kind": "custom-element",
       "name": "au-viewport"
-    },
-    {
-      "data": {
-        "aliases": [],
-        "bindables": {},
-        "boundary": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source",
-          "value": true
-        },
-        "capture": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source",
-          "value": false
-        },
-        "className": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source",
-          "value": "GuardedElement"
-        },
-        "containerless": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source",
-          "value": false
-        },
-        "dependencies": [],
-        "file": "/src/entry.ts",
-        "kind": "custom-element",
-        "name": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source",
-          "value": "guarded-el"
-        },
-        "processContent": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source",
-          "value": false
-        },
-        "shadowOptions": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source"
-        }
-      },
-      "id": "sym:00cd9fa8b7e4267ffa0ed0b9a0123610732c71905518efa52cf0a96d91bd9fd3",
-      "kind": "custom-element",
-      "name": "guarded-el",
-      "source": "/src/entry.ts"
     },
     {
       "data": {

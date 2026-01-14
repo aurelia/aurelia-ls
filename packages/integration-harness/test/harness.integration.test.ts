@@ -78,9 +78,52 @@ const AURELIA_TABLE_PACKAGE = path.resolve(
   "packages",
   "aurelia2-table",
 );
+const AURELIA_OUTCLICK_PACKAGE = path.resolve(
+  REPO_ROOT,
+  "aurelia2-plugins",
+  "packages",
+  "aurelia2-outclick",
+);
+const AURELIA_FORMS_PACKAGE = path.resolve(
+  REPO_ROOT,
+  "aurelia2-plugins",
+  "packages",
+  "aurelia2-forms",
+);
+const AURELIA_NOTIFICATION_PACKAGE = path.resolve(
+  REPO_ROOT,
+  "aurelia2-plugins",
+  "packages",
+  "aurelia2-notification",
+);
+const AURELIA_GOOGLE_MAPS_PACKAGE = path.resolve(
+  REPO_ROOT,
+  "aurelia2-plugins",
+  "packages",
+  "aurelia2-google-maps",
+);
 const HAS_AURELIA_TABLE = fs.existsSync(
   path.join(AURELIA_TABLE_PACKAGE, "package.json"),
 );
+const HAS_AURELIA_OUTCLICK = fs.existsSync(
+  path.join(AURELIA_OUTCLICK_PACKAGE, "package.json"),
+);
+const HAS_AURELIA_FORMS = fs.existsSync(
+  path.join(AURELIA_FORMS_PACKAGE, "package.json"),
+);
+const HAS_AURELIA_NOTIFICATION = fs.existsSync(
+  path.join(AURELIA_NOTIFICATION_PACKAGE, "package.json"),
+);
+const HAS_AURELIA_GOOGLE_MAPS = fs.existsSync(
+  path.join(AURELIA_GOOGLE_MAPS_PACKAGE, "package.json"),
+);
+const IS_CI = process.env.CI === "1" || process.env.CI === "true";
+if (IS_CI && !HAS_AURELIA_TABLE) {
+  throw new Error(
+    "[integration-harness] aurelia2-table package missing. " +
+    "CI requires the aurelia2-plugins submodule to run third-party SSR scenarios.",
+  );
+}
 const FIXTURE_MULTI_CLASS = path.resolve(
   __dirname,
   "..",
@@ -789,6 +832,206 @@ if (HAS_AURELIA_TABLE) {
           displayPages: ["1", "2", "3"],
         },
         htmlLinks: ["1", "2", "3"],
+      },
+    },
+  });
+}
+
+if (HAS_AURELIA_OUTCLICK) {
+  SCENARIOS.push({
+    id: "aurelia2-outclick-aot",
+    title: "aurelia2-outclick attribute compiles in root scope",
+    tags: ["external", "aot", "attribute", "third-party"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    externalPackages: [
+      {
+        path: AURELIA_OUTCLICK_PACKAGE,
+        preferSource: true,
+      },
+    ],
+    externalResourcePolicy: "root-scope",
+    resolution: {
+      packageRoots: {
+        "aurelia2-outclick": AURELIA_OUTCLICK_PACKAGE,
+      },
+    },
+    compile: [
+      {
+        id: "aurelia2-outclick-aot",
+        templatePath: "/src/aurelia2-outclick.html",
+        markup: "<div outclick.call=\"handle($event)\"></div>",
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["outclick"],
+      },
+      bindables: [
+        { resource: "outclick", name: "fn", primary: true },
+      ],
+      aot: {
+        instructions: [{ type: "hydrateAttribute", res: "outclick" }],
+      },
+    },
+  });
+}
+
+if (HAS_AURELIA_FORMS) {
+  SCENARIOS.push({
+    id: "aurelia2-forms-aot",
+    title: "aurelia2-forms elements and attributes compile in root scope",
+    tags: ["external", "aot", "element", "attribute", "third-party"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    externalPackages: [
+      {
+        path: AURELIA_FORMS_PACKAGE,
+        preferSource: true,
+      },
+    ],
+    externalResourcePolicy: "root-scope",
+    resolution: {
+      packageRoots: {
+        "aurelia2-forms": AURELIA_FORMS_PACKAGE,
+      },
+    },
+    compile: [
+      {
+        id: "aurelia2-forms-aot",
+        templatePath: "/src/aurelia2-forms.html",
+        markup: [
+          "<au-form form.bind=\"form\">",
+          "  <input au-field=\"email\">",
+          "</au-form>",
+        ].join("\n"),
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["au-form", "au-field"],
+      },
+      aot: {
+        instructions: [
+          { type: "hydrateElement", res: "au-form" },
+          { type: "hydrateAttribute", res: "au-field" },
+        ],
+      },
+    },
+  });
+}
+
+if (HAS_AURELIA_NOTIFICATION) {
+  SCENARIOS.push({
+    id: "aurelia2-notification-aot",
+    title: "aurelia2-notification host compiles in root scope",
+    tags: ["external", "aot", "element", "third-party"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    externalPackages: [
+      {
+        path: AURELIA_NOTIFICATION_PACKAGE,
+        preferSource: true,
+      },
+    ],
+    externalResourcePolicy: "root-scope",
+    resolution: {
+      packageRoots: {
+        "aurelia2-notification": AURELIA_NOTIFICATION_PACKAGE,
+      },
+    },
+    compile: [
+      {
+        id: "aurelia2-notification-aot",
+        templatePath: "/src/aurelia2-notification.html",
+        markup: [
+          "<au-notification-host",
+          "  position.bind=\"position\"",
+          "  host-class=\"host\"",
+          "  container-class=\"container\">",
+          "</au-notification-host>",
+        ].join("\n"),
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["au-notification-host"],
+      },
+      bindables: [
+        { resource: "au-notification-host", name: "position" },
+        { resource: "au-notification-host", name: "hostClass" },
+        { resource: "au-notification-host", name: "containerClass" },
+      ],
+      aot: {
+        instructions: [{ type: "hydrateElement", res: "au-notification-host" }],
+      },
+    },
+  });
+}
+
+if (HAS_AURELIA_GOOGLE_MAPS) {
+  SCENARIOS.push({
+    id: "aurelia2-google-maps-aot",
+    title: "aurelia2-google-maps element compiles with key bindables",
+    tags: ["external", "aot", "element", "third-party"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    externalPackages: [
+      {
+        path: AURELIA_GOOGLE_MAPS_PACKAGE,
+        preferSource: true,
+      },
+    ],
+    externalResourcePolicy: "root-scope",
+    resolution: {
+      packageRoots: {
+        "aurelia2-google-maps": AURELIA_GOOGLE_MAPS_PACKAGE,
+      },
+    },
+    compile: [
+      {
+        id: "aurelia2-google-maps-aot",
+        templatePath: "/src/aurelia2-google-maps.html",
+        markup: [
+          "<google-map",
+          "  latitude.bind=\"lat\"",
+          "  longitude.bind=\"lng\"",
+          "  zoom.bind=\"zoom\">",
+          "</google-map>",
+        ].join("\n"),
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["google-map"],
+      },
+      bindables: [
+        { resource: "google-map", name: "latitude" },
+        { resource: "google-map", name: "longitude" },
+        { resource: "google-map", name: "zoom" },
+      ],
+      aot: {
+        instructions: [{ type: "hydrateElement", res: "google-map" }],
       },
     },
   });

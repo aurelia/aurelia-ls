@@ -1,1 +1,224 @@
-{"symbols":[{"id":"sym:6c3d08f80976044bea423de0dc25ff48e143432497fcb0eab37aabc4e87f6d4c","kind":"binding-behavior","name":"attr","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts"},{"id":"sym:27a1ca5b9591fe73571676cb5b9de6b4a7bc528d14428dd4965544121996b5b2","kind":"binding-behavior","name":"debounce","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts"},{"id":"sym:3743c2a2c4272b28530c528ca79a85b3904d6e0a1916f3a6fa95214176194dce","kind":"binding-behavior","name":"fromView"},{"id":"sym:de6493a91910f48d85682954e9eee0de01b7da9342af055369af368abb71b077","kind":"binding-behavior","name":"fromview","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"},{"id":"sym:07b86e4d397b03adfac781fc7d9d31de22cac391d475b378130f87e1f5f9b840","kind":"binding-behavior","name":"oneTime"},{"id":"sym:b6b32a538fd513861acc555ca0c9b0ccd8d66163d8f691b48d1b12c030c6f4c0","kind":"binding-behavior","name":"onetime","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"},{"id":"sym:9c8a00f7f1063e7eab07405fe4506a301c581f1a95a64411e203c45708a09116","kind":"binding-behavior","name":"self","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts"},{"id":"sym:33f93446ab33468d17a77b143b2226209ee3788fc25ba74889743db2286e3750","kind":"binding-behavior","name":"signal","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts"},{"id":"sym:49c40bb778e872d6e397c5d581b414667dd017a47ab2332be38e46d3a907175f","kind":"binding-behavior","name":"throttle","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts"},{"id":"sym:474b44c55fa7519f95eb6153807557c2ff2f5496dcd7e8398c2e6a3677e28d9c","kind":"binding-behavior","name":"toView"},{"id":"sym:aaef51fb84995cb97b1aef1749cbecdcd1bf9b52f3976686bb605eeab0368c4b","kind":"binding-behavior","name":"toview","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"},{"id":"sym:3fe8afab67220e522132b10561ed1ad9af956ed9b6d9b882434e5306244cb9da","kind":"binding-behavior","name":"twoWay"},{"id":"sym:59e06474122eb2dbee420957d36ca35862ac6c5dedbc6d3f36b412619b1326cb","kind":"binding-behavior","name":"twoway","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"},{"id":"sym:955beefbe8ec3f23bfec6a3478b177f237e964ec54b594cb8c4c7545a3c79d60","kind":"binding-behavior","name":"updateTrigger"},{"id":"sym:8acbec4fa5ddaf769ec368513c34c408c705b4f887369a0ede2e8e47992017ad","kind":"binding-behavior","name":"updatetrigger","source":"aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts"},{"bindables":[{"attribute":"value","name":"value","primary":true}],"id":"sym:e9f09469e0e7d6ae951dc0f1c2676cb9880b5771538b1f7d172e3cd18ccd6e47","kind":"custom-attribute","name":"focus","source":"aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts"},{"bindables":[{"attribute":"color","name":"color","primary":true}],"id":"sym:73a7fd916097b7c10c734669b55bde14167c50dc20686bed5c08ee260ad57305","kind":"custom-attribute","name":"highlight","source":"packages/resolution/test/npm/fixtures/multi-class/src/index.ts"},{"bindables":[{"attribute":"value","mode":"toView","name":"value","primary":true}],"id":"sym:35b74b456b834c0430d4550fd9bf8b20de6ec949fd48e0d5277dc6d2e8dabd7c","kind":"custom-attribute","name":"href"},{"bindables":[{"attribute":"active","mode":"fromView","name":"active"},{"attribute":"attribute","mode":"toView","name":"attribute"},{"attribute":"context","mode":"toView","name":"context"},{"attribute":"params","mode":"toView","name":"params"},{"attribute":"route","mode":"toView","name":"route","primary":true}],"id":"sym:a6f1e666798ec7aa3510c9a1ab0d28961eb749b052cae4edbcb8d0cede21fd22","kind":"custom-attribute","name":"load"},{"aliases":["hide"],"bindables":[{"attribute":"value","name":"value","primary":true}],"id":"sym:fa9bf5a86f3da366ef00fb29f3193c649b3560dccbe8917f71ed0040c0e05594","kind":"custom-attribute","name":"show","source":"aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts"},{"bindables":[{"attribute":"component","name":"component"},{"attribute":"composing","name":"composing"},{"attribute":"composition","name":"composition"},{"attribute":"model","name":"model"},{"attribute":"scopeBehavior","name":"scopeBehavior"},{"attribute":"tag","name":"tag"},{"attribute":"template","name":"template"}],"id":"sym:7f875c1c7f40d5fb9886ebc7134698998e267586550fa4f2acfebab73c576b72","kind":"custom-element","name":"au-compose","source":"aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts"},{"bindables":[{"attribute":"expose","name":"expose"},{"attribute":"slotchange","name":"slotchange"}],"id":"sym:53d9a2d0fd9ecb6f901020ba1e29795d038e9f5e4e7a7f5ba59611d2ef84bf8b","kind":"custom-element","name":"au-slot","source":"aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts"},{"bindables":[{"attribute":"default","mode":"toView","name":"default"},{"attribute":"fallback","mode":"toView","name":"fallback"},{"attribute":"name","mode":"toView","name":"name"},{"attribute":"usedBy","mode":"toView","name":"usedBy"}],"id":"sym:b3998e6001ce1c8747e672714aabba60d2ce4efc5596c8898e793d1df492e1bb","kind":"custom-element","name":"au-viewport"},{"id":"sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549","kind":"custom-element","name":"my-app","source":"packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts"},{"bindables":[{"attribute":"avatar","name":"avatar"},{"attribute":"name","name":"name"}],"id":"sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26","kind":"custom-element","name":"user-card","source":"packages/resolution/test/npm/fixtures/multi-class/src/index.ts"},{"bindables":[{"attribute":"fallThrough","mode":"default","name":"fallThrough"},{"attribute":"value","mode":"default","name":"value","primary":true}],"id":"sym:b23222d983b6aea7272d319410b9691d63b8f0c8e0372084f272c49877382b2b","kind":"template-controller","name":"case"},{"bindables":[{"attribute":"value","name":"value"}],"id":"sym:aeb6eeb2d3664edc5e90a5d6c80358bf8fbe5f8dbef60e79d1b132fdc6d201b5","kind":"template-controller","name":"catch","source":"aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"},{"bindables":[{"attribute":"fallThrough","mode":"default","name":"fallThrough"}],"id":"sym:e56a18f663a89928a5625a1cedb2512c2164b3bb6b2b22e887767319925f6d9c","kind":"template-controller","name":"default-case"},{"id":"sym:0be3e5ac7eabeee3737873bb6dee1e72b198ed3e5a54df5e3f4d59c042e916b5","kind":"template-controller","name":"else","source":"aurelia/packages/runtime-html/src/resources/template-controllers/if.ts"},{"bindables":[{"attribute":"cache","name":"cache"},{"attribute":"value","name":"value"}],"id":"sym:a20c48a4e07438ad6f8adbeccc395ee6230c787cdc21011a9c4e1153afec1898","kind":"template-controller","name":"if","source":"aurelia/packages/runtime-html/src/resources/template-controllers/if.ts"},{"bindables":[{"attribute":"value","name":"value"}],"id":"sym:1bb1e540636c7e22fd2a650f9a4f5355285833216bc4ff23389c068f138aa38e","kind":"template-controller","name":"pending","source":"aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"},{"bindables":[{"attribute":"activated","name":"activated"},{"attribute":"activating","name":"activating"},{"attribute":"callbackContext","name":"callbackContext"},{"attribute":"deactivated","name":"deactivated"},{"attribute":"deactivating","name":"deactivating"},{"attribute":"position","name":"position"},{"attribute":"renderContext","name":"renderContext"},{"attribute":"strict","name":"strict"},{"attribute":"target","name":"target"}],"id":"sym:befdc1523f9e0029697a37f928577b06cf27be174d9d72e1bb6cd7df920b79fb","kind":"template-controller","name":"portal","source":"aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts"},{"bindables":[{"attribute":"value","name":"value"}],"id":"sym:7ffa45d035c7e6f03300e56c1ea8bcc0a6cb67deae12585b7688dd287432522f","kind":"template-controller","name":"promise","source":"aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"},{"bindables":[{"attribute":"items","name":"items"}],"id":"sym:57dd9812d05849b39d023767b948e1031553dec9428d48166c18fe9028c8cad0","kind":"template-controller","name":"repeat","source":"aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts"},{"bindables":[{"attribute":"value","name":"value"}],"id":"sym:7d2a7d2b8ba3637c88a537a913f2cfa258e22abf957e6bb5a80731d405bf4d30","kind":"template-controller","name":"switch","source":"aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts"},{"bindables":[{"attribute":"value","name":"value"}],"id":"sym:d13bd366e0b2cac66113cecbea55d948657ff673b54bc447acdd17e71eb5e45d","kind":"template-controller","name":"then","source":"aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"},{"bindables":[{"attribute":"value","name":"value"}],"id":"sym:32d632be4399a321aa93d1562efea3e2576d89e23b59f09b1215a0e486b415da","kind":"template-controller","name":"with","source":"aurelia/packages/runtime-html/src/resources/template-controllers/with.ts"},{"id":"sym:5a331384e1bf194d875314915ad92fa54276df9145d7f7df24d2a0946d44922a","kind":"value-converter","name":"sanitize","source":"aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts"}],"version":"aurelia-api-snapshot@1"}
+{
+  "symbols": [
+    { "id": "sym:6c3d08f80976044bea423de0dc25ff48e143432497fcb0eab37aabc4e87f6d4c", "kind": "binding-behavior", "name": "attr", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts" },
+    { "id": "sym:27a1ca5b9591fe73571676cb5b9de6b4a7bc528d14428dd4965544121996b5b2", "kind": "binding-behavior", "name": "debounce", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts" },
+    { "id": "sym:3743c2a2c4272b28530c528ca79a85b3904d6e0a1916f3a6fa95214176194dce", "kind": "binding-behavior", "name": "fromView" },
+    { "id": "sym:de6493a91910f48d85682954e9eee0de01b7da9342af055369af368abb71b077", "kind": "binding-behavior", "name": "fromview", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts" },
+    { "id": "sym:07b86e4d397b03adfac781fc7d9d31de22cac391d475b378130f87e1f5f9b840", "kind": "binding-behavior", "name": "oneTime" },
+    { "id": "sym:b6b32a538fd513861acc555ca0c9b0ccd8d66163d8f691b48d1b12c030c6f4c0", "kind": "binding-behavior", "name": "onetime", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts" },
+    { "id": "sym:9c8a00f7f1063e7eab07405fe4506a301c581f1a95a64411e203c45708a09116", "kind": "binding-behavior", "name": "self", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts" },
+    { "id": "sym:33f93446ab33468d17a77b143b2226209ee3788fc25ba74889743db2286e3750", "kind": "binding-behavior", "name": "signal", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts" },
+    { "id": "sym:49c40bb778e872d6e397c5d581b414667dd017a47ab2332be38e46d3a907175f", "kind": "binding-behavior", "name": "throttle", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts" },
+    { "id": "sym:474b44c55fa7519f95eb6153807557c2ff2f5496dcd7e8398c2e6a3677e28d9c", "kind": "binding-behavior", "name": "toView" },
+    { "id": "sym:aaef51fb84995cb97b1aef1749cbecdcd1bf9b52f3976686bb605eeab0368c4b", "kind": "binding-behavior", "name": "toview", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts" },
+    { "id": "sym:3fe8afab67220e522132b10561ed1ad9af956ed9b6d9b882434e5306244cb9da", "kind": "binding-behavior", "name": "twoWay" },
+    { "id": "sym:59e06474122eb2dbee420957d36ca35862ac6c5dedbc6d3f36b412619b1326cb", "kind": "binding-behavior", "name": "twoway", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts" },
+    { "id": "sym:955beefbe8ec3f23bfec6a3478b177f237e964ec54b594cb8c4c7545a3c79d60", "kind": "binding-behavior", "name": "updateTrigger" },
+    { "id": "sym:8acbec4fa5ddaf769ec368513c34c408c705b4f887369a0ede2e8e47992017ad", "kind": "binding-behavior", "name": "updatetrigger", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts" },
+    {
+      "bindables": [
+        { "attribute": "value", "name": "value", "primary": true }
+      ],
+      "id": "sym:e9f09469e0e7d6ae951dc0f1c2676cb9880b5771538b1f7d172e3cd18ccd6e47",
+      "kind": "custom-attribute",
+      "name": "focus",
+      "source": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "color", "name": "color", "primary": true }
+      ],
+      "id": "sym:73a7fd916097b7c10c734669b55bde14167c50dc20686bed5c08ee260ad57305",
+      "kind": "custom-attribute",
+      "name": "highlight",
+      "source": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
+      ],
+      "id": "sym:35b74b456b834c0430d4550fd9bf8b20de6ec949fd48e0d5277dc6d2e8dabd7c",
+      "kind": "custom-attribute",
+      "name": "href"
+    },
+    {
+      "bindables": [
+        { "attribute": "active", "mode": "fromView", "name": "active" },
+        { "attribute": "attribute", "mode": "toView", "name": "attribute" },
+        { "attribute": "context", "mode": "toView", "name": "context" },
+        { "attribute": "params", "mode": "toView", "name": "params" },
+        { "attribute": "route", "mode": "toView", "name": "route", "primary": true }
+      ],
+      "id": "sym:a6f1e666798ec7aa3510c9a1ab0d28961eb749b052cae4edbcb8d0cede21fd22",
+      "kind": "custom-attribute",
+      "name": "load"
+    },
+    {
+      "aliases": [ "hide" ],
+      "bindables": [
+        { "attribute": "value", "name": "value", "primary": true }
+      ],
+      "id": "sym:fa9bf5a86f3da366ef00fb29f3193c649b3560dccbe8917f71ed0040c0e05594",
+      "kind": "custom-attribute",
+      "name": "show",
+      "source": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "component", "name": "component" },
+        { "attribute": "composing", "name": "composing" },
+        { "attribute": "composition", "name": "composition" },
+        { "attribute": "model", "name": "model" },
+        { "attribute": "scopeBehavior", "name": "scopeBehavior" },
+        { "attribute": "tag", "name": "tag" },
+        { "attribute": "template", "name": "template" }
+      ],
+      "id": "sym:7f875c1c7f40d5fb9886ebc7134698998e267586550fa4f2acfebab73c576b72",
+      "kind": "custom-element",
+      "name": "au-compose",
+      "source": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "expose", "name": "expose" },
+        { "attribute": "slotchange", "name": "slotchange" }
+      ],
+      "id": "sym:53d9a2d0fd9ecb6f901020ba1e29795d038e9f5e4e7a7f5ba59611d2ef84bf8b",
+      "kind": "custom-element",
+      "name": "au-slot",
+      "source": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "default", "mode": "toView", "name": "default" },
+        { "attribute": "fallback", "mode": "toView", "name": "fallback" },
+        { "attribute": "name", "mode": "toView", "name": "name" },
+        { "attribute": "usedBy", "mode": "toView", "name": "usedBy" }
+      ],
+      "id": "sym:b3998e6001ce1c8747e672714aabba60d2ce4efc5596c8898e793d1df492e1bb",
+      "kind": "custom-element",
+      "name": "au-viewport"
+    },
+    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts" },
+    {
+      "bindables": [
+        { "attribute": "avatar", "name": "avatar" },
+        { "attribute": "name", "name": "name" }
+      ],
+      "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",
+      "kind": "custom-element",
+      "name": "user-card",
+      "source": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "fallThrough", "mode": "default", "name": "fallThrough" },
+        { "attribute": "value", "mode": "default", "name": "value", "primary": true }
+      ],
+      "id": "sym:b23222d983b6aea7272d319410b9691d63b8f0c8e0372084f272c49877382b2b",
+      "kind": "template-controller",
+      "name": "case"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "name": "value" }
+      ],
+      "id": "sym:aeb6eeb2d3664edc5e90a5d6c80358bf8fbe5f8dbef60e79d1b132fdc6d201b5",
+      "kind": "template-controller",
+      "name": "catch",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "fallThrough", "mode": "default", "name": "fallThrough" }
+      ],
+      "id": "sym:e56a18f663a89928a5625a1cedb2512c2164b3bb6b2b22e887767319925f6d9c",
+      "kind": "template-controller",
+      "name": "default-case"
+    },
+    { "id": "sym:0be3e5ac7eabeee3737873bb6dee1e72b198ed3e5a54df5e3f4d59c042e916b5", "kind": "template-controller", "name": "else", "source": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts" },
+    {
+      "bindables": [
+        { "attribute": "cache", "name": "cache" },
+        { "attribute": "value", "name": "value" }
+      ],
+      "id": "sym:a20c48a4e07438ad6f8adbeccc395ee6230c787cdc21011a9c4e1153afec1898",
+      "kind": "template-controller",
+      "name": "if",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "name": "value" }
+      ],
+      "id": "sym:1bb1e540636c7e22fd2a650f9a4f5355285833216bc4ff23389c068f138aa38e",
+      "kind": "template-controller",
+      "name": "pending",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "activated", "name": "activated" },
+        { "attribute": "activating", "name": "activating" },
+        { "attribute": "callbackContext", "name": "callbackContext" },
+        { "attribute": "deactivated", "name": "deactivated" },
+        { "attribute": "deactivating", "name": "deactivating" },
+        { "attribute": "position", "name": "position" },
+        { "attribute": "renderContext", "name": "renderContext" },
+        { "attribute": "strict", "name": "strict" },
+        { "attribute": "target", "name": "target" }
+      ],
+      "id": "sym:befdc1523f9e0029697a37f928577b06cf27be174d9d72e1bb6cd7df920b79fb",
+      "kind": "template-controller",
+      "name": "portal",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "name": "value" }
+      ],
+      "id": "sym:7ffa45d035c7e6f03300e56c1ea8bcc0a6cb67deae12585b7688dd287432522f",
+      "kind": "template-controller",
+      "name": "promise",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "items", "name": "items" }
+      ],
+      "id": "sym:57dd9812d05849b39d023767b948e1031553dec9428d48166c18fe9028c8cad0",
+      "kind": "template-controller",
+      "name": "repeat",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "name": "value" }
+      ],
+      "id": "sym:7d2a7d2b8ba3637c88a537a913f2cfa258e22abf957e6bb5a80731d405bf4d30",
+      "kind": "template-controller",
+      "name": "switch",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "name": "value" }
+      ],
+      "id": "sym:d13bd366e0b2cac66113cecbea55d948657ff673b54bc447acdd17e71eb5e45d",
+      "kind": "template-controller",
+      "name": "then",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "name": "value" }
+      ],
+      "id": "sym:32d632be4399a321aa93d1562efea3e2576d89e23b59f09b1215a0e486b415da",
+      "kind": "template-controller",
+      "name": "with",
+      "source": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts"
+    },
+    { "id": "sym:5a331384e1bf194d875314915ad92fa54276df9145d7f7df24d2a0946d44922a", "kind": "value-converter", "name": "sanitize", "source": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts" }
+  ],
+  "version": "aurelia-api-snapshot@1"
+}
