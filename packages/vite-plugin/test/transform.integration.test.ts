@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
-import type { ResolvedConfig } from "vite";
+import { build, type InlineConfig, type ResolvedConfig } from "vite";
 import { aurelia } from "../src/plugin.js";
 import type { AureliaPluginOptions } from "../src/types.js";
 import { createResolutionContext } from "../src/resolution.js";
@@ -27,6 +27,12 @@ type Workspace = {
 };
 
 describe("vite plugin transform integration", () => {
+  const thirdPartyBinding = {
+    resource: "user-card",
+    bindable: "name",
+    mode: 2,
+  };
+
   it("injects AOT output using third-party resources", async () => {
     const workspace = createWorkspace();
     try {
@@ -122,6 +128,42 @@ describe("vite plugin transform integration", () => {
       cleanupWorkspace(workspace);
     }
   });
+
+  it("builds client bundle output that includes third-party instructions", async () => {
+    const workspace = createWorkspace();
+    try {
+      const outDir = await runViteBuild(workspace, "client");
+      const output = readBuildOutput(outDir);
+      expect(hasThirdPartyBinding(output, thirdPartyBinding)).toBe(true);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("builds SSR bundle output that includes third-party instructions", async () => {
+    const workspace = createWorkspace();
+    try {
+      const outDir = await runViteBuild(workspace, "ssr");
+      const output = readBuildOutput(outDir);
+      expect(hasThirdPartyBinding(output, thirdPartyBinding)).toBe(true);
+      expect(output).toMatch(/__app/);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("builds client bundle without third-party config and omits bindable metadata", async () => {
+    const workspace = createWorkspace();
+    try {
+      const outDir = await runViteBuild(workspace, "client", {
+        thirdParty: { scan: false, packages: [] },
+      });
+      const output = readBuildOutput(outDir);
+      expect(hasThirdPartyBinding(output, thirdPartyBinding)).toBe(false);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
 });
 
 function createResolvedConfig(root: string): ResolvedConfig {
@@ -161,7 +203,7 @@ function createWorkspace(): Workspace {
   const appTemplatePath = join(appRoot, "src", "app.html");
   writeFileSync(appPath, appCode, "utf-8");
   writeFileSync(appTemplatePath, "<user-card name.bind=\"name\"></user-card>\n", "utf-8");
-  writeFileSync(join(appRoot, "src", "main.ts"), "export const marker = 0;\n", "utf-8");
+  writeViteEntrypoints(appRoot);
 
   writeThirdPartyPackage(packageRoot);
 
@@ -246,4 +288,142 @@ function writeThirdPartyPackage(packageRoot: string): void {
     "",
   ].join("\n");
   writeFileSync(join(packageRoot, "src", "index.ts"), source, "utf-8");
+}
+
+async function runViteBuild(
+  workspace: Workspace,
+  target: "client" | "ssr",
+  overrides?: Partial<AureliaPluginOptions>,
+): Promise<string> {
+  const baseOptions: AureliaPluginOptions = {
+    entry: "./src/app.html",
+    tsconfig: "tsconfig.json",
+    ssr: {
+      enabled: true,
+      ssrEntry: "./src/entry-server.ts",
+    },
+    thirdParty: {
+      scan: false,
+      packages: [{ path: "../packages/user-card" }],
+    },
+  };
+  const options: AureliaPluginOptions = {
+    ...baseOptions,
+    ...overrides,
+    ssr: overrides?.ssr ?? baseOptions.ssr,
+    thirdParty: overrides?.thirdParty ?? baseOptions.thirdParty,
+  };
+
+  const outDir = join(workspace.appRoot, target === "ssr" ? "dist-ssr" : "dist-client");
+  const config: InlineConfig = {
+    root: workspace.appRoot,
+    configFile: false,
+    plugins: aurelia(options),
+    resolve: {
+      alias: {
+        aurelia: join(workspace.appRoot, "src", "aurelia.ts"),
+      },
+    },
+    build: {
+      outDir,
+      emptyOutDir: true,
+      minify: false,
+      ...(target === "ssr"
+        ? { ssr: join(workspace.appRoot, "src", "entry-server.ts") }
+        : {}),
+    },
+    logLevel: "silent",
+  };
+
+  await build(config);
+  return outDir;
+}
+
+function readBuildOutput(outDir: string): string {
+  const files: string[] = [];
+  collectBuildFiles(outDir, files);
+  return files.map((file) => readFileSync(file, "utf-8")).join("\n");
+}
+
+function hasThirdPartyBinding(
+  output: string,
+  binding: { resource: string; bindable: string; mode: number },
+): boolean {
+  const context = findInstructionContext(output, binding.resource);
+  if (!context) return false;
+  const bindablePattern = new RegExp(`to\\s*:\\s*['"]${escapeRegExp(binding.bindable)}['"]`);
+  const modePattern = new RegExp(`mode\\s*:\\s*${binding.mode}`);
+  return bindablePattern.test(context) && modePattern.test(context);
+}
+
+function findInstructionContext(output: string, resource: string): string | null {
+  const resPattern = new RegExp(`res\\s*:\\s*['"]${escapeRegExp(resource)}['"]`);
+  const match = resPattern.exec(output);
+  if (!match) return null;
+  const start = Math.max(0, match.index - 600);
+  const end = Math.min(output.length, match.index + 400);
+  const context = output.slice(start, end);
+  if (!/instructions\s*:\s*\[/.test(context)) return null;
+  return context;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function collectBuildFiles(dir: string, files: string[]): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectBuildFiles(fullPath, files);
+      continue;
+    }
+    if (entry.isFile() && (fullPath.endsWith(".js") || fullPath.endsWith(".mjs") || fullPath.endsWith(".cjs"))) {
+      files.push(fullPath);
+    }
+  }
+}
+
+function writeViteEntrypoints(appRoot: string): void {
+  const indexHtml = [
+    "<!DOCTYPE html>",
+    "<html>",
+    "  <head>",
+    "    <meta charset=\"utf-8\">",
+    "    <title>Vite Aurelia Test</title>",
+    "  </head>",
+    "  <body>",
+    "    <div id=\"app\"></div>",
+    "    <script type=\"module\" src=\"/src/main.ts\"></script>",
+    "  </body>",
+    "</html>",
+    "",
+  ].join("\n");
+  writeFileSync(join(appRoot, "index.html"), indexHtml, "utf-8");
+
+  const mainSource = [
+    "import { App } from \"./app\";",
+    "console.log(App);",
+    "",
+  ].join("\n");
+  writeFileSync(join(appRoot, "src", "main.ts"), mainSource, "utf-8");
+
+  const entryServer = [
+    "import { App } from \"./app\";",
+    "globalThis.__app = App;",
+    "",
+    "export async function render() {",
+    "  return { html: \"\" };",
+    "}",
+    "",
+  ].join("\n");
+  writeFileSync(join(appRoot, "src", "entry-server.ts"), entryServer, "utf-8");
+
+  const aureliaStub = [
+    "export function customElement(_def) {",
+    "  return function() {};",
+    "}",
+    "",
+  ].join("\n");
+  writeFileSync(join(appRoot, "src", "aurelia.ts"), aureliaStub, "utf-8");
 }

@@ -48,6 +48,15 @@ import { loadConfigFile, mergeConfigs, normalizeOptions } from "./defaults.js";
  */
 const VIRTUAL_TEMPLATE_SUFFIX = ".$aurelia-template.js";
 
+function stripQuery(id: string): string {
+  const queryIndex = id.indexOf("?");
+  const hashIndex = id.indexOf("#");
+  if (queryIndex === -1 && hashIndex === -1) return id;
+  if (queryIndex === -1) return id.slice(0, hashIndex);
+  if (hashIndex === -1) return id.slice(0, queryIndex);
+  return id.slice(0, Math.min(queryIndex, hashIndex));
+}
+
 /**
  * Convert compiler's ImportMetaIR to transform's TemplateImport.
  *
@@ -339,18 +348,19 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
      * This prevents vite:build-html from trying to parse template files.
      */
     transform(code, id) {
+      const cleanId = stripQuery(id);
       // Only active in production builds
       if (resolvedConfig.command !== "build") {
         return null;
       }
 
       // Only process TypeScript/JavaScript files
-      if (!id.endsWith(".ts") && !id.endsWith(".tsx") && !id.endsWith(".js") && !id.endsWith(".jsx")) {
+      if (!cleanId.endsWith(".ts") && !cleanId.endsWith(".tsx") && !cleanId.endsWith(".js") && !cleanId.endsWith(".jsx")) {
         return null;
       }
 
       // Skip node_modules
-      if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
+      if (cleanId.includes("/node_modules/") || cleanId.includes("\\node_modules\\")) {
         return null;
       }
 
@@ -389,9 +399,8 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
    */
   const mainPlugin: Plugin = {
     name: "aurelia-ssr",
-
-    // Run after other plugins
-    enforce: "post",
+    // Run early so AOT injection sees TypeScript decorators before esbuild.
+    enforce: "pre",
 
     /**
      * Store resolved config and validate options.
@@ -639,13 +648,14 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
      * now have their $au definitions compiled directly into the source.
      */
     async transform(code, id) {
-      // Only process TypeScript files
-      if (!id.endsWith(".ts") && !id.endsWith(".tsx")) {
+      const cleanId = stripQuery(id);
+      // Only process TypeScript/JavaScript files
+      if (!cleanId.endsWith(".ts") && !cleanId.endsWith(".tsx") && !cleanId.endsWith(".js") && !cleanId.endsWith(".jsx")) {
         return null;
       }
 
       // Skip files that clearly aren't components
-      if (id.includes("/node_modules/") || id.includes("/.vite/")) {
+      if (cleanId.includes("/node_modules/") || cleanId.includes("/.vite/")) {
         return null;
       }
 
@@ -661,12 +671,19 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       }
 
       // Normalize path for lookup
-      const normalizedPath = normalizePathForId(id);
+      const normalizedPath = normalizePathForId(cleanId);
 
       // Find matching template info
-      const templateInfo = resolutionContext.result.templates.find(
+      let templateInfo = resolutionContext.result.templates.find(
         (t) => t.componentPath === normalizedPath,
       );
+      if (!templateInfo && (cleanId.endsWith(".js") || cleanId.endsWith(".jsx"))) {
+        const sourcePath = cleanId.replace(/\.(js|jsx)$/, ".ts");
+        const normalizedSource = normalizePathForId(sourcePath);
+        templateInfo = resolutionContext.result.templates.find(
+          (t) => t.componentPath === normalizedSource,
+        );
+      }
 
       // Get trace for this transform (build trace or undefined for dev)
       const trace = buildTrace?.trace;
