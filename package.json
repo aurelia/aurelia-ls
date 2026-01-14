@@ -42,7 +42,7 @@
     "lint:compiler": "pnpm -w eslint \"packages/compiler/**/*.{ts,tsx,js,mjs,cjs}\"",
     "test": "pnpm -w build && pnpm -w test:vitest",
     "test:watch": "pnpm -w build && vitest",
-    "test:vitest": "cross-env AURELIA_RESOLUTION_STRIP_SOURCED_NODES=1 AURELIA_HARNESS_TRIM=1 vitest run --maxWorkers=8",
+    "test:vitest": "cross-env AURELIA_RESOLUTION_STRIP_SOURCED_NODES=1 AURELIA_HARNESS_TRIM=1 vitest run --maxWorkers=4",
     "test:cov": "pnpm -w build && pnpm -w test:vitest -- --coverage",
     "test:compiler": "pnpm -w build && pnpm -w test:vitest -- packages/compiler",
     "test:compiler:cov": "pnpm -w build && pnpm -w test:vitest -- --coverage packages/compiler",

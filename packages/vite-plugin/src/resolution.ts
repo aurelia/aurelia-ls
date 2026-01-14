@@ -21,6 +21,7 @@ import {
   type CatalogGap,
   type ResourceCollections,
   type ResourceScopeId,
+  type NormalizedPath,
   type CompileTrace,
 } from "@aurelia-ls/compiler";
 import {
@@ -64,6 +65,9 @@ export interface ResolutionContextOptions {
   packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   templateExtensions?: readonly string[];
   styleExtensions?: readonly string[];
+  partialEvaluation?: {
+    failOnFiles?: ReadonlySet<NormalizedPath> | readonly NormalizedPath[];
+  };
 }
 
 /**
@@ -159,6 +163,7 @@ export async function createResolutionContext(
     packageRoots,
     templateExtensions: options?.templateExtensions,
     styleExtensions: options?.styleExtensions,
+    partialEvaluation: options?.partialEvaluation,
   }, resolutionLogger);
 
   const thirdPartyResources = await resolveThirdPartyResources(
@@ -488,12 +493,13 @@ function applyThirdPartyResources(
   opts?: { gaps?: AnalysisGap[]; confidence?: CatalogConfidence; policy?: ThirdPartyPolicy },
 ): ResolutionResult {
   const gapList = opts?.gaps ?? [];
-  const extraCatalogGaps = gapList.map(analysisGapToCatalogGap);
+  const catalogGaps = gapList.filter((gap) => gap.why.kind !== "cache-corrupt");
+  const extraCatalogGaps = catalogGaps.map(analysisGapToCatalogGap);
   const mergedCatalogGaps = [
     ...(result.catalog.gaps ?? []),
     ...extraCatalogGaps,
   ];
-  const mergedConfidence = mergeCatalogConfidence(result.catalog.confidence, gapList, opts?.confidence);
+  const mergedConfidence = mergeCatalogConfidence(result.catalog.confidence, catalogGaps, opts?.confidence);
 
   const diagnostics = gapList.length > 0
     ? [...result.diagnostics, ...gapList.map(analysisGapToDiagnostic)]
@@ -635,7 +641,7 @@ function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
 
 function analysisGapToDiagnostic(gap: AnalysisGap): ResolutionResult["diagnostics"][number] {
   const diagnostic: ResolutionResult["diagnostics"][number] = {
-    code: `gap:${gap.why.kind}`,
+    code: gap.why.kind === "cache-corrupt" ? "cache:corrupt" : `gap:${gap.why.kind}`,
     message: `${gap.what}: ${gap.suggestion}`,
     severity: "warning",
   };
@@ -676,8 +682,9 @@ function logPolicyDiagnostics(
 }
 
 function catalogConfidenceFromAnalysisGaps(gaps: AnalysisGap[]): CatalogConfidence | undefined {
-  if (gaps.length === 0) return undefined;
-  if (gaps.some((gap) => isConservativeGap(gap.why.kind))) {
+  const catalogGaps = gaps.filter((gap) => gap.why.kind !== "cache-corrupt");
+  if (catalogGaps.length === 0) return undefined;
+  if (catalogGaps.some((gap) => isConservativeGap(gap.why.kind))) {
     return "conservative";
   }
   return "partial";
@@ -700,6 +707,7 @@ function isConservativeGap(kind: AnalysisGap["why"]["kind"]): boolean {
     case "no-source":
     case "minified-code":
     case "parse-error":
+    case "analysis-failed":
       return true;
     default:
       return false;

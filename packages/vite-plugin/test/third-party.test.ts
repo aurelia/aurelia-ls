@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import { tmpdir } from "node:os";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
 import type { AureliaPluginOptions, ResolutionContext } from "../src/types.js";
 import { createResolutionContext } from "../src/resolution.js";
 import { loadConfigFile, mergeConfigs, normalizeOptions } from "../src/defaults.js";
@@ -352,6 +353,104 @@ describe("third-party error paths", () => {
     }
   });
 
+  it("emits missing-package-field gaps when name or version is missing", async () => {
+    const workspace = createWorkspace();
+    try {
+      const missingName = createPackageRoot(workspace.root, "missing-name");
+      writeFileSync(
+        join(missingName, "package.json"),
+        JSON.stringify(
+          {
+            version: "1.0.0",
+            exports: "./src/index.ts",
+            dependencies: { aurelia: "^2.0.0" },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      writeResource(missingName, "missing-name");
+
+      const missingNameCtx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: missingName }],
+        },
+      });
+
+      expect(missingNameCtx).not.toBeNull();
+      const missingNameCodes = missingNameCtx!.result.diagnostics.map((d) => d.code);
+      expect(missingNameCodes).toContain("gap:missing-package-field");
+
+      const missingVersion = createPackageRoot(workspace.root, "missing-version");
+      writeFileSync(
+        join(missingVersion, "package.json"),
+        JSON.stringify(
+          {
+            name: "missing-version",
+            exports: "./src/index.ts",
+            dependencies: { aurelia: "^2.0.0" },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      writeResource(missingVersion, "missing-version");
+
+      const missingVersionCtx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: missingVersion }],
+        },
+      });
+
+      expect(missingVersionCtx).not.toBeNull();
+      const missingVersionCodes = missingVersionCtx!.result.diagnostics.map((d) => d.code);
+      expect(missingVersionCodes).toContain("gap:missing-package-field");
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("emits no-entry-points gap when package.json lacks entry fields", async () => {
+    const workspace = createWorkspace();
+    try {
+      const noEntry = createPackageRoot(workspace.root, "no-entry-points");
+      writeFileSync(
+        join(noEntry, "package.json"),
+        JSON.stringify(
+          {
+            name: "no-entry-points",
+            version: "1.0.0",
+            dependencies: { aurelia: "^2.0.0" },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      writeResource(noEntry, "no-entry-points");
+
+      const ctx = await resolveWithOptions(workspace, {
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: noEntry }],
+        },
+      });
+
+      expect(ctx).not.toBeNull();
+      const codes = ctx!.result.diagnostics.map((d) => d.code);
+      expect(codes).toContain("gap:no-entry-points");
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
   it("emits entry-point-not-found gap for missing exports target", async () => {
     const workspace = createWorkspace();
     try {
@@ -382,6 +481,85 @@ describe("third-party error paths", () => {
       expect(ctx).not.toBeNull();
       const codes = ctx!.result.diagnostics.map((d) => d.code);
       expect(codes).toContain("gap:entry-point-not-found");
+      expect(ctx!.result.catalog.confidence).toBe("conservative");
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("emits cache:corrupt and regenerates output when cache entry is invalid", async () => {
+    const workspace = createWorkspace();
+    try {
+      const options: AureliaPluginOptions = {
+        tsconfig: "tsconfig.json",
+        packageRoots: workspace.packageRoots,
+        thirdParty: {
+          scan: false,
+          packages: ["aurelia-fixture"],
+        },
+      };
+
+      const resolved = normalizeOptions(options, {
+        command: "serve",
+        mode: "development",
+        root: workspace.appRoot,
+      });
+
+      const first = await resolveWithOptions(workspace, options);
+      expect(hasElement(first, "external-thing")).toBe(true);
+
+      const cacheDir = join(resolved.packagePath, ".aurelia-cache", "npm-analysis");
+      const cacheFiles = readdirSync(cacheDir).filter((entry) => entry.endsWith(".json"));
+      expect(cacheFiles.length).toBeGreaterThan(0);
+
+      for (const entry of cacheFiles) {
+        writeFileSync(join(cacheDir, entry), "{ invalid json", "utf-8");
+      }
+      const corruptedSample = readFileSync(join(cacheDir, cacheFiles[0]), "utf-8");
+      expect(() => JSON.parse(corruptedSample)).toThrow();
+
+      updateResource(workspace.packageRoots["aurelia-fixture"], "external-thing-next");
+      const second = await resolveWithOptions(workspace, options);
+      const codes = second!.result.diagnostics.map((d) => d.code);
+      const cacheEntriesAfter = readdirSync(cacheDir).filter((entry) => entry.endsWith(".json"));
+      const cacheGapKinds = cacheEntriesAfter.flatMap((entry) => {
+        const content = readFileSync(join(cacheDir, entry), "utf-8");
+        const parsed = JSON.parse(content) as { result?: { gaps?: Array<{ why?: { kind?: string } }> } };
+        return parsed.result?.gaps?.map((gap) => gap.why?.kind).filter(Boolean) ?? [];
+      });
+
+      expect(cacheGapKinds).toContain("cache-corrupt");
+      expect(codes).toContain("cache:corrupt");
+      expect(hasElement(second, "external-thing-next")).toBe(true);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("emits analysis-failed gap when partial evaluation throws", async () => {
+    const workspace = createWorkspace();
+    try {
+      const entryPath = normalizePathForId(join(workspace.appRoot, "src", "main.ts"));
+      const ctx = await resolveWithOptions(
+        workspace,
+        {
+          tsconfig: "tsconfig.json",
+          packageRoots: workspace.packageRoots,
+          thirdParty: {
+            scan: false,
+            packages: ["aurelia-fixture"],
+          },
+        },
+        {
+          partialEvaluation: {
+            failOnFiles: [entryPath],
+          },
+        },
+      );
+
+      expect(ctx).not.toBeNull();
+      const codes = ctx!.result.diagnostics.map((d) => d.code);
+      expect(codes).toContain("gap:analysis-failed");
       expect(ctx!.result.catalog.confidence).toBe("conservative");
     } finally {
       cleanupWorkspace(workspace);
@@ -427,6 +605,9 @@ describe("third-party error paths", () => {
 function resolveWithOptions(
   workspace: Workspace,
   options: AureliaPluginOptions,
+  overrides?: {
+    partialEvaluation?: { failOnFiles?: ReadonlySet<NormalizedPath> | readonly NormalizedPath[] };
+  },
 ) {
   const resolved = normalizeOptions(options, {
     command: "serve",
@@ -441,6 +622,7 @@ function resolveWithOptions(
     packageRoots: resolved.packageRoots,
     templateExtensions: resolved.conventions.config.templateExtensions,
     styleExtensions: resolved.conventions.config.styleExtensions,
+    partialEvaluation: overrides?.partialEvaluation,
   });
 }
 

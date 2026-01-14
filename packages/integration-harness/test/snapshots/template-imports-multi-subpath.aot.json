@@ -1,0 +1,56 @@
+{
+  "template-imports-multi-subpath-my-app": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_61e83540b37bcf00", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_b5ac350007790720", "mode": 2, "to": "avatar", "type": 12 }
+            ],
+            "res": "user-card",
+            "type": 0
+          },
+          {
+            "instructions": [
+              { "exprId": "expr_3741a980c6c5cdc0", "mode": 2, "to": "color", "type": 12 }
+            ],
+            "res": "highlight",
+            "type": 1
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_4a46160082a22b80", "mode": 2, "to": "label", "type": 12 }
+            ],
+            "res": "sub-card",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "template-imports-multi-subpath-my-app",
+      "nestedTemplates": [],
+      "targetCount": 2
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
+        "id": "expr_61e83540b37bcf00"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "avatarUrl" },
+        "id": "expr_b5ac350007790720"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "accent" },
+        "id": "expr_3741a980c6c5cdc0"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "label" },
+        "id": "expr_4a46160082a22b80"
+      }
+    ],
+    "template": "\n\n\n<div class=\"app\">\n  <!--au--><user-card></user-card>\n  <!--au--><sub-card></sub-card>\n</div>\n"
+  }
+}

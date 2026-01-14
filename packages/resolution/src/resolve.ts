@@ -60,6 +60,13 @@ export interface ResolutionConfig {
    */
   stripSourcedNodes?: boolean;
   /**
+   * Partial evaluation test hooks.
+   * Used by integration tests to validate analysis-failed gaps.
+   */
+  partialEvaluation?: {
+    failOnFiles?: ReadonlySet<NormalizedPath> | readonly NormalizedPath[];
+  };
+  /**
    * File system context for sibling detection.
    *
    * When provided, enables the sibling-file convention:
@@ -210,6 +217,7 @@ export function resolve(
     const evaluation = evaluateFileFacts(rawFacts, exportBindings, {
       packagePath: config?.packagePath,
       defines: config?.defines,
+      failOnFiles: config?.partialEvaluation?.failOnFiles,
     });
     trace.event("resolution.partialEvaluation.done", {
       factCount: evaluation.facts.size,
@@ -397,7 +405,7 @@ export function resolve(
  */
 function gapToDiagnostic(gap: AnalysisGap): ResolutionDiagnostic {
   const diagnostic: ResolutionDiagnostic = {
-    code: `gap:${gap.why.kind}`,
+    code: gap.why.kind === "cache-corrupt" ? "cache:corrupt" : `gap:${gap.why.kind}`,
     message: `${gap.what}: ${gap.suggestion}`,
     severity: "warning",
   };
@@ -445,6 +453,7 @@ function isConservativeGap(kind: AnalysisGap["why"]["kind"]): boolean {
     case "no-source":
     case "minified-code":
     case "parse-error":
+    case "analysis-failed":
       return true;
     default:
       return false;

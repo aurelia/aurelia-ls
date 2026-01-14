@@ -4615,7 +4615,7 @@
           "capture": false,
           "className": "MyAppCustomElement",
           "containerless": false,
-          "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts",
+          "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts",
           "kind": "element",
           "name": "my-app",
           "processContent": false
@@ -8736,8 +8736,8 @@
   "graph": {
     "root": "root",
     "scopes": {
-      "local:c:/projects/aurelia-ls/packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts": {
-        "id": "local:c:/projects/aurelia-ls/packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts",
+      "local:c:/projects/aurelia-ls/packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts": {
+        "id": "local:c:/projects/aurelia-ls/packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts",
         "label": "MyAppCustomElement",
         "parent": "root",
         "resources": {
@@ -8937,6 +8937,24 @@
             }
           },
           "elements": {
+            "sub-card": {
+              "bindables": {
+                "label": {
+                  "attribute": "label",
+                  "name": "label",
+                  "primary": true,
+                  "type": { "kind": "ts", "name": "string" }
+                }
+              },
+              "boundary": true,
+              "capture": false,
+              "className": "SubCard",
+              "containerless": false,
+              "file": "packages/resolution/test/npm/fixtures/multi-class/src/subpath/index.ts",
+              "kind": "element",
+              "name": "sub-card",
+              "processContent": false
+            },
             "user-card": {
               "bindables": {
                 "avatar": {
@@ -9345,27 +9363,9 @@
               "capture": false,
               "className": "MyAppCustomElement",
               "containerless": false,
-              "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts",
+              "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts",
               "kind": "element",
               "name": "my-app",
-              "processContent": false
-            },
-            "sub-card": {
-              "bindables": {
-                "label": {
-                  "attribute": "label",
-                  "name": "label",
-                  "primary": true,
-                  "type": { "kind": "ts", "name": "string" }
-                }
-              },
-              "boundary": true,
-              "capture": false,
-              "className": "SubCard",
-              "containerless": false,
-              "file": "packages/resolution/test/npm/fixtures/multi-class/src/subpath/index.ts",
-              "kind": "element",
-              "name": "sub-card",
               "processContent": false
             }
           },
@@ -10216,47 +10216,47 @@
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 138, "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts", "pos": 0 },
+          "location": { "end": 172, "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts", "pos": 0 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 138, "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts", "pos": 0 },
+          "location": { "end": 172, "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts", "pos": 0 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 138, "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts", "pos": 0 },
+          "location": { "end": 172, "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts", "pos": 0 },
           "origin": "source",
           "value": "MyAppCustomElement"
         },
         "containerless": {
-          "location": { "end": 138, "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts", "pos": 0 },
+          "location": { "end": 172, "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts", "pos": 0 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts",
+        "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 138, "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts", "pos": 0 },
+          "location": { "end": 172, "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts", "pos": 0 },
           "origin": "source",
           "value": "my-app"
         },
         "processContent": {
-          "location": { "end": 138, "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts", "pos": 0 },
+          "location": { "end": 172, "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts", "pos": 0 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 138, "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts", "pos": 0 },
+          "location": { "end": 172, "file": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts", "pos": 0 },
           "origin": "source"
         }
       },
       "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549",
       "kind": "custom-element",
       "name": "my-app",
-      "source": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts"
+      "source": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts"
     },
     {
       "data": {

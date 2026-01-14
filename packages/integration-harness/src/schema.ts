@@ -108,7 +108,10 @@ export interface RuntimeExpectation {
   configExport: string;
   componentName: string;
   template: string;
+  rootVm?: Record<string, unknown>;
   elementName: string;
+  scopeId?: ResourceScopeId;
+  scopeFromCompile?: string;
   patchElementExport?: string;
   patches?: readonly RuntimePatch[];
   vm?: Record<string, unknown>;

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 import { build } from "esbuild";
 
 import {
@@ -71,6 +72,21 @@ const TEMPLATE_IMPORTS_PKG_TSCONFIG = path.resolve(
   "fixtures",
   "template-imports-pkg",
   "tsconfig.json",
+);
+const TEMPLATE_IMPORTS_MULTI_SUBPATH_TSCONFIG = path.resolve(
+  __dirname,
+  "fixtures",
+  "template-imports-multi-subpath",
+  "tsconfig.json",
+);
+const TEMPLATE_IMPORTS_MULTI_SUBPATH_ROOT = path.resolve(
+  __dirname,
+  "fixtures",
+  "template-imports-multi-subpath",
+);
+const TEMPLATE_IMPORTS_MULTI_SUBPATH_TEMPLATE = fs.readFileSync(
+  path.join(TEMPLATE_IMPORTS_MULTI_SUBPATH_ROOT, "src", "my-app.html"),
+  "utf-8",
 );
 const AURELIA_TABLE_PACKAGE = path.resolve(
   REPO_ROOT,
@@ -427,6 +443,68 @@ const SCENARIOS: IntegrationScenario[] = [
           { type: "hydrateElement", res: "user-card" },
           { type: "hydrateAttribute", res: "highlight" },
         ],
+      },
+    },
+  },
+  {
+    id: "template-imports-multi-subpath",
+    title: "Template imports handle subpath + multiple packages",
+    tags: ["tsconfig", "template-imports", "third-party", "subpath", "local-scope", "aot"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: TEMPLATE_IMPORTS_MULTI_SUBPATH_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+      packageRoots: {
+        "@test/multi-class": FIXTURE_MULTI_CLASS,
+      },
+    },
+    compile: [
+      {
+        id: "template-imports-multi-subpath-my-app",
+        templatePath: "src/my-app.html",
+        scope: { localOf: "my-app" },
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        local: {
+          "my-app": ["user-card", "highlight", "sub-card"],
+        },
+      },
+      bindables: [
+        { resource: "user-card", name: "name" },
+        { resource: "user-card", name: "avatar" },
+        { resource: "highlight", name: "color", primary: true },
+        { resource: "sub-card", name: "label" },
+      ],
+      aot: {
+        instructions: [
+          { type: "hydrateElement", res: "user-card" },
+          { type: "hydrateAttribute", res: "highlight" },
+          { type: "hydrateElement", res: "sub-card" },
+        ],
+      },
+      runtime: {
+        kind: "ssr-module",
+        modulePath: TEMPLATE_IMPORTS_MULTI_SUBPATH_ROOT,
+        entry: "src/runtime-config.ts",
+        configExport: "MultiClassRuntimeConfiguration",
+        componentName: "template-imports-multi-subpath-runtime",
+        template: TEMPLATE_IMPORTS_MULTI_SUBPATH_TEMPLATE,
+        rootVm: {
+          userName: "Ada Lovelace",
+          avatarUrl: "/avatars/ada.png",
+          accent: "blue",
+          label: "Scoped Import",
+        },
+        elementName: "sub-card",
+        scopeFromCompile: "template-imports-multi-subpath-my-app",
+        vm: {
+          label: "Scoped Import",
+        },
       },
     },
   },
@@ -1204,7 +1282,22 @@ async function runSsrModuleAssertions(
   run: Awaited<ReturnType<typeof runIntegrationScenario>>,
   runtime: RuntimeExpectation,
 ): Promise<void> {
+  const scopeFromCompile = runtime.scopeFromCompile
+    ? run.compile[runtime.scopeFromCompile]?.scopeId
+    : undefined;
+  if (runtime.scopeFromCompile && !scopeFromCompile) {
+    throw new Error(`Runtime scope compile target "${runtime.scopeFromCompile}" not found.`);
+  }
+  const resourceScope = runtime.scopeId ?? scopeFromCompile ?? run.resourceGraph.root;
+
+  const rootVm = runtime.rootVm;
   class RuntimeApp {
+    public constructor() {
+      if (rootVm) {
+        Object.assign(this, rootVm);
+      }
+    }
+
     static $au = {
       type: "custom-element",
       name: runtime.componentName,
@@ -1216,7 +1309,7 @@ async function runSsrModuleAssertions(
     name: runtime.componentName,
     semantics: run.semantics,
     resourceGraph: run.resourceGraph,
-    resourceScope: run.resourceGraph.root,
+    resourceScope,
     stripSpans: false,
   });
 
@@ -1317,10 +1410,11 @@ async function buildExternalModuleBundle(
   modulePath: string,
   entry?: string,
 ): Promise<Record<string, unknown>> {
+  const cacheKey = entry ? `${modulePath}::${entry}` : modulePath;
   const entryPath = entry
     ? (path.isAbsolute(entry) ? entry : path.join(modulePath, entry))
     : path.join(modulePath, "src", "index.ts");
-  const buildDir = path.join(REPO_ROOT, ".temp", "aurelia2-table-build");
+  const buildDir = path.join(REPO_ROOT, ".temp", "integration-harness", hashCacheKey(cacheKey));
   const outfile = path.join(buildDir, "index.mjs");
 
   await fs.promises.mkdir(buildDir, { recursive: true });
@@ -1369,6 +1463,10 @@ async function buildExternalModuleBundle(
   });
 
   return import(/* @vite-ignore */ pathToFileURL(outfile).href);
+}
+
+function hashCacheKey(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
 }
 
 async function ensureAureliaWorkspaceModules(buildDir: string): Promise<void> {

@@ -252,6 +252,9 @@ function determineConfidence(
   gaps: AnalysisGap[],
   primaryStrategy: 'typescript' | 'es2022' | 'none'
 ): 'exact' | 'high' | 'partial' | 'low' | 'manual' {
+  if (gaps.some((gap) => gap.why.kind === "analysis-failed")) {
+    return 'manual';
+  }
   // No resources found at all
   if (resources.length === 0) {
     // If we have gaps explaining why, it's 'manual' (user needs to provide config)
@@ -545,6 +548,7 @@ export async function analyzePackages(
   for (const inputPath of dedupe(packagePaths)) {
     const packagePath = resolvePath(inputPath);
     const cacheMeta = await readPackageMeta(packagePath);
+    let cacheIssue: CacheReadResult | null = null;
 
     const cacheKey = cacheMeta
       ? buildCacheKey(cacheMeta, cache.schemaVersion, cache.fingerprint)
@@ -552,20 +556,25 @@ export async function analyzePackages(
 
     if (mode !== "off" && mode !== "write" && cacheKey && cacheMeta) {
       const cached = await readCacheEntry(cache.dir, cacheKey);
-      if (cached && cached.schemaVersion === cache.schemaVersion) {
-        if (cached.packagePath === packagePath &&
-            cached.packageName === cacheMeta.name &&
-            cached.version === cacheMeta.version &&
-            cached.manifestHash === cacheMeta.manifestHash &&
-            cached.fingerprint === cache.fingerprint &&
-            cached.preferSource === preferSource) {
-          results.set(packagePath, cached.result);
+      if (cached.error) {
+        cacheIssue = cached;
+      } else if (cached.entry && cached.entry.schemaVersion === cache.schemaVersion) {
+        if (cached.entry.packagePath === packagePath &&
+            cached.entry.packageName === cacheMeta.name &&
+            cached.entry.version === cacheMeta.version &&
+            cached.entry.manifestHash === cacheMeta.manifestHash &&
+            cached.entry.fingerprint === cache.fingerprint &&
+            cached.entry.preferSource === preferSource) {
+          results.set(packagePath, cached.entry.result);
           continue;
         }
       }
     }
 
-    const result = await analyzePackage(packagePath, options);
+    let result = await analyzePackage(packagePath, options);
+    if (cacheIssue && cacheMeta) {
+      result = appendGap(result, createCacheCorruptGap(cacheMeta.name, cacheIssue));
+    }
     results.set(packagePath, result);
 
     if (mode !== "off" && mode !== "read" && cacheKey && cacheMeta) {
@@ -602,6 +611,12 @@ interface PackageAnalysisCacheEntry {
   preferSource: boolean;
   timestamp: string;
   result: AnalysisResult<PackageAnalysis>;
+}
+
+interface CacheReadResult {
+  entry: PackageAnalysisCacheEntry | null;
+  path: string;
+  error?: string;
 }
 
 interface PackageMeta {
@@ -671,17 +686,37 @@ function sanitizePackageName(name: string): string {
 async function readCacheEntry(
   dir: string,
   key: string,
-): Promise<PackageAnalysisCacheEntry | null> {
+): Promise<CacheReadResult> {
   const path = join(dir, `${key}.json`);
   if (!existsSync(path)) {
-    return null;
+    return { entry: null, path };
   }
   try {
     const content = await readFile(path, "utf-8");
-    return JSON.parse(content) as PackageAnalysisCacheEntry;
-  } catch {
-    return null;
+    return { entry: JSON.parse(content) as PackageAnalysisCacheEntry, path };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { entry: null, path, error: message };
   }
+}
+
+function appendGap<T>(
+  result: AnalysisResult<T>,
+  extraGap: AnalysisGap,
+): AnalysisResult<T> {
+  return { ...result, gaps: [...result.gaps, extraGap] };
+}
+
+function createCacheCorruptGap(
+  packageName: string,
+  cache: CacheReadResult,
+): AnalysisGap {
+  return gap(
+    `npm analysis cache for "${packageName}"`,
+    { kind: "cache-corrupt", path: cache.path, message: cache.error ?? "unknown error" },
+    `Delete ${cache.path} to regenerate the cache entry.`,
+    { file: cache.path },
+  );
 }
 
 async function writeCacheEntry(
@@ -1597,6 +1632,10 @@ function formatGapReason(reason: GapReason): string {
       return `Unsupported format: ${reason.format}`;
     case 'invalid-resource-name':
       return `Invalid resource name for ${reason.className}: ${reason.reason}`;
+    case 'cache-corrupt':
+      return `Cache entry corrupt: ${reason.path} (${reason.message})`;
+    case 'analysis-failed':
+      return `Analysis failed (${reason.stage}): ${reason.message}`;
     case 'parse-error':
       return `Parse error: ${reason.message}`;
     default:

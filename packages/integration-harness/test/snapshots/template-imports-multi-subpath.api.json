@@ -99,7 +99,7 @@
       "kind": "custom-element",
       "name": "au-viewport"
     },
-    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts" },
+    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts" },
     {
       "bindables": [
         { "attribute": "label", "name": "label", "primary": true }

@@ -19,6 +19,11 @@ import { resolveInScope } from "./value/scope.js";
 export interface PartialEvaluationOptions {
   readonly packagePath?: string;
   readonly defines?: DefineMap;
+  /**
+   * Test hook: force evaluation to throw for specific files.
+   * Used to assert analysis-failed gap handling in integration tests.
+   */
+  readonly failOnFiles?: ReadonlySet<NormalizedPath> | readonly NormalizedPath[];
 }
 
 export interface PartialEvaluationFileResult {
@@ -44,6 +49,7 @@ export function evaluateFileFacts(
   options?: PartialEvaluationOptions,
 ): PartialEvaluationResult {
   const globalBindings = buildGlobalBindings(options?.defines);
+  const failOnFiles = normalizeFailOnFiles(options?.failOnFiles);
   const fileScopes = new Map<NormalizedPath, LexicalScope>();
   for (const [path, fileFacts] of facts) {
     const scoped = applyGlobalBindings(fileFacts.scope, globalBindings);
@@ -63,13 +69,29 @@ export function evaluateFileFacts(
   for (const [path, fileFacts] of facts) {
     const scope = fileScopes.get(path) ?? fileFacts.scope;
     const gapStart = ctx.gaps.length;
-    const resolved = evaluateFile(fileFacts, scope, ctx);
+    let resolved: FileFacts;
+    try {
+      if (failOnFiles?.has(path)) {
+        throw new Error(`Forced partial evaluation failure for ${path}`);
+      }
+      resolved = evaluateFile(fileFacts, scope, ctx);
+    } catch (error) {
+      ctx.gaps.push(createEvaluationFailureGap(path, error));
+      resolved = { ...fileFacts, scope };
+    }
     const newGaps = ctx.gaps.slice(gapStart);
     files.set(path, { facts: resolved, gaps: newGaps });
     resolvedFacts.set(path, resolved);
   }
 
   return { facts: resolvedFacts, gaps: [...ctx.gaps], files };
+}
+
+function normalizeFailOnFiles(
+  input: ReadonlySet<NormalizedPath> | readonly NormalizedPath[] | undefined,
+): ReadonlySet<NormalizedPath> | null {
+  if (!input) return null;
+  return input instanceof Set ? input : new Set(input);
 }
 
 function evaluateFile(
@@ -326,6 +348,16 @@ function createConditionalRegistrationGap(
     { kind: "conditional-registration", condition },
     "Cannot statically determine whether this registration executes. Consider hoisting register() or providing explicit AOT/SSR configuration.",
     { file: filePath, snippet: condition },
+  );
+}
+
+function createEvaluationFailureGap(filePath: NormalizedPath, error: unknown): AnalysisGap {
+  const message = error instanceof Error ? error.message : String(error);
+  return gap(
+    `partial evaluation for "${filePath}"`,
+    { kind: "analysis-failed", stage: "partial-evaluation", message },
+    "Partial evaluation failed; using unresolved facts. Consider simplifying the registration flow or providing explicit configuration.",
+    { file: filePath },
   );
 }
 

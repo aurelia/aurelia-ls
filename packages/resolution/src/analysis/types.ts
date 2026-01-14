@@ -123,6 +123,12 @@ export type GapReason =
   // Resource inference issues
   | { kind: 'invalid-resource-name'; className: string; reason: string }
 
+  // Cache failures (non-semantic, recovery required)
+  | { kind: 'cache-corrupt'; path: string; message: string }
+
+  // Analysis failures (fatal for the current stage)
+  | { kind: 'analysis-failed'; stage: 'partial-evaluation' | 'npm-analysis'; message: string }
+
   // General parsing/processing errors
   | { kind: 'parse-error'; message: string };
 
