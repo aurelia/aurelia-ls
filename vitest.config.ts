@@ -16,6 +16,7 @@ export default defineConfig({
     alias: {
       "@aurelia-ls/compiler": "./packages/compiler/out/index.js",
       "@aurelia-ls/integration-harness": "./packages/integration-harness/out/index.js",
+      "@aurelia-ls/resolution/npm": "./packages/resolution/out/npm/index.js",
       "@aurelia-ls/resolution": "./packages/resolution/out/index.js",
       "@aurelia-ls/transform": "./packages/transform/out/index.js",
       "@aurelia-ls/ssr": "./packages/ssr/out/index.js",

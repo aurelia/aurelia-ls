@@ -370,29 +370,29 @@ export function normalizeConventionOptions(
   options: ConventionConfig | undefined,
   thirdParty?: ThirdPartyOptions,
 ): ResolvedConventionOptions {
-  if (!options) {
+  if (!options && !thirdParty) {
     return { ...DEFAULT_CONVENTION_OPTIONS };
   }
 
   const defaultConfig = DEFAULT_CONVENTION_OPTIONS.config;
 
   return {
-    enabled: options.enabled ?? true,
+    enabled: options?.enabled ?? true,
     config: {
-      enabled: options.enabled ?? true,
-      suffixes: options.suffixes ?? defaultConfig.suffixes,
-      filePatterns: options.filePatterns ?? defaultConfig.filePatterns,
-      viewModelExtensions: options.viewModelExtensions ?? defaultConfig.viewModelExtensions,
-      templateExtensions: options.templateExtensions ?? defaultConfig.templateExtensions,
-      styleExtensions: options.styleExtensions ?? defaultConfig.styleExtensions,
-      directories: options.directories ?? defaultConfig.directories,
+      enabled: options?.enabled ?? true,
+      suffixes: options?.suffixes ?? defaultConfig.suffixes,
+      filePatterns: options?.filePatterns ?? defaultConfig.filePatterns,
+      viewModelExtensions: options?.viewModelExtensions ?? defaultConfig.viewModelExtensions,
+      templateExtensions: options?.templateExtensions ?? defaultConfig.templateExtensions,
+      styleExtensions: options?.styleExtensions ?? defaultConfig.styleExtensions,
+      directories: options?.directories ?? defaultConfig.directories,
       templatePairing: {
         preferSibling:
-          options.templatePairing?.preferSibling ?? DEFAULT_TEMPLATE_PAIRING_OPTIONS.preferSibling,
+          options?.templatePairing?.preferSibling ?? DEFAULT_TEMPLATE_PAIRING_OPTIONS.preferSibling,
       },
       stylesheetPairing: {
         injection:
-          options.stylesheetPairing?.injection ?? DEFAULT_STYLESHEET_PAIRING_OPTIONS.injection,
+          options?.stylesheetPairing?.injection ?? DEFAULT_STYLESHEET_PAIRING_OPTIONS.injection,
       },
     },
     thirdParty: {
