@@ -10,7 +10,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/resolution";
+import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap, ExperimentalPolicy } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -41,6 +41,8 @@ export type {
   DirectoryScope,
   DirectoryMatch,
 } from "@aurelia-ls/resolution";
+
+export type { ExperimentalPolicy };
 
 // Local imports for internal use
 import type {
@@ -956,6 +958,14 @@ export interface AureliaPluginOptions {
    */
   debug?: DebugOptions;
 
+  /**
+   * Experimental policy for gaps and confidence.
+   * Used by tooling to promote diagnostics or fail builds based on analyzability.
+   *
+   * @experimental
+   */
+  policy?: ExperimentalPolicy;
+
   // ---------------------------------------------------------------------------
   // Advanced
   // ---------------------------------------------------------------------------
@@ -1169,6 +1179,9 @@ export interface ResolvedAureliaOptions {
 
   /** Resolved debug options */
   debug: ResolvedDebugOptions;
+
+  /** Experimental policy (gap/confidence consumption) */
+  policy?: ExperimentalPolicy;
 
   /** Experimental options (as-is, no expansion) */
   experimental: ExperimentalOptions;

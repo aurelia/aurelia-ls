@@ -13,6 +13,7 @@ import ts from "typescript";
 import {
   DEFAULT_SEMANTICS,
   buildResourceCatalog,
+  buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
   normalizePathForId,
   prepareSemantics,
@@ -24,6 +25,7 @@ import {
 } from "@aurelia-ls/compiler";
 import {
   analyzePackages,
+  applyResolutionPolicy,
   buildSemanticsArtifacts,
   hashObject,
   resolve,
@@ -35,9 +37,10 @@ import {
   type DefineMap,
   type AnalysisGap,
   type ConventionConfig,
+  type ExperimentalPolicy,
 } from "@aurelia-ls/resolution";
 import { buildPackageRootMap, detectMonorepo, isAureliaPackage } from "@aurelia-ls/resolution/npm";
-import type { ResolutionContext, ThirdPartyOptions } from "./types.js";
+import type { ResolutionContext, ThirdPartyOptions, ThirdPartyPolicy } from "./types.js";
 import { buildThirdPartyResources, hasThirdPartyResources, mergeResourceCollections, mergeScopeResources } from "./third-party.js";
 
 /**
@@ -55,6 +58,7 @@ export interface ResolutionContextOptions {
   trace?: CompileTrace;
   defines?: DefineMap;
   thirdParty?: ThirdPartyOptions;
+  policy?: ExperimentalPolicy;
   conventions?: ConventionConfig;
   packagePath?: string;
   packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
@@ -174,38 +178,43 @@ export async function createResolutionContext(
     ? applyThirdPartyResources(result, thirdPartyResources.resources, {
       gaps: thirdPartyResources.gaps,
       confidence: thirdPartyResources.confidence,
+      policy: options?.thirdParty?.policy,
     })
     : result;
+  const finalResult = applyResolutionPolicy(nextResult, options?.policy);
+  if (options?.policy) {
+    logPolicyDiagnostics(logger, finalResult.diagnostics);
+  }
 
   // Log resolution results
-  const globalCount = nextResult.registration.sites.filter(s => s.scope.kind === "global").length;
-  const localCount = nextResult.registration.sites.filter(s => s.scope.kind === "local").length;
+  const globalCount = finalResult.registration.sites.filter(s => s.scope.kind === "global").length;
+  const localCount = finalResult.registration.sites.filter(s => s.scope.kind === "local").length;
   logger.info(
-    `[aurelia-ssr] Resolved ${nextResult.resources.length} resources (${globalCount} global, ${localCount} local)`,
+    `[aurelia-ssr] Resolved ${finalResult.resources.length} resources (${globalCount} global, ${localCount} local)`,
   );
   logger.info(
-    `[aurelia-ssr] Discovered ${nextResult.templates.length} external + ${nextResult.inlineTemplates.length} inline templates`,
+    `[aurelia-ssr] Discovered ${finalResult.templates.length} external + ${finalResult.inlineTemplates.length} inline templates`,
   );
 
   // Build template lookup map
   const templates = new Map<string, TemplateInfo>();
-  for (const template of nextResult.templates) {
+  for (const template of finalResult.templates) {
     templates.set(normalizePathForId(template.templatePath), template);
   }
 
   // Build merged semantics with discovered resources
-  const semantics = nextResult.semantics;
+  const semantics = finalResult.semantics;
 
   // Create context
   const context: ResolutionContext = {
-    result: nextResult,
-    resourceGraph: nextResult.resourceGraph,
+    result: finalResult,
+    resourceGraph: finalResult.resourceGraph,
     semantics,
     templates,
     getScopeForTemplate(templatePath: string): ResourceScopeId {
       const normalized = normalizePathForId(templatePath);
       const info = templates.get(normalized);
-      return info?.scopeId ?? nextResult.resourceGraph.root;
+      return info?.scopeId ?? finalResult.resourceGraph.root;
     },
   };
 
@@ -476,9 +485,68 @@ function countResourceCollections(resources: ResourceCollections): number {
 function applyThirdPartyResources(
   result: ResolutionResult,
   extra: Partial<ResolutionResult["semantics"]["resources"]>,
-  opts?: { gaps?: AnalysisGap[]; confidence?: CatalogConfidence },
+  opts?: { gaps?: AnalysisGap[]; confidence?: CatalogConfidence; policy?: ThirdPartyPolicy },
 ): ResolutionResult {
+  const gapList = opts?.gaps ?? [];
+  const extraCatalogGaps = gapList.map(analysisGapToCatalogGap);
+  const mergedCatalogGaps = [
+    ...(result.catalog.gaps ?? []),
+    ...extraCatalogGaps,
+  ];
+  const mergedConfidence = mergeCatalogConfidence(result.catalog.confidence, gapList, opts?.confidence);
+
+  const diagnostics = gapList.length > 0
+    ? [...result.diagnostics, ...gapList.map(analysisGapToDiagnostic)]
+    : result.diagnostics;
+
   const mergedResources = mergeResourceCollections(result.semantics.resources, extra);
+  const policy = opts?.policy ?? "root-scope";
+
+  const buildSemanticsWithResources = () => {
+    const sem = prepareSemantics(
+      { ...result.semantics },
+      { resources: mergedResources },
+    );
+    const catalog = buildResourceCatalog(
+      sem.resources,
+      sem.bindingCommands,
+      sem.attributePatterns,
+      mergedCatalogGaps.length || mergedConfidence
+        ? {
+            gaps: mergedCatalogGaps.length ? mergedCatalogGaps : undefined,
+            confidence: mergedConfidence,
+          }
+        : undefined,
+    );
+    const semantics = { ...sem, catalog };
+    const syntax = buildTemplateSyntaxRegistry(semantics);
+    return { semantics, catalog, syntax };
+  };
+
+  if (policy === "rebuild-graph") {
+    const { semantics, catalog, syntax } = buildSemanticsWithResources();
+    const nextGraph = buildResourceGraphFromSemantics(semantics);
+    return {
+      ...result,
+      semantics,
+      catalog,
+      syntax,
+      resourceGraph: nextGraph,
+      diagnostics,
+    };
+  }
+
+  if (policy === "semantics") {
+    const { semantics, catalog, syntax } = buildSemanticsWithResources();
+    return {
+      ...result,
+      semantics,
+      catalog,
+      syntax,
+      diagnostics,
+    };
+  }
+
   const rootId = result.resourceGraph.root;
   const rootScope = result.resourceGraph.scopes[rootId];
   const mergedRootResources = mergeScopeResources(rootScope?.resources, extra);
@@ -494,35 +562,7 @@ function applyThirdPartyResources(
       },
     },
   };
-  const gapList = opts?.gaps ?? [];
-  const extraCatalogGaps = gapList.map(analysisGapToCatalogGap);
-  const mergedCatalogGaps = [
-    ...(result.catalog.gaps ?? []),
-    ...extraCatalogGaps,
-  ];
-  const mergedConfidence = mergeCatalogConfidence(result.catalog.confidence, gapList, opts?.confidence);
-
-  const sem = prepareSemantics(
-    { ...result.semantics, resourceGraph: nextGraph },
-    { resources: mergedResources },
-  );
-  const catalog = buildResourceCatalog(
-    sem.resources,
-    sem.bindingCommands,
-    sem.attributePatterns,
-    mergedCatalogGaps.length || mergedConfidence
-      ? {
-          gaps: mergedCatalogGaps.length ? mergedCatalogGaps : undefined,
-          confidence: mergedConfidence,
-        }
-      : undefined,
-  );
-  const semantics = { ...sem, catalog };
-  const syntax = buildTemplateSyntaxRegistry(semantics);
-
-  const diagnostics = gapList.length > 0
-    ? [...result.diagnostics, ...gapList.map(analysisGapToDiagnostic)]
-    : result.diagnostics;
+  const { semantics, catalog, syntax } = buildSemanticsWithResources();
 
   return {
     ...result,
@@ -617,6 +657,22 @@ function mergeCatalogConfidence(
     return "conservative";
   }
   return base === "partial" ? base : "partial";
+}
+
+function logPolicyDiagnostics(
+  logger: Logger,
+  diagnostics: readonly ResolutionResult["diagnostics"][number][],
+): void {
+  for (const diag of diagnostics) {
+    if (!diag.code.startsWith("policy:")) continue;
+    if (diag.severity === "error") {
+      logger.error(`[aurelia-ssr] ${diag.message}`);
+    } else if (diag.severity === "warning") {
+      logger.warn(`[aurelia-ssr] ${diag.message}`);
+    } else {
+      logger.info(`[aurelia-ssr] ${diag.message}`);
+    }
+  }
 }
 
 function catalogConfidenceFromAnalysisGaps(gaps: AnalysisGap[]): CatalogConfidence | undefined {

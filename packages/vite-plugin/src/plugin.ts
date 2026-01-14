@@ -509,6 +509,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
             defines: resolutionDefines,
             thirdParty: resolvedOptions.conventions.thirdParty,
             conventions: resolvedOptions.conventions.config,
+            policy: resolvedOptions.policy,
             packagePath: resolvedOptions.packagePath,
             packageRoots: resolvedOptions.packageRoots,
             templateExtensions: resolvedOptions.conventions.config.templateExtensions,

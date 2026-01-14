@@ -57,6 +57,8 @@ export { buildSemanticSnapshot, buildApiSurfaceSnapshot, type SemanticSnapshotOp
 
 // === Shared types ===
 export type { Logger } from "./types.js";
+export type { ExperimentalPolicy, PolicySeverity } from "./policy.js";
+export { applyResolutionPolicy } from "./policy.js";
 
 // === Compile-time Defines ===
 export type { DefineMap, DefineValue } from "./defines.js";

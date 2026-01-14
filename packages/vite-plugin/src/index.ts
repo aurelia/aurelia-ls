@@ -203,6 +203,7 @@ export type {
 
 export type {
   ExperimentalOptions,
+  ExperimentalPolicy,
   PluginHooks,
   HookContext,
   ResolvedAureliaOptions,

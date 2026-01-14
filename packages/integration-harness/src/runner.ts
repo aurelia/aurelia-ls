@@ -5,6 +5,7 @@ import * as ts from "typescript";
 
 import {
   analyzePackage,
+  applyResolutionPolicy,
   buildApiSurfaceSnapshot,
   buildSemanticSnapshot,
   buildSemanticsArtifacts,
@@ -132,7 +133,8 @@ export async function runIntegrationScenario(
   const { program, fileSystem, fileMap } = createProgramFromScenario(normalized);
 
   const resolutionStart = performance.now();
-  const resolution = resolve(program, buildResolutionConfig(normalized, fileSystem), options.logger);
+  const baseResolution = resolve(program, buildResolutionConfig(normalized, fileSystem), options.logger);
+  const resolution = applyResolutionPolicy(baseResolution, normalized.resolution.policy);
   timings.resolutionMs = performance.now() - resolutionStart;
 
   const externalStart = performance.now();

@@ -1,6 +1,6 @@
 import type ts from "typescript";
 import type { LocalImportDef, ResourceCollections, ResourceScopeId } from "@aurelia-ls/compiler";
-import type { ConventionConfig, DefineMap } from "@aurelia-ls/resolution";
+import type { ConventionConfig, DefineMap, ExperimentalPolicy } from "@aurelia-ls/resolution";
 
 export type ScenarioTag = string;
 
@@ -21,6 +21,7 @@ export type FileSystemMode = "mock" | "node" | "none";
 export interface ResolutionHarnessOptions {
   conventions?: ConventionConfig;
   defines?: DefineMap;
+  policy?: ExperimentalPolicy;
   fileSystem?: FileSystemMode;
   templateExtensions?: readonly string[];
   styleExtensions?: readonly string[];
