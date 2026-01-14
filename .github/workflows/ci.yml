@@ -101,17 +101,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: aurelia2-plugins/node_modules
-          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json') }}
+          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json', 'aurelia/package-lock.json', 'aurelia/packages/*/package.json') }}
 
       - name: Install aurelia2-plugins dependencies
         if: steps.cache-plugins-npm.outputs.cache-hit != 'true'
         run: npm ci
         working-directory: aurelia2-plugins
-      - name: Ensure aurelia2-plugins optional peers
+      - name: Use local Aurelia packages for aurelia2-plugins
+        shell: bash
         run: |
-          if [ ! -d node_modules/@aurelia/i18n ]; then
-            npm install --no-save --no-package-lock @aurelia/i18n
-          fi
+          set -euo pipefail
+          rm -rf node_modules/@aurelia node_modules/aurelia packages/*/node_modules/@aurelia packages/*/node_modules/aurelia
+          pkg_dirs=()
+          for dir in ../aurelia/packages/*; do
+            if [ -f "$dir/package.json" ]; then
+              pkg_dirs+=("$dir")
+            fi
+          done
+          npm install --no-save --no-package-lock --force "${pkg_dirs[@]}"
         working-directory: aurelia2-plugins
 
       - name: Cache aurelia2-plugins build output
@@ -274,17 +281,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: aurelia2-plugins/node_modules
-          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json') }}
+          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json', 'aurelia/package-lock.json', 'aurelia/packages/*/package.json') }}
 
       - name: Install aurelia2-plugins dependencies
         if: steps.cache-plugins-npm.outputs.cache-hit != 'true'
         run: npm ci
         working-directory: aurelia2-plugins
-      - name: Ensure aurelia2-plugins optional peers
+      - name: Use local Aurelia packages for aurelia2-plugins
+        shell: bash
         run: |
-          if [ ! -d node_modules/@aurelia/i18n ]; then
-            npm install --no-save --no-package-lock @aurelia/i18n
-          fi
+          set -euo pipefail
+          rm -rf node_modules/@aurelia node_modules/aurelia packages/*/node_modules/@aurelia packages/*/node_modules/aurelia
+          pkg_dirs=()
+          for dir in ../aurelia/packages/*; do
+            if [ -f "$dir/package.json" ]; then
+              pkg_dirs+=("$dir")
+            fi
+          done
+          npm install --no-save --no-package-lock --force "${pkg_dirs[@]}"
         working-directory: aurelia2-plugins
 
       - name: Cache aurelia2-plugins build output
