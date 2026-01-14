@@ -1,3 +1,38 @@
+/**
+ * Experimental Policy — Gap/Confidence Diagnostic Control
+ *
+ * This module provides opt-in diagnostic behavior for gap/confidence reporting.
+ * When enabled via entrypoint policy configuration (e.g. Vite options or the
+ * integration harness), it:
+ *
+ * 1. **Gap severity promotion**: Promotes `gap:*` diagnostics to a configured
+ *    severity and emits a `policy:gaps` summary diagnostic.
+ *
+ * 2. **Confidence threshold enforcement**: Emits a `policy:confidence` diagnostic
+ *    when catalog confidence falls below a configured minimum.
+ *
+ * **Behavior is diagnostic-only** — resources are never skipped or excluded.
+ * This is intentional for the experimental phase; skip/degrade semantics may
+ * be added later if needed.
+ *
+ * **Not to be confused with `thirdParty.policy`** (type: `ThirdPartyPolicy`),
+ * which controls merge strategy for third-party resources (root-scope vs
+ * rebuild-graph vs semantics). That is a separate concern.
+ *
+ * @example
+ * ```ts
+ * aurelia({
+ *   policy: {
+ *     gaps: "error",                    // Promote gap diagnostics to errors
+ *     confidence: { min: "high" },      // Warn if confidence < high
+ *   },
+ * })
+ * ```
+ *
+ * @experimental
+ * @module
+ */
+
 import type { CatalogConfidence, CatalogGap } from "@aurelia-ls/compiler";
 import type { ResolutionDiagnostic, ResolutionResult } from "./resolve.js";
 

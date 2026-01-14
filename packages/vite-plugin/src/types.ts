@@ -407,10 +407,35 @@ export interface ExplicitAttributeConfig {
 }
 
 /**
- * Policy for merging third-party resources into semantics.
+ * Policy for merging third-party resources into the resolution artifacts.
  *
- * Experimental. Use to control how aggressively the resource graph
- * and semantics are rebuilt when third-party resources are added.
+ * Controls how aggressively artifacts are rebuilt when third-party resources
+ * are added. Trade-off is scope correctness vs rebuild cost.
+ *
+ * | Policy | Semantics | Catalog | Syntax | ResourceGraph | Use Case |
+ * |--------|-----------|---------|--------|---------------|----------|
+ * | `root-scope` | Rebuild | Rebuild | Rebuild | Merge root scope | Fast; keep scope shape, update root |
+ * | `semantics` | Rebuild | Rebuild | Rebuild | Keep | Update semantics without touching scopes |
+ * | `rebuild-graph` | Rebuild | Rebuild | Rebuild | Rebuild | Full rebuild; resources affect scope structure |
+ *
+ * **`root-scope`** (default): Rebuilds semantics/catalog/syntax from merged
+ * resources, then merges third-party resources into the root scope of the
+ * existing ResourceGraph. Use when resources should be globally visible but
+ * do not require new scope structure.
+ *
+ * **`semantics`**: Rebuilds semantics, catalog, and syntax registry from the
+ * merged resources, but keeps the existing ResourceGraph structure. Use when
+ * resources affect catalog/syntax but should not change scope topology.
+ *
+ * **`rebuild-graph`**: Most thorough. Rebuilds everything including the
+ * ResourceGraph from scratch based on the new semantics. Use when third-party
+ * resources must introduce scope structure changes (rare).
+ *
+ * **Not to be confused with `ExperimentalPolicy`** (top-level `policy` option),
+ * which controls gap/confidence diagnostic behavior. This is a separate concern
+ * specific to third-party resource merging.
+ *
+ * @default "root-scope"
  */
 export type ThirdPartyPolicy = "root-scope" | "rebuild-graph" | "semantics";
 
@@ -510,9 +535,15 @@ export interface ThirdPartyOptions {
   resources?: ExplicitResourceConfig;
 
   /**
-   * Experimental policy for how analysis results are merged into semantics.
+   * Policy for how third-party resources are merged into resolution artifacts.
    *
-   * @experimental
+   * - `"root-scope"` (default): Rebuild semantics and merge into root scope
+   * - `"semantics"`: Rebuild semantics/catalog/syntax but keep graph
+   * - `"rebuild-graph"`: Full rebuild of all artifacts (incl. graph)
+   *
+   * See {@link ThirdPartyPolicy} for detailed behavior of each option.
+   *
+   * @default "root-scope"
    */
   policy?: ThirdPartyPolicy;
 }
@@ -959,8 +990,22 @@ export interface AureliaPluginOptions {
   debug?: DebugOptions;
 
   /**
-   * Experimental policy for gaps and confidence.
-   * Used by tooling to promote diagnostics or fail builds based on analyzability.
+   * Experimental policy for gap/confidence diagnostic control.
+   *
+   * - `gaps`: Promote `gap:*` diagnostics to a configured severity (info/warning/error)
+   * - `confidence.min`: Emit diagnostic when catalog confidence falls below threshold
+   *
+   * Behavior is diagnostic-only — resources are never skipped or excluded.
+   *
+   * **Not to be confused with `thirdParty.policy`**, which controls merge strategy.
+   *
+   * @example
+   * ```ts
+   * policy: {
+   *   gaps: "error",                  // Treat gaps as errors
+   *   confidence: { min: "high" },    // Warn if confidence < high
+   * }
+   * ```
    *
    * @experimental
    */
