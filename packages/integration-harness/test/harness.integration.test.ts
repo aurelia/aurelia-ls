@@ -1531,7 +1531,8 @@ function normalizeSnapshotValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = normalizeSnapshotValue(entry);
+      const normalizedKey = normalizeSnapshotPath(key);
+      out[normalizedKey] = normalizeSnapshotValue(entry);
     }
     return out;
   }

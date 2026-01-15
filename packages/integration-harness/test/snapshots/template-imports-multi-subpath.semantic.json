@@ -4032,7 +4032,7 @@
   "graph": {
     "root": "root",
     "scopes": {
-      "local:c:/projects/aurelia-ls/packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts": {
+      "local:packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts": {
         "id": "local:packages/integration-harness/test/fixtures/template-imports-multi-subpath/src/my-app.ts",
         "label": "MyAppCustomElement",
         "parent": "root",

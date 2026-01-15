@@ -4258,7 +4258,7 @@
   "graph": {
     "root": "root",
     "scopes": {
-      "local:c:/projects/aurelia-ls/packages/resolution/test/apps/explicit-app/src/widgets/product-card.ts": {
+      "local:packages/resolution/test/apps/explicit-app/src/widgets/product-card.ts": {
         "id": "local:packages/resolution/test/apps/explicit-app/src/widgets/product-card.ts",
         "label": "ProductCard",
         "parent": "root",
