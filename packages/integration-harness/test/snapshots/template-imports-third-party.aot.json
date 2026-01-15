@@ -5,15 +5,15 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_cee6608011046000", "mode": 2, "to": "name", "type": 12 },
-              { "exprId": "expr_1317360015e78a00", "mode": 2, "to": "avatar", "type": 12 }
+              { "exprId": "expr_0000", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "avatar", "type": 12 }
             ],
             "res": "user-card",
             "type": 0
           },
           {
             "instructions": [
-              { "exprId": "expr_2dd8e60000b71300", "mode": 2, "to": "color", "type": 12 }
+              { "exprId": "expr_0002", "mode": 2, "to": "color", "type": 12 }
             ],
             "res": "highlight",
             "type": 1
@@ -27,15 +27,15 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
-        "id": "expr_cee6608011046000"
+        "id": "expr_0000"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "avatarUrl" },
-        "id": "expr_1317360015e78a00"
+        "id": "expr_0001"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "accent" },
-        "id": "expr_2dd8e60000b71300"
+        "id": "expr_0002"
       }
     ],
     "template": "\n\n<div class=\"app\">\n  <!--au--><user-card></user-card>\n</div>\n"

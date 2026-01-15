@@ -1521,25 +1521,53 @@ function assertSnapshot(label: string, snapshotPath: string, value: unknown): vo
 }
 
 function normalizeSnapshotBundle<T extends Record<string, unknown>>(bundle: T): T {
-  return normalizeSnapshotValue(bundle) as T;
+  const ctx: NormalizeContext = {
+    exprIds: new Map(),
+    nextExprIndex: 0,
+  };
+  return normalizeSnapshotValue(bundle, ctx) as T;
 }
 
-function normalizeSnapshotValue(value: unknown): unknown {
+type NormalizeContext = {
+  exprIds: Map<string, string>;
+  nextExprIndex: number;
+};
+
+function normalizeSnapshotValue(value: unknown, ctx: NormalizeContext): unknown {
   if (Array.isArray(value)) {
-    return value.map((entry) => normalizeSnapshotValue(entry));
+    return value.map((entry) => normalizeSnapshotValue(entry, ctx));
   }
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      const normalizedKey = normalizeSnapshotPath(key);
-      out[normalizedKey] = normalizeSnapshotValue(entry);
+      const normalizedKey = normalizeSnapshotString(key, ctx);
+      out[normalizedKey] = normalizeSnapshotValue(entry, ctx);
     }
     return out;
   }
   if (typeof value === "string") {
-    return normalizeSnapshotPath(value);
+    return normalizeSnapshotString(value, ctx);
   }
   return value;
+}
+
+function normalizeSnapshotString(value: string, ctx: NormalizeContext): string {
+  const normalizedPath = normalizeSnapshotPath(value);
+  return normalizeExprId(normalizedPath, ctx);
+}
+
+function normalizeExprId(value: string, ctx: NormalizeContext): string {
+  if (!EXPR_ID_PATTERN.test(value)) {
+    return value;
+  }
+  const existing = ctx.exprIds.get(value);
+  if (existing) {
+    return existing;
+  }
+  const normalized = `expr_${String(ctx.nextExprIndex).padStart(4, "0")}`;
+  ctx.nextExprIndex += 1;
+  ctx.exprIds.set(value, normalized);
+  return normalized;
 }
 
 function normalizeSnapshotPath(value: string): string {
@@ -1567,3 +1595,5 @@ function normalizePathForCompare(value: string): string {
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+const EXPR_ID_PATTERN = /^expr_[0-9a-f]{8,}$/i;

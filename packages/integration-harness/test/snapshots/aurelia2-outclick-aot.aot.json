@@ -5,7 +5,7 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_6e80c9c0368fcaa0", "mode": 2, "to": "fn", "type": 12 }
+              { "exprId": "expr_0000", "mode": 2, "to": "fn", "type": 12 }
             ],
             "res": "outclick",
             "type": 1
@@ -27,7 +27,7 @@
           "name": "handle",
           "optional": false
         },
-        "id": "expr_6e80c9c0368fcaa0"
+        "id": "expr_0000"
       }
     ],
     "template": "<!--au--><div outclick.call=\"handle($event)\"></div>"

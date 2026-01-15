@@ -3,7 +3,7 @@
     "definition": {
       "instructions": [
         [
-          { "exprIds": [ "expr_d77ae6008a1def60" ], "parts": [ "", "" ], "type": 30 }
+          { "exprIds": [ "expr_0000" ], "parts": [ "", "" ], "type": 30 }
         ],
         [
           { "instructions": [], "res": "nav-bar", "type": 0 }
@@ -11,8 +11,8 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_cacd1100cb98f395", "mode": 2, "to": "name", "type": 12 },
-              { "exprId": "expr_3880b1005d41a400", "mode": 2, "to": "age", "type": 12 }
+              { "exprId": "expr_0001", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_0002", "mode": 2, "to": "age", "type": 12 }
             ],
             "res": "user-card",
             "type": 0
@@ -26,15 +26,15 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "message" },
-        "id": "expr_d77ae6008a1def60"
+        "id": "expr_0000"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
-        "id": "expr_cacd1100cb98f395"
+        "id": "expr_0001"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userAge" },
-        "id": "expr_3880b1005d41a400"
+        "id": "expr_0002"
       }
     ],
     "template": "\n  <h1><!--au--> </h1>\n  <!--au--><nav-bar></nav-bar>\n  <!--au--><user-card></user-card>\n\n"

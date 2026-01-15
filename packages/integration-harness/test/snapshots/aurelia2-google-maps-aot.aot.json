@@ -5,9 +5,9 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_aede7460b6136700", "mode": 2, "to": "latitude", "type": 12 },
-              { "exprId": "expr_e6c8ea008394d780", "mode": 2, "to": "longitude", "type": 12 },
-              { "exprId": "expr_b68ac50076908480", "mode": 2, "to": "zoom", "type": 12 }
+              { "exprId": "expr_0000", "mode": 2, "to": "latitude", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "longitude", "type": 12 },
+              { "exprId": "expr_0002", "mode": 2, "to": "zoom", "type": 12 }
             ],
             "res": "google-map",
             "type": 0
@@ -21,15 +21,15 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "lat" },
-        "id": "expr_aede7460b6136700"
+        "id": "expr_0000"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "lng" },
-        "id": "expr_e6c8ea008394d780"
+        "id": "expr_0001"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "zoom" },
-        "id": "expr_b68ac50076908480"
+        "id": "expr_0002"
       }
     ],
     "template": "<!--au--><google-map>\n</google-map>"

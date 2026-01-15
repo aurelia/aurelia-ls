@@ -5,15 +5,15 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_61e83540b37bcf00", "mode": 2, "to": "name", "type": 12 },
-              { "exprId": "expr_b5ac350007790720", "mode": 2, "to": "avatar", "type": 12 }
+              { "exprId": "expr_0000", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "avatar", "type": 12 }
             ],
             "res": "user-card",
             "type": 0
           },
           {
             "instructions": [
-              { "exprId": "expr_3741a980c6c5cdc0", "mode": 2, "to": "color", "type": 12 }
+              { "exprId": "expr_0002", "mode": 2, "to": "color", "type": 12 }
             ],
             "res": "highlight",
             "type": 1
@@ -22,7 +22,7 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_4a46160082a22b80", "mode": 2, "to": "label", "type": 12 }
+              { "exprId": "expr_0003", "mode": 2, "to": "label", "type": 12 }
             ],
             "res": "sub-card",
             "type": 0
@@ -36,19 +36,19 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
-        "id": "expr_61e83540b37bcf00"
+        "id": "expr_0000"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "avatarUrl" },
-        "id": "expr_b5ac350007790720"
+        "id": "expr_0001"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "accent" },
-        "id": "expr_3741a980c6c5cdc0"
+        "id": "expr_0002"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "label" },
-        "id": "expr_4a46160082a22b80"
+        "id": "expr_0003"
       }
     ],
     "template": "\n\n\n<div class=\"app\">\n  <!--au--><user-card></user-card>\n  <!--au--><sub-card></sub-card>\n</div>\n"

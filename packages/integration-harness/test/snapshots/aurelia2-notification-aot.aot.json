@@ -5,7 +5,7 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_6d485780bae3ca80", "mode": 2, "to": "position", "type": 12 },
+              { "exprId": "expr_0000", "mode": 2, "to": "position", "type": 12 },
               { "to": "hostClass", "type": 10, "value": "host" },
               { "to": "containerClass", "type": 10, "value": "container" }
             ],
@@ -21,7 +21,7 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "position" },
-        "id": "expr_6d485780bae3ca80"
+        "id": "expr_0000"
       }
     ],
     "template": "<!--au--><au-notification-host host-class=\"host\" container-class=\"container\">\n</au-notification-host>"

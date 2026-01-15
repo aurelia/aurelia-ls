@@ -3,12 +3,12 @@
     "definition": {
       "instructions": [
         [
-          { "exprIds": [ "expr_28eaf180c780ff80" ], "parts": [ "", "" ], "type": 30 }
+          { "exprIds": [ "expr_0000" ], "parts": [ "", "" ], "type": 30 }
         ],
         [
           {
             "instructions": [
-              { "exprId": "expr_1112d700de94f000", "mode": 2, "to": "label", "type": 12 }
+              { "exprId": "expr_0001", "mode": 2, "to": "label", "type": 12 }
             ],
             "res": "counter",
             "type": 0
@@ -31,11 +31,11 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "title" },
-        "id": "expr_28eaf180c780ff80"
+        "id": "expr_0000"
       },
       {
         "ast": { "$kind": "PrimitiveLiteral", "value": "First Counter" },
-        "id": "expr_1112d700de94f000"
+        "id": "expr_0001"
       }
     ],
     "template": "\n\n<div class=\"app\">\n  <h1 data-testid=\"title\"><!--au--> </h1>\n\n  <!-- Counter imported via template-level import -->\n  <!--au--><counter data-testid=\"first-counter\"></counter>\n  <!--au--><counter data-testid=\"second-counter\" label=\"Second Counter\"></counter>\n</div>\n"

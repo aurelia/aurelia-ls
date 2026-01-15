@@ -3,12 +3,12 @@
     "definition": {
       "instructions": [
         [
-          { "exprIds": [ "expr_d3aaa980d9d81a20" ], "parts": [ "", "" ], "type": 30 }
+          { "exprIds": [ "expr_0000" ], "parts": [ "", "" ], "type": 30 }
         ],
         [
           {
             "instructions": [
-              { "exprId": "expr_e11fd100ed65b640", "mode": 2, "to": "amount", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "amount", "type": 12 },
               { "to": "currency", "type": 10, "value": "USD" }
             ],
             "res": "price-tag",
@@ -18,15 +18,15 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_025c25c0cf2b7600", "mode": 2, "to": "inStock", "type": 12 },
-              { "exprId": "expr_e4114b0033336130", "mode": 2, "to": "count", "type": 12 }
+              { "exprId": "expr_0002", "mode": 2, "to": "inStock", "type": 12 },
+              { "exprId": "expr_0003", "mode": 2, "to": "count", "type": 12 }
             ],
             "res": "stock-badge",
             "type": 0
           }
         ],
         [
-          { "exprId": "expr_e6605b40ed820900", "mode": 2, "to": "disabled", "type": 12 }
+          { "exprId": "expr_0004", "mode": 2, "to": "disabled", "type": 12 }
         ]
       ],
       "name": "product-card",
@@ -36,19 +36,19 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "name" },
-        "id": "expr_d3aaa980d9d81a20"
+        "id": "expr_0000"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "price" },
-        "id": "expr_e11fd100ed65b640"
+        "id": "expr_0001"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "inStock" },
-        "id": "expr_025c25c0cf2b7600"
+        "id": "expr_0002"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "stockCount" },
-        "id": "expr_e4114b0033336130"
+        "id": "expr_0003"
       },
       {
         "ast": {
@@ -57,7 +57,7 @@
           "operation": "!",
           "pos": 0
         },
-        "id": "expr_e6605b40ed820900"
+        "id": "expr_0004"
       }
     ],
     "template": "\n  <article class=\"product-card\">\n    <h3><!--au--> </h3>\n\n    <!-- Local-only components - not available outside this template -->\n    <!--au--><price-tag currency=\"USD\"></price-tag>\n    <!--au--><stock-badge></stock-badge>\n\n    <!--au--><button>Add to Cart</button>\n  </article>\n\n"

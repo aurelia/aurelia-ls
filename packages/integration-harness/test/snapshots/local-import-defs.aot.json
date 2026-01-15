@@ -5,7 +5,7 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_cbb7b28055d42c80", "mode": 2, "to": "label", "type": 12 }
+              { "exprId": "expr_0000", "mode": 2, "to": "label", "type": 12 }
             ],
             "res": "local-chip",
             "type": 0
@@ -19,7 +19,7 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "label" },
-        "id": "expr_cbb7b28055d42c80"
+        "id": "expr_0000"
       }
     ],
     "template": "<!--au--><local-chip></local-chip>"

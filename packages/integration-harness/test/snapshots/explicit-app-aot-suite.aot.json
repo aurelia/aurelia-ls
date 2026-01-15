@@ -5,7 +5,7 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_00d029801ecf3780", "mode": 2, "to": "value", "type": 12 }
+              { "exprId": "expr_0014", "mode": 2, "to": "value", "type": 12 }
             ],
             "res": "if",
             "templateIndex": 0,
@@ -24,7 +24,7 @@
               {
                 "containerless": true,
                 "instructions": [
-                  { "exprId": "expr_4799d80027d77ec0", "mode": 2, "to": "name", "type": 12 }
+                  { "exprId": "expr_0015", "mode": 2, "to": "name", "type": 12 }
                 ],
                 "res": "user-card",
                 "type": 0
@@ -42,11 +42,11 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
-        "id": "expr_4799d80027d77ec0"
+        "id": "expr_0015"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "show" },
-        "id": "expr_00d029801ecf3780"
+        "id": "expr_0014"
       }
     ],
     "template": "<div>\n  <!--au--><!--au-start--><!--au-end-->\n  <!--au--><!--au-start--><!--au-end-->\n</div>"
@@ -61,8 +61,8 @@
           {
             "containerless": true,
             "instructions": [
-              { "exprId": "expr_d97605003d20bee0", "mode": 2, "to": "name", "type": 12 },
-              { "exprId": "expr_413236a03d3864a0", "mode": 2, "to": "avatar", "type": 12 }
+              { "exprId": "expr_0016", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_0017", "mode": 2, "to": "avatar", "type": 12 }
             ],
             "res": "user-card",
             "type": 0
@@ -76,11 +76,11 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
-        "id": "expr_d97605003d20bee0"
+        "id": "expr_0016"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "avatarUrl" },
-        "id": "expr_413236a03d3864a0"
+        "id": "expr_0017"
       }
     ],
     "template": "<div>\n  <!--au--><nav-bar></nav-bar>\n  <!--au--><user-card></user-card>\n</div>"
@@ -89,7 +89,7 @@
     "definition": {
       "instructions": [
         [
-          { "exprIds": [ "expr_b2433ec068870a80" ], "parts": [ "", "" ], "type": 30 }
+          { "exprIds": [ "expr_0005" ], "parts": [ "", "" ], "type": 30 }
         ],
         [
           { "instructions": [], "res": "nav-bar", "type": 0 }
@@ -109,8 +109,8 @@
           {
             "containerless": true,
             "instructions": [
-              { "exprId": "expr_b937b1809e9d0680", "mode": 2, "to": "items", "type": 12 },
-              { "exprId": "expr_aded6d80d4c3da40", "mode": 2, "to": "columns", "type": 12 }
+              { "exprId": "expr_0006", "mode": 2, "to": "items", "type": 12 },
+              { "exprId": "expr_0007", "mode": 2, "to": "columns", "type": 12 }
             ],
             "res": "data-grid",
             "type": 0
@@ -135,16 +135,16 @@
           }
         ],
         [
-          { "exprIds": [ "expr_0367480038dcac40" ], "parts": [ "", "" ], "type": 30 }
+          { "exprIds": [ "expr_0008" ], "parts": [ "", "" ], "type": 30 }
         ],
         [
-          { "exprIds": [ "expr_b5a46200fd6cddc0" ], "parts": [ "", "" ], "type": 30 }
+          { "exprIds": [ "expr_0009" ], "parts": [ "", "" ], "type": 30 }
         ],
         [
-          { "exprId": "expr_dc814000907623c0", "mode": 6, "to": "value", "type": 12 }
+          { "exprId": "expr_0010", "mode": 6, "to": "value", "type": 12 }
         ],
         [
-          { "exprId": "expr_fe4b87f0ab648f00", "mode": 6, "to": "value", "type": 12 }
+          { "exprId": "expr_0011", "mode": 6, "to": "value", "type": 12 }
         ],
         [
           {
@@ -166,15 +166,15 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "message" },
-        "id": "expr_b2433ec068870a80"
+        "id": "expr_0005"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "items" },
-        "id": "expr_b937b1809e9d0680"
+        "id": "expr_0006"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "columns" },
-        "id": "expr_aded6d80d4c3da40"
+        "id": "expr_0007"
       },
       {
         "ast": {
@@ -183,7 +183,7 @@
           "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "today" },
           "name": "date"
         },
-        "id": "expr_0367480038dcac40"
+        "id": "expr_0008"
       },
       {
         "ast": {
@@ -192,7 +192,7 @@
           "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "price" },
           "name": "currency"
         },
-        "id": "expr_b5a46200fd6cddc0"
+        "id": "expr_0009"
       },
       {
         "ast": {
@@ -203,7 +203,7 @@
           "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "query" },
           "name": "debounce"
         },
-        "id": "expr_dc814000907623c0"
+        "id": "expr_0010"
       },
       {
         "ast": {
@@ -214,7 +214,7 @@
           "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "position" },
           "name": "throttle"
         },
-        "id": "expr_fe4b87f0ab648f00"
+        "id": "expr_0011"
       }
     ],
     "template": "\n  <h1><!--au--> </h1>\n\n  <!-- Global components -->\n  <!--au--><nav-bar></nav-bar>\n  <!--au--><user-card name=\"Alice\" avatar=\"alice.png\"></user-card>\n  <!--au--><data-grid></data-grid>\n\n  <!-- Global attributes -->\n  <!--au--><div tooltip=\"This is a tooltip\">Hover me</div>\n  <!--au--><p highlight=\"yellow\">Highlighted text</p>\n\n  <!-- Value converters and binding behaviors -->\n  <span><!--au--> </span>\n  <span><!--au--> </span>\n  <!--au--><input>\n  <!--au--><input>\n\n  <!-- static $au component -->\n  <!--au--><fancy-button label=\"Click me\"></fancy-button>\n\n  <!-- Local scope component (widgets) -->\n  <!--au--><product-card></product-card>\n\n"
@@ -223,12 +223,12 @@
     "definition": {
       "instructions": [
         [
-          { "exprIds": [ "expr_d3aaa980d9d81a20" ], "parts": [ "", "" ], "type": 30 }
+          { "exprIds": [ "expr_0000" ], "parts": [ "", "" ], "type": 30 }
         ],
         [
           {
             "instructions": [
-              { "exprId": "expr_e11fd100ed65b640", "mode": 2, "to": "amount", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "amount", "type": 12 },
               { "to": "currency", "type": 10, "value": "USD" }
             ],
             "res": "price-tag",
@@ -238,15 +238,15 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_025c25c0cf2b7600", "mode": 2, "to": "inStock", "type": 12 },
-              { "exprId": "expr_e4114b0033336130", "mode": 2, "to": "count", "type": 12 }
+              { "exprId": "expr_0002", "mode": 2, "to": "inStock", "type": 12 },
+              { "exprId": "expr_0003", "mode": 2, "to": "count", "type": 12 }
             ],
             "res": "stock-badge",
             "type": 0
           }
         ],
         [
-          { "exprId": "expr_e6605b40ed820900", "mode": 2, "to": "disabled", "type": 12 }
+          { "exprId": "expr_0004", "mode": 2, "to": "disabled", "type": 12 }
         ]
       ],
       "name": "explicit-product-card",
@@ -256,19 +256,19 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "name" },
-        "id": "expr_d3aaa980d9d81a20"
+        "id": "expr_0000"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "price" },
-        "id": "expr_e11fd100ed65b640"
+        "id": "expr_0001"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "inStock" },
-        "id": "expr_025c25c0cf2b7600"
+        "id": "expr_0002"
       },
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "stockCount" },
-        "id": "expr_e4114b0033336130"
+        "id": "expr_0003"
       },
       {
         "ast": {
@@ -277,7 +277,7 @@
           "operation": "!",
           "pos": 0
         },
-        "id": "expr_e6605b40ed820900"
+        "id": "expr_0004"
       }
     ],
     "template": "\n  <article class=\"product-card\">\n    <h3><!--au--> </h3>\n\n    <!-- Local-only components - not available outside this template -->\n    <!--au--><price-tag currency=\"USD\"></price-tag>\n    <!--au--><stock-badge></stock-badge>\n\n    <!--au--><button>Add to Cart</button>\n  </article>\n\n"
@@ -288,7 +288,7 @@
         [
           {
             "instructions": [
-              { "exprId": "expr_39aeae38b6eefa04", "to": "items", "type": 15 }
+              { "exprId": "expr_0012", "to": "items", "type": 15 }
             ],
             "res": "repeat",
             "templateIndex": 0,
@@ -304,7 +304,7 @@
               { "instructions": [], "res": "nav-bar", "type": 0 }
             ],
             [
-              { "exprIds": [ "expr_4994b940e930af80" ], "parts": [ "", "" ], "type": 30 }
+              { "exprIds": [ "expr_0013" ], "parts": [ "", "" ], "type": 30 }
             ]
           ],
           "name": "repeat_0",
@@ -317,7 +317,7 @@
     "expressions": [
       {
         "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "item" },
-        "id": "expr_4994b940e930af80"
+        "id": "expr_0013"
       },
       {
         "ast": {
@@ -326,7 +326,7 @@
           "iterable": { "$kind": "AccessScope", "ancestor": 0, "name": "items" },
           "semiIdx": -1
         },
-        "id": "expr_39aeae38b6eefa04"
+        "id": "expr_0012"
       }
     ],
     "template": "<!--au--><!--au-start--><!--au-end-->"
