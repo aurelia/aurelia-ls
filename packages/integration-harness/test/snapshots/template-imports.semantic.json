@@ -699,7 +699,7 @@
     "root": "root",
     "scopes": {
       "local:c:/projects/aurelia-ls/playground/template-imports/src/my-app.ts": {
-        "id": "local:c:/projects/aurelia-ls/playground/template-imports/src/my-app.ts",
+        "id": "local:playground/template-imports/src/my-app.ts",
         "label": "MyAppCustomElement",
         "parent": "root",
         "resources": {

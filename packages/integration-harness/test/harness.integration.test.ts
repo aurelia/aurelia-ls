@@ -1544,10 +1544,16 @@ function normalizeSnapshotValue(value: unknown): unknown {
 function normalizeSnapshotPath(value: string): string {
   const normalizedRoot = normalizePathForCompare(REPO_ROOT);
   if (!normalizedRoot) return value;
-  const normalized = normalizePathForCompare(value);
+  const normalizedValue = value.replace(/\\/g, "/");
+  const normalized = normalizePathForCompare(normalizedValue);
   const prefix = normalizedRoot.endsWith("/") ? normalizedRoot : `${normalizedRoot}/`;
   if (normalized.startsWith(prefix)) {
-    return normalized.slice(prefix.length);
+    return normalizedValue.slice(prefix.length);
+  }
+  if (normalized.includes(prefix)) {
+    const flags = process.platform === "win32" ? "gi" : "g";
+    const pattern = new RegExp(escapeRegExp(prefix), flags);
+    return normalizedValue.replace(pattern, "");
   }
   return value;
 }
@@ -1555,4 +1561,8 @@ function normalizeSnapshotPath(value: string): string {
 function normalizePathForCompare(value: string): string {
   const normalized = value.replace(/\\/g, "/");
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
