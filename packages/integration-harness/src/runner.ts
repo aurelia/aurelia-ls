@@ -131,6 +131,9 @@ export interface HarnessRunOptions {
   };
 }
 
+const externalResourceCache = new Map<string, readonly ResourceDef[]>();
+const externalAnalysisCache = new Map<string, AnalysisResult<PackageAnalysis>>();
+
 export async function runIntegrationScenario(
   scenario: IntegrationScenario,
   options: HarnessRunOptions = {},
@@ -319,8 +322,23 @@ async function analyzeExternalPackages(
 ): Promise<ExternalPackageResult[]> {
   const results: ExternalPackageResult[] = [];
   for (const spec of specs) {
-    const analysis = await analyzePackage(spec.path, { preferSource: spec.preferSource });
-    const resources = analysis.value.resources.map((entry) => entry.resource);
+    const cacheKey = `${spec.path}::${spec.preferSource ? "source" : "bundle"}`;
+    let analysis: AnalysisResult<PackageAnalysis> | undefined;
+    let resources = externalResourceCache.get(cacheKey);
+
+    if (retainAnalysis) {
+      analysis = externalAnalysisCache.get(cacheKey);
+    }
+
+    if (!resources || (retainAnalysis && !analysis)) {
+      analysis = analysis ?? await analyzePackage(spec.path, { preferSource: spec.preferSource });
+      resources = analysis.value.resources.map((entry) => entry.resource);
+      externalResourceCache.set(cacheKey, resources);
+      if (retainAnalysis) {
+        externalAnalysisCache.set(cacheKey, analysis);
+      }
+    }
+
     results.push({
       spec,
       resources,

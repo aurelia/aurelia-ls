@@ -1115,58 +1115,79 @@ if (HAS_AURELIA_GOOGLE_MAPS) {
   });
 }
 
+const SCENARIO_GROUP_SIZE = 4;
+const SCENARIO_GROUPS = chunkScenarios(SCENARIOS, SCENARIO_GROUP_SIZE);
+
 describe("integration harness scenarios", () => {
-  test("runs end-to-end scenarios with snapshots", async () => {
-    const reports = [];
-
-    for (const scenario of SCENARIOS) {
-      let run = await runIntegrationScenario(scenario);
-      const scenarioId = run.scenario.id;
-      const failures = evaluateExpectations(run, scenario.expect);
-      reports.push(buildScenarioReport(run, failures));
-      logMemoryTrace(run);
-
-      if (scenario.id === "conditional-define") {
-        const hasConditionalGap = (run.catalog.gaps ?? []).some(
-          (gap) => gap.kind === "conditional-registration",
-        );
-        expect(hasConditionalGap).toBe(false);
-      }
-
-      if (scenario.id === "external-multi-class") {
-        const externalResources = run.external.flatMap((pkg) => pkg.resources.map((r) => r.kind));
-        expect(externalResources.length).toBeGreaterThan(0);
-      }
-
-      await runRuntimeAssertions(run);
-
-      const bundle = createSnapshotBundle(run);
-      const normalized = normalizeSnapshotBundle(bundle);
-      const paths = getSnapshotPaths(SNAPSHOT_DIR, scenario.id);
-
-      assertSnapshot(`${scenario.id}:semantic`, paths.semantic, normalized.semantic);
-      assertSnapshot(`${scenario.id}:api`, paths.apiSurface, normalized.apiSurface);
-      if (normalized.aot) {
-        assertSnapshot(`${scenario.id}:aot`, paths.aot ?? "", normalized.aot);
-      }
-
-      if (SHOULD_GC) {
-        run = null;
-        await logGcBaseline(scenarioId);
-      }
-    }
-
-    const report = buildHarnessReport(reports);
-    const failureSummary = report.scenarios
-      .filter((entry) => entry.failures.length > 0)
-      .map((entry) => ({
-        id: entry.id,
-        failures: entry.failures,
-      }));
-
-    expect(report.failed, JSON.stringify(failureSummary, null, 2)).toBe(0);
+  SCENARIO_GROUPS.forEach((group, index) => {
+    const label = `runs end-to-end scenarios with snapshots (${index + 1}/${SCENARIO_GROUPS.length})`;
+    test(label, async () => {
+      await runScenarioGroup(group);
+    });
   });
 });
+
+async function runScenarioGroup(group: IntegrationScenario[]): Promise<void> {
+  const reports = [];
+
+  for (const scenario of group) {
+    let run = await runIntegrationScenario(scenario);
+    const scenarioId = run.scenario.id;
+    const failures = evaluateExpectations(run, scenario.expect);
+    reports.push(buildScenarioReport(run, failures));
+    logMemoryTrace(run);
+
+    if (scenario.id === "conditional-define") {
+      const hasConditionalGap = (run.catalog.gaps ?? []).some(
+        (gap) => gap.kind === "conditional-registration",
+      );
+      expect(hasConditionalGap).toBe(false);
+    }
+
+    if (scenario.id === "external-multi-class") {
+      const externalResources = run.external.flatMap((pkg) => pkg.resources.map((r) => r.kind));
+      expect(externalResources.length).toBeGreaterThan(0);
+    }
+
+    await runRuntimeAssertions(run);
+
+    const bundle = createSnapshotBundle(run);
+    const normalized = normalizeSnapshotBundle(bundle);
+    const paths = getSnapshotPaths(SNAPSHOT_DIR, scenario.id);
+
+    assertSnapshot(`${scenario.id}:semantic`, paths.semantic, normalized.semantic);
+    assertSnapshot(`${scenario.id}:api`, paths.apiSurface, normalized.apiSurface);
+    if (normalized.aot) {
+      assertSnapshot(`${scenario.id}:aot`, paths.aot ?? "", normalized.aot);
+    }
+
+    if (SHOULD_GC) {
+      run = null;
+      await logGcBaseline(scenarioId);
+    }
+  }
+
+  const report = buildHarnessReport(reports);
+  const failureSummary = report.scenarios
+    .filter((entry) => entry.failures.length > 0)
+    .map((entry) => ({
+      id: entry.id,
+      failures: entry.failures,
+    }));
+
+  expect(report.failed, JSON.stringify(failureSummary, null, 2)).toBe(0);
+}
+
+function chunkScenarios(
+  scenarios: IntegrationScenario[],
+  groupSize: number,
+): IntegrationScenario[][] {
+  const groups: IntegrationScenario[][] = [];
+  for (let i = 0; i < scenarios.length; i += groupSize) {
+    groups.push(scenarios.slice(i, i + groupSize));
+  }
+  return groups;
+}
 
 async function runRuntimeAssertions(run: Awaited<ReturnType<typeof runIntegrationScenario>>): Promise<void> {
   const runtime = run.scenario.expect?.runtime;
