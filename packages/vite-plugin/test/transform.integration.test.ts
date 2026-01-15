@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSyn
 import { join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
-import { build, type InlineConfig, type ResolvedConfig } from "vite";
+import { build, createServer, type InlineConfig, type ResolvedConfig } from "vite";
 import { aurelia } from "../src/plugin.js";
 import type { AureliaPluginOptions } from "../src/types.js";
 import { createResolutionContext } from "../src/resolution.js";
@@ -209,6 +209,54 @@ describe("vite plugin transform integration", () => {
       });
       const output = readBuildOutput(outDir);
       expect(hasThirdPartyBinding(output, scopedBinding)).toBe(false);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+});
+
+describe("vite dev server integration", () => {
+  it("serves dev transform output with third-party resources", async () => {
+    const workspace = createWorkspace();
+    try {
+      const options: AureliaPluginOptions = {
+        entry: "./src/app.html",
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [{ path: "../packages/user-card" }],
+        },
+      };
+
+      const output = await runViteDevTransform(workspace, options);
+      expect(hasThirdPartyBinding(output, {
+        resource: "user-card",
+        bindable: "name",
+        mode: 2,
+      })).toBe(true);
+    } finally {
+      cleanupWorkspace(workspace);
+    }
+  });
+
+  it("serves dev transform output without third-party metadata when disabled", async () => {
+    const workspace = createWorkspace();
+    try {
+      const options: AureliaPluginOptions = {
+        entry: "./src/app.html",
+        tsconfig: "tsconfig.json",
+        thirdParty: {
+          scan: false,
+          packages: [],
+        },
+      };
+
+      const output = await runViteDevTransform(workspace, options);
+      expect(hasThirdPartyBinding(output, {
+        resource: "user-card",
+        bindable: "name",
+        mode: 2,
+      })).toBe(false);
     } finally {
       cleanupWorkspace(workspace);
     }
@@ -437,6 +485,38 @@ async function runViteBuild(
 
   await build(config);
   return outDir;
+}
+
+async function runViteDevTransform(
+  workspace: Workspace,
+  options: AureliaPluginOptions,
+): Promise<string> {
+  const config: InlineConfig = {
+    root: workspace.appRoot,
+    configFile: false,
+    plugins: aurelia(options),
+    resolve: {
+      alias: {
+        aurelia: join(workspace.appRoot, "src", "aurelia.ts"),
+      },
+    },
+    server: {
+      middlewareMode: true,
+      hmr: false,
+    },
+    logLevel: "silent",
+  };
+
+  const server = await createServer(config);
+  try {
+    const result = await server.transformRequest("/src/app.ts");
+    if (!result?.code) {
+      throw new Error("Expected dev server transform to return code.");
+    }
+    return result.code;
+  } finally {
+    await server.close();
+  }
 }
 
 function readBuildOutput(outDir: string): string {
