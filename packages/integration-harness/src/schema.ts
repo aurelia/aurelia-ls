@@ -41,8 +41,10 @@ export type ExternalResourcePolicy =
   | "rebuild-graph";
 
 export interface ExternalPackageSpec {
+  // Preferred package identifier (use the actual package name).
   id?: string;
-  path: string;
+  // When omitted, the harness will resolve this from `id` using fixture rules.
+  path?: string;
   preferSource?: boolean;
 }
 
@@ -101,7 +103,7 @@ export interface AotExpectation {
 
 export type RuntimePatch = "bridge-bind-to-bound";
 
-export interface RuntimeExpectation {
+export interface SsrRuntimeExpectation {
   kind: "ssr-module";
   modulePath: string;
   entry?: string;
@@ -117,6 +119,32 @@ export interface RuntimeExpectation {
   vm?: Record<string, unknown>;
   htmlLinks?: readonly string[];
 }
+
+export interface BrowserProbe {
+  name: string;
+  expr: string;
+  expect?: unknown;
+}
+
+export interface BrowserRuntimeExpectation {
+  kind: "browser";
+  url: string;
+  start?: string;
+  cwd?: string;
+  root?: string;
+  waitFor?: string;
+  timeoutMs?: number;
+  headful?: boolean;
+  delayMs?: number;
+  attrs?: readonly string[];
+  dom?: readonly DomExpectation[];
+  attributes?: Readonly<Record<string, number>>;
+  probes?: readonly BrowserProbe[];
+}
+
+export type RuntimeExpectation =
+  | SsrRuntimeExpectation
+  | BrowserRuntimeExpectation;
 
 export type DomScope = "host" | "document";
 

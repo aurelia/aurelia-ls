@@ -5,3 +5,5 @@ export * from "./assertions.js";
 export * from "./snapshots.js";
 export * from "./report.js";
 export * from "./memory.js";
+export * from "./fixtures.js";
+export * from "./browser.js";

@@ -54,6 +54,7 @@ import {
   normalizeScenario,
 } from "./scenario.js";
 import { createMemoryTracker, type MemoryTrace } from "./memory.js";
+import { mergePackageRoots, resolveExternalPackageSpec } from "./fixtures.js";
 import type {
   AssertionFailure,
   CompileTargetSpec,
@@ -139,6 +140,7 @@ export async function runIntegrationScenario(
   options: HarnessRunOptions = {},
 ): Promise<IntegrationRun> {
   const normalized = normalizeScenario(scenario);
+  const resolvedScenario = resolveScenarioFixtures(normalized);
   const retention = resolveRetentionOptions(options.retain);
   const timings: IntegrationTimings = {
     totalMs: 0,
@@ -155,39 +157,39 @@ export async function runIntegrationScenario(
   });
   memoryTracker.mark("start");
 
-  const { program, fileSystem, fileMap } = createProgramFromScenario(normalized);
+  const { program, fileSystem, fileMap } = createProgramFromScenario(resolvedScenario);
   memoryTracker.mark("program");
 
   const resolutionStart = performance.now();
-  const baseResolution = resolve(program, buildResolutionConfig(normalized, fileSystem), options.logger);
-  const resolution = applyResolutionPolicy(baseResolution, normalized.resolution.policy);
+  const baseResolution = resolve(program, buildResolutionConfig(resolvedScenario, fileSystem), options.logger);
+  const resolution = applyResolutionPolicy(baseResolution, resolvedScenario.resolution.policy);
   timings.resolutionMs = performance.now() - resolutionStart;
   memoryTracker.mark("resolution");
 
   const externalStart = performance.now();
-  const external = await analyzeExternalPackages(normalized.externalPackages, retention.externalAnalysis);
+  const external = await analyzeExternalPackages(resolvedScenario.externalPackages, retention.externalAnalysis);
   timings.externalMs = performance.now() - externalStart;
   memoryTracker.mark("external");
 
   const merged = applyExternalResources(
     resolution,
     external.flatMap((pkg) => pkg.resources),
-    normalized.externalResourcePolicy,
+    resolvedScenario.externalResourcePolicy,
   );
-  const augmented = applyExplicitResources(merged, normalized.resolution.explicitResources);
+  const augmented = applyExplicitResources(merged, resolvedScenario.resolution.explicitResources);
   memoryTracker.mark("merge");
 
   const compileStart = performance.now();
-  const compile = compileTargets(normalized, resolution, augmented, fileMap, {
-    computeUsage: !!normalized.expect?.registrationPlan,
+  const compile = compileTargets(resolvedScenario, resolution, augmented, fileMap, {
+    computeUsage: !!resolvedScenario.expect?.registrationPlan,
   });
   timings.compileMs = performance.now() - compileStart;
   memoryTracker.mark("compile");
 
-  const snapshots = buildSnapshots(augmented, normalized);
+  const snapshots = buildSnapshots(augmented, resolvedScenario);
   memoryTracker.mark("snapshots");
 
-  const usageByScope = normalized.expect?.registrationPlan
+  const usageByScope = resolvedScenario.expect?.registrationPlan
     ? collectUsageByScope(compile)
     : undefined;
   const registrationPlan = usageByScope
@@ -201,7 +203,7 @@ export async function runIntegrationScenario(
   const trimmedResolution = trimResolutionResult(resolution, retention);
 
   return {
-    scenario: normalized,
+    scenario: resolvedScenario,
     program: retention.program ? program : undefined,
     fileSystem: retention.fileSystem ? fileSystem : undefined,
     resolution: trimmedResolution,
@@ -217,6 +219,22 @@ export async function runIntegrationScenario(
     registrationPlan,
     timings,
     memory,
+  };
+}
+
+function resolveScenarioFixtures(scenario: NormalizedScenario): NormalizedScenario {
+  if (scenario.externalPackages.length === 0) return scenario;
+
+  const externalPackages = scenario.externalPackages.map(resolveExternalPackageSpec);
+  const packageRoots = mergePackageRoots(scenario.resolution.packageRoots, externalPackages);
+
+  return {
+    ...scenario,
+    externalPackages,
+    resolution: {
+      ...scenario.resolution,
+      packageRoots,
+    },
   };
 }
 
@@ -322,6 +340,9 @@ async function analyzeExternalPackages(
 ): Promise<ExternalPackageResult[]> {
   const results: ExternalPackageResult[] = [];
   for (const spec of specs) {
+    if (!spec.path) {
+      throw new Error("External package spec missing path after fixture resolution.");
+    }
     const cacheKey = `${spec.path}::${spec.preferSource ? "source" : "bundle"}`;
     let analysis: AnalysisResult<PackageAnalysis> | undefined;
     let resources = externalResourceCache.get(cacheKey);

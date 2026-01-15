@@ -12,10 +12,12 @@ import {
   createSnapshotBundle,
   evaluateExpectations,
   getSnapshotPaths,
+  inspectBrowserRuntime,
+  resolveExternalPackagePath,
   runIntegrationScenario,
   writeSnapshot,
 } from "@aurelia-ls/integration-harness";
-import type { IntegrationScenario, RuntimeExpectation } from "@aurelia-ls/integration-harness";
+import type { BrowserRuntimeExpectation, IntegrationScenario, SsrRuntimeExpectation } from "@aurelia-ls/integration-harness";
 import {
   compileWithAot,
   patchComponentDefinition,
@@ -55,6 +57,10 @@ const SIBLING_APP_TSCONFIG = path.resolve(
   "sibling-app",
   "tsconfig.json",
 );
+const BASIC_CSR_ROOT = path.resolve(REPO_ROOT, "playground", "basic-csr");
+const BASIC_CSR_TSCONFIG = path.resolve(BASIC_CSR_ROOT, "tsconfig.json");
+const BASIC_CSR_URL = "http://localhost:4173/";
+const BASIC_CSR_START = "pnpm exec vite playground/basic-csr --port 4173 --strictPort";
 const TEMPLATE_IMPORTS_TSCONFIG = path.resolve(
   REPO_ROOT,
   "playground",
@@ -88,36 +94,11 @@ const TEMPLATE_IMPORTS_MULTI_SUBPATH_TEMPLATE = fs.readFileSync(
   path.join(TEMPLATE_IMPORTS_MULTI_SUBPATH_ROOT, "src", "my-app.html"),
   "utf-8",
 );
-const AURELIA_TABLE_PACKAGE = path.resolve(
-  REPO_ROOT,
-  "aurelia2-plugins",
-  "packages",
-  "aurelia2-table",
-);
-const AURELIA_OUTCLICK_PACKAGE = path.resolve(
-  REPO_ROOT,
-  "aurelia2-plugins",
-  "packages",
-  "aurelia2-outclick",
-);
-const AURELIA_FORMS_PACKAGE = path.resolve(
-  REPO_ROOT,
-  "aurelia2-plugins",
-  "packages",
-  "aurelia2-forms",
-);
-const AURELIA_NOTIFICATION_PACKAGE = path.resolve(
-  REPO_ROOT,
-  "aurelia2-plugins",
-  "packages",
-  "aurelia2-notification",
-);
-const AURELIA_GOOGLE_MAPS_PACKAGE = path.resolve(
-  REPO_ROOT,
-  "aurelia2-plugins",
-  "packages",
-  "aurelia2-google-maps",
-);
+const AURELIA_TABLE_PACKAGE = resolveExternalPackagePath("aurelia2-table");
+const AURELIA_OUTCLICK_PACKAGE = resolveExternalPackagePath("aurelia2-outclick");
+const AURELIA_FORMS_PACKAGE = resolveExternalPackagePath("aurelia2-forms");
+const AURELIA_NOTIFICATION_PACKAGE = resolveExternalPackagePath("aurelia2-notification");
+const AURELIA_GOOGLE_MAPS_PACKAGE = resolveExternalPackagePath("aurelia2-google-maps");
 const HAS_AURELIA_TABLE = fs.existsSync(
   path.join(AURELIA_TABLE_PACKAGE, "package.json"),
 );
@@ -140,16 +121,7 @@ if (IS_CI && !HAS_AURELIA_TABLE) {
     "CI requires the aurelia2-plugins submodule to run third-party SSR scenarios.",
   );
 }
-const FIXTURE_MULTI_CLASS = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "resolution",
-  "test",
-  "npm",
-  "fixtures",
-  "multi-class",
-);
+const FIXTURE_MULTI_CLASS = resolveExternalPackagePath("@test/multi-class");
 
 const EXPLICIT_THIRD_PARTY_RESOURCES = {
   elements: {
@@ -370,6 +342,40 @@ const SCENARIOS: IntegrationScenario[] = [
         instructions: [
           { type: "hydrateElement", res: "nav-bar" },
           { type: "hydrateElement", res: "user-card" },
+        ],
+      },
+    },
+  },
+  {
+    id: "basic-csr-browser",
+    title: "Browser runtime hook sees CSR-rendered DOM",
+    tags: ["browser", "runtime", "csr"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: BASIC_CSR_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+    },
+    expect: {
+      runtime: {
+        kind: "browser",
+        url: BASIC_CSR_URL,
+        start: BASIC_CSR_START,
+        cwd: REPO_ROOT,
+        root: "my-app",
+        waitFor: "h1[data-testid=\"title\"]",
+        dom: [
+          {
+            selector: "h1[data-testid=\"title\"]",
+            scope: "host",
+            texts: ["Hello from Aurelia"],
+          },
+          {
+            selector: "p[data-testid=\"count\"]",
+            scope: "host",
+            texts: ["Clicks: 0"],
+          },
         ],
       },
     },
@@ -695,16 +701,11 @@ const SCENARIOS: IntegrationScenario[] = [
     },
     externalPackages: [
       {
-        path: FIXTURE_MULTI_CLASS,
+        id: "@test/multi-class",
         preferSource: true,
       },
     ],
     externalResourcePolicy: "root-scope",
-    resolution: {
-      packageRoots: {
-        "@test/multi-class": FIXTURE_MULTI_CLASS,
-      },
-    },
     compile: [
       {
         id: "registration-plan-third-party-root",
@@ -777,16 +778,11 @@ const SCENARIOS: IntegrationScenario[] = [
     },
     externalPackages: [
       {
-        path: FIXTURE_MULTI_CLASS,
+        id: "@test/multi-class",
         preferSource: true,
       },
     ],
     externalResourcePolicy: "root-scope",
-    resolution: {
-      packageRoots: {
-        "@test/multi-class": FIXTURE_MULTI_CLASS,
-      },
-    },
     compile: [
       {
         id: "external-demo",
@@ -861,16 +857,11 @@ if (HAS_AURELIA_TABLE) {
     },
     externalPackages: [
       {
-        path: AURELIA_TABLE_PACKAGE,
+        id: "aurelia2-table",
         preferSource: true,
       },
     ],
     externalResourcePolicy: "root-scope",
-    resolution: {
-      packageRoots: {
-        "aurelia2-table": AURELIA_TABLE_PACKAGE,
-      },
-    },
     compile: [
       {
         id: "aurelia2-table-ssr",
@@ -928,16 +919,11 @@ if (HAS_AURELIA_OUTCLICK) {
     },
     externalPackages: [
       {
-        path: AURELIA_OUTCLICK_PACKAGE,
+        id: "aurelia2-outclick",
         preferSource: true,
       },
     ],
     externalResourcePolicy: "root-scope",
-    resolution: {
-      packageRoots: {
-        "aurelia2-outclick": AURELIA_OUTCLICK_PACKAGE,
-      },
-    },
     compile: [
       {
         id: "aurelia2-outclick-aot",
@@ -973,16 +959,11 @@ if (HAS_AURELIA_FORMS) {
     },
     externalPackages: [
       {
-        path: AURELIA_FORMS_PACKAGE,
+        id: "aurelia2-forms",
         preferSource: true,
       },
     ],
     externalResourcePolicy: "root-scope",
-    resolution: {
-      packageRoots: {
-        "aurelia2-forms": AURELIA_FORMS_PACKAGE,
-      },
-    },
     compile: [
       {
         id: "aurelia2-forms-aot",
@@ -1022,16 +1003,11 @@ if (HAS_AURELIA_NOTIFICATION) {
     },
     externalPackages: [
       {
-        path: AURELIA_NOTIFICATION_PACKAGE,
+        id: "aurelia2-notification",
         preferSource: true,
       },
     ],
     externalResourcePolicy: "root-scope",
-    resolution: {
-      packageRoots: {
-        "aurelia2-notification": AURELIA_NOTIFICATION_PACKAGE,
-      },
-    },
     compile: [
       {
         id: "aurelia2-notification-aot",
@@ -1075,16 +1051,11 @@ if (HAS_AURELIA_GOOGLE_MAPS) {
     },
     externalPackages: [
       {
-        path: AURELIA_GOOGLE_MAPS_PACKAGE,
+        id: "aurelia2-google-maps",
         preferSource: true,
       },
     ],
     externalResourcePolicy: "root-scope",
-    resolution: {
-      packageRoots: {
-        "aurelia2-google-maps": AURELIA_GOOGLE_MAPS_PACKAGE,
-      },
-    },
     compile: [
       {
         id: "aurelia2-google-maps-aot",
@@ -1197,6 +1168,11 @@ async function runRuntimeAssertions(run: Awaited<ReturnType<typeof runIntegratio
 
   if (runtime.kind === "ssr-module") {
     await runSsrModuleAssertions(run, runtime);
+    return;
+  }
+
+  if (runtime.kind === "browser") {
+    await runBrowserAssertions(runtime);
   }
 }
 
@@ -1301,7 +1277,7 @@ function writeMemoryLog(lines: string[]): void {
 
 async function runSsrModuleAssertions(
   run: Awaited<ReturnType<typeof runIntegrationScenario>>,
-  runtime: RuntimeExpectation,
+  runtime: SsrRuntimeExpectation,
 ): Promise<void> {
   const scopeFromCompile = runtime.scopeFromCompile
     ? run.compile[runtime.scopeFromCompile]?.scopeId
@@ -1398,6 +1374,56 @@ async function runSsrModuleAssertions(
   if (runtime.htmlLinks) {
     const links = extractPageLinks(result.html);
     expect(links).toEqual(runtime.htmlLinks);
+  }
+}
+
+async function runBrowserAssertions(runtime: BrowserRuntimeExpectation): Promise<void> {
+  const inspection = await inspectBrowserRuntime(runtime);
+
+  expect(inspection.hasRoot).toBe(true);
+  expect(inspection.hasController).toBe(true);
+
+  if (runtime.attributes) {
+    for (const [name, expectedCount] of Object.entries(runtime.attributes)) {
+      const actual = inspection.attributeCounts[name] ?? 0;
+      expect(actual, `attribute count for ${name}`).toBe(expectedCount);
+    }
+  }
+
+  if (runtime.dom && runtime.dom.length > 0) {
+    runtime.dom.forEach((expectation, index) => {
+      const actual = inspection.domResults[index];
+      if (!actual) {
+        throw new Error(`Browser DOM expectation missing for "${expectation.selector}".`);
+      }
+      if (expectation.count !== undefined) {
+        expect(actual.count, `count for ${expectation.selector}`).toBe(expectation.count);
+      }
+      if (expectation.texts) {
+        expect(actual.texts, `texts for ${expectation.selector}`).toEqual(expectation.texts);
+      }
+      if (expectation.contains) {
+        for (const fragment of expectation.contains) {
+          const matched = actual.texts.some((text) => text.includes(fragment));
+          expect(matched, `contains "${fragment}" for ${expectation.selector}`).toBe(true);
+        }
+      }
+    });
+  }
+
+  if (runtime.probes && runtime.probes.length > 0) {
+    for (const probe of runtime.probes) {
+      const result = inspection.probeResults[probe.name];
+      if (!result) {
+        throw new Error(`Browser probe "${probe.name}" not found in results.`);
+      }
+      if (!result.ok) {
+        throw new Error(`Browser probe "${probe.name}" failed: ${result.error ?? "unknown error"}`);
+      }
+      if (probe.expect !== undefined) {
+        expect(result.value, `probe "${probe.name}"`).toEqual(probe.expect);
+      }
+    }
   }
 }
 
