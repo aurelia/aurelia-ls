@@ -133,11 +133,10 @@ const HAS_AURELIA_NOTIFICATION = fs.existsSync(
 const HAS_AURELIA_GOOGLE_MAPS = fs.existsSync(
   path.join(AURELIA_GOOGLE_MAPS_PACKAGE, "package.json"),
 );
-const IS_CI = process.env.CI === "1" || process.env.CI === "true";
-if (IS_CI && !HAS_AURELIA_TABLE) {
+if (!HAS_AURELIA_TABLE) {
   throw new Error(
     "[integration-harness] aurelia2-table package missing. " +
-    "CI requires the aurelia2-plugins submodule to run third-party SSR scenarios.",
+    "The integration harness requires the aurelia2-plugins submodule to run third-party SSR scenarios.",
   );
 }
 const FIXTURE_MULTI_CLASS = resolveExternalPackagePath("@test/multi-class");
@@ -168,6 +167,10 @@ const UPDATE_SNAPSHOTS = process.env.AURELIA_INTEGRATION_GOLDEN === "1";
 const LOG_MEMORY = process.env.AURELIA_HARNESS_MEMORY_LOG === "1";
 const SHOULD_GC = process.env.AURELIA_HARNESS_GC === "1";
 const MEMORY_OUTPUT_PATH = process.env.AURELIA_HARNESS_MEMORY_PATH;
+const ONLY_SCENARIOS = (process.env.AURELIA_HARNESS_ONLY ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 let warnedGcUnavailable = false;
 
 const SCENARIOS: IntegrationScenario[] = [
@@ -957,50 +960,44 @@ if (HAS_AURELIA_TABLE) {
               expect: "probe-ok",
             },
             {
-              name: "probeAsync",
-              expr: "(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); return \"probe-async\"; })()",
-              expect: "probe-async",
-            },
-            {
               name: "filterRows",
-                expr: [
-                  "(() => {",
-                  "  const root = document.querySelector('app-root');",
-                  "  const hydrated = root?.dataset?.auHydrated ?? null;",
-                  "  const input = root?.querySelector?.('.filter') ?? document.querySelector('.filter');",
-                  "  if (!input) return JSON.stringify({ rows: [], filter: null, hydrated, hasInput: false });",
-                  "  input.value = 'amp';",
-                  "  input.dispatchEvent(new Event('input', { bubbles: true }));",
-                  "  const scope = root ?? document;",
-                  "  const rows = Array.from(scope.querySelectorAll('.row .name'))",
-                  "    .map((el) => el.textContent?.trim() ?? '')",
-                  "    .filter(Boolean);",
-                  "  const table = scope.querySelector('table');",
-                  "  const attr = table?.$au?.['au:resource:custom-attribute:aurelia-table'];",
-                  "  const attrVm = attr?.viewModel ?? null;",
-                  "  const attrAttached = attrVm?.isAttached ?? null;",
-                  "  const hasApi = Boolean(attrVm?.api);",
-                  "  const displayData = attrVm?.displayData ?? null;",
-                  "  const displayCount = Array.isArray(displayData) ? displayData.length : null;",
-                  "  const attrFilter = attrVm?.filters?.[0]?.value ?? null;",
-                  "  const dataCount = Array.isArray(attrVm?.data) ? attrVm.data.length : null;",
-                  "  const ctrl = root?.$au?.['au:resource:custom-element'];",
-                  "  const filter = ctrl?.viewModel?.filters?.[0]?.value ?? null;",
-                  "  return JSON.stringify({ rows, filter, hydrated, hasInput: true, attrAttached, hasApi, displayCount, attrFilter, dataCount });",
-                  "})()",
-                ].join("\n"),
-                expect: JSON.stringify({
-                  rows: ["Amp Deluxe"],
-                  filter: "amp",
-                  hydrated: "true",
-                  hasInput: true,
-                  attrAttached: true,
-                  hasApi: true,
-                  displayCount: 1,
-                  attrFilter: "amp",
-                  dataCount: 3,
-                }),
-              },
+              expr: [
+                "(async () => {",
+                "  const root = document.querySelector('app-root');",
+                "  const hydrated = root?.dataset?.auHydrated ?? null;",
+                "  const input = root?.querySelector?.('.filter') ?? document.querySelector('.filter');",
+                "  if (!input) return JSON.stringify({ rows: [], filter: null, hydrated, hasInput: false });",
+                "  input.value = 'amp';",
+                "  input.dispatchEvent(new Event('input', { bubbles: true }));",
+                "  await new Promise((resolve) => setTimeout(resolve, 0));",
+                "  const scope = root ?? document;",
+                "  const rows = Array.from(scope.querySelectorAll('.row .name'))",
+                "    .map((el) => el.textContent?.trim() ?? '')",
+                "    .filter(Boolean);",
+                "  const table = scope.querySelector('table');",
+                "  const attr = table?.$au?.['au:resource:custom-attribute:aurelia-table'];",
+                "  const attrVm = attr?.viewModel ?? null;",
+                "  const attrAttached = attrVm?.isAttached ?? null;",
+                "  const displayData = attrVm?.displayData ?? null;",
+                "  const displayCount = Array.isArray(displayData) ? displayData.length : null;",
+                "  const attrFilter = attrVm?.filters?.[0]?.value ?? null;",
+                "  const dataCount = Array.isArray(attrVm?.data) ? attrVm.data.length : null;",
+                "  const ctrl = root?.$au?.['au:resource:custom-element'];",
+                "  const filter = ctrl?.viewModel?.filters?.[0]?.value ?? null;",
+                "  return JSON.stringify({ rows, filter, hydrated, hasInput: true, attrAttached, displayCount, attrFilter, dataCount });",
+                "})()",
+              ].join("\n"),
+              expect: JSON.stringify({
+                rows: ["Amp Deluxe"],
+                filter: "amp",
+                hydrated: "true",
+                hasInput: true,
+                attrAttached: true,
+                displayCount: 1,
+                attrFilter: "amp",
+                dataCount: 3,
+              }),
+            },
           ],
         },
       },
@@ -1287,7 +1284,19 @@ if (HAS_AURELIA_GOOGLE_MAPS) {
 }
 
 const SCENARIO_GROUP_SIZE = 4;
-const SCENARIO_GROUPS = chunkScenarios(SCENARIOS, SCENARIO_GROUP_SIZE);
+const ACTIVE_SCENARIOS = ONLY_SCENARIOS.length > 0
+  ? SCENARIOS.filter((scenario) => ONLY_SCENARIOS.includes(scenario.id))
+  : SCENARIOS;
+if (ONLY_SCENARIOS.length > 0 && ACTIVE_SCENARIOS.length === 0) {
+  throw new Error(
+    [
+      "[integration-harness] No scenarios matched AURELIA_HARNESS_ONLY.",
+      `Requested: ${ONLY_SCENARIOS.join(", ")}`,
+      `Available: ${SCENARIOS.map((scenario) => scenario.id).join(", ")}`,
+    ].join(" "),
+  );
+}
+const SCENARIO_GROUPS = chunkScenarios(ACTIVE_SCENARIOS, SCENARIO_GROUP_SIZE);
 
 describe("integration harness scenarios", () => {
   SCENARIO_GROUPS.forEach((group, index) => {

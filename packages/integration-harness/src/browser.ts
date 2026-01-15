@@ -119,12 +119,12 @@ export async function inspectBrowserRuntime(
     for (const probe of probes) {
       try {
         const value = await page.evaluate(
-          ({ rootSelector, expr }) => {
+          async ({ rootSelector, expr }) => {
             const ELEMENT_KEY = "au:resource:custom-element";
             const rootEl = document.querySelector(rootSelector) as (Element & { $au?: Record<string, unknown> }) | null;
             const rootCtrl = rootEl?.$au?.[ELEMENT_KEY] ?? null;
             const fn = new Function("root", "rootCtrl", `return (${expr});`);
-            return fn(rootEl, rootCtrl);
+            return await fn(rootEl, rootCtrl);
           },
           { rootSelector: root, expr: probe.expr },
         );
