@@ -41,6 +41,7 @@ export async function inspectBrowserRuntime(
   } = expectation;
 
   const runtime = await loadPlaywright();
+  const debugProbes = process.env.AURELIA_HARNESS_DEBUG_PROBES === "1";
   let child: ReturnType<typeof spawn> | null = null;
   let childProcessGroup = false;
   let browser: Browser | null = null;
@@ -64,6 +65,12 @@ export async function inspectBrowserRuntime(
 
     browser = await runtime.chromium.launch({ headless: !headful });
     const page = await browser.newPage();
+    if (debugProbes) {
+      page.on("console", (msg) => {
+        const text = msg.text();
+        process.stdout.write(`[browser console] ${text}\n`);
+      });
+    }
     await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
     await page.waitForSelector(root, { timeout: timeoutMs });
     if (waitFor) {
@@ -75,7 +82,7 @@ export async function inspectBrowserRuntime(
 
     const domResults = await evaluateDomExpectations(page, dom, root);
     const snapshot = await page.evaluate(
-      ({ rootSelector, attrNames, probeList }) => {
+      ({ rootSelector, attrNames }) => {
         const ELEMENT_KEY = "au:resource:custom-element";
         const ATTR_PREFIX = "au:resource:custom-attribute:";
 
@@ -99,28 +106,38 @@ export async function inspectBrowserRuntime(
           return counts;
         }
 
-        function runProbes() {
-          const results: Record<string, { ok: boolean; value?: unknown; error?: string }> = {};
-          for (const probe of probeList) {
-            try {
-              const fn = new Function("root", "rootCtrl", `return (${probe.expr});`);
-              results[probe.name] = { ok: true, value: fn(rootEl, rootCtrl) };
-            } catch (error) {
-              results[probe.name] = { ok: false, error: String(error) };
-            }
-          }
-          return results;
-        }
-
         return {
           hasRoot: Boolean(rootEl),
           hasController: Boolean(rootCtrl),
           attributeCounts: countAttributes(),
-          probeResults: runProbes(),
         };
       },
-      { rootSelector: root, attrNames: attrs, probeList: probes },
+      { rootSelector: root, attrNames: attrs },
     );
+
+    const probeResults: BrowserInspection["probeResults"] = {};
+    for (const probe of probes) {
+      try {
+        const value = await page.evaluate(
+          ({ rootSelector, expr }) => {
+            const ELEMENT_KEY = "au:resource:custom-element";
+            const rootEl = document.querySelector(rootSelector) as (Element & { $au?: Record<string, unknown> }) | null;
+            const rootCtrl = rootEl?.$au?.[ELEMENT_KEY] ?? null;
+            const fn = new Function("root", "rootCtrl", `return (${expr});`);
+            return fn(rootEl, rootCtrl);
+          },
+          { rootSelector: root, expr: probe.expr },
+        );
+        probeResults[probe.name] = { ok: true, value };
+      } catch (error) {
+        probeResults[probe.name] = { ok: false, error: String(error) };
+      }
+    }
+
+    if (debugProbes) {
+      const probesLog = JSON.stringify(probeResults, null, 2);
+      process.stdout.write(`[browser] probeResults\n${probesLog}\n`);
+    }
 
     return {
       url,
@@ -128,7 +145,7 @@ export async function inspectBrowserRuntime(
       hasRoot: snapshot.hasRoot,
       hasController: snapshot.hasController,
       attributeCounts: snapshot.attributeCounts,
-      probeResults: snapshot.probeResults,
+      probeResults,
       domResults,
     };
   } finally {

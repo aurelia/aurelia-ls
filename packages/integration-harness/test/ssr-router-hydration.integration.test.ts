@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { IContainer, Registration } from "@aurelia/kernel";
+import { IContainer, Registration, resolve } from "@aurelia/kernel";
 import { AppTask, CustomElement } from "@aurelia/runtime-html";
 import {
   ILocationManager,
@@ -11,6 +11,7 @@ import {
   RouterOptions,
   ServerLocationManager,
   ViewportCustomElement,
+  route,
 } from "@aurelia/router";
 import {
   compileWithAot,
@@ -33,6 +34,8 @@ import { loadExternalModule } from "./_helpers/external-modules.js";
 
 const AURELIA_TABLE_PACKAGE = resolveExternalPackagePath("aurelia2-table");
 const HAS_AURELIA_TABLE = fs.existsSync(path.join(AURELIA_TABLE_PACKAGE, "package.json"));
+const AURELIA_STATE_PACKAGE = resolveExternalPackagePath("@aurelia/state");
+const HAS_AURELIA_STATE = fs.existsSync(path.join(AURELIA_STATE_PACKAGE, "package.json"));
 
 class HomePage {
   title = "Home";
@@ -78,6 +81,32 @@ const THIRD_PARTY_PAGE_TEMPLATE = [
   "    direction-links.bind=\"false\"",
   "    boundary-links.bind=\"false\">",
   "  </aut-pagination>",
+  "</div>",
+].join("\n");
+
+const DECORATOR_ROUTE_TEMPLATE = [
+  "<div class=\"page decorator-table-page\">",
+  "  <h1>${title}</h1>",
+  "  <p class=\"count\">${count & state}</p>",
+  "  <button class=\"inc\" click.trigger=\"increment()\">+</button>",
+  "  <aut-pagination",
+  "    total-items.bind=\"totalItems\"",
+  "    page-size.bind=\"pageSize\"",
+  "    current-page.bind=\"page\"",
+  "    direction-links.bind=\"false\"",
+  "    boundary-links.bind=\"false\">",
+  "  </aut-pagination>",
+  "</div>",
+].join("\n");
+
+const DECORATOR_APP_TEMPLATE = [
+  "<div class=\"router-app decorator-app\">",
+  "  <header>",
+  "    <h1>${appName}</h1>",
+  "  </header>",
+  "  <main>",
+  "    <au-viewport></au-viewport>",
+  "  </main>",
   "</div>",
 ].join("\n");
 
@@ -408,4 +437,186 @@ describe("integration harness: router SSR + hydration", () => {
 
     await hydrated.stop();
   });
+
+  test.skipIf(!HAS_AURELIA_TABLE || !HAS_AURELIA_STATE)(
+    "hydrates @route apps with third-party + state bindings",
+    async () => {
+      const scenario: IntegrationScenario = {
+        id: "router-decorator-third-party-state",
+        title: "Router @route + third-party + state SSR/hydration",
+        tags: ["router", "ssr", "hydration", "third-party", "state"],
+        source: {
+          kind: "memory",
+          files: {
+            "/src/entry.ts": "export const marker = 0;",
+          },
+        },
+        externalPackages: [
+          { id: "aurelia2-table", preferSource: true },
+          { id: "@aurelia/state", preferSource: true },
+        ],
+      };
+      const run = await runIntegrationScenario(scenario);
+
+      const pluginModule = await loadExternalModule(AURELIA_TABLE_PACKAGE);
+      const AureliaTableConfiguration = pluginModule.AureliaTableConfiguration as {
+        register: (container: unknown) => void;
+      };
+
+      const stateModule = await loadExternalModule(AURELIA_STATE_PACKAGE);
+      const StateDefaultConfiguration = stateModule.StateDefaultConfiguration as {
+        init: (
+          state: unknown,
+          ...handlers: Array<(state: unknown, action: unknown) => unknown>
+        ) => { register: (container: unknown) => void };
+      };
+      const IStore = stateModule.IStore as unknown;
+
+      type CounterState = { count: number };
+      type CounterAction = { type: "inc" };
+      const counterHandler = (state: CounterState, action: CounterAction) => {
+        if (action.type === "inc") {
+          return { ...state, count: state.count + 1 };
+        }
+        return state;
+      };
+
+      class DecoratorTablePage {
+        title = "Inventory";
+        page = 1;
+        pageSize = 5;
+        totalItems = 12;
+        private readonly store = resolve(IStore) as {
+          dispatch(action: CounterAction): void;
+          getState(): CounterState;
+        };
+
+        get count(): number {
+          return this.store.getState().count;
+        }
+
+        increment(): void {
+          this.store.dispatch({ type: "inc" });
+        }
+
+        static $au = {
+          type: "custom-element",
+          name: "decorator-table-page",
+        };
+      }
+
+      @route({
+        title: "Decorator Router",
+        routes: [
+          {
+            id: "table",
+            path: ["", "table"],
+            component: DecoratorTablePage,
+            title: "Table",
+          },
+        ],
+      })
+      class DecoratorRouterApp {
+        appName = "Decorator Router App";
+
+        static $au = {
+          type: "custom-element",
+          name: "router-app-decorator",
+          dependencies: [DecoratorTablePage],
+        };
+      }
+
+      const pageAot = compileWithAot(DECORATOR_ROUTE_TEMPLATE, {
+        name: "decorator-table-page",
+        semantics: run.semantics,
+        resourceGraph: run.resourceGraph,
+        resourceScope: run.resourceGraph.root,
+      });
+      const appAot = compileWithAot(DECORATOR_APP_TEMPLATE, {
+        name: "router-app-decorator",
+        semantics: run.semantics,
+        resourceGraph: run.resourceGraph,
+        resourceScope: run.resourceGraph.root,
+      });
+
+      patchComponentDefinition(DecoratorTablePage, pageAot, { name: "decorator-table-page" });
+      patchComponentDefinition(DecoratorRouterApp, appAot, { name: "router-app-decorator" });
+      CustomElement.define({
+        name: "decorator-table-page",
+        template: pageAot.template,
+        instructions: pageAot.instructions,
+        needsCompile: false,
+      }, DecoratorTablePage);
+
+      const registerState = (container: { register: (...args: unknown[]) => void }) => {
+        container.register(StateDefaultConfiguration.init({ count: 0 }, counterHandler));
+      };
+
+      const renderResult = await renderWithComponents(DecoratorRouterApp, {
+        childComponents: [DecoratorTablePage],
+        request: { url: "/table", baseHref: "/" },
+        register: (container) => {
+          container.register(
+            createSSRRouterConfiguration("/table", "/", true),
+            AureliaTableConfiguration,
+          );
+          registerState(container);
+        },
+      });
+
+      const ssrContext = createHydrationContext(
+        renderResult.html,
+        {},
+        renderResult.manifest,
+        {
+          ssrDef: {
+            template: appAot.template,
+            instructions: appAot.instructions,
+          },
+        },
+      );
+      expect(countElements(ssrContext.host, ".decorator-table-page")).toBe(1);
+      expect(getTexts(ssrContext.host, ".count")).toEqual(["0"]);
+      ssrContext.dom.window.close();
+
+      const hydrated = await hydrateSsr(
+        renderResult.html,
+        {},
+        renderResult.manifest,
+        appAot,
+        {
+          componentName: "router-app-decorator",
+          componentClass: DecoratorRouterApp,
+          childComponents: [DecoratorTablePage],
+          register: (container) => {
+            container.register(
+              createSSRRouterConfiguration("/table", "/", true),
+              AureliaTableConfiguration,
+            );
+            registerState(container);
+          },
+        },
+      );
+
+      const pageController = findControllerByName(hydrated.appRoot?.controller, "decorator-table-page");
+      const pageVm = pageController?.viewModel as DecoratorTablePage | undefined;
+      expect(pageVm).toBeTruthy();
+      expect(getTexts(hydrated.host, ".count")).toEqual(["0"]);
+
+      pageVm?.increment();
+      await flushDom();
+      expect(getTexts(hydrated.host, ".count")).toEqual(["1"]);
+
+      (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent = hydrated.dom.window.CustomEvent;
+      const paginationVm = resolvePaginationViewModel(hydrated);
+      paginationVm.selectPage?.(2);
+      await flushDom();
+      expect(pageVm?.page).toBe(2);
+
+      const doubleRender = checkForDoubleRender(hydrated.document, ".page");
+      expect(doubleRender.hasDuplicates).toBe(false);
+
+      await hydrated.stop();
+    },
+  );
 });

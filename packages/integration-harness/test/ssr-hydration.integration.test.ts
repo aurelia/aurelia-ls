@@ -44,6 +44,10 @@ const AURELIA_TABLE_PACKAGE = resolveExternalPackagePath("aurelia2-table");
 const HAS_AURELIA_TABLE = fs.existsSync(path.join(AURELIA_TABLE_PACKAGE, "package.json"));
 const AURELIA_STATE_PACKAGE = resolveExternalPackagePath("@aurelia/state");
 const HAS_AURELIA_STATE = fs.existsSync(path.join(AURELIA_STATE_PACKAGE, "package.json"));
+const AURELIA_OUTCLICK_PACKAGE = resolveExternalPackagePath("aurelia2-outclick");
+const HAS_AURELIA_OUTCLICK = fs.existsSync(path.join(AURELIA_OUTCLICK_PACKAGE, "package.json"));
+const AURELIA_FORMS_PACKAGE = resolveExternalPackagePath("aurelia2-forms");
+const HAS_AURELIA_FORMS = fs.existsSync(path.join(AURELIA_FORMS_PACKAGE, "package.json"));
 
 const EXPLICIT_CE_RESOURCES = {
   elements: {
@@ -143,6 +147,31 @@ const THIRD_PARTY_HYDRATION_TEMPLATE = [
   "    boundary-links.bind=\"false\">",
   "  </aut-pagination>",
   "  <p class=\"page-value\">${page}</p>",
+  "</section>",
+].join("\n");
+
+const THIRD_PARTY_TABLE_TEMPLATE = [
+  "<div class=\"table-shell\">",
+  "  <input class=\"filter\" value.bind=\"filters[0].value\">",
+  "<table class=\"table\" aurelia-table=\"data.bind: items; display-data.bind: displayed; filters.bind: filters\">",
+  "  <tbody>",
+  "    <tr repeat.for=\"item of displayed\" class=\"row\">",
+  "      <td class=\"name\">${item.name}</td>",
+  "    </tr>",
+  "  </tbody>",
+  "</table>",
+  "</div>",
+].join("\n");
+
+const MULTI_PACKAGE_TEMPLATE = [
+  "<section class=\"multi-package-shell\">",
+  "  <div class=\"outclick-target\" outclick.bind=\"onOutclick\"></div>",
+  "  <input class=\"field\" au-field=\"name\">",
+  "  <aut-pagination",
+  "    total-items.bind=\"totalItems\"",
+  "    page-size.bind=\"pageSize\"",
+  "    current-page.bind=\"page\">",
+  "  </aut-pagination>",
   "</section>",
 ].join("\n");
 
@@ -700,6 +729,222 @@ describe("integration harness: third-party hydration parity", () => {
 
     await hydrated.stop();
   });
+
+  test.skipIf(!HAS_AURELIA_TABLE)("hydrates third-party custom attribute bindings after SSR", async () => {
+    const scenario: IntegrationScenario = {
+      id: "third-party-table-hydration",
+      title: "Third-party custom attribute SSR + hydration preserves filters",
+      tags: ["ssr", "hydration", "third-party", "custom-attribute"],
+      source: BASE_SOURCE,
+      externalPackages: [{ id: "aurelia2-table", preferSource: true }],
+    };
+
+    const run = await runIntegrationScenario(scenario);
+    const pluginModule = await loadExternalModule(AURELIA_TABLE_PACKAGE);
+    const AureliaTableConfiguration = pluginModule.AureliaTableConfiguration as {
+      register: (container: unknown) => void;
+    };
+
+    const ThirdPartyTableApp = createComponent(
+      "third-party-table-app",
+      THIRD_PARTY_TABLE_TEMPLATE,
+      {
+        items: [
+          { name: "Amp Deluxe" },
+          { name: "Cab Classic" },
+          { name: "FX Chorus" },
+        ],
+        displayed: [],
+        filters: [{ keys: ["name"], value: "" }],
+      },
+    );
+
+    const rootAot = compileWithAot(THIRD_PARTY_TABLE_TEMPLATE, {
+      name: "third-party-table-app",
+      semantics: run.semantics,
+      resourceGraph: run.resourceGraph,
+      resourceScope: run.resourceGraph.root,
+    });
+    patchComponentDefinition(ThirdPartyTableApp, rootAot, { name: "third-party-table-app" });
+
+    const renderResult = await renderWithComponents(ThirdPartyTableApp, {
+      register: (container) => {
+        container.register(AureliaTableConfiguration);
+      },
+    });
+
+    const hydrated = await hydrateSsr(
+      renderResult.html,
+      {
+        items: [
+          { name: "Amp Deluxe" },
+          { name: "Cab Classic" },
+          { name: "FX Chorus" },
+        ],
+        displayed: [],
+        filters: [{ keys: ["name"], value: "" }],
+      },
+      renderResult.manifest,
+      rootAot,
+      {
+        componentName: "third-party-table-app",
+        componentClass: ThirdPartyTableApp,
+        register: (container) => {
+          container.register(AureliaTableConfiguration);
+        },
+      },
+    );
+
+    expect(getTexts(hydrated.host, ".row .name")).toEqual([
+      "Amp Deluxe",
+      "Cab Classic",
+      "FX Chorus",
+    ]);
+
+    const filters = hydrated.vm.filters as Array<{ value: string }>;
+    const input = hydrated.document.querySelector(".filter") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    if (!input) {
+      await hydrated.stop();
+      throw new Error("Filter input not found for third-party table hydration test.");
+    }
+
+    input.value = "amp";
+    input.dispatchEvent(new hydrated.dom.window.Event("input", { bubbles: true }));
+    await flushDom();
+
+    expect(filters[0].value).toBe("amp");
+    expect(getTexts(hydrated.host, ".row .name")).toEqual(["Amp Deluxe"]);
+
+    await hydrated.stop();
+  });
+});
+
+describe("integration harness: multi-package SSR + hydration", () => {
+  test.skipIf(!HAS_AURELIA_TABLE || !HAS_AURELIA_OUTCLICK || !HAS_AURELIA_FORMS)(
+    "hydrates multiple third-party packages together",
+    async () => {
+      const scenario: IntegrationScenario = {
+        id: "multi-package-ssr",
+        title: "Multiple third-party packages SSR + hydration",
+        tags: ["ssr", "hydration", "third-party", "multi-package"],
+        source: BASE_SOURCE,
+        externalPackages: [
+          { id: "aurelia2-table", preferSource: true },
+          { id: "aurelia2-outclick", preferSource: true },
+          { id: "aurelia2-forms", preferSource: true },
+        ],
+      };
+      const run = await runIntegrationScenario(scenario);
+
+      const tableModule = await loadExternalModule(AURELIA_TABLE_PACKAGE);
+      const AureliaTableConfiguration = tableModule.AureliaTableConfiguration as {
+        register: (container: unknown) => void;
+      };
+      const outclickModule = await loadExternalModule(AURELIA_OUTCLICK_PACKAGE);
+      const AureliaOutclick = outclickModule.AureliaOutclick as {
+        register: (container: unknown) => void;
+      };
+      const formsModule = await loadExternalModule(AURELIA_FORMS_PACKAGE);
+      const AureliaFormsConfiguration = formsModule.AureliaFormsConfiguration as {
+        register: (container: unknown) => void;
+      };
+
+      class MultiPackageVm {
+        page = 1;
+        pageSize = 5;
+        totalItems = 12;
+        name = "Ada";
+        outclicked = 0;
+
+        onOutclick(): void {
+          this.outclicked += 1;
+        }
+      }
+
+      const MultiPackageApp = createComponent(
+        "multi-package-app",
+        MULTI_PACKAGE_TEMPLATE,
+        {},
+        MultiPackageVm,
+      );
+
+      const rootAot = compileWithAot(MULTI_PACKAGE_TEMPLATE, {
+        name: "multi-package-app",
+        semantics: run.semantics,
+        resourceGraph: run.resourceGraph,
+        resourceScope: run.resourceGraph.root,
+      });
+      patchComponentDefinition(MultiPackageApp, rootAot, { name: "multi-package-app" });
+
+      const renderResult = await renderWithComponents(MultiPackageApp, {
+        register: (container) => {
+          container.register(
+            AureliaTableConfiguration,
+            AureliaOutclick,
+            AureliaFormsConfiguration,
+          );
+        },
+      });
+
+      const ssrContext = createHydrationContext(
+        renderResult.html,
+        {},
+        renderResult.manifest,
+        {
+          ssrDef: {
+            template: rootAot.template,
+            instructions: rootAot.instructions,
+          },
+        },
+      );
+      expect(countElements(ssrContext.host, "aut-pagination")).toBe(1);
+      expect(countElements(ssrContext.host, ".outclick-target")).toBe(1);
+      expect(countElements(ssrContext.host, ".field")).toBe(1);
+      ssrContext.dom.window.close();
+
+      const hydrated = await hydrateSsr(
+        renderResult.html,
+        {},
+        renderResult.manifest,
+        rootAot,
+        {
+          componentName: "multi-package-app",
+          componentClass: MultiPackageApp,
+          register: (container) => {
+            container.register(
+              AureliaTableConfiguration,
+              AureliaOutclick,
+              AureliaFormsConfiguration,
+            );
+          },
+        },
+      );
+
+      const outclickTarget = hydrated.document.querySelector(".outclick-target") as
+        | (Element & { $au?: Record<string, unknown> })
+        | null;
+      const outclickAttr = outclickTarget?.$au?.["au:resource:custom-attribute:outclick"] as
+        | { viewModel?: unknown }
+        | undefined;
+      expect(outclickAttr?.viewModel).toBeTruthy();
+
+      const fieldTarget = hydrated.document.querySelector(".field") as
+        | (Element & { $au?: Record<string, unknown> })
+        | null;
+      const fieldAttr = fieldTarget?.$au?.["au:resource:custom-attribute:au-field"] as
+        | { viewModel?: unknown }
+        | undefined;
+      expect(fieldAttr?.viewModel).toBeTruthy();
+
+      const paginationVm = resolvePaginationViewModel(hydrated);
+      paginationVm.selectPage?.(2);
+      await flushDom();
+      expect((hydrated.vm as { page?: number }).page).toBe(2);
+
+      await hydrated.stop();
+    },
+  );
 });
 
 describe("integration harness: state plugin SSR + hydration", () => {

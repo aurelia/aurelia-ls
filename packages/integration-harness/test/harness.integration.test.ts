@@ -61,6 +61,25 @@ const BASIC_CSR_ROOT = path.resolve(REPO_ROOT, "playground", "basic-csr");
 const BASIC_CSR_TSCONFIG = path.resolve(BASIC_CSR_ROOT, "tsconfig.json");
 const BASIC_CSR_URL = "http://localhost:4173/";
 const BASIC_CSR_START = "pnpm exec vite playground/basic-csr --port 4173 --strictPort";
+const SSR_TABLE_FIXTURE_ROOT = path.resolve(
+  __dirname,
+  "fixtures",
+  "ssr-aurelia2-table",
+);
+const SSR_TABLE_FIXTURE_TSCONFIG = path.join(SSR_TABLE_FIXTURE_ROOT, "tsconfig.json");
+const SSR_TABLE_FIXTURE_REL = path.relative(REPO_ROOT, SSR_TABLE_FIXTURE_ROOT)
+  .split(path.sep)
+  .join("/");
+const SSR_TABLE_FIXTURE_CONFIG = `${SSR_TABLE_FIXTURE_REL}/vite.config.ts`;
+const SSR_TABLE_URL = "http://localhost:4185/";
+const SSR_TABLE_START = [
+  "pnpm exec vite",
+  SSR_TABLE_FIXTURE_REL,
+  `--config ${SSR_TABLE_FIXTURE_CONFIG}`,
+  "--port 4185",
+  "--strictPort",
+  "--mode ssr",
+].join(" ");
 const TEMPLATE_IMPORTS_TSCONFIG = path.resolve(
   REPO_ROOT,
   "playground",
@@ -906,6 +925,88 @@ if (HAS_AURELIA_TABLE) {
   });
 
   SCENARIOS.push({
+    id: "aurelia2-table-ssr-browser",
+    title: "aurelia2-table filters respond after SSR hydration in browser",
+    tags: ["browser", "runtime", "ssr", "third-party", "filters"],
+    source: {
+      kind: "tsconfig",
+      tsconfigPath: SSR_TABLE_FIXTURE_TSCONFIG,
+    },
+    resolution: {
+      fileSystem: "node",
+    },
+    expect: {
+      runtime: {
+        kind: "browser",
+        url: SSR_TABLE_URL,
+        start: SSR_TABLE_START,
+        cwd: REPO_ROOT,
+        root: "app-root",
+        waitFor: "[data-au-hydrated]",
+        dom: [
+          {
+            selector: ".row .name",
+            scope: "host",
+            texts: ["Amp Deluxe", "Cab Classic", "FX Chorus"],
+          },
+        ],
+          probes: [
+            {
+              name: "probeSmoke",
+              expr: "\"probe-ok\"",
+              expect: "probe-ok",
+            },
+            {
+              name: "probeAsync",
+              expr: "(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); return \"probe-async\"; })()",
+              expect: "probe-async",
+            },
+            {
+              name: "filterRows",
+                expr: [
+                  "(() => {",
+                  "  const root = document.querySelector('app-root');",
+                  "  const hydrated = root?.dataset?.auHydrated ?? null;",
+                  "  const input = root?.querySelector?.('.filter') ?? document.querySelector('.filter');",
+                  "  if (!input) return JSON.stringify({ rows: [], filter: null, hydrated, hasInput: false });",
+                  "  input.value = 'amp';",
+                  "  input.dispatchEvent(new Event('input', { bubbles: true }));",
+                  "  const scope = root ?? document;",
+                  "  const rows = Array.from(scope.querySelectorAll('.row .name'))",
+                  "    .map((el) => el.textContent?.trim() ?? '')",
+                  "    .filter(Boolean);",
+                  "  const table = scope.querySelector('table');",
+                  "  const attr = table?.$au?.['au:resource:custom-attribute:aurelia-table'];",
+                  "  const attrVm = attr?.viewModel ?? null;",
+                  "  const attrAttached = attrVm?.isAttached ?? null;",
+                  "  const hasApi = Boolean(attrVm?.api);",
+                  "  const displayData = attrVm?.displayData ?? null;",
+                  "  const displayCount = Array.isArray(displayData) ? displayData.length : null;",
+                  "  const attrFilter = attrVm?.filters?.[0]?.value ?? null;",
+                  "  const dataCount = Array.isArray(attrVm?.data) ? attrVm.data.length : null;",
+                  "  const ctrl = root?.$au?.['au:resource:custom-element'];",
+                  "  const filter = ctrl?.viewModel?.filters?.[0]?.value ?? null;",
+                  "  return JSON.stringify({ rows, filter, hydrated, hasInput: true, attrAttached, hasApi, displayCount, attrFilter, dataCount });",
+                  "})()",
+                ].join("\n"),
+                expect: JSON.stringify({
+                  rows: ["Amp Deluxe"],
+                  filter: "amp",
+                  hydrated: "true",
+                  hasInput: true,
+                  attrAttached: true,
+                  hasApi: true,
+                  displayCount: 1,
+                  attrFilter: "amp",
+                  dataCount: 3,
+                }),
+              },
+          ],
+        },
+      },
+  });
+
+  SCENARIOS.push({
     id: "aurelia2-table-multi-binding",
     title: "aurelia2-table multi-binding syntax compiles correctly",
     tags: ["external", "aot", "attribute", "third-party", "multi-binding"],
@@ -1478,6 +1579,13 @@ async function runSsrModuleAssertions(
 
 async function runBrowserAssertions(runtime: BrowserRuntimeExpectation): Promise<void> {
   const inspection = await inspectBrowserRuntime(runtime);
+
+  if (process.env.AURELIA_HARNESS_DEBUG_PROBES === "1") {
+    const configured = JSON.stringify(runtime.probes ?? [], null, 2);
+    process.stdout.write(`[browser] configuredProbes\n${configured}\n`);
+    const probes = JSON.stringify(inspection.probeResults, null, 2);
+    process.stdout.write(`[browser] probeResults\n${probes}\n`);
+  }
 
   expect(inspection.hasRoot).toBe(true);
   expect(inspection.hasController).toBe(true);

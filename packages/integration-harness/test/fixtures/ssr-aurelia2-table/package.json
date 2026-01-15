@@ -1,0 +1,6 @@
+{
+  "name": "ssr-aurelia2-table",
+  "private": true,
+  "type": "module",
+  "description": "SSR + hydration fixture for aurelia2-table bindings"
+}

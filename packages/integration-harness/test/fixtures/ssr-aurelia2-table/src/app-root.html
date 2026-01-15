@@ -1,0 +1,11 @@
+<div class="table-shell">
+  <input class="filter" value.bind="filters[0].value">
+  <table class="table"
+    aurelia-table="data.bind: items; display-data.bind: $displayData; filters.bind: filters">
+    <tbody>
+      <tr repeat.for="item of $displayData" class="row">
+        <td class="name">${item.name}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
