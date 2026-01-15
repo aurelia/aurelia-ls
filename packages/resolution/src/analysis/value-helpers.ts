@@ -97,11 +97,12 @@ export function buildContextWithProgram(
   program: ts.Program
 ): PropertyResolutionContext {
   const scope = buildFileScope(sf, filePath);
+  const scopeWithResolvedImports = resolveImportPaths(scope, sf, program);
 
   // Create a minimal ResolutionContext with on-demand resolution
   // The pre-built maps are empty since we resolve everything on-demand
   const resolutionContext: ResolutionContext = {
-    fileScopes: new Map([[filePath, scope]]),
+    fileScopes: new Map([[filePath, scopeWithResolvedImports]]),
     exportBindings: new Map(),
     fileFacts: new Map(),
     resolving: new Set(),
@@ -112,7 +113,7 @@ export function buildContextWithProgram(
 
   return {
     sourceFile: sf,
-    scope,
+    scope: scopeWithResolvedImports,
     resolutionContext,
   };
 }
@@ -221,6 +222,41 @@ function resolveModuleToSourceFile(
   }
 
   return program.getSourceFile(resolvedPath);
+}
+
+/**
+ * Resolve module specifiers for imports in a scope.
+ *
+ * This enriches import bindings with resolvedPath so downstream resolution
+ * can handle namespace access (e.g., `import * as ns` then `ns.Value`).
+ */
+function resolveImportPaths(
+  scope: LexicalScope,
+  sf: ts.SourceFile,
+  program: ts.Program
+): LexicalScope {
+  let updated = false;
+  const imports = new Map(scope.imports);
+
+  for (const [name, binding] of imports) {
+    if (binding.resolvedPath) continue;
+    const resolvedFile = resolveModuleToSourceFile(binding.specifier, sf.fileName, program);
+    if (!resolvedFile) continue;
+    imports.set(name, {
+      ...binding,
+      resolvedPath: canonicalPath(resolvedFile.fileName),
+    });
+    updated = true;
+  }
+
+  if (!updated) {
+    return scope;
+  }
+
+  return {
+    ...scope,
+    imports,
+  };
 }
 
 // =============================================================================
