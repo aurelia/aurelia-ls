@@ -1,4 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, test } from "vitest";
+import { resolve } from "@aurelia/kernel";
 import {
   compileAndRenderAot,
   compileWithAot,
@@ -8,6 +11,7 @@ import {
 
 import {
   runIntegrationScenario,
+  resolveExternalPackagePath,
   type IntegrationScenario,
   type SsrHydrationExpectation,
   type DomExpectation,
@@ -24,6 +28,7 @@ import {
   getTexts,
   hydrateSsr,
 } from "./_helpers/ssr-hydration.js";
+import { loadExternalModule } from "./_helpers/external-modules.js";
 
 type HydrationCase = SsrHydrationExpectation & {
   dependencies?: Array<new () => Record<string, unknown>>;
@@ -35,6 +40,10 @@ const BASE_SOURCE: IntegrationScenario["source"] = {
     "/src/entry.ts": "export const marker = 0;",
   },
 };
+const AURELIA_TABLE_PACKAGE = resolveExternalPackagePath("aurelia2-table");
+const HAS_AURELIA_TABLE = fs.existsSync(path.join(AURELIA_TABLE_PACKAGE, "package.json"));
+const AURELIA_STATE_PACKAGE = resolveExternalPackagePath("@aurelia/state");
+const HAS_AURELIA_STATE = fs.existsSync(path.join(AURELIA_STATE_PACKAGE, "package.json"));
 
 const EXPLICIT_CE_RESOURCES = {
   elements: {
@@ -122,6 +131,26 @@ const CHILD_PANEL_TEMPLATE = [
   "  </ul>",
   "  <div if.bind=\"!items.length\" class=\"child-empty\">Empty</div>",
   "</div>",
+].join("\n");
+
+const THIRD_PARTY_HYDRATION_TEMPLATE = [
+  "<section class=\"third-party-shell\">",
+  "  <aut-pagination",
+  "    total-items.bind=\"totalItems\"",
+  "    page-size.bind=\"pageSize\"",
+  "    current-page.bind=\"page\"",
+  "    direction-links.bind=\"false\"",
+  "    boundary-links.bind=\"false\">",
+  "  </aut-pagination>",
+  "  <p class=\"page-value\">${page}</p>",
+  "</section>",
+].join("\n");
+
+const STATE_PLUGIN_TEMPLATE = [
+  "<section class=\"state-shell\">",
+  "  <p class=\"count\">${count & state}</p>",
+  "  <button class=\"inc\" click.trigger=\"increment()\">+</button>",
+  "</section>",
 ].join("\n");
 
 const ChildPanel = createComponent(
@@ -586,6 +615,193 @@ describe("integration harness: SSR + hydration parity", () => {
   });
 });
 
+describe("integration harness: third-party hydration parity", () => {
+  test.skipIf(!HAS_AURELIA_TABLE)("hydrates third-party bindings after SSR", async () => {
+    const scenario: IntegrationScenario = {
+      id: "third-party-hydration-parity",
+      title: "Third-party SSR + hydration preserves bindings",
+      tags: ["ssr", "hydration", "third-party"],
+      source: BASE_SOURCE,
+      externalPackages: [{ id: "aurelia2-table", preferSource: true }],
+    };
+
+    const run = await runIntegrationScenario(scenario);
+    const pluginModule = await loadExternalModule(AURELIA_TABLE_PACKAGE);
+    const AureliaTableConfiguration = pluginModule.AureliaTableConfiguration as {
+      register: (container: unknown) => void;
+    };
+    const AutPaginationCustomElement = pluginModule.AutPaginationCustomElement as new () => Record<string, unknown>;
+    ensureBoundLifecycle(AutPaginationCustomElement);
+
+    const ThirdPartyHydrationApp = createComponent(
+      "third-party-hydration-app",
+      THIRD_PARTY_HYDRATION_TEMPLATE,
+      {
+        page: 1,
+        pageSize: 5,
+        totalItems: 12,
+      },
+    );
+
+    const rootAot = compileWithAot(THIRD_PARTY_HYDRATION_TEMPLATE, {
+      name: "third-party-hydration-app",
+      semantics: run.semantics,
+      resourceGraph: run.resourceGraph,
+      resourceScope: run.resourceGraph.root,
+    });
+    patchComponentDefinition(ThirdPartyHydrationApp, rootAot, { name: "third-party-hydration-app" });
+
+    const renderResult = await renderWithComponents(ThirdPartyHydrationApp, {
+      register: (container) => {
+        container.register(AureliaTableConfiguration);
+      },
+    });
+
+    const ssrContext = createHydrationContext(
+      renderResult.html,
+      { page: 1, pageSize: 5, totalItems: 12 },
+      renderResult.manifest,
+      {
+        ssrDef: {
+          template: rootAot.template,
+          instructions: rootAot.instructions,
+        },
+      },
+    );
+    expect(countElements(ssrContext.host, "aut-pagination")).toBe(1);
+    expect(getTexts(ssrContext.host, ".page-value")).toEqual(["1"]);
+    ssrContext.dom.window.close();
+
+    const hydrated = await hydrateSsr(
+      renderResult.html,
+      { page: 1, pageSize: 5, totalItems: 12 },
+      renderResult.manifest,
+      rootAot,
+      {
+        componentName: "third-party-hydration-app",
+        componentClass: ThirdPartyHydrationApp,
+        register: (container) => {
+          container.register(AureliaTableConfiguration);
+        },
+      },
+    );
+
+    expect(getTexts(hydrated.host, ".page-value")).toEqual(["1"]);
+    (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent = hydrated.dom.window.CustomEvent;
+    const paginationVm = resolvePaginationViewModel(hydrated);
+    expect(paginationVm.totalPages).toBe(3);
+    hydrated.vm.page = 2;
+    await flushDom();
+    expect(paginationVm.currentPage).toBe(2);
+
+    paginationVm.selectPage?.(3);
+    await flushDom();
+    expect(hydrated.vm.page).toBe(3);
+
+    await hydrated.stop();
+  });
+});
+
+describe("integration harness: state plugin SSR + hydration", () => {
+  test.skipIf(!HAS_AURELIA_STATE)("hydrates store-backed bindings", async () => {
+    const scenario: IntegrationScenario = {
+      id: "state-plugin-ssr",
+      title: "State plugin SSR + hydration preserves bindings",
+      tags: ["ssr", "hydration", "state"],
+      source: BASE_SOURCE,
+      externalPackages: [{ id: "@aurelia/state", preferSource: true }],
+    };
+    const run = await runIntegrationScenario(scenario);
+    const stateModule = await loadExternalModule(AURELIA_STATE_PACKAGE);
+    const StateDefaultConfiguration = stateModule.StateDefaultConfiguration as {
+      init: (state: unknown, ...handlers: Array<(state: unknown, action: unknown) => unknown>) => {
+        register: (container: unknown) => void;
+      };
+    };
+    const IStore = stateModule.IStore as unknown;
+
+    type CounterState = { count: number };
+    type CounterAction = { type: "inc" };
+    const counterHandler = (state: CounterState, action: CounterAction) => {
+      if (action.type === "inc") {
+        return { ...state, count: state.count + 1 };
+      }
+      return state;
+    };
+
+    class StateApp {
+      private readonly store = resolve(IStore) as {
+        dispatch(action: CounterAction): void;
+        getState(): CounterState;
+      };
+
+      public get count(): number {
+        return this.store.getState().count;
+      }
+
+      public increment(): void {
+        this.store.dispatch({ type: "inc" });
+      }
+
+      static $au = {
+        type: "custom-element",
+        name: "state-app",
+        template: STATE_PLUGIN_TEMPLATE,
+      };
+    }
+
+    const rootAot = compileWithAot(STATE_PLUGIN_TEMPLATE, {
+      name: "state-app",
+      semantics: run.semantics,
+      resourceGraph: run.resourceGraph,
+      resourceScope: run.resourceGraph.root,
+    });
+    patchComponentDefinition(StateApp, rootAot, { name: "state-app" });
+
+    const registerState = (container: { register: (...args: unknown[]) => void }) => {
+      container.register(StateDefaultConfiguration.init({ count: 0 }, counterHandler));
+    };
+
+    const renderResult = await renderWithComponents(StateApp, {
+      register: registerState,
+    });
+
+    const ssrState = {};
+    const ssrContext = createHydrationContext(
+      renderResult.html,
+      ssrState,
+      renderResult.manifest,
+      {
+        ssrDef: {
+          template: rootAot.template,
+          instructions: rootAot.instructions,
+        },
+      },
+    );
+    expect(getTexts(ssrContext.host, ".count")).toEqual(["0"]);
+    ssrContext.dom.window.close();
+
+    const hydrated = await hydrateSsr(
+      renderResult.html,
+      ssrState,
+      renderResult.manifest,
+      rootAot,
+      {
+        componentName: "state-app",
+        componentClass: StateApp,
+        register: registerState,
+      },
+    );
+
+    expect(getTexts(hydrated.host, ".count")).toEqual(["0"]);
+    hydrated.vm.increment?.();
+    await flushDom();
+    expect(getTexts(hydrated.host, ".count")).toEqual(["1"]);
+
+    await hydrated.stop();
+  });
+});
+
 async function runSsrHydrationCase(
   run: Awaited<ReturnType<typeof runIntegrationScenario>>,
   expectation: HydrationCase,
@@ -891,6 +1107,47 @@ function resolveScope(
 async function flushDom(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function resolvePaginationViewModel(hydrated: {
+  host: Element;
+  document: Document;
+  appRoot: { controller?: unknown };
+}): { selectPage?: (page: number) => void } {
+  const hostElement = hydrated.document.querySelector("aut-pagination") as
+    | (Element & { $au?: Record<string, unknown> })
+    | null;
+  const viaElement = hostElement?.$au?.["au:resource:custom-element"] as
+    | { viewModel?: { selectPage?: (page: number) => void } }
+    | undefined;
+  if (viaElement?.viewModel?.selectPage) {
+    return viaElement.viewModel;
+  }
+  const viaController = findControllerByName(hydrated.appRoot?.controller, "aut-pagination");
+  if (viaController?.viewModel?.selectPage) {
+    return viaController.viewModel;
+  }
+  throw new Error("Unable to locate aut-pagination view model for interaction.");
+}
+
+function findControllerByName(
+  root: unknown,
+  name: string,
+): { viewModel?: { selectPage?: (page: number) => void } } | null {
+  if (!root || typeof root !== "object") return null;
+  const definitionName = (root as { definition?: { name?: string } }).definition?.name;
+  if (definitionName === name) {
+    return root as { viewModel?: { selectPage?: (page: number) => void } };
+  }
+  const children = (root as { children?: unknown[] }).children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = findControllerByName(child, name);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 function isTemplateControllerNode(
@@ -903,4 +1160,23 @@ function isTemplateControllerNode(
 function isScopeNode(entry: unknown): entry is { children?: unknown[] } {
   if (!entry || typeof entry !== "object") return false;
   return "children" in entry && !("type" in entry);
+}
+
+function ensureBoundLifecycle(elementCtor: unknown): void {
+  const proto = (elementCtor as { prototype?: { bind?: (...args: unknown[]) => void; bound?: (...args: unknown[]) => void } })
+    .prototype;
+  if (proto?.bind && !proto.bound) {
+    proto.bound = function (...args: unknown[]) {
+      return proto.bind?.apply(this, args);
+    };
+  }
+}
+
+function findPageLink(document: Document, text: string): HTMLAnchorElement | null {
+  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a.page-link"));
+  return links.find((link) => link.textContent?.trim() === text) ?? null;
+}
+
+function findActivePage(document: Document): HTMLAnchorElement | null {
+  return document.querySelector<HTMLAnchorElement>("li.page-item.active a.page-link");
 }

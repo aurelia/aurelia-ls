@@ -904,6 +904,49 @@ if (HAS_AURELIA_TABLE) {
       },
     },
   });
+
+  SCENARIOS.push({
+    id: "aurelia2-table-multi-binding",
+    title: "aurelia2-table multi-binding syntax compiles correctly",
+    tags: ["external", "aot", "attribute", "third-party", "multi-binding"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    externalPackages: [
+      {
+        id: "aurelia2-table",
+        preferSource: true,
+      },
+    ],
+    externalResourcePolicy: "root-scope",
+    compile: [
+      {
+        id: "aurelia2-table-multi-binding",
+        markup: [
+          "<div",
+          "  aurelia-table=\"data.bind: items; display-data.bind: displayed; filters.bind: filters\">",
+          "</div>",
+        ].join("\n"),
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["aurelia-table"],
+      },
+      bindables: [
+        { resource: "aurelia-table", name: "data" },
+        { resource: "aurelia-table", name: "displayData" },
+        { resource: "aurelia-table", name: "filters" },
+      ],
+      aot: {
+        instructions: [{ type: "hydrateAttribute", res: "aurelia-table" }],
+      },
+    },
+  });
 }
 
 if (HAS_AURELIA_OUTCLICK) {
@@ -983,6 +1026,62 @@ if (HAS_AURELIA_FORMS) {
       aot: {
         instructions: [
           { type: "hydrateElement", res: "au-form" },
+          { type: "hydrateAttribute", res: "au-field" },
+        ],
+      },
+    },
+  });
+}
+
+if (HAS_AURELIA_TABLE && HAS_AURELIA_OUTCLICK && HAS_AURELIA_FORMS) {
+  SCENARIOS.push({
+    id: "aurelia2-multi-package-aot",
+    title: "Multiple npm packages compile together in one template",
+    tags: ["external", "aot", "third-party", "multi-package"],
+    source: {
+      kind: "memory",
+      files: {
+        "/src/entry.ts": "export const marker = 0;",
+      },
+    },
+    externalPackages: [
+      {
+        id: "aurelia2-table",
+        preferSource: true,
+      },
+      {
+        id: "aurelia2-outclick",
+        preferSource: true,
+      },
+      {
+        id: "aurelia2-forms",
+        preferSource: true,
+      },
+    ],
+    externalResourcePolicy: "root-scope",
+    compile: [
+      {
+        id: "aurelia2-multi-package-aot",
+        markup: [
+          "<section>",
+          "  <div aurelia-table=\"data.bind: items\"></div>",
+          "  <aut-pagination total-items.bind=\"12\" page-size.bind=\"5\" current-page.bind=\"page\"></aut-pagination>",
+          "  <div outclick.bind=\"onOutclick\"></div>",
+          "  <input au-field=\"name\">",
+          "</section>",
+        ].join("\n"),
+        aot: true,
+      },
+    ],
+    expect: {
+      resources: {
+        global: ["aurelia-table", "aut-pagination", "outclick", "au-field"],
+      },
+      aot: {
+        instructions: [
+          { type: "hydrateAttribute", res: "aurelia-table" },
+          { type: "hydrateElement", res: "aut-pagination" },
+          { type: "hydrateAttribute", res: "outclick" },
           { type: "hydrateAttribute", res: "au-field" },
         ],
       },

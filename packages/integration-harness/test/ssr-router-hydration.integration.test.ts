@@ -1,9 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { IContainer, Registration } from "@aurelia/kernel";
-import {
-  AppTask,
-  CustomElement,
-} from "@aurelia/runtime-html";
+import { AppTask, CustomElement } from "@aurelia/runtime-html";
 import {
   ILocationManager,
   IRouter,
@@ -19,12 +18,21 @@ import {
   renderWithComponents,
 } from "@aurelia-ls/ssr";
 import {
+  resolveExternalPackagePath,
+  runIntegrationScenario,
+  type IntegrationScenario,
+} from "@aurelia-ls/integration-harness";
+import {
   checkForDoubleRender,
   countElements,
   createHydrationContext,
   getTexts,
   hydrateSsr,
 } from "./_helpers/ssr-hydration.js";
+import { loadExternalModule } from "./_helpers/external-modules.js";
+
+const AURELIA_TABLE_PACKAGE = resolveExternalPackagePath("aurelia2-table");
+const HAS_AURELIA_TABLE = fs.existsSync(path.join(AURELIA_TABLE_PACKAGE, "package.json"));
 
 class HomePage {
   title = "Home";
@@ -57,6 +65,19 @@ const ABOUT_TEMPLATE = [
   "<div class=\"page about-page\">",
   "  <h1>${title}</h1>",
   "  <p>${description}</p>",
+  "</div>",
+].join("\n");
+
+const THIRD_PARTY_PAGE_TEMPLATE = [
+  "<div class=\"page third-party-page\">",
+  "  <h1>${title}</h1>",
+  "  <aut-pagination",
+  "    total-items.bind=\"totalItems\"",
+  "    page-size.bind=\"pageSize\"",
+  "    current-page.bind=\"page\"",
+  "    direction-links.bind=\"false\"",
+  "    boundary-links.bind=\"false\">",
+  "  </aut-pagination>",
   "</div>",
 ].join("\n");
 
@@ -130,6 +151,71 @@ function createSSRRouterConfiguration(
   };
 }
 
+function ensureBoundLifecycle(elementCtor: unknown): void {
+  const proto = (elementCtor as { prototype?: { bind?: (...args: unknown[]) => void; bound?: (...args: unknown[]) => void } })
+    .prototype;
+  if (proto?.bind && !proto.bound) {
+    proto.bound = function (...args: unknown[]) {
+      return proto.bind?.apply(this, args);
+    };
+  }
+}
+
+function findPageLink(document: Document, text: string): HTMLAnchorElement | null {
+  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a.page-link"));
+  return links.find((link) => link.textContent?.trim() === text) ?? null;
+}
+
+function findActivePage(document: Document): HTMLAnchorElement | null {
+  return document.querySelector<HTMLAnchorElement>("li.page-item.active a.page-link");
+}
+
+async function flushDom(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function resolvePaginationViewModel(hydrated: {
+  host: Element;
+  document: Document;
+  appRoot: { controller?: unknown };
+}): { selectPage?: (page: number) => void } {
+  const hostElement = hydrated.document.querySelector("aut-pagination") as
+    | (Element & { $au?: Record<string, unknown> })
+    | null;
+  const viaElement = hostElement?.$au?.["au:resource:custom-element"] as
+    | { viewModel?: { selectPage?: (page: number) => void } }
+    | undefined;
+  if (viaElement?.viewModel?.selectPage) {
+    return viaElement.viewModel;
+  }
+  const viaController = findControllerByName(hydrated.appRoot?.controller, "aut-pagination");
+  if (viaController?.viewModel?.selectPage) {
+    return viaController.viewModel;
+  }
+  throw new Error("Unable to locate aut-pagination view model for interaction.");
+}
+
+function findControllerByName(
+  root: unknown,
+  name: string,
+): { viewModel?: { selectPage?: (page: number) => void } } | null {
+  if (!root || typeof root !== "object") return null;
+  const definitionName = (root as { definition?: { name?: string } }).definition?.name;
+  if (definitionName === name) {
+    return root as { viewModel?: { selectPage?: (page: number) => void } };
+  }
+  const children = (root as { children?: unknown[] }).children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = findControllerByName(child, name);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 describe("integration harness: router SSR + hydration", () => {
   test("hydrates routed viewport content without duplication", async () => {
     const homeAot = compileWithAot(HOME_TEMPLATE, { name: "home-page" });
@@ -183,6 +269,139 @@ describe("integration harness: router SSR + hydration", () => {
 
     expect(countElements(hydrated.host, ".about-page")).toBe(1);
     expect(getTexts(hydrated.host, ".about-page h1")).toEqual(["About"]);
+
+    const doubleRender = checkForDoubleRender(hydrated.document, ".page");
+    expect(doubleRender.hasDuplicates).toBe(false);
+
+    await hydrated.stop();
+  });
+
+  test.skipIf(!HAS_AURELIA_TABLE)("hydrates routed third-party components", async () => {
+    const scenario: IntegrationScenario = {
+      id: "router-with-third-party",
+      title: "Router SSR + hydration supports third-party elements",
+      tags: ["router", "ssr", "hydration", "third-party"],
+      source: {
+        kind: "memory",
+        files: {
+          "/src/entry.ts": [
+            "import { Aurelia } from \"aurelia\";",
+            "import { RouterConfiguration } from \"@aurelia/router\";",
+            "",
+            "Aurelia.register(RouterConfiguration);",
+            "export const marker = 0;",
+          ].join("\n"),
+        },
+      },
+      externalPackages: [{ id: "aurelia2-table", preferSource: true }],
+    };
+    const run = await runIntegrationScenario(scenario);
+
+    const pluginModule = await loadExternalModule(AURELIA_TABLE_PACKAGE);
+    const AureliaTableConfiguration = pluginModule.AureliaTableConfiguration as {
+      register: (container: unknown) => void;
+    };
+    const AutPaginationCustomElement = pluginModule.AutPaginationCustomElement as new () => Record<string, unknown>;
+    ensureBoundLifecycle(AutPaginationCustomElement);
+
+    class ThirdPartyPage {
+      title = "Third Party";
+      page = 1;
+      pageSize = 5;
+      totalItems = 12;
+
+      static $au = {
+        type: "custom-element",
+        name: "third-party-page",
+      };
+    }
+
+    class RouterAppWithThirdParty {
+      static routes = [
+        { path: "", component: ThirdPartyPage, title: "Third Party" },
+      ];
+
+      static $au = {
+        type: "custom-element",
+        name: "router-app-third-party",
+        dependencies: [ThirdPartyPage],
+      };
+    }
+
+    const thirdPartyAot = compileWithAot(THIRD_PARTY_PAGE_TEMPLATE, {
+      name: "third-party-page",
+      semantics: run.semantics,
+      resourceGraph: run.resourceGraph,
+      resourceScope: run.resourceGraph.root,
+    });
+    const appAot = compileWithAot(ROUTER_APP_TEMPLATE, {
+      name: "router-app-third-party",
+      semantics: run.semantics,
+      resourceGraph: run.resourceGraph,
+      resourceScope: run.resourceGraph.root,
+    });
+
+    patchComponentDefinition(ThirdPartyPage, thirdPartyAot, { name: "third-party-page" });
+    patchComponentDefinition(RouterAppWithThirdParty, appAot, { name: "router-app-third-party" });
+    CustomElement.define({
+      name: "third-party-page",
+      template: thirdPartyAot.template,
+      instructions: thirdPartyAot.instructions,
+      needsCompile: false,
+    }, ThirdPartyPage);
+
+    const renderResult = await renderWithComponents(RouterAppWithThirdParty, {
+      childComponents: [ThirdPartyPage],
+      request: { url: "/", baseHref: "/" },
+      register: (container) => {
+        container.register(
+          createSSRRouterConfiguration("/", "/", true),
+          AureliaTableConfiguration,
+        );
+      },
+    });
+
+    const ssrContext = createHydrationContext(
+      renderResult.html,
+      { page: 1, pageSize: 5, totalItems: 12 },
+      renderResult.manifest,
+      {
+        ssrDef: {
+          template: appAot.template,
+          instructions: appAot.instructions,
+        },
+      },
+    );
+    expect(countElements(ssrContext.host, "aut-pagination")).toBe(1);
+    ssrContext.dom.window.close();
+
+    const hydrated = await hydrateSsr(
+      renderResult.html,
+      { page: 1, pageSize: 5, totalItems: 12 },
+      renderResult.manifest,
+      appAot,
+      {
+        componentName: "router-app-third-party",
+        componentClass: RouterAppWithThirdParty,
+        childComponents: [ThirdPartyPage],
+        register: (container) => {
+          container.register(
+            createSSRRouterConfiguration("/", "/", true),
+            AureliaTableConfiguration,
+          );
+        },
+      },
+    );
+
+    expect(countElements(hydrated.host, "aut-pagination")).toBe(1);
+    (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent = hydrated.dom.window.CustomEvent;
+    const paginationVm = resolvePaginationViewModel(hydrated);
+    const pageVm = (paginationVm as { $controller?: { parent?: { viewModel?: { page?: number } } } })
+      .$controller?.parent?.viewModel;
+    expect(pageVm).toBeTruthy();
+    paginationVm.selectPage?.(2);
+    await flushDom();
+    expect(pageVm?.page).toBe(2);
 
     const doubleRender = checkForDoubleRender(hydrated.document, ".page");
     expect(doubleRender.hasDuplicates).toBe(false);

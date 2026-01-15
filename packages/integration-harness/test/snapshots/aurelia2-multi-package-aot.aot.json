@@ -1,0 +1,72 @@
+{
+  "aurelia2-multi-package-aot": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0000", "mode": 2, "to": "data", "type": 12 }
+            ],
+            "res": "aurelia-table",
+            "type": 1
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0001", "mode": 2, "to": "totalItems", "type": 12 },
+              { "exprId": "expr_0002", "mode": 2, "to": "pageSize", "type": 12 },
+              { "exprId": "expr_0003", "mode": 6, "to": "currentPage", "type": 12 }
+            ],
+            "res": "aut-pagination",
+            "type": 0
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0004", "mode": 2, "to": "fn", "type": 12 }
+            ],
+            "res": "outclick",
+            "type": 1
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "to": "name", "type": 10, "value": "name" }
+            ],
+            "res": "au-field",
+            "type": 1
+          }
+        ]
+      ],
+      "name": "aurelia2-multi-package-aot",
+      "nestedTemplates": [],
+      "targetCount": 4
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "items" },
+        "id": "expr_0000"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 12 },
+        "id": "expr_0001"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 5 },
+        "id": "expr_0002"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "page" },
+        "id": "expr_0003"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "onOutclick" },
+        "id": "expr_0004"
+      }
+    ],
+    "template": "<section>\n  <!--au--><div aurelia-table=\"data.bind: items\"></div>\n  <!--au--><aut-pagination></aut-pagination>\n  <!--au--><div></div>\n  <!--au--><input au-field=\"name\">\n</section>"
+  }
+}
