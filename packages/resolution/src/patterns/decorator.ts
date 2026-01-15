@@ -53,6 +53,7 @@ import {
   canonicalElementName,
   canonicalAttrName,
   canonicalSimpleName,
+  canonicalBindableName,
   canonicalAliases,
 } from '../util/naming.js';
 
@@ -133,6 +134,7 @@ interface AttributeMeta {
   bindables: BindableConfig[];
   isTemplateController: boolean;
   noMultiBindings: boolean;
+  defaultProperty?: string;
   decoratorSpan?: TextSpan;
 }
 
@@ -200,6 +202,7 @@ interface ParsedResourceDecorator {
   containerless: boolean;
   isTemplateController: boolean;
   noMultiBindings: boolean;
+  defaultProperty?: string;
   template?: string;
   span?: TextSpan;
 }
@@ -252,6 +255,7 @@ function parseResourceDecorator(dec: DecoratorApplication): ParsedResourceDecora
     result.isTemplateController = extractBooleanProp(arg, 'isTemplateController') ??
                                    extractBooleanProp(arg, 'templateController') ?? false;
     result.noMultiBindings = extractBooleanProp(arg, 'noMultiBindings') ?? false;
+    result.defaultProperty = extractStringProp(arg, 'defaultProperty');
 
     // Template
     result.template = extractStringProp(arg, 'template');
@@ -374,6 +378,7 @@ function mergeAttributeMeta(
     bindables: [...(existing?.bindables ?? []), ...parsed.bindables],
     isTemplateController: (existing?.isTemplateController ?? false) || parsed.isTemplateController,
     noMultiBindings: (existing?.noMultiBindings ?? false) || parsed.noMultiBindings,
+    defaultProperty: parsed.defaultProperty ?? existing?.defaultProperty,
     decoratorSpan: parsed.span ?? existing?.decoratorSpan,
   };
 }
@@ -447,7 +452,8 @@ function buildAttributeDef(
 
   // Merge bindables
   const bindables = buildBindableInputs(attrMeta.bindables, cls.bindableMembers);
-  const primary = findPrimaryBindable(bindables);
+  const primary = resolvePrimaryName(bindables, attrMeta.defaultProperty);
+  const bindablesWithPrimary = applyPrimaryBindable(bindables, primary);
   const isTC = attrMeta.isTemplateController || meta.templateController;
 
   if (isTC) {
@@ -457,7 +463,7 @@ function buildAttributeDef(
       file: cls.filePath,
       span: cls.span,
       aliases: canonicalAliases(attrMeta.aliases),
-      bindables: buildBindableDefs(bindables, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
+      bindables: buildBindableDefs(bindablesWithPrimary, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
       noMultiBindings: attrMeta.noMultiBindings,
     });
   }
@@ -468,7 +474,7 @@ function buildAttributeDef(
     file: cls.filePath,
     span: cls.span,
     aliases: canonicalAliases(attrMeta.aliases),
-    bindables: buildBindableDefs(bindables, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
+    bindables: buildBindableDefs(bindablesWithPrimary, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
     primary,
     noMultiBindings: attrMeta.noMultiBindings,
   });
@@ -594,5 +600,42 @@ function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
   }
 
   return undefined;
+}
+
+function resolvePrimaryName(
+  bindables: BindableInput[],
+  defaultProperty: string | undefined,
+): string | undefined {
+  const canonical = defaultProperty
+    ? canonicalBindableName(defaultProperty) ?? defaultProperty.trim()
+    : undefined;
+  if (canonical) {
+    return canonical;
+  }
+  return findPrimaryBindable(bindables);
+}
+
+function applyPrimaryBindable(
+  bindables: BindableInput[],
+  primary: string | undefined,
+): BindableInput[] {
+  if (!primary) {
+    return bindables;
+  }
+
+  let found = false;
+  const updated = bindables.map((bindable) => {
+    const isPrimary = bindable.name === primary;
+    if (isPrimary) {
+      found = true;
+    }
+    return { ...bindable, primary: isPrimary };
+  });
+
+  if (!found) {
+    updated.push({ name: primary, primary: true });
+  }
+
+  return updated;
 }
 

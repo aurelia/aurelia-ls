@@ -1276,202 +1276,202 @@
         "bindables": {
           "form": {
             "attribute": {
-              "location": { "end": 800, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 748 },
+              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
               "origin": "source",
               "value": "form"
             },
             "mode": {
-              "location": { "end": 800, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 748 },
+              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 800, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 748 },
+              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 800, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 748 },
+              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
               "origin": "source",
               "value": "form"
             },
             "type": {
-              "location": { "end": 800, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 748 },
+              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
               "origin": "source",
               "value": "FormController"
             }
           },
           "name": {
             "attribute": {
-              "location": { "end": 563, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 500 },
+              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
               "origin": "source",
               "value": "name"
             },
             "mode": {
-              "location": { "end": 563, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 500 },
+              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 563, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 500 },
+              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
               "origin": "source",
               "value": true
             },
             "property": {
-              "location": { "end": 563, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 500 },
+              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
               "origin": "source",
               "value": "name"
             },
             "type": {
-              "location": { "end": 563, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 500 },
+              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
               "origin": "source",
               "value": "string"
             }
           },
           "validateOn": {
             "attribute": {
-              "location": { "end": 745, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 694 },
+              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
               "origin": "source",
               "value": "validateOn"
             },
             "mode": {
-              "location": { "end": 745, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 694 },
+              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 745, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 694 },
+              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 745, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 694 },
+              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
               "origin": "source",
               "value": "validateOn"
             },
             "type": {
-              "location": { "end": 745, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 694 },
+              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
               "origin": "source",
               "value": "ValidateOn"
             }
           },
           "validationModel": {
             "attribute": {
-              "location": { "end": 865, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 803 },
+              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
               "origin": "source",
               "value": "validationModel"
             },
             "mode": {
-              "location": { "end": 865, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 803 },
+              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 865, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 803 },
+              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 865, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 803 },
+              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
               "origin": "source",
               "value": "validationModel"
             },
             "type": {
-              "location": { "end": 865, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 803 },
+              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
               "origin": "source",
               "value": "IValidateable"
             }
           },
           "validationProperty": {
             "attribute": {
-              "location": { "end": 926, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 868 },
+              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
               "origin": "source",
               "value": "validationProperty"
             },
             "mode": {
-              "location": { "end": 926, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 868 },
+              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 926, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 868 },
+              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 926, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 868 },
+              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
               "origin": "source",
               "value": "validationProperty"
             },
             "type": {
-              "location": { "end": 926, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 868 },
+              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
               "origin": "source",
               "value": "string"
             }
           },
           "validators": {
             "attribute": {
-              "location": { "end": 691, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 643 },
+              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
               "origin": "source",
               "value": "validators"
             },
             "mode": {
-              "location": { "end": 691, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 643 },
+              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 691, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 643 },
+              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 691, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 643 },
+              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
               "origin": "source",
               "value": "validators"
             },
             "type": {
-              "location": { "end": 691, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 643 },
+              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
               "origin": "source",
               "value": "ValidatorFn[]"
             }
           },
           "value": {
             "attribute": {
-              "location": { "end": 640, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 566 },
+              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
               "origin": "source",
               "value": "value"
             },
             "mode": {
-              "location": { "end": 640, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 566 },
+              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
               "origin": "source",
               "value": "twoWay"
             },
             "primary": {
-              "location": { "end": 640, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 566 },
+              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 640, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 566 },
+              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
               "origin": "source",
               "value": "value"
             }
           }
         },
         "className": {
-          "location": { "end": 5366, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
           "origin": "source",
           "value": "AuFieldCustomAttribute"
         },
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 5366, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
           "origin": "source",
           "value": "au-field"
         },
         "noMultiBindings": {
-          "location": { "end": 5366, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
           "origin": "source",
           "value": false
         },
         "primary": {
-          "location": { "end": 5366, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
           "origin": "source",
           "value": "name"
         }

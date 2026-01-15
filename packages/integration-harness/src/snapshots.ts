@@ -38,15 +38,25 @@ export function readSnapshot(path: string): string | null {
 
 export function compareSnapshot(path: string, value: unknown): SnapshotComparison {
   const actual = normalizeSnapshot(value);
-  const expected = readSnapshot(path);
-  if (expected === null) {
+  const expectedRaw = readSnapshot(path);
+  if (expectedRaw === null) {
     return { match: false, actual };
   }
-  return {
-    match: expected === actual,
-    expected,
-    actual,
-  };
+  try {
+    const expectedValue = JSON.parse(expectedRaw);
+    const expected = normalizeSnapshot(expectedValue);
+    return {
+      match: expected === actual,
+      expected,
+      actual,
+    };
+  } catch {
+    return {
+      match: false,
+      expected: expectedRaw,
+      actual,
+    };
+  }
 }
 
 export function createSnapshotBundle(run: IntegrationRun): Record<string, unknown> {

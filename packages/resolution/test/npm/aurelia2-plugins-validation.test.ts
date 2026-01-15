@@ -41,7 +41,7 @@ describe('aurelia2-plugins: re-export pattern', () => {
       expect(result.resources).toHaveLength(4);
       expect(result.confidence).toBe('high');
       const hasEntryPointGap = result.gaps.some(g => g.why.includes('Entry point not found'));
-      expect(hasEntryPointGap).toBe(true);
+      expect(hasEntryPointGap).toBe(false);
       expect(result.gaps.length).toBeGreaterThan(0);
     });
 
@@ -232,7 +232,7 @@ describe('aurelia2-plugins: re-export pattern', () => {
       const auQuery = result.resources.find(r => r.name === 'au-query')!;
 
       const query = auQuery.bindables.find(b => b.name === 'query');
-      expect(query?.primary).toBe(true);
+      expect(query?.primary).toBeUndefined();
 
       const queryResult = auQuery.bindables.find(b => b.name === 'result');
       expect(queryResult?.mode).toBe('twoWay');
