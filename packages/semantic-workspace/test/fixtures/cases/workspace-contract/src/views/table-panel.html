@@ -1,0 +1,50 @@
+<template>
+  <section class="table-panel">
+    <h3 class="table-title">Inventory</h3>
+
+    <div class="filters">
+      <input
+        type="text"
+        value.bind="filters.search & debounce: 200"
+        placeholder="Search"
+        t="[placeholder]filters.searchDevices">
+      <select value.bind="filters.type">
+        <option value="all">All</option>
+        <option repeat.for="kind of kinds" value.bind="kind">${kind}</option>
+      </select>
+      <button click.trigger="clearFilters()" tooltip="Clear filters">Clear</button>
+    </div>
+
+    <table
+      class="data-table"
+      aurelia-table="data.bind: items; display-data.bind: displayItems; filters.bind: filters;">
+      <thead>
+        <tr>
+          <th aut-sort="key: name; default: asc">Name</th>
+          <th aut-sort="key: type">Type</th>
+          <th aut-sort="key: rating">Rating</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template if-not.bind="displayItems.length">
+          <tr><td colspan="3">No results</td></tr>
+        </template>
+        <tr repeat.for="item of displayItems" click.trigger="choose(item)">
+          <td>
+            <status-badge status.bind="item.status" level.bind="item.rating"></status-badge>
+            <span tooltip.bind="item.name">${item.name | titlecase}</span>
+          </td>
+          <td>
+            <label-chip label.bind="item.type"></label-chip>
+          </td>
+          <td>${item.rating}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="view-mode">
+      <span if.bind="view === 'grid'">Grid active</span>
+      <span if.bind="view === 'list'">List active</span>
+    </div>
+  </section>
+</template>

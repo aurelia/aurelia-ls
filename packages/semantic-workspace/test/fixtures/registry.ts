@@ -117,6 +117,36 @@ export const fixtures: readonly FixtureDescriptor[] = [
     templateEntry: "src/my-app.html",
     notes: ["Scenario seed: playground/template-imports"],
   },
+  {
+    id: asFixtureId("workspace-contract"),
+    title: "workspace-contract",
+    description: "Curated LSP contract fixture with imports, scopes, and template breadth.",
+    origin: "semantic-workspace",
+    root: { kind: "local", path: "cases/workspace-contract" },
+    scenarios: ["S1"],
+    suites: ["workspace", "lsp-adapter"],
+    coverage: {
+      artifacts: [...editingArtifacts, "feature-usage"],
+      queries: editingQueries,
+      resources: ["element", "attribute", "value-converter", "binding-behavior", "template-controller"],
+      declarations: ["decorator", "decorator-config", "static-au", "convention", "define"],
+      scopes: ["global", "local", "imported"],
+      templateFeatures: [
+        "interpolation",
+        "repeat",
+        "if",
+        "switch",
+        "let",
+        "template-controller",
+        "containerless",
+        "compose",
+        "import",
+      ],
+    },
+    entry: "src/my-app.ts",
+    templateEntry: "src/my-app.html",
+    notes: ["Scenario seed: workspace-contract", "Primary LSP contract fixture."],
+  },
 
   // S2: Rename cascade + template edits.
   {

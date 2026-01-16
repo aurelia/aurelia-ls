@@ -1,0 +1,7 @@
+<template>
+  <span class="status-badge ${status}">
+    <span class="dot" if.bind="isActive"></span>
+    ${label | titlecase}
+    <small if.bind="level">(${level})</small>
+  </span>
+</template>

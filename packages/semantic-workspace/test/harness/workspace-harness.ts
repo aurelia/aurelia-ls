@@ -40,6 +40,9 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
   }
 
   const root = options.rootOverride ?? resolveFixtureRoot(fixture);
+  if (!root) {
+    throw new Error(`Fixture root not found for ${fixture.id}. Provide rootOverride or check out the fixture.`);
+  }
   const tsconfigPath = options.tsconfigPath ?? path.join(root, "tsconfig.json");
   const program = createProgramFromTsconfig(tsconfigPath);
   const packageRoots = options.resolution?.packageRoots
