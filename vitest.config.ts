@@ -19,6 +19,7 @@ export default defineConfig({
       "@aurelia-ls/resolution/npm": "./packages/resolution/out/npm/index.js",
       "@aurelia-ls/resolution": "./packages/resolution/out/index.js",
       "@aurelia-ls/transform": "./packages/transform/out/index.js",
+      "@aurelia-ls/semantic-workspace": "./packages/semantic-workspace/out/index.js",
       "@aurelia-ls/ssr": "./packages/ssr/out/index.js",
       "@aurelia-ls/ssg": "./packages/ssg/out/index.js",
       "@aurelia-ls/vite-plugin": "./packages/vite-plugin/out/index.js",

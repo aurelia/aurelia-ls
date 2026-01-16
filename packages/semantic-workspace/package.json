@@ -1,0 +1,23 @@
+{
+  "name": "@aurelia-ls/semantic-workspace",
+  "version": "0.2.0",
+  "description": "Semantics-first workspace engine for Aurelia tooling",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@aurelia-ls/compiler": "workspace:*"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

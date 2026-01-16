@@ -71,6 +71,7 @@
     "test:transform": "pnpm -w build && pnpm -w test:vitest -- packages/transform",
     "test:transform:cov": "pnpm -w build && pnpm -w test:vitest:cov -- packages/transform",
     "test:language-server": "pnpm -w build && pnpm -w test:vitest -- packages/language-server",
+    "test:ide": "pnpm -w build && pnpm -w test:vitest -- packages/language-server packages/semantic-workspace",
     "test:language-server:cov": "pnpm -w build && pnpm -w test:vitest:cov -- packages/language-server",
     "test:vscode": "pnpm -w build && pnpm -w test:vitest -- packages/vscode",
     "test:vscode:cov": "pnpm -w build && pnpm -w test:vitest:cov -- packages/vscode",

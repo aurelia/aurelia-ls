@@ -9,6 +9,7 @@
     { "path": "packages/vite-plugin" },
     { "path": "packages/language-server" },
     { "path": "packages/vscode" },
-    { "path": "packages/integration-harness" }
+    { "path": "packages/integration-harness" },
+    { "path": "packages/semantic-workspace" }
   ]
 }
