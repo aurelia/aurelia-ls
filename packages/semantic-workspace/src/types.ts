@@ -74,6 +74,8 @@ export interface WorkspaceCompletionItem {
   readonly label: string;
   readonly kind?: string;
   readonly detail?: string;
+  readonly documentation?: string;
+  readonly sortText?: string;
   // insertText overrides label when present (no snippet semantics assumed).
   readonly insertText?: string;
 }

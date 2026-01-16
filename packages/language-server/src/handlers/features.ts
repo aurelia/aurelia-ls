@@ -27,7 +27,13 @@ import {
   type SourceSpan,
 } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
-import { mapCompletions, mapHover, mapLocations, mapWorkspaceEdit } from "../mapping/lsp-types.js";
+import {
+  mapSemanticWorkspaceEdit,
+  mapWorkspaceCompletions,
+  mapWorkspaceHover,
+  mapWorkspaceLocations,
+  type LookupTextFn,
+} from "../mapping/lsp-types.js";
 import { handleSemanticTokensFull, SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 import ts from "typescript";
 import { pathToFileURL } from "node:url";
@@ -162,7 +168,7 @@ function getMetaImportDefinition(
   templatePath: string
 ): Location | null {
   const canonical = canonicalDocumentUri(doc.uri);
-  const compilation = ctx.workspace.program.getCompilation(canonical.uri);
+  const compilation = ctx.workspace.getCompilation(canonical.uri);
   if (!compilation) return null;
 
   const template = compilation.linked.templates[0];
@@ -392,7 +398,7 @@ function getMetaHover(
   offset: number
 ): Hover | null {
   const canonical = canonicalDocumentUri(doc.uri);
-  const compilation = ctx.workspace.program.getCompilation(canonical.uri);
+  const compilation = ctx.workspace.getCompilation(canonical.uri);
   if (!compilation) return null;
 
   const template = compilation.linked.templates[0];
@@ -444,7 +450,7 @@ export function validateTemplateImports(
   templatePath: string
 ): TemplateImportDiagnostic[] {
   const canonical = canonicalDocumentUri(doc.uri);
-  const compilation = ctx.workspace.program.getCompilation(canonical.uri);
+  const compilation = ctx.workspace.getCompilation(canonical.uri);
   if (!compilation) return [];
 
   const template = compilation.linked.templates[0];
@@ -483,8 +489,8 @@ export function handleCompletion(ctx: ServerContext, params: CompletionParams): 
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
     if (!doc) return [];
     const canonical = canonicalDocumentUri(doc.uri);
-    const completions = ctx.workspace.languageService.getCompletions(canonical.uri, params.position);
-    return mapCompletions(completions);
+    const completions = ctx.workspace.query(canonical.uri).completions(params.position);
+    return mapWorkspaceCompletions(completions);
   } catch (e) {
     ctx.logger.error(`[completion] failed for ${params.textDocument.uri}: ${formatError(e)}`);
     return [];
@@ -496,6 +502,7 @@ export function handleHover(ctx: ServerContext, params: TextDocumentPositionPara
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(doc.uri);
+    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
     // Check for meta element hover first
     const offset = doc.offsetAt(params.position);
@@ -504,8 +511,8 @@ export function handleHover(ctx: ServerContext, params: TextDocumentPositionPara
       return metaHover;
     }
 
-    // Fall through to regular TypeScript-based hover
-    return mapHover(ctx.workspace.languageService.getHover(canonical.uri, params.position));
+    const hover = ctx.workspace.query(canonical.uri).hover(params.position);
+    return mapWorkspaceHover(hover, lookupText);
   } catch (e) {
     ctx.logger.error(`[hover] failed for ${params.textDocument.uri}: ${formatError(e)}`);
     return null;
@@ -517,6 +524,7 @@ export function handleDefinition(ctx: ServerContext, params: TextDocumentPositio
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(doc.uri);
+    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
     // Check for meta element import definition first
     const offset = doc.offsetAt(params.position);
@@ -525,8 +533,8 @@ export function handleDefinition(ctx: ServerContext, params: TextDocumentPositio
       return metaDefinition;
     }
 
-    // Fall through to regular TypeScript-based definition
-    return mapLocations(ctx.workspace.languageService.getDefinition(canonical.uri, params.position));
+    const locations = ctx.workspace.query(canonical.uri).definition(params.position);
+    return mapWorkspaceLocations(locations, lookupText);
   } catch (e) {
     ctx.logger.error(`[definition] failed for ${params.textDocument.uri}: ${formatError(e)}`);
     return null;
@@ -538,7 +546,9 @@ export function handleReferences(ctx: ServerContext, params: ReferenceParams): L
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(doc.uri);
-    return mapLocations(ctx.workspace.languageService.getReferences(canonical.uri, params.position));
+    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
+    const locations = ctx.workspace.query(canonical.uri).references(params.position);
+    return mapWorkspaceLocations(locations, lookupText);
   } catch (e) {
     ctx.logger.error(`[references] failed for ${params.textDocument.uri}: ${formatError(e)}`);
     return null;
@@ -550,8 +560,14 @@ export function handleRename(ctx: ServerContext, params: RenameParams): Workspac
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(doc.uri);
-    const edits = ctx.workspace.languageService.renameSymbol(canonical.uri, params.position, params.newName);
-    return mapWorkspaceEdit(edits);
+    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
+    const result = ctx.workspace.refactor().rename({
+      uri: canonical.uri,
+      position: params.position,
+      newName: params.newName,
+    });
+    if ("error" in result) return null;
+    return mapSemanticWorkspaceEdit(result.edit, lookupText);
   } catch (e) {
     ctx.logger.error(`[rename] failed for ${params.textDocument.uri}: ${formatError(e)}`);
     return null;
@@ -563,10 +579,14 @@ export function handleCodeAction(ctx: ServerContext, params: CodeActionParams): 
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(doc.uri);
-    const actions = ctx.workspace.languageService.getCodeActions(canonical.uri, params.range);
+    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
+    const actions = ctx.workspace.refactor().codeActions({
+      uri: canonical.uri,
+      position: params.range.start,
+    });
     const mapped: CodeAction[] = [];
     for (const action of actions) {
-      const edit = mapWorkspaceEdit(action.edits);
+      const edit = mapSemanticWorkspaceEdit(action.edit ?? null, lookupText);
       if (!edit) continue;
       const mappedAction: CodeAction = { title: action.title, edit };
       if (action.kind) mappedAction.kind = action.kind;

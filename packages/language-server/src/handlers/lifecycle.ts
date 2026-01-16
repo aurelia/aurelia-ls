@@ -15,9 +15,9 @@ import path from "node:path";
 import { canonicalDocumentUri, deriveTemplatePaths } from "@aurelia-ls/compiler";
 import { DiagnosticSeverity } from "vscode-languageserver/node.js";
 import { AureliaProjectIndex } from "../services/project-index.js";
-import { TemplateWorkspace } from "../services/template-workspace.js";
+import { createSemanticWorkspace, type DefaultSemanticWorkspace } from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
-import { mapDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
+import { mapWorkspaceDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
 import { SEMANTIC_TOKENS_LEGEND, validateTemplateImports } from "./features.js";
 
 /** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
@@ -79,16 +79,16 @@ export async function refreshDocument(
     }
     const canonical = canonicalDocumentUri(doc.uri);
     if (reason === "open") {
-      ctx.workspace.open(doc);
+      ctx.workspace.open(canonical.uri, doc.getText(), doc.version);
     } else {
-      ctx.workspace.change(doc);
+      ctx.workspace.update(canonical.uri, doc.getText(), doc.version);
     }
     const overlay = ctx.materializeOverlay(canonical.uri);
 
     const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
-    const diagnostics = ctx.workspace.languageService.getDiagnostics(canonical.uri);
-    const lspDiagnostics = mapDiagnostics(diagnostics, lookupText);
+    const diagnostics = ctx.workspace.diagnostics(canonical.uri);
+    const lspDiagnostics = mapWorkspaceDiagnostics(canonical.uri, diagnostics, lookupText);
 
     // Add template import diagnostics
     const templateImportDiags = validateTemplateImports(ctx, doc, canonical.path);
@@ -102,14 +102,14 @@ export async function refreshDocument(
 
     await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: [...lspDiagnostics, ...importDiagsLsp] });
 
-    const compilation = ctx.workspace.program.getCompilation(canonical.uri);
+    const compilation = ctx.workspace.getCompilation(canonical.uri);
     await ctx.connection.sendNotification("aurelia/overlayReady", {
       uri: doc.uri,
       overlayPath: overlay?.overlay.path,
       calls: overlay?.calls.length ?? 0,
       overlayLen: overlay?.overlay.text.length ?? 0,
       diags: lspDiagnostics.length,
-      meta: compilation.meta,
+      meta: compilation?.meta,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
@@ -118,7 +118,7 @@ export async function refreshDocument(
   }
 }
 
-function createWorkspaceFromIndex(ctx: ServerContext): TemplateWorkspace {
+function createWorkspaceFromIndex(ctx: ServerContext): DefaultSemanticWorkspace {
   const semantics = ctx.projectIndex.currentSemantics();
   const catalog = ctx.projectIndex.currentCatalog();
   const syntax = ctx.projectIndex.currentSyntax();
@@ -142,7 +142,7 @@ function createWorkspaceFromIndex(ctx: ServerContext): TemplateWorkspace {
   const resourceScope = semantics.defaultScope ?? resourceGraph.root ?? null;
   if (resourceScope !== null) options.resourceScope = resourceScope;
 
-  return new TemplateWorkspace({
+  return createSemanticWorkspace({
     program: options,
     language: { typescript: ctx.tsAdapter },
     fingerprint: ctx.projectIndex.currentFingerprint(),

@@ -1,18 +1,34 @@
+import fs from "node:fs";
 import {
-  DEFAULT_SEMANTICS,
+  DefaultTemplateBuildService,
+  DefaultTemplateLanguageService,
+  DefaultTemplateProgram,
   InMemoryProvenanceIndex,
-  asDocumentUri,
+  InMemorySourceStore,
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
+  canonicalDocumentUri,
   prepareSemantics,
   stableHash,
   stableHashSemantics,
+  type CompletionItem as TemplateCompletionItem,
+  type DocumentSnapshot,
   type DocumentUri,
+  type Location as TemplateLocation,
+  type OverlayBuildArtifact,
   type ProvenanceIndex,
-  type ResourceCatalog,
-  type ResourceGraph,
-  type Semantics,
-  type TemplateSyntaxRegistry,
+  type SourceSpan,
+  type SourceStore,
+  type TemplateCodeAction,
+  type TemplateCompilation,
+  type TemplateLanguageService,
+  type TemplateLanguageServiceOptions,
+  type TemplateMappingArtifact,
+  type TemplateProgram,
+  type TemplateProgramOptions,
+  type TemplateQueryFacade,
+  type TextEdit as TemplateTextEdit,
+  type TextRange,
 } from "@aurelia-ls/compiler";
 import {
   asWorkspaceFingerprint,
@@ -22,26 +38,23 @@ import {
   type WorkspaceCodeAction,
   type WorkspaceCompletionItem,
   type WorkspaceDiagnostic,
+  type WorkspaceEdit,
   type WorkspaceLocation,
   type WorkspaceRefactorResult,
   type WorkspaceSnapshot,
   type WorkspaceToken,
 } from "./types.js";
 
-export interface SemanticWorkspaceOptions {
-  readonly configHash?: string;
-  readonly semantics?: Semantics;
-  readonly catalog?: ResourceCatalog;
-  readonly syntax?: TemplateSyntaxRegistry;
-  readonly resourceGraph?: ResourceGraph;
-  readonly provenance?: ProvenanceIndex;
-}
+export type WorkspaceProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance">;
 
-interface WorkspaceDocument {
-  readonly uri: DocumentUri;
-  readonly version: number;
-  readonly text: string;
-  readonly textHash: string;
+export interface SemanticWorkspaceOptions {
+  readonly program: WorkspaceProgramOptions;
+  readonly language?: TemplateLanguageServiceOptions;
+  readonly sourceStore?: SourceStore;
+  readonly provenance?: ProvenanceIndex;
+  readonly configHash?: string;
+  readonly fingerprint?: string;
+  readonly lookupText?: (uri: DocumentUri) => string | null;
 }
 
 const EMPTY_DIAGNOSTICS: readonly WorkspaceDiagnostic[] = [];
@@ -51,73 +64,74 @@ const EMPTY_LOCATIONS: readonly WorkspaceLocation[] = [];
 const EMPTY_COMPLETIONS: readonly WorkspaceCompletionItem[] = [];
 
 export class DefaultSemanticWorkspace implements SemanticWorkspace {
-  #documents = new Map<DocumentUri, WorkspaceDocument>();
-  #semantics: Semantics;
-  #catalog: ResourceCatalog;
-  #syntax: TemplateSyntaxRegistry;
-  #resourceGraph: ResourceGraph;
-  #provenance: ProvenanceIndex;
+  readonly sources: SourceStore;
+  provenance: ProvenanceIndex;
+  program: TemplateProgram;
+  buildService: DefaultTemplateBuildService;
+  languageService: TemplateLanguageService;
+
+  #programOptions: WorkspaceProgramOptions;
+  #languageOptions: TemplateLanguageServiceOptions;
   #configHash: string;
+  #workspaceFingerprint: string;
+  #lookupText: ((uri: DocumentUri) => string | null) | undefined;
   #refactor: RefactorEngine;
 
-  constructor(options: SemanticWorkspaceOptions = {}) {
-    const prepared = prepareSemantics(options.semantics ?? DEFAULT_SEMANTICS);
-    this.#semantics = prepared;
-    this.#catalog = options.catalog ?? prepared.catalog;
-    this.#syntax = options.syntax ?? buildTemplateSyntaxRegistry(prepared);
-    this.#resourceGraph = options.resourceGraph ?? buildResourceGraphFromSemantics(prepared);
-    this.#provenance = options.provenance ?? new InMemoryProvenanceIndex();
-    this.#configHash = options.configHash ?? computeConfigHash(prepared, this.#catalog, this.#syntax, this.#resourceGraph);
-    this.#refactor = createEmptyRefactorEngine();
+  constructor(options: SemanticWorkspaceOptions) {
+    this.sources = options.sourceStore ?? new InMemorySourceStore();
+    this.provenance = options.provenance ?? new InMemoryProvenanceIndex();
+    this.#programOptions = options.program;
+    this.#languageOptions = options.language ?? {};
+    this.#lookupText = options.lookupText;
+    this.program = this.#createProgram(this.provenance, this.#programOptions);
+    this.buildService = new DefaultTemplateBuildService(this.program);
+    this.languageService = new DefaultTemplateLanguageService(this.program, {
+      ...this.#languageOptions,
+      buildService: this.#languageOptions.buildService ?? this.buildService,
+    });
+    this.#configHash = options.configHash ?? computeConfigHash(this.#programOptions);
+    this.#workspaceFingerprint = options.fingerprint ?? this.program.optionsFingerprint;
+    this.#refactor = new WorkspaceRefactorEngine(this);
+  }
+
+  get fingerprint(): string {
+    return this.#workspaceFingerprint;
   }
 
   open(uri: DocumentUri, text?: string, version?: number): void {
-    if (text === undefined) return;
-    this.#upsertDocument(uri, text, version);
+    if (text === undefined) {
+      this.ensureFromFile(uri);
+      return;
+    }
+    const canonical = canonicalDocumentUri(uri);
+    this.program.upsertTemplate(canonical.uri, text, version);
   }
 
   update(uri: DocumentUri, text: string, version?: number): void {
-    this.#upsertDocument(uri, text, version);
+    const canonical = canonicalDocumentUri(uri);
+    this.program.upsertTemplate(canonical.uri, text, version);
   }
 
   close(uri: DocumentUri): void {
-    this.#documents.delete(asDocumentUri(uri));
+    const canonical = canonicalDocumentUri(uri);
+    this.program.closeTemplate(canonical.uri);
   }
 
   snapshot(): WorkspaceSnapshot {
-    return this.#buildSnapshot();
-  }
-
-  diagnostics(_uri: DocumentUri): readonly WorkspaceDiagnostic[] {
-    return EMPTY_DIAGNOSTICS;
-  }
-
-  query(_uri: DocumentUri): SemanticQuery {
-    return createEmptyQuery();
-  }
-
-  refactor(): RefactorEngine {
-    return this.#refactor;
-  }
-
-  #upsertDocument(uri: DocumentUri, text: string, version?: number): void {
-    const canonical = asDocumentUri(uri);
-    const existing = this.#documents.get(canonical);
-    const nextVersion = version ?? ((existing?.version ?? 0) + 1);
-    this.#documents.set(canonical, {
-      uri: canonical,
-      version: nextVersion,
-      text,
-      textHash: stableHash(text),
+    const prepared = prepareSemantics(this.#programOptions.semantics, {
+      catalog: this.#programOptions.catalog,
     });
-  }
+    const catalog = this.#programOptions.catalog ?? prepared.catalog;
+    const syntax = this.#programOptions.syntax ?? buildTemplateSyntaxRegistry(prepared);
+    const resourceGraph = this.#programOptions.resourceGraph
+      ?? this.#programOptions.semantics.resourceGraph
+      ?? buildResourceGraphFromSemantics(prepared);
 
-  #buildSnapshot(): WorkspaceSnapshot {
-    const docs = [...this.#documents.values()]
+    const docs = Array.from(this.sources.all())
       .map((doc) => ({
         uri: doc.uri,
         version: doc.version,
-        textHash: doc.textHash,
+        textHash: stableHash(doc.text),
       }))
       .sort((a, b) => a.uri.localeCompare(b.uri));
 
@@ -132,57 +146,372 @@ export class DefaultSemanticWorkspace implements SemanticWorkspace {
       meta: {
         fingerprint,
         configHash: this.#configHash,
-        docCount: this.#documents.size,
+        docCount: docs.length,
       },
-      semantics: this.#semantics,
-      catalog: this.#catalog,
-      syntax: this.#syntax,
-      resourceGraph: this.#resourceGraph,
-      provenance: this.#provenance,
+      semantics: this.#programOptions.semantics,
+      catalog,
+      syntax,
+      resourceGraph,
+      provenance: this.provenance,
     };
+  }
+
+  diagnostics(uri: DocumentUri): readonly WorkspaceDiagnostic[] {
+    try {
+      const canonical = canonicalDocumentUri(uri);
+      const diags = this.languageService.getDiagnostics(canonical.uri);
+      return mapDiagnostics(diags.all);
+    } catch {
+      return EMPTY_DIAGNOSTICS;
+    }
+  }
+
+  query(uri: DocumentUri): SemanticQuery {
+    const canonical = canonicalDocumentUri(uri);
+    return {
+      hover: (pos) => this.#hoverAt(canonical.uri, pos),
+      definition: (pos) => this.#locationsAt(canonical.uri, pos, "definition"),
+      references: (pos) => this.#locationsAt(canonical.uri, pos, "references"),
+      completions: (pos) => this.#completionsAt(canonical.uri, pos),
+      diagnostics: () => this.diagnostics(canonical.uri),
+      semanticTokens: () => EMPTY_TOKENS,
+    };
+  }
+
+  refactor(): RefactorEngine {
+    return this.#refactor;
+  }
+
+  reconfigure(options: SemanticWorkspaceOptions): boolean {
+    const next = normalizeOptions(options, this.#languageOptions, this.#lookupText);
+    const preview = this.#createProgram(new InMemoryProvenanceIndex(), next.program);
+    const nextFingerprint = next.fingerprint ?? preview.optionsFingerprint;
+
+    if (preview.optionsFingerprint === this.program.optionsFingerprint && nextFingerprint === this.#workspaceFingerprint) {
+      return false;
+    }
+
+    this.provenance = preview.provenance;
+    this.program = preview;
+    this.#programOptions = next.program;
+    this.#languageOptions = next.language;
+    this.#lookupText = next.lookupText;
+    this.buildService = new DefaultTemplateBuildService(this.program);
+    this.languageService = new DefaultTemplateLanguageService(this.program, {
+      ...this.#languageOptions,
+      buildService: this.#languageOptions.buildService ?? this.buildService,
+    });
+    this.#configHash = next.configHash ?? computeConfigHash(this.#programOptions);
+    this.#workspaceFingerprint = nextFingerprint;
+    return true;
+  }
+
+  ensureFromFile(uri: DocumentUri): DocumentSnapshot | null {
+    const canonical = canonicalDocumentUri(uri);
+    const existing = this.sources.get(canonical.uri);
+    if (existing) return existing;
+    try {
+      const text = fs.readFileSync(canonical.path, "utf8");
+      this.program.upsertTemplate(canonical.uri, text);
+      return this.sources.get(canonical.uri);
+    } catch {
+      return null;
+    }
+  }
+
+  getOverlay(uri: DocumentUri): OverlayBuildArtifact {
+    const canonical = canonicalDocumentUri(uri);
+    return this.buildService.getOverlay(canonical.uri);
+  }
+
+  getMapping(uri: DocumentUri): TemplateMappingArtifact | null {
+    try {
+      const canonical = canonicalDocumentUri(uri);
+      return this.program.getMapping(canonical.uri);
+    } catch {
+      return null;
+    }
+  }
+
+  getCompilation(uri: DocumentUri): TemplateCompilation | null {
+    try {
+      const canonical = canonicalDocumentUri(uri);
+      return this.program.getCompilation(canonical.uri);
+    } catch {
+      return null;
+    }
+  }
+
+  getQueryFacade(uri: DocumentUri): TemplateQueryFacade | null {
+    try {
+      const canonical = canonicalDocumentUri(uri);
+      return this.program.getQuery(canonical.uri);
+    } catch {
+      return null;
+    }
+  }
+
+  getCacheStats(target?: DocumentUri) {
+    return this.program.getCacheStats(target);
+  }
+
+  lookupText(uri: DocumentUri): string | null {
+    const canonical = canonicalDocumentUri(uri);
+    const snap = this.sources.get(canonical.uri);
+    if (snap) return snap.text;
+    if (this.#lookupText) {
+      const text = this.#lookupText(canonical.uri);
+      if (text != null) return text;
+    }
+    try {
+      return fs.readFileSync(canonical.path, "utf8");
+    } catch {
+      return null;
+    }
+  }
+
+  #createProgram(provenance: ProvenanceIndex, options: WorkspaceProgramOptions): TemplateProgram {
+    return new DefaultTemplateProgram({
+      ...options,
+      sourceStore: this.sources,
+      provenance,
+    });
+  }
+
+  #hoverAt(uri: DocumentUri, pos: { line: number; character: number }) {
+    try {
+      const hover = this.languageService.getHover(uri, pos);
+      if (!hover) return null;
+      const span = spanFromRange(uri, hover.range, this.lookupText.bind(this));
+      return span
+        ? { contents: hover.contents, location: { uri, span } }
+        : { contents: hover.contents };
+    } catch {
+      return null;
+    }
+  }
+
+  #locationsAt(uri: DocumentUri, pos: { line: number; character: number }, kind: "definition" | "references") {
+    try {
+      const locations = kind === "definition"
+        ? this.languageService.getDefinition(uri, pos)
+        : this.languageService.getReferences(uri, pos);
+      return mapLocations(locations ?? [], this.lookupText.bind(this));
+    } catch {
+      return EMPTY_LOCATIONS;
+    }
+  }
+
+  #completionsAt(uri: DocumentUri, pos: { line: number; character: number }) {
+    try {
+      const items = this.languageService.getCompletions(uri, pos);
+      return mapCompletions(items ?? []);
+    } catch {
+      return EMPTY_COMPLETIONS;
+    }
   }
 }
 
-export function createSemanticWorkspace(options?: SemanticWorkspaceOptions): SemanticWorkspace {
+export function createSemanticWorkspace(options: SemanticWorkspaceOptions): DefaultSemanticWorkspace {
   return new DefaultSemanticWorkspace(options);
 }
 
-function createEmptyQuery(): SemanticQuery {
+class WorkspaceRefactorEngine implements RefactorEngine {
+  constructor(private readonly workspace: DefaultSemanticWorkspace) {}
+
+  rename(request: { uri: DocumentUri; position: { line: number; character: number }; newName: string }): WorkspaceRefactorResult {
+    try {
+      const canonical = canonicalDocumentUri(request.uri);
+      const edits = this.workspace.languageService.renameSymbol(canonical.uri, request.position, request.newName);
+      const mapped = mapTextEdits(edits, this.workspace.lookupText.bind(this.workspace));
+      if (!mapped.length) {
+        return {
+          error: {
+            kind: "pipeline-failure",
+            message: "Rename produced no edits.",
+            retryable: false,
+          },
+        };
+      }
+      return { edit: { edits: mapped } };
+    } catch (e) {
+      return {
+        error: {
+          kind: "pipeline-failure",
+          message: e instanceof Error ? e.message : String(e),
+          retryable: false,
+        },
+      };
+    }
+  }
+
+  codeActions(request: { uri: DocumentUri; position?: { line: number; character: number }; range?: SourceSpan; kinds?: readonly string[] }): readonly WorkspaceCodeAction[] {
+    try {
+      const canonical = canonicalDocumentUri(request.uri);
+      const text = this.workspace.lookupText(canonical.uri);
+      if (!text) return EMPTY_ACTIONS;
+      const range = request.range
+        ? spanToRange(text, request.range)
+        : request.position
+          ? { start: request.position, end: request.position }
+          : null;
+      if (!range) return EMPTY_ACTIONS;
+
+      const actions = this.workspace.languageService.getCodeActions(canonical.uri, range);
+      return mapCodeActions(actions ?? [], this.workspace.lookupText.bind(this.workspace));
+    } catch {
+      return EMPTY_ACTIONS;
+    }
+  }
+}
+
+function normalizeOptions(
+  options: SemanticWorkspaceOptions,
+  fallbackLanguage: TemplateLanguageServiceOptions,
+  lookupText: ((uri: DocumentUri) => string | null) | undefined,
+): { program: WorkspaceProgramOptions; language: TemplateLanguageServiceOptions; configHash?: string; fingerprint?: string; lookupText?: (uri: DocumentUri) => string | null } {
   return {
-    hover: () => null,
-    definition: () => EMPTY_LOCATIONS,
-    references: () => EMPTY_LOCATIONS,
-    completions: () => EMPTY_COMPLETIONS,
-    diagnostics: () => EMPTY_DIAGNOSTICS,
-    semanticTokens: () => EMPTY_TOKENS,
+    program: options.program,
+    language: options.language ?? fallbackLanguage,
+    configHash: options.configHash,
+    fingerprint: options.fingerprint,
+    lookupText: options.lookupText ?? lookupText,
   };
 }
 
-function createEmptyRefactorEngine(): RefactorEngine {
-  const error: WorkspaceRefactorResult = {
-    error: {
-      kind: "pipeline-failure",
-      message: "Refactor engine is not configured yet.",
-      retryable: false,
-    },
-  };
+function mapDiagnostics(diags: readonly { code: string | number; message: string; severity: "error" | "warning" | "info"; source: string; location: { span: SourceSpan } | null }[]): WorkspaceDiagnostic[] {
+  const results: WorkspaceDiagnostic[] = [];
+  for (const diag of diags) {
+    results.push({
+      code: String(diag.code),
+      message: diag.message,
+      severity: diag.severity,
+      source: diag.source,
+      span: diag.location?.span,
+    });
+  }
+  return results;
+}
 
+function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceCompletionItem[] {
+  return items.map((item) => ({
+    label: item.label,
+    ...(item.kind ? { kind: item.kind } : {}),
+    ...(item.detail ? { detail: item.detail } : {}),
+    ...(item.documentation ? { documentation: item.documentation } : {}),
+    ...(item.sortText ? { sortText: item.sortText } : {}),
+    ...(item.insertText ? { insertText: item.insertText } : {}),
+  }));
+}
+
+function mapLocations(
+  locs: readonly TemplateLocation[],
+  lookupText: (uri: DocumentUri) => string | null,
+): WorkspaceLocation[] {
+  const results: WorkspaceLocation[] = [];
+  for (const loc of locs) {
+    const span = spanFromRange(loc.uri, loc.range, lookupText);
+    if (!span) continue;
+    results.push({ uri: loc.uri, span });
+  }
+  return results;
+}
+
+function mapTextEdits(
+  edits: readonly TemplateTextEdit[],
+  lookupText: (uri: DocumentUri) => string | null,
+): WorkspaceEdit["edits"] {
+  const results: WorkspaceEdit["edits"] = [];
+  for (const edit of edits) {
+    const span = spanFromRange(edit.uri, edit.range, lookupText);
+    if (!span) continue;
+    results.push({ uri: edit.uri, span, newText: edit.newText });
+  }
+  return results;
+}
+
+function mapCodeActions(
+  actions: readonly TemplateCodeAction[],
+  lookupText: (uri: DocumentUri) => string | null,
+): WorkspaceCodeAction[] {
+  const results: WorkspaceCodeAction[] = [];
+  for (const action of actions) {
+    const edits = mapTextEdits(action.edits, lookupText);
+    results.push({
+      id: `workspace:${action.title}`,
+      title: action.title,
+      ...(action.kind ? { kind: action.kind } : {}),
+      ...(edits.length ? { edit: { edits } } : {}),
+    });
+  }
+  return results;
+}
+
+function spanFromRange(
+  uri: DocumentUri,
+  range: TextRange,
+  lookupText: (uri: DocumentUri) => string | null,
+): SourceSpan | null {
+  const text = lookupText(uri);
+  if (!text) return null;
+  const start = offsetAtPosition(text, range.start);
+  const end = offsetAtPosition(text, range.end);
+  if (start == null || end == null) return null;
+  const canonical = canonicalDocumentUri(uri);
+  return { start, end, file: canonical.file };
+}
+
+function spanToRange(text: string, span: SourceSpan): TextRange {
   return {
-    rename: () => error,
-    codeActions: () => EMPTY_ACTIONS,
+    start: positionAtOffset(text, span.start),
+    end: positionAtOffset(text, span.end),
   };
 }
 
-function computeConfigHash(
-  semantics: Semantics,
-  catalog: ResourceCatalog,
-  syntax: TemplateSyntaxRegistry,
-  resourceGraph: ResourceGraph,
-): string {
+function positionAtOffset(text: string, offset: number): { line: number; character: number } {
+  const length = text.length;
+  const clamped = Math.max(0, Math.min(offset, length));
+  const lineStarts = computeLineStarts(text);
+  let line = 0;
+  while (line + 1 < lineStarts.length && (lineStarts[line + 1] ?? Number.POSITIVE_INFINITY) <= clamped) {
+    line += 1;
+  }
+  const lineStart = lineStarts[line] ?? 0;
+  const character = clamped - lineStart;
+  return { line, character };
+}
+
+function offsetAtPosition(text: string, position: { line: number; character: number }): number | null {
+  if (position.line < 0 || position.character < 0) return null;
+  const lineStarts = computeLineStarts(text);
+  if (position.line >= lineStarts.length) return null;
+  const lineStart = lineStarts[position.line];
+  if (lineStart === undefined) return null;
+  const nextLine = lineStarts[position.line + 1];
+  const lineEnd = nextLine ?? text.length;
+  return Math.min(lineEnd, lineStart + position.character);
+}
+
+function computeLineStarts(text: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charCodeAt(i);
+    if (ch === 13 /* CR */ || ch === 10 /* LF */) {
+      if (ch === 13 /* CR */ && text.charCodeAt(i + 1) === 10 /* LF */) i += 1;
+      starts.push(i + 1);
+    }
+  }
+  return starts;
+}
+
+function computeConfigHash(options: WorkspaceProgramOptions): string {
   return stableHash({
-    semantics: stableHashSemantics(semantics),
-    catalog: stableHash(catalog),
-    syntax: stableHash(syntax),
-    resourceGraph: stableHash(resourceGraph),
+    semantics: stableHashSemantics(options.semantics),
+    catalog: options.catalog ? stableHash(options.catalog) : null,
+    syntax: options.syntax ? stableHash(options.syntax) : null,
+    resourceGraph: options.resourceGraph ? stableHash(options.resourceGraph) : null,
+    resourceScope: options.resourceScope ?? null,
+    isJs: options.isJs,
+    overlayBaseName: options.overlayBaseName ?? null,
   });
 }

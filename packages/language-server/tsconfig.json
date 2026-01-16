@@ -6,7 +6,8 @@
   },
   "references": [
     { "path": "../compiler" },
-    { "path": "../resolution" }
+    { "path": "../resolution" },
+    { "path": "../semantic-workspace" }
   ],
   "include": ["src"]
 }

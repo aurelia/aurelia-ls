@@ -45,7 +45,7 @@ export function handleGetMapping(ctx: ServerContext, params: MaybeUriParam) {
     const canonical = canonicalDocumentUri(uri);
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
-    const mapping = ctx.workspace.program.getMapping(canonical.uri);
+    const mapping = ctx.workspace.getMapping(canonical.uri);
     if (!mapping) return null;
     const derived = deriveTemplatePaths(canonical.uri, ctx.overlayPathOptions());
     return { overlayPath: derived.overlay.path, mapping };
@@ -63,14 +63,15 @@ export function handleQueryAtPosition(ctx: ServerContext, params: { uri: string;
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(uri);
-    const query = ctx.workspace.program.getQuery(canonical.uri);
+    const query = ctx.workspace.getQueryFacade(canonical.uri);
+    if (!query) return null;
     const offset = doc.offsetAt(params.position);
     return {
       expr: query.exprAt(offset),
       node: query.nodeAt(offset),
       controller: query.controllerAt(offset),
       bindables: query.nodeAt(offset) ? query.bindablesFor(query.nodeAt(offset)!) : null,
-      mappingSize: ctx.workspace.program.getMapping(canonical.uri)?.entries.length ?? 0,
+      mappingSize: ctx.workspace.getMapping(canonical.uri)?.entries.length ?? 0,
     };
   } catch (e) {
     ctx.logger.error(`[queryAtPosition] failed for ${params?.uri}: ${formatError(e)}`);
@@ -95,7 +96,7 @@ export function handleDumpState(ctx: ServerContext) {
       overlayRoots: ctx.overlayFs.listScriptRoots(),
       overlays: ctx.overlayFs.listOverlays(),
       programRoots: roots,
-      programCache: ctx.workspace.program.getCacheStats(),
+      programCache: ctx.workspace.getCacheStats(),
     };
   } catch (e) {
     ctx.logger.error(`[dumpState] failed: ${formatError(e)}`);

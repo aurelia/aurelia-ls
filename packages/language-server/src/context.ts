@@ -1,7 +1,6 @@
 import type { Connection, TextDocuments } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import path from "node:path";
-import fs from "node:fs";
 import {
   PRELUDE_TS,
   canonicalDocumentUri,
@@ -18,7 +17,7 @@ import type { OverlayFs } from "./services/overlay-fs.js";
 import type { TsService } from "./services/ts-service.js";
 import type { TsServicesAdapter } from "./services/typescript-services.js";
 import type { AureliaProjectIndex } from "./services/project-index.js";
-import type { TemplateWorkspace } from "./services/template-workspace.js";
+import type { DefaultSemanticWorkspace } from "@aurelia-ls/semantic-workspace";
 import type { VmReflectionService } from "./services/vm-reflection.js";
 import type { Logger } from "./services/types.js";
 
@@ -48,7 +47,7 @@ export interface ServerContext {
   // Mutable state
   workspaceRoot: string | null;
   projectIndex: AureliaProjectIndex;
-  workspace: TemplateWorkspace;
+  workspace: DefaultSemanticWorkspace;
 
   // Workspace management
   ensurePrelude(): void;
@@ -115,7 +114,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   // Mutable state - set during onInitialize
   let workspaceRoot: string | null = null;
   let projectIndex: AureliaProjectIndex;
-  let workspace: TemplateWorkspace;
+  let workspace: DefaultSemanticWorkspace;
 
   // Sync debouncing state
   let lastSyncTime = 0;
@@ -180,22 +179,18 @@ export function createServerContext(init: ServerContextInit): ServerContext {
 
   function lookupText(uri: DocumentUri): string | null {
     const canonical = canonicalDocumentUri(uri);
-    const snap = workspace.program.sources.get(canonical.uri);
+    const snap = workspace.sources.get(canonical.uri);
     if (snap) return snap.text;
     const overlay = overlayFs.snapshot(paths.canonical(canonical.path));
     if (overlay) return overlay.text;
-    try {
-      return fs.readFileSync(canonical.path, "utf8");
-    } catch {
-      return null;
-    }
+    return workspace.lookupText(canonical.uri);
   }
 
   function ensureProgramDocument(uri: string): TextDocument | null {
     const live = documents.get(uri);
     if (live) {
       vmReflection.setActiveTemplate(canonicalDocumentUri(uri).path);
-      workspace.change(live);
+      workspace.update(canonicalDocumentUri(uri).uri, live.getText(), live.version);
       return live;
     }
     const snap = workspace.ensureFromFile(uri);
@@ -209,12 +204,12 @@ export function createServerContext(init: ServerContextInit): ServerContext {
       const canonical = canonicalDocumentUri(uri);
       trace.setAttribute("lsp.overlay.uri", canonical.uri);
       vmReflection.setActiveTemplate(canonical.path);
-      if (!workspace.snapshot(canonical.uri)) {
+      if (!workspace.sources.get(canonical.uri)) {
         const doc = ensureProgramDocument(uri);
         if (!doc) return null;
       }
       trace.event("lsp.overlay.build");
-      const artifact = workspace.buildService.getOverlay(canonical.uri);
+      const artifact = workspace.getOverlay(canonical.uri);
       tsService.upsertOverlay(artifact.overlay.path, artifact.overlay.text);
       return artifact;
     });

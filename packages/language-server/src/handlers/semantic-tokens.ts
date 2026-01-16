@@ -1440,7 +1440,7 @@ export function handleSemanticTokensFull(
       }
 
       const canonical = canonicalDocumentUri(doc.uri);
-      const compilation = ctx.workspace.program.getCompilation(canonical.uri);
+      const compilation = ctx.workspace.getCompilation(canonical.uri);
 
       if (!compilation?.linked?.templates?.length) {
         return null;
