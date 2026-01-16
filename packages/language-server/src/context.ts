@@ -128,17 +128,23 @@ export function createServerContext(init: ServerContextInit): ServerContext {
 
   function workspaceProgramOptions() {
     const semantics = projectIndex.currentSemantics();
+    const catalog = projectIndex.currentCatalog();
+    const syntax = projectIndex.currentSyntax();
     const resourceGraph = projectIndex.currentResourceGraph();
     const options: {
       vm: VmReflectionService;
       isJs: boolean;
       semantics: typeof semantics;
+      catalog: typeof catalog;
+      syntax: typeof syntax;
       resourceGraph: typeof resourceGraph;
       resourceScope?: typeof resourceGraph.root | null;
     } = {
       vm: vmReflection,
       isJs: false,
       semantics,
+      catalog,
+      syntax,
       resourceGraph,
     };
     const resourceScope = semantics.defaultScope ?? resourceGraph.root ?? null;

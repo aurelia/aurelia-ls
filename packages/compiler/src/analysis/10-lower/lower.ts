@@ -2,8 +2,7 @@ import { parseFragment } from "parse5";
 
 import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode } from "../../model/ir.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { Semantics } from "../../language/registry.js";
-import { DEFAULT as DEFAULT_SEMANTICS } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../language/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
@@ -11,13 +10,14 @@ import { ExprTable, DomIdAllocator } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
+import { buildProjectionMap } from "./template-builders.js";
 
 export interface BuildIrOptions {
   file?: string;
   name?: string;
   attrParser: AttributeParser;
   exprParser: IExpressionParser;
-  sem?: Semantics;
+  catalog: ResourceCatalog;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
@@ -36,7 +36,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
     trace.event("lower.parse.complete");
 
-    const sem = opts.sem ?? DEFAULT_SEMANTICS;
+    const catalog = opts.catalog;
     const source = resolveSourceFile(opts.file ?? opts.name ?? "");
     const ids = new DomIdAllocator();
     const table = new ExprTable(opts.exprParser, source, html);
@@ -50,15 +50,25 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     // Tags to skip during DOM building and row collection
     const skipTags = META_ELEMENT_TAGS;
 
+    const projectionMap = buildProjectionMap(
+      p5,
+      opts.attrParser,
+      table,
+      nestedTemplates,
+      catalog,
+      collectRows,
+      skipTags,
+    );
+
     // Build DOM tree (skipping meta elements)
     trace.event("lower.dom.start");
-    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, undefined, skipTags);
+    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, undefined, skipTags, projectionMap);
     trace.event("lower.dom.complete");
 
     // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, sem, skipTags);
+    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
     trace.event("lower.rows.complete");
 
     // Build root template with meta

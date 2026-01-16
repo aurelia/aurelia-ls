@@ -23,7 +23,7 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { normalizePathForId, debug, extractTemplateMeta, type CompileTrace, type ImportMetaIR, type LocalImportDef } from "@aurelia-ls/compiler";
+import { normalizePathForId, debug, extractTemplateMeta, type CompileTrace, type ImportMetaIR } from "@aurelia-ls/compiler";
 import {
   transform,
   transformEntryPoint,
@@ -33,12 +33,14 @@ import {
 } from "@aurelia-ls/transform";
 import { compileWithAot, isSSRHandler, type SSRHandler } from "@aurelia-ls/ssr";
 import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
+import { mergeDefines, ssrDefines, type TemplateInfo, type RouteTree } from "@aurelia-ls/resolution";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";
-import { resolveTraceOptions, createBuildTrace, type ManagedTrace } from "./trace.js";
+import { createBuildTrace, type ManagedTrace } from "./trace.js";
 import type { AureliaPluginOptions, PluginState, ResolutionContext, ResolvedTraceOptions } from "./types.js";
-import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
+import { convertToLocalImports } from "./local-imports.js";
+import { loadConfigFile, mergeConfigs, normalizeOptions } from "./defaults.js";
 
 /**
  * Virtual file suffix for Aurelia templates in production builds.
@@ -46,34 +48,14 @@ import type { TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
  */
 const VIRTUAL_TEMPLATE_SUFFIX = ".$aurelia-template.js";
 
-/**
- * Default HTML shell for SSR output.
- * Contains the basic structure with a script tag to load the client bundle.
- */
-const DEFAULT_HTML_SHELL = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aurelia SSR</title>
-</head>
-<body>
-  <!--ssr-outlet-->
-  <script type="module" src="/src/main.ts"></script>
-</body>
-</html>`;
-
-/**
- * Default routes to exclude from SSR.
- * These are Vite internals and API routes.
- */
-const DEFAULT_EXCLUDE = [
-  "/api/**",
-  "/@vite/**",
-  "/@fs/**",
-  "/__vite_ping",
-  "/node_modules/**",
-];
+function stripQuery(id: string): string {
+  const queryIndex = id.indexOf("?");
+  const hashIndex = id.indexOf("#");
+  if (queryIndex === -1 && hashIndex === -1) return id;
+  if (queryIndex === -1) return id.slice(0, hashIndex);
+  if (hashIndex === -1) return id.slice(0, queryIndex);
+  return id.slice(0, Math.min(queryIndex, hashIndex));
+}
 
 /**
  * Convert compiler's ImportMetaIR to transform's TemplateImport.
@@ -94,29 +76,6 @@ function convertToTemplateImports(imports: ImportMetaIR[]): TemplateImport[] {
   }));
 }
 
-/**
- * Convert template imports to LocalImportDef for compiler resolution.
- *
- * This allows the compiler to resolve elements referenced via `<import from="...">`.
- * The element name is derived from the module specifier (e.g., "./all-table" → "all-table").
- */
-function convertToLocalImports(imports: ImportMetaIR[]): LocalImportDef[] {
-  return imports.map((imp) => {
-    // Derive element name from module specifier
-    // "./views/all-table" → "all-table"
-    // "@scope/pkg/my-component" → "my-component"
-    const specifier = imp.from.value;
-    const lastSegment = specifier.split(/[/\\]/).pop() ?? specifier;
-    // Remove any extension if present
-    const name = lastSegment.replace(/\.(ts|js|html)$/, "");
-
-    return {
-      name,
-      bindables: {}, // TODO: Get bindables from resolution analysis
-      alias: imp.defaultAlias?.value ?? undefined,
-    };
-  });
-}
 
 /**
  * Transform a component file to inject $au definition.
@@ -137,7 +96,10 @@ function transformComponent(
     // Extract template meta (imports, bindables, etc.)
     const templateMeta = extractTemplateMeta(templateHtml, templateInfo.templatePath);
     const templateImports = convertToTemplateImports(templateMeta.imports);
-    const localImports = convertToLocalImports(templateMeta.imports);
+    const localImports = convertToLocalImports(
+      templateMeta.imports,
+      resolutionContext.semantics.resources.elements,
+    );
 
     // Compile with AOT
     const aot = compileWithAot(templateHtml, {
@@ -386,18 +348,19 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
      * This prevents vite:build-html from trying to parse template files.
      */
     transform(code, id) {
+      const cleanId = stripQuery(id);
       // Only active in production builds
       if (resolvedConfig.command !== "build") {
         return null;
       }
 
       // Only process TypeScript/JavaScript files
-      if (!id.endsWith(".ts") && !id.endsWith(".tsx") && !id.endsWith(".js") && !id.endsWith(".jsx")) {
+      if (!cleanId.endsWith(".ts") && !cleanId.endsWith(".tsx") && !cleanId.endsWith(".js") && !cleanId.endsWith(".jsx")) {
         return null;
       }
 
       // Skip node_modules
-      if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
+      if (cleanId.includes("/node_modules/") || cleanId.includes("\\node_modules\\")) {
         return null;
       }
 
@@ -436,21 +399,31 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
    */
   const mainPlugin: Plugin = {
     name: "aurelia-ssr",
-
-    // Run after other plugins
-    enforce: "post",
+    // Run early so AOT injection sees TypeScript decorators before esbuild.
+    enforce: "pre",
 
     /**
      * Store resolved config and validate options.
      */
-    configResolved(config) {
+    async configResolved(config) {
       resolvedConfig = config;
 
+      const searchFrom = options.tsconfig
+        ? resolve(config.root, options.tsconfig)
+        : options.entry
+          ? resolve(config.root, options.entry)
+          : config.root;
+
+      const fileConfig = await loadConfigFile(config.root, searchFrom);
+      const mergedOptions = mergeConfigs(fileConfig, options);
+      const resolvedOptions = normalizeOptions(mergedOptions, {
+        command: config.command,
+        mode: config.mode,
+        root: config.root,
+      });
+
       // Resolve entry path
-      const entry = resolve(
-        config.root,
-        options.entry ?? "./src/my-app.html",
-      );
+      const entry = resolve(config.root, resolvedOptions.entry);
 
       // Validate entry exists
       if (!existsSync(entry)) {
@@ -459,23 +432,14 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         );
       }
 
-      // Normalize SSR options (boolean | object | undefined → object)
-      const ssrOptions = typeof options.ssr === "object" ? options.ssr : {};
+      const ssrOptions = resolvedOptions.ssr;
       // Set closure variable - SSR is enabled if explicitly true or object without enabled:false
-      ssrEnabled = options.ssr === true || (typeof options.ssr === "object" && options.ssr.enabled !== false);
+      ssrEnabled = ssrOptions.enabled;
+      const resolutionDefines = ssrEnabled
+        ? mergeDefines(ssrDefines(), ssrOptions.defines)
+        : ssrOptions.defines;
 
-      // Normalize SSG options (boolean | object | undefined → object)
-      const ssgInput = typeof options.ssg === "object" ? options.ssg : {};
-      const ssgEnabled = options.ssg === true || (typeof options.ssg === "object" && ssgInput.enabled !== false);
-      const resolvedSSG = {
-        enabled: ssgEnabled,
-        entryPoints: ssgInput.entryPoints ?? [],
-        outDir: ssgInput.outDir ?? ".",
-        fallback: ssgInput.fallback ?? "404.html",
-        additionalRoutes: ssgInput.additionalRoutes,
-        onBeforeRender: ssgInput.onBeforeRender,
-        onAfterRender: ssgInput.onAfterRender,
-      };
+      const resolvedSSG = resolvedOptions.ssg;
 
       // Resolve SSR entry point path
       const ssrEntry = ssrOptions.ssrEntry
@@ -483,20 +447,13 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         : null;
 
       // Resolve trace options (from debug.trace)
-      traceOptions = resolveTraceOptions(options.debug?.trace, config.root);
+      traceOptions = resolvedOptions.debug.trace;
       if (traceOptions.enabled) {
         config.logger.info(`[aurelia-ssr] Tracing enabled (output: ${traceOptions.output})`);
       }
 
       // Resolve dumpArtifacts option (from debug.dumpArtifacts)
-      const dumpArtifactsOpt = options.debug?.dumpArtifacts;
-      if (dumpArtifactsOpt === true) {
-        dumpArtifactsPath = resolve(config.root, ".aurelia-artifacts");
-      } else if (typeof dumpArtifactsOpt === "string") {
-        dumpArtifactsPath = resolve(config.root, dumpArtifactsOpt);
-      } else {
-        dumpArtifactsPath = false;
-      }
+      dumpArtifactsPath = resolvedOptions.debug.dumpArtifacts;
       if (dumpArtifactsPath) {
         config.logger.info(`[aurelia-ssr] Artifact dumping enabled: ${dumpArtifactsPath}`);
       }
@@ -509,13 +466,13 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       // Build plugin state with defaults
       pluginState = {
         entry,
-        state: ssrOptions.state ?? (() => ({})),
-        stripMarkers: ssrOptions.stripMarkers ?? false,
-        include: ssrOptions.include ?? ["**"],
-        exclude: ssrOptions.exclude ?? DEFAULT_EXCLUDE,
-        htmlShell: ssrOptions.htmlShell ?? DEFAULT_HTML_SHELL,
+        state: ssrOptions.state,
+        stripMarkers: ssrOptions.stripMarkers,
+        include: ssrOptions.include,
+        exclude: ssrOptions.exclude,
+        htmlShell: ssrOptions.htmlShell,
         resolution: null, // Will be set after async initialization
-        baseHref: ssrOptions.baseHref ?? "/",
+        baseHref: ssrOptions.baseHref,
         register,
         ssg: resolvedSSG,
         routeTree: null, // Will be set after route discovery
@@ -524,7 +481,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       };
 
       // Debug: log plugin configuration
-      debug.vite("config.resolved", {
+      debug.vite('config.resolved', {
         entry,
         root: config.root,
         ssrEnabled,
@@ -541,12 +498,12 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       }
 
       if (resolvedSSG.enabled) {
-        config.logger.info("[aurelia-ssr] SSG enabled");
+        config.logger.info('[aurelia-ssr] SSG enabled');
       }
 
       // Start resolution initialization if tsconfig provided
-      if (options.tsconfig) {
-        const tsconfigPath = resolve(config.root, options.tsconfig);
+      if (resolvedOptions.tsconfig) {
+        const tsconfigPath = resolve(config.root, resolvedOptions.tsconfig);
         const logger = {
           info: (msg: string) => config.logger.info(msg),
           warn: (msg: string) => config.logger.warn(msg),
@@ -554,11 +511,24 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         };
 
         // Start async resolution (will complete before first request)
-        resolutionPromise = createResolutionContext(tsconfigPath, logger).then((ctx) => {
+        resolutionPromise = createResolutionContext(
+          tsconfigPath,
+          logger,
+          {
+            defines: resolutionDefines,
+            thirdParty: resolvedOptions.conventions.thirdParty,
+            conventions: resolvedOptions.conventions.config,
+            policy: resolvedOptions.policy,
+            packagePath: resolvedOptions.packagePath,
+            packageRoots: resolvedOptions.packageRoots,
+            templateExtensions: resolvedOptions.conventions.config.templateExtensions,
+            styleExtensions: resolvedOptions.conventions.config.styleExtensions,
+          },
+        ).then((ctx) => {
           resolutionContext = ctx;
           pluginState.resolution = ctx;
           if (ctx) {
-            config.logger.info("[aurelia-ssr] Resource resolution ready");
+            config.logger.info('[aurelia-ssr] Resource resolution ready');
 
             // Discover routes if SSG is enabled
             if (resolvedSSG.enabled) {
@@ -678,13 +648,14 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
      * now have their $au definitions compiled directly into the source.
      */
     async transform(code, id) {
-      // Only process TypeScript files
-      if (!id.endsWith(".ts") && !id.endsWith(".tsx")) {
+      const cleanId = stripQuery(id);
+      // Only process TypeScript/JavaScript files
+      if (!cleanId.endsWith(".ts") && !cleanId.endsWith(".tsx") && !cleanId.endsWith(".js") && !cleanId.endsWith(".jsx")) {
         return null;
       }
 
       // Skip files that clearly aren't components
-      if (id.includes("/node_modules/") || id.includes("/.vite/")) {
+      if (cleanId.includes("/node_modules/") || cleanId.includes("/.vite/")) {
         return null;
       }
 
@@ -700,12 +671,19 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       }
 
       // Normalize path for lookup
-      const normalizedPath = normalizePathForId(id);
+      const normalizedPath = normalizePathForId(cleanId);
 
       // Find matching template info
-      const templateInfo = resolutionContext.result.templates.find(
+      let templateInfo = resolutionContext.result.templates.find(
         (t) => t.componentPath === normalizedPath,
       );
+      if (!templateInfo && (cleanId.endsWith(".js") || cleanId.endsWith(".jsx"))) {
+        const sourcePath = cleanId.replace(/\.(js|jsx)$/, ".ts");
+        const normalizedSource = normalizePathForId(sourcePath);
+        templateInfo = resolutionContext.result.templates.find(
+          (t) => t.componentPath === normalizedSource,
+        );
+      }
 
       // Get trace for this transform (build trace or undefined for dev)
       const trace = buildTrace?.trace;
@@ -930,7 +908,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       if (result.expandedRoutes.length > 0) {
         for (const expanded of result.expandedRoutes) {
           resolvedConfig.logger.info(
-            `[aurelia-ssr] Expanded ${expanded.parameterizedRoute.fullPath} → ${expanded.staticPaths.length} pages`,
+            `[aurelia-ssr] Expanded ${expanded.parameterizedRoute.fullPath} ΓåÆ ${expanded.staticPaths.length} pages`,
           );
         }
       }

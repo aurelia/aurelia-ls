@@ -4,12 +4,12 @@
     "markup": "<div switch.bind=\"status\"><template case=\"active\">Active</template><template case=\"inactive\">Inactive</template><template case=\"pending\">Pending</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": []
@@ -20,10 +20,10 @@
     "markup": "<div switch.bind=\"code\"><template case.bind=\"errorCode\">Error</template><template case.bind=\"warningCode\">Warning</template><template default-case>OK</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
         { "kind": "branch", "res": "default-case", "branch": "default" }
       ],
@@ -36,8 +36,8 @@
     "markup": "<div switch.bind=\"status\"><div class=\"wrapper\"><template case=\"a\">A</template></div></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": []
@@ -49,9 +49,9 @@
     "markup": "<div switch.bind=\"status\"><template if.bind=\"show\"><template case=\"a\">A</template></template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": [
@@ -65,9 +65,9 @@
     "markup": "<div switch.bind=\"status\"><template repeat.for=\"s of statuses\"><template case.bind=\"s\">Match</template></template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "iterator", "res": "repeat", "to": "items" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": [
@@ -82,10 +82,10 @@
     "expect": {
       "items": [
         { "kind": "iterator", "res": "repeat", "to": "items" },
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": []
@@ -97,9 +97,9 @@
     "markup": "<div if.bind=\"show\" switch.bind=\"status\"><template case=\"a\">A</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "if", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": []
@@ -110,8 +110,8 @@
     "markup": "<div switch.bind=\"mode\"><template case=\"edit\"><span class.bind=\"cls\">${itemName}</span></template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
         { "kind": "prop", "to": "class", "target": "native", "effectiveMode": "toView" }
       ],
@@ -137,8 +137,8 @@
     "markup": "<div switch.bind=\"status\"><my-echo case=\"delivered\" message.bind=\"msg\"></my-echo></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
         { "kind": "prop", "to": "message", "target": "bindable", "effectiveMode": "toView" }
       ],
@@ -150,13 +150,13 @@
     "markup": "<div switch.bind=\"outer\"><template case=\"a\"><div switch.bind=\"inner\"><template case=\"x\">X</template><template case=\"y\">Y</template></div></template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "default" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "switch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" },
-        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "case", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": []

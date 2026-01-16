@@ -27,13 +27,69 @@ export {
   AttrSyntax,
   AttributeParser,
   createDefaultSyntax,
+  createAttributeParserFromRegistry,
   registerBuiltins,
 } from "./parsing/index.js";
 export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
 
 // === Language / Semantics ===
-export { DEFAULT as DEFAULT_SEMANTICS, createSemanticsLookup, buildResourceGraphFromSemantics, materializeResourcesForScope, materializeSemanticsForScope } from "./language/index.js";
-export type { Semantics, ResourceGraph, ResourceScope, ResourceScopeId, ResourceCollections, ScopedResources, SemanticsLookupOptions, LocalImportDef } from "./language/index.js";
+export {
+  DEFAULT as DEFAULT_SEMANTICS,
+  prepareSemantics,
+  createSemanticsLookup,
+  buildResourceCatalog,
+  buildResourceGraphFromSemantics,
+  materializeResourcesForScope,
+  materializeSemanticsForScope,
+  buildTemplateSyntaxRegistry,
+} from "./language/index.js";
+export type {
+  SourceLocation,
+  Configured,
+  Sourced,
+  Semantics,
+  SemanticsWithCaches,
+  ResourceGraph,
+  ResourceScope,
+  ResourceScopeId,
+  ResourceCollections,
+  ScopedResources,
+  SemanticsLookupOptions,
+  LocalImportDef,
+  ResourceCatalog,
+  CatalogGap,
+  CatalogConfidence,
+  TemplateSyntaxRegistry,
+  TemplateSyntaxMatcher,
+  TemplateSyntaxEmitter,
+  TemplateSyntaxMatchInput,
+  TemplateSyntaxMatch,
+  TemplateSyntaxEmitInput,
+  TemplateSyntaxEmitResult,
+  FeatureUsageSet,
+  FeatureUsageFlags,
+  RegistrationPlan,
+  RegistrationScopePlan,
+  RegistrationPlanDirective,
+  StyleProfile,
+  SemanticSnapshot,
+  SemanticSymbolSnapshot,
+  ApiSurfaceSnapshot,
+  ApiSurfaceSymbol,
+  ApiSurfaceBindable,
+  ResourceDef,
+  ResourceDefBase,
+  ResourceKind,
+  ResourceKindLike,
+  CustomElementDef,
+  CustomAttributeDef,
+  TemplateControllerDef,
+  ValueConverterDef,
+  BindingBehaviorDef,
+  BindableDef,
+  ResourceKey,
+  SymbolId,
+} from "./language/index.js";
 
 // Resource definitions (for resolution package and external tooling)
 export type {
@@ -101,7 +157,6 @@ export {
   planAot,
   emitAotCode,
   emitTemplate,
-  collectNestedTemplateHtml,
   collectNestedTemplateHtmlTree,
   // Constants for transform package
   INSTRUCTION_TYPE,
@@ -129,6 +184,7 @@ export type {
   SerializedSetProperty,
   SerializedSetAttribute,
   SerializedHydrateElement,
+  SerializedProjection,
   SerializedHydrateAttribute,
   SerializedHydrateTemplateController,
   SerializedHydrateLetElement,
@@ -165,6 +221,7 @@ export {
   resolveHost,
   bindScopes,
   typecheck,
+  collectFeatureUsage,
   // Typecheck configuration
   resolveTypecheckConfig,
   checkTypeCompatibility,
@@ -175,7 +232,7 @@ export {
   extractTemplateMeta,
   stripMetaFromHtml,
 } from "./analysis/index.js";
-export type { BuildIrOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
+export type { BuildIrOptions, FeatureUsageOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {
   // Linked semantics (for semantic tokens, etc.)
   LinkedSemanticsModule,
@@ -242,6 +299,7 @@ export type {
 
 // === Pipeline ===
 export type { StageKey, StageArtifactMeta } from "./pipeline/index.js";
+export { stableHash, stableHashSemantics } from "./pipeline/index.js";
 
 // === Model (Foundation) ===
 export {

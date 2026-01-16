@@ -1,19 +1,38 @@
 import type ts from "typescript";
-import type { NormalizedPath, ResourceGraph, Semantics, ResourceScopeId, CompileTrace } from "@aurelia-ls/compiler";
+import type {
+  CatalogConfidence,
+  CatalogGap,
+  ApiSurfaceSnapshot,
+  NormalizedPath,
+  ResourceCatalog,
+  ResourceGraph,
+  ResourceDef,
+  ResourceScopeId,
+  SemanticSnapshot,
+  Semantics,
+  SemanticsWithCaches,
+  TemplateSyntaxRegistry,
+  CompileTrace,
+} from "@aurelia-ls/compiler";
 import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
-import type { SourceFacts } from "./extraction/types.js";
-import type { ResourceCandidate, ResolverDiagnostic } from "./inference/types.js";
+import type { FileFacts, FileContext } from "./extraction/file-facts.js";
+import type { AnalysisGap } from "./analysis/types.js";
+import type { DefineMap } from "./defines.js";
 import type { RegistrationAnalysis, RegistrationSite, RegistrationEvidence } from "./registration/types.js";
 import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
-import { extractAllFacts } from "./extraction/extractor.js";
-import { resolveImports } from "./extraction/import-resolver.js";
+import { extractAllFileFacts, extractFileContext } from "./extraction/file-facts-extractor.js";
+import { evaluateFileFacts } from "./analysis/index.js";
 import { buildExportBindingMap } from "./binding/export-resolver.js";
-import { createResolverPipeline } from "./inference/resolver-pipeline.js";
+import { matchFileFacts } from "./patterns/pipeline.js";
 import { createRegistrationAnalyzer } from "./registration/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
 import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
+import { buildSemanticsArtifacts } from "./semantics/build.js";
+import { stripSourcedNodes } from "./semantics/strip.js";
+import { unwrapSourced } from "./semantics/sourced.js";
+import { buildApiSurfaceSnapshot, buildSemanticSnapshot } from "./snapshots/index.js";
 import { dirname, resolve as resolvePath, basename } from "node:path";
 
 /**
@@ -28,6 +47,25 @@ export interface ResolutionConfig {
   defaultScope?: ResourceScopeId | null;
   /** Optional trace for instrumentation */
   trace?: CompileTrace;
+  /** Optional package root (for resolution context metadata) */
+  packagePath?: string;
+  /** Optional package root mapping for stable snapshot ids */
+  packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
+  /** Compile-time constant definitions (e.g. window.__AU_DEF__ = true) */
+  defines?: DefineMap;
+  /**
+   * Memory profiling knob.
+   * When enabled, drops ts.Node references from Sourced<T> after analysis.
+   * Keeps location/value provenance but reduces heap retention from AST graphs.
+   */
+  stripSourcedNodes?: boolean;
+  /**
+   * Partial evaluation test hooks.
+   * Used by integration tests to validate analysis-failed gaps.
+   */
+  partialEvaluation?: {
+    failOnFiles?: ReadonlySet<NormalizedPath> | readonly NormalizedPath[];
+  };
   /**
    * File system context for sibling detection.
    *
@@ -53,10 +91,20 @@ export interface ResolutionConfig {
  * Result of running resolution.
  */
 export interface ResolutionResult {
+  /** Full semantics with provenance */
+  semantics: SemanticsWithCaches;
+  /** Minimal catalog for lowering */
+  catalog: ResourceCatalog;
+  /** Syntax registry for parsing and emitting */
+  syntax: TemplateSyntaxRegistry;
   /** The constructed resource graph */
   resourceGraph: ResourceGraph;
-  /** All resource candidates identified */
-  candidates: readonly ResourceCandidate[];
+  /** Stable semantic snapshot (for diffing/manifests) */
+  semanticSnapshot: SemanticSnapshot;
+  /** API surface summary snapshot */
+  apiSurfaceSnapshot: ApiSurfaceSnapshot;
+  /** All resource definitions identified */
+  resources: readonly ResourceDef[];
   /** Registration analysis results */
   registration: RegistrationAnalysis;
   /** External template files (convention-based: foo.ts → foo.html) */
@@ -65,8 +113,8 @@ export interface ResolutionResult {
   inlineTemplates: readonly InlineTemplateInfo[];
   /** Diagnostics from resolution */
   diagnostics: readonly ResolutionDiagnostic[];
-  /** Extracted facts (for debugging/tooling) */
-  facts: Map<NormalizedPath, SourceFacts>;
+  /** Extracted facts with partial evaluation applied */
+  facts: Map<NormalizedPath, FileFacts>;
 }
 
 /**
@@ -115,11 +163,15 @@ export interface ResolutionDiagnostic {
  * Main entry point: run the full resolution pipeline.
  *
  * Pipeline:
- * 1. Extraction: AST → SourceFacts (with DependencyRef.resolvedPath: null)
- * 2. Import Resolution: Populate DependencyRef.resolvedPath
- * 3. Inference: SourceFacts → ResourceCandidate[]
- * 4. Registration Analysis: SourceFacts + ResourceCandidate[] → RegistrationAnalysis
- * 5. Scope Construction: RegistrationAnalysis → ResourceGraph
+ * 1. Extraction (Layer 1): AST -> FileFacts (with import resolution)
+ * 2. Export Binding (Layer 1.5): FileFacts -> ExportBindingMap
+ * 3. Partial Evaluation (Layer 2): FileFacts -> resolved FileFacts + gaps
+ * 4. Pattern Matching (Layer 3): FileFacts -> ResourceDef[]
+ * 5. Semantics (Layer 4): ResourceDef[] -> Semantics + Catalog + Syntax
+ * 6. Registration Analysis (Layer 5): ResourceDef[] + FileFacts -> RegistrationAnalysis
+ * 7. Scope Construction (Layer 6): RegistrationAnalysis -> ResourceGraph
+ * 8. Snapshot Export (Layer 7): Semantics + ResourceGraph -> snapshots
+ * 9. Template Discovery (Layer 8): RegistrationAnalysis + ResourceGraph -> templates
  */
 export function resolve(
   program: ts.Program,
@@ -140,7 +192,7 @@ export function resolve(
     // Layer 1: Extraction
     log.info("[resolution] extracting facts...");
     trace.event("resolution.extraction.start");
-    const rawFacts = extractAllFacts(program, {
+    const rawFacts = extractAllFileFacts(program, {
       fileSystem: config?.fileSystem,
       templateExtensions: config?.templateExtensions,
       styleExtensions: config?.styleExtensions,
@@ -148,28 +200,10 @@ export function resolve(
     trace.event("resolution.extraction.done", { factCount: rawFacts.size });
     debug.resolution("extraction.complete", { factCount: rawFacts.size });
 
-    // Layer 1.5: Import Resolution
-    log.info("[resolution] resolving imports...");
-    trace.event("resolution.importResolution.start");
-    const facts = resolveImports(rawFacts);
-    trace.event("resolution.importResolution.done");
-    debug.resolution("importResolution.complete", { factCount: facts.size });
-
-    // Layer 2: Inference
-    log.info("[resolution] resolving candidates...");
-    trace.event("resolution.inference.start");
-    const pipeline = createResolverPipeline(config?.conventions);
-    const { candidates, diagnostics: resolverDiags } = pipeline.resolve(facts);
-    trace.event("resolution.inference.done", { candidateCount: candidates.length });
-    debug.resolution("inference.complete", {
-      candidateCount: candidates.length,
-      diagnosticCount: resolverDiags.length,
-    });
-
-    // Layer 2.5: Export Binding Resolution
+    // Layer 1.5: Export Binding Resolution
     log.info("[resolution] building export bindings...");
     trace.event("resolution.binding.start");
-    const exportBindings = buildExportBindingMap(facts);
+    const exportBindings = buildExportBindingMap(rawFacts);
     trace.event("resolution.binding.done", {
       fileCount: exportBindings.size,
     });
@@ -177,11 +211,74 @@ export function resolve(
       fileCount: exportBindings.size,
     });
 
-    // Layer 3: Registration Analysis
+    // Layer 2: Partial Evaluation
+    log.info("[resolution] partially evaluating values...");
+    trace.event("resolution.partialEvaluation.start");
+    const evaluation = evaluateFileFacts(rawFacts, exportBindings, {
+      packagePath: config?.packagePath,
+      defines: config?.defines,
+      failOnFiles: config?.partialEvaluation?.failOnFiles,
+    });
+    trace.event("resolution.partialEvaluation.done", {
+      factCount: evaluation.facts.size,
+      gapCount: evaluation.gaps.length,
+    });
+    debug.resolution("partialEvaluation.complete", {
+      factCount: evaluation.facts.size,
+      gapCount: evaluation.gaps.length,
+    });
+
+    const facts = evaluation.facts;
+
+    // Layer 3: Pattern Matching
+    log.info("[resolution] matching patterns...");
+    trace.event("resolution.patternMatching.start");
+    const allResources: ResourceDef[] = [];
+    const matcherGaps: AnalysisGap[] = [];
+    const contexts = new Map<NormalizedPath, FileContext>();
+
+    for (const [filePath, fileFacts] of facts) {
+      // Get file context for convention matching
+      const context = extractFileContext(filePath, {
+        fileSystem: config?.fileSystem,
+        templateExtensions: config?.templateExtensions,
+        styleExtensions: config?.styleExtensions,
+      }, program);
+
+      // Store context for later use by registration analyzer
+      contexts.set(filePath, context);
+
+      // Run pattern matchers on classes AND define calls
+      const matchResult = matchFileFacts(fileFacts, context);
+      allResources.push(...matchResult.resources);
+      matcherGaps.push(...matchResult.gaps);
+    }
+    trace.event("resolution.patternMatching.done", { resourceCount: allResources.length });
+    debug.resolution("patternMatching.complete", {
+      resourceCount: allResources.length,
+      gapCount: matcherGaps.length,
+    });
+
+    const analysisGaps = [...evaluation.gaps, ...matcherGaps];
+    const catalogGaps = analysisGaps.map(analysisGapToCatalogGap);
+    const catalogConfidence = catalogConfidenceFromGaps(analysisGaps);
+
+    // Layer 4: Semantics + Catalog + Syntax
+    log.info("[resolution] building semantics artifacts...");
+    trace.event("resolution.semantics.start");
+    const { semantics, catalog, syntax } = buildSemanticsArtifacts(allResources, config?.baseSemantics, {
+      confidence: catalogConfidence,
+      ...(catalogGaps.length ? { gaps: catalogGaps } : {}),
+    });
+    trace.event("resolution.semantics.done", {
+      resourceCount: allResources.length,
+    });
+
+    // Layer 5: Registration Analysis
     log.info("[resolution] analyzing registration...");
     trace.event("resolution.registration.start");
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(candidates, facts, exportBindings);
+    const registration = analyzer.analyze(allResources, facts, exportBindings, contexts);
     trace.event("resolution.registration.done", {
       siteCount: registration.sites.length,
       orphanCount: registration.orphans.length,
@@ -193,7 +290,7 @@ export function resolve(
       unresolvedCount: registration.unresolved.length,
     });
 
-    // Layer 4: Scope Construction
+    // Layer 6: Scope Construction
     log.info("[resolution] building resource graph...");
     trace.event("resolution.scope.start");
     const resourceGraph = buildResourceGraph(registration, config?.baseSemantics, config?.defaultScope);
@@ -208,7 +305,25 @@ export function resolve(
       orphanCount: registration.orphans.length,
     });
 
-    // Layer 5: Template Discovery
+    // Layer 7: Snapshot Export
+    log.info("[resolution] building snapshots...");
+    trace.event("resolution.snapshots.start");
+    const snapshotIdOptions = {
+      rootDir: config?.packagePath ?? program.getCurrentDirectory(),
+      packageRoots: config?.packageRoots,
+    };
+    const semanticSnapshot = buildSemanticSnapshot(semantics, {
+      ...snapshotIdOptions,
+      graph: resourceGraph,
+      catalog,
+    });
+    const apiSurfaceSnapshot = buildApiSurfaceSnapshot(semantics, snapshotIdOptions);
+    trace.event("resolution.snapshots.done", {
+      semanticSymbolCount: semanticSnapshot.symbols.length,
+      apiSymbolCount: apiSurfaceSnapshot.symbols.length,
+    });
+
+    // Layer 8: Template Discovery
     log.info("[resolution] discovering templates...");
     trace.event("resolution.templates.start");
     const { templates, inlineTemplates } = discoverTemplates(registration, program, resourceGraph);
@@ -222,7 +337,7 @@ export function resolve(
     });
 
     log.info(
-      `[resolution] complete: ${candidates.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
+      `[resolution] complete: ${allResources.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
     );
 
     // Extract unresolved resource refs from registration sites
@@ -236,28 +351,43 @@ export function resolve(
         file: getFileFromEvidence(s.evidence),
       }));
 
-    // Merge all diagnostics: resolver + orphans + unresolved patterns + unresolved refs
+    // Merge all diagnostics: matcher gaps + orphans + unresolved patterns + unresolved refs
     const allDiagnostics: ResolutionDiagnostic[] = [
-      ...resolverDiags.map(toDiagnostic),
+      ...analysisGaps.map(gapToDiagnostic),
       ...orphansToDiagnostics(registration.orphans),
       ...unresolvedToDiagnostics(registration.unresolved),
       ...unresolvedRefsToDiagnostics(unresolvedRefs),
     ];
 
     trace.setAttributes({
-      "resolution.candidateCount": candidates.length,
+      "resolution.resourceCount": allResources.length,
       "resolution.globalCount": globalCount,
       "resolution.localCount": localCount,
       "resolution.orphanCount": registration.orphans.length,
       "resolution.unresolvedCount": registration.unresolved.length,
       "resolution.templateCount": templates.length,
       "resolution.inlineTemplateCount": inlineTemplates.length,
+      "resolution.analysisGapCount": analysisGaps.length,
+      "resolution.partialEvaluationGapCount": evaluation.gaps.length,
       "resolution.diagnosticCount": allDiagnostics.length,
+      "resolution.semanticSnapshotSymbolCount": semanticSnapshot.symbols.length,
+      "resolution.apiSnapshotSymbolCount": apiSurfaceSnapshot.symbols.length,
     });
 
+    if (config?.stripSourcedNodes) {
+      const stripped = stripSourcedNodes(allResources);
+      trace.event("resolution.stripSourcedNodes", { removed: stripped.removed });
+      debug.resolution("stripSourcedNodes.complete", { removed: stripped.removed });
+    }
+
     return {
+      semantics,
+      catalog,
+      syntax,
       resourceGraph,
-      candidates,
+      semanticSnapshot,
+      apiSurfaceSnapshot,
+      resources: allResources,
       registration,
       templates,
       inlineTemplates,
@@ -267,13 +397,67 @@ export function resolve(
   });
 }
 
-function toDiagnostic(d: ResolverDiagnostic): ResolutionDiagnostic {
-  return {
-    code: d.code,
-    message: d.message,
-    source: d.source,
-    severity: d.severity,
+/**
+ * Convert an AnalysisGap to a ResolutionDiagnostic.
+ *
+ * The source field is only included when gap has location information.
+ * The file path is normalized since GapLocation.file is a plain string.
+ */
+function gapToDiagnostic(gap: AnalysisGap): ResolutionDiagnostic {
+  const diagnostic: ResolutionDiagnostic = {
+    code: gap.why.kind === "cache-corrupt" ? "cache:corrupt" : `gap:${gap.why.kind}`,
+    message: `${gap.what}: ${gap.suggestion}`,
+    severity: "warning",
   };
+  if (gap.where?.file) {
+    diagnostic.source = normalizePathForId(gap.where.file);
+  }
+  return diagnostic;
+}
+
+function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
+  const message = `${gap.what}: ${gap.suggestion}`;
+  const resource = gap.where?.file;
+  return resource
+    ? { kind: gap.why.kind, message, resource }
+    : { kind: gap.why.kind, message };
+}
+
+function catalogConfidenceFromGaps(gaps: AnalysisGap[]): CatalogConfidence {
+  if (gaps.length === 0) return "complete";
+  for (const gap of gaps) {
+    if (isConservativeGap(gap.why.kind)) {
+      return "conservative";
+    }
+  }
+  return "partial";
+}
+
+function isConservativeGap(kind: AnalysisGap["why"]["kind"]): boolean {
+  switch (kind) {
+    // Package structure failures: analysis could not proceed reliably.
+    case "package-not-found":
+    case "invalid-package-json":
+    case "missing-package-field":
+    case "entry-point-not-found":
+    case "no-entry-points":
+    case "complex-exports":
+    case "workspace-no-source-dir":
+    case "workspace-entry-not-found":
+    // Import/resolution failures.
+    case "unresolved-import":
+    case "circular-import":
+    case "external-package":
+    // Format/parse failures.
+    case "unsupported-format":
+    case "no-source":
+    case "minified-code":
+    case "parse-error":
+    case "analysis-failed":
+      return true;
+    default:
+      return false;
+  }
 }
 
 /**
@@ -327,7 +511,7 @@ function discoverTemplates(
   const templates: TemplateInfo[] = [];
   const inlineTemplates: InlineTemplateInfo[] = [];
   const sourceFiles = new Set(program.getSourceFiles().map((sf) => normalizePathForId(sf.fileName)));
-  const processedResources = new Set<ResourceCandidate>();
+  const processedResources = new Set<ResourceDef>();
 
   // Process registered resources (from registration sites)
   for (const site of registration.sites) {
@@ -341,19 +525,23 @@ function discoverTemplates(
     processedResources.add(resource);
 
     // Only elements have templates
-    if (resource.kind !== "element") continue;
+    if (resource.kind !== "custom-element") continue;
+    if (!resource.file) continue;
 
-    const componentPath = resource.source;
+    const componentPath = resource.file;
     const scopeId = computeScopeId(site, resourceGraph);
+    const className = unwrapSourced(resource.className) ?? "unknown";
+    const resourceName = unwrapSourced(resource.name) ?? "unknown";
+    const inlineTemplate = unwrapSourced(resource.inlineTemplate);
 
     // Check for inline template first
-    if (resource.inlineTemplate !== undefined) {
+    if (inlineTemplate !== undefined) {
       inlineTemplates.push({
-        content: resource.inlineTemplate,
+        content: inlineTemplate,
         componentPath,
         scopeId,
-        className: resource.className,
-        resourceName: resource.name,
+        className,
+        resourceName,
       });
       continue;
     }
@@ -367,8 +555,8 @@ function discoverTemplates(
       templatePath,
       componentPath,
       scopeId,
-      className: resource.className,
-      resourceName: resource.name,
+      className,
+      resourceName,
     });
   }
 
@@ -383,19 +571,23 @@ function discoverTemplates(
     processedResources.add(resource);
 
     // Only elements have templates
-    if (resource.kind !== "element") continue;
+    if (resource.kind !== "custom-element") continue;
+    if (!resource.file) continue;
 
-    const componentPath = resource.source;
+    const componentPath = resource.file;
     const scopeId = resourceGraph.root; // Orphans go to root scope
+    const className = unwrapSourced(resource.className) ?? "unknown";
+    const resourceName = unwrapSourced(resource.name) ?? "unknown";
+    const inlineTemplate = unwrapSourced(resource.inlineTemplate);
 
     // Check for inline template first
-    if (resource.inlineTemplate !== undefined) {
+    if (inlineTemplate !== undefined) {
       inlineTemplates.push({
-        content: resource.inlineTemplate,
+        content: inlineTemplate,
         componentPath,
         scopeId,
-        className: resource.className,
-        resourceName: resource.name,
+        className,
+        resourceName,
       });
       continue;
     }
@@ -409,8 +601,8 @@ function discoverTemplates(
       templatePath,
       componentPath,
       scopeId,
-      className: resource.className,
-      resourceName: resource.name,
+      className,
+      resourceName,
     });
   }
 
@@ -458,3 +650,4 @@ function computeScopeId(site: RegistrationSite, resourceGraph: ResourceGraph): R
   // Global: use root scope
   return resourceGraph.root;
 }
+

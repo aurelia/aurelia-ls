@@ -9,8 +9,8 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import type { ResourceGraph, ResourceScopeId, Semantics, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree } from "@aurelia-ls/resolution";
+import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
+import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap, ExperimentalPolicy } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -41,6 +41,8 @@ export type {
   DirectoryScope,
   DirectoryMatch,
 } from "@aurelia-ls/resolution";
+
+export type { ExperimentalPolicy };
 
 // Local imports for internal use
 import type {
@@ -317,6 +319,15 @@ export interface SSROptions {
   register?: string;
 
   /**
+   * Compile-time defines for conditional registration guards.
+   * Used by resolution partial evaluation (e.g. window.__AU_DEF__).
+   *
+   * @example
+   * defines: ssrDefines()
+   */
+  defines?: DefineMap;
+
+  /**
    * Manifest configuration.
    *
    * @default { inline: true }
@@ -396,6 +407,50 @@ export interface ExplicitAttributeConfig {
 }
 
 /**
+ * Policy for merging third-party resources into the resolution artifacts.
+ *
+ * Controls how aggressively artifacts are rebuilt when third-party resources
+ * are added. Trade-off is scope correctness vs rebuild cost.
+ *
+ * | Policy | Semantics | Catalog | Syntax | ResourceGraph | Use Case |
+ * |--------|-----------|---------|--------|---------------|----------|
+ * | `root-scope` | Rebuild | Rebuild | Rebuild | Merge root scope | Fast; keep scope shape, update root |
+ * | `semantics` | Rebuild | Rebuild | Rebuild | Keep | Update semantics without touching scopes |
+ * | `rebuild-graph` | Rebuild | Rebuild | Rebuild | Rebuild | Full rebuild; resources affect scope structure |
+ *
+ * **`root-scope`** (default): Rebuilds semantics/catalog/syntax from merged
+ * resources, then merges third-party resources into the root scope of the
+ * existing ResourceGraph. Use when resources should be globally visible but
+ * do not require new scope structure.
+ *
+ * **`semantics`**: Rebuilds semantics, catalog, and syntax registry from the
+ * merged resources, but keeps the existing ResourceGraph structure. Use when
+ * resources affect catalog/syntax but should not change scope topology.
+ *
+ * **`rebuild-graph`**: Most thorough. Rebuilds everything including the
+ * ResourceGraph from scratch based on the new semantics. Use when third-party
+ * resources must introduce scope structure changes (rare).
+ *
+ * **Not to be confused with `ExperimentalPolicy`** (top-level `policy` option),
+ * which controls gap/confidence diagnostic behavior. This is a separate concern
+ * specific to third-party resource merging.
+ *
+ * @default "root-scope"
+ */
+export type ThirdPartyPolicy = "root-scope" | "rebuild-graph" | "semantics";
+
+/**
+ * Package spec for third-party scanning.
+ * Accepts a direct path to a package root.
+ */
+export interface ThirdPartyPackageSpec {
+  /** Absolute path or workspace-relative path to the package root */
+  path: string;
+  /** Prefer TypeScript source over compiled output */
+  preferSource?: boolean;
+}
+
+/**
  * Explicit resource declarations.
  * Manually declare resources from packages that don't expose Aurelia metadata.
  */
@@ -451,28 +506,25 @@ export interface ExplicitResourceConfig {
 
 /**
  * Third-party resource configuration.
- *
- * @future Auto-scanning is not yet implemented. Use `resources` for explicit declarations.
- *
- * @see {@link https://aurelia.io/docs/vite/third-party | Third-Party Resources} — TODO: docs not yet published
+ * @see {@link https://aurelia.io/docs/vite/third-party | Third-Party Resources} - TODO: docs not yet published
  */
 export interface ThirdPartyOptions {
   /**
    * Auto-scan node_modules for Aurelia resources.
    * Looks for packages with `aurelia` in their package.json.
    *
-   * @future Not yet implemented.
-   * @default false
+   * @default true (prerelease)
    */
   scan?: boolean;
 
   /**
    * Specific packages to scan for resources.
    *
-   * @future Not yet implemented.
-   * @example ['@aurelia-ui/components', 'aurelia-table']
+   * Accepts package names or explicit package roots.
+   *
+   * @example ['@aurelia-ui/components', 'aurelia-table', { path: './packages/ui', preferSource: true }]
    */
-  packages?: string[];
+  packages?: Array<string | ThirdPartyPackageSpec>;
 
   /**
    * Explicit resource declarations.
@@ -481,6 +533,19 @@ export interface ThirdPartyOptions {
    * Note: This is the recommended approach for declaring third-party resources.
    */
   resources?: ExplicitResourceConfig;
+
+  /**
+   * Policy for how third-party resources are merged into resolution artifacts.
+   *
+   * - `"root-scope"` (default): Rebuild semantics and merge into root scope
+   * - `"semantics"`: Rebuild semantics/catalog/syntax but keep graph
+   * - `"rebuild-graph"`: Full rebuild of all artifacts (incl. graph)
+   *
+   * See {@link ThirdPartyPolicy} for detailed behavior of each option.
+   *
+   * @default "root-scope"
+   */
+  policy?: ThirdPartyPolicy;
 }
 
 // NOTE: Convention types (ConventionConfig, DirectoryConventionConfig, etc.)
@@ -836,6 +901,18 @@ export interface AureliaPluginOptions {
    */
   tsconfig?: string;
 
+  /**
+   * Package root path for resolution snapshots and npm analysis context.
+   * Defaults to the Vite project root when not provided.
+   */
+  packagePath?: string;
+
+  /**
+   * Map of package name to package root path for stable snapshot IDs.
+   * Useful in monorepos to keep symbol IDs stable across packages.
+   */
+  packageRoots?: Record<string, string>;
+
   // ---------------------------------------------------------------------------
   // Development
   // ---------------------------------------------------------------------------
@@ -911,6 +988,28 @@ export interface AureliaPluginOptions {
    * Debug and diagnostics configuration.
    */
   debug?: DebugOptions;
+
+  /**
+   * Experimental policy for gap/confidence diagnostic control.
+   *
+   * - `gaps`: Promote `gap:*` diagnostics to a configured severity (info/warning/error)
+   * - `confidence.min`: Emit diagnostic when catalog confidence falls below threshold
+   *
+   * Behavior is diagnostic-only — resources are never skipped or excluded.
+   *
+   * **Not to be confused with `thirdParty.policy`**, which controls merge strategy.
+   *
+   * @example
+   * ```ts
+   * policy: {
+   *   gaps: "error",                  // Treat gaps as errors
+   *   confidence: { min: "high" },    // Warn if confidence < high
+   * }
+   * ```
+   *
+   * @experimental
+   */
+  policy?: ExperimentalPolicy;
 
   // ---------------------------------------------------------------------------
   // Advanced
@@ -1018,7 +1117,7 @@ export interface ResolutionContext {
   /** Resource graph for compilation */
   resourceGraph: ResourceGraph;
   /** Merged semantics with discovered resources */
-  semantics: Semantics;
+  semantics: SemanticsWithCaches;
   /** Template info for looking up component scope */
   templates: Map<string, TemplateInfo>;
   /** Lookup scope for a template path */
@@ -1048,6 +1147,8 @@ export interface ResolvedSSRConfig {
   ssrEntry: string | null;
   /** Path to module with register export */
   register: string | null;
+  /** Compile-time defines for conditional registration guards */
+  defines: DefineMap;
   manifest: Required<SSRManifestOptions>;
   hydration: Required<SSRHydrationOptions>;
 }
@@ -1068,7 +1169,10 @@ export interface ResolvedConventionOptions {
     stylesheetPairing: StylesheetPairingConfig;
   };
   /** Third-party resources (not part of ConventionConfig) */
-  thirdParty: Required<Omit<ThirdPartyOptions, "resources">> & {
+  thirdParty: {
+    scan: boolean;
+    packages: Array<string | ThirdPartyPackageSpec>;
+    policy?: ThirdPartyPolicy;
     resources: ExplicitResourceConfig;
   };
 }
@@ -1094,6 +1198,12 @@ export interface ResolvedAureliaOptions {
   /** tsconfig path (null if not provided) */
   tsconfig: string | null;
 
+  /** Package root path for snapshots/analysis */
+  packagePath: string;
+
+  /** Optional map of package roots for stable snapshot ids */
+  packageRoots?: Record<string, string>;
+
   /** Use development bundles */
   useDev: boolean;
 
@@ -1114,6 +1224,9 @@ export interface ResolvedAureliaOptions {
 
   /** Resolved debug options */
   debug: ResolvedDebugOptions;
+
+  /** Experimental policy (gap/confidence consumption) */
+  policy?: ExperimentalPolicy;
 
   /** Experimental options (as-is, no expansion) */
   experimental: ExperimentalOptions;

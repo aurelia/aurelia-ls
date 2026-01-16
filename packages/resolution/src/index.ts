@@ -3,16 +3,19 @@
 // This package discovers Aurelia resources in a project and builds a ResourceGraph
 // that the AOT compiler uses for template compilation.
 //
-// Architecture:
+// Architecture (unified value model):
 // - File Discovery (Layer 0): File enumeration, sibling detection
-// - Extraction (Layer 1): AST → SourceFacts (with DependencyRef.resolvedPath: null)
-// - Import Resolution (Layer 1.5): Populate DependencyRef.resolvedPath
-// - Inference (Layer 2): SourceFacts → ResourceCandidate[]
-// - Registration (Layer 3): SourceFacts + ResourceCandidate[] → RegistrationAnalysis
-// - Scope (Layer 4): RegistrationAnalysis → ResourceGraph
+// - Extraction (Layer 1): AST -> FileFacts (classes, imports, exports, registrations)
+// - Partial Evaluation (Layer 2): FileFacts -> resolved FileFacts + gaps
+// - Pattern Matching (Layer 3): FileFacts -> ResourceDef[]
+// - Registration (Layer 4): ResourceDef[] + FileFacts -> RegistrationAnalysis
+// - Scope (Layer 5): RegistrationAnalysis -> ResourceGraph
 //
-// See docs/resolution-architecture.md for details.
-// See docs/registration-analysis-design.md for the three-phase model.
+// Key types:
+// - FileFacts: Unified extraction output
+// - ClassValue: Enriched class metadata with AnalyzableValue
+// - ResourceDef: Unified resource definition (compiler-facing, Sourced<T>)
+//
 
 // === Re-export compiler types for convenience ===
 export type {
@@ -20,20 +23,46 @@ export type {
   ResourceScope,
   ResourceScopeId,
   ResourceCollections,
+  FeatureUsageSet,
+  FeatureUsageFlags,
+  RegistrationPlan,
+  RegistrationScopePlan,
+  RegistrationPlanDirective,
+  ResourceDef,
+  ResourceKind,
   ElementRes,
   AttrRes,
   Bindable,
   ValueConverterSig,
   BindingBehaviorSig,
   Semantics,
+  SemanticsWithCaches,
+  ResourceCatalog,
+  SemanticSnapshot,
+  SemanticSymbolSnapshot,
+  ApiSurfaceSnapshot,
+  ApiSurfaceSymbol,
+  ApiSurfaceBindable,
+  SymbolId,
+  TemplateSyntaxRegistry,
   NormalizedPath,
 } from "@aurelia-ls/compiler";
 
 // === Main entry point ===
 export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic, type TemplateInfo, type InlineTemplateInfo } from "./resolve.js";
+export { buildSemanticsArtifacts, type SemanticsArtifacts } from "./semantics/build.js";
+
+// === Snapshots ===
+export { buildSemanticSnapshot, buildApiSurfaceSnapshot, type SemanticSnapshotOptions, type SnapshotIdOptions } from "./snapshots/index.js";
 
 // === Shared types ===
 export type { Logger } from "./types.js";
+export type { ExperimentalPolicy, PolicySeverity } from "./policy.js";
+export { applyResolutionPolicy } from "./policy.js";
+
+// === Compile-time Defines ===
+export type { DefineMap, DefineValue } from "./defines.js";
+export { ssrDefines, csrDefines, mergeDefines } from "./defines.js";
 
 // === File Discovery (Layer 0) ===
 export {
@@ -51,7 +80,6 @@ export {
   findTemplateSibling,
   findStylesheetSibling,
   classMatchesFileName,
-  toSiblingFacts,
   buildFilePair,
   detectSiblingsBatch,
   findOrphanTemplates,
@@ -80,7 +108,6 @@ export {
 export type {
   // Core Types
   SiblingFile,
-  SiblingFileFact,
   ProjectFile,
   ProjectFileType,
   ProjectStructure,
@@ -112,20 +139,58 @@ export type {
   ConventionBuilder,
 } from "./project/index.js";
 
-// === Extraction (Layer 1) ===
-export { extractAllFacts, extractSourceFacts, resolveImports } from "./extraction/index.js";
-export type { ExtractionOptions } from "./extraction/index.js";
 export type {
-  SourceFacts,
-  ClassFacts,
-  DecoratorFact,
-  StaticAuFact,
-  StaticDependenciesFact,
-  BindableMemberFact,
-  RegistrationCallFact,
-  BindingMode,
-  DependencyRef,
-} from "./extraction/index.js";
+  FileFacts,
+  ImportDeclaration,
+  ExportDeclaration,
+  VariableDeclaration,
+  FunctionDeclaration,
+  RegistrationCall,
+  DefineCall,
+  FileContext,
+  // SiblingFile exported from project/index.js (canonical source)
+  TemplateImport,
+  MatchContext,
+} from "./extraction/file-facts.js";
+export { emptyFileFacts, emptyFileContext } from "./extraction/file-facts.js";
+
+// === Value Model Types ===
+// Core types for static value analysis (used by FileFacts.classes)
+export type {
+  AnalyzableValue,
+  ClassValue,
+  DecoratorApplication,
+  BindableMember,
+  LexicalScope,
+} from "./analysis/index.js";
+
+// === Pattern Matchers (New) ===
+// Pattern matchers operate on ClassValue -> ResourceDef.
+export { matchAll, matchFile, matchExpected, matchDefineCalls, matchFileFacts, type MatchResult, type FileMatchResult } from "./patterns/index.js";
+export { matchDecorator, type DecoratorMatchResult } from "./patterns/index.js";
+export { matchStaticAu, type StaticAuMatchResult } from "./patterns/index.js";
+export { matchDefine, type DefineMatchResult } from "./patterns/index.js";
+export { matchConvention, type ConventionMatchResult } from "./patterns/index.js";
+
+// === Unified Resolution API (New) ===
+// Convenient API that combines extraction + pattern matching.
+export {
+  resolveFile,
+  resolveProgram,
+  extractResources,
+  type FileResolutionResult,
+  type ProgramResolutionResult,
+  type FileResolutionOptions,
+} from "./resolve-files.js";
+
+// === Extraction (Layer 1) ===
+// Unified extraction (FileFacts with enriched ClassValue)
+export { extractAllFileFacts, extractFileFacts, extractFileContext } from "./extraction/index.js";
+export type { ExtractionOptions } from "./extraction/index.js";
+
+// === Analysis (Layer 2) ===
+export { evaluateFileFacts } from "./analysis/index.js";
+export type { PartialEvaluationResult, PartialEvaluationFileResult, PartialEvaluationOptions } from "./analysis/index.js";
 
 // === Export Binding Resolution (Layer 1.5) ===
 export { buildExportBindingMap, lookupExportBinding } from "./binding/index.js";
@@ -136,13 +201,10 @@ export type {
   ExportLookupResult,
 } from "./binding/index.js";
 
-// === Inference (Layer 2) ===
-export { createResolverPipeline, resolveFromDecorators, resolveFromStaticAu, resolveFromConventions } from "./inference/index.js";
-export type { ResourceCandidate, BindableSpec, ResolverResult, ResolverDiagnostic, ResolverPipeline } from "./inference/index.js";
-
 // === Registration (Layer 3) ===
-export { createRegistrationAnalyzer, buildImportGraph } from "./registration/index.js";
+export { createRegistrationAnalyzer, buildImportGraph, buildRegistrationPlan } from "./registration/index.js";
 export type { RegistrationAnalyzer, ImportGraph } from "./registration/index.js";
+export type { UsageByScope } from "./registration/index.js";
 // New registration model (see types.ts for design rationale)
 export type {
   RegistrationAnalysis,
@@ -190,7 +252,7 @@ export {
   // Functions
   getResourceTypeFromClassName,
   stripResourceSuffix,
-  // Normalization (user-friendly → internal)
+  // Normalization (user-friendly -> internal)
   normalizeScope,
   normalizeDirectoryRule,
   normalizeDirectoryConventions,
@@ -288,3 +350,38 @@ export {
   formatPluginHintMessage,
 } from "./diagnostics/index.js";
 export type { PluginHint, PluginHintResult, UnresolvedResourceInfo } from "./diagnostics/index.js";
+
+// === NPM Package Analysis ===
+// Extracts Aurelia resource semantics from npm packages.
+// Used by app mode to understand dependencies, and by library mode to generate manifests.
+export {
+  analyzePackage,
+  analyzePackages,
+  isAureliaPackage,
+  // Package scanner
+  scanPackage,
+  getSourceEntryPoint,
+  // Utility functions
+  success,
+  partial,
+  combine,
+  gap,
+} from "./npm/index.js";
+export type {
+  // Analysis result types
+  AnalysisResult,
+  Confidence,
+  AnalysisGap,
+  GapLocation,
+  GapReason,
+  // Package analysis types
+  PackageAnalysis,
+  ExtractedConfiguration,
+  ConfigurationRegistration,
+  SourceLocation,
+  AnalysisOptions,
+  // Package scanner types
+  PackageInfo,
+  EntryPoint,
+} from "./npm/index.js";
+

@@ -148,6 +148,10 @@ interface Instruction {
     from?: BindingSource;
   }>;
   def?: TemplateIr;
+  projections?: Array<{
+    slotName?: string;
+    def?: TemplateIr;
+  }>;
 }
 
 function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
@@ -275,6 +279,11 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
                 p.attr,
                 p.from
               );
+            }
+          }
+          if (ins.projections) {
+            for (const proj of ins.projections) {
+              if (proj.def) reduceTemplate(proj.def, out);
             }
           }
           break;

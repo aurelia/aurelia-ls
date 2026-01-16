@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { extractAllFacts } from "@aurelia-ls/resolution";
-import type { SourceFacts } from "@aurelia-ls/resolution";
+import { extractAllFileFacts } from "@aurelia-ls/resolution";
+import type { FileFacts, ClassValue } from "@aurelia-ls/resolution";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 import {
   createProgramFromApp,
   getTestAppPath,
@@ -9,13 +10,61 @@ import {
 
 const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
 
+/**
+ * Helper to get a string property from static $au.
+ */
+function getStaticAuProperty(cls: ClassValue, prop: string): string | undefined {
+  const auValue = cls.staticMembers.get('$au');
+  if (auValue?.kind !== 'object') return undefined;
+  const propValue = auValue.properties.get(prop);
+  if (propValue?.kind !== 'literal' || typeof propValue.value !== 'string') return undefined;
+  return propValue.value;
+}
+
+/**
+ * Helper to get bindables array from static $au.
+ * Handles both string form ('prop') and object form ({ name: 'prop', ... }).
+ */
+function getStaticAuBindables(cls: ClassValue): string[] {
+  const auValue = cls.staticMembers.get('$au');
+  if (auValue?.kind !== 'object') return [];
+  const bindablesValue = auValue.properties.get('bindables');
+  if (!bindablesValue) return [];
+
+  // Handle array form: bindables: ['prop1', { name: 'prop2' }]
+  if (bindablesValue.kind === 'array') {
+    const names: string[] = [];
+    for (const el of bindablesValue.elements) {
+      // String form: 'propName'
+      if (el.kind === 'literal' && typeof el.value === 'string') {
+        names.push(el.value);
+      }
+      // Object form: { name: 'propName', ... }
+      else if (el.kind === 'object') {
+        const nameVal = el.properties.get('name');
+        if (nameVal?.kind === 'literal' && typeof nameVal.value === 'string') {
+          names.push(nameVal.value);
+        }
+      }
+    }
+    return names;
+  }
+
+  // Handle object form: bindables: { prop1: {}, prop2: {} }
+  if (bindablesValue.kind === 'object') {
+    return [...bindablesValue.properties.keys()];
+  }
+
+  return [];
+}
+
 describe("Extraction: explicit-app", () => {
-  let appFacts: Map<string, SourceFacts>;
+  let appFacts: Map<NormalizedPath, FileFacts>;
 
   beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
-    const allFacts = extractAllFacts(program);
-    appFacts = filterFactsByPathPattern(allFacts, "/explicit-app/src/") as Map<string, SourceFacts>;
+    const allFacts = extractAllFileFacts(program);
+    appFacts = filterFactsByPathPattern(allFacts, "/explicit-app/src/");
   });
 
   it("extracts facts from all source files", () => {
@@ -36,7 +85,7 @@ describe("Extraction: explicit-app", () => {
     );
     expect(navBarFacts, "Should find nav-bar.ts").toBeTruthy();
 
-    const navBarClass = navBarFacts!.classes.find(c => c.name === "NavBar");
+    const navBarClass = navBarFacts!.classes.find(c => c.className === "NavBar");
     expect(navBarClass, "Should find NavBar class").toBeTruthy();
     expect(navBarClass!.decorators.length).toBeGreaterThan(0);
     expect(navBarClass!.decorators.some(d => d.name === "customElement"), "Should have @customElement").toBe(true);
@@ -49,13 +98,22 @@ describe("Extraction: explicit-app", () => {
     );
     expect(fancyButtonFacts, "Should find fancy-button.ts").toBeTruthy();
 
-    const fancyButtonClass = fancyButtonFacts!.classes.find(c => c.name === "FancyButton");
+    const fancyButtonClass = fancyButtonFacts!.classes.find(c => c.className === "FancyButton");
     expect(fancyButtonClass, "Should find FancyButton class").toBeTruthy();
-    expect(fancyButtonClass!.staticAu, "FancyButton should have static $au").toBeTruthy();
-    expect(fancyButtonClass!.staticAu!.type).toBe("custom-element");
-    expect(fancyButtonClass!.staticAu!.name).toBe("fancy-button");
-    expect(fancyButtonClass!.staticAu!.bindables).toBeTruthy();
-    expect(fancyButtonClass!.staticAu!.bindables!.length).toBe(3);
+
+    // Check static $au
+    const auValue = fancyButtonClass!.staticMembers.get('$au');
+    expect(auValue, "FancyButton should have static $au").toBeTruthy();
+    expect(auValue!.kind).toBe('object');
+
+    const type = getStaticAuProperty(fancyButtonClass!, 'type');
+    expect(type).toBe('custom-element');
+
+    const name = getStaticAuProperty(fancyButtonClass!, 'name');
+    expect(name).toBe('fancy-button');
+
+    const bindables = getStaticAuBindables(fancyButtonClass!);
+    expect(bindables.length).toBe(3);
   });
 
   it("extracts static dependencies correctly", () => {
@@ -65,25 +123,23 @@ describe("Extraction: explicit-app", () => {
     );
     expect(productCardFacts, "Should find product-card.ts").toBeTruthy();
 
-    const productCardClass = productCardFacts!.classes.find(c => c.name === "ProductCard");
+    const productCardClass = productCardFacts!.classes.find(c => c.className === "ProductCard");
     expect(productCardClass, "Should find ProductCard class").toBeTruthy();
-    expect(productCardClass!.staticDependencies, "ProductCard should have static dependencies").toBeTruthy();
 
-    const refs = productCardClass!.staticDependencies!.references;
-    expect(refs.length).toBe(2);
+    // Check static dependencies
+    const deps = productCardClass!.staticMembers.get('dependencies');
+    expect(deps, "ProductCard should have static dependencies").toBeTruthy();
+    expect(deps!.kind).toBe('array');
 
-    // Check dependency names
-    const depNames = refs
-      .filter(r => r.kind === "identifier")
-      .map(r => (r as { kind: "identifier"; name: string }).name)
-      .sort();
-    expect(depNames).toEqual(["PriceTag", "StockBadge"]);
+    if (deps!.kind === 'array') {
+      expect(deps.elements.length).toBe(2);
 
-    // Check that references have spans (provenance)
-    for (const ref of refs) {
-      expect(ref.span, "DependencyRef should have span").toBeTruthy();
-      expect(typeof ref.span.start).toBe("number");
-      expect(typeof ref.span.end).toBe("number");
+      // Check dependency names (they're references to imported classes)
+      const depNames = deps.elements
+        .filter(el => el.kind === 'reference')
+        .map(el => (el as { kind: 'reference'; name: string }).name)
+        .sort();
+      expect(depNames).toEqual(["PriceTag", "StockBadge"]);
     }
   });
 
@@ -94,7 +150,7 @@ describe("Extraction: explicit-app", () => {
     );
     expect(userCardFacts, "Should find user-card.ts").toBeTruthy();
 
-    const userCardClass = userCardFacts!.classes.find(c => c.name === "UserCard");
+    const userCardClass = userCardFacts!.classes.find(c => c.className === "UserCard");
     expect(userCardClass, "Should find UserCard class").toBeTruthy();
     expect(userCardClass!.bindableMembers.length).toBeGreaterThan(0);
 
@@ -111,7 +167,7 @@ describe("Extraction: explicit-app", () => {
 
     expect(mainFacts!.registrationCalls.length).toBeGreaterThan(0);
 
-    const aureliaCall = mainFacts!.registrationCalls.find(c => c.receiver === "Aurelia");
+    const aureliaCall = mainFacts!.registrationCalls.find(c => c.receiver === "aurelia");
     expect(aureliaCall, "Should find Aurelia.register() call").toBeTruthy();
     expect(aureliaCall!.arguments.length).toBe(5); // 5 spread arguments
   });

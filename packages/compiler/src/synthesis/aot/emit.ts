@@ -33,6 +33,7 @@ import type {
   AotMappingEntry,
   PlanNode,
   PlanElementNode,
+  PlanCommentNode,
   PlanTextNode,
   PlanBinding,
   PlanCustomElement,
@@ -203,7 +204,7 @@ class EmitContext {
         this.emitText(node, instructions);
         break;
       case "comment":
-        // Comments don't produce instructions
+        this.emitComment(node, instructions, nestedTemplates);
         break;
       case "fragment":
         for (const child of node.children) {
@@ -233,7 +234,7 @@ class EmitContext {
 
       // Custom element hydration
       if (node.customElement) {
-        row.push(this.emitHydrateElement(node.customElement));
+        row.push(this.emitHydrateElement(node.customElement, nestedTemplates));
       }
 
       // Let element hydration
@@ -288,7 +289,7 @@ class EmitContext {
    */
   private emitController(
     ctrl: PlanController,
-    hostNode: PlanElementNode,
+    hostNode: PlanElementNode | PlanCommentNode,
     instructions: SerializedInstruction[][],
     nestedTemplates: SerializedDefinition[],
   ): void {
@@ -333,7 +334,7 @@ class EmitContext {
    */
   private emitControllerTemplate(
     ctrl: PlanController,
-    _hostNode: PlanElementNode,
+    _hostNode: PlanElementNode | PlanCommentNode,
     name: string,
   ): SerializedDefinition {
     const innerInstructions: SerializedInstruction[][] = [];
@@ -391,7 +392,7 @@ class EmitContext {
 
       // Custom element hydration
       if (node.customElement) {
-        row.push(this.emitHydrateElement(node.customElement));
+        row.push(this.emitHydrateElement(node.customElement, nestedTemplates));
       }
 
       // Let element hydration
@@ -418,6 +419,19 @@ class EmitContext {
     // Recurse into children
     for (const child of node.children) {
       this.emitNode(child, instructions, nestedTemplates);
+    }
+  }
+
+  /**
+   * Emit instructions for a comment node (controllers only).
+   */
+  private emitComment(
+    node: PlanCommentNode,
+    instructions: SerializedInstruction[][],
+    nestedTemplates: SerializedDefinition[],
+  ): void {
+    for (const ctrl of node.controllers) {
+      this.emitController(ctrl, node, instructions, nestedTemplates);
     }
   }
 
@@ -605,7 +619,10 @@ class EmitContext {
   /**
    * Emit hydrate instruction for a custom element.
    */
-  private emitHydrateElement(ce: PlanCustomElement): SerializedHydrateElement {
+  private emitHydrateElement(
+    ce: PlanCustomElement,
+    nestedTemplates: SerializedDefinition[],
+  ): SerializedHydrateElement {
     const instructions: SerializedInstruction[] = [];
 
     // Emit bindings
@@ -632,6 +649,18 @@ class EmitContext {
       res: ce.resource,
       instructions,
     };
+    if (ce.projections.length > 0) {
+      const projections = ce.projections.map((projection) => {
+        const templateIndex = nestedTemplates.length;
+        const templateName = `${ce.resource}_projection_${this.nestedTemplateIndex++}`;
+        nestedTemplates.push(this.emitDefinition(projection.template, templateName));
+        return {
+          slotName: projection.slotName,
+          templateIndex,
+        };
+      });
+      result.projections = projections;
+    }
     if (ce.containerless) {
       result.containerless = true;
     }

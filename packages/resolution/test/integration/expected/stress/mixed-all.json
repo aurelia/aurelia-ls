@@ -2,22 +2,14 @@
   "targets": 5,
   "expressions": 37,
   "instructions": [
-    {
-      "kind": "text",
-      "target": 0,
-      "text": "${title}"
-    },
+    { "kind": "text", "target": 0, "text": "${title}" },
     {
       "kind": "controller",
       "target": 1,
       "name": "switch",
       "template": 0,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "viewMode",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "viewMode", "mode": "toView" }
       ]
     },
     {
@@ -26,11 +18,7 @@
       "name": "if",
       "template": 1,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showPortal",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showPortal", "mode": "toView" }
       ]
     },
     {
@@ -39,11 +27,7 @@
       "name": "if",
       "template": 2,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "showCopyright",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "showCopyright", "mode": "toView" }
       ]
     },
     {
@@ -52,10 +36,7 @@
       "name": "repeat",
       "template": 3,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "link of footerLinks"
-        }
+        { "iterator": "items", "expr": "link of footerLinks" }
       ]
     }
   ],
@@ -69,11 +50,7 @@
           "name": "case",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"list\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"list\"", "mode": "toView" }
           ]
         },
         {
@@ -82,11 +59,7 @@
           "name": "case",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"grid\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"grid\"", "mode": "toView" }
           ]
         },
         {
@@ -95,20 +68,10 @@
           "name": "case",
           "template": 2,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "\"detail\"",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "\"detail\"", "mode": "toView" }
           ]
         },
-        {
-          "kind": "controller",
-          "target": 3,
-          "name": "default-case",
-          "template": 3,
-          "bindings": []
-        }
+        { "kind": "controller", "target": 3, "name": "default-case", "template": 3, "bindings": [] }
       ],
       "templates": [
         {
@@ -120,10 +83,7 @@
               "name": "repeat",
               "template": 0,
               "bindings": [
-                {
-                  "iterator": "items",
-                  "expr": "category of categories"
-                }
+                { "iterator": "items", "expr": "category of categories" }
               ]
             }
           ],
@@ -131,21 +91,14 @@
             {
               "name": "repeat_2",
               "instructions": [
-                {
-                  "kind": "text",
-                  "target": 0,
-                  "text": "${category.name}"
-                },
+                { "kind": "text", "target": 0, "text": "${category.name}" },
                 {
                   "kind": "controller",
                   "target": 1,
                   "name": "repeat",
                   "template": 0,
                   "bindings": [
-                    {
-                      "iterator": "items",
-                      "expr": "item of category.items"
-                    }
+                    { "iterator": "items", "expr": "item of category.items" }
                   ]
                 }
               ],
@@ -159,45 +112,23 @@
                       "name": "if",
                       "template": 0,
                       "bindings": [
-                        {
-                          "property": "value",
-                          "expr": "item.featured",
-                          "mode": "toView"
-                        }
+                        { "property": "value", "expr": "item.featured", "mode": "toView" }
                       ]
                     },
-                    {
-                      "kind": "controller",
-                      "target": 1,
-                      "name": "else",
-                      "template": 1,
-                      "bindings": []
-                    }
+                    { "kind": "controller", "target": 1, "name": "else", "template": 1, "bindings": [] }
                   ],
                   "templates": [
                     {
                       "name": "if_4",
                       "instructions": [
-                        {
-                          "kind": "text",
-                          "target": 0,
-                          "text": "${item.title}"
-                        },
-                        {
-                          "kind": "text",
-                          "target": 1,
-                          "text": "${item.description}"
-                        }
+                        { "kind": "text", "target": 0, "text": "${item.title}" },
+                        { "kind": "text", "target": 1, "text": "${item.description}" }
                       ]
                     },
                     {
                       "name": "else_5",
                       "instructions": [
-                        {
-                          "kind": "text",
-                          "target": 0,
-                          "text": "${item.title}"
-                        }
+                        { "kind": "text", "target": 0, "text": "${item.title}" }
                       ]
                     }
                   ]
@@ -215,11 +146,7 @@
               "name": "promise",
               "template": 0,
               "bindings": [
-                {
-                  "property": "value",
-                  "expr": "gridDataPromise",
-                  "mode": "toView"
-                }
+                { "property": "value", "expr": "gridDataPromise", "mode": "toView" }
               ]
             }
           ],
@@ -233,11 +160,7 @@
                   "name": "pending",
                   "template": 0,
                   "bindings": [
-                    {
-                      "property": "value",
-                      "expr": "gridDataPromise",
-                      "mode": "toView"
-                    }
+                    { "property": "value", "expr": "gridDataPromise", "mode": "toView" }
                   ]
                 },
                 {
@@ -246,11 +169,7 @@
                   "name": "then",
                   "template": 1,
                   "bindings": [
-                    {
-                      "property": "value",
-                      "expr": "gridDataPromise",
-                      "mode": "toView"
-                    }
+                    { "property": "value", "expr": "gridDataPromise", "mode": "toView" }
                   ]
                 },
                 {
@@ -259,19 +178,12 @@
                   "name": "catch",
                   "template": 2,
                   "bindings": [
-                    {
-                      "property": "value",
-                      "expr": "gridDataPromise",
-                      "mode": "toView"
-                    }
+                    { "property": "value", "expr": "gridDataPromise", "mode": "toView" }
                   ]
                 }
               ],
               "templates": [
-                {
-                  "name": "pending_8",
-                  "instructions": []
-                },
+                { "name": "pending_8", "instructions": [] },
                 {
                   "name": "then_9",
                   "instructions": [
@@ -281,10 +193,7 @@
                       "name": "repeat",
                       "template": 0,
                       "bindings": [
-                        {
-                          "iterator": "items",
-                          "expr": "cell of gridData.cells"
-                        }
+                        { "iterator": "items", "expr": "cell of gridData.cells" }
                       ]
                     }
                   ],
@@ -292,18 +201,8 @@
                     {
                       "name": "repeat_10",
                       "instructions": [
-                        {
-                          "kind": "bind",
-                          "target": 0,
-                          "property": "class",
-                          "expr": "cell.class",
-                          "mode": "toView"
-                        },
-                        {
-                          "kind": "text",
-                          "target": 1,
-                          "text": "\n            ${cell.value}\n          "
-                        }
+                        { "kind": "bind", "target": 0, "property": "class", "expr": "cell.class", "mode": "toView" },
+                        { "kind": "text", "target": 1, "text": "\n            ${cell.value}\n          " }
                       ]
                     }
                   ]
@@ -311,11 +210,7 @@
                 {
                   "name": "catch_11",
                   "instructions": [
-                    {
-                      "kind": "text",
-                      "target": 0,
-                      "text": "Grid load failed: ${error}"
-                    }
+                    { "kind": "text", "target": 0, "text": "Grid load failed: ${error}" }
                   ]
                 }
               ]
@@ -331,11 +226,7 @@
               "name": "with",
               "template": 0,
               "bindings": [
-                {
-                  "property": "value",
-                  "expr": "selectedItem",
-                  "mode": "toView"
-                }
+                { "property": "value", "expr": "selectedItem", "mode": "toView" }
               ]
             }
           ],
@@ -343,22 +234,14 @@
             {
               "name": "with_13",
               "instructions": [
-                {
-                  "kind": "text",
-                  "target": 0,
-                  "text": "${name}"
-                },
+                { "kind": "text", "target": 0, "text": "${name}" },
                 {
                   "kind": "controller",
                   "target": 1,
                   "name": "with",
                   "template": 0,
                   "bindings": [
-                    {
-                      "property": "value",
-                      "expr": "metadata",
-                      "mode": "toView"
-                    }
+                    { "property": "value", "expr": "metadata", "mode": "toView" }
                   ]
                 },
                 {
@@ -367,11 +250,7 @@
                   "name": "if",
                   "template": 1,
                   "bindings": [
-                    {
-                      "property": "value",
-                      "expr": "hasComments",
-                      "mode": "toView"
-                    }
+                    { "property": "value", "expr": "hasComments", "mode": "toView" }
                   ]
                 }
               ],
@@ -379,16 +258,8 @@
                 {
                   "name": "with_14",
                   "instructions": [
-                    {
-                      "kind": "text",
-                      "target": 0,
-                      "text": "Created: ${createdAt}"
-                    },
-                    {
-                      "kind": "text",
-                      "target": 1,
-                      "text": "Author: ${author}"
-                    }
+                    { "kind": "text", "target": 0, "text": "Created: ${createdAt}" },
+                    { "kind": "text", "target": 1, "text": "Author: ${author}" }
                   ]
                 },
                 {
@@ -400,10 +271,7 @@
                       "name": "repeat",
                       "template": 0,
                       "bindings": [
-                        {
-                          "iterator": "items",
-                          "expr": "comment of comments"
-                        }
+                        { "iterator": "items", "expr": "comment of comments" }
                       ]
                     }
                   ],
@@ -411,11 +279,7 @@
                     {
                       "name": "repeat_16",
                       "instructions": [
-                        {
-                          "kind": "text",
-                          "target": 0,
-                          "text": "${comment.text} - ${comment.user}"
-                        }
+                        { "kind": "text", "target": 0, "text": "${comment.text} - ${comment.user}" }
                       ]
                     }
                   ]
@@ -424,10 +288,7 @@
             }
           ]
         },
-        {
-          "name": "default-case_17",
-          "instructions": []
-        }
+        { "name": "default-case_17", "instructions": [] }
       ]
     },
     {
@@ -439,11 +300,7 @@
           "name": "portal",
           "template": 0,
           "bindings": [
-            {
-              "property": "target",
-              "expr": "modal-target",
-              "mode": "toView"
-            }
+            { "property": "target", "expr": "modal-target", "mode": "toView" }
           ]
         }
       ],
@@ -451,21 +308,14 @@
         {
           "name": "portal_19",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${modalTitle}"
-            },
+            { "kind": "text", "target": 0, "text": "${modalTitle}" },
             {
               "kind": "controller",
               "target": 1,
               "name": "repeat",
               "template": 0,
               "bindings": [
-                {
-                  "iterator": "items",
-                  "expr": "option of modalOptions"
-                }
+                { "iterator": "items", "expr": "option of modalOptions" }
               ]
             }
           ],
@@ -473,18 +323,8 @@
             {
               "name": "repeat_20",
               "instructions": [
-                {
-                  "kind": "event",
-                  "target": 0,
-                  "event": "click",
-                  "handler": "selectOption(option)",
-                  "capture": false
-                },
-                {
-                  "kind": "text",
-                  "target": 1,
-                  "text": "${option.label}"
-                }
+                { "kind": "event", "target": 0, "event": "click", "handler": "selectOption(option)", "capture": false },
+                { "kind": "text", "target": 1, "text": "${option.label}" }
               ]
             }
           ]
@@ -494,11 +334,7 @@
     {
       "name": "if_21",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${copyright}"
-        }
+        { "kind": "text", "target": 0, "text": "${copyright}" }
       ]
     },
     {
@@ -510,18 +346,10 @@
           "name": "href",
           "alias": null,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "link.url",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "link.url", "mode": "toView" }
           ]
         },
-        {
-          "kind": "text",
-          "target": 1,
-          "text": "${link.text}"
-        }
+        { "kind": "text", "target": 1, "text": "${link.text}" }
       ]
     }
   ]

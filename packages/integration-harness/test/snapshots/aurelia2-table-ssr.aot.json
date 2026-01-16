@@ -1,0 +1,43 @@
+{
+  "aurelia2-table-ssr": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0000", "mode": 2, "to": "totalItems", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "pageSize", "type": 12 },
+              { "exprId": "expr_0002", "mode": 6, "to": "currentPage", "type": 12 },
+              { "exprId": "expr_0003", "mode": 2, "to": "directionLinks", "type": 12 },
+              { "exprId": "expr_0003", "mode": 2, "to": "boundaryLinks", "type": 12 }
+            ],
+            "res": "aut-pagination",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "aurelia2-table-ssr",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 12 },
+        "id": "expr_0000"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 5 },
+        "id": "expr_0001"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": 1 },
+        "id": "expr_0002"
+      },
+      {
+        "ast": { "$kind": "PrimitiveLiteral", "value": false },
+        "id": "expr_0003"
+      }
+    ],
+    "template": "<!--au--><aut-pagination>\n</aut-pagination>"
+  }
+}

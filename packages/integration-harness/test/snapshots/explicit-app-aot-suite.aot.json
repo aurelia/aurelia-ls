@@ -1,0 +1,334 @@
+{
+  "explicit-if-else-with-child": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0014", "mode": 2, "to": "value", "type": 12 }
+            ],
+            "res": "if",
+            "templateIndex": 0,
+            "type": 2
+          }
+        ],
+        [
+          { "instructions": [], "res": "else", "templateIndex": 1, "type": 2 }
+        ]
+      ],
+      "name": "explicit-if-else-with-child",
+      "nestedTemplates": [
+        {
+          "instructions": [
+            [
+              {
+                "containerless": true,
+                "instructions": [
+                  { "exprId": "expr_0015", "mode": 2, "to": "name", "type": 12 }
+                ],
+                "res": "user-card",
+                "type": 0
+              }
+            ]
+          ],
+          "name": "if_0",
+          "nestedTemplates": [],
+          "targetCount": 1
+        },
+        { "instructions": [], "name": "else_1", "nestedTemplates": [], "targetCount": 0 }
+      ],
+      "targetCount": 2
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
+        "id": "expr_0015"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "show" },
+        "id": "expr_0014"
+      }
+    ],
+    "template": "<div>\n  <!--au--><!--au-start--><!--au-end-->\n  <!--au--><!--au-start--><!--au-end-->\n</div>"
+  },
+  "explicit-multiple-elements": {
+    "definition": {
+      "instructions": [
+        [
+          { "instructions": [], "res": "nav-bar", "type": 0 }
+        ],
+        [
+          {
+            "containerless": true,
+            "instructions": [
+              { "exprId": "expr_0016", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_0017", "mode": 2, "to": "avatar", "type": 12 }
+            ],
+            "res": "user-card",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "explicit-multiple-elements",
+      "nestedTemplates": [],
+      "targetCount": 2
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
+        "id": "expr_0016"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "avatarUrl" },
+        "id": "expr_0017"
+      }
+    ],
+    "template": "<div>\n  <!--au--><nav-bar></nav-bar>\n  <!--au--><user-card></user-card>\n</div>"
+  },
+  "explicit-my-app": {
+    "definition": {
+      "instructions": [
+        [
+          { "exprIds": [ "expr_0005" ], "parts": [ "", "" ], "type": 30 }
+        ],
+        [
+          { "instructions": [], "res": "nav-bar", "type": 0 }
+        ],
+        [
+          {
+            "containerless": true,
+            "instructions": [
+              { "to": "name", "type": 10, "value": "Alice" },
+              { "to": "avatar", "type": 10, "value": "alice.png" }
+            ],
+            "res": "user-card",
+            "type": 0
+          }
+        ],
+        [
+          {
+            "containerless": true,
+            "instructions": [
+              { "exprId": "expr_0006", "mode": 2, "to": "items", "type": 12 },
+              { "exprId": "expr_0007", "mode": 2, "to": "columns", "type": 12 }
+            ],
+            "res": "data-grid",
+            "type": 0
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "to": "text", "type": 10, "value": "This is a tooltip" }
+            ],
+            "res": "tooltip",
+            "type": 1
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "to": "color", "type": 10, "value": "yellow" }
+            ],
+            "res": "highlight",
+            "type": 1
+          }
+        ],
+        [
+          { "exprIds": [ "expr_0008" ], "parts": [ "", "" ], "type": 30 }
+        ],
+        [
+          { "exprIds": [ "expr_0009" ], "parts": [ "", "" ], "type": 30 }
+        ],
+        [
+          { "exprId": "expr_0010", "mode": 6, "to": "value", "type": 12 }
+        ],
+        [
+          { "exprId": "expr_0011", "mode": 6, "to": "value", "type": 12 }
+        ],
+        [
+          {
+            "instructions": [
+              { "to": "label", "type": 10, "value": "Click me" }
+            ],
+            "res": "fancy-button",
+            "type": 0
+          }
+        ],
+        [
+          { "instructions": [], "res": "product-card", "type": 0 }
+        ]
+      ],
+      "name": "explicit-my-app",
+      "nestedTemplates": [],
+      "targetCount": 12
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "message" },
+        "id": "expr_0005"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "items" },
+        "id": "expr_0006"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "columns" },
+        "id": "expr_0007"
+      },
+      {
+        "ast": {
+          "$kind": "ValueConverter",
+          "args": [],
+          "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "today" },
+          "name": "date"
+        },
+        "id": "expr_0008"
+      },
+      {
+        "ast": {
+          "$kind": "ValueConverter",
+          "args": [],
+          "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "price" },
+          "name": "currency"
+        },
+        "id": "expr_0009"
+      },
+      {
+        "ast": {
+          "$kind": "BindingBehavior",
+          "args": [
+            { "$kind": "PrimitiveLiteral", "value": 300 }
+          ],
+          "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "query" },
+          "name": "debounce"
+        },
+        "id": "expr_0010"
+      },
+      {
+        "ast": {
+          "$kind": "BindingBehavior",
+          "args": [
+            { "$kind": "PrimitiveLiteral", "value": 100 }
+          ],
+          "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "position" },
+          "name": "throttle"
+        },
+        "id": "expr_0011"
+      }
+    ],
+    "template": "\n  <h1><!--au--> </h1>\n\n  <!-- Global components -->\n  <!--au--><nav-bar></nav-bar>\n  <!--au--><user-card name=\"Alice\" avatar=\"alice.png\"></user-card>\n  <!--au--><data-grid></data-grid>\n\n  <!-- Global attributes -->\n  <!--au--><div tooltip=\"This is a tooltip\">Hover me</div>\n  <!--au--><p highlight=\"yellow\">Highlighted text</p>\n\n  <!-- Value converters and binding behaviors -->\n  <span><!--au--> </span>\n  <span><!--au--> </span>\n  <!--au--><input>\n  <!--au--><input>\n\n  <!-- static $au component -->\n  <!--au--><fancy-button label=\"Click me\"></fancy-button>\n\n  <!-- Local scope component (widgets) -->\n  <!--au--><product-card></product-card>\n\n"
+  },
+  "explicit-product-card": {
+    "definition": {
+      "instructions": [
+        [
+          { "exprIds": [ "expr_0000" ], "parts": [ "", "" ], "type": 30 }
+        ],
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0001", "mode": 2, "to": "amount", "type": 12 },
+              { "to": "currency", "type": 10, "value": "USD" }
+            ],
+            "res": "price-tag",
+            "type": 0
+          }
+        ],
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0002", "mode": 2, "to": "inStock", "type": 12 },
+              { "exprId": "expr_0003", "mode": 2, "to": "count", "type": 12 }
+            ],
+            "res": "stock-badge",
+            "type": 0
+          }
+        ],
+        [
+          { "exprId": "expr_0004", "mode": 2, "to": "disabled", "type": 12 }
+        ]
+      ],
+      "name": "explicit-product-card",
+      "nestedTemplates": [],
+      "targetCount": 4
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "name" },
+        "id": "expr_0000"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "price" },
+        "id": "expr_0001"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "inStock" },
+        "id": "expr_0002"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "stockCount" },
+        "id": "expr_0003"
+      },
+      {
+        "ast": {
+          "$kind": "Unary",
+          "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "inStock" },
+          "operation": "!",
+          "pos": 0
+        },
+        "id": "expr_0004"
+      }
+    ],
+    "template": "\n  <article class=\"product-card\">\n    <h3><!--au--> </h3>\n\n    <!-- Local-only components - not available outside this template -->\n    <!--au--><price-tag currency=\"USD\"></price-tag>\n    <!--au--><stock-badge></stock-badge>\n\n    <!--au--><button>Add to Cart</button>\n  </article>\n\n"
+  },
+  "explicit-repeat-with-child": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0012", "to": "items", "type": 15 }
+            ],
+            "res": "repeat",
+            "templateIndex": 0,
+            "type": 2
+          }
+        ]
+      ],
+      "name": "explicit-repeat-with-child",
+      "nestedTemplates": [
+        {
+          "instructions": [
+            [
+              { "instructions": [], "res": "nav-bar", "type": 0 }
+            ],
+            [
+              { "exprIds": [ "expr_0013" ], "parts": [ "", "" ], "type": 30 }
+            ]
+          ],
+          "name": "repeat_0",
+          "nestedTemplates": [],
+          "targetCount": 2
+        }
+      ],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "item" },
+        "id": "expr_0013"
+      },
+      {
+        "ast": {
+          "$kind": "ForOfStatement",
+          "declaration": { "$kind": "BindingIdentifier", "name": "item" },
+          "iterable": { "$kind": "AccessScope", "ancestor": 0, "name": "items" },
+          "semiIdx": -1
+        },
+        "id": "expr_0012"
+      }
+    ],
+    "template": "<!--au--><!--au-start--><!--au-end-->"
+  }
+}

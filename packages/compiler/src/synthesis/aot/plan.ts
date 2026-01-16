@@ -76,6 +76,7 @@ import type {
   PlanLetElement,
   PlanLetBinding,
   PlanController,
+  PlanProjection,
   PlanAuxExpr,
   PlanExpression,
   PlanScope,
@@ -392,7 +393,7 @@ function transformNode(
     case "text":
       return transformText(node, instructions, ctx);
     case "comment":
-      return transformComment(node, ctx);
+      return transformComment(node, instructions, instructionsByTarget, currentFrame, ctx);
   }
 }
 
@@ -463,7 +464,7 @@ function transformElement(
         break;
 
       case "hydrateElement":
-        customElement = transformHydrateElement(ins, ctx);
+        customElement = transformHydrateElement(ins, currentFrame, ctx);
         needsTarget = true;
         break;
 
@@ -715,11 +716,26 @@ function transformText(
   };
 }
 
-function transformComment(node: CommentNode, ctx: PlanningContext): PlanCommentNode {
+function transformComment(
+  node: CommentNode,
+  instructions: LinkedInstruction[],
+  instructionsByTarget: Map<NodeId, LinkedInstruction[]>,
+  currentFrame: FrameId,
+  ctx: PlanningContext,
+): PlanCommentNode {
+  const controllers: PlanController[] = [];
+
+  for (const ins of instructions) {
+    if (ins.kind === "hydrateTemplateController") {
+      controllers.push(transformController(ins, instructionsByTarget, currentFrame, ctx));
+    }
+  }
+
   const result: PlanCommentNode = {
     kind: "comment",
     nodeId: node.id,
     content: node.text,
+    controllers,
   };
   if (ctx.options.includeLocations && node.loc) {
     result.loc = node.loc;
@@ -873,7 +889,11 @@ function transformTextInterpolation(ins: LinkedTextBinding, ctx: PlanningContext
  * Custom Element/Attribute Transformations
  * ============================================================================= */
 
-function transformHydrateElement(ins: LinkedHydrateElement, ctx: PlanningContext): PlanCustomElement {
+function transformHydrateElement(
+  ins: LinkedHydrateElement,
+  currentFrame: FrameId,
+  ctx: PlanningContext
+): PlanCustomElement {
   const bindings: PlanPropertyBinding[] = [];
   const staticProps: PlanStaticProp[] = [];
 
@@ -892,13 +912,43 @@ function transformHydrateElement(ins: LinkedHydrateElement, ctx: PlanningContext
     }
   }
 
+  const projections = transformProjections(ins.projections ?? null, currentFrame, ctx);
+
   return {
     resource: ins.res?.def.name ?? "unknown",
     bindings,
     staticProps,
-    projections: [], // TODO: Handle projections
+    projections,
     containerless: ins.containerless ?? false,
   };
+}
+
+function transformProjections(
+  projections: LinkedHydrateElement["projections"] | null,
+  currentFrame: FrameId,
+  ctx: PlanningContext,
+): PlanProjection[] {
+  if (!projections || projections.length === 0) {
+    return [];
+  }
+
+  const result: PlanProjection[] = [];
+  for (const projection of projections) {
+    const linked = ctx.getLinkedTemplate(projection.def.dom);
+    if (!linked) {
+      debug.aot("plan.projection.missing", {
+        slot: projection.slot ?? null,
+        templateId: projection.def.dom.id,
+      });
+      continue;
+    }
+    const template = transformNestedTemplate(linked, new Map(), currentFrame, ctx);
+    result.push({
+      slotName: projection.slot ?? undefined,
+      template,
+    });
+  }
+  return result;
 }
 
 function transformHydrateAttribute(ins: LinkedHydrateAttribute, ctx: PlanningContext): PlanCustomAttr {

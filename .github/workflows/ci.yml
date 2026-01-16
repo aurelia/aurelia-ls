@@ -22,6 +22,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify submodules
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -90,12 +96,55 @@ jobs:
         run: npm run build
         working-directory: aurelia
 
+      - name: Cache aurelia2-plugins node_modules
+        id: cache-plugins-npm
+        uses: actions/cache@v4
+        with:
+          path: aurelia2-plugins/node_modules
+          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json', 'aurelia/package-lock.json', 'aurelia/packages/*/package.json') }}
+
+      - name: Install aurelia2-plugins dependencies
+        if: steps.cache-plugins-npm.outputs.cache-hit != 'true'
+        run: npm ci
+        working-directory: aurelia2-plugins
+      - name: Use local Aurelia packages for aurelia2-plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf node_modules/@aurelia node_modules/aurelia packages/*/node_modules/@aurelia packages/*/node_modules/aurelia
+          pkg_dirs=()
+          for dir in ../aurelia/packages/*; do
+            if [ -f "$dir/package.json" ]; then
+              pkg_dirs+=("$dir")
+            fi
+          done
+          npm install --no-save --no-package-lock --force "${pkg_dirs[@]}"
+        working-directory: aurelia2-plugins
+
+      - name: Cache aurelia2-plugins build output
+        id: cache-plugins-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            aurelia2-plugins/packages/*/dist
+          key: aurelia2-plugins-build-${{ hashFiles('aurelia2-plugins/packages/*/src/**') }}
+          restore-keys: |
+            aurelia2-plugins-build-
+
+      - name: Build aurelia2-plugins
+        if: steps.cache-plugins-build.outputs.cache-hit != 'true'
+        run: npm run build
+        working-directory: aurelia2-plugins
+
       - name: Bundle VS Code extension
         run: pnpm -w build && npm run bundle
         working-directory: packages/vscode
 
       - name: Lint
         run: pnpm lint:compiler
+
+      - name: Install Playwright
+        run: npx playwright install chromium --with-deps
 
       - name: Test with coverage
         run: pnpm test:cov
@@ -156,6 +205,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify submodules
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -223,6 +278,46 @@ jobs:
         if: steps.cache-aurelia-build.outputs.cache-hit != 'true'
         run: npm run build
         working-directory: aurelia
+
+      - name: Cache aurelia2-plugins node_modules
+        id: cache-plugins-npm
+        uses: actions/cache@v4
+        with:
+          path: aurelia2-plugins/node_modules
+          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json', 'aurelia/package-lock.json', 'aurelia/packages/*/package.json') }}
+
+      - name: Install aurelia2-plugins dependencies
+        if: steps.cache-plugins-npm.outputs.cache-hit != 'true'
+        run: npm ci
+        working-directory: aurelia2-plugins
+      - name: Use local Aurelia packages for aurelia2-plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf node_modules/@aurelia node_modules/aurelia packages/*/node_modules/@aurelia packages/*/node_modules/aurelia
+          pkg_dirs=()
+          for dir in ../aurelia/packages/*; do
+            if [ -f "$dir/package.json" ]; then
+              pkg_dirs+=("$dir")
+            fi
+          done
+          npm install --no-save --no-package-lock --force "${pkg_dirs[@]}"
+        working-directory: aurelia2-plugins
+
+      - name: Cache aurelia2-plugins build output
+        id: cache-plugins-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            aurelia2-plugins/packages/*/dist
+          key: aurelia2-plugins-build-${{ hashFiles('aurelia2-plugins/packages/*/src/**') }}
+          restore-keys: |
+            aurelia2-plugins-build-
+
+      - name: Build aurelia2-plugins
+        if: steps.cache-plugins-build.outputs.cache-hit != 'true'
+        run: npm run build
+        working-directory: aurelia2-plugins
 
       - name: Install Playwright
         run: npx playwright install chromium --with-deps

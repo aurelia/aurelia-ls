@@ -4,7 +4,7 @@
     "markup": "<div promise.bind=\"p\"><template then><span textcontent.bind=\"value\"></span></template><template catch><button @click=\"retry()\"></button></template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "then", "branch": "then" },
         { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
@@ -19,7 +19,7 @@
     "markup": "<div promise.bind=\"p\"><template pending>Loading...</template><template then>Done</template></div>",
     "expect": {
       "items": [
-        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "default" },
+        { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "pending", "branch": "pending" },
         { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },

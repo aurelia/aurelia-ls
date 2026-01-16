@@ -329,7 +329,7 @@ describe("cascade suppression", () => {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    sem: DEFAULT_SEMANTICS,
+    catalog: DEFAULT_SEMANTICS.catalog,
   };
 
   test("no type diagnostic when target.kind === 'unknown' (resolve failed)", () => {
@@ -401,7 +401,7 @@ describe("style binding syntax", () => {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    sem: DEFAULT_SEMANTICS,
+    catalog: DEFAULT_SEMANTICS.catalog,
   };
 
   test("width.style produces stylePropertyBinding with target.kind=style", () => {

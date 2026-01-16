@@ -16,6 +16,7 @@ import {
   StandardConfiguration,
   ISSRContext,
   CustomElement,
+  IRendering,
   type ICustomElementController,
   type ISSRManifest,
 } from "@aurelia/runtime-html";
@@ -178,11 +179,23 @@ export async function render(
 
     // Create DI container
     const container = DI.createContainer();
+    // Ensure SSR marker preservation is registered before any runtime services resolve.
     container.register(
-      StandardConfiguration,
       Registration.instance(IPlatform, platform),
       Registration.instance(ISSRContext, { preserveMarkers: true }),
+      StandardConfiguration,
     );
+    if (process.env.AURELIA_DEBUG_AOT === "1") {
+      const hasSsrContext = container.has(ISSRContext, true);
+      const context = hasSsrContext ? container.get(ISSRContext) : undefined;
+      const rendering = container.get(IRendering) as { _preserveMarkers?: boolean };
+      // eslint-disable-next-line no-console
+      console.log("[ssr] ISSRContext", {
+        has: hasSsrContext,
+        preserveMarkers: context?.preserveMarkers ?? null,
+        renderingPreserveMarkers: rendering?._preserveMarkers ?? null,
+      });
+    }
 
     // Call custom registration hook (for router, etc.)
     if (options.register) {
@@ -204,8 +217,13 @@ export async function render(
     doc.body.appendChild(host);
 
     const au = new Aurelia(container);
-    au.app({ host, component: RootComponent });
-    await au.start();
+    const globalSnapshot = applyGlobalDom(platform);
+    try {
+      au.app({ host, component: RootComponent });
+      await au.start();
+    } finally {
+      restoreGlobalDom(globalSnapshot);
+    }
     trace.event("ssr.render.aureliaStarted");
     debug.ssr("render.aurelia.started");
 
@@ -247,6 +265,86 @@ export async function render(
 
     return { html, manifest };
   });
+}
+
+type GlobalDomSnapshot = {
+  window?: unknown;
+  document?: unknown;
+  HTMLElement?: unknown;
+  Element?: unknown;
+  Node?: unknown;
+  HTMLInputElement?: unknown;
+  HTMLTextAreaElement?: unknown;
+  HTMLSelectElement?: unknown;
+};
+
+type DomGlobals = GlobalDomSnapshot;
+
+function applyGlobalDom(platform: IPlatform): GlobalDomSnapshot {
+  const globals = globalThis as unknown as DomGlobals;
+  const win = (platform as { window?: unknown }).window
+    ?? (platform.document as { defaultView?: unknown } | undefined)?.defaultView;
+  const winGlobals = (win ?? {}) as DomGlobals;
+
+  const snapshot: GlobalDomSnapshot = {
+    window: globals.window,
+    document: globals.document,
+    HTMLElement: globals.HTMLElement,
+    Element: globals.Element,
+    Node: globals.Node,
+    HTMLInputElement: globals.HTMLInputElement,
+    HTMLTextAreaElement: globals.HTMLTextAreaElement,
+    HTMLSelectElement: globals.HTMLSelectElement,
+  };
+
+  if (win) {
+    globals.window = win;
+  }
+  if (platform.document) {
+    globals.document = platform.document as unknown;
+  }
+  if (winGlobals.HTMLElement) {
+    globals.HTMLElement = winGlobals.HTMLElement;
+  }
+  if (winGlobals.Element) {
+    globals.Element = winGlobals.Element;
+  }
+  if (winGlobals.Node) {
+    globals.Node = winGlobals.Node;
+  }
+  if (winGlobals.HTMLInputElement) {
+    globals.HTMLInputElement = winGlobals.HTMLInputElement;
+  }
+  if (winGlobals.HTMLTextAreaElement) {
+    globals.HTMLTextAreaElement = winGlobals.HTMLTextAreaElement;
+  }
+  if (winGlobals.HTMLSelectElement) {
+    globals.HTMLSelectElement = winGlobals.HTMLSelectElement;
+  }
+
+  if (process.env.AURELIA_SSR_DEBUG_GLOBALS === "1") {
+    // eslint-disable-next-line no-console
+    console.log("[ssr] globals", {
+      hasWindow: Boolean(globals.window),
+      hasDocument: Boolean(globals.document),
+      hasHTMLElement: Boolean(globals.HTMLElement),
+      hasHTMLInputElement: Boolean(globals.HTMLInputElement),
+    });
+  }
+
+  return snapshot;
+}
+
+function restoreGlobalDom(snapshot: GlobalDomSnapshot): void {
+  const globals = globalThis as unknown as DomGlobals;
+  globals.window = snapshot.window;
+  globals.document = snapshot.document;
+  globals.HTMLElement = snapshot.HTMLElement;
+  globals.Element = snapshot.Element;
+  globals.Node = snapshot.Node;
+  globals.HTMLInputElement = snapshot.HTMLInputElement;
+  globals.HTMLTextAreaElement = snapshot.HTMLTextAreaElement;
+  globals.HTMLSelectElement = snapshot.HTMLSelectElement;
 }
 
 // Re-export for backwards compatibility during transition

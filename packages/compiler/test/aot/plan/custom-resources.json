@@ -80,7 +80,7 @@
     "markup": "<div tooltip.bind=\"message\"></div>",
     "expect": {
       "nodes": [
-        { "kind": "element", "tag": "div", "hasTarget": true, "customAttrs": ["tooltip"] }
+        { "kind": "element", "tag": "div", "hasTarget": true, "customAttrs": [ "tooltip" ] }
       ],
       "bindings": [
         { "type": "propertyBinding", "to": "value", "mode": "toView", "context": "customAttr:tooltip" }
@@ -123,7 +123,7 @@
     "markup": "<div tooltip.bind=\"tip\" highlight.bind=\"activeColor\"></div>",
     "expect": {
       "nodes": [
-        { "kind": "element", "tag": "div", "hasTarget": true, "customAttrs": ["tooltip", "highlight"] }
+        { "kind": "element", "tag": "div", "hasTarget": true, "customAttrs": [ "tooltip", "highlight" ] }
       ],
       "bindings": [
         { "type": "propertyBinding", "to": "value", "mode": "toView", "context": "customAttr:tooltip" },

@@ -1,6 +1,7 @@
 import { test, expect } from "vitest";
 
 import {
+  DEFAULT_SEMANTICS,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
   canonicalDocumentUri,
@@ -21,6 +22,7 @@ function createProgram() {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
+    semantics: DEFAULT_SEMANTICS,
   });
 }
 
@@ -116,6 +118,7 @@ test("diagnostics use VM display name for missing members", () => {
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
+    semantics: DEFAULT_SEMANTICS,
   });
   const uri = "/app/diag-display.html";
   program.upsertTemplate(uri, "<template>${missing}</template>");
@@ -155,6 +158,7 @@ test("TypeScript diagnostics replace overlay aliases with VM display names", () 
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
+    semantics: DEFAULT_SEMANTICS,
   });
   const uri = "/app/noisy.html";
   program.upsertTemplate(uri, "<template>${value}</template>");
@@ -207,6 +211,7 @@ test("suppresses typecheck mismatch when TypeScript confirms matching type", () 
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
+    semantics: DEFAULT_SEMANTICS,
   });
   const uri = "/app/typecheck-noise.html";
   const markup = "<template><div class.bind=\"greeting\"></div></template>";
@@ -943,6 +948,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-warning.html";
     // disabled expects boolean, but we give it a string literal
@@ -970,6 +976,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-location.html";
     // The 'yes' literal is at offset 32-37 in: <template><input disabled.bind="'yes'"></template>
@@ -997,6 +1004,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-null.html";
     // value expects string, null would be problematic in strict mode
@@ -1020,6 +1028,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-coerce.html";
     // value expects string, number should coerce without error
@@ -1042,6 +1051,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-cascade.html";
     // nonexistent is not a valid property - resolve will set target.kind = "unknown"
@@ -1068,6 +1078,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-style.html";
     // width.style expects string, number should coerce without error
@@ -1090,6 +1101,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-style-bool.html";
     // width.style expects string, boolean should error
@@ -1114,6 +1126,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-if.html";
     // if.bind expects boolean value
@@ -1139,6 +1152,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-multi.html";
     // value.bind is fine (string→string), disabled.bind is mismatch (number→boolean)
@@ -1165,6 +1179,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const uri = "/app/tc-text.html";
     // Text bindings accept anything - they stringify the value
@@ -1222,6 +1237,7 @@ describe("Elm-style error propagation", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
+      semantics: DEFAULT_SEMANTICS,
     });
     const service = new DefaultTemplateLanguageService(program, {
       typescript: { getDiagnostics() { return []; } },

@@ -7,7 +7,7 @@
           "x-widget": {
             "kind": "element",
             "name": "x-widget",
-            "aliases": ["x-alias"],
+            "aliases": [ "x-alias" ],
             "boundary": true,
             "bindables": {
               "foo": { "name": "foo", "mode": "toView" }
@@ -31,7 +31,7 @@
           "fancy-attr": {
             "kind": "attribute",
             "name": "fancy-attr",
-            "aliases": ["fancy"],
+            "aliases": [ "fancy" ],
             "isTemplateController": false,
             "primary": "value",
             "bindables": {

@@ -1,0 +1,35 @@
+{
+  "aurelia2-outclick-aot": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0000", "mode": 2, "to": "fn", "type": 12 }
+            ],
+            "res": "outclick",
+            "type": 1
+          }
+        ]
+      ],
+      "name": "aurelia2-outclick-aot",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": {
+          "$kind": "CallScope",
+          "ancestor": 0,
+          "args": [
+            { "$kind": "AccessScope", "ancestor": 0, "name": "$event" }
+          ],
+          "name": "handle",
+          "optional": false
+        },
+        "id": "expr_0000"
+      }
+    ],
+    "template": "<!--au--><div outclick.call=\"handle($event)\"></div>"
+  }
+}

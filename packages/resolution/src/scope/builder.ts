@@ -1,7 +1,14 @@
 import {
   buildResourceGraphFromSemantics,
   DEFAULT_SEMANTICS,
+  prepareSemantics,
   type Bindable,
+  type BindableDef,
+  type ControllerConfig,
+  type CustomAttributeDef,
+  type CustomElementDef,
+  type BindingBehaviorDef,
+  type ResourceDef,
   type TypeRef,
   type ResourceCollections,
   type ResourceGraph,
@@ -10,13 +17,30 @@ import {
   type Semantics,
   type ElementRes,
   type AttrRes,
+  type TemplateControllerDef,
+  type ValueConverterDef,
   type ValueConverterSig,
   type BindingBehaviorSig,
 } from "@aurelia-ls/compiler";
 import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
-import type { ResourceCandidate, BindableSpec } from "../inference/types.js";
-import type { PluginManifest } from "../plugins/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
+import { unwrapSourced } from "../semantics/sourced.js";
+
+type MutableResourceCollections = {
+  elements: Record<string, ElementRes>;
+  attributes: Record<string, AttrRes>;
+  controllers: Record<string, ControllerConfig>;
+  valueConverters: Record<string, ValueConverterSig>;
+  bindingBehaviors: Record<string, BindingBehaviorSig>;
+};
+
+type MutablePartialResourceCollections = {
+  elements?: Record<string, ElementRes>;
+  attributes?: Record<string, AttrRes>;
+  controllers?: Record<string, ControllerConfig>;
+  valueConverters?: Record<string, ValueConverterSig>;
+  bindingBehaviors?: Record<string, BindingBehaviorSig>;
+};
 
 /**
  * Build a ResourceGraph from registration analysis.
@@ -36,7 +60,7 @@ export function buildResourceGraph(
   baseSemantics?: Semantics,
   defaultScope?: ResourceScopeId | null,
 ): ResourceGraph {
-  const semantics = baseSemantics ?? DEFAULT_SEMANTICS;
+  const semantics = prepareSemantics(baseSemantics ?? DEFAULT_SEMANTICS);
 
   // Build set of activated packages from plugins
   const activatedPackages = new Set<string>();
@@ -46,7 +70,7 @@ export function buildResourceGraph(
 
   // Separate sites by scope
   const globalResources = createEmptyCollections();
-  const localScopes = new Map<string, { className: string; resources: ResourceCollections }>();
+  const localScopes = new Map<string, { className: string; resources: MutableResourceCollections }>();
 
   for (const site of registration.sites) {
     // Only process resolved resource references
@@ -81,22 +105,23 @@ export function buildResourceGraph(
 
   // Build the base graph, filtering out plugin resources that aren't activated
   const fullBaseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
-  const graph = cloneResourceGraphWithFilter(fullBaseGraph, activatedPackages);
+  const baseGraph = cloneResourceGraphWithFilter(fullBaseGraph, activatedPackages);
+  const scopes: Record<ResourceScopeId, ResourceScope> = { ...baseGraph.scopes };
 
   // Determine target scope for global resources
-  const targetScopeId = defaultScope ?? semantics.defaultScope ?? graph.root;
-  let targetScope = graph.scopes[targetScopeId];
-
-  // If target scope doesn't exist, fall back to root
-  if (!targetScope) {
-    targetScope = graph.scopes[graph.root];
-  }
+  const targetScopeId = defaultScope ?? semantics.defaultScope ?? baseGraph.root;
+  const targetScope = scopes[targetScopeId] ?? scopes[baseGraph.root];
 
   // Add global resources to target scope
   if (targetScope) {
     const overlay = diffResourceCollections(semantics.resources, globalResources);
     if (!isResourceOverlayEmpty(overlay)) {
-      targetScope.resources = overlayScopeResources(targetScope.resources, overlay);
+      scopes[targetScope.id] = {
+        id: targetScope.id,
+        parent: targetScope.parent,
+        ...(targetScope.label ? { label: targetScope.label } : {}),
+        resources: overlayScopeResources(targetScope.resources, overlay),
+      };
     }
   }
 
@@ -104,103 +129,205 @@ export function buildResourceGraph(
   for (const [componentPath, scopeData] of localScopes) {
     const scopeId = `local:${componentPath}` as ResourceScopeId;
 
-    // Check if scope already exists
-    if (!graph.scopes[scopeId]) {
-      graph.scopes[scopeId] = {
-        id: scopeId,
-        parent: graph.root,
-        label: scopeData.className,
-        resources: {},
-      };
-    }
+    const existing = scopes[scopeId];
+    const baseScope: ResourceScope = existing ?? {
+      id: scopeId,
+      parent: baseGraph.root,
+      label: scopeData.className,
+      resources: {},
+    };
 
-    // Add local resources
-    const localScope = graph.scopes[scopeId];
-    if (localScope) {
-      localScope.resources = overlayScopeResources(localScope.resources, scopeData.resources);
-    }
+    scopes[scopeId] = {
+      id: baseScope.id,
+      parent: baseScope.parent,
+      ...(baseScope.label ? { label: baseScope.label } : {}),
+      resources: overlayScopeResources(baseScope.resources, scopeData.resources),
+    };
   }
 
-  return graph;
+  return { version: baseGraph.version, root: baseGraph.root, scopes };
 }
 
 // --- Helper functions ---
 
-function createEmptyCollections(): ResourceCollections {
+function createEmptyCollections(): MutableResourceCollections {
   return {
     elements: {},
     attributes: {},
-    controllers: DEFAULT_SEMANTICS.resources.controllers,
+    controllers: { ...DEFAULT_SEMANTICS.resources.controllers },
     valueConverters: {},
     bindingBehaviors: {},
   };
 }
 
-function addToCollections(collections: ResourceCollections, candidate: ResourceCandidate): void {
-  if (candidate.kind === "element") {
-    collections.elements[candidate.name] = candidateToElement(candidate);
-  } else if (candidate.kind === "attribute") {
-    collections.attributes[candidate.name] = candidateToAttribute(candidate);
-  } else if (candidate.kind === "valueConverter") {
-    collections.valueConverters[candidate.name] = candidateToValueConverter(candidate);
-  } else if (candidate.kind === "bindingBehavior") {
-    collections.bindingBehaviors[candidate.name] = candidateToBindingBehavior(candidate);
+function addToCollections(collections: MutableResourceCollections, resource: ResourceDef): void {
+  const name = unwrapSourced(resource.name);
+  if (!name) return;
+  switch (resource.kind) {
+    case "custom-element":
+      collections.elements[name] = resourceToElement(resource);
+      break;
+    case "custom-attribute":
+      collections.attributes[name] = resourceToAttribute(resource);
+      break;
+    case "template-controller":
+      collections.attributes[name] = resourceToTemplateController(resource);
+      break;
+    case "value-converter":
+      collections.valueConverters[name] = resourceToValueConverter(resource);
+      break;
+    case "binding-behavior":
+      collections.bindingBehaviors[name] = resourceToBindingBehavior(resource);
+      break;
   }
 }
 
-function candidateToElement(c: ResourceCandidate): ElementRes {
+function resourceToElement(def: CustomElementDef): ElementRes {
+  const name = unwrapSourced(def.name) ?? "";
+  const aliases = def.aliases
+    .map((alias) => unwrapSourced(alias))
+    .filter((alias): alias is string => !!alias);
+  const containerless = unwrapSourced(def.containerless);
+  const shadowOptions = unwrapSourced(def.shadowOptions);
+  const capture = unwrapSourced(def.capture);
+  const processContent = unwrapSourced(def.processContent);
+  const boundary = unwrapSourced(def.boundary);
+  const dependencies = def.dependencies
+    .map((dep) => unwrapSourced(dep))
+    .filter((dep): dep is string => !!dep);
+  const className = unwrapSourced(def.className);
+
   return {
     kind: "element",
-    name: c.name,
-    bindables: bindableSpecsToRecord(c.bindables),
-    ...(c.aliases.length > 0 ? { aliases: [...c.aliases] } : {}),
-    ...(c.containerless ? { containerless: true } : {}),
-    ...(c.boundary ? { boundary: true } : {}),
+    name,
+    bindables: bindableDefsToRecord(def.bindables),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    ...(containerless !== undefined ? { containerless } : {}),
+    ...(shadowOptions !== undefined ? { shadowOptions } : {}),
+    ...(capture !== undefined ? { capture } : {}),
+    ...(processContent !== undefined ? { processContent } : {}),
+    ...(boundary !== undefined ? { boundary } : {}),
+    ...(dependencies.length > 0 ? { dependencies } : {}),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
   };
 }
 
-function candidateToAttribute(c: ResourceCandidate): AttrRes {
+function resourceToAttribute(def: CustomAttributeDef): AttrRes {
+  const name = unwrapSourced(def.name) ?? "";
+  const aliases = def.aliases
+    .map((alias) => unwrapSourced(alias))
+    .filter((alias): alias is string => !!alias);
+  const primary = unwrapSourced(def.primary) ?? findPrimaryBindableName(def.bindables) ?? undefined;
+  const noMultiBindings = unwrapSourced(def.noMultiBindings);
+  const className = unwrapSourced(def.className);
+
   return {
     kind: "attribute",
-    name: c.name,
-    bindables: bindableSpecsToRecord(c.bindables),
-    ...(c.aliases.length > 0 ? { aliases: [...c.aliases] } : {}),
-    ...(c.primary ? { primary: c.primary } : {}),
-    ...(c.isTemplateController ? { isTemplateController: true } : {}),
-    ...(c.noMultiBindings ? { noMultiBindings: true } : {}),
+    name,
+    bindables: bindableDefsToRecord(def.bindables),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    ...(primary ? { primary } : {}),
+    ...(noMultiBindings !== undefined ? { noMultiBindings } : {}),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
   };
 }
 
-function candidateToValueConverter(c: ResourceCandidate): ValueConverterSig {
+function resourceToTemplateController(def: TemplateControllerDef): AttrRes {
+  const name = unwrapSourced(def.name) ?? "";
+  const aliases = (unwrapSourced(def.aliases) ?? []).filter((alias): alias is string => !!alias);
+  const primary = findPrimaryBindableName(def.bindables) ?? undefined;
+  const noMultiBindings = unwrapSourced(def.noMultiBindings);
+  const className = unwrapSourced(def.className);
+
   return {
-    name: c.name,
-    in: { kind: "unknown" },
-    out: { kind: "unknown" },
+    kind: "attribute",
+    name,
+    bindables: bindableDefsToRecord(def.bindables),
+    ...(aliases.length > 0 ? { aliases } : {}),
+    ...(primary ? { primary } : {}),
+    isTemplateController: true,
+    ...(noMultiBindings !== undefined ? { noMultiBindings } : {}),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
   };
 }
 
-function candidateToBindingBehavior(c: ResourceCandidate): BindingBehaviorSig {
-  return { name: c.name };
+function resourceToValueConverter(def: ValueConverterDef): ValueConverterSig {
+  const name = unwrapSourced(def.name) ?? "";
+  const className = unwrapSourced(def.className);
+  return {
+    name,
+    in: toTypeRef(unwrapSourced(def.fromType)),
+    out: toTypeRef(unwrapSourced(def.toType)),
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
+  };
 }
 
-function bindableSpecsToRecord(specs: readonly BindableSpec[]): Record<string, Bindable> {
+function resourceToBindingBehavior(def: BindingBehaviorDef): BindingBehaviorSig {
+  const name = unwrapSourced(def.name) ?? "";
+  const className = unwrapSourced(def.className);
+  return {
+    name,
+    ...(className ? { className } : {}),
+    ...(def.file ? { file: def.file } : {}),
+    ...(def.package ? { package: def.package } : {}),
+  };
+}
+
+function toTypeRefOptional(typeName: string | undefined): TypeRef | undefined {
+  if (!typeName) return undefined;
+  const trimmed = typeName.trim();
+  if (!trimmed) return undefined;
+  if (trimmed === "any") return { kind: "any" };
+  if (trimmed === "unknown") return { kind: "unknown" };
+  return { kind: "ts", name: trimmed };
+}
+
+function toTypeRef(typeName: string | undefined): TypeRef {
+  return toTypeRefOptional(typeName) ?? { kind: "unknown" };
+}
+
+function bindableDefsToRecord(bindables: Readonly<Record<string, BindableDef>>): Record<string, Bindable> {
   const record: Record<string, Bindable> = {};
-  for (const spec of specs) {
-    const type: TypeRef = spec.type ? { kind: "ts", name: spec.type } : { kind: "unknown" };
+  for (const [key, def] of Object.entries(bindables)) {
+    const name = unwrapSourced(def.property) ?? key;
+    const attribute = unwrapSourced(def.attribute);
+    const mode = unwrapSourced(def.mode);
+    const primary = unwrapSourced(def.primary);
+    const type = toTypeRefOptional(unwrapSourced(def.type));
+    const doc = unwrapSourced(def.doc);
+
     const bindable: Bindable = {
-      name: spec.name,
-      type,
+      name,
+      ...(attribute ? { attribute } : {}),
+      ...(mode ? { mode } : {}),
+      ...(primary !== undefined ? { primary } : {}),
+      ...(type ? { type } : {}),
+      ...(doc ? { doc } : {}),
     };
-    if (spec.mode) {
-      bindable.mode = spec.mode;
-    }
-    record[spec.name] = bindable;
+
+    record[bindable.name] = bindable;
   }
   return record;
 }
 
+function findPrimaryBindableName(defs: Readonly<Record<string, BindableDef>>): string | null {
+  for (const [key, def] of Object.entries(defs)) {
+    const primary = unwrapSourced(def.primary);
+    if (primary) return unwrapSourced(def.property) ?? key;
+  }
+  return null;
+}
+
 function diffResourceCollections(base: ResourceCollections, overlay: ResourceCollections): Partial<ResourceCollections> {
-  const diff: Partial<ResourceCollections> = {};
+  const diff: MutablePartialResourceCollections = {};
   const elements = diffRecords(base.elements, overlay.elements);
   if (elements) diff.elements = elements;
   const attributes = diffRecords(base.attributes, overlay.attributes);
@@ -274,7 +401,7 @@ function filterPartialResources(
   activatedPackages: Set<string>,
 ): Partial<ResourceCollections> {
   if (!resources) return {};
-  const filtered: Partial<ResourceCollections> = {};
+  const filtered: MutablePartialResourceCollections = {};
 
   if (resources.elements) {
     const elements: Record<string, ElementRes> = {};
@@ -315,9 +442,9 @@ function filterPartialResources(
   return filtered;
 }
 
-function clonePartialResources(resources: Partial<ResourceCollections> | undefined): Partial<ResourceCollections> {
+function clonePartialResources(resources: Partial<ResourceCollections> | undefined): MutablePartialResourceCollections {
   if (!resources) return {};
-  const cloned: Partial<ResourceCollections> = {};
+  const cloned: MutablePartialResourceCollections = {};
   if (resources.elements) cloned.elements = { ...resources.elements };
   if (resources.attributes) cloned.attributes = { ...resources.attributes };
   if (resources.controllers) cloned.controllers = { ...resources.controllers };

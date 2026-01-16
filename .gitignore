@@ -21,6 +21,9 @@ Thumbs.db
 coverage/
 
 .aurelia-cache
+.inspection-output
+.temp/
+aurelia-manifests/
 
 # Example outputs
 examples/*-output.html

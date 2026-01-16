@@ -124,10 +124,7 @@
                 { "type": "listenerBinding", "target": 0, "to": "click", "capture": false }
               ]
             },
-            {
-              "name": "case_2",
-              "instructions": []
-            }
+            { "name": "case_2", "instructions": [] }
           ]
         }
       ]

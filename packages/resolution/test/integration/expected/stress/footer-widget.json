@@ -2,11 +2,7 @@
   "targets": 1,
   "expressions": 1,
   "instructions": [
-    {
-      "kind": "text",
-      "target": 0,
-      "text": "${text}"
-    }
+    { "kind": "text", "target": 0, "text": "${text}" }
   ],
   "templates": []
 }

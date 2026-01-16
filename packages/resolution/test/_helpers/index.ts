@@ -14,3 +14,10 @@ export {
 export {
   createProgramFromMemory,
 } from "./inline-program.js";
+
+// NPM analysis cache helpers (test-only)
+export {
+  analyzePackageCached,
+  inspectCached,
+  clearNpmAnalysisCache,
+} from "./npm-analysis-cache.js";

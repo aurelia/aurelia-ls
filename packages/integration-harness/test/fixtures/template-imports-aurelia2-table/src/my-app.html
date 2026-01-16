@@ -1,0 +1,11 @@
+<import from="aurelia2-table">
+
+<div class="app">
+  <aut-pagination
+    total-items.bind="totalItems"
+    page-size.bind="pageSize"
+    current-page.bind="currentPage">
+  </aut-pagination>
+
+  <div aurelia-table data.bind="items"></div>
+</div>

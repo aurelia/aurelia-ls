@@ -4,52 +4,27 @@
     {
       "name": "config with path only",
       "source": "@route({ path: 'products' })\nexport class Products {}",
-      "expected": {
-        "path": "products",
-        "routes": [],
-        "definitionType": "decorator"
-      }
+      "expected": { "path": "products", "routes": [], "definitionType": "decorator" }
     },
     {
       "name": "config with path and title",
       "source": "@route({ path: 'about', title: 'About Us' })\nexport class About {}",
-      "expected": {
-        "path": "about",
-        "title": "About Us",
-        "routes": [],
-        "definitionType": "decorator"
-      }
+      "expected": { "path": "about", "title": "About Us", "routes": [], "definitionType": "decorator" }
     },
     {
       "name": "config with id",
       "source": "@route({ path: 'products/:id', id: 'product-detail' })\nexport class ProductDetail {}",
-      "expected": {
-        "path": "products/:id",
-        "id": "product-detail",
-        "routes": [],
-        "definitionType": "decorator",
-        "params": ["id"]
-      }
+      "expected": { "path": "products/:id", "id": "product-detail", "routes": [], "definitionType": "decorator", "params": [ "id" ] }
     },
     {
       "name": "config with viewport",
       "source": "@route({ path: 'sidebar', viewport: 'aside' })\nexport class Sidebar {}",
-      "expected": {
-        "path": "sidebar",
-        "viewport": "aside",
-        "routes": [],
-        "definitionType": "decorator"
-      }
+      "expected": { "path": "sidebar", "viewport": "aside", "routes": [], "definitionType": "decorator" }
     },
     {
       "name": "config with redirectTo",
       "source": "@route({ path: 'old-page', redirectTo: 'new-page' })\nexport class OldPage {}",
-      "expected": {
-        "path": "old-page",
-        "redirectTo": "new-page",
-        "routes": [],
-        "definitionType": "decorator"
-      }
+      "expected": { "path": "old-page", "redirectTo": "new-page", "routes": [], "definitionType": "decorator" }
     },
     {
       "name": "config with data",

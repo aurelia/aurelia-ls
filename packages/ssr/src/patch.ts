@@ -7,6 +7,7 @@
  */
 
 import type { IInstruction } from "@aurelia/template-compiler";
+import { CustomElement } from "@aurelia/runtime-html";
 import type { AotCompileResult } from "./aot.js";
 
 /**
@@ -115,6 +116,16 @@ export function patchComponentDefinition(
 
   // Mutate the class
   ComponentClass.$au = patched;
+
+  // Override decorator annotations so AOT template wins over @customElement metadata.
+  const annotate = CustomElement.annotate as (
+    Type: ComponentClass,
+    prop: keyof StaticAuDefinition,
+    value: StaticAuDefinition[keyof StaticAuDefinition],
+    context?: unknown,
+  ) => void;
+  annotate(ComponentClass, "template", patched.template, null);
+  annotate(ComponentClass, "needsCompile", false, null);
 }
 
 /**

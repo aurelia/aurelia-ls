@@ -5,7 +5,15 @@ import { createDefaultEngine } from "./pipeline/index.js";
 import type { ExprTableEntry, SourceSpan, ExprIdMap } from "./model/index.js";
 
 // Language imports (via barrel)
-import type { Semantics, ResourceGraph, ResourceScopeId } from "./language/index.js";
+import type {
+  FeatureUsageSet,
+  LocalImportDef,
+  ResourceCatalog,
+  ResourceGraph,
+  ResourceScopeId,
+  Semantics,
+  TemplateSyntaxRegistry,
+} from "./language/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
@@ -30,9 +38,12 @@ export interface CompileOptions {
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  semantics?: Semantics;
+  semantics: Semantics;
+  catalog?: ResourceCatalog;
+  syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
+  localImports?: readonly LocalImportDef[];
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   overlayBaseName?: string;
@@ -56,6 +67,7 @@ export interface TemplateCompilation {
   linked: StageOutputs["20-resolve"];
   scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
+  usage: FeatureUsageSet;
   overlayPlan: StageOutputs["overlay:plan"];
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
@@ -72,15 +84,18 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
+    semantics: opts.semantics,
     overlay: {
       isJs: opts.isJs,
       filename: overlayBaseName,
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
   };
-  if (opts.semantics) base.semantics = opts.semantics;
+  if (opts.catalog) base.catalog = opts.catalog;
+  if (opts.syntax) base.syntax = opts.syntax;
   if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
   if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
+  if (opts.localImports) base.localImports = opts.localImports;
   if (opts.cache) base.cache = opts.cache;
   if (opts.fingerprints) base.fingerprints = opts.fingerprints;
   if (opts.attrParser) base.attrParser = opts.attrParser;
@@ -103,6 +118,7 @@ export function compileTemplate(
   const linked = session.run("20-resolve");
   const scope = session.run("30-bind");
   const typecheck = session.run("40-typecheck");
+  const usage = session.run("50-usage");
   const overlayPlan = overlayArtifacts.plan;
 
   return {
@@ -110,6 +126,7 @@ export function compileTemplate(
     linked,
     scope,
     typecheck,
+    usage,
     overlayPlan,
     overlay: overlayArtifacts.overlay,
     mapping: overlayArtifacts.mapping,
@@ -122,6 +139,7 @@ export function compileTemplate(
       "20-resolve",
       "30-bind",
       "40-typecheck",
+      "50-usage",
       "overlay:plan",
       "overlay:emit",
     ]),
@@ -159,4 +177,3 @@ function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMeta
   }
   return meta;
 }
-

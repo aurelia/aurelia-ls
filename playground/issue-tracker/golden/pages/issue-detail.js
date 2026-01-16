@@ -497,15 +497,34 @@ const issueDetail__def_2 = {
   ],
   needsCompile: false
 };
+const issueDetail__def_4 = {
+  name: "with_4",
+  type: "custom-element",
+  template: '<div style="display: flex; align-items: center; gap: 0.5rem;">\n            <!--au--><user-avatar></user-avatar>\n            <span><!--au--> </span>\n          </div>',
+  instructions: [
+    /* target 0 */
+    [{ type: 12, from: issueDetail__e[12], to: "user", mode: 2 }],
+    /* target 1 */
+    [
+      { type: 30, from: { $kind: "Interpolation", parts: ["", ""], expressions: [issueDetail__e[13]], isMulti: false, firstExpression: issueDetail__e[13] } }
+    ]
+  ],
+  needsCompile: false
+};
 const issueDetail__def_3 = {
   name: "if_3",
   type: "custom-element",
-  template: "<!---->",
-  instructions: [],
+  template: "<!--au--><!--au-start--><!--au-end-->",
+  instructions: [
+    /* target 0 */
+    [
+      { type: 2, def: issueDetail__def_4, res: "with", props: [{ type: 12, from: issueDetail__e[15], to: "value", mode: 2 }] }
+    ]
+  ],
   needsCompile: false
 };
-const issueDetail__def_4 = {
-  name: "else_4",
+const issueDetail__def_5 = {
+  name: "else_5",
   type: "custom-element",
   template: '<!--au--><span style="color: #999;"></span>',
   instructions: [
@@ -516,8 +535,8 @@ const issueDetail__def_4 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_5 = {
-  name: "if_5",
+const issueDetail__def_6 = {
+  name: "if_6",
   type: "custom-element",
   template: "<!--au--><span><!--au--> </span>",
   instructions: [
@@ -532,8 +551,8 @@ const issueDetail__def_5 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_6 = {
-  name: "else_6",
+const issueDetail__def_7 = {
+  name: "else_7",
   type: "custom-element",
   template: '<!--au--><span style="color: #999;"></span>',
   instructions: [
@@ -544,8 +563,8 @@ const issueDetail__def_6 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_7 = {
-  name: "if_7",
+const issueDetail__def_8 = {
+  name: "if_8",
   type: "custom-element",
   template: "<span><!--au--> </span>",
   instructions: [
@@ -556,8 +575,8 @@ const issueDetail__def_7 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_8 = {
-  name: "else_8",
+const issueDetail__def_9 = {
+  name: "else_9",
   type: "custom-element",
   template: '<!--au--><span style="color: #999;"></span>',
   instructions: [
@@ -568,8 +587,8 @@ const issueDetail__def_8 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_9 = {
-  name: "if_9",
+const issueDetail__def_10 = {
+  name: "if_10",
   type: "custom-element",
   template: '<section class="issue-detail-section">\n        <!--au--><h3></h3>\n        <!--au--><label-list></label-list>\n      </section>',
   instructions: [
@@ -582,18 +601,6 @@ const issueDetail__def_9 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_12 = {
-  name: "case_12",
-  type: "custom-element",
-  template: "<!--au--><span></span>",
-  instructions: [
-    /* target 0 */
-    [
-      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.reopen" }, to: "" }
-    ]
-  ],
-  needsCompile: false
-};
 const issueDetail__def_13 = {
   name: "case_13",
   type: "custom-element",
@@ -601,7 +608,7 @@ const issueDetail__def_13 = {
   instructions: [
     /* target 0 */
     [
-      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.start" }, to: "" }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.reopen" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -613,7 +620,7 @@ const issueDetail__def_14 = {
   instructions: [
     /* target 0 */
     [
-      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.review" }, to: "" }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.start" }, to: "" }
     ]
   ],
   needsCompile: false
@@ -625,13 +632,25 @@ const issueDetail__def_15 = {
   instructions: [
     /* target 0 */
     [
-      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.close" }, to: "" }
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.review" }, to: "" }
     ]
   ],
   needsCompile: false
 };
 const issueDetail__def_16 = {
-  name: "default-case_16",
+  name: "case_16",
+  type: "custom-element",
+  template: "<!--au--><span></span>",
+  instructions: [
+    /* target 0 */
+    [
+      { type: 100, from: { $kind: "PrimitiveLiteral", value: "issue.transitions.close" }, to: "" }
+    ]
+  ],
+  needsCompile: false
+};
+const issueDetail__def_17 = {
+  name: "default-case_17",
   type: "custom-element",
   template: "<span><!--au--> </span>",
   instructions: [
@@ -642,34 +661,34 @@ const issueDetail__def_16 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_11 = {
-  name: "switch_11",
+const issueDetail__def_12 = {
+  name: "switch_12",
   type: "custom-element",
   template: "\n              <!--au--><!--au-start--><!--au-end-->\n              <!--au--><!--au-start--><!--au-end-->\n              <!--au--><!--au-start--><!--au-end-->\n              <!--au--><!--au-start--><!--au-end-->\n              <!--au--><!--au-start--><!--au-end-->\n            ",
   instructions: [
     /* target 0 */
     [
-      { type: 2, def: issueDetail__def_12, res: "case", props: [{ type: 12, from: issueDetail__e[26], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_13, res: "case", props: [{ type: 12, from: issueDetail__e[26], to: "value", mode: 2 }] }
     ],
     /* target 1 */
     [
-      { type: 2, def: issueDetail__def_13, res: "case", props: [{ type: 12, from: issueDetail__e[27], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_14, res: "case", props: [{ type: 12, from: issueDetail__e[27], to: "value", mode: 2 }] }
     ],
     /* target 2 */
     [
-      { type: 2, def: issueDetail__def_14, res: "case", props: [{ type: 12, from: issueDetail__e[28], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_15, res: "case", props: [{ type: 12, from: issueDetail__e[28], to: "value", mode: 2 }] }
     ],
     /* target 3 */
     [
-      { type: 2, def: issueDetail__def_15, res: "case", props: [{ type: 12, from: issueDetail__e[29], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_16, res: "case", props: [{ type: 12, from: issueDetail__e[29], to: "value", mode: 2 }] }
     ],
     /* target 4 */
-    [{ type: 2, def: issueDetail__def_16, res: "default-case", props: [] }]
+    [{ type: 2, def: issueDetail__def_17, res: "default-case", props: [] }]
   ],
   needsCompile: false
 };
-const issueDetail__def_10 = {
-  name: "repeat_10",
+const issueDetail__def_11 = {
+  name: "repeat_11",
   type: "custom-element",
   template: '<!--au--><button class="btn btn-secondary">\n            <!-- Status transition labels using switch/case -->\n            <!--au--><!--au-start--><!--au-end-->\n          </button>',
   instructions: [
@@ -680,13 +699,13 @@ const issueDetail__def_10 = {
     ],
     /* target 1 */
     [
-      { type: 2, def: issueDetail__def_11, res: "switch", props: [{ type: 12, from: issueDetail__e[25], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_12, res: "switch", props: [{ type: 12, from: issueDetail__e[25], to: "value", mode: 2 }] }
     ]
   ],
   needsCompile: false
 };
-const issueDetail__def_17 = {
-  name: "if_17",
+const issueDetail__def_18 = {
+  name: "if_18",
   type: "custom-element",
   template: '<div class="empty-state" style="padding: 1rem;">\n        <!--au--><p></p>\n      </div>',
   instructions: [
@@ -697,8 +716,8 @@ const issueDetail__def_17 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_19 = {
-  name: "repeat_19",
+const issueDetail__def_20 = {
+  name: "repeat_20",
   type: "custom-element",
   template: '<!--au--><div class="comment">\n          <!--au--><user-avatar></user-avatar>\n          <div class="comment-content">\n            <div class="comment-header">\n              <span class="comment-author"><!--au--> </span>\n              <!--au--><time-ago></time-ago>\n            </div>\n            <div class="comment-body"><!--au--> </div>\n          </div>\n        </div>',
   instructions: [
@@ -721,14 +740,14 @@ const issueDetail__def_19 = {
   ],
   needsCompile: false
 };
-const issueDetail__def_18 = {
-  name: "else_18",
+const issueDetail__def_19 = {
+  name: "else_19",
   type: "custom-element",
   template: '<div class="comment-list">\n        <!--au--><!--au-start--><!--au-end-->\n      </div>',
   instructions: [
     /* target 0 */
     [
-      { type: 2, def: issueDetail__def_19, res: "repeat", props: [{ forOf: issueDetail__e[37], to: "items", props: [], type: 15 }] }
+      { type: 2, def: issueDetail__def_20, res: "repeat", props: [{ forOf: issueDetail__e[37], to: "items", props: [], type: 15 }] }
     ]
   ],
   needsCompile: false
@@ -777,22 +796,22 @@ const issueDetail__def_1 = {
       { type: 2, def: issueDetail__def_3, res: "if", props: [{ type: 12, from: issueDetail__e[15], to: "value", mode: 2 }] }
     ],
     /* target 12 */
-    [{ type: 2, def: issueDetail__def_4, res: "else", props: [] }],
+    [{ type: 2, def: issueDetail__def_5, res: "else", props: [] }],
     /* target 13 */
     [
-      { type: 2, def: issueDetail__def_5, res: "if", props: [{ type: 12, from: issueDetail__e[18], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_6, res: "if", props: [{ type: 12, from: issueDetail__e[18], to: "value", mode: 2 }] }
     ],
     /* target 14 */
-    [{ type: 2, def: issueDetail__def_6, res: "else", props: [] }],
+    [{ type: 2, def: issueDetail__def_7, res: "else", props: [] }],
     /* target 15 */
     [
-      { type: 2, def: issueDetail__def_7, res: "if", props: [{ type: 12, from: issueDetail__e[20], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_8, res: "if", props: [{ type: 12, from: issueDetail__e[20], to: "value", mode: 2 }] }
     ],
     /* target 16 */
-    [{ type: 2, def: issueDetail__def_8, res: "else", props: [] }],
+    [{ type: 2, def: issueDetail__def_9, res: "else", props: [] }],
     /* target 17 */
     [
-      { type: 2, def: issueDetail__def_9, res: "if", props: [{ type: 12, from: issueDetail__e[22], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_10, res: "if", props: [{ type: 12, from: issueDetail__e[22], to: "value", mode: 2 }] }
     ],
     /* target 18 */
     [
@@ -804,7 +823,7 @@ const issueDetail__def_1 = {
     ],
     /* target 20 */
     [
-      { type: 2, def: issueDetail__def_10, res: "repeat", props: [{ forOf: issueDetail__e[30], to: "items", props: [], type: 15 }] }
+      { type: 2, def: issueDetail__def_11, res: "repeat", props: [{ forOf: issueDetail__e[30], to: "items", props: [], type: 15 }] }
     ],
     /* target 21 */
     [
@@ -812,10 +831,10 @@ const issueDetail__def_1 = {
     ],
     /* target 22 */
     [
-      { type: 2, def: issueDetail__def_17, res: "if", props: [{ type: 12, from: issueDetail__e[31], to: "value", mode: 2 }] }
+      { type: 2, def: issueDetail__def_18, res: "if", props: [{ type: 12, from: issueDetail__e[31], to: "value", mode: 2 }] }
     ],
     /* target 23 */
-    [{ type: 2, def: issueDetail__def_18, res: "else", props: [] }],
+    [{ type: 2, def: issueDetail__def_19, res: "else", props: [] }],
     /* target 24 */
     [
       { type: 12, from: issueDetail__e[38], to: "value", mode: 6 },

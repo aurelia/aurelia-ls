@@ -1,23 +1,10 @@
 {
   "$schema": "../../schemas/resource-graph.schema.json",
   "$comment": "Expected ResourceGraph output for explicit-app. Update as resolution implementation evolves.",
-
   "globalScope": {
     "customElements": [
-      {
-        "name": "my-app",
-        "source": "src/my-app.ts",
-        "exportName": "MyApp",
-        "bindables": [],
-        "template": "src/my-app.html"
-      },
-      {
-        "name": "nav-bar",
-        "source": "src/components/nav-bar.ts",
-        "exportName": "NavBar",
-        "bindables": [],
-        "template": "src/components/nav-bar.html"
-      },
+      { "name": "my-app", "source": "src/my-app.ts", "exportName": "MyApp", "bindables": [], "template": "src/my-app.html" },
+      { "name": "nav-bar", "source": "src/components/nav-bar.ts", "exportName": "NavBar", "bindables": [], "template": "src/components/nav-bar.html" },
       {
         "name": "user-card",
         "source": "src/components/user-card.ts",
@@ -34,7 +21,7 @@
         "name": "data-grid",
         "source": "src/components/data-grid.ts",
         "exportName": "DataGrid",
-        "aliases": ["grid", "table-view"],
+        "aliases": [ "grid", "table-view" ],
         "containerless": true,
         "bindables": [
           { "name": "items", "mode": "toView" },
@@ -54,13 +41,13 @@
           { "name": "stockCount", "mode": "toView" }
         ],
         "template": "src/widgets/product-card.html",
-        "localDependencies": ["price-tag", "stock-badge"]
+        "localDependencies": [ "price-tag", "stock-badge" ]
       },
       {
         "name": "fancy-button",
         "source": "src/static-au/fancy-button.ts",
         "exportName": "FancyButton",
-        "aliases": ["btn", "action-button"],
+        "aliases": [ "btn", "action-button" ],
         "bindables": [
           { "name": "label", "mode": "toView" },
           { "name": "disabled", "mode": "fromView" },
@@ -69,7 +56,6 @@
         "definedVia": "static-$au"
       }
     ],
-
     "customAttributes": [
       {
         "name": "tooltip",
@@ -89,35 +75,15 @@
         ]
       }
     ],
-
     "valueConverters": [
-      {
-        "name": "date",
-        "source": "src/value-converters/date-format.ts",
-        "exportName": "DateFormatValueConverter"
-      },
-      {
-        "name": "currency",
-        "source": "src/value-converters/currency.ts",
-        "exportName": "CurrencyValueConverter",
-        "definedVia": "static-$au"
-      }
+      { "name": "date", "source": "src/value-converters/date-format.ts", "exportName": "DateFormatValueConverter" },
+      { "name": "currency", "source": "src/value-converters/currency.ts", "exportName": "CurrencyValueConverter", "definedVia": "static-$au" }
     ],
-
     "bindingBehaviors": [
-      {
-        "name": "debounce",
-        "source": "src/binding-behaviors/debounce.ts",
-        "exportName": "DebounceBindingBehavior"
-      },
-      {
-        "name": "throttle",
-        "source": "src/binding-behaviors/throttle.ts",
-        "exportName": "ThrottleBindingBehavior"
-      }
+      { "name": "debounce", "source": "src/binding-behaviors/debounce.ts", "exportName": "DebounceBindingBehavior" },
+      { "name": "throttle", "source": "src/binding-behaviors/throttle.ts", "exportName": "ThrottleBindingBehavior" }
     ]
   },
-
   "localScopes": {
     "src/widgets/product-card.ts": {
       "customElements": [
@@ -142,60 +108,23 @@
       ]
     }
   },
-
   "registrationEvidence": {
     "$comment": "Traces how each resource was determined to be global vs local",
     "global": {
-      "nav-bar": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/components/index.ts", "src/components/nav-bar.ts"]
-      },
-      "user-card": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/components/index.ts", "src/components/user-card.ts"]
-      },
-      "data-grid": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/components/index.ts", "src/components/data-grid.ts"]
-      },
-      "tooltip": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/attributes/index.ts", "src/attributes/tooltip.ts"]
-      },
-      "highlight": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/attributes/index.ts", "src/attributes/highlight.ts"]
-      },
-      "date": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/value-converters/index.ts", "src/value-converters/date-format.ts"]
-      },
-      "currency": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/value-converters/index.ts", "src/value-converters/currency.ts"]
-      },
-      "debounce": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/binding-behaviors/index.ts", "src/binding-behaviors/debounce.ts"]
-      },
-      "throttle": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/binding-behaviors/index.ts", "src/binding-behaviors/throttle.ts"]
-      },
-      "fancy-button": {
-        "via": "barrel",
-        "path": ["src/main.ts", "src/static-au/index.ts", "src/static-au/fancy-button.ts"]
-      }
+      "nav-bar": { "via": "barrel", "path": [ "src/main.ts", "src/components/index.ts", "src/components/nav-bar.ts" ] },
+      "user-card": { "via": "barrel", "path": [ "src/main.ts", "src/components/index.ts", "src/components/user-card.ts" ] },
+      "data-grid": { "via": "barrel", "path": [ "src/main.ts", "src/components/index.ts", "src/components/data-grid.ts" ] },
+      "tooltip": { "via": "barrel", "path": [ "src/main.ts", "src/attributes/index.ts", "src/attributes/tooltip.ts" ] },
+      "highlight": { "via": "barrel", "path": [ "src/main.ts", "src/attributes/index.ts", "src/attributes/highlight.ts" ] },
+      "date": { "via": "barrel", "path": [ "src/main.ts", "src/value-converters/index.ts", "src/value-converters/date-format.ts" ] },
+      "currency": { "via": "barrel", "path": [ "src/main.ts", "src/value-converters/index.ts", "src/value-converters/currency.ts" ] },
+      "debounce": { "via": "barrel", "path": [ "src/main.ts", "src/binding-behaviors/index.ts", "src/binding-behaviors/debounce.ts" ] },
+      "throttle": { "via": "barrel", "path": [ "src/main.ts", "src/binding-behaviors/index.ts", "src/binding-behaviors/throttle.ts" ] },
+      "fancy-button": { "via": "barrel", "path": [ "src/main.ts", "src/static-au/index.ts", "src/static-au/fancy-button.ts" ] }
     },
     "local": {
-      "price-tag": {
-        "via": "static-dependencies",
-        "owner": "src/widgets/product-card.ts"
-      },
-      "stock-badge": {
-        "via": "static-dependencies",
-        "owner": "src/widgets/product-card.ts"
-      }
+      "price-tag": { "via": "static-dependencies", "owner": "src/widgets/product-card.ts" },
+      "stock-badge": { "via": "static-dependencies", "owner": "src/widgets/product-card.ts" }
     }
   }
 }

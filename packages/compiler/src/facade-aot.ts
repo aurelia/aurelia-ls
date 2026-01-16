@@ -12,8 +12,18 @@
 
 import { lowerDocument, resolveHost, bindScopes } from "./analysis/index.js";
 import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
-import { getExpressionParser, DEFAULT_SYNTAX } from "./parsing/index.js";
-import { DEFAULT as DEFAULT_SEMANTICS, type Semantics, type ResourceGraph, type ResourceScopeId, type LocalImportDef } from "./language/index.js";
+import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser } from "./parsing/index.js";
+import {
+  buildTemplateSyntaxRegistry,
+  materializeSemanticsForScope,
+  prepareSemantics,
+  type ResourceCatalog,
+  type Semantics,
+  type ResourceGraph,
+  type ResourceScopeId,
+  type LocalImportDef,
+  type TemplateSyntaxRegistry,
+} from "./language/index.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "./shared/index.js";
 import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";
 
@@ -26,12 +36,18 @@ export interface CompileAotOptions {
   templatePath?: string;
   /** Component name (kebab-case, e.g., "my-app") */
   name?: string;
-  /** Custom semantics (defaults to DEFAULT_SEMANTICS with all built-ins) */
-  semantics?: Semantics;
+  /** Semantics (built-ins + project-specific resources) */
+  semantics: Semantics;
+  /** Precomputed catalog for lowering (scope-specific if provided) */
+  catalog?: ResourceCatalog;
+  /** Precomputed syntax registry for parsing/emitting */
+  syntax?: TemplateSyntaxRegistry;
   /** Resource graph for project-specific components */
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
   resourceScope?: ResourceScopeId | null;
+  /** Optional attribute parser override */
+  attrParser?: AttributeParser;
   /**
    * Local imports from template `<import>` elements.
    *
@@ -113,14 +129,28 @@ export interface CompileAotResult {
  */
 export function compileAot(
   markup: string,
-  options: CompileAotOptions = {},
+  options: CompileAotOptions,
 ): CompileAotResult {
   const trace = options.trace ?? NOOP_TRACE;
 
   return trace.span("compiler.compileAot", () => {
     const templatePath = options.templatePath ?? "template.html";
     const name = options.name ?? "template";
-    const semantics = options.semantics ?? DEFAULT_SEMANTICS;
+    const baseSemantics = options.semantics;
+    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
+    const semantics = options.resourceGraph || options.resourceScope !== undefined || hasLocalImports
+      ? materializeSemanticsForScope(
+          baseSemantics,
+          options.resourceGraph ?? null,
+          options.resourceScope ?? null,
+          options.localImports,
+        )
+      : prepareSemantics(baseSemantics);
+    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
+    const catalog = useCatalogOverride ? options.catalog! : semantics.catalog;
+    const semWithCatalog = useCatalogOverride ? { ...semantics, catalog } : semantics;
+    const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
+    const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
 
     trace.setAttributes({
       [CompilerAttributes.TEMPLATE]: templatePath,
@@ -133,24 +163,24 @@ export function compileAot(
     const exprParser = getExpressionParser();
 
     const ir = lowerDocument(markup, {
-      attrParser: DEFAULT_SYNTAX,
+      attrParser,
       exprParser,
       file: templatePath,
       name,
-      sem: semantics,
+      catalog,
       trace,
     });
 
     // Build resolve options for resource graph and local imports
-    const resolveOpts = options.resourceGraph || options.localImports
+    const resolveOpts = options.resourceGraph || options.localImports || options.resourceScope !== undefined
       ? {
-          graph: options.resourceGraph ?? null,
-          scope: options.resourceScope ?? null,
-          localImports: options.localImports,
+          ...(options.resourceGraph ? { graph: options.resourceGraph } : {}),
+          ...(options.resourceScope !== undefined ? { scope: options.resourceScope ?? null } : {}),
+          ...(options.localImports ? { localImports: options.localImports } : {}),
         }
       : undefined;
 
-    const linked = resolveHost(ir, semantics, { ...resolveOpts, trace });
+    const linked = resolveHost(ir, semWithCatalog, { ...resolveOpts, trace });
     const scoped = bindScopes(linked, { trace });
     trace.event("compiler.aot.analysis.done");
 

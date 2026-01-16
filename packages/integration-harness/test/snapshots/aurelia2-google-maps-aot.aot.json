@@ -1,0 +1,37 @@
+{
+  "aurelia2-google-maps-aot": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0000", "mode": 2, "to": "latitude", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "longitude", "type": 12 },
+              { "exprId": "expr_0002", "mode": 2, "to": "zoom", "type": 12 }
+            ],
+            "res": "google-map",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "aurelia2-google-maps-aot",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "lat" },
+        "id": "expr_0000"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "lng" },
+        "id": "expr_0001"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "zoom" },
+        "id": "expr_0002"
+      }
+    ],
+    "template": "<!--au--><google-map>\n</google-map>"
+  }
+}

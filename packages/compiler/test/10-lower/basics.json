@@ -362,16 +362,12 @@
   {
     "name": "LB-41 empty template produces no expressions",
     "markup": "",
-    "expect": {
-      "expressions": []
-    }
+    "expect": { "expressions": [] }
   },
   {
     "name": "LB-42 whitespace-only template produces no expressions",
     "markup": "   \n   \t   ",
-    "expect": {
-      "expressions": []
-    }
+    "expect": { "expressions": [] }
   },
   {
     "name": "LB-43 multiple interpolations in same text node",
@@ -527,7 +523,9 @@
       "expressions": [
         { "kind": "propCommand", "command": "bind", "code": "bar" }
       ],
-      "diags": [{ "code": "AU0705" }]
+      "diags": [
+        { "code": "AU0705" }
+      ]
     }
   },
   {
@@ -537,7 +535,9 @@
       "expressions": [
         { "kind": "propCommand", "command": "bind", "code": "bar" }
       ],
-      "diags": [{ "code": "AU0705" }]
+      "diags": [
+        { "code": "AU0705" }
+      ]
     }
   }
 ]

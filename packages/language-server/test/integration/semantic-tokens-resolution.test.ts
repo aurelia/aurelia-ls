@@ -27,7 +27,7 @@ import {
   type NodeSem,
   type DOMNode,
   type ElementNode,
-  type Semantics,
+  type SemanticsWithCaches,
 } from "@aurelia-ls/compiler";
 
 import {
@@ -61,7 +61,7 @@ function createProgramFromApp(appPath: string): ts.Program {
 
 function compileTemplateForSemanticTokens(
   markup: string,
-  semantics: Semantics,
+  semantics: SemanticsWithCaches,
   options?: { templatePath?: string; name?: string },
 ) {
   const templatePath = options?.templatePath ?? "template.html";
@@ -73,7 +73,7 @@ function compileTemplateForSemanticTokens(
     exprParser,
     file: templatePath,
     name,
-    sem: semantics,
+    catalog: semantics.catalog,
   });
 
   const linked = resolveHost(ir, semantics);
@@ -88,7 +88,7 @@ function compileTemplateForSemanticTokens(
 describe("Semantic Tokens + Resolution Integration", () => {
   let program: ts.Program;
   let resolutionResult: ReturnType<typeof resolve>;
-  let rootSemantics: Semantics;
+  let rootSemantics: SemanticsWithCaches;
 
   beforeAll(() => {
     program = createProgramFromApp(EXPLICIT_APP);
@@ -108,25 +108,28 @@ describe("Semantic Tokens + Resolution Integration", () => {
 
   describe("Resolution discovers custom elements", () => {
     it("discovers nav-bar element", () => {
-      const navBar = resolutionResult.candidates.find(
-        (c) => c.kind === "element" && c.name === "nav-bar",
+      const navBar = resolutionResult.resources.find(
+        (c) => c.kind === "custom-element" && c.name.value === "nav-bar",
       );
       expect(navBar, "nav-bar discovered").toBeTruthy();
     });
 
     it("discovers user-card element", () => {
-      const userCard = resolutionResult.candidates.find(
-        (c) => c.kind === "element" && c.name === "user-card",
+      const userCard = resolutionResult.resources.find(
+        (c) => c.kind === "custom-element" && c.name.value === "user-card",
       );
       expect(userCard, "user-card discovered").toBeTruthy();
     });
 
     it("discovers data-grid element with aliases", () => {
-      const dataGrid = resolutionResult.candidates.find(
-        (c) => c.kind === "element" && c.name === "data-grid",
+      const dataGrid = resolutionResult.resources.find(
+        (c) => c.kind === "custom-element" && c.name.value === "data-grid",
       );
       expect(dataGrid, "data-grid discovered").toBeTruthy();
-      expect(dataGrid!.aliases, "has aliases").toContain("grid");
+      const aliases = dataGrid!.aliases
+        .map((alias) => alias.value)
+        .filter((alias): alias is string => !!alias);
+      expect(aliases, "has aliases").toContain("grid");
     });
 
     it("elements are merged into semantics", () => {

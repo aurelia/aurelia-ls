@@ -8,10 +8,7 @@
       "name": "repeat",
       "template": 0,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of items"
-        }
+        { "iterator": "items", "expr": "item of items" }
       ]
     },
     {
@@ -20,10 +17,7 @@
       "name": "repeat",
       "template": 1,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of items; index as i"
-        }
+        { "iterator": "items", "expr": "item of items; index as i" }
       ]
     },
     {
@@ -32,10 +26,7 @@
       "name": "repeat",
       "template": 2,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "row of rows"
-        }
+        { "iterator": "items", "expr": "row of rows" }
       ]
     },
     {
@@ -44,10 +35,7 @@
       "name": "repeat",
       "template": 3,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of items"
-        }
+        { "iterator": "items", "expr": "item of items" }
       ]
     },
     {
@@ -56,10 +44,7 @@
       "name": "repeat",
       "template": 4,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "item of items"
-        }
+        { "iterator": "items", "expr": "item of items" }
       ]
     },
     {
@@ -68,10 +53,7 @@
       "name": "repeat",
       "template": 5,
       "bindings": [
-        {
-          "iterator": "items",
-          "expr": "a of level1"
-        }
+        { "iterator": "items", "expr": "a of level1" }
       ]
     }
   ],
@@ -79,21 +61,13 @@
     {
       "name": "repeat_0",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${item}"
-        }
+        { "kind": "text", "target": 0, "text": "${item}" }
       ]
     },
     {
       "name": "repeat_1",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${i}: ${item}"
-        }
+        { "kind": "text", "target": 0, "text": "${i}: ${item}" }
       ]
     },
     {
@@ -105,10 +79,7 @@
           "name": "repeat",
           "template": 0,
           "bindings": [
-            {
-              "iterator": "items",
-              "expr": "cell of row.cells"
-            }
+            { "iterator": "items", "expr": "cell of row.cells" }
           ]
         }
       ],
@@ -116,11 +87,7 @@
         {
           "name": "repeat_3",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${cell}"
-            }
+            { "kind": "text", "target": 0, "text": "${cell}" }
           ]
         }
       ]
@@ -134,40 +101,22 @@
           "name": "if",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "item.visible",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "item.visible", "mode": "toView" }
           ]
         },
-        {
-          "kind": "controller",
-          "target": 1,
-          "name": "else",
-          "template": 1,
-          "bindings": []
-        }
+        { "kind": "controller", "target": 1, "name": "else", "template": 1, "bindings": [] }
       ],
       "templates": [
         {
           "name": "if_5",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${item.label}"
-            }
+            { "kind": "text", "target": 0, "text": "${item.label}" }
           ]
         },
         {
           "name": "else_6",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "Hidden: ${item.label}"
-            }
+            { "kind": "text", "target": 0, "text": "Hidden: ${item.label}" }
           ]
         }
       ]
@@ -175,25 +124,9 @@
     {
       "name": "repeat_7",
       "instructions": [
-        {
-          "kind": "bind",
-          "target": 0,
-          "property": "class",
-          "expr": "item.class",
-          "mode": "toView"
-        },
-        {
-          "kind": "bind",
-          "target": 0,
-          "property": "dataId",
-          "expr": "item.id",
-          "mode": "toView"
-        },
-        {
-          "kind": "text",
-          "target": 1,
-          "text": "\n    ${item.name}\n  "
-        }
+        { "kind": "bind", "target": 0, "property": "class", "expr": "item.class", "mode": "toView" },
+        { "kind": "bind", "target": 0, "property": "dataId", "expr": "item.id", "mode": "toView" },
+        { "kind": "text", "target": 1, "text": "\n    ${item.name}\n  " }
       ]
     },
     {
@@ -205,10 +138,7 @@
           "name": "repeat",
           "template": 0,
           "bindings": [
-            {
-              "iterator": "items",
-              "expr": "b of a.level2"
-            }
+            { "iterator": "items", "expr": "b of a.level2" }
           ]
         }
       ],
@@ -222,10 +152,7 @@
               "name": "repeat",
               "template": 0,
               "bindings": [
-                {
-                  "iterator": "items",
-                  "expr": "c of b.level3"
-                }
+                { "iterator": "items", "expr": "c of b.level3" }
               ]
             }
           ],
@@ -233,11 +160,7 @@
             {
               "name": "repeat_10",
               "instructions": [
-                {
-                  "kind": "text",
-                  "target": 0,
-                  "text": "${c}"
-                }
+                { "kind": "text", "target": 0, "text": "${c}" }
               ]
             }
           ]

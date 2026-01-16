@@ -2,3 +2,6 @@
 	path = aurelia
 	url = https://github.com/aurelia/aurelia.git
 	branch = hydration-approot-resolution
+[submodule "aurelia2-plugins"]
+	path = aurelia2-plugins
+	url = https://github.com/Vheissu/aurelia2-plugins.git

@@ -297,6 +297,26 @@ function walkRows(
         }
         case "hydrateElement": {
           for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
+          if (ins.projections) {
+            for (const projection of ins.projections) {
+              const linkedProjection = domToLinked.get(projection.def.dom);
+              if (linkedProjection) {
+                walkRows(
+                  linkedProjection.rows,
+                  currentFrame,
+                  frames,
+                  frameIds,
+                  exprToFrame,
+                  diags,
+                  domToLinked,
+                  forOfIndex,
+                  exprIndex,
+                  reportedBadExprs,
+                  allowLets,
+                );
+              }
+            }
+          }
           break;
         }
         case "hydrateAttribute": {

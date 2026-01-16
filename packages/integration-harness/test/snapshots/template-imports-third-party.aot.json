@@ -1,0 +1,43 @@
+{
+  "template-imports-third-party-my-app": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0000", "mode": 2, "to": "name", "type": 12 },
+              { "exprId": "expr_0001", "mode": 2, "to": "avatar", "type": 12 }
+            ],
+            "res": "user-card",
+            "type": 0
+          },
+          {
+            "instructions": [
+              { "exprId": "expr_0002", "mode": 2, "to": "color", "type": 12 }
+            ],
+            "res": "highlight",
+            "type": 1
+          }
+        ]
+      ],
+      "name": "template-imports-third-party-my-app",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "userName" },
+        "id": "expr_0000"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "avatarUrl" },
+        "id": "expr_0001"
+      },
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "accent" },
+        "id": "expr_0002"
+      }
+    ],
+    "template": "\n\n<div class=\"app\">\n  <!--au--><user-card></user-card>\n</div>\n"
+  }
+}

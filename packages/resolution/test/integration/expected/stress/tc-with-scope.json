@@ -8,11 +8,7 @@
       "name": "with",
       "template": 0,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "user",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "user", "mode": "toView" }
       ]
     },
     {
@@ -21,11 +17,7 @@
       "name": "with",
       "template": 1,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "item",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "item", "mode": "toView" }
       ]
     },
     {
@@ -34,11 +26,7 @@
       "name": "with",
       "template": 2,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "company",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "company", "mode": "toView" }
       ]
     },
     {
@@ -47,11 +35,7 @@
       "name": "with",
       "template": 3,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "order",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "order", "mode": "toView" }
       ]
     },
     {
@@ -60,11 +44,7 @@
       "name": "with",
       "template": 4,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "profile",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "profile", "mode": "toView" }
       ]
     }
   ],
@@ -72,52 +52,28 @@
     {
       "name": "with_0",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${name}"
-        },
-        {
-          "kind": "text",
-          "target": 1,
-          "text": "${email}"
-        }
+        { "kind": "text", "target": 0, "text": "${name}" },
+        { "kind": "text", "target": 1, "text": "${email}" }
       ]
     },
     {
       "name": "with_1",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${label}"
-        },
-        {
-          "kind": "text",
-          "target": 1,
-          "text": "Parent: ${$parent.parentName}"
-        }
+        { "kind": "text", "target": 0, "text": "${label}" },
+        { "kind": "text", "target": 1, "text": "Parent: ${$parent.parentName}" }
       ]
     },
     {
       "name": "with_2",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${name}"
-        },
+        { "kind": "text", "target": 0, "text": "${name}" },
         {
           "kind": "controller",
           "target": 1,
           "name": "with",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "ceo",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "ceo", "mode": "toView" }
           ]
         }
       ],
@@ -125,16 +81,8 @@
         {
           "name": "with_3",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "CEO: ${name}"
-            },
-            {
-              "kind": "text",
-              "target": 1,
-              "text": "Company: ${$parent.name}"
-            }
+            { "kind": "text", "target": 0, "text": "CEO: ${name}" },
+            { "kind": "text", "target": 1, "text": "Company: ${$parent.name}" }
           ]
         }
       ]
@@ -142,38 +90,23 @@
     {
       "name": "with_4",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "Order #${id}"
-        },
+        { "kind": "text", "target": 0, "text": "Order #${id}" },
         {
           "kind": "controller",
           "target": 1,
           "name": "repeat",
           "template": 0,
           "bindings": [
-            {
-              "iterator": "items",
-              "expr": "item of items"
-            }
+            { "iterator": "items", "expr": "item of items" }
           ]
         },
-        {
-          "kind": "text",
-          "target": 2,
-          "text": "Total: $${total}"
-        }
+        { "kind": "text", "target": 2, "text": "Total: $${total}" }
       ],
       "templates": [
         {
           "name": "repeat_5",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${item.name}: $${item.price}"
-            }
+            { "kind": "text", "target": 0, "text": "${item.name}: $${item.price}" }
           ]
         }
       ]
@@ -181,30 +114,19 @@
     {
       "name": "with_6",
       "instructions": [
-        {
-          "kind": "text",
-          "target": 0,
-          "text": "${username}"
-        },
+        { "kind": "text", "target": 0, "text": "${username}" },
         {
           "kind": "controller",
           "target": 1,
           "name": "if",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "isVerified",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "isVerified", "mode": "toView" }
           ]
         }
       ],
       "templates": [
-        {
-          "name": "if_7",
-          "instructions": []
-        }
+        { "name": "if_7", "instructions": [] }
       ]
     }
   ]

@@ -1,0 +1,47 @@
+{
+  "aurelia2-forms-aot": {
+    "definition": {
+      "instructions": [
+        [
+          {
+            "instructions": [
+              { "exprId": "expr_0000", "mode": 6, "to": "form", "type": 12 }
+            ],
+            "projections": [
+              { "slotName": "default", "templateIndex": 0 }
+            ],
+            "res": "au-form",
+            "type": 0
+          }
+        ]
+      ],
+      "name": "aurelia2-forms-aot",
+      "nestedTemplates": [
+        {
+          "instructions": [
+            [
+              {
+                "instructions": [
+                  { "to": "name", "type": 10, "value": "email" }
+                ],
+                "res": "au-field",
+                "type": 1
+              }
+            ]
+          ],
+          "name": "au-form_projection_0",
+          "nestedTemplates": [],
+          "targetCount": 1
+        }
+      ],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "form" },
+        "id": "expr_0000"
+      }
+    ],
+    "template": "<!--au--><au-form></au-form>"
+  }
+}

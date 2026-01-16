@@ -1,0 +1,16 @@
+{
+  "guarded": {
+    "definition": {
+      "instructions": [
+        [
+          { "instructions": [], "res": "guarded-el", "type": 0 }
+        ]
+      ],
+      "name": "guarded",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [],
+    "template": "<!--au--><guarded-el></guarded-el>"
+  }
+}

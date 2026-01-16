@@ -8,11 +8,7 @@
       "name": "promise",
       "template": 0,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "dataPromise",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "dataPromise", "mode": "toView" }
       ]
     },
     {
@@ -21,11 +17,7 @@
       "name": "promise",
       "template": 1,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "userPromise",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "userPromise", "mode": "toView" }
       ]
     },
     {
@@ -34,11 +26,7 @@
       "name": "promise",
       "template": 2,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "quickPromise",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "quickPromise", "mode": "toView" }
       ]
     },
     {
@@ -47,11 +35,7 @@
       "name": "promise",
       "template": 3,
       "bindings": [
-        {
-          "property": "value",
-          "expr": "outerPromise",
-          "mode": "toView"
-        }
+        { "property": "value", "expr": "outerPromise", "mode": "toView" }
       ]
     }
   ],
@@ -65,11 +49,7 @@
           "name": "pending",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "dataPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "dataPromise", "mode": "toView" }
           ]
         },
         {
@@ -78,11 +58,7 @@
           "name": "then",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "dataPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "dataPromise", "mode": "toView" }
           ]
         },
         {
@@ -91,37 +67,22 @@
           "name": "catch",
           "template": 2,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "dataPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "dataPromise", "mode": "toView" }
           ]
         }
       ],
       "templates": [
-        {
-          "name": "pending_1",
-          "instructions": []
-        },
+        { "name": "pending_1", "instructions": [] },
         {
           "name": "then_2",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${data}"
-            }
+            { "kind": "text", "target": 0, "text": "${data}" }
           ]
         },
         {
           "name": "catch_3",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "Error: ${err.message}"
-            }
+            { "kind": "text", "target": 0, "text": "Error: ${err.message}" }
           ]
         }
       ]
@@ -135,11 +96,7 @@
           "name": "pending",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "userPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "userPromise", "mode": "toView" }
           ]
         },
         {
@@ -148,11 +105,7 @@
           "name": "then",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "userPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "userPromise", "mode": "toView" }
           ]
         },
         {
@@ -161,54 +114,25 @@
           "name": "catch",
           "template": 2,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "userPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "userPromise", "mode": "toView" }
           ]
         }
       ],
       "templates": [
-        {
-          "name": "pending_5",
-          "instructions": []
-        },
+        { "name": "pending_5", "instructions": [] },
         {
           "name": "then_6",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${user.name}"
-            },
-            {
-              "kind": "text",
-              "target": 1,
-              "text": "Email: ${user.email}"
-            },
-            {
-              "kind": "text",
-              "target": 2,
-              "text": "Role: ${user.role}"
-            }
+            { "kind": "text", "target": 0, "text": "${user.name}" },
+            { "kind": "text", "target": 1, "text": "Email: ${user.email}" },
+            { "kind": "text", "target": 2, "text": "Role: ${user.role}" }
           ]
         },
         {
           "name": "catch_7",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${error.message}"
-            },
-            {
-              "kind": "event",
-              "target": 1,
-              "event": "click",
-              "handler": "retry()",
-              "capture": false
-            }
+            { "kind": "text", "target": 0, "text": "${error.message}" },
+            { "kind": "event", "target": 1, "event": "click", "handler": "retry()", "capture": false }
           ]
         }
       ]
@@ -222,11 +146,7 @@
           "name": "then",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "quickPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "quickPromise", "mode": "toView" }
           ]
         },
         {
@@ -235,11 +155,7 @@
           "name": "catch",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "quickPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "quickPromise", "mode": "toView" }
           ]
         }
       ],
@@ -247,21 +163,13 @@
         {
           "name": "then_9",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "Result: ${result}"
-            }
+            { "kind": "text", "target": 0, "text": "Result: ${result}" }
           ]
         },
         {
           "name": "catch_10",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "Failed: ${e}"
-            }
+            { "kind": "text", "target": 0, "text": "Failed: ${e}" }
           ]
         }
       ]
@@ -275,11 +183,7 @@
           "name": "pending",
           "template": 0,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "outerPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "outerPromise", "mode": "toView" }
           ]
         },
         {
@@ -288,27 +192,16 @@
           "name": "then",
           "template": 1,
           "bindings": [
-            {
-              "property": "value",
-              "expr": "outerPromise",
-              "mode": "toView"
-            }
+            { "property": "value", "expr": "outerPromise", "mode": "toView" }
           ]
         }
       ],
       "templates": [
-        {
-          "name": "pending_12",
-          "instructions": []
-        },
+        { "name": "pending_12", "instructions": [] },
         {
           "name": "then_13",
           "instructions": [
-            {
-              "kind": "text",
-              "target": 0,
-              "text": "${outer.name}: ${inner.value}"
-            }
+            { "kind": "text", "target": 0, "text": "${outer.name}: ${inner.value}" }
           ]
         }
       ]

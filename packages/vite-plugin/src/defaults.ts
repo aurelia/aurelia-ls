@@ -23,6 +23,8 @@ import type {
   SSRManifestOptions,
   SSRHydrationOptions,
   ThirdPartyOptions,
+  ThirdPartyPackageSpec,
+  ThirdPartyPolicy,
   TraceOptions,
   DebugChannel,
   // Resolved types
@@ -46,6 +48,11 @@ import {
   DEFAULT_CONVENTION_CONFIG,
   DEFAULT_SUFFIXES,
 } from "@aurelia-ls/resolution";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 // ============================================================================
 // Default Values
@@ -106,11 +113,12 @@ export const DEFAULT_SSR_OPTIONS: ResolvedSSRConfig = {
   state: DEFAULT_STATE_PROVIDER,
   stripMarkers: false,
   include: ["**"],
-  exclude: ["/api/**", "/@vite/**", "/@fs/**", "/__vite_ping"],
+  exclude: ["/api/**", "/@vite/**", "/@fs/**", "/__vite_ping", "/node_modules/**"],
   htmlShell: DEFAULT_HTML_SHELL,
   baseHref: "/",
   ssrEntry: null,
   register: null,
+  defines: {},
   manifest: DEFAULT_SSR_MANIFEST_OPTIONS,
   hydration: DEFAULT_SSR_HYDRATION_OPTIONS,
 };
@@ -145,11 +153,15 @@ export const DEFAULT_STYLESHEET_PAIRING_OPTIONS: StylesheetPairingConfig = {
 /**
  * Default third-party options.
  */
-export const DEFAULT_THIRD_PARTY_OPTIONS: Required<Omit<ThirdPartyOptions, "resources">> & {
+export const DEFAULT_THIRD_PARTY_OPTIONS: {
+  scan: boolean;
+  packages: Array<string | ThirdPartyPackageSpec>;
+  policy?: ThirdPartyPolicy;
   resources: NonNullable<ThirdPartyOptions["resources"]>;
 } = {
-  scan: false,
+  scan: true,
   packages: [],
+  policy: undefined,
   resources: {
     elements: {},
     attributes: {},
@@ -319,6 +331,7 @@ export function normalizeSSROptions(
     baseHref: options.baseHref ?? DEFAULT_SSR_OPTIONS.baseHref,
     ssrEntry: options.ssrEntry ?? DEFAULT_SSR_OPTIONS.ssrEntry,
     register: options.register ?? null,
+    defines: options.defines ?? DEFAULT_SSR_OPTIONS.defines,
     manifest: normalizeSSRManifestOptions(options.manifest, isDev),
     hydration: normalizeSSRHydrationOptions(options.hydration, isDev),
   };
@@ -357,34 +370,35 @@ export function normalizeConventionOptions(
   options: ConventionConfig | undefined,
   thirdParty?: ThirdPartyOptions,
 ): ResolvedConventionOptions {
-  if (!options) {
+  if (!options && !thirdParty) {
     return { ...DEFAULT_CONVENTION_OPTIONS };
   }
 
   const defaultConfig = DEFAULT_CONVENTION_OPTIONS.config;
 
   return {
-    enabled: options.enabled ?? true,
+    enabled: options?.enabled ?? true,
     config: {
-      enabled: options.enabled ?? true,
-      suffixes: options.suffixes ?? defaultConfig.suffixes,
-      filePatterns: options.filePatterns ?? defaultConfig.filePatterns,
-      viewModelExtensions: options.viewModelExtensions ?? defaultConfig.viewModelExtensions,
-      templateExtensions: options.templateExtensions ?? defaultConfig.templateExtensions,
-      styleExtensions: options.styleExtensions ?? defaultConfig.styleExtensions,
-      directories: options.directories ?? defaultConfig.directories,
+      enabled: options?.enabled ?? true,
+      suffixes: options?.suffixes ?? defaultConfig.suffixes,
+      filePatterns: options?.filePatterns ?? defaultConfig.filePatterns,
+      viewModelExtensions: options?.viewModelExtensions ?? defaultConfig.viewModelExtensions,
+      templateExtensions: options?.templateExtensions ?? defaultConfig.templateExtensions,
+      styleExtensions: options?.styleExtensions ?? defaultConfig.styleExtensions,
+      directories: options?.directories ?? defaultConfig.directories,
       templatePairing: {
         preferSibling:
-          options.templatePairing?.preferSibling ?? DEFAULT_TEMPLATE_PAIRING_OPTIONS.preferSibling,
+          options?.templatePairing?.preferSibling ?? DEFAULT_TEMPLATE_PAIRING_OPTIONS.preferSibling,
       },
       stylesheetPairing: {
         injection:
-          options.stylesheetPairing?.injection ?? DEFAULT_STYLESHEET_PAIRING_OPTIONS.injection,
+          options?.stylesheetPairing?.injection ?? DEFAULT_STYLESHEET_PAIRING_OPTIONS.injection,
       },
     },
     thirdParty: {
       scan: thirdParty?.scan ?? DEFAULT_THIRD_PARTY_OPTIONS.scan,
       packages: thirdParty?.packages ?? DEFAULT_THIRD_PARTY_OPTIONS.packages,
+      policy: thirdParty?.policy ?? DEFAULT_THIRD_PARTY_OPTIONS.policy,
       resources: {
         elements: thirdParty?.resources?.elements ?? {},
         attributes: thirdParty?.resources?.attributes ?? {},
@@ -531,10 +545,18 @@ export function normalizeOptions(
 ): Omit<ResolvedAureliaOptions, "resolution" | "routeTree"> {
   const isDev = context.command === "serve";
   const opts = options ?? {};
+  const packagePath = opts.packagePath
+    ? resolvePath(context.root, opts.packagePath)
+    : context.root;
+  const packageRoots = opts.packageRoots
+    ? normalizePackageRoots(opts.packageRoots, context.root)
+    : undefined;
 
   return {
     entry: opts.entry ?? "./src/my-app.html",
     tsconfig: opts.tsconfig ?? null,
+    packagePath,
+    packageRoots,
     useDev: opts.useDev ?? isDev, // Default: true in dev, false in production
     hmr: normalizeHMROptions(opts.hmr),
     ssr: normalizeSSROptions(opts.ssr, isDev),
@@ -542,9 +564,21 @@ export function normalizeOptions(
     conventions: normalizeConventionOptions(opts.conventions, opts.thirdParty),
     compiler: normalizeCompilerOptions(opts.compiler),
     debug: normalizeDebugOptions(opts.debug, context.root),
+    policy: opts.policy,
     experimental: { ...DEFAULT_EXPERIMENTAL_OPTIONS, ...opts.experimental },
     hooks: { ...DEFAULT_HOOKS, ...opts.hooks },
   };
+}
+
+function normalizePackageRoots(
+  roots: Record<string, string>,
+  baseDir: string,
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const [name, value] of Object.entries(roots)) {
+    normalized[name] = resolvePath(baseDir, value);
+  }
+  return normalized;
 }
 
 // ============================================================================
@@ -588,7 +622,7 @@ export function isSSGEnabled(options: AureliaPluginOptions | undefined): boolean
 }
 
 // ============================================================================
-// Config File Loading (Placeholder)
+// Config File Loading
 // ============================================================================
 
 /**
@@ -601,26 +635,189 @@ export const CONFIG_FILE_NAMES = [
   "aurelia.config.cjs",
 ] as const;
 
+const CONFIG_EXTENSIONS = [".ts", ".js", ".mjs", ".cjs"] as const;
+
 /**
  * Load Aurelia config from file.
- * Searches for config files in the project root.
+ * Searches for config files walking up from `searchFrom` to `root`.
  *
- * TODO: Implement actual config loading with bundling support.
- * This is a placeholder for the config file infrastructure.
- *
- * @param root - Project root directory
+ * @param root - Workspace root directory
+ * @param searchFrom - Entry/tsconfig path to start searching from
  * @returns Loaded config or null if no config file found
  */
-export async function loadConfigFile(root: string): Promise<AureliaConfig | null> {
-  // Placeholder - actual implementation would:
-  // 1. Search for config files in priority order
-  // 2. Bundle the config file (for TypeScript support)
-  // 3. Execute and return the exported config
-  // 4. Handle 'extends' field for config inheritance
+export async function loadConfigFile(
+  root: string,
+  searchFrom?: string,
+): Promise<AureliaConfig | null> {
+  const rootDir = resolvePath(root);
+  const startDir = resolveSearchDir(rootDir, searchFrom);
+  const configPath = findConfigFile(startDir, rootDir);
+  if (!configPath) {
+    return null;
+  }
 
-  // For now, return null (no config file)
-  void root; // Suppress unused parameter warning
+  const visited = new Set<string>();
+  return loadConfigWithExtends(configPath, visited);
+}
+
+function resolveSearchDir(rootDir: string, searchFrom?: string): string {
+  if (!searchFrom) {
+    return rootDir;
+  }
+
+  const resolved = resolvePath(searchFrom);
+  if (existsSync(resolved)) {
+    const stat = statSync(resolved);
+    if (stat.isFile()) {
+      return dirname(resolved);
+    }
+  }
+  return resolved;
+}
+
+function findConfigFile(startDir: string, rootDir: string): string | null {
+  let current = startDir;
+  const stop = resolvePath(rootDir);
+
+  while (true) {
+    for (const name of CONFIG_FILE_NAMES) {
+      const candidate = join(current, name);
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    if (current === stop) {
+      break;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
   return null;
+}
+
+async function loadConfigWithExtends(
+  configPath: string,
+  visited: Set<string>,
+): Promise<AureliaConfig | null> {
+  const resolvedPath = resolvePath(configPath);
+  if (visited.has(resolvedPath)) {
+    throw new Error(`Circular config extends detected: ${[...visited, resolvedPath].join(" -> ")}`);
+  }
+  visited.add(resolvedPath);
+
+  const config = await loadConfigModule(resolvedPath);
+  if (!config) {
+    return null;
+  }
+
+  if (!config.extends) {
+    return config;
+  }
+
+  const baseConfig = await loadExtendedConfig(config.extends, dirname(resolvedPath), visited);
+  return mergeConfigs(baseConfig, config);
+}
+
+async function loadExtendedConfig(
+  specifier: string,
+  baseDir: string,
+  visited: Set<string>,
+): Promise<AureliaConfig | null> {
+  const resolved = resolveExtendsSpecifier(specifier, baseDir);
+  if (!resolved) {
+    return null;
+  }
+
+  if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+    const configPath = findConfigFile(resolved, resolved);
+    if (!configPath) {
+      return null;
+    }
+    return loadConfigWithExtends(configPath, visited);
+  }
+
+  if (existsSync(resolved)) {
+    return loadConfigWithExtends(resolved, visited);
+  }
+
+  // Try adding extensions when given a path without extension.
+  if (!extname(resolved)) {
+    for (const ext of CONFIG_EXTENSIONS) {
+      const candidate = resolved + ext;
+      if (existsSync(candidate)) {
+        return loadConfigWithExtends(candidate, visited);
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolveExtendsSpecifier(specifier: string, baseDir: string): string | null {
+  const isPathLike =
+    specifier.startsWith(".") ||
+    specifier.startsWith("/") ||
+    specifier.startsWith("\\");
+
+  if (isPathLike) {
+    return resolvePath(baseDir, specifier);
+  }
+
+  try {
+    const require = createRequire(join(baseDir, "noop.js"));
+    return require.resolve(specifier);
+  } catch {
+    return null;
+  }
+}
+
+async function loadConfigModule(configPath: string): Promise<AureliaConfig | null> {
+  const ext = extname(configPath).toLowerCase();
+  const modulePath = ext === ".ts"
+    ? await bundleConfig(configPath)
+    : configPath;
+
+  const mod = await import(pathToFileURL(modulePath).href);
+  const raw = (mod?.default ?? mod?.config ?? mod) as unknown;
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  return raw as AureliaConfig;
+}
+
+async function bundleConfig(configPath: string): Promise<string> {
+  const cacheDir = join(dirname(configPath), ".aurelia-cache", "config");
+  mkdirSync(cacheDir, { recursive: true });
+
+  const source = readFileSync(configPath, "utf-8");
+  const hash = createHash("sha256")
+    .update(configPath)
+    .update(source)
+    .digest("hex")
+    .slice(0, 8);
+  const base = basename(configPath, extname(configPath));
+  const outfile = join(cacheDir, `${base}.${hash}.mjs`);
+
+  if (!existsSync(outfile)) {
+    const esbuild = await import("esbuild");
+    await esbuild.build({
+      entryPoints: [configPath],
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      target: "es2022",
+      outfile,
+      sourcemap: false,
+      logLevel: "silent",
+    });
+  }
+
+  return outfile;
 }
 
 /**
@@ -639,20 +836,69 @@ export function mergeConfigs(
     return inlineConfig;
   }
 
-  // Deep merge with inline taking precedence
-  // TODO: Implement proper deep merge
-  return {
+  const merged: AureliaPluginOptions = {
     ...fileConfig,
     ...inlineConfig,
-    // Merge nested objects
-    ssr:
-      typeof inlineConfig.ssr === "boolean" || typeof fileConfig.ssr === "boolean"
-        ? inlineConfig.ssr ?? fileConfig.ssr
-        : { ...(fileConfig.ssr as SSROptions), ...(inlineConfig.ssr as SSROptions) },
-    conventions: { ...fileConfig.conventions, ...inlineConfig.conventions },
-    compiler: { ...fileConfig.compiler, ...inlineConfig.compiler },
-    debug: { ...fileConfig.debug, ...inlineConfig.debug },
-    experimental: { ...fileConfig.experimental, ...inlineConfig.experimental },
-    hooks: { ...fileConfig.hooks, ...inlineConfig.hooks },
   };
+
+  merged.ssr =
+    typeof inlineConfig.ssr === "boolean" || typeof fileConfig.ssr === "boolean"
+      ? inlineConfig.ssr ?? fileConfig.ssr
+      : { ...(fileConfig.ssr as SSROptions), ...(inlineConfig.ssr as SSROptions) };
+
+  merged.ssg =
+    typeof inlineConfig.ssg === "boolean" || typeof fileConfig.ssg === "boolean"
+      ? inlineConfig.ssg ?? fileConfig.ssg
+      : { ...(fileConfig.ssg ?? {}), ...(inlineConfig.ssg ?? {}) };
+
+  merged.conventions = { ...fileConfig.conventions, ...inlineConfig.conventions };
+
+  merged.thirdParty = mergeThirdPartyOptions(fileConfig.thirdParty, inlineConfig.thirdParty);
+
+  merged.compiler = { ...fileConfig.compiler, ...inlineConfig.compiler };
+  merged.debug = { ...fileConfig.debug, ...inlineConfig.debug };
+  merged.policy = inlineConfig.policy ?? fileConfig.policy;
+  merged.experimental = { ...fileConfig.experimental, ...inlineConfig.experimental };
+  merged.hooks = { ...fileConfig.hooks, ...inlineConfig.hooks };
+
+  merged.packagePath = inlineConfig.packagePath ?? fileConfig.packagePath;
+  merged.packageRoots = inlineConfig.packageRoots ?? fileConfig.packageRoots;
+
+  return merged;
+}
+
+function mergeThirdPartyOptions(
+  base?: AureliaPluginOptions["thirdParty"],
+  override?: AureliaPluginOptions["thirdParty"],
+): AureliaPluginOptions["thirdParty"] {
+  if (!base) return override;
+  if (!override) return base;
+
+  return {
+    ...base,
+    ...override,
+    resources: {
+      elements: { ...base.resources?.elements, ...override.resources?.elements },
+      attributes: { ...base.resources?.attributes, ...override.resources?.attributes },
+      valueConverters: mergeStringArray(base.resources?.valueConverters, override.resources?.valueConverters),
+      bindingBehaviors: mergeStringArray(base.resources?.bindingBehaviors, override.resources?.bindingBehaviors),
+    },
+  };
+}
+
+function mergeStringArray(
+  base?: string[],
+  override?: string[],
+): string[] | undefined {
+  if (!base && !override) return undefined;
+  const merged = [...(base ?? []), ...(override ?? [])];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const entry of merged) {
+    const key = entry.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(key);
+  }
+  return result;
 }

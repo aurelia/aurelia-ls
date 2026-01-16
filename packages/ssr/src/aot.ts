@@ -120,6 +120,7 @@ export function compileWithAot(
   options: AotCompileOptions = {},
 ): AotCompileResult {
   const trace = options.trace ?? NOOP_TRACE;
+  const semantics = options.semantics ?? DEFAULT_SEMANTICS;
 
   return trace.span("ssr.compileWithAot", () => {
     // 1. Run SSR-agnostic AOT compilation (analysis + synthesis)
@@ -128,7 +129,7 @@ export function compileWithAot(
     const aotResult = compileAot(markup, {
       templatePath: options.templatePath,
       name: options.name,
-      semantics: options.semantics,
+      semantics,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
       localImports: options.localImports,

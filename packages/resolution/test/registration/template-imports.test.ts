@@ -144,21 +144,26 @@ describe("Template Import Registration", () => {
     result = resolve(program, { fileSystem });
   });
 
-  it("extracts template imports from sibling HTML", () => {
-    const myAppFacts = result.facts.get("/app/src/my-app.ts" as NormalizedPath);
-    expect(myAppFacts).toBeDefined();
-    expect(myAppFacts!.templateImports.length).toBe(2);
-    expect(myAppFacts!.templateImports[0]!.moduleSpecifier).toBe("./components/nav-bar");
-    expect(myAppFacts!.templateImports[1]!.moduleSpecifier).toBe("./components/footer");
-  });
-
-  it("creates registration sites with template-import evidence", () => {
+  it("creates registration sites from template imports in sibling HTML", () => {
+    // Template imports should create registration sites with template-import evidence
+    // The test verifies this through observable behavior (sites created) not internal structure
     const templateImportSites = result.registration.sites.filter(
       (site) => site.evidence.kind === "template-import"
     );
 
-    // Should have sites for both imports (nav-bar and footer)
-    expect(templateImportSites.length).toBeGreaterThanOrEqual(2);
+    // Should have exactly 2 template import sites (nav-bar and footer)
+    expect(templateImportSites.length).toBe(2);
+
+    // Verify the module specifiers are captured in unresolved refs
+    // (In mock setup without full module resolution, these remain unresolved)
+    const moduleSpecifiers = templateImportSites
+      .filter((s) => s.resourceRef.kind === "unresolved")
+      .map((s) => s.resourceRef.kind === "unresolved" ? s.resourceRef.name : null)
+      .filter(Boolean)
+      .sort();
+
+    expect(moduleSpecifiers).toContain("./components/nav-bar");
+    expect(moduleSpecifiers).toContain("./components/footer");
   });
 
   it("template import sites have local scope", () => {
@@ -256,9 +261,11 @@ describe("Template Import - Edge Cases", () => {
 
     const result = resolve(program, { fileSystem: fs });
 
-    // Should have no template imports
-    const facts = result.facts.get("/app/lonely.ts" as NormalizedPath);
-    expect(facts?.templateImports).toHaveLength(0);
+    // Component without sibling template should produce no template-import sites
+    const templateImportSites = result.registration.sites.filter(
+      (s) => s.evidence.kind === "template-import"
+    );
+    expect(templateImportSites).toHaveLength(0);
   });
 
   it("handles templates without imports", () => {
@@ -301,14 +308,10 @@ describe("Template Import - Edge Cases", () => {
 
     const result = resolve(program, { fileSystem: fs });
 
-    // Should have empty template imports
-    const facts = result.facts.get("/app/simple.ts" as NormalizedPath);
-    expect(facts?.templateImports).toHaveLength(0);
-
-    // Should have no template-import evidence sites
-    const sites = result.registration.sites.filter(
+    // Template without <import> elements should produce no template-import sites
+    const templateImportSites = result.registration.sites.filter(
       (s) => s.evidence.kind === "template-import"
     );
-    expect(sites).toHaveLength(0);
+    expect(templateImportSites).toHaveLength(0);
   });
 });

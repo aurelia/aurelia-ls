@@ -1,0 +1,28 @@
+{
+  "registration-plan-third-party-root": {
+    "definition": {
+      "instructions": [
+        [
+          { "instructions": [], "res": "user-card", "type": 0 },
+          {
+            "instructions": [
+              { "exprId": "expr_0000", "mode": 2, "to": "color", "type": 12 }
+            ],
+            "res": "highlight",
+            "type": 1
+          }
+        ]
+      ],
+      "name": "registration-plan-third-party-root",
+      "nestedTemplates": [],
+      "targetCount": 1
+    },
+    "expressions": [
+      {
+        "ast": { "$kind": "AccessScope", "ancestor": 0, "name": "color" },
+        "id": "expr_0000"
+      }
+    ],
+    "template": "<!--au--><user-card></user-card>"
+  }
+}

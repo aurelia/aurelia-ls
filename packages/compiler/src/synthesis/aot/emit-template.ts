@@ -65,27 +65,6 @@ export interface NestedTemplateHtmlNode {
 }
 
 /**
- * Collect HTML for all nested templates (controller content).
- *
- * Returns HTML strings in the same order that emit.ts creates
- * nested template definitions (depth-first tree walk order).
- *
- * Each nested template HTML is the content that goes inside
- * `<!--au-start-->...<!--au-end-->` markers.
- *
- * @deprecated Use collectNestedTemplateHtmlTree for hierarchical structure
- */
-export function collectNestedTemplateHtml(
-  plan: AotPlanModule,
-  options: TemplateEmitOptions = {},
-): string[] {
-  const ctx = new TemplateEmitContext(options);
-  const htmlStrings: string[] = [];
-  collectNestedFromNode(plan.root, htmlStrings, ctx);
-  return htmlStrings;
-}
-
-/**
  * Collect HTML for nested templates in a hierarchical structure.
  *
  * Returns a structure that matches SerializedDefinition.nestedTemplates,
@@ -97,62 +76,6 @@ export function collectNestedTemplateHtmlTree(
 ): NestedTemplateHtmlNode[] {
   const ctx = new TemplateEmitContext(options);
   return collectNestedFromNodeTree(plan.root, ctx);
-}
-
-/**
- * Walk the tree and collect nested template HTML in order.
- */
-function collectNestedFromNode(
-  node: PlanNode,
-  htmlStrings: string[],
-  ctx: TemplateEmitContext,
-): void {
-  switch (node.kind) {
-    case "element":
-      collectNestedFromElement(node, htmlStrings, ctx);
-      break;
-    case "fragment":
-      for (const child of node.children) {
-        collectNestedFromNode(child, htmlStrings, ctx);
-      }
-      break;
-    // text and comment nodes don't have nested templates
-  }
-}
-
-/**
- * Collect nested template HTML from an element and its children.
- */
-function collectNestedFromElement(
-  node: PlanElementNode,
-  htmlStrings: string[],
-  ctx: TemplateEmitContext,
-): void {
-  // Process controllers - each controller has template(s) that become nested definitions
-  for (const ctrl of node.controllers) {
-    // Get template(s) from this controller
-    const templates = getControllerTemplates(ctrl);
-
-    for (const template of templates) {
-      // Create a child context with fresh local-to-global mapping
-      // but shared global counter for unique marker IDs
-      const nestedCtx = ctx.forNestedTemplate();
-
-      // Emit the template content
-      const content = emitNode(template, nestedCtx);
-      htmlStrings.push(content);
-
-      // Recurse into the template to find more nested controllers
-      // Use the nested context to continue with the same global counter
-      collectNestedFromNode(template, htmlStrings, nestedCtx);
-    }
-  }
-
-  // Recurse into children (will be empty when controllers exist,
-  // but handled via ctrl.template above)
-  for (const child of node.children) {
-    collectNestedFromNode(child, htmlStrings, ctx);
-  }
 }
 
 /* =============================================================================
@@ -170,6 +93,10 @@ function collectNestedFromNodeTree(
   switch (node.kind) {
     case "element":
       return collectNestedFromElementTree(node, ctx);
+    case "comment":
+      return node.controllers.length > 0
+        ? collectNestedFromControllers(node.controllers, ctx)
+        : [];
     case "fragment": {
       // Collect from all children and flatten
       const results: NestedTemplateHtmlNode[] = [];
@@ -200,29 +127,41 @@ function collectNestedFromElementTree(
   node: PlanElementNode,
   ctx: TemplateEmitContext,
 ): NestedTemplateHtmlNode[] {
+  const results = collectNestedFromControllers(node.controllers, ctx);
+
+  if (node.customElement?.projections?.length) {
+    for (const projection of node.customElement.projections) {
+      const projectionCtx = ctx.forNestedTemplate();
+      const html = emitNode(projection.template, projectionCtx);
+      const nested = collectNestedFromNodeTree(projection.template, projectionCtx);
+      results.push({ html, nested });
+    }
+  }
+
+  // Also collect from element's children
+  // (empty when controllers exist, but still check)
+  for (const child of node.children) {
+    results.push(...collectNestedFromNodeTree(child, ctx));
+  }
+
+  return results;
+}
+
+function collectNestedFromControllers(
+  controllers: readonly PlanController[],
+  ctx: TemplateEmitContext,
+): NestedTemplateHtmlNode[] {
   const results: NestedTemplateHtmlNode[] = [];
 
-  // Process controllers - each controller creates one nested definition
-  for (const ctrl of node.controllers) {
+  for (const ctrl of controllers) {
     const nestedCtx = ctx.forNestedTemplate();
-
-    // Emit HTML for the controller's main template
     const html = emitNode(ctrl.template, nestedCtx);
-
-    // Collect nested templates:
-    // - For controllers with branches (switch/promise): branches ARE the nested content
-    // - For other controllers: recursively collect from the template tree
     const nested: NestedTemplateHtmlNode[] = [];
 
     if (ctrl.branches) {
-      // Add branch templates (these match emit.ts emitControllerBranches)
-      // The branches contain all nested controllers for this controller.
-      // Don't also walk ctrl.template - it would find the same case/branch controllers
-      // again since they're attached to elements in the template tree.
       for (const branchCtrl of ctrl.branches) {
         const branchCtx = ctx.forNestedTemplate();
         const branchHtml = emitNode(branchCtrl.template, branchCtx);
-        // Recursively collect nested templates within the branch
         const branchNested = collectNestedFromNodeTree(branchCtrl.template, branchCtx);
         nested.push({ html: branchHtml, nested: branchNested });
       }
@@ -232,7 +171,6 @@ function collectNestedFromElementTree(
         branchHtmlLengths: nested.map(n => n.html.length),
       });
     } else {
-      // No branches - collect nested templates from within the main template
       nested.push(...collectNestedFromNodeTree(ctrl.template, nestedCtx));
     }
 
@@ -242,12 +180,6 @@ function collectNestedFromElementTree(
       nestedCount: nested.length,
     });
     results.push({ html, nested });
-  }
-
-  // Also collect from element's children
-  // (empty when controllers exist, but still check)
-  for (const child of node.children) {
-    results.push(...collectNestedFromNodeTree(child, ctx));
   }
 
   return results;
@@ -338,26 +270,13 @@ function emitElement(node: PlanElementNode, ctx: TemplateEmitContext): string {
  *
  * IMPORTANT: The element content is NOT included in the parent template.
  * The content (including the element itself) goes in the nested template,
- * which is collected separately via collectNestedTemplateHtml().
+ * which is collected separately via collectNestedTemplateHtmlTree().
  */
 function emitElementWithControllers(
   node: PlanElementNode,
   ctx: TemplateEmitContext,
 ): string {
-  // Controllers are stored in inside-out order, but we emit outside-in
-  // So we reverse to get the outermost controller first
-  const controllers = [...node.controllers].reverse();
-
-  // Start with empty content - the actual element goes in the nested template
-  // The au-start/au-end markers are placeholders that the runtime replaces
-  let content = "";
-
-  // Wrap with each controller's markers (inside-out → outside-in)
-  for (const ctrl of controllers) {
-    content = emitControllerWrapper(ctrl, content, ctx);
-  }
-
-  return content;
+  return emitControllerMarkers(node.controllers, ctx);
 }
 
 /**
@@ -450,7 +369,23 @@ function emitText(node: PlanTextNode, _ctx: TemplateEmitContext): string {
  * Emit a comment node.
  */
 function emitComment(node: PlanCommentNode, _ctx: TemplateEmitContext): string {
+  if (node.controllers.length > 0) {
+    return emitControllerMarkers(node.controllers, _ctx);
+  }
   return `<!--${node.content}-->`;
+}
+
+function emitControllerMarkers(
+  controllers: readonly PlanController[],
+  ctx: TemplateEmitContext,
+): string {
+  // Controllers are stored in inside-out order, but we emit outside-in
+  const ordered = [...controllers].reverse();
+  let content = "";
+  for (const ctrl of ordered) {
+    content = emitControllerWrapper(ctrl, content, ctx);
+  }
+  return content;
 }
 
 /**

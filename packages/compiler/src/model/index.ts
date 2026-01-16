@@ -20,3 +20,4 @@ export * from "./symbols.js";
 
 // Diagnostics - foundation diagnostic types
 export * from "./diagnostics.js";
+

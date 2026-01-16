@@ -1,0 +1,154 @@
+{
+  "symbols": [
+    { "id": "sym:3b74a8b8f6b1cab7b3b23c476abebff3647f7d3dae436a16fe65c331791cb3e5", "kind": "binding-behavior", "name": "attr" },
+    { "id": "sym:4d0360bf45909587a0dc09a421641bb65ae673ed42efca90bb089bf320193528", "kind": "binding-behavior", "name": "debounce" },
+    { "id": "sym:3743c2a2c4272b28530c528ca79a85b3904d6e0a1916f3a6fa95214176194dce", "kind": "binding-behavior", "name": "fromView" },
+    { "id": "sym:07b86e4d397b03adfac781fc7d9d31de22cac391d475b378130f87e1f5f9b840", "kind": "binding-behavior", "name": "oneTime" },
+    { "id": "sym:520ad232c7db3196f958b96d3acbb3a7b0bd27b4de197bedd2735c82f5b0cc90", "kind": "binding-behavior", "name": "self" },
+    { "id": "sym:f7766fb8ca5e5dfef58a96a1b6bbc8607ea5375952a2ca3d110690c0994b36f1", "kind": "binding-behavior", "name": "signal" },
+    { "id": "sym:e0cccbad10aef3ed2320576272f8bc9c4680bda15a1d632719f11880098d7c32", "kind": "binding-behavior", "name": "throttle" },
+    { "id": "sym:474b44c55fa7519f95eb6153807557c2ff2f5496dcd7e8398c2e6a3677e28d9c", "kind": "binding-behavior", "name": "toView" },
+    { "id": "sym:3fe8afab67220e522132b10561ed1ad9af956ed9b6d9b882434e5306244cb9da", "kind": "binding-behavior", "name": "twoWay" },
+    { "id": "sym:955beefbe8ec3f23bfec6a3478b177f237e964ec54b594cb8c4c7545a3c79d60", "kind": "binding-behavior", "name": "updateTrigger" },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "twoWay", "name": "value", "primary": true }
+      ],
+      "id": "sym:bd3ca4f1e46fc9f524e069b140137d20d9391868e4fb43577125209b75dcad7b",
+      "kind": "custom-attribute",
+      "name": "focus"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
+      ],
+      "id": "sym:35b74b456b834c0430d4550fd9bf8b20de6ec949fd48e0d5277dc6d2e8dabd7c",
+      "kind": "custom-attribute",
+      "name": "href"
+    },
+    {
+      "bindables": [
+        { "attribute": "active", "mode": "fromView", "name": "active" },
+        { "attribute": "attribute", "mode": "toView", "name": "attribute" },
+        { "attribute": "context", "mode": "toView", "name": "context" },
+        { "attribute": "params", "mode": "toView", "name": "params" },
+        { "attribute": "route", "mode": "toView", "name": "route", "primary": true }
+      ],
+      "id": "sym:a6f1e666798ec7aa3510c9a1ab0d28961eb749b052cae4edbcb8d0cede21fd22",
+      "kind": "custom-attribute",
+      "name": "load"
+    },
+    {
+      "aliases": [ "hide" ],
+      "bindables": [
+        { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
+      ],
+      "id": "sym:7cd7c8718c36e91b56d5c9edf376f2cc291b713000ce57c3a09618ac59ff6cbc",
+      "kind": "custom-attribute",
+      "name": "show"
+    },
+    { "id": "sym:b70eb5ef677882e0a36875f708191a069b21126c8097c619c773b2aab67ee154", "kind": "custom-element", "name": "alpha-el", "source": "/src/entry.ts" },
+    {
+      "bindables": [
+        { "attribute": "component", "mode": "toView", "name": "component" },
+        { "attribute": "composing", "mode": "fromView", "name": "composing" },
+        { "attribute": "composition", "mode": "fromView", "name": "composition" },
+        { "attribute": "model", "mode": "toView", "name": "model" },
+        { "attribute": "scopeBehavior", "mode": "toView", "name": "scopeBehavior" },
+        { "attribute": "tag", "mode": "toView", "name": "tag" },
+        { "attribute": "template", "mode": "toView", "name": "template" }
+      ],
+      "id": "sym:b13d833a60050dfbfcdf6a67c81b49c24062b337ca76151521de39f85f76510d",
+      "kind": "custom-element",
+      "name": "au-compose"
+    },
+    {
+      "bindables": [
+        { "attribute": "expose", "mode": "toView", "name": "expose" },
+        { "attribute": "slotchange", "mode": "toView", "name": "slotchange" }
+      ],
+      "id": "sym:77ad508ba7fb9bccfb7a7df427205649f6f1a9bdfb04755fd8e41b7cc418324f",
+      "kind": "custom-element",
+      "name": "au-slot"
+    },
+    {
+      "bindables": [
+        { "attribute": "default", "mode": "toView", "name": "default" },
+        { "attribute": "fallback", "mode": "toView", "name": "fallback" },
+        { "attribute": "name", "mode": "toView", "name": "name" },
+        { "attribute": "usedBy", "mode": "toView", "name": "usedBy" }
+      ],
+      "id": "sym:b3998e6001ce1c8747e672714aabba60d2ce4efc5596c8898e793d1df492e1bb",
+      "kind": "custom-element",
+      "name": "au-viewport"
+    },
+    { "id": "sym:162cbd8778176d56ab2d7b89dff36c2b98b7f6dfc51e3132d51016ab3307d7bc", "kind": "custom-element", "name": "beta-el", "source": "/src/entry.ts" },
+    {
+      "bindables": [
+        { "attribute": "fallThrough", "mode": "default", "name": "fallThrough" },
+        { "attribute": "value", "mode": "default", "name": "value", "primary": true }
+      ],
+      "id": "sym:b23222d983b6aea7272d319410b9691d63b8f0c8e0372084f272c49877382b2b",
+      "kind": "template-controller",
+      "name": "case"
+    },
+    { "id": "sym:d5d28e40e60f803563d27833e11a600f401129491767beadb820333489a5c435", "kind": "template-controller", "name": "catch" },
+    {
+      "bindables": [
+        { "attribute": "fallThrough", "mode": "default", "name": "fallThrough" }
+      ],
+      "id": "sym:e56a18f663a89928a5625a1cedb2512c2164b3bb6b2b22e887767319925f6d9c",
+      "kind": "template-controller",
+      "name": "default-case"
+    },
+    { "id": "sym:d18e41261a5a2a52d3e7cca4f872f9a316aca4e43a74987231820633e79cb50d", "kind": "template-controller", "name": "else" },
+    {
+      "bindables": [
+        { "attribute": "cache", "mode": "default", "name": "cache" },
+        { "attribute": "value", "mode": "default", "name": "value", "primary": true }
+      ],
+      "id": "sym:9ab1c4a971e0cd760d191fc4fe1fcc5ca05dc1cad3e5313880f7ac5d26f23291",
+      "kind": "template-controller",
+      "name": "if"
+    },
+    { "id": "sym:5ee5f38b42ddd1a8505593d2864ce71bda55f67f8001a57a0755e027f101f056", "kind": "template-controller", "name": "pending" },
+    {
+      "bindables": [
+        { "attribute": "renderContext", "mode": "default", "name": "renderContext" },
+        { "attribute": "strict", "mode": "default", "name": "strict" },
+        { "attribute": "target", "mode": "default", "name": "target", "primary": true }
+      ],
+      "id": "sym:3a87ced3c822044435ac09d7863f40df607130d54c70296b2f427358c11d70ea",
+      "kind": "template-controller",
+      "name": "portal"
+    },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "default", "name": "value" }
+      ],
+      "id": "sym:d791097d0b611b0401fbe5f6260a73be91b209cbaaf27d40dc553a49a55d127a",
+      "kind": "template-controller",
+      "name": "promise"
+    },
+    { "id": "sym:bcd87ba155b6df3f485cf6bc1ee8718f0a56c75838c891b838c6c9ae63458149", "kind": "template-controller", "name": "repeat" },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "default", "name": "value" }
+      ],
+      "id": "sym:681d274949ff208dfba3cf855dee816035fb0294a47ba7e6e4d4823bd8dbc081",
+      "kind": "template-controller",
+      "name": "switch"
+    },
+    { "id": "sym:6e4da88e15b7109346a3cb527a32f6e14796b70e8a0e99b9e5427a7d3810b17c", "kind": "template-controller", "name": "then" },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "default", "name": "value" }
+      ],
+      "id": "sym:dd18da47caf0863212db946eabf2aeb65ae9a1259eaffb4c72f9e575bab2fdab",
+      "kind": "template-controller",
+      "name": "with"
+    },
+    { "id": "sym:9422448ff104ae17401f04a8ef3f30754bb2b91801b7f0580c376761a323876b", "kind": "value-converter", "name": "sanitize" }
+  ],
+  "version": "aurelia-api-snapshot@1"
+}

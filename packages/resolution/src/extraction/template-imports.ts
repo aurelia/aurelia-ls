@@ -15,7 +15,7 @@ import {
   type SourceSpan,
 } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "../project/context.js";
-import type { TemplateImportFact, NamedAlias } from "./types.js";
+import type { TemplateImport } from "./file-facts.js";
 
 /**
  * Extract template imports from a template file.
@@ -27,7 +27,7 @@ import type { TemplateImportFact, NamedAlias } from "./types.js";
 export function extractTemplateImports(
   templatePath: NormalizedPath,
   fileSystem: FileSystemContext,
-): TemplateImportFact[] {
+): TemplateImport[] {
   // Read the template file
   const content = fileSystem.readFile(templatePath);
   if (content === undefined) {
@@ -37,17 +37,17 @@ export function extractTemplateImports(
   // Extract meta elements using compiler's function
   const meta = extractTemplateMeta(content, templatePath);
 
-  // Convert ImportMetaIR to TemplateImportFact
+  // Convert ImportMetaIR to TemplateImport
   return meta.imports.map((imp) => convertImportMeta(imp, templatePath));
 }
 
 /**
- * Convert ImportMetaIR from the compiler to TemplateImportFact.
+ * Convert ImportMetaIR from the compiler to TemplateImport.
  *
  * Preserves source spans as SourceSpan (with file) rather than downgrading to TextSpan.
  */
-function convertImportMeta(imp: ImportMetaIR, templatePath: NormalizedPath): TemplateImportFact {
-  const namedAliases: NamedAlias[] = imp.namedAliases.map((na) => ({
+function convertImportMeta(imp: ImportMetaIR, templatePath: NormalizedPath): TemplateImport {
+  const namedAliases: readonly { exportName: string; alias: string }[] = imp.namedAliases.map((na) => ({
     exportName: na.exportName.value,
     alias: na.alias.value,
   }));
@@ -83,10 +83,10 @@ function convertImportMeta(imp: ImportMetaIR, templatePath: NormalizedPath): Tem
  * @returns Template import facts with resolvedPath populated
  */
 export function resolveTemplateImportPaths(
-  imports: readonly TemplateImportFact[],
+  imports: readonly TemplateImport[],
   templatePath: NormalizedPath,
   resolveModule: (specifier: string, fromFile: NormalizedPath) => NormalizedPath | null,
-): TemplateImportFact[] {
+): TemplateImport[] {
   return imports.map((imp) => {
     const resolvedPath = resolveModule(imp.moduleSpecifier, templatePath);
     return {
@@ -110,10 +110,11 @@ export function extractComponentTemplateImports(
   componentPath: NormalizedPath,
   siblingTemplatePath: NormalizedPath | undefined,
   fileSystem: FileSystemContext,
-): TemplateImportFact[] {
+): TemplateImport[] {
   if (!siblingTemplatePath) {
     return [];
   }
 
   return extractTemplateImports(siblingTemplatePath, fileSystem);
 }
+
