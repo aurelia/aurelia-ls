@@ -1,0 +1,112 @@
+[
+  {
+    "name": "AOT-CE-PR-01: custom element projections with named slot",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-card": {
+            "kind": "element",
+            "name": "my-card",
+            "boundary": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-card><input value.bind=\"query\"><template au-slot=\"header\">Hello ${title}</template></my-card>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "my-card", "propCount": 0, "containerless": false }
+      ],
+      "nested": [
+        {
+          "name": "my-card_projection_0",
+          "instructions": [
+            { "type": "propertyBinding", "target": 0, "to": "value", "mode": "twoWay" }
+          ]
+        },
+        {
+          "name": "my-card_projection_1",
+          "instructions": [
+            { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-CE-PR-02: repeat inside projection",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-card": {
+            "kind": "element",
+            "name": "my-card",
+            "boundary": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-card><div repeat.for=\"item of items\">${item}</div></my-card>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 2,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "my-card", "propCount": 0, "containerless": false }
+      ],
+      "nested": [
+        {
+          "name": "my-card_projection_0",
+          "nested": [
+            { "name": "repeat_1" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "AOT-CE-PR-03: nested projection inside projection",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-card": {
+            "kind": "element",
+            "name": "my-card",
+            "boundary": true,
+            "bindables": {}
+          },
+          "my-panel": {
+            "kind": "element",
+            "name": "my-panel",
+            "boundary": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-card><my-panel><template au-slot=\"header\">Hello ${title}</template></my-panel></my-card>",
+    "expect": {
+      "targetCount": 1,
+      "exprCount": 1,
+      "instructions": [
+        { "type": "hydrateElement", "target": 0, "resource": "my-card", "propCount": 0, "containerless": false }
+      ],
+      "nested": [
+        {
+          "name": "my-card_projection_0",
+          "nested": [
+            {
+              "name": "my-panel_projection_1",
+              "instructions": [
+                { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

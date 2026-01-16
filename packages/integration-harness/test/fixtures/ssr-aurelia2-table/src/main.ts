@@ -31,13 +31,16 @@ if (ssrDef && ssrScope) {
 
   const host = document.querySelector("app-root") as HTMLElement | null;
   if (host) {
-    new Aurelia()
+    const app = new Aurelia()
       .register(AureliaTableConfiguration)
       .hydrate({
         host,
         component: HydrateApp,
         ssrScope,
       });
+    Promise.resolve(app).then(() => {
+      host.dataset.auHydrated = "true";
+    });
   }
 } else {
   Aurelia.register(AureliaTableConfiguration)

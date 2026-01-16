@@ -234,7 +234,7 @@ class EmitContext {
 
       // Custom element hydration
       if (node.customElement) {
-        row.push(this.emitHydrateElement(node.customElement));
+        row.push(this.emitHydrateElement(node.customElement, nestedTemplates));
       }
 
       // Let element hydration
@@ -392,7 +392,7 @@ class EmitContext {
 
       // Custom element hydration
       if (node.customElement) {
-        row.push(this.emitHydrateElement(node.customElement));
+        row.push(this.emitHydrateElement(node.customElement, nestedTemplates));
       }
 
       // Let element hydration
@@ -619,7 +619,10 @@ class EmitContext {
   /**
    * Emit hydrate instruction for a custom element.
    */
-  private emitHydrateElement(ce: PlanCustomElement): SerializedHydrateElement {
+  private emitHydrateElement(
+    ce: PlanCustomElement,
+    nestedTemplates: SerializedDefinition[],
+  ): SerializedHydrateElement {
     const instructions: SerializedInstruction[] = [];
 
     // Emit bindings
@@ -646,6 +649,18 @@ class EmitContext {
       res: ce.resource,
       instructions,
     };
+    if (ce.projections.length > 0) {
+      const projections = ce.projections.map((projection) => {
+        const templateIndex = nestedTemplates.length;
+        const templateName = `${ce.resource}_projection_${this.nestedTemplateIndex++}`;
+        nestedTemplates.push(this.emitDefinition(projection.template, templateName));
+        return {
+          slotName: projection.slotName,
+          templateIndex,
+        };
+      });
+      result.projections = projections;
+    }
     if (ce.containerless) {
       result.containerless = true;
     }

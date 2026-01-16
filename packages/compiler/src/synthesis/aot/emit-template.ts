@@ -129,6 +129,15 @@ function collectNestedFromElementTree(
 ): NestedTemplateHtmlNode[] {
   const results = collectNestedFromControllers(node.controllers, ctx);
 
+  if (node.customElement?.projections?.length) {
+    for (const projection of node.customElement.projections) {
+      const projectionCtx = ctx.forNestedTemplate();
+      const html = emitNode(projection.template, projectionCtx);
+      const nested = collectNestedFromNodeTree(projection.template, projectionCtx);
+      results.push({ html, nested });
+    }
+  }
+
   // Also collect from element's children
   // (empty when controllers exist, but still check)
   for (const child of node.children) {

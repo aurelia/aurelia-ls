@@ -19,6 +19,10 @@ export async function loadExternalModule(
   return runtimeModuleCache.get(cacheKey)!;
 }
 
+export function resetExternalModuleCache(): void {
+  runtimeModuleCache.clear();
+}
+
 async function buildExternalModuleBundle(
   modulePath: string,
   entry?: string,
@@ -43,6 +47,9 @@ async function buildExternalModuleBundle(
     target: "es2022",
     sourcemap: "inline",
     resolveExtensions: [".ts", ".js"],
+    loader: {
+      ".html": "text",
+    },
     tsconfigRaw: {
       compilerOptions: {
         useDefineForClassFields: false,

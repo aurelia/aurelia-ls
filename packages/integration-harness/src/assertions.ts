@@ -1,5 +1,5 @@
 import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler";
-import type { ResourceCollections } from "@aurelia-ls/compiler";
+import type { ResourceCollections, SerializedDefinition } from "@aurelia-ls/compiler";
 import type { AssertionFailure, RegistrationPlanResourceSet, RegistrationPlanScopeExpectation, ScenarioExpectations } from "./schema.js";
 import type { IntegrationRun } from "./runner.js";
 
@@ -227,21 +227,33 @@ function collectInstructionSummaries(run: IntegrationRun): InstructionSummary[] 
   for (const compile of Object.values(run.compile)) {
     const code = compile.aot?.codeResult;
     if (!code) continue;
-    const rows = code.definition.instructions ?? [];
-    for (let target = 0; target < rows.length; target++) {
-      const row = rows[target] ?? [];
-      for (const inst of row) {
-        const typeName = TYPE_NAMES.get(inst.type) ?? String(inst.type);
-        summaries.push({
-          type: typeName,
-          res: extractResName(inst),
-          target,
-        });
-      }
-    }
+    collectDefinitionSummaries(code.definition, summaries);
   }
 
   return summaries;
+}
+
+function collectDefinitionSummaries(
+  definition: SerializedDefinition,
+  summaries: InstructionSummary[],
+): void {
+  const rows = definition.instructions ?? [];
+  for (let target = 0; target < rows.length; target++) {
+    const row = rows[target] ?? [];
+    for (const inst of row) {
+      const typeName = TYPE_NAMES.get(inst.type) ?? String(inst.type);
+      summaries.push({
+        type: typeName,
+        res: extractResName(inst),
+        target,
+      });
+    }
+  }
+
+  const nested = definition.nestedTemplates ?? [];
+  for (const child of nested) {
+    collectDefinitionSummaries(child, summaries);
+  }
 }
 
 function extractResName(inst: unknown): string | undefined {

@@ -72,9 +72,9 @@ export async function inspectBrowserRuntime(
       });
     }
     await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
-    await page.waitForSelector(root, { timeout: timeoutMs });
+    await page.waitForSelector(root, { timeout: timeoutMs, state: "attached" });
     if (waitFor) {
-      await page.waitForSelector(waitFor, { timeout: timeoutMs });
+      await page.waitForSelector(waitFor, { timeout: timeoutMs, state: "attached" });
     }
     if (delayMs > 0) {
       await delay(delayMs);

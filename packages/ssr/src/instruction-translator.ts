@@ -57,6 +57,7 @@ import {
   type SerializedSetProperty,
   type SerializedSetAttribute,
   type SerializedHydrateElement,
+  type SerializedProjection,
   type SerializedHydrateAttribute,
   type SerializedHydrateTemplateController,
   type SerializedHydrateLetElement,
@@ -291,16 +292,38 @@ function translateHydrateElement(
 ): HydrateElementInstruction {
   // Translate nested instructions
   const props = ins.instructions.map((i: SerializedInstruction) => translateInstruction(i, ctx));
+  const projections = translateProjections(ins.projections, ctx);
 
   return {
     type: itHydrateElement,
     res: ins.res,
     props,
-    projections: null,
+    projections,
     containerless: ins.containerless ?? false,
     captures: void 0,
     data: {},
   } as HydrateElementInstruction;
+}
+
+function translateProjections(
+  projections: SerializedProjection[] | undefined,
+  ctx: TranslationContext,
+): Record<string, NestedDefinition> | null {
+  if (!projections || projections.length === 0) {
+    return null;
+  }
+
+  const result: Record<string, NestedDefinition> = {};
+  for (const projection of projections) {
+    const def = ctx.nestedDefs[projection.templateIndex];
+    if (!def) {
+      throw new Error(`Missing projection template at index ${projection.templateIndex}`);
+    }
+    const slotName = projection.slotName ?? "default";
+    result[slotName] = def;
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 function translateHydrateAttribute(

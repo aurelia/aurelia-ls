@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { IContainer, Registration, resolve } from "@aurelia/kernel";
-import { AppTask, CustomElement } from "@aurelia/runtime-html";
+import { AppTask, CustomElement, Rendering } from "@aurelia/runtime-html";
 import {
   ILocationManager,
   IRouter,
@@ -31,11 +31,38 @@ import {
   hydrateSsr,
 } from "./_helpers/ssr-hydration.js";
 import { loadExternalModule } from "./_helpers/external-modules.js";
+import { ensureBoundLifecycle, patchAutPaginationDefinition } from "./_helpers/third-party.js";
 
 const AURELIA_TABLE_PACKAGE = resolveExternalPackagePath("aurelia2-table");
 const HAS_AURELIA_TABLE = fs.existsSync(path.join(AURELIA_TABLE_PACKAGE, "package.json"));
 const AURELIA_STATE_PACKAGE = resolveExternalPackagePath("@aurelia/state");
 const HAS_AURELIA_STATE = fs.existsSync(path.join(AURELIA_STATE_PACKAGE, "package.json"));
+
+if (process.env.AURELIA_DEBUG_AOT === "1") {
+  process.env.AURELIA_SSR_DEBUG_MISMATCH = "1";
+  const originalRender = Rendering.prototype.render;
+  Rendering.prototype.render = function (controller, targets, definition, host) {
+    try {
+      return originalRender.call(this, controller, targets, definition, host);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("AUR0757")) {
+        const template = definition.template;
+        const markerCount = typeof template === "string"
+          ? (template.match(/<!--au-->/g) ?? []).length
+          : null;
+        // eslint-disable-next-line no-console
+        console.log("[render-mismatch]", {
+          name: definition.name,
+          targetCount: targets.length,
+          rowCount: definition.instructions.length,
+          markerCount,
+          templateType: template == null ? "null" : typeof template,
+        });
+      }
+      throw error;
+    }
+  };
+}
 
 class HomePage {
   title = "Home";
@@ -167,6 +194,8 @@ function createSSRRouterConfiguration(
         IRouter,
         ViewportCustomElement,
         AppTask.hydrated(IContainer, RouteContext.setRoot),
+        AppTask.activated(IRouter, (router) => router.start(true)),
+        AppTask.deactivated(IRouter, (router) => router.stop()),
       ];
 
       if (activateRoutes) {
@@ -178,16 +207,6 @@ function createSSRRouterConfiguration(
       return container.register(...registrations);
     },
   };
-}
-
-function ensureBoundLifecycle(elementCtor: unknown): void {
-  const proto = (elementCtor as { prototype?: { bind?: (...args: unknown[]) => void; bound?: (...args: unknown[]) => void } })
-    .prototype;
-  if (proto?.bind && !proto.bound) {
-    proto.bound = function (...args: unknown[]) {
-      return proto.bind?.apply(this, args);
-    };
-  }
 }
 
 function findPageLink(document: Document, text: string): HTMLAnchorElement | null {
@@ -241,6 +260,41 @@ function findControllerByName(
       const found = findControllerByName(child, name);
       if (found) return found;
     }
+  }
+  return null;
+}
+
+async function waitForControllerByName(
+  root: unknown,
+  name: string,
+  timeoutMs = 2000,
+): Promise<{ viewModel?: { selectPage?: (page: number) => void } } | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const found = findControllerByName(root, name);
+    if (found) return found;
+    await flushDom();
+  }
+  return null;
+}
+
+async function waitForElementController(
+  document: Document,
+  selector: string,
+  timeoutMs = 2000,
+): Promise<{ viewModel?: unknown } | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const el = document.querySelector(selector) as (Element & { $au?: Record<string, unknown> }) | null;
+    const ctrl = el?.$au?.["au:resource:custom-element"] as { viewModel?: unknown } | undefined;
+    if (ctrl?.viewModel) {
+      return ctrl;
+    }
+    if (process.env.AURELIA_DEBUG_AOT === "1" && el && el.$au) {
+      // eslint-disable-next-line no-console
+      console.log("[router-decorator] element $au keys", Object.keys(el.$au));
+    }
+    await flushDom();
   }
   return null;
 }
@@ -305,7 +359,10 @@ describe("integration harness: router SSR + hydration", () => {
     await hydrated.stop();
   });
 
-  test.skipIf(!HAS_AURELIA_TABLE)("hydrates routed third-party components", async () => {
+  test("hydrates routed third-party components", async () => {
+    if (!HAS_AURELIA_TABLE) {
+      throw new Error("aurelia2-table package is required for router integration tests.");
+    }
     const scenario: IntegrationScenario = {
       id: "router-with-third-party",
       title: "Router SSR + hydration supports third-party elements",
@@ -322,7 +379,10 @@ describe("integration harness: router SSR + hydration", () => {
           ].join("\n"),
         },
       },
-      externalPackages: [{ id: "aurelia2-table", preferSource: true }],
+    externalPackages: [
+      { id: "@aurelia/router", preferSource: true },
+      { id: "aurelia2-table", preferSource: true },
+    ],
     };
     const run = await runIntegrationScenario(scenario);
 
@@ -330,7 +390,9 @@ describe("integration harness: router SSR + hydration", () => {
     const AureliaTableConfiguration = pluginModule.AureliaTableConfiguration as {
       register: (container: unknown) => void;
     };
-    const AutPaginationCustomElement = pluginModule.AutPaginationCustomElement as new () => Record<string, unknown>;
+    const AutPaginationCustomElement = pluginModule.AutPaginationCustomElement as
+      new () => Record<string, unknown>;
+    await patchAutPaginationDefinition(AutPaginationCustomElement, run);
     ensureBoundLifecycle(AutPaginationCustomElement);
 
     class ThirdPartyPage {
@@ -372,12 +434,6 @@ describe("integration harness: router SSR + hydration", () => {
 
     patchComponentDefinition(ThirdPartyPage, thirdPartyAot, { name: "third-party-page" });
     patchComponentDefinition(RouterAppWithThirdParty, appAot, { name: "router-app-third-party" });
-    CustomElement.define({
-      name: "third-party-page",
-      template: thirdPartyAot.template,
-      instructions: thirdPartyAot.instructions,
-      needsCompile: false,
-    }, ThirdPartyPage);
 
     const renderResult = await renderWithComponents(RouterAppWithThirdParty, {
       childComponents: [ThirdPartyPage],
@@ -438,9 +494,12 @@ describe("integration harness: router SSR + hydration", () => {
     await hydrated.stop();
   });
 
-  test.skipIf(!HAS_AURELIA_TABLE || !HAS_AURELIA_STATE)(
+  test(
     "hydrates @route apps with third-party + state bindings",
     async () => {
+      if (!HAS_AURELIA_TABLE || !HAS_AURELIA_STATE) {
+        throw new Error("aurelia2-table and @aurelia/state packages are required for this router test.");
+      }
       const scenario: IntegrationScenario = {
         id: "router-decorator-third-party-state",
         title: "Router @route + third-party + state SSR/hydration",
@@ -452,6 +511,7 @@ describe("integration harness: router SSR + hydration", () => {
           },
         },
         externalPackages: [
+          { id: "@aurelia/router", preferSource: true },
           { id: "aurelia2-table", preferSource: true },
           { id: "@aurelia/state", preferSource: true },
         ],
@@ -462,6 +522,10 @@ describe("integration harness: router SSR + hydration", () => {
       const AureliaTableConfiguration = pluginModule.AureliaTableConfiguration as {
         register: (container: unknown) => void;
       };
+      const AutPaginationCustomElement = pluginModule.AutPaginationCustomElement as
+        new () => Record<string, unknown>;
+      await patchAutPaginationDefinition(AutPaginationCustomElement, run);
+      ensureBoundLifecycle(AutPaginationCustomElement);
 
       const stateModule = await loadExternalModule(AURELIA_STATE_PACKAGE);
       const StateDefaultConfiguration = stateModule.StateDefaultConfiguration as {
@@ -538,15 +602,40 @@ describe("integration harness: router SSR + hydration", () => {
         resourceGraph: run.resourceGraph,
         resourceScope: run.resourceGraph.root,
       });
-
       patchComponentDefinition(DecoratorTablePage, pageAot, { name: "decorator-table-page" });
       patchComponentDefinition(DecoratorRouterApp, appAot, { name: "router-app-decorator" });
-      CustomElement.define({
-        name: "decorator-table-page",
-        template: pageAot.template,
-        instructions: pageAot.instructions,
-        needsCompile: false,
-      }, DecoratorTablePage);
+      CustomElement.clearDefinition(DecoratorTablePage);
+      CustomElement.clearDefinition(DecoratorRouterApp);
+      CustomElement.define(DecoratorTablePage.$au!, DecoratorTablePage);
+      CustomElement.define(DecoratorRouterApp.$au!, DecoratorRouterApp);
+
+      if (process.env.AURELIA_DEBUG_AOT === "1") {
+        // eslint-disable-next-line no-console
+        console.log("[router-decorator] page targetCount", pageAot.targetCount, "rows", pageAot.instructions.length);
+        // eslint-disable-next-line no-console
+        console.log("[router-decorator] page template", pageAot.template);
+        // eslint-disable-next-line no-console
+        console.log("[router-decorator] app targetCount", appAot.targetCount, "rows", appAot.instructions.length);
+        // eslint-disable-next-line no-console
+        console.log("[router-decorator] app template", appAot.template);
+        const countMarkers = (template: unknown) => (
+          typeof template === "string" ? (template.match(/<!--au-->/g) ?? []).length : null
+        );
+        const appDef = CustomElement.getDefinition(DecoratorRouterApp);
+        const pageDef = CustomElement.getDefinition(DecoratorTablePage);
+        // eslint-disable-next-line no-console
+        console.log("[router-decorator] app def", {
+          templateType: appDef.template == null ? "null" : typeof appDef.template,
+          markerCount: countMarkers(appDef.template),
+          rowCount: appDef.instructions.length,
+        });
+        // eslint-disable-next-line no-console
+        console.log("[router-decorator] page def", {
+          templateType: pageDef.template == null ? "null" : typeof pageDef.template,
+          markerCount: countMarkers(pageDef.template),
+          rowCount: pageDef.instructions.length,
+        });
+      }
 
       const registerState = (container: { register: (...args: unknown[]) => void }) => {
         container.register(StateDefaultConfiguration.init({ count: 0 }, counterHandler));
@@ -587,6 +676,7 @@ describe("integration harness: router SSR + hydration", () => {
         {
           componentName: "router-app-decorator",
           componentClass: DecoratorRouterApp,
+          reuseComponentClass: true,
           childComponents: [DecoratorTablePage],
           register: (container) => {
             container.register(
@@ -598,7 +688,20 @@ describe("integration harness: router SSR + hydration", () => {
         },
       );
 
-      const pageController = findControllerByName(hydrated.appRoot?.controller, "decorator-table-page");
+      if (process.env.AURELIA_DEBUG_AOT === "1") {
+        // eslint-disable-next-line no-console
+        console.log("[router-decorator] hydrated counts", {
+          viewport: countElements(hydrated.host, "au-viewport"),
+          pageHost: countElements(hydrated.host, "decorator-table-page"),
+          pageInner: countElements(hydrated.host, ".decorator-table-page"),
+        });
+      }
+
+      const pageController = await waitForElementController(
+        hydrated.document,
+        "decorator-table-page",
+        4000,
+      );
       const pageVm = pageController?.viewModel as DecoratorTablePage | undefined;
       expect(pageVm).toBeTruthy();
       expect(getTexts(hydrated.host, ".count")).toEqual(["0"]);

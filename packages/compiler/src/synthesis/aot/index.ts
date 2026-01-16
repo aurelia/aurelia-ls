@@ -59,6 +59,7 @@ export type {
   SerializedSetProperty,
   SerializedSetAttribute,
   SerializedHydrateElement,
+  SerializedProjection,
   SerializedHydrateAttribute,
   SerializedHydrateTemplateController,
   SerializedHydrateLetElement,

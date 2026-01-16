@@ -504,6 +504,21 @@ function emitHydrateElement(
 ): string {
   const props = emitNestedInstructions(instr.instructions, ctx, indent);
   let str = `{ type: ${INSTRUCTION_TYPE.hydrateElement}, res: "${instr.res}", props: ${props}`;
+  if (instr.projections && instr.projections.length > 0) {
+    const projectionEntries = instr.projections.map((projection) => {
+      const nestedDef = ctx.definition.nestedTemplates[projection.templateIndex];
+      if (!nestedDef) {
+        throw new Error(`Nested template at index ${projection.templateIndex} not found for projection`);
+      }
+      const defVar = ctx.defVarMap.get(nestedDef);
+      if (!defVar) {
+        throw new Error(`No variable name found for projection template at index ${projection.templateIndex}`);
+      }
+      const slotName = projection.slotName ?? "default";
+      return `"${slotName}": ${defVar}`;
+    });
+    str += `, projections: { ${projectionEntries.join(", ")} }`;
+  }
   if (instr.containerless) {
     str += ", containerless: true";
   }

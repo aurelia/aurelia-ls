@@ -1,0 +1,86 @@
+[
+  {
+    "name": "LP-01 projections: default + named slot (template unwrap)",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-card": {
+            "kind": "element",
+            "name": "my-card",
+            "boundary": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-card><input value.bind=\"query\"><template au-slot=\"header\">Hello ${title}</template></my-card>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "query" },
+        { "kind": "text", "code": "title" }
+      ],
+      "elements": [
+        { "res": "my-card", "containerless": false, "props": [] }
+      ]
+    }
+  },
+  {
+    "name": "LP-02 projections: repeat inside default slot",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-card": {
+            "kind": "element",
+            "name": "my-card",
+            "boundary": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-card><div repeat.for=\"item of items\">${item}</div></my-card>",
+    "expect": {
+      "expressions": [
+        { "kind": "iterator", "code": "item of items" },
+        { "kind": "text", "code": "item" }
+      ],
+      "controllers": [
+        { "name": "repeat" }
+      ],
+      "elements": [
+        { "res": "my-card", "containerless": false, "props": [] }
+      ]
+    }
+  },
+  {
+    "name": "LP-03 projections: nested custom element inside projection",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-card": {
+            "kind": "element",
+            "name": "my-card",
+            "boundary": true,
+            "bindables": {}
+          },
+          "my-panel": {
+            "kind": "element",
+            "name": "my-panel",
+            "boundary": true,
+            "bindables": {}
+          }
+        }
+      }
+    },
+    "markup": "<my-card><my-panel><template au-slot=\"header\">Hello ${title}</template></my-panel></my-card>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "title" }
+      ],
+      "elements": [
+        { "res": "my-card", "containerless": false, "props": [] },
+        { "res": "my-panel", "containerless": false, "props": [] }
+      ]
+    }
+  }
+]

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { resolve } from "@aurelia/kernel";
+import { Rendering } from "@aurelia/runtime-html";
 import {
   compileAndRenderAot,
   compileWithAot,
@@ -28,7 +29,8 @@ import {
   getTexts,
   hydrateSsr,
 } from "./_helpers/ssr-hydration.js";
-import { loadExternalModule } from "./_helpers/external-modules.js";
+import { loadExternalModule, resetExternalModuleCache } from "./_helpers/external-modules.js";
+import { ensureBoundLifecycle, patchAutPaginationDefinition } from "./_helpers/third-party.js";
 
 type HydrationCase = SsrHydrationExpectation & {
   dependencies?: Array<new () => Record<string, unknown>>;
@@ -645,7 +647,10 @@ describe("integration harness: SSR + hydration parity", () => {
 });
 
 describe("integration harness: third-party hydration parity", () => {
-  test.skipIf(!HAS_AURELIA_TABLE)("hydrates third-party bindings after SSR", async () => {
+  test("hydrates third-party bindings after SSR", async () => {
+    if (!HAS_AURELIA_TABLE) {
+      throw new Error("aurelia2-table package is required for third-party SSR hydration tests.");
+    }
     const scenario: IntegrationScenario = {
       id: "third-party-hydration-parity",
       title: "Third-party SSR + hydration preserves bindings",
@@ -660,6 +665,7 @@ describe("integration harness: third-party hydration parity", () => {
       register: (container: unknown) => void;
     };
     const AutPaginationCustomElement = pluginModule.AutPaginationCustomElement as new () => Record<string, unknown>;
+    await patchAutPaginationDefinition(AutPaginationCustomElement, run);
     ensureBoundLifecycle(AutPaginationCustomElement);
 
     const ThirdPartyHydrationApp = createComponent(
@@ -685,6 +691,19 @@ describe("integration harness: third-party hydration parity", () => {
         container.register(AureliaTableConfiguration);
       },
     });
+    if (process.env.AURELIA_DEBUG_AOT === "1") {
+      const markerCount = (renderResult.html.match(/<!--au-->/g) ?? []).length;
+      const paginationMatch = renderResult.html.match(/<aut-pagination[\s\S]*?<\/aut-pagination>/i);
+      const paginationMarkers = paginationMatch
+        ? (paginationMatch[0].match(/<!--au-->/g) ?? []).length
+        : 0;
+      // eslint-disable-next-line no-console
+      console.log("[third-party] render markers", markerCount, "pagination markers", paginationMarkers);
+      if (paginationMatch) {
+        // eslint-disable-next-line no-console
+        console.log("[third-party] pagination snippet", paginationMatch[0]);
+      }
+    }
 
     const ssrContext = createHydrationContext(
       renderResult.html,
@@ -730,7 +749,10 @@ describe("integration harness: third-party hydration parity", () => {
     await hydrated.stop();
   });
 
-  test.skipIf(!HAS_AURELIA_TABLE)("hydrates third-party custom attribute bindings after SSR", async () => {
+  test("hydrates third-party custom attribute bindings after SSR", async () => {
+    if (!HAS_AURELIA_TABLE) {
+      throw new Error("aurelia2-table package is required for third-party custom attribute tests.");
+    }
     const scenario: IntegrationScenario = {
       id: "third-party-table-hydration",
       title: "Third-party custom attribute SSR + hydration preserves filters",
@@ -820,14 +842,20 @@ describe("integration harness: third-party hydration parity", () => {
   });
 });
 
-describe("integration harness: multi-package SSR + hydration", () => {
-  test.skipIf(!HAS_AURELIA_TABLE || !HAS_AURELIA_OUTCLICK || !HAS_AURELIA_FORMS)(
-    "hydrates multiple third-party packages together",
-    async () => {
-      const scenario: IntegrationScenario = {
-        id: "multi-package-ssr",
-        title: "Multiple third-party packages SSR + hydration",
-        tags: ["ssr", "hydration", "third-party", "multi-package"],
+  describe("integration harness: multi-package SSR + hydration", () => {
+    test(
+      "hydrates multiple third-party packages together",
+      async () => {
+        if (!HAS_AURELIA_TABLE || !HAS_AURELIA_OUTCLICK || !HAS_AURELIA_FORMS) {
+          throw new Error("aurelia2-table, aurelia2-outclick, and aurelia2-forms packages are required.");
+        }
+        resetExternalModuleCache();
+        const restoreRender = enableRenderMismatchTrace();
+        try {
+        const scenario: IntegrationScenario = {
+          id: "multi-package-ssr",
+          title: "Multiple third-party packages SSR + hydration",
+          tags: ["ssr", "hydration", "third-party", "multi-package"],
         source: BASE_SOURCE,
         externalPackages: [
           { id: "aurelia2-table", preferSource: true },
@@ -841,6 +869,10 @@ describe("integration harness: multi-package SSR + hydration", () => {
       const AureliaTableConfiguration = tableModule.AureliaTableConfiguration as {
         register: (container: unknown) => void;
       };
+      const AutPaginationCustomElement = tableModule.AutPaginationCustomElement as
+        new () => Record<string, unknown>;
+      await patchAutPaginationDefinition(AutPaginationCustomElement, run);
+      ensureBoundLifecycle(AutPaginationCustomElement);
       const outclickModule = await loadExternalModule(AURELIA_OUTCLICK_PACKAGE);
       const AureliaOutclick = outclickModule.AureliaOutclick as {
         register: (container: unknown) => void;
@@ -875,6 +907,12 @@ describe("integration harness: multi-package SSR + hydration", () => {
         resourceGraph: run.resourceGraph,
         resourceScope: run.resourceGraph.root,
       });
+      if (process.env.AURELIA_DEBUG_AOT === "1") {
+        // eslint-disable-next-line no-console
+        console.log("[multi-package] targetCount", rootAot.targetCount, "rows", rootAot.instructions.length);
+        // eslint-disable-next-line no-console
+        console.log("[multi-package] template", rootAot.template);
+      }
       patchComponentDefinition(MultiPackageApp, rootAot, { name: "multi-package-app" });
 
       const renderResult = await renderWithComponents(MultiPackageApp, {
@@ -940,15 +978,21 @@ describe("integration harness: multi-package SSR + hydration", () => {
       const paginationVm = resolvePaginationViewModel(hydrated);
       paginationVm.selectPage?.(2);
       await flushDom();
-      expect((hydrated.vm as { page?: number }).page).toBe(2);
+        expect((hydrated.vm as { page?: number }).page).toBe(2);
 
-      await hydrated.stop();
-    },
-  );
-});
+        await hydrated.stop();
+        } finally {
+          restoreRender();
+        }
+      },
+    );
+  });
 
 describe("integration harness: state plugin SSR + hydration", () => {
-  test.skipIf(!HAS_AURELIA_STATE)("hydrates store-backed bindings", async () => {
+  test("hydrates store-backed bindings", async () => {
+    if (!HAS_AURELIA_STATE) {
+      throw new Error("@aurelia/state package is required for state SSR hydration tests.");
+    }
     const scenario: IntegrationScenario = {
       id: "state-plugin-ssr",
       title: "State plugin SSR + hydration preserves bindings",
@@ -1407,14 +1451,36 @@ function isScopeNode(entry: unknown): entry is { children?: unknown[] } {
   return "children" in entry && !("type" in entry);
 }
 
-function ensureBoundLifecycle(elementCtor: unknown): void {
-  const proto = (elementCtor as { prototype?: { bind?: (...args: unknown[]) => void; bound?: (...args: unknown[]) => void } })
-    .prototype;
-  if (proto?.bind && !proto.bound) {
-    proto.bound = function (...args: unknown[]) {
-      return proto.bind?.apply(this, args);
-    };
+function enableRenderMismatchTrace(): () => void {
+  if (process.env.AURELIA_DEBUG_AOT !== "1") {
+    return () => {};
   }
+  const original = Rendering.prototype.render;
+  Rendering.prototype.render = function (
+    controller,
+    targets,
+    definition,
+    host,
+  ) {
+    if (targets.length !== definition.instructions.length) {
+      const template = definition.template;
+      const markerCount = typeof template === "string"
+        ? (template.match(/<!--au-->/g) ?? []).length
+        : null;
+      // eslint-disable-next-line no-console
+      console.log("[render-mismatch]", {
+        name: definition.name,
+        targetCount: targets.length,
+        rowCount: definition.instructions.length,
+        markerCount,
+        templateType: template == null ? "null" : typeof template,
+      });
+    }
+    return original.call(this, controller, targets, definition, host);
+  } as typeof original;
+  return () => {
+    Rendering.prototype.render = original;
+  };
 }
 
 function findPageLink(document: Document, text: string): HTMLAnchorElement | null {

@@ -76,6 +76,7 @@ import type {
   PlanLetElement,
   PlanLetBinding,
   PlanController,
+  PlanProjection,
   PlanAuxExpr,
   PlanExpression,
   PlanScope,
@@ -463,7 +464,7 @@ function transformElement(
         break;
 
       case "hydrateElement":
-        customElement = transformHydrateElement(ins, ctx);
+        customElement = transformHydrateElement(ins, currentFrame, ctx);
         needsTarget = true;
         break;
 
@@ -888,7 +889,11 @@ function transformTextInterpolation(ins: LinkedTextBinding, ctx: PlanningContext
  * Custom Element/Attribute Transformations
  * ============================================================================= */
 
-function transformHydrateElement(ins: LinkedHydrateElement, ctx: PlanningContext): PlanCustomElement {
+function transformHydrateElement(
+  ins: LinkedHydrateElement,
+  currentFrame: FrameId,
+  ctx: PlanningContext
+): PlanCustomElement {
   const bindings: PlanPropertyBinding[] = [];
   const staticProps: PlanStaticProp[] = [];
 
@@ -907,13 +912,43 @@ function transformHydrateElement(ins: LinkedHydrateElement, ctx: PlanningContext
     }
   }
 
+  const projections = transformProjections(ins.projections ?? null, currentFrame, ctx);
+
   return {
     resource: ins.res?.def.name ?? "unknown",
     bindings,
     staticProps,
-    projections: [], // TODO: Handle projections
+    projections,
     containerless: ins.containerless ?? false,
   };
+}
+
+function transformProjections(
+  projections: LinkedHydrateElement["projections"] | null,
+  currentFrame: FrameId,
+  ctx: PlanningContext,
+): PlanProjection[] {
+  if (!projections || projections.length === 0) {
+    return [];
+  }
+
+  const result: PlanProjection[] = [];
+  for (const projection of projections) {
+    const linked = ctx.getLinkedTemplate(projection.def.dom);
+    if (!linked) {
+      debug.aot("plan.projection.missing", {
+        slot: projection.slot ?? null,
+        templateId: projection.def.dom.id,
+      });
+      continue;
+    }
+    const template = transformNestedTemplate(linked, new Map(), currentFrame, ctx);
+    result.push({
+      slotName: projection.slot ?? undefined,
+      template,
+    });
+  }
+  return result;
 }
 
 function transformHydrateAttribute(ins: LinkedHydrateAttribute, ctx: PlanningContext): PlanCustomAttr {

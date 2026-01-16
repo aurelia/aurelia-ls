@@ -754,7 +754,15 @@ export interface SerializedHydrateElement {
   type: typeof INSTRUCTION_TYPE.hydrateElement;
   res: string;
   instructions: SerializedInstruction[];
+  projections?: SerializedProjection[];
   containerless?: boolean;
+}
+
+export interface SerializedProjection {
+  /** Slot name (undefined for default) */
+  slotName?: string;
+  /** Index into serialized definition's nestedTemplates */
+  templateIndex: number;
 }
 
 export interface SerializedHydrateAttribute {

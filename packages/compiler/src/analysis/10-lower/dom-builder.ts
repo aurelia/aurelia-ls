@@ -1,5 +1,5 @@
 import type { DOMNode, TemplateNode, NodeId } from "../../model/ir.js";
-import type { P5Element, P5Node, P5Template } from "./lower-shared.js";
+import type { P5Element, P5Node, P5Template, ProjectionMap } from "./lower-shared.js";
 import type { DomIdAllocator } from "./lower-shared.js";
 import { isComment, isElement, isText, toSpan } from "./lower-shared.js";
 import type { SourceFile } from "../../model/source.js";
@@ -21,13 +21,14 @@ export function buildDomRoot(
   file: SourceFile,
   idMap?: WeakMap<P5Node, NodeId>,
   skipTags?: Set<string>,
+  projectionMap?: ProjectionMap,
 ): TemplateNode {
   return {
     kind: "template",
     id: ids.current(),
     ns: "html",
     attrs: [],
-    children: buildDomChildren(rootLike, ids, file, idMap, skipTags),
+    children: buildDomChildren(rootLike, ids, file, idMap, skipTags, projectionMap),
     loc: null,
   };
 }
@@ -38,6 +39,7 @@ export function buildDomChildren(
   file: SourceFile,
   idMap?: WeakMap<P5Node, NodeId>,
   skipTags?: Set<string>,
+  projectionMap?: ProjectionMap,
 ): DOMNode[] {
   return ids.withinChildren(() => {
     const out: DOMNode[] = [];
@@ -51,7 +53,7 @@ export function buildDomChildren(
         // But adopt their children - parse5 may have nested content inside them
         if (skipTags?.has(tag)) {
           // Recursively process children and add to output
-          out.push(...buildDomChildren(n, ids, file, idMap, skipTags));
+          out.push(...buildDomChildren(n, ids, file, idMap, skipTags, projectionMap));
           continue;
         }
 
@@ -65,7 +67,7 @@ export function buildDomChildren(
             id,
             ns: toNs(n),
             attrs: mapStaticAttrs(n),
-            children: buildDomChildren(t.content, ids, file, idMap, skipTags),
+            children: buildDomChildren(t.content, ids, file, idMap, skipTags, projectionMap),
             loc: toSpan(n.sourceCodeLocation, file),
           });
         } else {
@@ -75,7 +77,9 @@ export function buildDomChildren(
             ns: toNs(n),
             tag,
             attrs: mapStaticAttrs(n),
-            children: buildDomChildren(n, ids, file, idMap, skipTags),
+            children: projectionMap?.has(n)
+              ? []
+              : buildDomChildren(n, ids, file, idMap, skipTags, projectionMap),
             selfClosed: false,
             loc: toSpan(n.sourceCodeLocation, file),
           });

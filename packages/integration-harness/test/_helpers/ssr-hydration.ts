@@ -106,6 +106,28 @@ export function createHydrationContext(
   const platform = new BrowserPlatform(window as any);
   const host = resolveHost(document, hostElement);
 
+  // Ensure DOM globals exist for runtime checks in node-based SSR/hydration tests.
+  const globalWindow = globalThis as typeof globalThis & {
+    HTMLElement?: typeof window.HTMLElement;
+    Element?: typeof window.Element;
+    Node?: typeof window.Node;
+    Document?: typeof window.Document;
+    HTMLInputElement?: typeof window.HTMLInputElement;
+    HTMLTextAreaElement?: typeof window.HTMLTextAreaElement;
+    HTMLSelectElement?: typeof window.HTMLSelectElement;
+    CustomEvent?: typeof window.CustomEvent;
+    Event?: typeof window.Event;
+  };
+  globalWindow.HTMLElement = window.HTMLElement;
+  globalWindow.Element = window.Element;
+  globalWindow.Node = window.Node;
+  globalWindow.Document = window.Document;
+  globalWindow.HTMLInputElement = window.HTMLInputElement;
+  globalWindow.HTMLTextAreaElement = window.HTMLTextAreaElement;
+  globalWindow.HTMLSelectElement = window.HTMLSelectElement;
+  globalWindow.CustomEvent = window.CustomEvent;
+  globalWindow.Event = window.Event;
+
   return { dom, window, document, platform, host };
 }
 
@@ -118,6 +140,7 @@ export async function hydrateSsr(
     componentName: string;
     hostElement?: string;
     componentClass?: new () => Record<string, unknown>;
+    reuseComponentClass?: boolean;
     register?: (container: ReturnType<typeof DI.createContainer>) => void;
     childComponents?: Array<new () => Record<string, unknown>>;
   },
@@ -132,8 +155,13 @@ export async function hydrateSsr(
 
   const Base = options.componentClass ?? (class {} as new () => Record<string, unknown>);
   const baseAu = (Base as { $au?: Record<string, unknown> }).$au ?? {};
-  const HydrateComponent = class extends Base {
-    static $au = {
+  const reuseComponentClass = Boolean(options.componentClass && options.reuseComponentClass);
+  let HydrateComponent: new () => Record<string, unknown>;
+  let restoreAu: Record<string, unknown> | undefined;
+  if (reuseComponentClass) {
+    const baseWithAu = Base as { $au?: Record<string, unknown> };
+    restoreAu = baseWithAu.$au;
+    baseWithAu.$au = {
       ...baseAu,
       type: "custom-element",
       name: options.componentName,
@@ -141,7 +169,19 @@ export async function hydrateSsr(
       instructions: aot.instructions,
       needsCompile: false,
     };
-  };
+    HydrateComponent = Base;
+  } else {
+    HydrateComponent = class extends Base {
+      static $au = {
+        ...baseAu,
+        type: "custom-element",
+        name: options.componentName,
+        template: aot.template,
+        instructions: aot.instructions,
+        needsCompile: false,
+      };
+    };
+  }
 
   for (const [key, value] of Object.entries(state)) {
     (HydrateComponent as { prototype: Record<string, unknown> }).prototype[key] = cloneValue(value);
@@ -162,6 +202,7 @@ export async function hydrateSsr(
     }
   }
 
+  CustomElement.clearDefinition(HydrateComponent);
   const au = new Aurelia(container);
   let appRoot: Awaited<ReturnType<Aurelia["hydrate"]>>;
   try {
@@ -184,6 +225,15 @@ export async function hydrateSsr(
     html: () => ctx.host.innerHTML,
     stop: async () => {
       await appRoot.deactivate();
+      if (reuseComponentClass) {
+        const baseWithAu = Base as { $au?: Record<string, unknown> };
+        if (restoreAu === undefined) {
+          delete baseWithAu.$au;
+        } else {
+          baseWithAu.$au = restoreAu;
+        }
+        CustomElement.clearDefinition(Base);
+      }
       ctx.dom.window.close();
     },
   };

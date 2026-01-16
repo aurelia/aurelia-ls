@@ -22,6 +22,7 @@ import type {
   SetPropertyIR,
 } from "../../model/ir.js";
 import type { ExprTable, P5Element, P5Loc } from "./lower-shared.js";
+import type { ProjectionMap } from "./lower-shared.js";
 import {
   attrLoc,
   attrValueLoc,
@@ -160,7 +161,8 @@ export function lowerElementAttributes(
   el: P5Element,
   attrParser: AttributeParser,
   table: ExprTable,
-  catalog: ResourceCatalog
+  catalog: ResourceCatalog,
+  projectionMap?: ProjectionMap,
 ): ElementLoweringResult {
   const attrs = el.attrs ?? [];
   const authoredTag = el.nodeName.toLowerCase();
@@ -424,10 +426,12 @@ export function lowerElementAttributes(
 
   const instructions: InstructionIR[] = [];
   if (elementDef) {
+    const projections = projectionMap?.get(el);
     instructions.push({
       type: "hydrateElement",
       res: elementDef.name,
       props: hydrateElementProps,
+      ...(projections ? { projections } : {}),
       containerless,
       loc: toSpan(el.sourceCodeLocation, table.source),
     } satisfies HydrateElementIR);

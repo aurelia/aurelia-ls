@@ -946,6 +946,7 @@ if (HAS_AURELIA_TABLE) {
         cwd: REPO_ROOT,
         root: "app-root",
         waitFor: "[data-au-hydrated]",
+        timeoutMs: 60_000,
         dom: [
           {
             selector: ".row .name",
@@ -1283,7 +1284,9 @@ if (HAS_AURELIA_GOOGLE_MAPS) {
   });
 }
 
-const SCENARIO_GROUP_SIZE = 4;
+const SCENARIO_GROUP_SIZE = 2;
+const DEFAULT_SCENARIO_TIMEOUT_MS = 30_000;
+const GROUP_TIMEOUT_BUFFER_MS = 10_000;
 const ACTIVE_SCENARIOS = ONLY_SCENARIOS.length > 0
   ? SCENARIOS.filter((scenario) => ONLY_SCENARIOS.includes(scenario.id))
   : SCENARIOS;
@@ -1297,13 +1300,17 @@ if (ONLY_SCENARIOS.length > 0 && ACTIVE_SCENARIOS.length === 0) {
   );
 }
 const SCENARIO_GROUPS = chunkScenarios(ACTIVE_SCENARIOS, SCENARIO_GROUP_SIZE);
+const SCENARIO_GROUP_TIMEOUTS = SCENARIO_GROUPS.map((group) => (
+  group.reduce((total, scenario) => total + getScenarioTimeoutMs(scenario), GROUP_TIMEOUT_BUFFER_MS)
+));
 
 describe("integration harness scenarios", () => {
   SCENARIO_GROUPS.forEach((group, index) => {
     const label = `runs end-to-end scenarios with snapshots (${index + 1}/${SCENARIO_GROUPS.length})`;
+    const timeoutMs = SCENARIO_GROUP_TIMEOUTS[index] ?? DEFAULT_SCENARIO_TIMEOUT_MS;
     test(label, async () => {
       await runScenarioGroup(group);
-    });
+    }, timeoutMs);
   });
 });
 
@@ -1367,6 +1374,14 @@ function chunkScenarios(
     groups.push(scenarios.slice(i, i + groupSize));
   }
   return groups;
+}
+
+function getScenarioTimeoutMs(scenario: IntegrationScenario): number {
+  const runtime = scenario.expect?.runtime as BrowserRuntimeExpectation | SsrRuntimeExpectation | undefined;
+  if (runtime?.kind === "browser") {
+    return Math.max(DEFAULT_SCENARIO_TIMEOUT_MS, runtime.timeoutMs ?? DEFAULT_SCENARIO_TIMEOUT_MS);
+  }
+  return DEFAULT_SCENARIO_TIMEOUT_MS;
 }
 
 async function runRuntimeAssertions(run: Awaited<ReturnType<typeof runIntegrationScenario>>): Promise<void> {
@@ -1692,6 +1707,9 @@ async function buildExternalModuleBundle(
     target: "es2022",
     sourcemap: "inline",
     resolveExtensions: [".ts", ".js"],
+    loader: {
+      ".html": "text",
+    },
     tsconfigRaw: {
       compilerOptions: {
         useDefineForClassFields: false,

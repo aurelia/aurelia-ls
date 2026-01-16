@@ -3,7 +3,7 @@ import type { ResourceCatalog } from "../../language/registry.js";
 import type { InstructionRow, TemplateIR } from "../../model/ir.js";
 import { collectControllers } from "./controller-lowering.js";
 import { lowerElementAttributes } from "./element-lowering.js";
-import type { ExprTable, DomIdAllocator, P5Node, P5Template } from "./lower-shared.js";
+import type { ExprTable, DomIdAllocator, P5Node, P5Template, ProjectionMap } from "./lower-shared.js";
 import { findAttr, isElement, isText } from "./lower-shared.js";
 import { lowerLetElement } from "./let-lowering.js";
 import { lowerTextNode } from "./text-lowering.js";
@@ -16,7 +16,8 @@ export function collectRows(
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[],
   catalog: ResourceCatalog,
-  skipTags?: Set<string>
+  skipTags?: Set<string>,
+  projectionMap?: ProjectionMap,
 ): void {
   ids.withinChildren(() => {
     const kids = p.childNodes ?? [];
@@ -28,7 +29,7 @@ export function collectRows(
         // But process their children - parse5 may have nested content inside them
         if (skipTags?.has(tag)) {
           // Recursively process children
-          collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags);
+          collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
           continue;
         }
 
@@ -50,10 +51,13 @@ export function collectRows(
 
         const ctrlRows = collectControllers(n, attrParser, table, nestedTemplates, catalog, collectRows);
         const nodeRows =
-          ctrlRows.length > 0 ? ctrlRows : lowerElementAttributes(n, attrParser, table, catalog).instructions;
+          ctrlRows.length > 0
+            ? ctrlRows
+            : lowerElementAttributes(n, attrParser, table, catalog, projectionMap).instructions;
         if (nodeRows.length) rows.push({ target, instructions: nodeRows });
 
-        if (!ctrlRows.length) {
+        const skipChildren = !!projectionMap?.has(n);
+        if (!ctrlRows.length && !skipChildren) {
           if (tag === "template") {
             // Skip promise branch templates - their content is handled by injectPromiseBranchesIntoDef
             const isPromiseBranch = findAttr(n, "then") || findAttr(n, "catch") || findAttr(n, "pending");
@@ -66,11 +70,12 @@ export function collectRows(
                 nestedTemplates,
                 rows,
                 catalog,
-                skipTags
+                skipTags,
+                projectionMap,
               );
             }
           } else {
-            collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags);
+            collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
           }
         }
         ids.exitElement();

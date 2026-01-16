@@ -6,6 +6,7 @@ import type {
   ExprRef,
   ExprTableEntry,
   InterpIR,
+  TemplateIR,
   IrDiagCode,
   IrDiagnostic,
   SourceSpan,
@@ -26,6 +27,9 @@ export type P5Loc =
   | DefaultTreeAdapterMap["textNode"]["sourceCodeLocation"]
   | null
   | undefined;
+
+export type ProjectionDef = { slot?: string | null; def: TemplateIR };
+export type ProjectionMap = WeakMap<P5Element, ProjectionDef[]>;
 
 export function isElement(n: P5Node): n is P5Element {
   return (n as P5Element).tagName != null;

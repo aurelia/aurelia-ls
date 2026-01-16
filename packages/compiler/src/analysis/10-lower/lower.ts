@@ -10,6 +10,7 @@ import { ExprTable, DomIdAllocator } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
+import { buildProjectionMap } from "./template-builders.js";
 
 export interface BuildIrOptions {
   file?: string;
@@ -49,15 +50,25 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     // Tags to skip during DOM building and row collection
     const skipTags = META_ELEMENT_TAGS;
 
+    const projectionMap = buildProjectionMap(
+      p5,
+      opts.attrParser,
+      table,
+      nestedTemplates,
+      catalog,
+      collectRows,
+      skipTags,
+    );
+
     // Build DOM tree (skipping meta elements)
     trace.event("lower.dom.start");
-    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, undefined, skipTags);
+    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, undefined, skipTags, projectionMap);
     trace.event("lower.dom.complete");
 
     // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, skipTags);
+    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
     trace.event("lower.rows.complete");
 
     // Build root template with meta

@@ -96,13 +96,19 @@
     },
     "markup": "<my-card title.bind=\"heading\"><p>${body}</p></my-card>",
     "expect": {
-      "targetCount": 2,
+      "targetCount": 1,
       "exprCount": 2,
       "instructions": [
-        { "type": "hydrateElement", "target": 0, "resource": "my-card", "propCount": 1, "containerless": false },
-        { "type": "textBinding", "target": 1, "parts": 2, "exprs": 1 }
+        { "type": "hydrateElement", "target": 0, "resource": "my-card", "propCount": 1, "containerless": false }
       ],
-      "nested": []
+      "nested": [
+        {
+          "name": "my-card_projection_0",
+          "instructions": [
+            { "type": "textBinding", "target": 0, "parts": 2, "exprs": 1 }
+          ]
+        }
+      ]
     }
   },
   {
