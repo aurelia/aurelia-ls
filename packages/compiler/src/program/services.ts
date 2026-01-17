@@ -4,6 +4,7 @@ import {
   offsetAtPosition,
   positionAtOffset,
   resolveSourceSpan,
+  spanContainsOffset,
   spanLength,
   spanToRange,
 } from "../model/index.js";
@@ -17,8 +18,22 @@ import { stableHash } from "../pipeline/index.js";
 // Analysis imports (via barrel)
 import type { TypecheckDiagnostic } from "../analysis/index.js";
 
+// Language imports (via barrel)
+import {
+  buildTemplateSyntaxRegistry,
+  materializeResourcesForScope,
+  prepareSemantics,
+  type AttrRes,
+  type Bindable,
+  type ElementRes,
+  type ResourceCollections,
+  type SemanticsWithCaches,
+  type TemplateSyntaxRegistry,
+  type TypeRef,
+} from "../language/index.js";
+
 // Synthesis imports (via barrel)
-import type { TemplateBindableInfo, TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/index.js";
+import type { TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/index.js";
 
 // Compiler facade
 import type { TemplateCompilation } from "../facade.js";
@@ -363,7 +378,8 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (offset == null) return [];
 
     const query = this.program.getQuery(canonical.uri);
-    const template = this.collectTemplateCompletions(query, snapshot, offset);
+    const compilation = this.program.getCompilation(canonical.uri);
+    const template = this.collectTemplateCompletions(query, snapshot, offset, compilation);
     const typescript = this.collectTypeScriptCompletions(canonical, snapshot, offset);
     return dedupeCompletions([...template, ...typescript]);
   }
@@ -453,25 +469,36 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return extras.length ? dedupeTextEdits([...mapped, ...extras]) : mapped;
   }
 
-  private collectTemplateCompletions(query: TemplateQueryFacade, snapshot: DocumentSnapshot, offset: number): CompletionItem[] {
-    // If we're inside an expression, lean on TypeScript completions instead of guesswork.
-    if (query.exprAt(offset)) return [];
-    const node = query.nodeAt(offset);
-    if (!node) return [];
-    const bindables = query.bindablesFor(node);
-    if (!bindables?.length) return [];
+  private collectTemplateCompletions(
+    query: TemplateQueryFacade,
+    snapshot: DocumentSnapshot,
+    offset: number,
+    compilation: TemplateCompilation | null,
+  ): CompletionItem[] {
+    const { sem, resources, syntax } = resolveCompletionContext(this.program);
 
-    const range = wordRangeAtOffset(snapshot.text, offset);
-    return bindables.map((bindable) => {
-      const detail = describeBindable(bindable);
-      return {
-        label: bindable.name,
-        source: "template" as const,
-        range,
-        ...(detail ? { detail } : {}),
-        ...(bindable.type ? { documentation: bindable.type } : {}),
-      };
-    });
+    const exprInfo = query.exprAt(offset);
+    if (exprInfo) {
+      const exprSpan = findExpressionSpan(compilation?.mapping ?? null, offset) ?? exprInfo.span;
+      return collectExpressionCompletions(snapshot.text, offset, exprSpan, resources);
+    }
+
+    const context = findTagContext(snapshot.text, offset);
+    if (!context) return [];
+
+    if (context.kind === "tag-name") {
+      return collectTagNameCompletions(snapshot.text, context, resources, sem);
+    }
+
+    if (context.kind === "attr-name") {
+      return collectAttributeNameCompletions(snapshot.text, context, resources, sem, syntax);
+    }
+
+    if (context.kind === "attr-value") {
+      return collectAttributeValueCompletions(snapshot.text, context, resources);
+    }
+
+    return [];
   }
 
   private collectTypeScriptCompletions(
@@ -830,16 +857,6 @@ function getVmRootTypeExpr(vm: TemplateProgram["options"]["vm"]): string {
   return vm.getRootVmTypeExpr();
 }
 
-function describeBindable(bindable: TemplateBindableInfo): string | undefined {
-  const mode = bindable.mode ? `[${bindable.mode}]` : null;
-  const source = bindable.source;
-  const type = bindable.type ? `: ${bindable.type}` : "";
-  const parts: string[] = [source];
-  if (mode) parts.push(mode);
-  if (!parts.length && !type) return undefined;
-  return `${parts.join(" ")}${type}`;
-}
-
 function dedupeCompletions(items: readonly CompletionItem[]): CompletionItem[] {
   const seen = new Set<string>();
   const results: CompletionItem[] = [];
@@ -857,28 +874,542 @@ function rangeKey(range: TextRange | undefined): string {
   return `${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
 }
 
-function wordRangeAtOffset(text: string, offset: number): TextRange {
-  const clamped = Math.max(0, Math.min(offset, text.length));
-  let start = clamped;
-  while (start > 0 && isIdentifierChar(text.charCodeAt(start - 1))) start -= 1;
-  let end = clamped;
-  while (end < text.length && isIdentifierChar(text.charCodeAt(end))) end += 1;
+type TagContext =
+  | {
+      kind: "tag-name";
+      tagName: string;
+      nameStart: number;
+      nameEnd: number;
+      prefix: string;
+    }
+  | {
+      kind: "attr-name";
+      tagName: string;
+      attrName: string;
+      attrStart: number;
+      attrEnd: number;
+      prefix: string;
+    }
+  | {
+      kind: "attr-value";
+      tagName: string;
+      attrName: string;
+      valueStart: number;
+      valueEnd: number;
+      prefix: string;
+    };
+
+function resolveCompletionContext(
+  program: TemplateProgram,
+): { sem: SemanticsWithCaches; resources: ResourceCollections; syntax: TemplateSyntaxRegistry } {
+  const base = prepareSemantics(program.options.semantics, {
+    catalog: program.options.catalog,
+  });
+  const graph = program.options.resourceGraph ?? base.resourceGraph ?? null;
+  const scope = program.options.resourceScope ?? base.defaultScope ?? null;
+  const { resources } = materializeResourcesForScope(base, graph, scope);
+  const catalogResources = program.options.catalog?.resources;
+  const mergedResources = catalogResources ? mergeResourceCollections(resources, catalogResources) : resources;
+  const sem = prepareSemantics(
+    { ...base, resourceGraph: graph ?? undefined, defaultScope: scope ?? undefined },
+    { resources: mergedResources },
+  );
+  const syntax = program.options.syntax ?? buildTemplateSyntaxRegistry(sem);
+  return { sem, resources: mergedResources, syntax };
+}
+
+function mergeResourceCollections(
+  base: ResourceCollections,
+  extra: ResourceCollections,
+): ResourceCollections {
   return {
-    start: positionAtOffset(text, start),
-    end: positionAtOffset(text, end),
+    elements: { ...extra.elements, ...base.elements },
+    attributes: { ...extra.attributes, ...base.attributes },
+    controllers: { ...extra.controllers, ...base.controllers },
+    valueConverters: { ...extra.valueConverters, ...base.valueConverters },
+    bindingBehaviors: { ...extra.bindingBehaviors, ...base.bindingBehaviors },
   };
 }
 
-function isIdentifierChar(code: number): boolean {
+function collectExpressionCompletions(
+  text: string,
+  offset: number,
+  exprSpan: SourceSpan,
+  resources: ResourceCollections,
+): CompletionItem[] {
+  if (!spanContainsOffset(exprSpan, offset)) return [];
+  const exprText = text.slice(exprSpan.start, exprSpan.end);
+  const relativeOffset = offset - exprSpan.start;
+  const hit = findPipeContext(exprText, relativeOffset);
+  if (!hit) return [];
+  const range = rangeFromOffsets(text, exprSpan.start + hit.nameStart, exprSpan.start + hit.nameEnd);
+  const prefix = hit.prefix.toLowerCase();
+  const labels = hit.kind === "value-converter"
+    ? Object.keys(resources.valueConverters ?? {})
+    : Object.keys(resources.bindingBehaviors ?? {});
+  const detail = hit.kind === "value-converter" ? "Value Converter" : "Binding Behavior";
+  return labels
+    .filter((label) => label.toLowerCase().startsWith(prefix))
+    .sort()
+    .map((label) => ({ label, source: "template", range, detail }));
+}
+
+function collectTagNameCompletions(
+  text: string,
+  context: Extract<TagContext, { kind: "tag-name" }>,
+  resources: ResourceCollections,
+  sem: SemanticsWithCaches,
+): CompletionItem[] {
+  const range = rangeFromOffsets(text, context.nameStart, context.nameEnd);
+  const prefix = context.prefix.toLowerCase();
+  const items: CompletionItem[] = [];
+  const seen = new Set<string>();
+
+  for (const element of Object.values(resources.elements)) {
+    const names = [element.name, ...(element.aliases ?? [])].filter((name): name is string => !!name);
+    for (const name of names) {
+      if (!name.toLowerCase().startsWith(prefix)) continue;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      items.push({ label: name, source: "template", range, detail: "Custom Element" });
+    }
+  }
+
+  for (const name of Object.keys(sem.dom.elements ?? {})) {
+    if (!name.toLowerCase().startsWith(prefix)) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    items.push({ label: name, source: "template", range, detail: "HTML Element" });
+  }
+
+  return items;
+}
+
+function collectAttributeNameCompletions(
+  text: string,
+  context: Extract<TagContext, { kind: "attr-name" }>,
+  resources: ResourceCollections,
+  sem: SemanticsWithCaches,
+  syntax: TemplateSyntaxRegistry,
+): CompletionItem[] {
+  const typed = context.prefix;
+  const command = parseBindingCommandContext(typed, context.attrName);
+  if (command) {
+    return collectBindingCommandCompletions(
+      syntax,
+      typed.slice(command.commandOffset),
+      rangeFromOffsets(text, context.attrStart + command.rangeStart, context.attrStart + command.rangeEnd),
+    );
+  }
+
+  let prefix = typed;
+  let rangeStart = context.attrStart;
+  if (prefix.startsWith(":") || prefix.startsWith("@")) {
+    prefix = prefix.slice(1);
+    rangeStart += 1;
+  }
+  const range = rangeFromOffsets(text, rangeStart, context.attrEnd);
+  const lowerPrefix = prefix.toLowerCase();
+
+  const items: CompletionItem[] = [];
+  const seen = new Set<string>();
+  const push = (label: string, detail?: string, documentation?: string) => {
+    if (!label.toLowerCase().startsWith(lowerPrefix)) return;
+    if (seen.has(label)) return;
+    seen.add(label);
+    items.push({
+      label,
+      source: "template",
+      range,
+      ...(detail ? { detail } : {}),
+      ...(documentation ? { documentation } : {}),
+    });
+  };
+
+  const element = context.tagName ? resolveElement(resources, context.tagName) : null;
+  if (element) {
+    for (const bindable of Object.values(element.bindables ?? {})) {
+      const label = (bindable.attribute ?? bindable.name).trim();
+      if (!label) continue;
+      push(label, "Bindable", typeRefToString(bindable.type));
+    }
+  }
+
+  for (const attr of Object.values(resources.attributes ?? {})) {
+    const detail = attr.isTemplateController ? "Template Controller" : "Custom Attribute";
+    const names = [attr.name, ...(attr.aliases ?? [])].filter((name): name is string => !!name);
+    for (const name of names) {
+      push(name, detail);
+    }
+  }
+
+  const dom = context.tagName ? sem.dom.elements[context.tagName] : null;
+  if (dom) {
+    for (const name of Object.keys(dom.props ?? {})) {
+      push(name, "Native Attribute");
+    }
+    for (const name of Object.keys(dom.attrToProp ?? {})) {
+      push(name, "Native Attribute");
+    }
+    for (const name of Object.keys(sem.naming.attrToPropGlobal ?? {})) {
+      push(name, "Native Attribute");
+    }
+    const perTag = sem.naming.perTag?.[context.tagName];
+    if (perTag) {
+      for (const name of Object.keys(perTag)) {
+        push(name, "Native Attribute");
+      }
+    }
+  }
+
+  return items;
+}
+
+function collectAttributeValueCompletions(
+  text: string,
+  context: Extract<TagContext, { kind: "attr-value" }>,
+  resources: ResourceCollections,
+): CompletionItem[] {
+  const attrTarget = normalizeAttributeTarget(context.attrName);
+  if (!attrTarget) return [];
+
+  const range = rangeFromOffsets(text, context.valueStart, context.valueEnd);
+  const prefix = context.prefix.toLowerCase();
+
+  const element = context.tagName ? resolveElement(resources, context.tagName) : null;
+  const elementBindable = element ? findBindableForAttribute(element.bindables, attrTarget) : null;
+
+  const attribute = resolveAttribute(resources, attrTarget);
+  const attributeBindable = attribute ? findPrimaryBindable(attribute) : null;
+
+  const bindable = elementBindable ?? attributeBindable;
+  if (!bindable) return [];
+
+  const literals = extractStringLiteralUnion(bindable.type);
+  if (!literals.length) return [];
+
+  return literals
+    .filter((value) => value.toLowerCase().startsWith(prefix))
+    .sort()
+    .map((value) => ({ label: value, source: "template", range }));
+}
+
+function collectBindingCommandCompletions(
+  syntax: TemplateSyntaxRegistry,
+  prefix: string,
+  range: TextRange,
+): CompletionItem[] {
+  const lowerPrefix = prefix.toLowerCase();
+  return Object.entries(syntax.bindingCommands ?? {})
+    .filter(([name, cmd]) => !name.includes(".") && cmd.kind !== "translation")
+    .map(([name, cmd]) => ({
+      name,
+      detail: cmd.kind,
+    }))
+    .filter((entry) => entry.name.toLowerCase().startsWith(lowerPrefix))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((entry) => ({
+      label: entry.name,
+      source: "template",
+      range,
+      ...(entry.detail ? { detail: entry.detail } : {}),
+    }));
+}
+
+function findExpressionSpan(mapping: TemplateMappingArtifact | null, offset: number): SourceSpan | null {
+  if (!mapping) return null;
+  let best: SourceSpan | null = null;
+  for (const entry of mapping.entries ?? []) {
+    if (!spanContainsOffset(entry.htmlSpan, offset)) continue;
+    if (!best || spanLength(entry.htmlSpan) < spanLength(best)) best = entry.htmlSpan;
+  }
+  return best;
+}
+
+function findPipeContext(
+  text: string,
+  offset: number,
+): { kind: "value-converter" | "binding-behavior"; nameStart: number; nameEnd: number; prefix: string } | null {
+  if (offset <= 0) return null;
+  for (let i = Math.min(offset - 1, text.length - 1); i >= 0; i -= 1) {
+    const code = text.charCodeAt(i);
+    if (code === 124 /* | */) {
+      if (text.charCodeAt(i - 1) === 124 || text.charCodeAt(i + 1) === 124) continue;
+      return resolvePipeName(text, offset, i, "value-converter");
+    }
+    if (code === 38 /* & */) {
+      if (text.charCodeAt(i - 1) === 38 || text.charCodeAt(i + 1) === 38) continue;
+      return resolvePipeName(text, offset, i, "binding-behavior");
+    }
+  }
+  return null;
+}
+
+function resolvePipeName(
+  text: string,
+  offset: number,
+  operatorIndex: number,
+  kind: "value-converter" | "binding-behavior",
+): { kind: "value-converter" | "binding-behavior"; nameStart: number; nameEnd: number; prefix: string } | null {
+  let i = operatorIndex + 1;
+  while (i < text.length && isWhitespace(text.charCodeAt(i))) i += 1;
+  const nameStart = i;
+  while (i < text.length && isResourceNameChar(text.charCodeAt(i))) i += 1;
+  const nameEnd = i;
+  if (offset < nameStart || offset > nameEnd) return null;
+  const prefix = text.slice(nameStart, Math.min(offset, nameEnd));
+  return { kind, nameStart, nameEnd, prefix };
+}
+
+function findTagContext(text: string, offset: number): TagContext | null {
+  const clamped = Math.max(0, Math.min(offset, text.length));
+  const tagStart = text.lastIndexOf("<", clamped);
+  if (tagStart < 0) return null;
+  const lastClose = text.lastIndexOf(">", clamped);
+  if (lastClose > tagStart) return null;
+
+  let i = tagStart + 1;
+  const first = text.charCodeAt(i);
+  if (first === 47 /* / */ || first === 33 /* ! */ || first === 63 /* ? */) return null;
+
+  while (i < text.length && isWhitespace(text.charCodeAt(i))) i += 1;
+  const nameStart = i;
+  while (i < text.length && isTagNameChar(text.charCodeAt(i))) i += 1;
+  const nameEnd = i;
+  const rawTagName = text.slice(nameStart, nameEnd);
+  const tagName = rawTagName.toLowerCase();
+
+  if (clamped <= nameEnd) {
+    return {
+      kind: "tag-name",
+      tagName,
+      nameStart,
+      nameEnd,
+      prefix: text.slice(nameStart, clamped),
+    };
+  }
+
+  const tagEnd = text.indexOf(">", tagStart + 1);
+  const limit = tagEnd === -1 ? text.length : tagEnd;
+
+  while (i < limit) {
+    while (i < limit && isWhitespace(text.charCodeAt(i))) {
+      if (clamped <= i) {
+        return { kind: "attr-name", tagName, attrName: "", attrStart: clamped, attrEnd: clamped, prefix: "" };
+      }
+      i += 1;
+    }
+    if (i >= limit) break;
+    if (text.charCodeAt(i) === 47 /* / */) {
+      if (clamped <= i) {
+        return { kind: "attr-name", tagName, attrName: "", attrStart: clamped, attrEnd: clamped, prefix: "" };
+      }
+      i += 1;
+      continue;
+    }
+
+    const attrStart = i;
+    while (i < limit && isAttrNameChar(text.charCodeAt(i))) i += 1;
+    const attrEnd = i;
+    const attrName = text.slice(attrStart, attrEnd);
+
+    if (clamped <= attrEnd) {
+      return {
+        kind: "attr-name",
+        tagName,
+        attrName,
+        attrStart,
+        attrEnd,
+        prefix: text.slice(attrStart, Math.min(clamped, attrEnd)),
+      };
+    }
+
+    while (i < limit && isWhitespace(text.charCodeAt(i))) i += 1;
+    if (i >= limit) break;
+    if (text.charCodeAt(i) !== 61 /* = */) continue;
+    i += 1;
+    while (i < limit && isWhitespace(text.charCodeAt(i))) i += 1;
+    if (i >= limit) break;
+
+    const valueStart = i;
+    const quote = text.charCodeAt(i);
+    if (quote === 34 /* " */ || quote === 39 /* ' */) {
+      i += 1;
+      const contentStart = i;
+      while (i < limit && text.charCodeAt(i) !== quote) i += 1;
+      const contentEnd = i;
+      if (clamped >= contentStart && clamped <= contentEnd) {
+        return {
+          kind: "attr-value",
+          tagName,
+          attrName,
+          valueStart: contentStart,
+          valueEnd: contentEnd,
+          prefix: text.slice(contentStart, Math.min(clamped, contentEnd)),
+        };
+      }
+      if (i < limit) i += 1;
+      continue;
+    }
+
+    while (i < limit && !isWhitespace(text.charCodeAt(i)) && text.charCodeAt(i) !== 62 /* > */) i += 1;
+    const contentEnd = i;
+    if (clamped >= valueStart && clamped <= contentEnd) {
+      return {
+        kind: "attr-value",
+        tagName,
+        attrName,
+        valueStart,
+        valueEnd: contentEnd,
+        prefix: text.slice(valueStart, Math.min(clamped, contentEnd)),
+      };
+    }
+  }
+
+  return { kind: "attr-name", tagName, attrName: "", attrStart: clamped, attrEnd: clamped, prefix: "" };
+}
+
+function parseBindingCommandContext(
+  typed: string,
+  attrName: string,
+): { commandOffset: number; rangeStart: number; rangeEnd: number } | null {
+  const lastDot = typed.lastIndexOf(".");
+  if (lastDot < 0) return null;
+  const colonIndex = typed.indexOf(":", lastDot + 1);
+  if (colonIndex >= 0 && colonIndex < typed.length) return null;
+
+  const fullDot = attrName.lastIndexOf(".");
+  if (fullDot < 0) return null;
+  let commandEnd = attrName.length;
+  const commandColon = attrName.indexOf(":", fullDot + 1);
+  if (commandColon >= 0) commandEnd = commandColon;
+
+  return {
+    commandOffset: lastDot + 1,
+    rangeStart: fullDot + 1,
+    rangeEnd: commandEnd,
+  };
+}
+
+function normalizeAttributeTarget(attrName: string): string {
+  let target = attrName.trim();
+  if (!target) return "";
+  if (target.startsWith(":") || target.startsWith("@")) {
+    target = target.slice(1);
+  }
+  const dot = target.indexOf(".");
+  if (dot >= 0) target = target.slice(0, dot);
+  const colon = target.indexOf(":");
+  if (colon >= 0) target = target.slice(0, colon);
+  return target.toLowerCase();
+}
+
+function resolveElement(resources: ResourceCollections, tagName: string): ElementRes | null {
+  const normalized = tagName.toLowerCase();
+  const direct = resources.elements[normalized];
+  if (direct) return direct;
+  for (const el of Object.values(resources.elements)) {
+    if (!el.aliases) continue;
+    if (el.aliases.some((alias) => alias.toLowerCase() === normalized)) return el;
+  }
+  return null;
+}
+
+function resolveAttribute(resources: ResourceCollections, name: string): AttrRes | null {
+  const normalized = name.toLowerCase();
+  const direct = resources.attributes[normalized];
+  if (direct) return direct;
+  for (const attr of Object.values(resources.attributes)) {
+    if (!attr.aliases) continue;
+    if (attr.aliases.some((alias) => alias.toLowerCase() === normalized)) return attr;
+  }
+  return null;
+}
+
+function findBindableForAttribute(
+  bindables: Readonly<Record<string, Bindable>> | undefined,
+  attrName: string,
+): Bindable | null {
+  if (!bindables) return null;
+  const normalized = attrName.toLowerCase();
+  for (const bindable of Object.values(bindables)) {
+    const attr = (bindable.attribute ?? bindable.name).toLowerCase();
+    if (attr === normalized) return bindable;
+  }
+  return null;
+}
+
+function findPrimaryBindable(attr: AttrRes): Bindable | null {
+  const key = attr.primary ?? Object.keys(attr.bindables ?? {})[0];
+  if (!key) return null;
+  return attr.bindables[key] ?? null;
+}
+
+function extractStringLiteralUnion(type: TypeRef | undefined): string[] {
+  if (!type || type.kind !== "ts") return [];
+  const values: string[] = [];
+  const regex = /(['"])([^'"]+)\1/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(type.name)) !== null) {
+    const value = match[2];
+    if (value) values.push(value);
+  }
+  return Array.from(new Set(values));
+}
+
+function typeRefToString(type: TypeRef | undefined): string | undefined {
+  if (!type) return undefined;
+  switch (type.kind) {
+    case "ts":
+      return type.name;
+    case "any":
+      return "any";
+    case "unknown":
+      return "unknown";
+    default:
+      return undefined;
+  }
+}
+
+function rangeFromOffsets(text: string, start: number, end: number): TextRange {
+  const safeStart = Math.max(0, Math.min(start, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(end, text.length));
+  return {
+    start: positionAtOffset(text, safeStart),
+    end: positionAtOffset(text, safeEnd),
+  };
+}
+
+function isWhitespace(code: number): boolean {
+  return code === 32 /* space */ || code === 9 /* tab */ || code === 10 /* lf */ || code === 13 /* cr */;
+}
+
+function isTagNameChar(code: number): boolean {
   return (
-    (code >= 48 && code <= 57) || // 0-9
-    (code >= 65 && code <= 90) || // A-Z
-    (code >= 97 && code <= 122) || // a-z
-    code === 95 /* _ */ ||
-    code === 36 /* $ */ ||
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
     code === 45 /* - */ ||
-    code === 46 /* . */ ||
     code === 58 /* : */
+  );
+}
+
+function isAttrNameChar(code: number): boolean {
+  return (
+    isTagNameChar(code) ||
+    code === 46 /* . */ ||
+    code === 64 /* @ */ ||
+    code === 95 /* _ */
+  );
+}
+
+function isResourceNameChar(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 45 /* - */ ||
+    code === 95 /* _ */
   );
 }
 
