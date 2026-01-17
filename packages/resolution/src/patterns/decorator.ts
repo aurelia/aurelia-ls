@@ -32,9 +32,11 @@ import type {
 } from '../analysis/value/types.js';
 import {
   extractString,
+  extractStringWithSpan,
   extractBoolean,
   extractStringArray,
   extractStringProp,
+  extractStringPropWithSpan,
   extractBindingModeProp,
   extractBooleanProp,
   extractStringArrayProp,
@@ -121,6 +123,7 @@ interface DecoratorMeta {
 
 interface ElementMeta {
   name?: string;
+  nameSpan?: TextSpan;
   aliases: string[];
   bindables: BindableConfig[];
   containerless: boolean;
@@ -130,6 +133,7 @@ interface ElementMeta {
 
 interface AttributeMeta {
   name?: string;
+  nameSpan?: TextSpan;
   aliases: string[];
   bindables: BindableConfig[];
   isTemplateController: boolean;
@@ -140,6 +144,7 @@ interface AttributeMeta {
 
 interface SimpleResourceMeta {
   name?: string;
+  nameSpan?: TextSpan;
   aliases: string[];
   decoratorSpan?: TextSpan;
 }
@@ -149,6 +154,7 @@ interface BindableConfig {
   mode?: BindingMode;
   primary?: boolean;
   attribute?: string;
+  attributeSpan?: TextSpan;
 }
 
 /**
@@ -197,6 +203,7 @@ function collectDecoratorMeta(decorators: readonly DecoratorApplication[]): Deco
 
 interface ParsedResourceDecorator {
   name?: string;
+  nameSpan?: TextSpan;
   aliases: string[];
   bindables: BindableConfig[];
   containerless: boolean;
@@ -228,15 +235,20 @@ function parseResourceDecorator(dec: DecoratorApplication): ParsedResourceDecora
   if (!arg) return result;
 
   // String argument: @customElement('my-element')
-  const stringName = extractString(arg);
-  if (stringName !== undefined) {
-    result.name = stringName;
+  const stringName = extractStringWithSpan(arg);
+  if (stringName) {
+    result.name = stringName.value;
+    result.nameSpan = stringName.span;
     return result;
   }
 
   // Object argument: @customElement({ name: 'my-element', ... })
   if (arg.kind === 'object') {
-    result.name = extractStringProp(arg, 'name');
+    const nameProp = extractStringPropWithSpan(arg, 'name');
+    if (nameProp) {
+      result.name = nameProp.value;
+      result.nameSpan = nameProp.span;
+    }
 
     // Aliases
     const aliasesArr = extractStringArrayProp(arg, 'aliases');
@@ -281,15 +293,20 @@ function parseSimpleDecorator(dec: DecoratorApplication): SimpleResourceMeta {
   if (!arg) return result;
 
   // String argument
-  const stringName = extractString(arg);
-  if (stringName !== undefined) {
-    result.name = stringName;
+  const stringName = extractStringWithSpan(arg);
+  if (stringName) {
+    result.name = stringName.value;
+    result.nameSpan = stringName.span;
     return result;
   }
 
   // Object argument
   if (arg.kind === 'object') {
-    result.name = extractStringProp(arg, 'name');
+    const nameProp = extractStringPropWithSpan(arg, 'name');
+    if (nameProp) {
+      result.name = nameProp.value;
+      result.nameSpan = nameProp.span;
+    }
     const aliasesArr = extractStringArrayProp(arg, 'aliases');
     result.aliases.push(...aliasesArr);
     const alias = extractStringProp(arg, 'alias');
@@ -317,13 +334,15 @@ function parseBindablesValue(value: AnalyzableValue): BindableConfig[] {
 
       // Object element
       if (element.kind === 'object') {
-        const name = extractStringProp(element, 'name');
-        if (name) {
+        const nameProp = extractStringPropWithSpan(element, 'name');
+        if (nameProp) {
+          const attrProp = extractStringPropWithSpan(element, 'attribute');
           result.push({
-            name,
+            name: nameProp.value,
             mode: extractBindingModeProp(element, 'mode'),
             primary: extractBooleanProp(element, 'primary'),
-            attribute: extractStringProp(element, 'attribute'),
+            attribute: attrProp?.value,
+            attributeSpan: attrProp?.span,
           });
         }
       }
@@ -334,11 +353,13 @@ function parseBindablesValue(value: AnalyzableValue): BindableConfig[] {
   if (value.kind === 'object') {
     for (const [name, propValue] of value.properties) {
       if (propValue.kind === 'object') {
+        const attrProp = extractStringPropWithSpan(propValue, 'attribute');
         result.push({
           name,
           mode: extractBindingModeProp(propValue, 'mode'),
           primary: extractBooleanProp(propValue, 'primary'),
-          attribute: extractStringProp(propValue, 'attribute'),
+          attribute: attrProp?.value,
+          attributeSpan: attrProp?.span,
         });
       } else {
         // Just the property name, no config
@@ -360,6 +381,7 @@ function mergeElementMeta(
 ): ElementMeta {
   return {
     name: parsed.name ?? existing?.name,
+    nameSpan: parsed.nameSpan ?? existing?.nameSpan,
     aliases: [...(existing?.aliases ?? []), ...parsed.aliases],
     bindables: [...(existing?.bindables ?? []), ...parsed.bindables],
     containerless: (existing?.containerless ?? false) || parsed.containerless,
@@ -374,6 +396,7 @@ function mergeAttributeMeta(
 ): AttributeMeta {
   return {
     name: parsed.name ?? existing?.name,
+    nameSpan: parsed.nameSpan ?? existing?.nameSpan,
     aliases: [...(existing?.aliases ?? []), ...parsed.aliases],
     bindables: [...(existing?.bindables ?? []), ...parsed.bindables],
     isTemplateController: (existing?.isTemplateController ?? false) || parsed.isTemplateController,
@@ -389,6 +412,7 @@ function mergeSimpleMeta(
 ): SimpleResourceMeta {
   return {
     name: parsed.name ?? existing?.name,
+    nameSpan: parsed.nameSpan ?? existing?.nameSpan,
     aliases: [...(existing?.aliases ?? []), ...parsed.aliases],
     decoratorSpan: parsed.decoratorSpan ?? existing?.decoratorSpan,
   };
@@ -424,6 +448,7 @@ function buildElementDef(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: elementMeta.nameSpan,
     aliases: canonicalAliases(elementMeta.aliases),
     bindables: buildBindableDefs(bindables, cls.filePath, elementMeta.decoratorSpan ?? cls.span),
     containerless: elementMeta.containerless || meta.containerless,
@@ -462,6 +487,7 @@ function buildAttributeDef(
       className: cls.className,
       file: cls.filePath,
       span: cls.span,
+      nameSpan: attrMeta.nameSpan,
       aliases: canonicalAliases(attrMeta.aliases),
       bindables: buildBindableDefs(bindablesWithPrimary, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
       noMultiBindings: attrMeta.noMultiBindings,
@@ -473,6 +499,7 @@ function buildAttributeDef(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: attrMeta.nameSpan,
     aliases: canonicalAliases(attrMeta.aliases),
     bindables: buildBindableDefs(bindablesWithPrimary, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
     primary,
@@ -500,6 +527,7 @@ function buildValueConverterDefFromMeta(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: meta.nameSpan,
   });
 }
 
@@ -523,6 +551,7 @@ function buildBindingBehaviorDefFromMeta(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: meta.nameSpan,
   });
 }
 
@@ -546,6 +575,7 @@ function buildBindableInputs(
       mode: config.mode,
       primary: config.primary,
       attribute: config.attribute,
+      attributeSpan: config.attributeSpan,
     });
   }
 
@@ -556,12 +586,17 @@ function buildBindableInputs(
     // Extract mode/primary from @bindable(...) args if present
     let mode: BindingMode | undefined = existing?.mode;
     let primary: boolean | undefined = existing?.primary;
+    let attribute: string | undefined = existing?.attribute;
+    let attributeSpan: TextSpan | undefined = existing?.attributeSpan;
 
     if (member.args.length > 0) {
       const arg = member.args[0];
       if (arg?.kind === 'object') {
         mode = mode ?? extractBindingModeProp(arg, 'mode');
         primary = primary ?? extractBooleanProp(arg, 'primary');
+        const attrProp = extractStringPropWithSpan(arg, 'attribute');
+        attribute = attribute ?? attrProp?.value;
+        attributeSpan = attributeSpan ?? attrProp?.span;
       }
     }
 
@@ -569,7 +604,8 @@ function buildBindableInputs(
       name: member.name,
       mode,
       primary,
-      attribute: existing?.attribute,
+      attribute,
+      attributeSpan,
       type: member.type,
       span: member.span,
     });

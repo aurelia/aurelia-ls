@@ -31,8 +31,10 @@ import type { ClassValue, AnalyzableValue } from '../analysis/value/types.js';
 import {
   extractString,
   extractBoolean,
+  extractStringWithSpan,
   extractStringArray,
   extractStringProp,
+  extractStringPropWithSpan,
   extractBindingModeProp,
   extractBooleanProp,
   extractStringArrayProp,
@@ -127,7 +129,8 @@ function buildElementDef(
   gaps: AnalysisGap[]
 ): StaticAuMatchResult {
   // Derive name
-  const rawName = extractStringProp(au, 'name') ?? cls.className;
+  const nameProp = extractStringPropWithSpan(au, 'name');
+  const rawName = nameProp?.value ?? cls.className;
   const name = canonicalElementName(rawName);
   if (!name) {
     gaps.push({
@@ -150,6 +153,7 @@ function buildElementDef(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: nameProp?.span,
     aliases: canonicalAliases([...aliases]),
     bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
     containerless,
@@ -170,7 +174,8 @@ function buildAttributeDef(
   gaps: AnalysisGap[]
 ): StaticAuMatchResult {
   // Derive name
-  const rawName = extractStringProp(au, 'name') ?? cls.className;
+  const nameProp = extractStringPropWithSpan(au, 'name');
+  const rawName = nameProp?.value ?? cls.className;
   const name = canonicalAttrName(rawName);
   if (!name) {
     gaps.push({
@@ -197,6 +202,7 @@ function buildAttributeDef(
       className: cls.className,
       file: cls.filePath,
       span: cls.span,
+      nameSpan: nameProp?.span,
       aliases: canonicalAliases([...aliases]),
       bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
       noMultiBindings,
@@ -209,6 +215,7 @@ function buildAttributeDef(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: nameProp?.span,
     aliases: canonicalAliases([...aliases]),
     bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
     primary,
@@ -228,7 +235,8 @@ function buildValueConverterDefFromAu(
   gaps: AnalysisGap[]
 ): StaticAuMatchResult {
   // Derive name
-  const rawName = extractStringProp(au, 'name') ?? cls.className;
+  const nameProp = extractStringPropWithSpan(au, 'name');
+  const rawName = nameProp?.value ?? cls.className;
   const name = canonicalSimpleName(rawName);
   if (!name) {
     gaps.push({
@@ -244,6 +252,7 @@ function buildValueConverterDefFromAu(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: nameProp?.span,
   });
 
   return { resource, gaps };
@@ -259,7 +268,8 @@ function buildBindingBehaviorDefFromAu(
   gaps: AnalysisGap[]
 ): StaticAuMatchResult {
   // Derive name
-  const rawName = extractStringProp(au, 'name') ?? cls.className;
+  const nameProp = extractStringPropWithSpan(au, 'name');
+  const rawName = nameProp?.value ?? cls.className;
   const name = canonicalSimpleName(rawName);
   if (!name) {
     gaps.push({
@@ -275,6 +285,7 @@ function buildBindingBehaviorDefFromAu(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    nameSpan: nameProp?.span,
   });
 
   return { resource, gaps };
@@ -302,13 +313,15 @@ function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
 
       // Object element
       if (element.kind === 'object') {
-        const name = extractStringProp(element, 'name');
-        if (name) {
+        const nameProp = extractStringPropWithSpan(element, 'name');
+        if (nameProp) {
+          const attrProp = extractStringPropWithSpan(element, 'attribute');
           result.push({
-            name,
+            name: nameProp.value,
             mode: extractBindingModeProp(element, 'mode'),
             primary: extractBooleanProp(element, 'primary'),
-            attribute: extractStringProp(element, 'attribute'),
+            attribute: attrProp?.value,
+            attributeSpan: attrProp?.span,
           });
         }
       }
@@ -319,11 +332,13 @@ function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
   if (value.kind === 'object') {
     for (const [name, propValue] of value.properties) {
       if (propValue.kind === 'object') {
+        const attrProp = extractStringPropWithSpan(propValue, 'attribute');
         result.push({
           name,
           mode: extractBindingModeProp(propValue, 'mode'),
           primary: extractBooleanProp(propValue, 'primary'),
-          attribute: extractStringProp(propValue, 'attribute'),
+          attribute: attrProp?.value,
+          attributeSpan: attrProp?.span,
         });
       } else {
         result.push({ name });

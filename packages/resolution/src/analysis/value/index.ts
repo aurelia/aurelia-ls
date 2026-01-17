@@ -55,6 +55,7 @@ export type {
   ImportBinding,
   ResolutionContext,
   OnDemandResolver,
+  ExtractedString,
 } from './types.js';
 
 // Re-export cross-file resolution types from canonical locations
@@ -89,10 +90,12 @@ export {
 // Re-export value extraction helpers (for pattern matching)
 export {
   extractString,
+  extractStringWithSpan,
   extractBoolean,
   extractStringArray,
   getProperty,
   extractStringProp,
+  extractStringPropWithSpan,
   extractBooleanProp,
   extractStringArrayProp,
 } from './types.js';

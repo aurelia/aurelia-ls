@@ -56,6 +56,11 @@ function lookupHostPropCaseInsensitive(host: NodeSem, raw: string): string | nul
 
   // 1) Prefer custom element bindables (component props)
   if (host.custom) {
+    for (const bindable of Object.values(host.custom.def.bindables)) {
+      if (bindable.attribute && bindable.attribute.toLowerCase() === needle) {
+        return bindable.name;
+      }
+    }
     for (const k of Object.keys(host.custom.def.bindables)) {
       if (k.toLowerCase() === needle) return k;
     }

@@ -702,6 +702,20 @@ export function extractString(value: AnalyzableValue | undefined): string | unde
   return undefined;
 }
 
+export type ExtractedString = { value: string; span?: TextSpan };
+
+/**
+ * Extract a string literal value along with its span.
+ */
+export function extractStringWithSpan(value: AnalyzableValue | undefined): ExtractedString | undefined {
+  if (!value) return undefined;
+  const resolved = getResolvedValue(value);
+  if (resolved.kind === 'literal' && typeof resolved.value === 'string') {
+    return { value: resolved.value, span: resolved.span };
+  }
+  return undefined;
+}
+
 /**
  * Extract a boolean from an AnalyzableValue.
  * Returns undefined if not a boolean literal.
@@ -746,6 +760,13 @@ export function getProperty(value: AnalyzableValue | undefined, key: string): An
  */
 export function extractStringProp(obj: AnalyzableValue | undefined, key: string): string | undefined {
   return extractString(getProperty(obj, key));
+}
+
+/**
+ * Extract a string property with its span.
+ */
+export function extractStringPropWithSpan(obj: AnalyzableValue | undefined, key: string): ExtractedString | undefined {
+  return extractStringWithSpan(getProperty(obj, key));
 }
 
 /**

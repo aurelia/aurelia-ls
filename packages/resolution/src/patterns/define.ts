@@ -33,7 +33,9 @@ import type { AnalyzableValue } from '../analysis/value/types.js';
 import {
   extractString,
   extractBoolean,
+  extractStringWithSpan,
   extractStringProp,
+  extractStringPropWithSpan,
   extractBindingModeProp,
   extractBooleanProp,
   extractStringArrayProp,
@@ -139,9 +141,9 @@ function buildElementDef(
   const def = defineCall.definition;
 
   // Handle string-only definition: CustomElement.define('my-element', MyClass)
-  const stringName = extractString(def);
-  if (stringName !== undefined) {
-    const name = canonicalElementName(stringName);
+  const stringName = extractStringWithSpan(def);
+  if (stringName) {
+    const name = canonicalElementName(stringName.value);
     if (!name) {
       gaps.push(invalidNameGap(className, 'element'));
       return { resource: null, gaps };
@@ -152,6 +154,7 @@ function buildElementDef(
       className,
       file: filePath,
       span: defineCall.span,
+      nameSpan: stringName.span,
       boundary: true,
       containerless: false,
     });
@@ -169,7 +172,8 @@ function buildElementDef(
   }
 
   // Extract name
-  const rawName = extractStringProp(def, 'name') ?? className;
+  const nameProp = extractStringPropWithSpan(def, 'name');
+  const rawName = nameProp?.value ?? className;
   const name = canonicalElementName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'element'));
@@ -188,6 +192,7 @@ function buildElementDef(
     className,
     file: filePath,
     span: defineCall.span,
+    nameSpan: nameProp?.span,
     aliases: canonicalAliases([...aliases]),
     bindables: buildBindableDefs(bindables, filePath, defineCall.span),
     containerless,
@@ -211,9 +216,9 @@ function buildAttributeDef(
   const def = defineCall.definition;
 
   // Handle string-only definition
-  const stringName = extractString(def);
-  if (stringName !== undefined) {
-    const name = canonicalAttrName(stringName);
+  const stringName = extractStringWithSpan(def);
+  if (stringName) {
+    const name = canonicalAttrName(stringName.value);
     if (!name) {
       gaps.push(invalidNameGap(className, 'attribute'));
       return { resource: null, gaps };
@@ -224,6 +229,7 @@ function buildAttributeDef(
       className,
       file: filePath,
       span: defineCall.span,
+      nameSpan: stringName.span,
       noMultiBindings: false,
     });
     return { resource, gaps };
@@ -240,7 +246,8 @@ function buildAttributeDef(
   }
 
   // Extract name
-  const rawName = extractStringProp(def, 'name') ?? className;
+  const nameProp = extractStringPropWithSpan(def, 'name');
+  const rawName = nameProp?.value ?? className;
   const name = canonicalAttrName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'attribute'));
@@ -263,6 +270,7 @@ function buildAttributeDef(
       className,
       file: filePath,
       span: defineCall.span,
+      nameSpan: nameProp?.span,
       aliases: canonicalAliases([...aliases]),
       bindables: buildBindableDefs(bindablesWithPrimary, filePath, defineCall.span),
       noMultiBindings,
@@ -275,6 +283,7 @@ function buildAttributeDef(
     className,
     file: filePath,
     span: defineCall.span,
+    nameSpan: nameProp?.span,
     aliases: canonicalAliases([...aliases]),
     bindables: buildBindableDefs(bindablesWithPrimary, filePath, defineCall.span),
     primary,
@@ -297,9 +306,9 @@ function buildValueConverterDefFromDefine(
   const def = defineCall.definition;
 
   // Handle string-only definition
-  const stringName = extractString(def);
-  if (stringName !== undefined) {
-    const name = canonicalSimpleName(stringName);
+  const stringName = extractStringWithSpan(def);
+  if (stringName) {
+    const name = canonicalSimpleName(stringName.value);
     if (!name) {
       gaps.push(invalidNameGap(className, 'value converter'));
       return { resource: null, gaps };
@@ -310,6 +319,7 @@ function buildValueConverterDefFromDefine(
       className,
       file: filePath,
       span: defineCall.span,
+      nameSpan: stringName.span,
     });
     return { resource, gaps };
   }
@@ -325,7 +335,8 @@ function buildValueConverterDefFromDefine(
   }
 
   // Extract name
-  const rawName = extractStringProp(def, 'name') ?? className;
+  const nameProp = extractStringPropWithSpan(def, 'name');
+  const rawName = nameProp?.value ?? className;
   const name = canonicalSimpleName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'value converter'));
@@ -337,6 +348,7 @@ function buildValueConverterDefFromDefine(
     className,
     file: filePath,
     span: defineCall.span,
+    nameSpan: nameProp?.span,
   });
 
   return { resource, gaps };
@@ -355,9 +367,9 @@ function buildBindingBehaviorDefFromDefine(
   const def = defineCall.definition;
 
   // Handle string-only definition
-  const stringName = extractString(def);
-  if (stringName !== undefined) {
-    const name = canonicalSimpleName(stringName);
+  const stringName = extractStringWithSpan(def);
+  if (stringName) {
+    const name = canonicalSimpleName(stringName.value);
     if (!name) {
       gaps.push(invalidNameGap(className, 'binding behavior'));
       return { resource: null, gaps };
@@ -368,6 +380,7 @@ function buildBindingBehaviorDefFromDefine(
       className,
       file: filePath,
       span: defineCall.span,
+      nameSpan: stringName.span,
     });
     return { resource, gaps };
   }
@@ -383,7 +396,8 @@ function buildBindingBehaviorDefFromDefine(
   }
 
   // Extract name
-  const rawName = extractStringProp(def, 'name') ?? className;
+  const nameProp = extractStringPropWithSpan(def, 'name');
+  const rawName = nameProp?.value ?? className;
   const name = canonicalSimpleName(rawName);
   if (!name) {
     gaps.push(invalidNameGap(className, 'binding behavior'));
@@ -395,6 +409,7 @@ function buildBindingBehaviorDefFromDefine(
     className,
     file: filePath,
     span: defineCall.span,
+    nameSpan: nameProp?.span,
   });
 
   return { resource, gaps };
@@ -422,13 +437,15 @@ function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
 
       // Object element
       if (element.kind === 'object') {
-        const name = extractStringProp(element, 'name');
-        if (name) {
+        const nameProp = extractStringPropWithSpan(element, 'name');
+        if (nameProp) {
+          const attrProp = extractStringPropWithSpan(element, 'attribute');
           result.push({
-            name,
+            name: nameProp.value,
             mode: extractBindingModeProp(element, 'mode'),
             primary: extractBooleanProp(element, 'primary'),
-            attribute: extractStringProp(element, 'attribute'),
+            attribute: attrProp?.value,
+            attributeSpan: attrProp?.span,
           });
         }
       }
@@ -439,11 +456,13 @@ function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
   if (value.kind === 'object') {
     for (const [name, propValue] of value.properties) {
       if (propValue.kind === 'object') {
+        const attrProp = extractStringPropWithSpan(propValue, 'attribute');
         result.push({
           name,
           mode: extractBindingModeProp(propValue, 'mode'),
           primary: extractBooleanProp(propValue, 'primary'),
-          attribute: extractStringProp(propValue, 'attribute'),
+          attribute: attrProp?.value,
+          attributeSpan: attrProp?.span,
         });
       } else {
         result.push({ name });

@@ -20,6 +20,7 @@ export interface BindableInput {
   readonly primary?: boolean;
   readonly type?: string;
   readonly span?: TextSpan;
+  readonly attributeSpan?: TextSpan;
 }
 
 export function buildBindableDefs(
@@ -40,6 +41,7 @@ export function buildBindableDef(
   fallbackSpan?: TextSpan,
 ): BindableDef {
   const span = bindable.span ?? fallbackSpan;
+  const attributeSpan = bindable.attributeSpan ?? span;
   const mode = bindable.mode;
   const primary = bindable.primary ?? false;
   const attribute = bindable.attribute ?? bindable.name;
@@ -51,7 +53,7 @@ export function buildBindableDef(
   });
   return {
     property: sourcedValue(bindable.name, file, span),
-    attribute: sourcedValue(attribute, file, span),
+    attribute: sourcedValue(attribute, file, attributeSpan),
     mode: sourcedValue(mode, file, span),
     primary: sourcedValue(primary, file, span),
     ...(bindable.type ? { type: sourcedValue(bindable.type, file, span) } : {}),
@@ -63,6 +65,7 @@ export interface ElementDefInput {
   readonly className: string;
   readonly file: NormalizedPath;
   readonly span?: TextSpan;
+  readonly nameSpan?: TextSpan;
   readonly aliases?: readonly string[];
   readonly bindables?: Readonly<Record<string, BindableDef>>;
   readonly containerless?: boolean;
@@ -75,6 +78,7 @@ export interface AttributeDefInput {
   readonly className: string;
   readonly file: NormalizedPath;
   readonly span?: TextSpan;
+  readonly nameSpan?: TextSpan;
   readonly aliases?: readonly string[];
   readonly bindables?: Readonly<Record<string, BindableDef>>;
   readonly primary?: string;
@@ -86,6 +90,7 @@ export interface TemplateControllerDefInput {
   readonly className: string;
   readonly file: NormalizedPath;
   readonly span?: TextSpan;
+  readonly nameSpan?: TextSpan;
   readonly aliases?: readonly string[];
   readonly bindables?: Readonly<Record<string, BindableDef>>;
   readonly noMultiBindings?: boolean;
@@ -96,13 +101,14 @@ export interface SimpleDefInput {
   readonly className: string;
   readonly file: NormalizedPath;
   readonly span?: TextSpan;
+  readonly nameSpan?: TextSpan;
 }
 
 export function buildCustomElementDef(input: ElementDefInput): CustomElementDef {
   return {
     kind: "custom-element",
     className: sourcedValue(input.className, input.file, input.span),
-    name: sourcedValue(input.name, input.file, input.span),
+    name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     aliases: (input.aliases ?? []).map((alias) => sourcedValue(alias, input.file, input.span)),
     containerless: sourcedValue(input.containerless ?? false, input.file, input.span),
     shadowOptions: sourcedValue(undefined, input.file, input.span),
@@ -120,7 +126,7 @@ export function buildCustomAttributeDef(input: AttributeDefInput): CustomAttribu
   return {
     kind: "custom-attribute",
     className: sourcedValue(input.className, input.file, input.span),
-    name: sourcedValue(input.name, input.file, input.span),
+    name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     aliases: (input.aliases ?? []).map((alias) => sourcedValue(alias, input.file, input.span)),
     noMultiBindings: sourcedValue(input.noMultiBindings ?? false, input.file, input.span),
     ...(input.primary ? { primary: sourcedValue(input.primary, input.file, input.span) } : {}),
@@ -133,7 +139,7 @@ export function buildTemplateControllerDef(input: TemplateControllerDefInput): T
   return {
     kind: "template-controller",
     className: sourcedValue(input.className, input.file, input.span),
-    name: sourcedValue(input.name, input.file, input.span),
+    name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     aliases: sourcedValue(input.aliases ?? [], input.file, input.span),
     noMultiBindings: sourcedValue(input.noMultiBindings ?? false, input.file, input.span),
     bindables: input.bindables ?? {},
@@ -145,7 +151,7 @@ export function buildValueConverterDef(input: SimpleDefInput): ValueConverterDef
   return {
     kind: "value-converter",
     className: sourcedValue(input.className, input.file, input.span),
-    name: sourcedValue(input.name, input.file, input.span),
+    name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     file: input.file,
   };
 }
@@ -154,7 +160,7 @@ export function buildBindingBehaviorDef(input: SimpleDefInput): BindingBehaviorD
   return {
     kind: "binding-behavior",
     className: sourcedValue(input.className, input.file, input.span),
-    name: sourcedValue(input.name, input.file, input.span),
+    name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     file: input.file,
   };
 }

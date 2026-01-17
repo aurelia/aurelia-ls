@@ -432,8 +432,25 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const edits = ts.getRenameEdits(overlay, overlayOffset, newName) ?? [];
     if (!edits.length) return [];
 
-    const mapped = this.mapTypeScriptEdits(edits, overlay, true);
-    return mapped ?? [];
+    const mapped = this.mapTypeScriptEdits(edits, overlay, true) ?? [];
+    const refs = ts.getReferences ? ts.getReferences(overlay, overlayOffset) ?? [] : [];
+    if (!refs.length) return mapped;
+
+    const locations = this.mapTypeScriptLocations(refs, overlay);
+    if (!locations.length) return mapped;
+
+    const seen = new Set(mapped.map((edit) => `${edit.uri}:${rangeKey(edit.range)}`));
+    const extras: TextEdit[] = [];
+    for (const loc of locations) {
+      if (!loc.range) continue;
+      if (!this.program.sources.get(loc.uri)) continue;
+      const key = `${loc.uri}:${rangeKey(loc.range)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      extras.push({ uri: loc.uri, range: loc.range, newText: newName });
+    }
+
+    return extras.length ? dedupeTextEdits([...mapped, ...extras]) : mapped;
   }
 
   private collectTemplateCompletions(query: TemplateQueryFacade, snapshot: DocumentSnapshot, offset: number): CompletionItem[] {

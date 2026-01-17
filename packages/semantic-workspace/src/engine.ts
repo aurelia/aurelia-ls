@@ -6,11 +6,19 @@ import {
   asDocumentUri,
   canonicalDocumentUri,
   debug,
+  normalizePathForId,
   offsetAtPosition,
   spanContainsOffset,
+  spanLength,
+  toSourceFileId,
+  type BindableDef,
   type DocumentUri,
+  type LinkedInstruction,
+  type LinkedRow,
   type OverlayBuildArtifact,
   type OverlayDocumentSnapshot,
+  type ResourceDef,
+  type SourceLocation,
   type SourceSpan,
   type TemplateCompilation,
   type TemplateMappingArtifact,
@@ -40,10 +48,12 @@ import {
   type WorkspaceDiagnostic,
   type WorkspaceHover,
   type WorkspaceLocation,
+  type WorkspaceTextEdit,
   type WorkspaceRefactorResult,
   type WorkspaceSnapshot,
   type WorkspaceToken,
   type WorkspaceCodeAction,
+  type WorkspaceRenameRequest,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
@@ -269,6 +279,50 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return this.#refactorProxy;
   }
 
+  prepareRefactor(uri: DocumentUri): void {
+    const canonical = canonicalDocumentUri(uri);
+    this.#ensureTemplateContext(canonical.uri);
+    this.#syncTemplateOverlaysForReferences(canonical.uri);
+  }
+
+  tryResourceRename(request: WorkspaceRenameRequest): WorkspaceRefactorResult | null {
+    const canonical = canonicalDocumentUri(request.uri);
+    this.#ensureTemplateContext(canonical.uri);
+
+    const text = this.lookupText(canonical.uri);
+    if (!text) return null;
+    const offset = offsetAtPosition(text, request.position);
+    if (offset == null) return null;
+
+    const compilation = this.#kernel.getCompilation(canonical.uri);
+    if (!compilation) return null;
+
+    const bindingCommands = this.#kernel.program.options.syntax?.bindingCommands ?? {};
+    const preferRoots = [this.#workspaceRoot];
+
+    const elementEdits = this.#renameElementAt(compilation, text, offset, request.newName, preferRoots);
+    if (elementEdits?.length) {
+      return { edit: { edits: finalizeWorkspaceEdits(elementEdits) } };
+    }
+
+    const bindableEdits = this.#renameBindableAttributeAt(compilation, text, offset, request.newName, bindingCommands, preferRoots);
+    if (bindableEdits?.length) {
+      return { edit: { edits: finalizeWorkspaceEdits(bindableEdits) } };
+    }
+
+    const converterEdits = this.#renameValueConverterAt(compilation, text, offset, request.newName, preferRoots);
+    if (converterEdits?.length) {
+      return { edit: { edits: finalizeWorkspaceEdits(converterEdits) } };
+    }
+
+    const behaviorEdits = this.#renameBindingBehaviorAt(compilation, text, offset, request.newName, preferRoots);
+    if (behaviorEdits?.length) {
+      return { edit: { edits: finalizeWorkspaceEdits(behaviorEdits) } };
+    }
+
+    return null;
+  }
+
   lookupText(uri: DocumentUri): string | null {
     const canonical = canonicalDocumentUri(uri);
     const snap = this.#kernel.sources.get(canonical.uri);
@@ -490,6 +544,170 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#setActiveTemplateForOverlay(activeUri);
   }
 
+  #renameElementAt(
+    compilation: TemplateCompilation,
+    text: string,
+    offset: number,
+    newName: string,
+    preferRoots: readonly string[],
+  ): WorkspaceTextEdit[] | null {
+    const node = compilation.query.nodeAt(offset);
+    if (!node || node.kind !== "element") return null;
+    const row = findLinkedRow(compilation.linked.templates, node.templateIndex, node.id);
+    if (!row || row.node.kind !== "element") return null;
+    const tagSpan = elementTagSpanAtOffset(text, node.span, row.node.tag, offset);
+    if (!tagSpan) return null;
+    const res = row.node.custom?.def ?? null;
+    if (!res) return null;
+
+    const target: ResourceTarget = { kind: "element", name: res.name, file: res.file ?? null };
+    const edits: WorkspaceTextEdit[] = [];
+    this.#collectElementTagEdits(target, newName, edits);
+
+    const entry = findResourceEntry(this.#definitionIndex.elements, target.name, target.file, preferRoots);
+    const nameEdit = entry ? buildResourceNameEdit(entry.def, target.name, newName, this.lookupText.bind(this)) : null;
+    if (nameEdit) edits.push(nameEdit);
+
+    return edits.length ? edits : null;
+  }
+
+  #renameBindableAttributeAt(
+    compilation: TemplateCompilation,
+    text: string,
+    offset: number,
+    newName: string,
+    bindingCommands: BindingCommands,
+    preferRoots: readonly string[],
+  ): WorkspaceTextEdit[] | null {
+    const hits = findInstructionsAtOffset(compilation.linked.templates, offset);
+    for (const hit of hits) {
+      const nameSpan = attributeNameSpan(text, hit.loc);
+      if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
+      const attrName = text.slice(nameSpan.start, nameSpan.end);
+      const target = resolveBindableTarget(hit.instruction, this.#definitionIndex, preferRoots);
+      if (!target) continue;
+
+      const edits: WorkspaceTextEdit[] = [];
+      this.#collectBindableAttributeEdits(target, newName, bindingCommands, edits);
+
+      const attrValue = target.bindable.attribute.value ?? target.property;
+      const attrEdit = buildBindableAttributeEdit(target.bindable, attrValue, newName, this.lookupText.bind(this));
+      if (attrEdit) edits.push(attrEdit);
+
+      if (!edits.length) return null;
+      return edits;
+    }
+    return null;
+  }
+
+  #renameValueConverterAt(
+    compilation: TemplateCompilation,
+    text: string,
+    offset: number,
+    newName: string,
+    preferRoots: readonly string[],
+  ): WorkspaceTextEdit[] | null {
+    const hit = findValueConverterAtOffset(compilation.exprTable ?? [], text, offset);
+    if (!hit) return null;
+
+    const edits: WorkspaceTextEdit[] = [];
+    this.#collectConverterEdits(hit.name, newName, edits);
+
+    const entry = findResourceEntry(this.#definitionIndex.valueConverters, hit.name, null, preferRoots);
+    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, newName, this.lookupText.bind(this)) : null;
+    if (nameEdit) edits.push(nameEdit);
+
+    return edits.length ? edits : null;
+  }
+
+  #renameBindingBehaviorAt(
+    compilation: TemplateCompilation,
+    text: string,
+    offset: number,
+    newName: string,
+    preferRoots: readonly string[],
+  ): WorkspaceTextEdit[] | null {
+    const hit = findBindingBehaviorAtOffset(compilation.exprTable ?? [], text, offset);
+    if (!hit) return null;
+
+    const edits: WorkspaceTextEdit[] = [];
+    this.#collectBehaviorEdits(hit.name, newName, edits);
+
+    const entry = findResourceEntry(this.#definitionIndex.bindingBehaviors, hit.name, null, preferRoots);
+    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, newName, this.lookupText.bind(this)) : null;
+    if (nameEdit) edits.push(nameEdit);
+
+    return edits.length ? edits : null;
+  }
+
+  #collectElementTagEdits(target: ResourceTarget, newName: string, out: WorkspaceTextEdit[]): void {
+    this.#forEachTemplateCompilation((uri, text, compilation) => {
+      const spans = collectElementTagSpans(compilation, text, target);
+      for (const span of spans) {
+        out.push({ uri, span, newText: newName });
+      }
+    });
+  }
+
+  #collectBindableAttributeEdits(
+    target: BindableTarget,
+    newName: string,
+    bindingCommands: BindingCommands,
+    out: WorkspaceTextEdit[],
+  ): void {
+    this.#forEachTemplateCompilation((uri, text, compilation) => {
+      const matches = collectBindableAttributeMatches(compilation, text, target);
+      for (const match of matches) {
+        const replacement = renameAttributeName(match.attrName, newName, bindingCommands);
+        out.push({ uri, span: match.span, newText: replacement });
+      }
+    });
+  }
+
+  #collectConverterEdits(name: string, newName: string, out: WorkspaceTextEdit[]): void {
+    this.#forEachTemplateCompilation((uri, text, compilation) => {
+      const spans = collectConverterSpans(compilation.exprTable ?? [], text, name);
+      for (const span of spans) {
+        out.push({ uri, span, newText: newName });
+      }
+    });
+  }
+
+  #collectBehaviorEdits(name: string, newName: string, out: WorkspaceTextEdit[]): void {
+    this.#forEachTemplateCompilation((uri, text, compilation) => {
+      const spans = collectBehaviorSpans(compilation.exprTable ?? [], text, name);
+      for (const span of spans) {
+        out.push({ uri, span, newText: newName });
+      }
+    });
+  }
+
+  #forEachTemplateCompilation(
+    visit: (uri: DocumentUri, text: string, compilation: TemplateCompilation) => void,
+  ): void {
+    const visited = new Set<DocumentUri>();
+    const iterate = (uri: DocumentUri) => {
+      if (visited.has(uri)) return;
+      visited.add(uri);
+      const text = this.lookupText(uri);
+      if (!text) return;
+      const compilation = this.#kernel.getCompilation(uri);
+      if (!compilation) return;
+      visit(uri, text, compilation);
+    };
+
+    for (const entry of this.#templateIndex.templates) {
+      const canonical = canonicalDocumentUri(entry.templatePath);
+      iterate(canonical.uri);
+    }
+
+    for (const entry of this.#templateIndex.inlineTemplates) {
+      const inlinePath = inlineTemplatePath(entry.componentPath);
+      const canonical = canonicalDocumentUri(inlinePath);
+      iterate(canonical.uri);
+    }
+  }
+
   #setActiveTemplateForOverlay(uri: DocumentUri): void {
     const setter = getActiveTemplateSetter(this.#vm);
     if (!setter) return;
@@ -542,6 +760,9 @@ class WorkspaceRefactorProxy implements RefactorEngine {
 
   rename(request: { uri: DocumentUri; position: { line: number; character: number }; newName: string }): WorkspaceRefactorResult {
     this.engine.refresh();
+    this.engine.prepareRefactor(request.uri);
+    const resourceRename = this.engine.tryResourceRename(request);
+    if (resourceRename) return resourceRename;
     return this.inner.rename(request);
   }
 
@@ -806,4 +1027,618 @@ function buildOverlaySnapshot(
     text: overlay.text,
     templateUri: templateCanonical.uri,
   };
+}
+
+type ResourceDefinitionEntry = {
+  def: ResourceDef;
+  symbolId?: string;
+};
+
+type ResourceTarget = {
+  kind: "element" | "attribute" | "value-converter" | "binding-behavior";
+  name: string;
+  file: string | null;
+};
+
+type BindableTarget = {
+  ownerKind: "element" | "attribute";
+  ownerName: string;
+  ownerFile: string | null;
+  ownerDef: ResourceDef;
+  bindable: BindableDef;
+  property: string;
+};
+
+type InstructionHit = {
+  instruction: LinkedInstruction;
+  loc: SourceSpan;
+  len: number;
+  hostTag?: string;
+  hostKind?: "custom" | "native" | "none";
+};
+
+type BindingCommands = Readonly<Record<string, unknown>>;
+
+type ExpressionAst = {
+  $kind?: string;
+  span?: SourceSpan;
+  name?: string;
+  ancestor?: number;
+  expression?: ExpressionAst;
+  object?: ExpressionAst;
+  func?: ExpressionAst;
+  args?: ExpressionAst[];
+  left?: ExpressionAst;
+  right?: ExpressionAst;
+  condition?: ExpressionAst;
+  yes?: ExpressionAst;
+  no?: ExpressionAst;
+  target?: ExpressionAst;
+  value?: ExpressionAst;
+  key?: ExpressionAst;
+  parts?: ExpressionAst[];
+  expressions?: ExpressionAst[];
+  declaration?: ExpressionAst;
+  iterable?: ExpressionAst;
+};
+
+function finalizeWorkspaceEdits(edits: WorkspaceTextEdit[]): WorkspaceTextEdit[] {
+  const seen = new Set<string>();
+  const results: WorkspaceTextEdit[] = [];
+  for (const edit of edits) {
+    const key = `${edit.uri}:${edit.span.start}:${edit.span.end}:${edit.newText}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(edit);
+  }
+  results.sort((a, b) => {
+    const uriDelta = String(a.uri).localeCompare(String(b.uri));
+    if (uriDelta !== 0) return uriDelta;
+    return b.span.start - a.span.start;
+  });
+  return results;
+}
+
+function findResourceEntry(
+  map: ReadonlyMap<string, ResourceDefinitionEntry[]>,
+  name: string,
+  file: string | null,
+  preferRoots: readonly string[],
+): ResourceDefinitionEntry | null {
+  const entries = map.get(name);
+  if (!entries?.length) return null;
+
+  if (file) {
+    const normalized = normalizePathForId(file);
+    const exact = entries.find((entry) => entry.def.file && normalizePathForId(entry.def.file) === normalized);
+    if (exact) return exact;
+  }
+
+  if (preferRoots.length) {
+    const roots = preferRoots.map((root) => normalizePathForId(root));
+    const matches = entries.filter((entry) => {
+      if (!entry.def.file) return false;
+      const defPath = normalizePathForId(entry.def.file);
+      return roots.some((root) => defPath.startsWith(root));
+    });
+    if (matches.length === 1) return matches[0]!;
+    if (matches.length > 1) return matches[0]!;
+  }
+
+  return entries[0] ?? null;
+}
+
+function buildResourceNameEdit(
+  def: ResourceDef,
+  oldName: string,
+  newName: string,
+  lookupText: (uri: DocumentUri) => string | null,
+): WorkspaceTextEdit | null {
+  const loc = readLocation(def.name);
+  if (!loc) return null;
+  return buildLocationEdit(loc, newName, lookupText, oldName);
+}
+
+function buildBindableAttributeEdit(
+  bindable: BindableDef,
+  oldName: string,
+  newName: string,
+  lookupText: (uri: DocumentUri) => string | null,
+): WorkspaceTextEdit | null {
+  const loc = readLocation(bindable.attribute);
+  if (!loc) return null;
+  return buildLocationEdit(loc, newName, lookupText, oldName);
+}
+
+function buildLocationEdit(
+  loc: SourceLocation,
+  newName: string,
+  lookupText: (uri: DocumentUri) => string | null,
+  expected?: string,
+): WorkspaceTextEdit | null {
+  const canonical = canonicalDocumentUri(loc.file);
+  const span: SourceSpan = { start: loc.pos, end: loc.end, file: toSourceFileId(loc.file) };
+  const text = lookupText(canonical.uri);
+  const original = text ? text.slice(span.start, span.end) : "";
+  if (expected !== undefined) {
+    const literal = parseStringLiteral(original);
+    if (!literal || literal.value !== expected) return null;
+    return { uri: canonical.uri, span, newText: `${literal.quote}${newName}${literal.quote}` };
+  }
+  const newText = replaceStringLiteral(original, newName);
+  return { uri: canonical.uri, span, newText };
+}
+
+function parseStringLiteral(original: string): { value: string; quote: string } | null {
+  if (original.length < 2) return null;
+  const first = original[0];
+  const last = original[original.length - 1];
+  if ((first === "\"" || first === "'" || first === "`") && last === first) {
+    return { value: original.slice(1, -1), quote: first };
+  }
+  return null;
+}
+
+function replaceStringLiteral(original: string, value: string): string {
+  if (original.length >= 2) {
+    const first = original[0];
+    const last = original[original.length - 1];
+    if ((first === "\"" || first === "'" || first === "`") && last === first) {
+      return `${first}${value}${first}`;
+    }
+  }
+  return value;
+}
+
+function findLinkedRow(
+  templates: readonly { rows: readonly LinkedRow[] }[],
+  templateIndex: number,
+  nodeId: string,
+): LinkedRow | null {
+  const template = templates[templateIndex];
+  if (!template) return null;
+  return template.rows.find((row) => row.target === nodeId) ?? null;
+}
+
+function elementTagSpanAtOffset(
+  text: string,
+  span: SourceSpan | undefined,
+  tag: string,
+  offset: number,
+): SourceSpan | null {
+  if (!span) return null;
+  const openStart = span.start + 1;
+  const openEnd = openStart + tag.length;
+  if (offset >= openStart && offset < openEnd) {
+    return { start: openStart, end: openEnd, ...(span.file ? { file: span.file } : {}) };
+  }
+  const closePattern = `</${tag}>`;
+  const closeTagStart = text.lastIndexOf(closePattern, span.end);
+  if (closeTagStart !== -1 && closeTagStart > span.start) {
+    const closeNameStart = closeTagStart + 2;
+    const closeNameEnd = closeNameStart + tag.length;
+    if (offset >= closeNameStart && offset < closeNameEnd) {
+      return { start: closeNameStart, end: closeNameEnd, ...(span.file ? { file: span.file } : {}) };
+    }
+  }
+  return null;
+}
+
+function elementTagNameSpans(text: string, span: SourceSpan, tag: string): SourceSpan[] {
+  const spans: SourceSpan[] = [];
+  const openStart = span.start + 1;
+  spans.push({ start: openStart, end: openStart + tag.length, ...(span.file ? { file: span.file } : {}) });
+
+  const closePattern = `</${tag}>`;
+  const closeTagStart = text.lastIndexOf(closePattern, span.end);
+  if (closeTagStart !== -1 && closeTagStart > span.start) {
+    const closeNameStart = closeTagStart + 2;
+    const closeNameEnd = closeNameStart + tag.length;
+    spans.push({ start: closeNameStart, end: closeNameEnd, ...(span.file ? { file: span.file } : {}) });
+  }
+
+  return spans;
+}
+
+function attributeNameSpan(text: string, loc: SourceSpan): SourceSpan | null {
+  const raw = text.slice(loc.start, loc.end);
+  const eq = raw.indexOf("=");
+  const namePart = (eq === -1 ? raw : raw.slice(0, eq)).trim();
+  if (!namePart) return null;
+  const nameOffset = raw.indexOf(namePart);
+  if (nameOffset < 0) return null;
+  const start = loc.start + nameOffset;
+  const end = start + namePart.length;
+  return { start, end, ...(loc.file ? { file: loc.file } : {}) };
+}
+
+function findInstructionsAtOffset(
+  templates: readonly { rows: readonly LinkedRow[] }[],
+  offset: number,
+): InstructionHit[] {
+  const hits: InstructionHit[] = [];
+  const addHit = (
+    instruction: LinkedInstruction,
+    host: { hostTag?: string; hostKind?: "custom" | "native" | "none" },
+  ) => {
+    const loc = instruction.loc ?? null;
+    if (!loc) return;
+    if (!spanContainsOffset(loc, offset)) return;
+    hits.push({ instruction, loc, len: spanLength(loc), hostTag: host.hostTag, hostKind: host.hostKind });
+  };
+
+  for (const template of templates) {
+    for (const row of template.rows ?? []) {
+      const host: { hostTag?: string; hostKind?: "custom" | "native" | "none" } =
+        row.node.kind === "element"
+          ? {
+            hostTag: row.node.tag,
+            hostKind: row.node.custom ? "custom" : row.node.native ? "native" : "none",
+          }
+          : {};
+      for (const instruction of row.instructions ?? []) {
+        addHit(instruction, host);
+        if (
+          instruction.kind === "hydrateElement"
+          || instruction.kind === "hydrateAttribute"
+          || instruction.kind === "hydrateTemplateController"
+        ) {
+          for (const prop of instruction.props ?? []) {
+            addHit(prop, host);
+          }
+        }
+      }
+    }
+  }
+
+  hits.sort((a, b) => a.len - b.len);
+  return hits;
+}
+
+function resolveBindableTarget(
+  instruction: LinkedInstruction,
+  resources: ResourceDefinitionIndex,
+  preferRoots: readonly string[],
+): BindableTarget | null {
+  if (instruction.kind !== "propertyBinding" && instruction.kind !== "attributeBinding" && instruction.kind !== "setProperty") {
+    return null;
+  }
+  const target = instruction.target as { kind?: string } | null | undefined;
+  if (!target || typeof target !== "object" || !("kind" in target)) return null;
+
+  switch (target.kind) {
+    case "element.bindable": {
+      const t = target as { element: { def: { name: string; file?: string } } };
+      const entry = findResourceEntry(resources.elements, t.element.def.name, t.element.def.file ?? null, preferRoots);
+      if (!entry) return null;
+      const bindable = findBindableDef(entry.def, instruction.to);
+      if (!bindable) return null;
+      return {
+        ownerKind: "element",
+        ownerName: t.element.def.name,
+        ownerFile: t.element.def.file ?? null,
+        ownerDef: entry.def,
+        bindable,
+        property: instruction.to,
+      };
+    }
+    case "attribute.bindable": {
+      const t = target as { attribute: { def: { name: string; file?: string; isTemplateController?: boolean } } };
+      const map = t.attribute.def.isTemplateController ? resources.controllers : resources.attributes;
+      const entry = findResourceEntry(map, t.attribute.def.name, t.attribute.def.file ?? null, preferRoots);
+      if (!entry) return null;
+      const bindable = findBindableDef(entry.def, instruction.to);
+      if (!bindable) return null;
+      return {
+        ownerKind: "attribute",
+        ownerName: t.attribute.def.name,
+        ownerFile: t.attribute.def.file ?? null,
+        ownerDef: entry.def,
+        bindable,
+        property: instruction.to,
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+function collectBindableAttributeMatches(
+  compilation: TemplateCompilation,
+  text: string,
+  target: BindableTarget,
+): Array<{ span: SourceSpan; attrName: string }> {
+  const results: Array<{ span: SourceSpan; attrName: string }> = [];
+  for (const template of compilation.linked.templates ?? []) {
+    for (const row of template.rows ?? []) {
+      for (const instruction of row.instructions ?? []) {
+        collectBindableInstructionMatches(instruction, target, text, results);
+        if (
+          instruction.kind === "hydrateElement"
+          || instruction.kind === "hydrateAttribute"
+          || instruction.kind === "hydrateTemplateController"
+        ) {
+          for (const prop of instruction.props ?? []) {
+            collectBindableInstructionMatches(prop, target, text, results);
+          }
+        }
+      }
+    }
+  }
+  return results;
+}
+
+function collectBindableInstructionMatches(
+  instruction: LinkedInstruction,
+  target: BindableTarget,
+  text: string,
+  results: Array<{ span: SourceSpan; attrName: string }>,
+): void {
+  if (instruction.kind !== "propertyBinding" && instruction.kind !== "attributeBinding" && instruction.kind !== "setProperty") {
+    return;
+  }
+  const loc = instruction.loc ?? null;
+  if (!loc) return;
+
+  const targetInfo = instruction.target as { kind?: string } | null | undefined;
+  if (!targetInfo || typeof targetInfo !== "object" || !("kind" in targetInfo)) return;
+
+  if (target.ownerKind === "element" && targetInfo.kind === "element.bindable") {
+    const t = targetInfo as { element: { def: { name: string; file?: string } } };
+    if (!resourceRefMatches(t.element.def, target.ownerName, target.ownerFile)) return;
+  } else if (target.ownerKind === "attribute" && targetInfo.kind === "attribute.bindable") {
+    const t = targetInfo as { attribute: { def: { name: string; file?: string } } };
+    if (!resourceRefMatches(t.attribute.def, target.ownerName, target.ownerFile)) return;
+  } else {
+    return;
+  }
+
+  if (instruction.to !== target.property) return;
+  const nameSpan = attributeNameSpan(text, loc);
+  if (!nameSpan) return;
+  const attrName = text.slice(nameSpan.start, nameSpan.end);
+  results.push({ span: nameSpan, attrName });
+}
+
+function renameAttributeName(attrName: string, newBase: string, bindingCommands: BindingCommands): string {
+  if (!attrName) return newBase;
+  if (attrName.startsWith(":") || attrName.startsWith("@")) {
+    return `${attrName[0]}${newBase}`;
+  }
+  const parts = attrName.split(".");
+  if (parts.length > 1) {
+    const command = parts[parts.length - 1];
+    if (command && bindingCommands[command]) {
+      return `${newBase}.${command}`;
+    }
+  }
+  return newBase;
+}
+
+function collectElementTagSpans(
+  compilation: TemplateCompilation,
+  text: string,
+  target: ResourceTarget,
+): SourceSpan[] {
+  const results: SourceSpan[] = [];
+  const irTemplates = (compilation.ir as { templates?: Array<{ dom: { id: string; kind: string; tag?: string; loc?: SourceSpan | null; children?: unknown[] } }> } | null)?.templates ?? [];
+  const linkedTemplates = compilation.linked.templates ?? [];
+
+  for (let i = 0; i < irTemplates.length; i += 1) {
+    const irTemplate = irTemplates[i];
+    const linked = linkedTemplates[i];
+    if (!irTemplate || !linked) continue;
+    const rowsByTarget = new Map<string, LinkedRow>();
+    for (const row of linked.rows ?? []) {
+      rowsByTarget.set(row.target, row);
+    }
+
+    const stack: Array<{ id: string; kind: string; tag?: string; loc?: SourceSpan | null; children?: unknown[] }> = [irTemplate.dom];
+    while (stack.length) {
+      const node = stack.pop();
+      if (!node) continue;
+      if (node.kind === "element") {
+        const row = rowsByTarget.get(node.id);
+        if (row?.node.kind === "element" && row.node.custom?.def && node.loc) {
+          if (resourceRefMatches(row.node.custom.def, target.name, target.file)) {
+            results.push(...elementTagNameSpans(text, node.loc, row.node.tag));
+          }
+        }
+      }
+      if (node.kind === "element" || node.kind === "template") {
+        const children = node.children as Array<{ id: string; kind: string; tag?: string; loc?: SourceSpan | null; children?: unknown[] }> | undefined;
+        if (children?.length) {
+          for (let c = children.length - 1; c >= 0; c -= 1) {
+            stack.push(children[c]!);
+          }
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+function collectConverterSpans(
+  exprTable: readonly { id: string; ast: unknown }[],
+  text: string,
+  name: string,
+): SourceSpan[] {
+  const spans: SourceSpan[] = [];
+  for (const entry of exprTable) {
+    collectConverterNodes(entry.ast as ExpressionAst, text, name, spans);
+  }
+  return spans;
+}
+
+function collectConverterNodes(
+  node: ExpressionAst | null | undefined,
+  text: string,
+  name: string,
+  spans: SourceSpan[],
+): void {
+  if (!node || !node.$kind) return;
+  if (node.$kind === "ValueConverter" && node.name === name && node.span) {
+    const start = findPipeOrAmpName(text, node.span, "|", name);
+    if (start !== -1) {
+      spans.push({ start, end: start + name.length, ...(node.span.file ? { file: node.span.file } : {}) });
+    }
+  }
+  walkAstChildren(node, text, name, spans, collectConverterNodes);
+}
+
+function collectBehaviorSpans(
+  exprTable: readonly { id: string; ast: unknown }[],
+  text: string,
+  name: string,
+): SourceSpan[] {
+  const spans: SourceSpan[] = [];
+  for (const entry of exprTable) {
+    collectBehaviorNodes(entry.ast as ExpressionAst, text, name, spans);
+  }
+  return spans;
+}
+
+function collectBehaviorNodes(
+  node: ExpressionAst | null | undefined,
+  text: string,
+  name: string,
+  spans: SourceSpan[],
+): void {
+  if (!node || !node.$kind) return;
+  if (node.$kind === "BindingBehavior" && node.name === name && node.span) {
+    const start = findPipeOrAmpName(text, node.span, "&", name);
+    if (start !== -1) {
+      spans.push({ start, end: start + name.length, ...(node.span.file ? { file: node.span.file } : {}) });
+    }
+  }
+  walkAstChildren(node, text, name, spans, collectBehaviorNodes);
+}
+
+function walkAstChildren(
+  node: ExpressionAst,
+  text: string,
+  name: string,
+  spans: SourceSpan[],
+  visitor: (node: ExpressionAst | null | undefined, text: string, name: string, spans: SourceSpan[]) => void,
+): void {
+  const queue: (ExpressionAst | null | undefined)[] = [];
+  queue.push(node.expression, node.object, node.func, node.left, node.right, node.condition, node.yes, node.no, node.target, node.value, node.key, node.declaration, node.iterable);
+  if (node.args) queue.push(...node.args);
+  if (node.parts) queue.push(...node.parts);
+  if (node.expressions) queue.push(...node.expressions);
+  for (const child of queue) {
+    if (!child) continue;
+    visitor(child, text, name, spans);
+  }
+}
+
+function findValueConverterAtOffset(
+  exprTable: readonly { id: string; ast: unknown }[],
+  text: string,
+  offset: number,
+): { name: string; exprId: string } | null {
+  for (const entry of exprTable) {
+    const hit = findConverterInAst(entry.ast as ExpressionAst, text, offset);
+    if (hit) return { name: hit, exprId: entry.id };
+  }
+  return null;
+}
+
+function findBindingBehaviorAtOffset(
+  exprTable: readonly { id: string; ast: unknown }[],
+  text: string,
+  offset: number,
+): { name: string; exprId: string } | null {
+  for (const entry of exprTable) {
+    const hit = findBehaviorInAst(entry.ast as ExpressionAst, text, offset);
+    if (hit) return { name: hit, exprId: entry.id };
+  }
+  return null;
+}
+
+function findConverterInAst(node: ExpressionAst | null | undefined, text: string, offset: number): string | null {
+  if (!node || !node.$kind) return null;
+  if (node.$kind === "ValueConverter" && node.name && node.span) {
+    const start = findPipeOrAmpName(text, node.span, "|", node.name);
+    if (start !== -1 && offset >= start && offset < start + node.name.length) {
+      return node.name;
+    }
+  }
+  return walkAstChildrenForHit(node, text, offset, findConverterInAst);
+}
+
+function findBehaviorInAst(node: ExpressionAst | null | undefined, text: string, offset: number): string | null {
+  if (!node || !node.$kind) return null;
+  if (node.$kind === "BindingBehavior" && node.name && node.span) {
+    const start = findPipeOrAmpName(text, node.span, "&", node.name);
+    if (start !== -1 && offset >= start && offset < start + node.name.length) {
+      return node.name;
+    }
+  }
+  return walkAstChildrenForHit(node, text, offset, findBehaviorInAst);
+}
+
+function walkAstChildrenForHit(
+  node: ExpressionAst,
+  text: string,
+  offset: number,
+  finder: (node: ExpressionAst, text: string, offset: number) => string | null,
+): string | null {
+  const queue: (ExpressionAst | null | undefined)[] = [];
+  queue.push(node.expression, node.object, node.func, node.left, node.right, node.condition, node.yes, node.no, node.target, node.value, node.key, node.declaration, node.iterable);
+  if (node.args) queue.push(...node.args);
+  if (node.parts) queue.push(...node.parts);
+  if (node.expressions) queue.push(...node.expressions);
+  for (const child of queue) {
+    if (!child) continue;
+    const hit = finder(child, text, offset);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function findPipeOrAmpName(text: string, span: SourceSpan, separator: "|" | "&", name: string): number {
+  const searchText = text.slice(span.start, span.end);
+  const sepIndex = searchText.lastIndexOf(separator);
+  if (sepIndex === -1) return -1;
+  const afterSep = searchText.slice(sepIndex + 1);
+  const whitespaceLen = afterSep.match(/^\s*/)?.[0].length ?? 0;
+  const nameStart = span.start + sepIndex + 1 + whitespaceLen;
+  const candidate = text.slice(nameStart, nameStart + name.length);
+  return candidate === name ? nameStart : -1;
+}
+
+function resourceRefMatches(
+  def: { name: string; file?: string | null },
+  name: string,
+  file: string | null,
+): boolean {
+  if (def.name !== name) return false;
+  if (file && def.file) {
+    return normalizePathForId(def.file) === normalizePathForId(file);
+  }
+  return true;
+}
+
+function findBindableDef(def: ResourceDef, name: string): BindableDef | null {
+  if (!("bindables" in def) || !def.bindables) return null;
+  const record = def.bindables as Readonly<Record<string, BindableDef>>;
+  if (record[name]) return record[name]!;
+  const camel = dashToCamel(name);
+  return record[camel] ?? null;
+}
+
+function dashToCamel(value: string): string {
+  if (!value.includes("-")) return value;
+  return value.replace(/-([a-zA-Z0-9])/g, (_match, captured) => captured.toUpperCase());
+}
+
+function readLocation(value: unknown): SourceLocation | null {
+  if (!value || typeof value !== "object") return null;
+  if ("location" in value) {
+    const loc = (value as { location?: SourceLocation }).location;
+    return loc ?? null;
+  }
+  return null;
 }
