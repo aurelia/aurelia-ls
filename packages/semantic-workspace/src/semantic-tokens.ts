@@ -108,14 +108,33 @@ function extractElementTokens(
     if (row.node.kind !== "element") continue;
 
     const nodeSem = row.node as NodeSem & { kind: "element" };
-    if (!nodeSem.custom) continue;
-
     const element = node as ElementNode;
     const loc = element.loc;
     if (!loc) continue;
 
     const tagStart = loc.start + 1;
     const tagLength = element.tag.length;
+    if (element.tag === "let") {
+      tokens.push({
+        type: "aureliaMetaElement",
+        span: sliceSpan(tagStart, tagStart + tagLength, loc),
+      });
+
+      if (!element.selfClosed) {
+        const closeTagPattern = `</${element.tag}>`;
+        const closeTagStart = text.lastIndexOf(closeTagPattern, loc.end);
+        if (closeTagStart !== -1) {
+          const closeNameStart = closeTagStart + 2;
+          tokens.push({
+            type: "aureliaMetaElement",
+            span: sliceSpan(closeNameStart, closeNameStart + tagLength, loc),
+          });
+        }
+      }
+      continue;
+    }
+
+    if (!nodeSem.custom) continue;
     tokens.push({
       type: "aureliaElement",
       span: sliceSpan(tagStart, tagStart + tagLength, loc),
@@ -450,6 +469,9 @@ type InstructionLike =
       type?: string;
       res?: InstructionRes;
       loc?: SourceSpan | null;
+      target?: { kind?: string } | null;
+      instructions?: unknown[];
+      props?: unknown[];
       def?: { rows?: { instructions: unknown[] }[] };
     };
 
@@ -464,24 +486,35 @@ function extractBindingCommandTokens(text: string, rows: LinkedRow[]): Workspace
 }
 
 function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: WorkspaceToken[]): void {
+  const kind = instructionKind(ins);
+  if (!kind) return;
+
+  if (kind === "hydrateLetElement") {
+    const nested = "instructions" in ins ? ins.instructions : undefined;
+    if (Array.isArray(nested)) {
+      for (const letIns of nested) {
+        extractBindingTokensFromIR(letIns as InstructionLike, text, tokens);
+      }
+    }
+    return;
+  }
+
   const loc = ins.loc;
   if (!loc) return;
 
-  const attrText = text.slice(loc.start, loc.end);
-  const eqPos = attrText.indexOf("=");
-  const rawAttrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
-  const attrName = rawAttrName.trim();
-  const whitespaceOffset = rawAttrName.indexOf(attrName);
+  const attrInfo = getAttributeNameInfo(text, loc);
+  if (!attrInfo) return;
+  const { attrName, nameStart } = attrInfo;
 
-  const kind = instructionKind(ins);
-  if (!kind) return;
+  const targetKind = "target" in ins ? ins.target?.kind ?? null : null;
+  const isElementBindable = targetKind === "element.bindable";
 
   if (kind === "hydrateTemplateController") {
     const res = instructionResName(hasRes(ins) ? ins.res : null);
     if (!res) return;
     const controllerPos = attrName.indexOf(res);
     if (controllerPos !== -1) {
-      const start = loc.start + whitespaceOffset + controllerPos;
+      const start = nameStart + controllerPos;
       tokens.push({
         type: "aureliaController",
         span: sliceSpan(start, start + res.length, loc),
@@ -490,7 +523,7 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
 
     const cmdInfo = findBindingCommandInAttr(attrName);
     if (cmdInfo && cmdInfo.command !== res) {
-      emitCommandToken(loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
     }
 
     const nestedRows = nestedInstructionRows(ins);
@@ -509,26 +542,46 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
     if (!res) return;
     const cmdInfo = findBindingCommandInAttr(attrName);
     if (cmdInfo) {
-      emitCommandToken(loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
     }
-    const attrNameOnly = cmdInfo ? attrName.slice(0, cmdInfo.position - 1) : attrName;
-    if (attrNameOnly.length > 0) {
-      const start = loc.start + whitespaceOffset;
+    const base = attributeBaseName(attrName, cmdInfo);
+    if (base) {
+      const start = nameStart + base.offset;
       tokens.push({
         type: "aureliaAttribute",
-        span: sliceSpan(start, start + attrNameOnly.length, loc),
+        span: sliceSpan(start, start + base.name.length, loc),
       });
+    }
+    return;
+  }
+
+  if (kind === "letBinding") {
+    const cmdInfo = findBindingCommandInAttr(attrName);
+    const base = attributeBaseName(attrName, cmdInfo);
+    if (base) {
+      tokens.push({
+        type: "variable",
+        modifiers: ["declaration"],
+        span: sliceSpan(nameStart + base.offset, nameStart + base.offset + base.name.length, loc),
+      });
+    }
+    if (attrName.startsWith(":")) {
+      emitCommandToken(nameStart, 1, loc, tokens);
+      return;
+    }
+    if (cmdInfo) {
+      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
     }
     return;
   }
 
   if (kind === "refBinding") {
     if (attrName === "ref") {
-      emitCommandToken(loc.start + whitespaceOffset, 3, loc, tokens);
+      emitCommandToken(nameStart, 3, loc, tokens);
     } else {
       const cmdInfo = findBindingCommandInAttr(attrName);
       if (cmdInfo) {
-        emitCommandToken(loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+        emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
       }
     }
     return;
@@ -552,30 +605,45 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
         span: sliceSpan(closeNameStart, closeNameStart + elementName.length, loc),
       });
     }
+    const props = "props" in ins ? ins.props : undefined;
+    if (Array.isArray(props)) {
+      for (const prop of props) {
+        extractBindingTokensFromIR(prop as InstructionLike, text, tokens);
+      }
+    }
     return;
   }
 
   if (kind === "propertyBinding" || kind === "attributeBinding" ||
-      kind === "stylePropertyBinding") {
+      kind === "stylePropertyBinding" || kind === "setProperty") {
+    const cmdInfo = findBindingCommandInAttr(attrName);
+    if (isElementBindable) {
+      const base = attributeBaseName(attrName, cmdInfo);
+      if (base) {
+        tokens.push({
+          type: "aureliaBindable",
+          span: sliceSpan(nameStart + base.offset, nameStart + base.offset + base.name.length, loc),
+        });
+      }
+    }
     if (attrName.startsWith(":")) {
-      emitCommandToken(loc.start + whitespaceOffset, 1, loc, tokens);
+      emitCommandToken(nameStart, 1, loc, tokens);
       return;
     }
-    const cmdInfo = findBindingCommandInAttr(attrName);
     if (cmdInfo) {
-      emitCommandToken(loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
     }
     return;
   }
 
   if (kind === "listenerBinding") {
     if (attrName.startsWith("@")) {
-      emitCommandToken(loc.start + whitespaceOffset, 1, loc, tokens);
+      emitCommandToken(nameStart, 1, loc, tokens);
       return;
     }
     const cmdInfo = findBindingCommandInAttr(attrName);
     if (cmdInfo) {
-      emitCommandToken(loc.start + whitespaceOffset + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
     }
   }
 }
@@ -697,13 +765,25 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
     if (imp.tagLoc && imp.tagLoc.start < imp.tagLoc.end) {
       tokens.push({ type: "aureliaMetaElement", span: imp.tagLoc });
     }
+    const fromAttr = findMetaAttributeName(text, imp.from.loc, "from");
+    if (fromAttr) {
+      tokens.push({ type: "aureliaMetaAttribute", span: fromAttr });
+    }
     if (imp.from.loc && imp.from.loc.start < imp.from.loc.end) {
       tokens.push({ type: "string", span: imp.from.loc });
     }
     if (imp.defaultAlias?.loc && imp.defaultAlias.loc.start < imp.defaultAlias.loc.end) {
+      const asAttr = findMetaAttributeName(text, imp.defaultAlias.loc, "as");
+      if (asAttr) {
+        tokens.push({ type: "aureliaMetaAttribute", span: asAttr });
+      }
       tokens.push({ type: "variable", modifiers: ["declaration"], span: imp.defaultAlias.loc });
     }
     for (const na of imp.namedAliases) {
+      const asSpan = findNamedAliasAttributeSpan(text, na.exportName.loc);
+      if (asSpan) {
+        tokens.push({ type: "aureliaMetaAttribute", span: asSpan });
+      }
       if (na.exportName.loc && na.exportName.loc.start < na.exportName.loc.end) {
         tokens.push({ type: "variable", span: na.exportName.loc });
       }
@@ -717,19 +797,37 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
     if (bindable.tagLoc && bindable.tagLoc.start < bindable.tagLoc.end) {
       tokens.push({ type: "aureliaMetaElement", span: bindable.tagLoc });
     }
+    const nameAttr = findMetaAttributeName(text, bindable.name.loc, "name");
+    if (nameAttr) {
+      tokens.push({ type: "aureliaMetaAttribute", span: nameAttr });
+    }
     if (bindable.name.loc && bindable.name.loc.start < bindable.name.loc.end) {
       tokens.push({ type: "aureliaBindable", modifiers: ["declaration"], span: bindable.name.loc });
     }
     if (bindable.mode?.loc && bindable.mode.loc.start < bindable.mode.loc.end) {
+      const modeAttr = findMetaAttributeName(text, bindable.mode.loc, "mode");
+      if (modeAttr) {
+        tokens.push({ type: "aureliaMetaAttribute", span: modeAttr });
+      }
       tokens.push({ type: "keyword", span: bindable.mode.loc });
     }
     if (bindable.attribute?.loc && bindable.attribute.loc.start < bindable.attribute.loc.end) {
+      const attributeAttr = findMetaAttributeName(text, bindable.attribute.loc, "attribute");
+      if (attributeAttr) {
+        tokens.push({ type: "aureliaMetaAttribute", span: attributeAttr });
+      }
       tokens.push({ type: "aureliaAttribute", span: bindable.attribute.loc });
     }
   }
 
   if (meta.shadowDom?.tagLoc) {
     tokens.push({ type: "aureliaMetaElement", span: meta.shadowDom.tagLoc });
+  }
+  if (meta.shadowDom?.mode?.loc) {
+    const modeAttr = findMetaAttributeName(text, meta.shadowDom.mode.loc, "mode");
+    if (modeAttr) {
+      tokens.push({ type: "aureliaMetaAttribute", span: modeAttr });
+    }
   }
   if (meta.containerless?.tagLoc) {
     tokens.push({ type: "aureliaMetaElement", span: meta.containerless.tagLoc });
@@ -743,6 +841,10 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
     }
     for (const name of alias.names) {
       if (name.loc) {
+        const aliasAttr = findMetaAttributeName(text, name.loc, "name");
+        if (aliasAttr) {
+          tokens.push({ type: "aureliaMetaAttribute", span: aliasAttr });
+        }
         tokens.push({ type: "variable", modifiers: ["declaration"], span: name.loc });
       }
     }
@@ -812,3 +914,66 @@ const BINDING_COMMANDS = new Set([
   "attr",
   "style",
 ]);
+
+function getAttributeNameInfo(
+  text: string,
+  loc: SourceSpan,
+): { attrName: string; nameStart: number } | null {
+  const attrText = text.slice(loc.start, loc.end);
+  const eqPos = attrText.indexOf("=");
+  const rawAttrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
+  const attrName = rawAttrName.trim();
+  if (!attrName) return null;
+  const whitespaceOffset = rawAttrName.indexOf(attrName);
+  return { attrName, nameStart: loc.start + whitespaceOffset };
+}
+
+function attributeBaseName(
+  attrName: string,
+  cmdInfo: { command: string; position: number } | null,
+): { name: string; offset: number } | null {
+  let name = attrName;
+  if (cmdInfo) {
+    const sepIndex = cmdInfo.position - 1;
+    const baseEnd = sepIndex >= 0 && attrName[sepIndex] === "." ? sepIndex : cmdInfo.position;
+    name = attrName.slice(0, baseEnd);
+  }
+  if (!name) return null;
+  let offset = 0;
+  if (name.startsWith(":") || name.startsWith("@")) {
+    name = name.slice(1);
+    offset = 1;
+  }
+  if (!name) return null;
+  return { name, offset };
+}
+
+function findMetaAttributeName(
+  text: string,
+  valueLoc: SourceSpan,
+  expectedName?: string,
+): SourceSpan | null {
+  if (valueLoc.start <= 0) return null;
+  const eqPos = text.lastIndexOf("=", valueLoc.start);
+  if (eqPos === -1) return null;
+  let end = eqPos;
+  while (end > 0 && /\s/.test(text[end - 1]!)) {
+    end -= 1;
+  }
+  let start = end;
+  while (start > 0 && /[A-Za-z0-9_.:-]/.test(text[start - 1]!)) {
+    start -= 1;
+  }
+  if (start >= end) return null;
+  const name = text.slice(start, end);
+  if (expectedName && name.toLowerCase() !== expectedName.toLowerCase()) {
+    return null;
+  }
+  return valueLoc.file ? { start, end, file: valueLoc.file } : { start, end };
+}
+
+function findNamedAliasAttributeSpan(text: string, exportLoc: SourceSpan): SourceSpan | null {
+  const start = exportLoc.end;
+  if (text.slice(start, start + 3) !== ".as") return null;
+  return exportLoc.file ? { start, end: start + 3, file: exportLoc.file } : { start, end: start + 3 };
+}
