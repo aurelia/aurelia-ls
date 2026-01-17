@@ -46,6 +46,7 @@ import {
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
+import { buildResourceDefinitionIndex, collectTemplateDefinitions, type ResourceDefinitionIndex } from "./definition.js";
 
 export interface SemanticWorkspaceEngineOptions {
   readonly logger: Logger;
@@ -79,6 +80,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #vm: VmReflection;
   readonly #isJs: boolean;
   readonly #overlayBaseName?: string;
+  #workspaceRoot: string;
+  #definitionIndex: ResourceDefinitionIndex;
   #resourceScope: ResourceScopeId | null;
   #projectVersion = 0;
   #templateIndex: TemplateIndex;
@@ -92,7 +95,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       configFileName: options.configFileName,
     });
 
-    const workspaceRoot = options.workspaceRoot ?? process.cwd();
+    const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
+    this.#workspaceRoot = workspaceRoot;
     const resolution: ResolutionConfig = {
       ...(options.resolution ?? {}),
       packagePath: options.resolution?.packagePath ?? workspaceRoot,
@@ -116,6 +120,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
     this.#lookupText = options.lookupText;
     this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
+    this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentResolution());
 
     this.#kernel = createSemanticWorkspaceKernel({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
@@ -149,6 +154,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#projectIndex.refresh();
     this.#projectVersion = version;
     this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
+    this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentResolution());
     this.#kernel.reconfigure({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
       fingerprint: this.#projectIndex.currentFingerprint(),
@@ -159,6 +165,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
   configureProject(options: { workspaceRoot?: string | null; tsconfigPath?: string | null; configFileName?: string }): void {
     const root = options.workspaceRoot ?? null;
+    if (root) {
+      this.#workspaceRoot = path.resolve(root);
+    }
     this.#env.tsService.configure({
       workspaceRoot: root,
       tsconfigPath: options.tsconfigPath ?? null,
@@ -234,8 +243,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       },
       definition: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
-        const meta = this.#metaDefinition(canonical.uri, pos);
-        return meta ?? base.definition(pos);
+        const meta = this.#metaDefinition(canonical.uri, pos) ?? [];
+        const local = this.#definitionAt(canonical.uri, pos);
+        const baseDefs = base.definition(pos);
+        return mergeLocations(meta, local, baseDefs);
       },
       references: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
@@ -407,6 +418,23 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       span: span ?? { start: 0, end: 0, file: target.file },
     };
     return [loc];
+  }
+
+  #definitionAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
+    const text = this.lookupText(uri);
+    if (!text) return [];
+    const offset = offsetAtPosition(text, pos);
+    if (offset == null) return [];
+    const compilation = this.#kernel.getCompilation(uri);
+    if (!compilation) return [];
+    return collectTemplateDefinitions({
+      compilation,
+      text,
+      offset,
+      resources: this.#definitionIndex,
+      bindingCommands: this.#kernel.program.options.syntax?.bindingCommands,
+      preferRoots: [this.#workspaceRoot],
+    });
   }
 
   #templateImportDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
@@ -683,4 +711,25 @@ function findFirstExportSpan(filePath: string): SourceSpan | null {
 
 function isWithinSpan(offset: number, span: SourceSpan | undefined): boolean {
   return span ? spanContainsOffset(span, offset) : false;
+}
+
+function mergeLocations(...lists: readonly (readonly WorkspaceLocation[])[]): WorkspaceLocation[] {
+  const results: WorkspaceLocation[] = [];
+  const seen = new Set<string>();
+  for (const list of lists) {
+    for (const loc of list) {
+      const key = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(loc);
+    }
+  }
+  results.sort((a, b) => {
+    const uriDelta = String(a.uri).localeCompare(String(b.uri));
+    if (uriDelta !== 0) return uriDelta;
+    const startDelta = a.span.start - b.span.start;
+    if (startDelta !== 0) return startDelta;
+    return a.span.end - b.span.end;
+  });
+  return results;
 }
