@@ -46,7 +46,7 @@ import {
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
-import { buildResourceDefinitionIndex, collectTemplateDefinitions, type ResourceDefinitionIndex } from "./definition.js";
+import { buildResourceDefinitionIndex, collectTemplateDefinitions, collectTemplateReferences, type ResourceDefinitionIndex } from "./definition.js";
 
 export interface SemanticWorkspaceEngineOptions {
   readonly logger: Logger;
@@ -250,7 +250,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       },
       references: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
-        return base.references(pos);
+        const local = this.#referencesAt(canonical.uri, pos);
+        const baseRefs = base.references(pos);
+        return mergeLocations(local, baseRefs);
       },
       completions: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
@@ -434,6 +436,21 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       resources: this.#definitionIndex,
       bindingCommands: this.#kernel.program.options.syntax?.bindingCommands,
       preferRoots: [this.#workspaceRoot],
+      documentUri: uri,
+    });
+  }
+
+  #referencesAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
+    const text = this.lookupText(uri);
+    if (!text) return [];
+    const offset = offsetAtPosition(text, pos);
+    if (offset == null) return [];
+    const compilation = this.#kernel.getCompilation(uri);
+    if (!compilation) return [];
+    return collectTemplateReferences({
+      compilation,
+      text,
+      offset,
       documentUri: uri,
     });
   }

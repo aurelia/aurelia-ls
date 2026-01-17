@@ -150,6 +150,47 @@ export function collectTemplateDefinitions(options: {
   return results;
 }
 
+export function collectTemplateReferences(options: {
+  compilation: TemplateCompilation;
+  text: string;
+  offset: number;
+  documentUri?: DocumentUri | null;
+}): WorkspaceLocation[] {
+  const { compilation, offset } = options;
+  const scopeTemplate = compilation.scope?.templates?.[0];
+  if (!scopeTemplate) return [];
+
+  const lookup = buildScopeLookup(scopeTemplate);
+  const match = findLocalScopeSymbolAtOffset(compilation, offset, lookup);
+  if (!match) return [];
+
+  const results: WorkspaceLocation[] = [];
+  const documentUri = options.documentUri ?? null;
+  if (match.symbol.span) {
+    const loc = spanLocation(match.symbol.span, documentUri);
+    if (loc) results.push(loc);
+  }
+
+  const exprTable = compilation.exprTable ?? [];
+  for (const entry of exprTable) {
+    const frameId = lookup.exprToFrame.get(entry.id) ?? lookup.rootFrameId;
+    if (frameId == null) continue;
+    const frame = lookup.frameById.get(frameId);
+    if (!frame) continue;
+    const accesses: AccessScopeInfo[] = [];
+    collectAccessScopeNodes(entry.ast as ExpressionAst, accesses);
+    for (const access of accesses) {
+      const resolved = resolveSymbol(frame, lookup.frameById, access.name, access.ancestor ?? 0);
+      if (!resolved) continue;
+      if (resolved.frame.id !== match.frame.id || resolved.symbol.name !== match.symbol.name) continue;
+      const loc = spanLocation(access.span, documentUri);
+      if (loc) results.push(loc);
+    }
+  }
+
+  return results;
+}
+
 type InstructionHit = {
   instruction: LinkedInstruction;
   loc: SourceSpan;
@@ -490,24 +531,48 @@ type ScopeFrame = {
   symbols: readonly ScopeSymbol[];
 };
 
-function findLocalScopeDefinition(
+type ScopeLookup = {
+  frames: ScopeFrame[];
+  frameById: Map<FrameId, ScopeFrame>;
+  exprToFrame: ReadonlyMap<ExprId, FrameId>;
+  rootFrameId: FrameId | null;
+};
+
+type ScopeSymbolMatch = {
+  frame: ScopeFrame;
+  symbol: ScopeSymbol;
+};
+
+type AccessScopeInfo = {
+  name: string;
+  ancestor?: number;
+  span: SourceSpan;
+};
+
+function buildScopeLookup(scopeTemplate: { frames: ScopeFrame[]; exprToFrame: ReadonlyMap<ExprId, FrameId>; root?: FrameId | null }): ScopeLookup {
+  const frames = scopeTemplate.frames as ScopeFrame[];
+  const frameById = new Map<FrameId, ScopeFrame>();
+  for (const frame of frames) frameById.set(frame.id, frame);
+  const rootFrameId = scopeTemplate.root ?? frames[0]?.id ?? null;
+  return {
+    frames,
+    frameById,
+    exprToFrame: scopeTemplate.exprToFrame as ReadonlyMap<ExprId, FrameId>,
+    rootFrameId,
+  };
+}
+
+function findLocalScopeSymbolAtOffset(
   compilation: TemplateCompilation,
-  text: string,
   offset: number,
-  documentUri: DocumentUri | null,
-): WorkspaceLocation | null {
+  lookup: ScopeLookup,
+): ScopeSymbolMatch | null {
   const exprHit = compilation.query.exprAt(offset);
   const exprFallback = exprHit ?? findExprSpanAtOffset(compilation.exprSpans, offset);
   if (!exprFallback) return null;
 
   const exprId = exprFallback.exprId;
-  const scopeTemplate = compilation.scope?.templates?.[0];
-  if (!scopeTemplate) return null;
-
-  const frameId =
-    exprHit?.frameId
-    ?? (scopeTemplate.exprToFrame as Map<ExprId, FrameId> | undefined)?.get(exprId)
-    ?? null;
+  const frameId = exprHit?.frameId ?? lookup.exprToFrame.get(exprId) ?? lookup.rootFrameId;
   if (frameId == null) return null;
 
   const entry = findExprEntry(compilation.exprTable, exprId);
@@ -525,18 +590,24 @@ function findLocalScopeDefinition(
   }
   if (!name || !rootOnly) return null;
 
-  const frames = scopeTemplate.frames as ScopeFrame[];
-  const frameById = new Map<FrameId, ScopeFrame>();
-  for (const frame of frames) frameById.set(frame.id, frame);
-
-  const startFrame = frameById.get(frameId);
+  const startFrame = lookup.frameById.get(frameId);
   if (!startFrame) return null;
-  const resolvedFrame = ascendFrame(startFrame, frameById, ancestorDepth);
-  if (!resolvedFrame) return null;
+  return resolveSymbol(startFrame, lookup.frameById, name, ancestorDepth);
+}
 
-  const match = findSymbolInScope(resolvedFrame, frameById, name);
-  if (!match || !match.span) return null;
-  return spanLocation(match.span, documentUri);
+function findLocalScopeDefinition(
+  compilation: TemplateCompilation,
+  text: string,
+  offset: number,
+  documentUri: DocumentUri | null,
+): WorkspaceLocation | null {
+  const scopeTemplate = compilation.scope?.templates?.[0];
+  if (!scopeTemplate) return null;
+
+  const lookup = buildScopeLookup(scopeTemplate);
+  const match = findLocalScopeSymbolAtOffset(compilation, offset, lookup);
+  if (!match?.symbol.span) return null;
+  return spanLocation(match.symbol.span, documentUri);
 }
 
 function ascendFrame(
@@ -552,15 +623,26 @@ function ascendFrame(
   return current;
 }
 
+function resolveSymbol(
+  start: ScopeFrame,
+  frameById: Map<FrameId, ScopeFrame>,
+  name: string,
+  ancestorDepth: number,
+): ScopeSymbolMatch | null {
+  const resolvedFrame = ascendFrame(start, frameById, ancestorDepth);
+  if (!resolvedFrame) return null;
+  return findSymbolInScope(resolvedFrame, frameById, name);
+}
+
 function findSymbolInScope(
   start: ScopeFrame,
   frameById: Map<FrameId, ScopeFrame>,
   name: string,
-): ScopeSymbol | null {
+): ScopeSymbolMatch | null {
   let current: ScopeFrame | null = start;
   while (current) {
     const match = current.symbols.find((symbol) => symbol.name === name);
-    if (match) return match;
+    if (match) return { frame: current, symbol: match };
     if (!current.parent) return null;
     current = frameById.get(current.parent) ?? null;
   }
@@ -666,6 +748,39 @@ function findAccessScopeAtOffset(
   };
   visit(node);
   return best;
+}
+
+function collectAccessScopeNodes(
+  node: ExpressionAst | null | undefined,
+  out: AccessScopeInfo[],
+): void {
+  if (!node || !node.$kind) return;
+  if (node.$kind === "AccessScope" && node.name && node.span) {
+    out.push({ name: node.name, ancestor: node.ancestor, span: node.span });
+  }
+  const queue: (ExpressionAst | null | undefined)[] = [];
+  queue.push(
+    node.expression,
+    node.object,
+    node.func,
+    node.left,
+    node.right,
+    node.condition,
+    node.yes,
+    node.no,
+    node.target,
+    node.value,
+    node.key,
+    node.declaration,
+    node.iterable,
+  );
+  if (node.args) queue.push(...node.args);
+  if (node.parts) queue.push(...node.parts);
+  if (node.expressions) queue.push(...node.expressions);
+  for (const child of queue) {
+    if (!child) continue;
+    collectAccessScopeNodes(child, out);
+  }
 }
 
 type ExpressionAst = {
