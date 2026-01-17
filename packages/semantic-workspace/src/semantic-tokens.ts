@@ -70,7 +70,15 @@ export function collectSemanticTokens(
     const bLen = b.span.end - b.span.start;
     return aLen - bLen;
   });
-  return all;
+  const seen = new Set<string>();
+  const deduped: WorkspaceToken[] = [];
+  for (const token of all) {
+    const key = tokenKey(token);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(token);
+  }
+  return deduped;
 }
 
 function buildNodeMap(root: DOMNode): Map<string, DOMNode> {
@@ -779,6 +787,11 @@ function sliceSpan(start: number, end: number, base?: SourceSpan): SourceSpan {
     return { start, end, file: base.file };
   }
   return { start, end };
+}
+
+function tokenKey(token: WorkspaceToken): string {
+  const mods = token.modifiers ? token.modifiers.join(",") : "";
+  return `${token.type}:${token.span.start}:${token.span.end}:${mods}`;
 }
 
 const BINDING_COMMANDS = new Set([

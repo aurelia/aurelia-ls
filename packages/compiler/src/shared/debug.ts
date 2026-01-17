@@ -198,6 +198,7 @@ export function refreshDebugChannels(): void {
   debug.typecheck = createChannel("typecheck");
   debug.aot = createChannel("aot");
   debug.overlay = createChannel("overlay");
+  debug.workspace = createChannel("workspace");
   debug.ssr = createChannel("ssr");
   debug.transform = createChannel("transform");
   debug.resolution = createChannel("resolution");
@@ -249,6 +250,9 @@ export const debug = {
 
   /** LSP overlay generation */
   overlay: createChannel("overlay"),
+
+  /** Semantic workspace (editor/LSP) */
+  workspace: createChannel("workspace"),
 
   /** SSR rendering */
   ssr: createChannel("ssr"),

@@ -8,6 +8,8 @@ import {
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
   canonicalDocumentUri,
+  debug,
+  offsetAtPosition,
   rangeToSpan,
   prepareSemantics,
   spanToRange,
@@ -47,6 +49,7 @@ import {
   type WorkspaceTextEdit,
   type WorkspaceToken,
 } from "./types.js";
+import { collectTemplateHover, mergeHoverContents } from "./hover.js";
 
 export type WorkspaceProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance">;
 
@@ -284,12 +287,42 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
 
   #hoverAt(uri: DocumentUri, pos: { line: number; character: number }) {
     try {
-      const hover = this.languageService.getHover(uri, pos);
-      if (!hover) return null;
-      const span = spanFromRange(uri, hover.range, this.lookupText.bind(this));
-      return span
-        ? { contents: hover.contents, location: { uri, span } }
-        : { contents: hover.contents };
+      const text = this.lookupText(uri);
+      if (!text) return null;
+      const offset = offsetAtPosition(text, pos);
+      if (offset == null) return null;
+
+      const base = this.languageService.getHover(uri, pos);
+      let detail = null;
+      try {
+        const compilation = this.program.getCompilation(uri);
+        detail = collectTemplateHover({
+          compilation,
+          text,
+          offset,
+          bindingCommands: this.program.options.syntax?.bindingCommands,
+        });
+      } catch (error) {
+        debug.workspace("hover.collect.error", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        detail = null;
+      }
+
+      const baseSpan = base ? spanFromRange(uri, base.range, this.lookupText.bind(this)) : null;
+      const contents = mergeHoverContents(detail?.lines ?? [], base?.contents ?? null);
+      if (!contents) return null;
+
+      const span = detail?.span ?? baseSpan ?? null;
+      if (!span) return { contents };
+
+      const location: WorkspaceLocation = {
+        uri,
+        span,
+        ...(detail?.exprId ? { exprId: detail.exprId } : {}),
+        ...(detail?.nodeId ? { nodeId: detail.nodeId } : {}),
+      };
+      return { contents, location };
     } catch {
       return null;
     }

@@ -5,6 +5,7 @@ import {
   PRELUDE_TS,
   asDocumentUri,
   canonicalDocumentUri,
+  debug,
   offsetAtPosition,
   spanContainsOffset,
   type DocumentUri,
@@ -64,6 +65,7 @@ interface TemplateIndex {
   readonly templates: readonly TemplateInfo[];
   readonly inlineTemplates: readonly InlineTemplateInfo[];
   readonly templateToComponent: ReadonlyMap<DocumentUri, string>;
+  readonly templateToScope: ReadonlyMap<DocumentUri, ResourceScopeId>;
 }
 
 export class SemanticWorkspaceEngine implements SemanticWorkspace {
@@ -185,16 +187,14 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   open(uri: DocumentUri, text?: string, version?: number): void {
-    this.#ensureIndexFresh();
     const canonical = canonicalDocumentUri(uri);
-    this.#activateTemplate(canonical.uri);
+    this.#ensureTemplateContext(canonical.uri);
     this.#kernel.open(canonical.uri, text, version);
   }
 
   update(uri: DocumentUri, text: string, version?: number): void {
-    this.#ensureIndexFresh();
     const canonical = canonicalDocumentUri(uri);
-    this.#activateTemplate(canonical.uri);
+    this.#ensureTemplateContext(canonical.uri);
     this.#kernel.update(canonical.uri, text, version);
   }
 
@@ -217,8 +217,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   diagnostics(uri: DocumentUri): readonly WorkspaceDiagnostic[] {
-    this.#ensureIndexFresh();
     const canonical = canonicalDocumentUri(uri);
+    this.#ensureTemplateContext(canonical.uri);
     const base = this.#kernel.diagnostics(canonical.uri);
     const meta = this.#templateImportDiagnostics(canonical.uri);
     return meta.length ? [...base, ...meta] : base;
@@ -229,20 +229,20 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const base = this.#kernel.query(canonical.uri);
     return {
       hover: (pos) => {
-        this.#ensureIndexFresh();
+        this.#ensureTemplateContext(canonical.uri);
         return this.#metaHover(canonical.uri, pos) ?? base.hover(pos);
       },
       definition: (pos) => {
-        this.#ensureIndexFresh();
+        this.#ensureTemplateContext(canonical.uri);
         const meta = this.#metaDefinition(canonical.uri, pos);
         return meta ?? base.definition(pos);
       },
       references: (pos) => {
-        this.#ensureIndexFresh();
+        this.#ensureTemplateContext(canonical.uri);
         return base.references(pos);
       },
       completions: (pos) => {
-        this.#ensureIndexFresh();
+        this.#ensureTemplateContext(canonical.uri);
         return base.completions(pos);
       },
       diagnostics: () => this.diagnostics(canonical.uri),
@@ -275,28 +275,33 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (existing) return { uri: canonical.uri, text: existing.text };
     const text = this.lookupText(canonical.uri);
     if (text == null) return null;
+    this.#ensureTemplateContext(canonical.uri);
     this.#kernel.open(canonical.uri, text);
     return { uri: canonical.uri, text };
   }
 
   getOverlay(uri: DocumentUri): OverlayBuildArtifact {
-    this.#ensureIndexFresh();
-    return this.#kernel.getOverlay(uri);
+    const canonical = canonicalDocumentUri(uri);
+    this.#ensureTemplateContext(canonical.uri);
+    return this.#kernel.getOverlay(canonical.uri);
   }
 
   getMapping(uri: DocumentUri): TemplateMappingArtifact | null {
-    this.#ensureIndexFresh();
-    return this.#kernel.getMapping(uri);
+    const canonical = canonicalDocumentUri(uri);
+    this.#ensureTemplateContext(canonical.uri);
+    return this.#kernel.getMapping(canonical.uri);
   }
 
   getCompilation(uri: DocumentUri): TemplateCompilation | null {
-    this.#ensureIndexFresh();
-    return this.#kernel.getCompilation(uri);
+    const canonical = canonicalDocumentUri(uri);
+    this.#ensureTemplateContext(canonical.uri);
+    return this.#kernel.getCompilation(canonical.uri);
   }
 
   getQueryFacade(uri: DocumentUri): TemplateQueryFacade | null {
-    this.#ensureIndexFresh();
-    return this.#kernel.getQueryFacade(uri);
+    const canonical = canonicalDocumentUri(uri);
+    this.#ensureTemplateContext(canonical.uri);
+    return this.#kernel.getQueryFacade(canonical.uri);
   }
 
   getCacheStats(target?: DocumentUri) {
@@ -312,6 +317,11 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const version = this.#env.project.getProjectVersion();
     if (version === this.#projectVersion) return;
     this.refresh({ force: true });
+  }
+
+  #ensureTemplateContext(uri: DocumentUri): void {
+    this.#ensureIndexFresh();
+    this.#activateTemplate(uri);
   }
 
   #programOptions(vm: VmReflection, isJs: boolean, overlayBaseName?: string) {
@@ -335,15 +345,26 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
   #activateTemplate(uri: DocumentUri): void {
     const setter = getActiveTemplateSetter(this.#vm);
-    if (!setter) return;
     const componentPath = this.#templateIndex.templateToComponent.get(uri) ?? canonicalDocumentUri(uri).path;
-    setter(componentPath);
+    if (setter) setter(componentPath);
+    this.#applyTemplateScope(uri);
   }
 
   #deactivateTemplate(): void {
     const setter = getActiveTemplateSetter(this.#vm);
     if (!setter) return;
     setter(null);
+  }
+
+  #applyTemplateScope(uri: DocumentUri): void {
+    const scope = this.#templateIndex.templateToScope.get(uri);
+    if (!scope || scope === this.#resourceScope) return;
+    debug.workspace("scope.update", {
+      uri,
+      from: this.#resourceScope ?? "default",
+      to: scope,
+    });
+    this.setResourceScope(scope);
   }
 
   #metaHover(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceHover | null {
@@ -456,17 +477,23 @@ function getActiveTemplateSetter(vm: VmReflection): ((path: string | null) => vo
 
 function buildTemplateIndex(resolution: ResolutionResult): TemplateIndex {
   const templateToComponent = new Map<DocumentUri, string>();
+  const templateToScope = new Map<DocumentUri, ResourceScopeId>();
   for (const entry of resolution.templates) {
-    templateToComponent.set(asDocumentUri(entry.templatePath), entry.componentPath);
+    const uri = asDocumentUri(entry.templatePath);
+    templateToComponent.set(uri, entry.componentPath);
+    templateToScope.set(uri, entry.scopeId);
   }
   for (const entry of resolution.inlineTemplates) {
     const inlinePath = inlineTemplatePath(entry.componentPath);
-    templateToComponent.set(asDocumentUri(inlinePath), entry.componentPath);
+    const uri = asDocumentUri(inlinePath);
+    templateToComponent.set(uri, entry.componentPath);
+    templateToScope.set(uri, entry.scopeId);
   }
   return {
     templates: resolution.templates,
     inlineTemplates: resolution.inlineTemplates,
     templateToComponent,
+    templateToScope,
   };
 }
 
