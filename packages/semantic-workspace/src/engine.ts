@@ -6,6 +6,7 @@ import {
   asDocumentUri,
   canonicalDocumentUri,
   debug,
+  extractTemplateMeta,
   normalizePathForId,
   offsetAtPosition,
   spanContainsOffset,
@@ -21,6 +22,7 @@ import {
   type SourceLocation,
   type SourceSpan,
   type TemplateCompilation,
+  type TemplateMetaIR,
   type TemplateMappingArtifact,
   type TemplateQueryFacade,
   type VmReflection,
@@ -53,6 +55,7 @@ import {
   type WorkspaceSnapshot,
   type WorkspaceToken,
   type WorkspaceCodeAction,
+  type WorkspaceCodeActionRequest,
   type WorkspaceRenameRequest,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
@@ -240,8 +243,11 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const canonical = canonicalDocumentUri(uri);
     this.#ensureTemplateContext(canonical.uri);
     const base = this.#kernel.diagnostics(canonical.uri);
-    const meta = this.#templateImportDiagnostics(canonical.uri);
-    return meta.length ? [...base, ...meta] : base;
+    const mapped = this.#mapDiagnostics(canonical.uri, base);
+    const meta = this.#templateMetaDiagnostics(canonical.uri);
+    const gaps = this.#catalogDiagnostics(canonical.uri);
+    if (!meta.length && !gaps.length) return mapped;
+    return [...mapped, ...meta, ...gaps];
   }
 
   query(uri: DocumentUri): SemanticQuery {
@@ -277,6 +283,33 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
   refactor(): RefactorEngine {
     return this.#refactorProxy;
+  }
+
+  collectCodeActions(request: WorkspaceCodeActionRequest): readonly WorkspaceCodeAction[] {
+    const canonical = canonicalDocumentUri(request.uri);
+    this.#ensureTemplateContext(canonical.uri);
+    const text = this.lookupText(canonical.uri);
+    if (!text) return [];
+    const compilation = this.#kernel.getCompilation(canonical.uri);
+    if (!compilation) return [];
+    const targetSpan = resolveActionSpan(request, text);
+    if (!targetSpan) return [];
+
+    const diagnostics = this.diagnostics(canonical.uri);
+    const bindingCommands = this.#kernel.program.options.syntax?.bindingCommands ?? {};
+    return collectWorkspaceCodeActions({
+      request,
+      uri: canonical.uri,
+      text,
+      compilation,
+      diagnostics,
+      bindingCommands,
+      templateIndex: this.#templateIndex,
+      definitionIndex: this.#definitionIndex,
+      workspaceRoot: this.#workspaceRoot,
+      compilerOptions: this.#env.tsService.compilerOptions(),
+      lookupText: this.lookupText.bind(this),
+    }, targetSpan);
   }
 
   prepareRefactor(uri: DocumentUri): void {
@@ -715,17 +748,24 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     setter(componentPath);
   }
 
-  #templateImportDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
+  #mapDiagnostics(uri: DocumentUri, diagnostics: readonly WorkspaceDiagnostic[]): WorkspaceDiagnostic[] {
+    if (diagnostics.length === 0) return [];
+    const text = this.lookupText(uri);
+    const compilation = text ? this.#kernel.getCompilation(uri) : null;
+    const bindingCommands = this.#kernel.program.options.syntax?.bindingCommands ?? {};
+    return diagnostics.map((diag) => mapWorkspaceDiagnostic(diag, { text, compilation, bindingCommands }));
+  }
+
+  #templateMetaDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
     const compilation = this.#kernel.getCompilation(uri);
     const template = compilation?.linked?.templates?.[0];
     if (!template?.templateMeta) return [];
     const templatePath = this.#templateIndex.templateToComponent.get(uri) ?? canonicalDocumentUri(uri).path;
     const diagnostics: WorkspaceDiagnostic[] = [];
-    for (const imp of template.templateMeta.imports) {
+    const meta = template.templateMeta;
+
+    for (const imp of meta.imports) {
       const specifier = imp.from.value;
-      if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
-        continue;
-      }
       const resolvedPath = resolveModuleSpecifier(specifier, templatePath, this.#env.tsService.compilerOptions());
       if (resolvedPath) continue;
       diagnostics.push({
@@ -736,7 +776,86 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         span: imp.from.loc,
       });
     }
+
+    const aliasSeen = new Map<string, SourceSpan>();
+    for (const alias of meta.aliases) {
+      for (const name of alias.names) {
+        const key = name.value.toLowerCase();
+        if (aliasSeen.has(key)) {
+          diagnostics.push({
+            code: "aurelia/alias-conflict",
+            message: `Alias '${name.value}' is already declared.`,
+            severity: "warning",
+            source: "aurelia",
+            span: name.loc,
+          });
+        } else {
+          aliasSeen.set(key, name.loc);
+        }
+      }
+    }
+
+    const bindableSeen = new Map<string, SourceSpan>();
+    for (const bindable of meta.bindables) {
+      const key = bindable.name.value.toLowerCase();
+      if (bindableSeen.has(key)) {
+        diagnostics.push({
+          code: "aurelia/bindable-decl-conflict",
+          message: `Bindable '${bindable.name.value}' is already declared.`,
+          severity: "warning",
+          source: "aurelia",
+          span: bindable.name.loc,
+        });
+      } else {
+        bindableSeen.set(key, bindable.name.loc);
+      }
+    }
+
     return diagnostics;
+  }
+
+  #catalogDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
+    const catalog = this.#projectIndex.currentCatalog();
+    const gaps = catalog.gaps ?? [];
+    if (gaps.length === 0 && !catalog.confidence) return [];
+
+    const templatePath = canonicalDocumentUri(uri).path;
+    const componentPath = this.#templateIndex.templateToComponent.get(uri) ?? null;
+    const normalizedTemplate = normalizePathForId(templatePath);
+    const normalizedComponent = componentPath ? normalizePathForId(componentPath) : null;
+
+    const results: WorkspaceDiagnostic[] = [];
+    for (const gap of gaps) {
+      if (gap.resource) {
+        const normalizedResource = normalizePathForId(gap.resource);
+        if (normalizedResource !== normalizedTemplate && normalizedResource !== normalizedComponent) {
+          continue;
+        }
+      } else {
+        continue;
+      }
+
+      results.push({
+        code: gapCodeForKind(gap.kind),
+        message: gap.message,
+        severity: "info",
+        source: "aurelia",
+        data: { gapKind: gap.kind },
+      });
+    }
+
+    const confidence = catalog.confidence;
+    if (confidence && confidence !== "complete" && confidence !== "high" && results.length > 0) {
+      results.push({
+        code: "aurelia/confidence/low",
+        message: `Catalog confidence '${confidence}'.`,
+        severity: "info",
+        source: "aurelia",
+        data: { confidence },
+      });
+    }
+
+    return results;
   }
 
   #semanticTokens(uri: DocumentUri): readonly WorkspaceToken[] {
@@ -768,7 +887,9 @@ class WorkspaceRefactorProxy implements RefactorEngine {
 
   codeActions(request: { uri: DocumentUri; position?: { line: number; character: number }; range?: SourceSpan; kinds?: readonly string[] }): readonly WorkspaceCodeAction[] {
     this.engine.refresh();
-    return this.inner.codeActions(request);
+    const custom = this.engine.collectCodeActions(request);
+    const base = this.inner.codeActions(request);
+    return mergeCodeActions(custom, base, request.kinds);
   }
 }
 
@@ -1049,12 +1170,18 @@ type BindableTarget = {
   property: string;
 };
 
+type InstructionOwner =
+  | { kind: "element"; name: string; file: string | null }
+  | { kind: "attribute"; name: string; file: string | null; isTemplateController?: boolean }
+  | { kind: "controller"; name: string };
+
 type InstructionHit = {
   instruction: LinkedInstruction;
   loc: SourceSpan;
   len: number;
   hostTag?: string;
   hostKind?: "custom" | "native" | "none";
+  owner?: InstructionOwner | null;
 };
 
 type BindingCommands = Readonly<Record<string, unknown>>;
@@ -1081,6 +1208,753 @@ type ExpressionAst = {
   declaration?: ExpressionAst;
   iterable?: ExpressionAst;
 };
+
+type DiagnosticMapContext = {
+  text: string | null;
+  compilation: TemplateCompilation | null;
+  bindingCommands: BindingCommands;
+};
+
+type CodeActionContext = {
+  request: WorkspaceCodeActionRequest;
+  uri: DocumentUri;
+  text: string;
+  compilation: TemplateCompilation;
+  diagnostics: readonly WorkspaceDiagnostic[];
+  bindingCommands: BindingCommands;
+  templateIndex: TemplateIndex;
+  definitionIndex: ResourceDefinitionIndex;
+  workspaceRoot: string;
+  compilerOptions: ts.CompilerOptions;
+  lookupText: (uri: DocumentUri) => string | null;
+};
+
+type BindableCandidate = {
+  ownerKind: "element" | "attribute";
+  ownerName: string;
+  ownerFile: string | null;
+  propertyName: string;
+  attributeName: string | null;
+};
+
+type ImportCandidate = {
+  kind: "element" | "attribute" | "controller" | "value-converter" | "binding-behavior";
+  name: string;
+};
+
+type InsertContext = {
+  offset: number;
+  indent: string;
+};
+
+function resolveActionSpan(request: WorkspaceCodeActionRequest, text: string): SourceSpan | null {
+  if (request.range) return normalizeSpan(request.range);
+  if (!request.position) return null;
+  const offset = offsetAtPosition(text, request.position);
+  if (offset == null) return null;
+  return { start: offset, end: offset };
+}
+
+function normalizeSpan(span: SourceSpan): SourceSpan {
+  const start = Math.min(span.start, span.end);
+  const end = Math.max(span.start, span.end);
+  return { start, end, ...(span.file ? { file: span.file } : {}) };
+}
+
+function mergeCodeActions(
+  primary: readonly WorkspaceCodeAction[],
+  secondary: readonly WorkspaceCodeAction[],
+  kinds: readonly string[] | undefined,
+): WorkspaceCodeAction[] {
+  const results: WorkspaceCodeAction[] = [];
+  const seen = new Set<string>();
+  for (const action of [...primary, ...secondary]) {
+    if (!matchesActionKind(action.kind, kinds)) continue;
+    if (seen.has(action.id)) continue;
+    seen.add(action.id);
+    results.push(action);
+  }
+  return results;
+}
+
+function matchesActionKind(actionKind: string | undefined, kinds: readonly string[] | undefined): boolean {
+  if (!kinds || kinds.length === 0) return true;
+  if (!actionKind) return false;
+  return kinds.some((kind) => actionKind === kind || actionKind.startsWith(`${kind}.`));
+}
+
+function collectWorkspaceCodeActions(ctx: CodeActionContext, targetSpan: SourceSpan): WorkspaceCodeAction[] {
+  if (ctx.request.kinds && !ctx.request.kinds.some((kind) => kind === "quickfix" || kind.startsWith("quickfix."))) {
+    return [];
+  }
+  const results: WorkspaceCodeAction[] = [];
+  const seen = new Set<string>();
+  for (const diagnostic of ctx.diagnostics) {
+    if (!diagnostic.span || !spanIntersects(diagnostic.span, targetSpan)) continue;
+    let action: WorkspaceCodeAction | null = null;
+    switch (diagnostic.code) {
+      case "aurelia/unknown-bindable":
+        action = buildAddBindableAction(diagnostic, ctx);
+        break;
+      case "aurelia/unknown-element":
+      case "aurelia/unknown-attribute":
+      case "aurelia/unknown-controller":
+      case "aurelia/unknown-converter":
+      case "aurelia/unknown-behavior":
+      case "aurelia/expr-symbol-not-found":
+        action = buildAddImportAction(diagnostic, ctx, targetSpan);
+        break;
+      default:
+        break;
+    }
+    if (!action || seen.has(action.id)) continue;
+    seen.add(action.id);
+    results.push(action);
+  }
+  return results;
+}
+
+function spanIntersects(a: SourceSpan, b: SourceSpan): boolean {
+  const aStart = Math.min(a.start, a.end);
+  const aEnd = Math.max(a.start, a.end);
+  const bStart = Math.min(b.start, b.end);
+  const bEnd = Math.max(b.start, b.end);
+  if (aStart === aEnd) return bStart <= aStart && aStart <= bEnd;
+  if (bStart === bEnd) return aStart <= bStart && bStart <= aEnd;
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function resolveBindableCandidate(
+  hit: InstructionHit,
+  text: string,
+  bindingCommands: BindingCommands,
+  definitionIndex?: ResourceDefinitionIndex | null,
+  preferRoots: readonly string[] = [],
+): BindableCandidate | null {
+  const attrName = attributeNameFromHit(text, hit);
+  const base = attributeBaseName(attrName, bindingCommands);
+  if (!base) return null;
+  const propertyName = dashToCamel(base);
+  const attributeName = base !== propertyName ? base : null;
+
+  if (hit.owner && (hit.owner.kind === "element" || hit.owner.kind === "attribute")) {
+    return {
+      ownerKind: hit.owner.kind,
+      ownerName: hit.owner.name,
+      ownerFile: hit.owner.file,
+      propertyName,
+      attributeName,
+    };
+  }
+
+  if (hit.hostKind === "custom" && hit.hostTag) {
+    const entry = definitionIndex
+      ? findResourceEntry(definitionIndex.elements, hit.hostTag.toLowerCase(), null, preferRoots)
+      : null;
+    return {
+      ownerKind: "element",
+      ownerName: hit.hostTag,
+      ownerFile: entry?.def.file ?? null,
+      propertyName,
+      attributeName,
+    };
+  }
+
+  return null;
+}
+
+function attributeNameFromHit(text: string, hit: InstructionHit): string | null {
+  const span = attributeNameSpan(text, hit.loc);
+  if (!span) return null;
+  return text.slice(span.start, span.end);
+}
+
+function attributeBaseName(attrName: string | null, bindingCommands: BindingCommands): string | null {
+  if (!attrName) return null;
+  if (attrName.startsWith(":") || attrName.startsWith("@")) {
+    return attrName.slice(1) || null;
+  }
+  const parts = attrName.split(".");
+  if (parts.length < 2) return attrName;
+  const command = parts[parts.length - 1];
+  if (!command) return attrName;
+  return bindingCommands[command] ? parts.slice(0, -1).join(".") : attrName;
+}
+
+function resolveImportCandidate(
+  diagnostic: WorkspaceDiagnostic,
+  ctx: CodeActionContext,
+  targetSpan: SourceSpan,
+): ImportCandidate | null {
+  const data = diagnostic.data as Record<string, unknown> | undefined;
+  const dataKind = typeof data?.resourceKind === "string" ? data.resourceKind : null;
+  const dataName = typeof data?.name === "string" ? data.name : null;
+  if (dataKind && dataName) {
+    return { kind: dataKind as ImportCandidate["kind"], name: dataName };
+  }
+
+  const offset = Number.isFinite(targetSpan.start) ? targetSpan.start : diagnostic.span?.start ?? null;
+  if (offset == null) return null;
+
+  switch (diagnostic.code) {
+    case "aurelia/unknown-element": {
+      const name = findElementNameAtOffset(ctx.compilation, offset);
+      return name ? { kind: "element", name } : null;
+    }
+    case "aurelia/unknown-attribute": {
+      const hit = findInstructionHit(ctx.compilation, offset);
+      const attrName = hit ? attributeNameFromHit(ctx.text, hit) : null;
+      const base = attributeBaseName(attrName, ctx.bindingCommands);
+      return base ? { kind: "attribute", name: base } : null;
+    }
+    case "aurelia/unknown-controller": {
+      const name = findControllerNameAtOffset(ctx.compilation, ctx.text, offset, ctx.bindingCommands);
+      return name ? { kind: "controller", name } : null;
+    }
+    case "aurelia/unknown-converter": {
+      const hit = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      return hit ? { kind: "value-converter", name: hit.name } : null;
+    }
+    case "aurelia/unknown-behavior": {
+      const hit = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      return hit ? { kind: "binding-behavior", name: hit.name } : null;
+    }
+    case "aurelia/expr-symbol-not-found": {
+      const symbolKind = typeof data?.symbolKind === "string" ? data.symbolKind : null;
+      if (symbolKind === "binding-behavior") {
+        const hit = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+        return hit ? { kind: "binding-behavior", name: hit.name } : null;
+      }
+      if (symbolKind === "value-converter") {
+        const hit = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+        return hit ? { kind: "value-converter", name: hit.name } : null;
+      }
+      const converter = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      if (converter) return { kind: "value-converter", name: converter.name };
+      const behavior = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      return behavior ? { kind: "binding-behavior", name: behavior.name } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function buildAddImportAction(
+  diagnostic: WorkspaceDiagnostic,
+  ctx: CodeActionContext,
+  targetSpan: SourceSpan,
+): WorkspaceCodeAction | null {
+  const candidate = resolveImportCandidate(diagnostic, ctx, targetSpan);
+  if (!candidate) return null;
+
+  const map = resourceMapForKind(ctx.definitionIndex, candidate.kind);
+  const entry = findResourceEntry(map, candidate.name.toLowerCase(), null, [ctx.workspaceRoot]);
+  if (!entry?.def.file) return null;
+
+  const containingFile = ctx.templateIndex.templateToComponent.get(ctx.uri) ?? canonicalDocumentUri(ctx.uri).path;
+  const targetFile = resolveFilePath(entry.def.file, ctx.workspaceRoot);
+  const specifier = moduleSpecifierFromFile(targetFile, containingFile);
+  if (!specifier) return null;
+
+  const templatePath = canonicalDocumentUri(ctx.uri).path;
+  const meta = extractTemplateMeta(ctx.text, templatePath);
+  if (hasImportForFile(meta, targetFile, containingFile, ctx.compilerOptions)) return null;
+
+  const insertion = computeImportInsertion(ctx.text, meta);
+  const line = `${insertion.indent}<import from="${specifier}"></import>`;
+  const edit = buildInsertionEdit(ctx.uri, ctx.text, insertion.offset, line);
+  const name = candidate.name;
+  const id = `aurelia/add-import:${candidate.kind}:${name}`;
+  return {
+    id,
+    title: `Add <import> for '${name}'`,
+    kind: "quickfix",
+    edit: { edits: finalizeWorkspaceEdits([edit]) },
+  };
+}
+
+function buildAddBindableAction(
+  diagnostic: WorkspaceDiagnostic,
+  ctx: CodeActionContext,
+): WorkspaceCodeAction | null {
+  const offset = diagnostic.span?.start ?? null;
+  if (offset == null) return null;
+  const hit = findInstructionHit(ctx.compilation, offset);
+  if (!hit) return null;
+
+  const candidate = resolveBindableCandidate(hit, ctx.text, ctx.bindingCommands, ctx.definitionIndex, [ctx.workspaceRoot]);
+  if (!candidate || candidate.ownerKind !== "element" || !candidate.ownerFile) return null;
+
+  const target = resolveExternalTemplateForComponent(candidate.ownerFile, ctx.templateIndex);
+  if (!target) return null;
+  const templateText = ctx.lookupText(target.uri);
+  if (!templateText) return null;
+
+  const meta = extractTemplateMeta(templateText, target.path);
+  const insertion = computeBindableInsertion(templateText, meta);
+  const attributePart = candidate.attributeName ? ` attribute="${candidate.attributeName}"` : "";
+  const line = `${insertion.indent}<bindable name="${candidate.propertyName}"${attributePart}></bindable>`;
+  const edit = buildInsertionEdit(target.uri, templateText, insertion.offset, line);
+
+  const id = `aurelia/add-bindable:${candidate.ownerName}:${candidate.propertyName}`;
+  return {
+    id,
+    title: `Add <bindable> '${candidate.propertyName}' to ${candidate.ownerName}`,
+    kind: "quickfix",
+    edit: { edits: finalizeWorkspaceEdits([edit]) },
+  };
+}
+
+function buildInsertionEdit(uri: DocumentUri, text: string, offset: number, line: string): WorkspaceTextEdit {
+  const canonical = canonicalDocumentUri(uri);
+  const newText = buildLineInsertion(text, offset, line);
+  const span: SourceSpan = { start: offset, end: offset, file: canonical.file };
+  return { uri: canonical.uri, span, newText };
+}
+
+function buildLineInsertion(text: string, offset: number, line: string): string {
+  const newline = detectNewline(text);
+  const before = offset > 0 ? text[offset - 1] : "";
+  const after = offset < text.length ? text[offset] : "";
+  const needsLeading = offset > 0 && before !== "\n" && before !== "\r";
+  const needsTrailing = offset < text.length && after !== "\n" && after !== "\r";
+  return `${needsLeading ? newline : ""}${line}${needsTrailing ? newline : ""}`;
+}
+
+function computeImportInsertion(text: string, meta: TemplateMetaIR): InsertContext {
+  const lastImport = pickLastByEnd(meta.imports);
+  if (lastImport) {
+    return { offset: lastImport.elementLoc.end, indent: lineIndentAt(text, lastImport.elementLoc.start) };
+  }
+  const firstBindable = pickFirstByStart(meta.bindables);
+  if (firstBindable) {
+    return { offset: firstBindable.elementLoc.start, indent: lineIndentAt(text, firstBindable.elementLoc.start) };
+  }
+  return findTemplateRootInsert(text) ?? { offset: 0, indent: "" };
+}
+
+function computeBindableInsertion(text: string, meta: TemplateMetaIR): InsertContext {
+  const lastBindable = pickLastByEnd(meta.bindables);
+  if (lastBindable) {
+    return { offset: lastBindable.elementLoc.end, indent: lineIndentAt(text, lastBindable.elementLoc.start) };
+  }
+  const lastImport = pickLastByEnd(meta.imports);
+  if (lastImport) {
+    return { offset: lastImport.elementLoc.end, indent: lineIndentAt(text, lastImport.elementLoc.start) };
+  }
+  return findTemplateRootInsert(text) ?? { offset: 0, indent: "" };
+}
+
+function pickLastByEnd<T extends { elementLoc: SourceSpan }>(items: readonly T[]): T | null {
+  let best: T | null = null;
+  for (const item of items) {
+    if (!best || item.elementLoc.end > best.elementLoc.end) {
+      best = item;
+    }
+  }
+  return best;
+}
+
+function pickFirstByStart<T extends { elementLoc: SourceSpan }>(items: readonly T[]): T | null {
+  let best: T | null = null;
+  for (const item of items) {
+    if (!best || item.elementLoc.start < best.elementLoc.start) {
+      best = item;
+    }
+  }
+  return best;
+}
+
+function findTemplateRootInsert(text: string): InsertContext | null {
+  const match = text.match(/^[\s\r\n]*<template\b[^>]*>/i);
+  if (!match) return null;
+  const offset = match[0].length;
+  const tagStart = match[0].search(/<template\b/i);
+  const openIndent = lineIndentAt(text, Math.max(0, tagStart));
+  const after = text.slice(offset);
+  const childIndentMatch = after.match(/\r?\n([ \t]*)\S/);
+  const childIndent = childIndentMatch?.[1] ?? `${openIndent}${detectIndentUnit(text)}`;
+  return { offset, indent: childIndent };
+}
+
+function lineIndentAt(text: string, offset: number): string {
+  const lineStart = Math.max(0, text.lastIndexOf("\n", offset - 1) + 1);
+  const line = text.slice(lineStart, offset);
+  return line.match(/^[ \t]*/)?.[0] ?? "";
+}
+
+function detectIndentUnit(text: string): string {
+  const lines = text.split(/\r?\n/);
+  let minSpaces = Number.POSITIVE_INFINITY;
+  for (const line of lines) {
+    const tabMatch = line.match(/^\t+\S/);
+    if (tabMatch) return "\t";
+    const spaceMatch = line.match(/^( +)\S/);
+    const spaces = spaceMatch?.[1];
+    if (spaces) {
+      minSpaces = Math.min(minSpaces, spaces.length);
+    }
+  }
+  if (minSpaces !== Number.POSITIVE_INFINITY) {
+    return " ".repeat(minSpaces);
+  }
+  return "  ";
+}
+
+function detectNewline(text: string): string {
+  return text.includes("\r\n") ? "\r\n" : "\n";
+}
+
+function moduleSpecifierFromFile(targetFile: string, containingFile: string): string | null {
+  if (!targetFile || !containingFile) return null;
+  const fromDir = path.dirname(containingFile);
+  let relative = path.relative(fromDir, targetFile);
+  if (!relative) return null;
+  relative = normalizePathSlashes(relative);
+  relative = stripKnownExtension(relative);
+  if (!relative.startsWith(".")) {
+    relative = `./${relative}`;
+  }
+  return relative;
+}
+
+function stripKnownExtension(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  const extensions = [
+    ".d.mts",
+    ".d.cts",
+    ".d.ts",
+    ".inline.html",
+    ".html",
+    ".mts",
+    ".cts",
+    ".mjs",
+    ".cjs",
+    ".tsx",
+    ".jsx",
+    ".ts",
+    ".js",
+  ];
+  for (const ext of extensions) {
+    if (lower.endsWith(ext)) {
+      return filePath.slice(0, -ext.length);
+    }
+  }
+  return filePath;
+}
+
+function normalizePathSlashes(filePath: string): string {
+  return filePath.split("\\").join("/");
+}
+
+function resolveFilePath(filePath: string, workspaceRoot: string): string {
+  return path.isAbsolute(filePath) ? filePath : path.resolve(workspaceRoot, filePath);
+}
+
+function resolveExternalTemplateForComponent(
+  componentFile: string,
+  templateIndex: TemplateIndex,
+): { uri: DocumentUri; path: string } | null {
+  const normalized = normalizePathForId(componentFile);
+  for (const entry of templateIndex.templates) {
+    if (normalizePathForId(entry.componentPath) === normalized) {
+      return { uri: asDocumentUri(entry.templatePath), path: entry.templatePath };
+    }
+  }
+  return null;
+}
+
+function resourceMapForKind(
+  index: ResourceDefinitionIndex,
+  kind: ImportCandidate["kind"],
+): ReadonlyMap<string, ResourceDefinitionEntry[]> {
+  switch (kind) {
+    case "element":
+      return index.elements;
+    case "attribute":
+      return index.attributes;
+    case "controller":
+      return index.controllers;
+    case "value-converter":
+      return index.valueConverters;
+    case "binding-behavior":
+      return index.bindingBehaviors;
+  }
+}
+
+function hasImportForFile(
+  meta: TemplateMetaIR,
+  targetFile: string,
+  containingFile: string,
+  compilerOptions: ts.CompilerOptions,
+): boolean {
+  const targetNormalized = normalizePathForId(targetFile);
+  for (const imp of meta.imports) {
+    const resolved = resolveModuleSpecifier(imp.from.value, containingFile, compilerOptions);
+    if (!resolved) continue;
+    if (normalizePathForId(resolved) === targetNormalized) return true;
+  }
+  return false;
+}
+
+function findInstructionHit(compilation: TemplateCompilation, offset: number): InstructionHit | null {
+  const hits = findInstructionsAtOffset(compilation.linked.templates, offset);
+  return hits[0] ?? null;
+}
+
+function findElementNameAtOffset(
+  compilation: TemplateCompilation,
+  offset: number,
+): string | null {
+  const node = compilation.query.nodeAt(offset);
+  if (!node || node.kind !== "element") return null;
+  const row = findLinkedRow(compilation.linked.templates, node.templateIndex, node.id);
+  if (!row || row.node.kind !== "element") return null;
+  return row.node.tag;
+}
+
+function findControllerNameAtOffset(
+  compilation: TemplateCompilation,
+  text: string,
+  offset: number,
+  bindingCommands: BindingCommands,
+): string | null {
+  const controller = compilation.query.controllerAt(offset);
+  if (controller?.kind) return controller.kind;
+  const hit = findInstructionHit(compilation, offset);
+  const attrName = hit ? attributeNameFromHit(text, hit) : null;
+  const base = attributeBaseName(attrName, bindingCommands);
+  return base ?? null;
+}
+
+function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapContext): WorkspaceDiagnostic {
+  if (diag.source === "typescript") {
+    return {
+      ...diag,
+      code: String(diag.code),
+      source: "typescript",
+    };
+  }
+
+  const code = String(diag.code);
+  const span = diag.span;
+  const offset = span?.start ?? null;
+  const text = ctx.text;
+  const compilation = ctx.compilation;
+  const base = {
+    message: diag.message,
+    severity: diag.severity,
+    span: diag.span,
+    source: "aurelia" as const,
+  };
+
+  switch (code) {
+    case "AU1102": {
+      const name = offset != null && text && compilation
+        ? findElementNameAtOffset(compilation, offset)
+        : null;
+      return {
+        ...base,
+        code: "aurelia/unknown-element",
+        data: mergeDiagnosticData(diag.data, {
+          aurCode: "AUR0752",
+          ...(name ? { resourceKind: "element", name } : {}),
+        }),
+      };
+    }
+    case "AU1101": {
+      const name = offset != null && text && compilation
+        ? findControllerNameAtOffset(compilation, text, offset, ctx.bindingCommands)
+        : null;
+      return {
+        ...base,
+        code: "aurelia/unknown-controller",
+        data: mergeDiagnosticData(diag.data, {
+          aurCode: "AUR0754",
+          ...(name ? { resourceKind: "controller", name } : {}),
+        }),
+      };
+    }
+    case "AU1104": {
+      let bindableData: Record<string, unknown> | null = null;
+      let attrName: string | null = null;
+      if (offset != null && text && compilation) {
+        const hit = findInstructionHit(compilation, offset);
+        const target = hit
+          ? (hit.instruction as { target?: { kind?: string } }).target
+          : null;
+        if (hit && target && typeof target === "object" && "kind" in target && target.kind === "unknown") {
+          const candidate = resolveBindableCandidate(hit, text, ctx.bindingCommands);
+          if (candidate) {
+            bindableData = {
+              bindable: {
+                name: candidate.propertyName,
+                attribute: candidate.attributeName ?? undefined,
+                ownerKind: candidate.ownerKind,
+                ownerName: candidate.ownerName,
+                ...(candidate.ownerFile ? { ownerFile: candidate.ownerFile } : {}),
+              },
+            };
+          } else {
+            const raw = attributeNameFromHit(text, hit);
+            attrName = attributeBaseName(raw, ctx.bindingCommands);
+          }
+        }
+      }
+      if (bindableData) {
+        return {
+          ...base,
+          code: "aurelia/unknown-bindable",
+          data: mergeDiagnosticData(diag.data, {
+            aurCode: "AUR0707",
+            ...bindableData,
+          }),
+        };
+      }
+      if (attrName) {
+        return {
+          ...base,
+          code: "aurelia/unknown-attribute",
+          data: mergeDiagnosticData(diag.data, {
+            aurCode: "AUR0753",
+            resourceKind: "attribute",
+            name: attrName,
+          }),
+        };
+      }
+      return {
+        ...base,
+        code: "aurelia/unknown-bindable",
+        data: mergeDiagnosticData(diag.data, { aurCode: "AUR0707" }),
+      };
+    }
+    case "AU0101": {
+      const name = offset != null && text && compilation
+        ? findBindingBehaviorAtOffset(compilation.exprTable ?? [], text, offset)?.name
+        : null;
+      return {
+        ...base,
+        code: "aurelia/expr-symbol-not-found",
+        data: mergeDiagnosticData(diag.data, {
+          aurCode: "AUR0101",
+          symbolKind: "binding-behavior",
+          ...(name ? { name } : {}),
+        }),
+      };
+    }
+    case "AU0103": {
+      const name = offset != null && text && compilation
+        ? findValueConverterAtOffset(compilation.exprTable ?? [], text, offset)?.name
+        : null;
+      return {
+        ...base,
+        code: "aurelia/expr-symbol-not-found",
+        data: mergeDiagnosticData(diag.data, {
+          aurCode: "AUR0103",
+          symbolKind: "value-converter",
+          ...(name ? { name } : {}),
+        }),
+      };
+    }
+    case "AU0102":
+    case "AU0106":
+    case "AU9996": {
+      const aurCode = code === "AU0102"
+        ? "AUR0102"
+        : code === "AU0106"
+          ? "AUR0106"
+          : "AUR9996";
+      return {
+        ...base,
+        code: "aurelia/invalid-binding-pattern",
+        data: mergeDiagnosticData(diag.data, { aurCode }),
+      };
+    }
+    case "AU0704":
+      return {
+        ...base,
+        code: "aurelia/invalid-command-usage",
+        data: mergeDiagnosticData(diag.data, { aurCode: "AUR0704" }),
+      };
+    case "AU0705": {
+      let command: string | null = null;
+      if (offset != null && text && compilation) {
+        const hit = findInstructionHit(compilation, offset);
+        const raw = hit ? attributeNameFromHit(text, hit) : null;
+        if (raw) {
+          const parts = raw.split(".");
+          if (parts.length > 1) command = parts[parts.length - 1] ?? null;
+        }
+      }
+      return {
+        ...base,
+        code: "aurelia/unknown-command",
+        data: mergeDiagnosticData(diag.data, {
+          aurCode: "AUR0713",
+          ...(command ? { command } : {}),
+        }),
+      };
+    }
+    case "AU0810":
+    case "AU0813":
+    case "AU0815":
+    case "AU0816":
+      return {
+        ...base,
+        code: "aurelia/invalid-command-usage",
+        data: mergeDiagnosticData(diag.data, { aurCode: `AUR${code.slice(2)}` }),
+      };
+    case "AU1106":
+      return {
+        ...base,
+        code: "aurelia/invalid-command-usage",
+      };
+    case "AU1201":
+    case "AU1202":
+      return {
+        ...base,
+        code: "aurelia/invalid-binding-pattern",
+      };
+    case "AU1203":
+      return {
+        ...base,
+        code: "aurelia/expr-parse-error",
+        data: mergeDiagnosticData(diag.data, { recovery: true }),
+      };
+    case "AU1301":
+    case "AU1302":
+    case "AU1303":
+      return {
+        ...base,
+        code: "aurelia/expr-type-mismatch",
+      };
+    default:
+      return {
+        ...base,
+        code: `aurelia/${code}`,
+        data: diag.data,
+      };
+  }
+}
+
+function mergeDiagnosticData(
+  base: WorkspaceDiagnostic["data"],
+  next: Record<string, unknown> | null,
+): WorkspaceDiagnostic["data"] {
+  if (!base && !next) return undefined;
+  if (!next || Object.keys(next).length === 0) return base;
+  return { ...(base ?? {}), ...next };
+}
+
+function gapCodeForKind(kind: string): string {
+  switch (kind) {
+    case "conditional-registration":
+    case "loop-variable":
+      return "aurelia/gap/unknown-registration";
+    default:
+      return "aurelia/gap/partial-eval";
+  }
+}
 
 function finalizeWorkspaceEdits(edits: WorkspaceTextEdit[]): WorkspaceTextEdit[] {
   const seen = new Set<string>();
@@ -1260,11 +2134,19 @@ function findInstructionsAtOffset(
   const addHit = (
     instruction: LinkedInstruction,
     host: { hostTag?: string; hostKind?: "custom" | "native" | "none" },
+    owner?: InstructionOwner | null,
   ) => {
     const loc = instruction.loc ?? null;
     if (!loc) return;
     if (!spanContainsOffset(loc, offset)) return;
-    hits.push({ instruction, loc, len: spanLength(loc), hostTag: host.hostTag, hostKind: host.hostKind });
+    hits.push({
+      instruction,
+      loc,
+      len: spanLength(loc),
+      hostTag: host.hostTag,
+      hostKind: host.hostKind,
+      ...(owner ? { owner } : {}),
+    });
   };
 
   for (const template of templates) {
@@ -1276,15 +2158,35 @@ function findInstructionsAtOffset(
             hostKind: row.node.custom ? "custom" : row.node.native ? "native" : "none",
           }
           : {};
+      const elementOwner: InstructionOwner | null = row.node.kind === "element" && row.node.custom?.def
+        ? { kind: "element", name: row.node.custom.def.name, file: row.node.custom.def.file ?? null }
+        : null;
       for (const instruction of row.instructions ?? []) {
-        addHit(instruction, host);
+        addHit(instruction, host, elementOwner);
         if (
           instruction.kind === "hydrateElement"
           || instruction.kind === "hydrateAttribute"
           || instruction.kind === "hydrateTemplateController"
         ) {
+          const owner: InstructionOwner | null =
+            instruction.kind === "hydrateElement"
+              ? instruction.res?.def
+                ? { kind: "element", name: instruction.res.def.name, file: instruction.res.def.file ?? null }
+                : elementOwner
+              : instruction.kind === "hydrateAttribute"
+                ? instruction.res?.def
+                  ? {
+                    kind: "attribute",
+                    name: instruction.res.def.name,
+                    file: instruction.res.def.file ?? null,
+                    isTemplateController: instruction.res.def.isTemplateController,
+                  }
+                  : null
+                : instruction.kind === "hydrateTemplateController"
+                  ? { kind: "controller", name: instruction.res }
+                  : null;
           for (const prop of instruction.props ?? []) {
-            addHit(prop, host);
+            addHit(prop, host, owner);
           }
         }
       }
