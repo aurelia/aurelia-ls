@@ -10,6 +10,10 @@ import type {
   BindingPattern,
   Interpolation,
   ForOfStatement,
+  AttributeBindableIR,
+  ControllerBindableIR,
+  ElementBindableIR,
+  IteratorBindingIR,
 } from "../model/ir.js";
 import type { SourceFile } from "../model/source.js";
 import { absoluteSpan, fallbackSpan, resolveSourceSpan, resolveSourceSpanMaybe } from "../model/source.js";
@@ -35,6 +39,20 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
       recordExprSpan(ref.id, ref.loc);
     }
   };
+  const visitBindable = (bindable: ElementBindableIR | AttributeBindableIR | ControllerBindableIR | IteratorBindingIR) => {
+    switch (bindable.type) {
+      case "propertyBinding":
+      case "attributeBinding":
+      case "stylePropertyBinding":
+        visitSource(bindable.from);
+        break;
+      case "multiAttr":
+        if (bindable.from) visitSource(bindable.from);
+        break;
+      default:
+        break;
+    }
+  };
 
   for (const t of ir.templates) {
     for (const row of t.rows ?? []) {
@@ -50,14 +68,12 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
           case "refBinding":
             recordExprSpan(ins.from.id, ins.from?.loc);
             break;
+          case "hydrateElement":
+          case "hydrateAttribute":
+            for (const p of ins.props ?? []) visitBindable(p);
+            break;
           case "hydrateTemplateController":
-            for (const p of ins.props ?? []) {
-              if (p.type === "iteratorBinding") {
-                continue;
-              } else if (p.type === "propertyBinding") {
-                visitSource(p.from);
-              }
-            }
+            for (const p of ins.props ?? []) visitBindable(p);
             if (ins.branch?.kind === "case") {
               recordExprSpan(ins.branch.expr.id, ins.branch.expr.loc);
             }

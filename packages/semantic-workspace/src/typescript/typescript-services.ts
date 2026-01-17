@@ -153,7 +153,7 @@ export class TsServicesAdapter implements TypeScriptServices {
     return results;
   }
 
-  private syncOverlay(overlay: OverlayDocumentSnapshot): string {
+  syncOverlay(overlay: OverlayDocumentSnapshot): string {
     const canonical = canonicalDocumentUri(overlay.uri);
     const path = this.paths.canonical(canonical.path);
     this.tsService.upsertOverlay(path, overlay.text);

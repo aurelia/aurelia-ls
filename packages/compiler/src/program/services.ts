@@ -193,6 +193,7 @@ export interface OverlayDocumentSnapshot {
 
 export interface TypeScriptServices {
   getDiagnostics(overlay: OverlayDocumentSnapshot): readonly TsDiagnostic[];
+  syncOverlay?(overlay: OverlayDocumentSnapshot): void;
   getQuickInfo?(overlay: OverlayDocumentSnapshot, offset: number): TsQuickInfo | null;
   getDefinition?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
   getReferences?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;

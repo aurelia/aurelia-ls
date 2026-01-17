@@ -10,6 +10,7 @@ import {
   spanContainsOffset,
   type DocumentUri,
   type OverlayBuildArtifact,
+  type OverlayDocumentSnapshot,
   type SourceSpan,
   type TemplateCompilation,
   type TemplateMappingArtifact,
@@ -250,6 +251,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       },
       references: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
+        this.#syncTemplateOverlaysForReferences(canonical.uri);
         const local = this.#referencesAt(canonical.uri, pos);
         const baseRefs = base.references(pos);
         return mergeLocations(local, baseRefs);
@@ -453,6 +455,46 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       offset,
       documentUri: uri,
     });
+  }
+
+  #syncTemplateOverlaysForReferences(activeUri: DocumentUri): void {
+    const ts = this.#typescript;
+    if (!ts?.syncOverlay) return;
+    const sources = this.#kernel.sources;
+    const templates = new Set<DocumentUri>();
+
+    for (const entry of this.#templateIndex.templates) {
+      const canonical = canonicalDocumentUri(entry.templatePath);
+      if (!sources.get(canonical.uri)) {
+        const text = this.lookupText(canonical.uri);
+        if (text == null) continue;
+        this.#kernel.open(canonical.uri, text);
+      }
+      templates.add(canonical.uri);
+    }
+
+    for (const entry of this.#templateIndex.inlineTemplates) {
+      const canonical = canonicalDocumentUri(inlineTemplatePath(entry.componentPath));
+      if (!sources.get(canonical.uri)) {
+        this.#kernel.open(canonical.uri, entry.content);
+      }
+      templates.add(canonical.uri);
+    }
+
+    this.#setActiveTemplateForOverlay(activeUri);
+    for (const templateUri of templates) {
+      this.#setActiveTemplateForOverlay(templateUri);
+      const overlay = this.#kernel.program.getOverlay(templateUri);
+      ts.syncOverlay(buildOverlaySnapshot(templateUri, overlay));
+    }
+    this.#setActiveTemplateForOverlay(activeUri);
+  }
+
+  #setActiveTemplateForOverlay(uri: DocumentUri): void {
+    const setter = getActiveTemplateSetter(this.#vm);
+    if (!setter) return;
+    const componentPath = this.#templateIndex.templateToComponent.get(uri) ?? canonicalDocumentUri(uri).path;
+    setter(componentPath);
   }
 
   #templateImportDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
@@ -750,4 +792,18 @@ function mergeLocations(...lists: readonly (readonly WorkspaceLocation[])[]): Wo
     return a.span.end - b.span.end;
   });
   return results;
+}
+
+function buildOverlaySnapshot(
+  templateUri: DocumentUri,
+  overlay: { overlayPath: string; text: string },
+): OverlayDocumentSnapshot {
+  const overlayCanonical = canonicalDocumentUri(overlay.overlayPath);
+  const templateCanonical = canonicalDocumentUri(templateUri);
+  return {
+    uri: overlayCanonical.uri,
+    file: overlayCanonical.file,
+    text: overlay.text,
+    templateUri: templateCanonical.uri,
+  };
 }

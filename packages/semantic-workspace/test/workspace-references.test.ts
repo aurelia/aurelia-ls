@@ -66,6 +66,10 @@ describe("workspace references (workspace-contract)", () => {
   let appText: string;
   let tableUri: string;
   let tableText: string;
+  let detailUri: string;
+  let detailText: string;
+  let modelsUri: string;
+  let modelsText: string;
 
   beforeAll(async () => {
     harness = await createWorkspaceHarness({
@@ -74,14 +78,20 @@ describe("workspace references (workspace-contract)", () => {
     });
     appUri = harness.openTemplate("src/my-app.html");
     tableUri = harness.openTemplate("src/views/table-panel.html");
+    detailUri = harness.toDocumentUri("src/components/device-detail.html");
+    modelsUri = harness.toDocumentUri("src/models.ts");
 
     const app = harness.readText(appUri);
     const table = harness.readText(tableUri);
-    if (!app || !table) {
+    const detail = harness.readText(detailUri);
+    const models = harness.readText(modelsUri);
+    if (!app || !table || !detail || !models) {
       throw new Error("Expected template text for workspace-contract fixtures");
     }
     appText = app;
     tableText = table;
+    detailText = detail;
+    modelsText = models;
   });
 
   it("finds <let> references", () => {
@@ -98,5 +108,17 @@ describe("workspace references (workspace-contract)", () => {
     const offsets = findOffsets(tableText, /\bitem\b/);
     expect(refs.length).toBe(offsets.length);
     expectReferencesAtOffsets(refs, tableUri, offsets);
+  });
+
+  it("finds cross-file references via TypeScript", () => {
+    const query = harness.workspace.query(tableUri);
+    const refs = query.references(findPosition(tableText, "item.rating", "item.".length));
+    const detailOffsets = findOffsets(detailText, /device\.rating/g).map((offset) => offset + "device.".length);
+    expectReferencesAtOffsets(refs, detailUri, detailOffsets);
+    const modelsOffset = modelsText.indexOf("rating: number");
+    if (modelsOffset < 0) {
+      throw new Error("Expected rating property in models.ts");
+    }
+    expectReferencesAtOffsets(refs, modelsUri, [modelsOffset]);
   });
 });
