@@ -111,30 +111,28 @@ function assertUnreachable(_x: never): never {
  * scope of that graph, it's NOT truly unknown (just out-of-scope), so we
  * should NOT suppress AU1104 in that case.
  */
-function isUnknownCustomElement(host: NodeSem, graph?: ResourceGraph | null): boolean {
-  // Not an element or not a custom element tag
+function isMissingCustomElement(host: NodeSem): boolean {
   if (host.kind !== "element" || !host.tag.includes("-")) {
     return false;
   }
+  return !host.custom && !host.native;
+}
 
-  // If resolved (custom or native), it's not unknown
-  if (host.custom || host.native) {
-    return false;
-  }
-
-  // If there's a resource graph, check if the element exists in ANY scope
-  // If it does, it's not "truly unknown" - it's just not visible in current scope
-  if (graph) {
-    const tag = host.tag.toLowerCase();
-    for (const scope of Object.values(graph.scopes)) {
-      if (scope.resources?.elements?.[tag]) {
-        return false; // Element exists in graph, not truly unknown
-      }
+function elementExistsInGraph(tag: string, graph?: ResourceGraph | null): boolean {
+  if (!graph) return false;
+  const needle = tag.toLowerCase();
+  for (const scope of Object.values(graph.scopes)) {
+    if (scope.resources?.elements?.[needle]) {
+      return true;
     }
   }
+  return false;
+}
 
-  // Truly unknown custom element
-  return true;
+function isUnknownCustomElement(host: NodeSem, graph?: ResourceGraph | null): boolean {
+  if (host.kind !== "element") return false;
+  if (!isMissingCustomElement(host)) return false;
+  return !elementExistsInGraph(host.tag, graph);
 }
 
 interface ResolverContext {
@@ -531,13 +529,13 @@ function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
 function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
   if (n.kind === "element") {
     const nodeSem = resolveNodeSem(n, ctx.lookup);
-    if (nodeSem.kind === "element" && isUnknownCustomElement(nodeSem, ctx.graph)) {
-      pushDiag(
-        ctx.diags,
-        "AU1102",
-        `Unknown custom element '<${nodeSem.tag}>'.`,
-        n.loc,
-      );
+    if (nodeSem.kind === "element" && isMissingCustomElement(nodeSem)) {
+      const existsInGraph = elementExistsInGraph(nodeSem.tag, ctx.graph);
+      const code = existsInGraph ? "AU1107" : "AU1102";
+      const message = existsInGraph
+        ? `Custom element '<${nodeSem.tag}>' is not registered in this scope.`
+        : `Unknown custom element '<${nodeSem.tag}>'.`;
+      pushDiag(ctx.diags, code, message, n.loc);
     }
   }
 
@@ -785,6 +783,10 @@ function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverC
 
 function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateAttribute {
   const res = resolveAttrResRef(ins.res, ctx.lookup);
+  if (!res) {
+    const name = ins.alias ?? ins.res;
+    pushDiag(ctx.diags, "AU1108", `Custom attribute '${name}' is not registered in this scope.`, ins.loc);
+  }
   const props = ins.props.map((p) => linkAttributeBindable(p, res));
   return {
     kind: "hydrateAttribute",

@@ -129,18 +129,22 @@ describe("workspace code actions (workspace-contract)", () => {
   });
 
   it("adds import for missing value converter", () => {
-    const mutated = appText;
+    const mutated = replaceOnce(
+      appText,
+      "titlecase",
+      "slugify",
+    );
     harness.updateTemplate(appUri, mutated, 5);
 
-    const position = findPosition(mutated, "titlecase", 1);
+    const position = findPosition(mutated, "slugify", 1);
     const actions = harness.workspace.refactor().codeActions({ uri: appUri, position });
-    const action = actions.find((entry) => entry.id === "aurelia/add-import:value-converter:titlecase");
+    const action = actions.find((entry) => entry.id === "aurelia/add-import:value-converter:slugify");
 
     expect(action).toBeDefined();
     const edit = action?.edit?.edits.find((entry) => String(entry.uri) === String(appUri));
     expect(edit).toBeDefined();
     if (edit) {
-      expect(edit.newText.includes('<import from="./value-converters/titlecase"></import>')).toBe(true);
+      expect(edit.newText.includes('<import from="./value-converters/slugify"></import>')).toBe(true);
     }
   });
 
@@ -161,6 +165,46 @@ describe("workspace code actions (workspace-contract)", () => {
     expect(edit).toBeDefined();
     if (edit) {
       expect(edit.newText.includes('<import from="./binding-behaviors/flash"></import>')).toBe(true);
+    }
+  });
+
+  it("adds import for missing custom element", () => {
+    const mutated = insertBefore(
+      appText,
+      "<div class=\"quick-actions\">",
+      "  <status-badge status.bind=\"activeDevice.status\"></status-badge>\n",
+    );
+    harness.updateTemplate(appUri, mutated, 7);
+
+    const position = findPosition(mutated, "status-badge", 1);
+    const actions = harness.workspace.refactor().codeActions({ uri: appUri, position });
+    const action = actions.find((entry) => entry.id === "aurelia/add-import:element:status-badge");
+
+    expect(action).toBeDefined();
+    const edit = action?.edit?.edits.find((entry) => String(entry.uri) === String(appUri));
+    expect(edit).toBeDefined();
+    if (edit) {
+      expect(edit.newText.includes('<import from="./components/status-badge"></import>')).toBe(true);
+    }
+  });
+
+  it("adds import for missing custom attribute", () => {
+    const mutated = replaceOnce(
+      appText,
+      "copy-to-clipboard.bind=\"noteMessage\">",
+      "copy-to-clipboard.bind=\"noteMessage\" tooltip.bind=\"noteMessage\">",
+    );
+    harness.updateTemplate(appUri, mutated, 8);
+
+    const position = findPosition(mutated, "tooltip.bind", 1);
+    const actions = harness.workspace.refactor().codeActions({ uri: appUri, position });
+    const action = actions.find((entry) => entry.id === "aurelia/add-import:attribute:tooltip");
+
+    expect(action).toBeDefined();
+    const edit = action?.edit?.edits.find((entry) => String(entry.uri) === String(appUri));
+    expect(edit).toBeDefined();
+    if (edit) {
+      expect(edit.newText.includes('<import from="./attributes/tooltip"></import>')).toBe(true);
     }
   });
 });

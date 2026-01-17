@@ -575,7 +575,10 @@ function discoverTemplates(
     if (!resource.file) continue;
 
     const componentPath = resource.file;
-    const scopeId = resourceGraph.root; // Orphans go to root scope
+    const localScopeId = `local:${componentPath}` as ResourceScopeId;
+    const scopeId = resourceGraph.scopes[localScopeId]
+      ? localScopeId
+      : resourceGraph.root;
     const className = unwrapSourced(resource.className) ?? "unknown";
     const resourceName = unwrapSourced(resource.name) ?? "unknown";
     const inlineTemplate = unwrapSourced(resource.inlineTemplate);

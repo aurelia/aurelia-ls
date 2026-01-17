@@ -67,7 +67,9 @@ export type SemDiagCode =
   | "AU1103" // Unknown event
   | "AU1104" // Property target not found on host
   | "AU1105" // Repeat missing iterator binding (reserved)
-  | "AU1106"; // Repeat tail option not recognized/wrong syntax
+  | "AU1106" // Repeat tail option not recognized/wrong syntax
+  | "AU1107" // Custom element exists but is not registered in this scope
+  | "AU1108"; // Custom attribute exists but is not registered in this scope
 
 export type SemDiagnostic = CompilerDiagnostic<SemDiagCode>;
 

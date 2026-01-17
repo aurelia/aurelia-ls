@@ -1749,7 +1749,8 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
   };
 
   switch (code) {
-    case "AU1102": {
+    case "AU1102":
+    case "AU1107": {
       const name = offset != null && text && compilation
         ? findElementNameAtOffset(compilation, offset)
         : null;
@@ -1826,6 +1827,22 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
         ...base,
         code: "aurelia/unknown-bindable",
         data: mergeDiagnosticData(diag.data, { aurCode: "AUR0707" }),
+      };
+    }
+    case "AU1108": {
+      let attrName: string | null = null;
+      if (offset != null && text && compilation) {
+        const hit = findInstructionHit(compilation, offset);
+        const raw = hit ? attributeNameFromHit(text, hit) : null;
+        attrName = attributeBaseName(raw, ctx.bindingCommands);
+      }
+      return {
+        ...base,
+        code: "aurelia/unknown-attribute",
+        data: mergeDiagnosticData(diag.data, {
+          aurCode: "AUR0753",
+          ...(attrName ? { resourceKind: "attribute", name: attrName } : {}),
+        }),
       };
     }
     case "AU0101": {
