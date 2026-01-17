@@ -101,6 +101,15 @@ describe("workspace definition (workspace-contract)", () => {
     expect(typeof hit.symbolId).toBe("string");
   });
 
+  it("resolves <import> definition targets", () => {
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(findPosition(appText, "./views/summary-panel", 2));
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/src/views/summary-panel.ts",
+      textIncludes: "SummaryPanel",
+    });
+  });
+
   it("resolves inline custom elements", () => {
     const query = harness.workspace.query(appUri);
     const defs = query.definition(findPosition(appText, "<inline-note", 1));
@@ -179,6 +188,25 @@ describe("workspace definition (workspace-contract)", () => {
     expectDefinition(harness, defs, {
       uriEndsWith: "/src/my-app.ts",
       textIncludes: "filters",
+    });
+  });
+
+  it("resolves <let> variable definitions", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "${total}", 2);
+    const defs = query.definition(pos);
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/src/my-app.html",
+      textIncludes: "total.bind",
+    });
+  });
+
+  it("resolves repeat.for iterator definitions", () => {
+    const tableQuery = harness.workspace.query(tableUri);
+    const defs = tableQuery.definition(findPosition(tableText, "choose(item)", "choose(".length));
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/src/views/table-panel.html",
+      textIncludes: "item of displayItems",
     });
   });
 });

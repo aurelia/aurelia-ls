@@ -8,12 +8,14 @@ import {
   type ExprId,
   type LinkedInstruction,
   type LinkedRow,
+  type FrameId,
   type NodeId,
   type ResourceDef,
   type SourceLocation,
   type SourceSpan,
   type SymbolId,
   type TemplateCompilation,
+  type DocumentUri,
 } from "@aurelia-ls/compiler";
 import type { ResolutionResult } from "@aurelia-ls/resolution";
 import type { WorkspaceLocation } from "./types.js";
@@ -90,6 +92,7 @@ export function collectTemplateDefinitions(options: {
   resources: ResourceDefinitionIndex;
   bindingCommands?: BindingCommands | null;
   preferRoots?: readonly string[] | null;
+  documentUri?: DocumentUri | null;
 }): WorkspaceLocation[] {
   const { compilation, text, offset, resources } = options;
   const bindingCommands = options.bindingCommands ?? {};
@@ -140,6 +143,9 @@ export function collectTemplateDefinitions(options: {
     const location = entry ? resourceLocation(entry) : null;
     if (location) results.push(location);
   }
+
+  const localDef = findLocalScopeDefinition(compilation, text, offset, options.documentUri ?? null);
+  if (localDef) results.push(localDef);
 
   return results;
 }
@@ -470,6 +476,196 @@ function attributeBaseName(attrName: string | null, bindingCommands: BindingComm
 
 function looksLikeCustomElementTag(tag: string): boolean {
   return tag.includes("-");
+}
+
+type ScopeSymbol = {
+  kind: "let" | "iteratorLocal" | "contextual" | "alias" | string;
+  name: string;
+  span?: SourceSpan | null;
+};
+
+type ScopeFrame = {
+  id: FrameId;
+  parent: FrameId | null;
+  symbols: readonly ScopeSymbol[];
+};
+
+function findLocalScopeDefinition(
+  compilation: TemplateCompilation,
+  text: string,
+  offset: number,
+  documentUri: DocumentUri | null,
+): WorkspaceLocation | null {
+  const exprHit = compilation.query.exprAt(offset);
+  const exprFallback = exprHit ?? findExprSpanAtOffset(compilation.exprSpans, offset);
+  if (!exprFallback) return null;
+
+  const exprId = exprFallback.exprId;
+  const scopeTemplate = compilation.scope?.templates?.[0];
+  if (!scopeTemplate) return null;
+
+  const frameId =
+    exprHit?.frameId
+    ?? (scopeTemplate.exprToFrame as Map<ExprId, FrameId> | undefined)?.get(exprId)
+    ?? null;
+  if (frameId == null) return null;
+
+  const entry = findExprEntry(compilation.exprTable, exprId);
+  const access = entry ? findAccessScopeAtOffset(entry.ast as ExpressionAst, offset) : null;
+
+  let name = access?.name ?? null;
+  let ancestorDepth = access?.ancestor ?? 0;
+  let rootOnly = true;
+  if (!name && exprHit?.memberPath) {
+    const parsed = parseLocalPath(exprHit.memberPath);
+    if (!parsed) return null;
+    name = parsed.name;
+    ancestorDepth = parsed.ancestorDepth;
+    rootOnly = parsed.rootOnly;
+  }
+  if (!name || !rootOnly) return null;
+
+  const frames = scopeTemplate.frames as ScopeFrame[];
+  const frameById = new Map<FrameId, ScopeFrame>();
+  for (const frame of frames) frameById.set(frame.id, frame);
+
+  const startFrame = frameById.get(frameId);
+  if (!startFrame) return null;
+  const resolvedFrame = ascendFrame(startFrame, frameById, ancestorDepth);
+  if (!resolvedFrame) return null;
+
+  const match = findSymbolInScope(resolvedFrame, frameById, name);
+  if (!match || !match.span) return null;
+  return spanLocation(match.span, documentUri);
+}
+
+function ascendFrame(
+  start: ScopeFrame,
+  frameById: Map<FrameId, ScopeFrame>,
+  depth: number,
+): ScopeFrame | null {
+  let current: ScopeFrame | null = start;
+  for (let i = 0; i < depth; i += 1) {
+    if (!current?.parent) return null;
+    current = frameById.get(current.parent) ?? null;
+  }
+  return current;
+}
+
+function findSymbolInScope(
+  start: ScopeFrame,
+  frameById: Map<FrameId, ScopeFrame>,
+  name: string,
+): ScopeSymbol | null {
+  let current: ScopeFrame | null = start;
+  while (current) {
+    const match = current.symbols.find((symbol) => symbol.name === name);
+    if (match) return match;
+    if (!current.parent) return null;
+    current = frameById.get(current.parent) ?? null;
+  }
+  return null;
+}
+
+function spanLocation(span: SourceSpan, documentUri: DocumentUri | null): WorkspaceLocation | null {
+  if (documentUri) {
+    const canonical = canonicalDocumentUri(documentUri);
+    return { uri: canonical.uri, span: { ...span, file: canonical.file } };
+  }
+  if (!span.file) return null;
+  const canonical = canonicalDocumentUri(span.file);
+  return { uri: canonical.uri, span };
+}
+
+function parseLocalPath(path: string): { name: string; ancestorDepth: number; rootOnly: boolean } | null {
+  let working = path;
+  let ancestorDepth = 0;
+  if (working.startsWith("$parent^")) {
+    const rest = working.slice("$parent^".length);
+    const match = rest.match(/^(\d+)(.*)$/);
+    if (!match) return null;
+    ancestorDepth = Number(match[1] ?? 0);
+    working = match[2] ?? "";
+    if (working.startsWith(".")) {
+      working = working.slice(1);
+    } else if (!working) {
+      return null;
+    }
+  }
+  if (working.startsWith("$this") || working.startsWith("$vm") || working.startsWith("$parent")) return null;
+  const sepIndex = working.search(/[.\[]/);
+  const rootOnly = sepIndex === -1;
+  const name = (sepIndex === -1 ? working : working.slice(0, sepIndex)).trim();
+  if (!name) return null;
+  return { name, ancestorDepth, rootOnly };
+}
+
+function findExprSpanAtOffset(
+  exprSpans: ReadonlyMap<ExprId, SourceSpan>,
+  offset: number,
+): { exprId: ExprId; span: SourceSpan } | null {
+  let best: { exprId: ExprId; span: SourceSpan } | null = null;
+  let bestLen = Number.POSITIVE_INFINITY;
+  for (const [exprId, span] of exprSpans) {
+    if (!spanContainsOffset(span, offset)) continue;
+    const len = spanLength(span);
+    if (len < bestLen) {
+      bestLen = len;
+      best = { exprId, span };
+    }
+  }
+  return best;
+}
+
+function findExprEntry(
+  exprTable: readonly { id: ExprId; ast: unknown }[],
+  exprId: ExprId,
+): { id: ExprId; ast: unknown } | null {
+  for (const entry of exprTable) {
+    if (entry.id === exprId) return entry;
+  }
+  return null;
+}
+
+function findAccessScopeAtOffset(
+  node: ExpressionAst | null | undefined,
+  offset: number,
+): { name: string; ancestor?: number; span?: SourceSpan } | null {
+  let best: { name: string; ancestor?: number; span?: SourceSpan } | null = null;
+  const visit = (current: ExpressionAst | null | undefined) => {
+    if (!current || !current.$kind) return;
+    if (current.$kind === "AccessScope" && current.name && current.span && spanContainsOffset(current.span, offset)) {
+      if (!best || spanLength(current.span) < spanLength(best.span ?? current.span)) {
+        best = { name: current.name, ancestor: current.ancestor, span: current.span };
+      }
+    }
+    const queue: (ExpressionAst | null | undefined)[] = [];
+    queue.push(
+      current.expression,
+      current.object,
+      current.func,
+      current.left,
+      current.right,
+      current.condition,
+      current.yes,
+      current.no,
+      current.target,
+      current.value,
+      current.key,
+      current.declaration,
+      current.iterable,
+    );
+    if (current.args) queue.push(...current.args);
+    if (current.parts) queue.push(...current.parts);
+    if (current.expressions) queue.push(...current.expressions);
+    for (const child of queue) {
+      if (!child) continue;
+      if (child.span && !spanContainsOffset(child.span, offset) && best) continue;
+      visit(child);
+    }
+  };
+  visit(node);
+  return best;
 }
 
 type ExpressionAst = {

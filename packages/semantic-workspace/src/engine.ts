@@ -434,6 +434,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       resources: this.#definitionIndex,
       bindingCommands: this.#kernel.program.options.syntax?.bindingCommands,
       preferRoots: [this.#workspaceRoot],
+      documentUri: uri,
     });
   }
 
