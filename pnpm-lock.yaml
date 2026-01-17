@@ -246,6 +246,9 @@ importers:
       '@aurelia-ls/resolution':
         specifier: workspace:*
         version: link:../resolution
+      '@aurelia-ls/semantic-workspace':
+        specifier: workspace:*
+        version: link:../semantic-workspace
       typescript:
         specifier: ^5.5.4
         version: 5.9.3
@@ -273,6 +276,9 @@ importers:
       '@aurelia-ls/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@aurelia-ls/resolution':
+        specifier: workspace:*
+        version: link:../resolution
       typescript:
         specifier: ^5.0.0
         version: 5.9.3

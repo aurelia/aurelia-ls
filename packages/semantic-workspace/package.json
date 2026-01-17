@@ -15,9 +15,10 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aurelia-ls/compiler": "workspace:*"
+    "@aurelia-ls/compiler": "workspace:*",
+    "@aurelia-ls/resolution": "workspace:*"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.5.4"
   }
 }

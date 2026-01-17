@@ -1,6 +1,12 @@
 // Model imports (via barrel)
-import type { NormalizedPath, SourceFileId, SourceSpan } from "../model/index.js";
-import { resolveSourceSpan, spanLength } from "../model/index.js";
+import type { NormalizedPath, SourceFileId, SourceSpan, Position, TextRange } from "../model/index.js";
+import {
+  offsetAtPosition,
+  positionAtOffset,
+  resolveSourceSpan,
+  spanLength,
+  spanToRange,
+} from "../model/index.js";
 
 // Shared imports (via barrel)
 import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../shared/index.js";
@@ -40,16 +46,7 @@ import type { TemplateProgram } from "./program.js";
  */
 
 export type { DocumentSpan } from "./provenance.js";
-
-export interface Position {
-  line: number;
-  character: number;
-}
-
-export interface TextRange {
-  start: Position;
-  end: Position;
-}
+export type { Position, TextRange } from "../model/index.js";
 
 export interface TextEdit {
   uri: DocumentUri;
@@ -1139,47 +1136,6 @@ function normalizeRange(range: TextRange | null | undefined): TextRange | null {
 
 function locationKey(loc: Location): string {
   return `${loc.uri}:${loc.range.start.line}:${loc.range.start.character}-${loc.range.end.line}:${loc.range.end.character}`;
-}
-
-function spanToRange(span: SourceSpan, text: string): TextRange {
-  return {
-    start: positionAtOffset(text, span.start),
-    end: positionAtOffset(text, span.end),
-  };
-}
-
-function positionAtOffset(text: string, offset: number): Position {
-  const length = text.length;
-  const clamped = Math.max(0, Math.min(offset, length));
-  const lineStarts = computeLineStarts(text);
-  let line = 0;
-  while (line + 1 < lineStarts.length && (lineStarts[line + 1] ?? Number.POSITIVE_INFINITY) <= clamped) line += 1;
-  const lineStart = lineStarts[line] ?? 0;
-  const character = clamped - lineStart;
-  return { line, character };
-}
-
-function offsetAtPosition(text: string, position: Position): number | null {
-  if (position.line < 0 || position.character < 0) return null;
-  const lineStarts = computeLineStarts(text);
-  if (position.line >= lineStarts.length) return null;
-  const lineStart = lineStarts[position.line];
-  if (lineStart === undefined) return null;
-  const nextLine = lineStarts[position.line + 1];
-  const lineEnd = nextLine ?? text.length;
-  return Math.min(lineEnd, lineStart + position.character);
-}
-
-function computeLineStarts(text: string): number[] {
-  const starts = [0];
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charCodeAt(i);
-    if (ch === 13 /* CR */ || ch === 10 /* LF */) {
-      if (ch === 13 /* CR */ && text.charCodeAt(i + 1) === 10 /* LF */) i += 1;
-      starts.push(i + 1);
-    }
-  }
-  return starts;
 }
 
 function tsCategoryToSeverity(cat: TsDiagnosticCategory): DiagnosticSeverity {

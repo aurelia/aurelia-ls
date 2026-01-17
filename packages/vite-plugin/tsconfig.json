@@ -9,6 +9,7 @@
     { "path": "../compiler" },
     { "path": "../resolution" },
     { "path": "../transform" },
-    { "path": "../ssr" }
+    { "path": "../ssr" },
+    { "path": "../ssg" }
   ]
 }

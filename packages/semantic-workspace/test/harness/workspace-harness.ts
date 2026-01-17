@@ -1,19 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 import {
-  DEFAULT_SEMANTICS,
   asDocumentUri,
   canonicalDocumentUri,
-  normalizePathForId,
   type DocumentUri,
-  type NormalizedPath,
   type ResourceScopeId,
-  type VmReflection,
 } from "@aurelia-ls/compiler";
-import { createNodeFileSystem, resolve, type ResolutionConfig, type ResolutionResult, type Logger as ResolutionLogger } from "@aurelia-ls/resolution";
+import { createNodeFileSystem, type ResolutionConfig, type ResolutionResult, type Logger as ResolutionLogger } from "@aurelia-ls/resolution";
 import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/resolution/npm";
-import { createSemanticWorkspace, type DefaultSemanticWorkspace } from "@aurelia-ls/semantic-workspace";
+import {
+  createSemanticWorkspace,
+  inlineTemplatePath,
+  type SemanticWorkspaceEngine,
+} from "@aurelia-ls/semantic-workspace";
 import { getFixture, resolveFixtureRoot } from "../fixtures/index.js";
 import type { WorkspaceHarness, WorkspaceHarnessOptions, WorkspaceTemplateEntry } from "./types.js";
 
@@ -22,12 +21,6 @@ const SILENT_LOGGER: ResolutionLogger = {
   info: () => {},
   warn: () => {},
   error: () => {},
-};
-
-const DEFAULT_VM: VmReflection = {
-  getRootVmTypeExpr: () => "any",
-  getSyntheticPrefix: () => "__AU_TEST_",
-  getDisplayName: () => "TestVm",
 };
 
 const cachedPackageRoots = new Map<string, ReadonlyMap<string, string>>();
@@ -44,12 +37,12 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     throw new Error(`Fixture root not found for ${fixture.id}. Provide rootOverride or check out the fixture.`);
   }
   const tsconfigPath = options.tsconfigPath ?? path.join(root, "tsconfig.json");
-  const program = createProgramFromTsconfig(tsconfigPath);
   const packageRoots = options.resolution?.packageRoots
     ?? await resolvePackageRoots(root, options.packageRoots);
 
+  const logger = options.logger ?? SILENT_LOGGER;
+  const inlineTextByUri = new Map<DocumentUri, string>();
   const resolutionConfig: ResolutionConfig = {
-    baseSemantics: DEFAULT_SEMANTICS,
     packagePath: root,
     packageRoots,
     fileSystem: options.resolution?.fileSystem ?? createNodeFileSystem({ root }),
@@ -57,34 +50,24 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     ...options.resolution,
   };
 
-  const resolution = resolve(program, resolutionConfig, options.logger ?? SILENT_LOGGER);
-  const inlineTextByUri = new Map<DocumentUri, string>();
+  const workspace = createSemanticWorkspace({
+    logger,
+    workspaceRoot: root,
+    tsconfigPath,
+    resolution: resolutionConfig,
+    lookupText: (uri) => lookupText(uri, inlineTextByUri),
+    ...(options.workspace?.vm ? { vm: options.workspace.vm } : {}),
+    ...(options.workspace?.typescript !== undefined ? { typescript: options.workspace.typescript } : {}),
+    ...(options.workspace?.isJs !== undefined ? { isJs: options.workspace.isJs } : {}),
+  });
+
+  const resolution = workspace.projectIndex.currentResolution();
   const {
     templates,
     templateByUri,
     externalTemplates,
     inlineTemplates,
   } = buildTemplateEntries(resolution, inlineTextByUri);
-
-  const vm = options.workspace?.vm ?? DEFAULT_VM;
-  const isJs = options.workspace?.isJs ?? false;
-  const typescript = options.workspace?.typescript;
-  const programOptions = {
-    vm,
-    isJs,
-    semantics: resolution.semantics,
-    catalog: resolution.catalog,
-    syntax: resolution.syntax,
-    resourceGraph: resolution.resourceGraph,
-    resourceScope: resolution.resourceGraph.root,
-  };
-
-  const workspace = createSemanticWorkspace({
-    program: programOptions,
-    ...(typescript ? { language: { typescript } } : {}),
-    ...(options.workspace?.fingerprint ? { fingerprint: options.workspace.fingerprint } : {}),
-    lookupText: (uri) => lookupText(uri, inlineTextByUri),
-  });
 
   const openMode = options.openTemplates ?? "external";
   if (openMode !== "none") {
@@ -127,16 +110,13 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
   };
 
   const setResourceScope = (scope: ResourceScopeId | null) => {
-    return workspace.reconfigure({
-      program: { ...programOptions, resourceScope: scope },
-    });
+    return workspace.setResourceScope(scope);
   };
 
   return {
     fixture,
     root,
     tsconfigPath,
-    program,
     resolution,
     workspace,
     templates,
@@ -152,23 +132,6 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     toDocumentUri,
     setResourceScope,
   };
-}
-
-function createProgramFromTsconfig(tsconfigPath: string): ts.Program {
-  const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
-  if (configFile.error) {
-    const message = ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n");
-    throw new Error(`Failed to read tsconfig at ${tsconfigPath}: ${message}`);
-  }
-
-  const basePath = path.dirname(tsconfigPath);
-  const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, basePath);
-  if (parsed.errors.length > 0) {
-    const messages = parsed.errors.map((e) => ts.flattenDiagnosticMessageText(e.messageText, "\n"));
-    throw new Error(`Failed to parse tsconfig at ${tsconfigPath}: ${messages.join("\n")}`);
-  }
-
-  return ts.createProgram(parsed.fileNames, parsed.options);
 }
 
 async function resolvePackageRoots(
@@ -252,14 +215,6 @@ function buildTemplateEntries(
   return { templates, templateByUri, externalTemplates, inlineTemplates };
 }
 
-function inlineTemplatePath(componentPath: NormalizedPath): NormalizedPath {
-  const replaced = componentPath.replace(/\.(ts|js|tsx|jsx)$/i, ".inline.html");
-  const fallback = componentPath.endsWith(".inline.html")
-    ? componentPath
-    : `${componentPath}.inline.html`;
-  return normalizePathForId(replaced === componentPath ? fallback : replaced);
-}
-
 function lookupText(uri: DocumentUri, inlineTextByUri: Map<DocumentUri, string>): string | null {
   const inline = inlineTextByUri.get(uri);
   if (inline !== undefined) return inline;
@@ -277,7 +232,7 @@ function readTemplateText(uri: DocumentUri, inlineTextByUri: Map<DocumentUri, st
 }
 
 function openTemplatesInWorkspace(
-  workspace: DefaultSemanticWorkspace,
+  workspace: SemanticWorkspaceEngine,
   templates: readonly WorkspaceTemplateEntry[],
   inlineTextByUri: Map<DocumentUri, string>,
 ): void {

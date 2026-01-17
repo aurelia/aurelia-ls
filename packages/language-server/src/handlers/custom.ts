@@ -5,7 +5,7 @@
  * the LSP connection. Errors are logged and graceful fallbacks are returned.
  */
 import type { Position } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri, deriveTemplatePaths } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
 
 type MaybeUriParam = { uri?: string } | string | null;
@@ -26,10 +26,11 @@ export function handleGetOverlay(ctx: ServerContext, params: MaybeUriParam) {
     const uri = uriFromParam(params);
     ctx.logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
     if (!uri) return null;
-    ctx.syncWorkspaceWithIndex();
-    const artifact = ctx.materializeOverlay(uri);
+    const canonical = canonicalDocumentUri(uri);
+    ctx.ensureProgramDocument(uri);
+    const artifact = ctx.workspace.getOverlay(canonical.uri);
     return artifact
-      ? { fingerprint: ctx.workspace.fingerprint, artifact }
+      ? { fingerprint: ctx.workspace.snapshot().meta.fingerprint, artifact }
       : null;
   } catch (e) {
     ctx.logger.error(`[getOverlay] failed: ${formatError(e)}`);
@@ -41,14 +42,13 @@ export function handleGetMapping(ctx: ServerContext, params: MaybeUriParam) {
   try {
     const uri = uriFromParam(params);
     if (!uri) return null;
-    ctx.syncWorkspaceWithIndex();
     const canonical = canonicalDocumentUri(uri);
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
     const mapping = ctx.workspace.getMapping(canonical.uri);
     if (!mapping) return null;
-    const derived = deriveTemplatePaths(canonical.uri, ctx.overlayPathOptions());
-    return { overlayPath: derived.overlay.path, mapping };
+    const overlay = ctx.workspace.getOverlay(canonical.uri);
+    return { overlayPath: overlay.overlay.path, mapping };
   } catch (e) {
     ctx.logger.error(`[getMapping] failed: ${formatError(e)}`);
     return null;
@@ -59,7 +59,6 @@ export function handleQueryAtPosition(ctx: ServerContext, params: { uri: string;
   try {
     const uri = params?.uri;
     if (!uri || !params.position) return null;
-    ctx.syncWorkspaceWithIndex();
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(uri);
@@ -88,14 +87,11 @@ export function handleGetSsr(ctx: ServerContext, params: MaybeUriParam) {
 
 export function handleDumpState(ctx: ServerContext) {
   try {
-    const roots = ctx.tsService.getService().getProgram()?.getRootFileNames() ?? [];
     return {
       workspaceRoot: ctx.workspaceRoot,
-      caseSensitive: ctx.paths.isCaseSensitive(),
-      projectVersion: ctx.tsService.getProjectVersion(),
-      overlayRoots: ctx.overlayFs.listScriptRoots(),
-      overlays: ctx.overlayFs.listOverlays(),
-      programRoots: roots,
+      fingerprint: ctx.workspace.snapshot().meta.fingerprint,
+      templateCount: ctx.workspace.templates.length,
+      inlineTemplateCount: ctx.workspace.inlineTemplates.length,
       programCache: ctx.workspace.getCacheStats(),
     };
   } catch (e) {

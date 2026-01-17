@@ -1,4 +1,3 @@
-import type ts from "typescript";
 import type {
   DocumentUri,
   NormalizedPath,
@@ -7,7 +6,7 @@ import type {
   VmReflection,
 } from "@aurelia-ls/compiler";
 import type { ResolutionConfig, ResolutionResult, Logger as ResolutionLogger } from "@aurelia-ls/resolution";
-import type { DefaultSemanticWorkspace } from "@aurelia-ls/semantic-workspace";
+import type { SemanticWorkspaceEngine } from "@aurelia-ls/semantic-workspace";
 import type { FixtureDescriptor, FixtureId } from "../fixtures/types.js";
 
 export type TemplateOpenMode = "none" | "external" | "all";
@@ -30,8 +29,7 @@ export interface WorkspaceHarnessOptions {
   readonly workspace?: {
     readonly vm?: VmReflection;
     readonly isJs?: boolean;
-    readonly fingerprint?: string;
-    readonly typescript?: TypeScriptServices;
+    readonly typescript?: TypeScriptServices | false;
   };
 }
 
@@ -49,9 +47,8 @@ export interface WorkspaceHarness {
   readonly fixture: FixtureDescriptor;
   readonly root: string;
   readonly tsconfigPath: string;
-  readonly program: ts.Program;
   readonly resolution: ResolutionResult;
-  readonly workspace: DefaultSemanticWorkspace;
+  readonly workspace: SemanticWorkspaceEngine;
   readonly templates: readonly WorkspaceTemplateEntry[];
   readonly templateByUri: ReadonlyMap<DocumentUri, WorkspaceTemplateEntry>;
   readonly externalTemplates: readonly WorkspaceTemplateEntry[];

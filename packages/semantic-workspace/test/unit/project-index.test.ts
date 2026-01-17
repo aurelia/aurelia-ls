@@ -2,17 +2,17 @@ import { test, expect } from "vitest";
 import path from "node:path";
 import ts from "typescript";
 
-import { AureliaProjectIndex } from "../../out/services/project-index.js";
+import { AureliaProjectIndex } from "@aurelia-ls/semantic-workspace";
 import { DEFAULT_SEMANTICS, buildResourceGraphFromSemantics, type ResourceScopeId } from "@aurelia-ls/compiler";
 
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 
 function createTsProject(source: string | Record<string, string> = "export class Example {}", compilerOptions = {}) {
-  const normalizeName = (fileName) => {
+  const normalizeName = (fileName: string) => {
     const normalized = path.normalize(fileName);
     return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
   };
-  const files = new Map();
+  const files = new Map<string, string>();
   if (typeof source === "string") {
     const abs = path.join(process.cwd(), "src", "example.ts");
     files.set(normalizeName(abs), source);
@@ -31,7 +31,7 @@ function createTsProject(source: string | Record<string, string> = "export class
   };
   let version = 1;
 
-  const host = {
+  const host: ts.LanguageServiceHost = {
     getScriptFileNames: () => Array.from(files.keys()),
     getScriptVersion: () => String(version),
     getCompilationSettings: () => settings,
@@ -49,16 +49,16 @@ function createTsProject(source: string | Record<string, string> = "export class
   const languageService = ts.createLanguageService(host);
 
   return {
-    getService: () => languageService,
+    getProgram: () => languageService.getProgram()!,
     compilerOptions: () => settings,
     getRootFileNames: () => Array.from(files.keys()),
     getProjectVersion: () => version,
     bumpVersion() { version += 1; },
-    addFile(fileName, text) {
+    addFile(fileName: string, text: string) {
       files.set(normalizeName(fileName), text);
       version += 1;
     },
-    updateFile(fileName, text) {
+    updateFile(fileName: string, text: string) {
       files.set(normalizeName(fileName), text);
       version += 1;
     },
@@ -183,7 +183,11 @@ test("maps discoveries into the default resource scope when a graph is provided"
     `,
   });
 
-  const index = new AureliaProjectIndex({ ts: tsProject, logger, baseSemantics });
+  const index = new AureliaProjectIndex({
+    ts: tsProject,
+    logger,
+    resolution: { baseSemantics, defaultScope: featureScope },
+  });
   const graph = index.currentResourceGraph();
   const sem = index.currentSemantics();
 

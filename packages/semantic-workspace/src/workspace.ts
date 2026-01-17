@@ -8,7 +8,9 @@ import {
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
   canonicalDocumentUri,
+  rangeToSpan,
   prepareSemantics,
+  spanToRange,
   stableHash,
   stableHashSemantics,
   type CompletionItem as TemplateCompletionItem,
@@ -42,12 +44,13 @@ import {
   type WorkspaceLocation,
   type WorkspaceRefactorResult,
   type WorkspaceSnapshot,
+  type WorkspaceTextEdit,
   type WorkspaceToken,
 } from "./types.js";
 
 export type WorkspaceProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance">;
 
-export interface SemanticWorkspaceOptions {
+export interface SemanticWorkspaceKernelOptions {
   readonly program: WorkspaceProgramOptions;
   readonly language?: TemplateLanguageServiceOptions;
   readonly sourceStore?: SourceStore;
@@ -63,7 +66,7 @@ const EMPTY_TOKENS: readonly WorkspaceToken[] = [];
 const EMPTY_LOCATIONS: readonly WorkspaceLocation[] = [];
 const EMPTY_COMPLETIONS: readonly WorkspaceCompletionItem[] = [];
 
-export class DefaultSemanticWorkspace implements SemanticWorkspace {
+export class SemanticWorkspaceKernel implements SemanticWorkspace {
   readonly sources: SourceStore;
   provenance: ProvenanceIndex;
   program: TemplateProgram;
@@ -77,7 +80,7 @@ export class DefaultSemanticWorkspace implements SemanticWorkspace {
   #lookupText: ((uri: DocumentUri) => string | null) | undefined;
   #refactor: RefactorEngine;
 
-  constructor(options: SemanticWorkspaceOptions) {
+  constructor(options: SemanticWorkspaceKernelOptions) {
     this.sources = options.sourceStore ?? new InMemorySourceStore();
     this.provenance = options.provenance ?? new InMemoryProvenanceIndex();
     this.#programOptions = options.program;
@@ -95,7 +98,7 @@ export class DefaultSemanticWorkspace implements SemanticWorkspace {
   }
 
   get fingerprint(): string {
-    return this.#workspaceFingerprint;
+    return this.snapshot().meta.fingerprint;
   }
 
   open(uri: DocumentUri, text?: string, version?: number): void {
@@ -137,6 +140,7 @@ export class DefaultSemanticWorkspace implements SemanticWorkspace {
 
     const fingerprint = asWorkspaceFingerprint(
       stableHash({
+        base: this.#workspaceFingerprint,
         configHash: this.#configHash,
         docs,
       }),
@@ -182,7 +186,7 @@ export class DefaultSemanticWorkspace implements SemanticWorkspace {
     return this.#refactor;
   }
 
-  reconfigure(options: SemanticWorkspaceOptions): boolean {
+  reconfigure(options: SemanticWorkspaceKernelOptions): boolean {
     const next = normalizeOptions(options, this.#languageOptions, this.#lookupText);
     const preview = this.#createProgram(new InMemoryProvenanceIndex(), next.program);
     const nextFingerprint = next.fingerprint ?? preview.optionsFingerprint;
@@ -312,12 +316,12 @@ export class DefaultSemanticWorkspace implements SemanticWorkspace {
   }
 }
 
-export function createSemanticWorkspace(options: SemanticWorkspaceOptions): DefaultSemanticWorkspace {
-  return new DefaultSemanticWorkspace(options);
+export function createSemanticWorkspaceKernel(options: SemanticWorkspaceKernelOptions): SemanticWorkspaceKernel {
+  return new SemanticWorkspaceKernel(options);
 }
 
 class WorkspaceRefactorEngine implements RefactorEngine {
-  constructor(private readonly workspace: DefaultSemanticWorkspace) {}
+  constructor(private readonly workspace: SemanticWorkspaceKernel) {}
 
   rename(request: { uri: DocumentUri; position: { line: number; character: number }; newName: string }): WorkspaceRefactorResult {
     try {
@@ -351,7 +355,7 @@ class WorkspaceRefactorEngine implements RefactorEngine {
       const text = this.workspace.lookupText(canonical.uri);
       if (!text) return EMPTY_ACTIONS;
       const range = request.range
-        ? spanToRange(text, request.range)
+        ? spanToRange(request.range, text)
         : request.position
           ? { start: request.position, end: request.position }
           : null;
@@ -366,7 +370,7 @@ class WorkspaceRefactorEngine implements RefactorEngine {
 }
 
 function normalizeOptions(
-  options: SemanticWorkspaceOptions,
+  options: SemanticWorkspaceKernelOptions,
   fallbackLanguage: TemplateLanguageServiceOptions,
   lookupText: ((uri: DocumentUri) => string | null) | undefined,
 ): { program: WorkspaceProgramOptions; language: TemplateLanguageServiceOptions; configHash?: string; fingerprint?: string; lookupText?: (uri: DocumentUri) => string | null } {
@@ -396,7 +400,6 @@ function mapDiagnostics(diags: readonly { code: string | number; message: string
 function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceCompletionItem[] {
   return items.map((item) => ({
     label: item.label,
-    ...(item.kind ? { kind: item.kind } : {}),
     ...(item.detail ? { detail: item.detail } : {}),
     ...(item.documentation ? { documentation: item.documentation } : {}),
     ...(item.sortText ? { sortText: item.sortText } : {}),
@@ -421,7 +424,7 @@ function mapTextEdits(
   edits: readonly TemplateTextEdit[],
   lookupText: (uri: DocumentUri) => string | null,
 ): WorkspaceEdit["edits"] {
-  const results: WorkspaceEdit["edits"] = [];
+  const results: WorkspaceTextEdit[] = [];
   for (const edit of edits) {
     const span = spanFromRange(edit.uri, edit.range, lookupText);
     if (!span) continue;
@@ -454,54 +457,8 @@ function spanFromRange(
 ): SourceSpan | null {
   const text = lookupText(uri);
   if (!text) return null;
-  const start = offsetAtPosition(text, range.start);
-  const end = offsetAtPosition(text, range.end);
-  if (start == null || end == null) return null;
   const canonical = canonicalDocumentUri(uri);
-  return { start, end, file: canonical.file };
-}
-
-function spanToRange(text: string, span: SourceSpan): TextRange {
-  return {
-    start: positionAtOffset(text, span.start),
-    end: positionAtOffset(text, span.end),
-  };
-}
-
-function positionAtOffset(text: string, offset: number): { line: number; character: number } {
-  const length = text.length;
-  const clamped = Math.max(0, Math.min(offset, length));
-  const lineStarts = computeLineStarts(text);
-  let line = 0;
-  while (line + 1 < lineStarts.length && (lineStarts[line + 1] ?? Number.POSITIVE_INFINITY) <= clamped) {
-    line += 1;
-  }
-  const lineStart = lineStarts[line] ?? 0;
-  const character = clamped - lineStart;
-  return { line, character };
-}
-
-function offsetAtPosition(text: string, position: { line: number; character: number }): number | null {
-  if (position.line < 0 || position.character < 0) return null;
-  const lineStarts = computeLineStarts(text);
-  if (position.line >= lineStarts.length) return null;
-  const lineStart = lineStarts[position.line];
-  if (lineStart === undefined) return null;
-  const nextLine = lineStarts[position.line + 1];
-  const lineEnd = nextLine ?? text.length;
-  return Math.min(lineEnd, lineStart + position.character);
-}
-
-function computeLineStarts(text: string): number[] {
-  const starts = [0];
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charCodeAt(i);
-    if (ch === 13 /* CR */ || ch === 10 /* LF */) {
-      if (ch === 13 /* CR */ && text.charCodeAt(i + 1) === 10 /* LF */) i += 1;
-      starts.push(i + 1);
-    }
-  }
-  return starts;
+  return rangeToSpan(range, text, canonical.file);
 }
 
 function computeConfigHash(options: WorkspaceProgramOptions): string {

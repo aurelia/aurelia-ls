@@ -2,8 +2,7 @@ import { test, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { OverlayFs } from "../../out/services/overlay-fs.js";
-import { createPathUtils } from "../../out/services/paths.js";
+import { OverlayFs, createPathUtils } from "@aurelia-ls/semantic-workspace";
 
 const paths = createPathUtils();
 

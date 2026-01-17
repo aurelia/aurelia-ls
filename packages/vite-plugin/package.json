@@ -26,12 +26,7 @@
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0",
-    "typescript": "^5.0.0"
-  },
-  "peerDependenciesMeta": {
-    "typescript": {
-      "optional": true
-    }
+    "typescript": "^5.5.4"
   },
   "devDependencies": {
     "vite": "^6.0.0"

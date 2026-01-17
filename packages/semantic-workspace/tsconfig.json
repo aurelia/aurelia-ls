@@ -6,6 +6,7 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../compiler" }
+    { "path": "../compiler" },
+    { "path": "../resolution" }
   ]
 }

@@ -1,37 +1,33 @@
-import type ts from "typescript";
 import {
   DEFAULT_SEMANTICS,
-  buildTemplateSyntaxRegistry,
   prepareSemantics,
   stableHash,
   stableHashSemantics,
-  type NormalizedPath,
   type ResourceCatalog,
   type ResourceGraph,
   type ResourceScopeId,
-  type Semantics,
   type SemanticsWithCaches,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
-import { hashObject, normalizeCompilerOptions, resolve, type ResourceDef, type DefineMap } from "@aurelia-ls/resolution";
-import type { Logger } from "./types.js";
-
-export interface TypeScriptProject {
-  getService(): ts.LanguageService;
-  compilerOptions(): ts.CompilerOptions;
-  getRootFileNames(): readonly NormalizedPath[];
-  getProjectVersion(): number;
-}
+import {
+  hashObject,
+  normalizeCompilerOptions,
+  resolve,
+  type ResolutionConfig,
+  type ResolutionResult,
+  type ResourceDef,
+  type Logger,
+} from "@aurelia-ls/resolution";
+import type { TypeScriptProject } from "./project.js";
 
 export interface AureliaProjectIndexOptions {
   readonly ts: TypeScriptProject;
   readonly logger: Logger;
-  readonly baseSemantics?: Semantics;
-  readonly defaultScope?: ResourceScopeId | null;
-  readonly defines?: DefineMap;
+  readonly resolution?: ResolutionConfig;
 }
 
 interface IndexSnapshot {
+  readonly resolution: ResolutionResult;
   readonly semantics: SemanticsWithCaches;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
@@ -53,8 +49,9 @@ export class AureliaProjectIndex {
   #logger: Logger;
   #baseSemantics: SemanticsWithCaches;
   #defaultScope: ResourceScopeId | null;
-  #defines: DefineMap | undefined;
+  #resolutionConfig: ResolutionConfig;
 
+  #resolution: ResolutionResult;
   #semantics: SemanticsWithCaches;
   #catalog: ResourceCatalog;
   #syntax: TemplateSyntaxRegistry;
@@ -64,11 +61,17 @@ export class AureliaProjectIndex {
   constructor(options: AureliaProjectIndexOptions) {
     this.#ts = options.ts;
     this.#logger = options.logger;
-    this.#baseSemantics = prepareSemantics(options.baseSemantics ?? DEFAULT_SEMANTICS);
-    this.#defaultScope = options.defaultScope ?? null;
-    this.#defines = options.defines;
+    const resolutionConfig = options.resolution ?? {};
+    this.#baseSemantics = prepareSemantics(resolutionConfig.baseSemantics ?? DEFAULT_SEMANTICS);
+    this.#defaultScope = resolutionConfig.defaultScope ?? null;
+    this.#resolutionConfig = {
+      ...resolutionConfig,
+      baseSemantics: this.#baseSemantics,
+      defaultScope: this.#defaultScope ?? resolutionConfig.defaultScope,
+    };
 
     const snapshot = this.#computeSnapshot();
+    this.#resolution = snapshot.resolution;
     this.#semantics = snapshot.semantics;
     this.#catalog = snapshot.catalog;
     this.#syntax = snapshot.syntax;
@@ -79,6 +82,7 @@ export class AureliaProjectIndex {
   refresh(): void {
     const snapshot = this.#computeSnapshot();
     const changed = snapshot.fingerprint !== this.#fingerprint;
+    this.#resolution = snapshot.resolution;
     this.#semantics = snapshot.semantics;
     this.#catalog = snapshot.catalog;
     this.#syntax = snapshot.syntax;
@@ -90,6 +94,10 @@ export class AureliaProjectIndex {
 
   currentResourceGraph(): ResourceGraph {
     return this.#resourceGraph;
+  }
+
+  currentResolution(): ResolutionResult {
+    return this.#resolution;
   }
 
   currentCatalog(): ResourceCatalog {
@@ -109,42 +117,8 @@ export class AureliaProjectIndex {
   }
 
   #computeSnapshot(): IndexSnapshot {
-    const program = this.#ts.getService().getProgram();
-
-    if (!program) {
-      // No program available - return base semantics with empty graph
-      const base = this.#baseSemantics;
-      const resourceGraph: ResourceGraph = base.resourceGraph ?? {
-        version: "aurelia-resource-graph@1",
-        root: "aurelia:root" as ResourceScopeId,
-        scopes: {},
-      };
-      const semantics: SemanticsWithCaches = {
-        ...base,
-        resourceGraph,
-        defaultScope: this.#defaultScope ?? base.defaultScope ?? null,
-      };
-      const catalog = base.catalog;
-      const syntax = buildTemplateSyntaxRegistry(semantics);
-      const fingerprint = hashObject({
-        empty: true,
-        semantics: stableHashSemantics(semantics),
-        catalog: stableHash(catalog),
-        syntax: stableHash(syntax),
-        resourceGraph: stableHash(resourceGraph),
-      });
-      return { semantics, catalog, syntax, resourceGraph, fingerprint };
-    }
-
-    const result = resolve(
-      program,
-      {
-        baseSemantics: this.#baseSemantics,
-        defaultScope: this.#defaultScope,
-        defines: this.#defines,
-      },
-      this.#logger,
-    );
+    const program = this.#ts.getProgram();
+    const result = resolve(program, this.#resolutionConfig, this.#logger);
 
     const semantics: SemanticsWithCaches = {
       ...result.semantics,
@@ -159,6 +133,26 @@ export class AureliaProjectIndex {
       catalog: stableHash(result.catalog),
       syntax: stableHash(result.syntax),
       resourceGraph: stableHash(result.resourceGraph),
+      templates: result.templates.map((t) => ({
+        templatePath: t.templatePath,
+        componentPath: t.componentPath,
+        scopeId: t.scopeId,
+        className: t.className,
+        resourceName: t.resourceName,
+      })),
+      inlineTemplates: result.inlineTemplates.map((t) => ({
+        componentPath: t.componentPath,
+        scopeId: t.scopeId,
+        className: t.className,
+        resourceName: t.resourceName,
+        content: t.content,
+      })),
+      diagnostics: result.diagnostics.map((d) => ({
+        code: d.code,
+        message: d.message,
+        severity: d.severity,
+        source: d.source ?? null,
+      })),
       resources: result.resources.map((r) => ({
         kind: r.kind,
         name: unwrapSourcedValue(r.name),
@@ -169,6 +163,7 @@ export class AureliaProjectIndex {
     });
 
     return {
+      resolution: result,
       semantics,
       catalog: result.catalog,
       syntax: result.syntax,

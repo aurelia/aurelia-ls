@@ -28,6 +28,6 @@
     "jsdom": "^25.0.1"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.5.4"
   }
 }

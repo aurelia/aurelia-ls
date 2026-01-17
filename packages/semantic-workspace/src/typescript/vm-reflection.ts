@@ -2,11 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { type NormalizedPath, type VmReflection, normalizePathForId } from "@aurelia-ls/compiler";
-import type { Logger } from "./types.js";
+import type { Logger } from "@aurelia-ls/resolution";
 import type { PathUtils } from "./paths.js";
 import type { TsService } from "./ts-service.js";
 
 const VM_EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
+const INLINE_SUFFIX = ".inline.html";
 
 function hasSymbolFlag(symbol: ts.Symbol, flag: ts.SymbolFlags): boolean {
   return Boolean(symbol.getFlags() & flag);
@@ -77,7 +78,7 @@ export class VmReflectionService implements VmReflection {
   }
 
   #findCompanionVm(templatePath: NormalizedPath): NormalizedPath | null {
-    const base = templatePath.replace(/\.[^.]+$/, "");
+    const base = this.#stripTemplateSuffix(templatePath);
     for (const ext of VM_EXTS) {
       const candidate = this.paths.canonical(`${base}${ext}`);
       if (fs.existsSync(candidate)) {
@@ -85,6 +86,18 @@ export class VmReflectionService implements VmReflection {
       }
     }
     return null;
+  }
+
+  #stripTemplateSuffix(templatePath: NormalizedPath): NormalizedPath {
+    if (templatePath.endsWith(INLINE_SUFFIX)) {
+      const stripped = templatePath.slice(0, -INLINE_SUFFIX.length);
+      return normalizePathForId(stripped);
+    }
+    const withoutExt = templatePath.replace(/\.[^.]+$/, "");
+    const withoutInline = withoutExt.endsWith(".inline")
+      ? withoutExt.slice(0, -".inline".length)
+      : withoutExt;
+    return normalizePathForId(withoutInline);
   }
 
   #toImportPath(file: NormalizedPath): string {

@@ -1,4 +1,5 @@
 import { test, expect, describe, vi } from "vitest";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import { handleGetOverlay, handleGetMapping, handleGetSsr, handleDumpState } from "../../out/handlers/custom.js";
 
 function createMockLogger() {
@@ -12,36 +13,20 @@ function createMockLogger() {
 
 function createMockContext(overrides: Record<string, unknown> = {}) {
   const logger = createMockLogger();
+  const workspace = {
+    snapshot: vi.fn(() => ({ meta: { fingerprint: "test@1" } })),
+    getOverlay: vi.fn(),
+    getMapping: vi.fn(),
+    getQueryFacade: vi.fn(),
+    getCacheStats: vi.fn(() => ({})),
+    templates: [],
+    inlineTemplates: [],
+  };
   return {
     logger,
-    syncWorkspaceWithIndex: vi.fn(),
-    materializeOverlay: vi.fn(),
-    ensureProgramDocument: vi.fn(),
-    workspace: {
-      fingerprint: "test@1",
-      program: {
-        getMapping: vi.fn(),
-        getQuery: vi.fn(),
-        getCacheStats: vi.fn(() => ({})),
-      },
-    },
+    ensureProgramDocument: vi.fn(() => ({ offsetAt: vi.fn(() => 0) })),
+    workspace,
     workspaceRoot: "/test/workspace",
-    paths: {
-      isCaseSensitive: vi.fn(() => true),
-    },
-    tsService: {
-      getProjectVersion: vi.fn(() => "1"),
-      getService: vi.fn(() => ({
-        getProgram: vi.fn(() => ({
-          getRootFileNames: vi.fn(() => ["/test/src/main.ts"]),
-        })),
-      })),
-    },
-    overlayFs: {
-      listScriptRoots: vi.fn(() => ["/test/src"]),
-      listOverlays: vi.fn(() => ["/test/src/component.overlay.ts"]),
-    },
-    overlayPathOptions: vi.fn(() => ({})),
     ...overrides,
   };
 }
@@ -67,12 +52,12 @@ describe("handleGetOverlay", () => {
 
   test("accepts string uri directly", () => {
     const ctx = createMockContext();
-    ctx.materializeOverlay.mockReturnValue({ overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] });
+    ctx.workspace.getOverlay.mockReturnValue({ overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] });
 
     const result = handleGetOverlay(ctx as never, "file:///test.html");
 
-    expect(ctx.syncWorkspaceWithIndex).toHaveBeenCalled();
-    expect(ctx.materializeOverlay).toHaveBeenCalledWith("file:///test.html");
+    expect(ctx.ensureProgramDocument).toHaveBeenCalledWith("file:///test.html");
+    expect(ctx.workspace.getOverlay).toHaveBeenCalledWith(canonicalDocumentUri("file:///test.html").uri);
     expect(result).toEqual({
       fingerprint: "test@1",
       artifact: { overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] },
@@ -81,17 +66,17 @@ describe("handleGetOverlay", () => {
 
   test("accepts uri in object params", () => {
     const ctx = createMockContext();
-    ctx.materializeOverlay.mockReturnValue({ overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] });
+    ctx.workspace.getOverlay.mockReturnValue({ overlay: { path: "/test.ts", text: "code" }, mapping: { entries: [] }, calls: [] });
 
     const result = handleGetOverlay(ctx as never, { uri: "file:///test.html" });
 
-    expect(ctx.materializeOverlay).toHaveBeenCalledWith("file:///test.html");
+    expect(ctx.workspace.getOverlay).toHaveBeenCalledWith(canonicalDocumentUri("file:///test.html").uri);
     expect(result).not.toBe(null);
   });
 
   test("returns null when overlay not found", () => {
     const ctx = createMockContext();
-    ctx.materializeOverlay.mockReturnValue(null);
+    ctx.workspace.getOverlay.mockReturnValue(null);
 
     const result = handleGetOverlay(ctx as never, { uri: "file:///missing.html" });
 
@@ -100,13 +85,13 @@ describe("handleGetOverlay", () => {
 
   test("logs and returns null on error", () => {
     const ctx = createMockContext();
-    ctx.syncWorkspaceWithIndex.mockImplementation(() => { throw new Error("sync failed"); });
+    ctx.workspace.getOverlay.mockImplementation(() => { throw new Error("overlay failed"); });
 
     const result = handleGetOverlay(ctx as never, { uri: "file:///test.html" });
 
     expect(result).toBe(null);
     expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("getOverlay"));
-    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("sync failed"));
+    expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("overlay failed"));
   });
 });
 
@@ -126,9 +111,19 @@ describe("handleGetMapping", () => {
     expect(result).toBe(null);
   });
 
+  test("returns overlay path and mapping when available", () => {
+    const ctx = createMockContext();
+    ctx.workspace.getMapping.mockReturnValue({ entries: ["entry"] });
+    ctx.workspace.getOverlay.mockReturnValue({ overlay: { path: "/test.ts" }, mapping: { entries: [] }, calls: [] });
+
+    const result = handleGetMapping(ctx as never, { uri: "file:///test.html" });
+
+    expect(result).toEqual({ overlayPath: "/test.ts", mapping: { entries: ["entry"] } });
+  });
+
   test("logs and returns null on error", () => {
     const ctx = createMockContext();
-    ctx.syncWorkspaceWithIndex.mockImplementation(() => { throw new Error("mapping error"); });
+    ctx.workspace.getMapping.mockImplementation(() => { throw new Error("mapping error"); });
 
     const result = handleGetMapping(ctx as never, { uri: "file:///test.html" });
 
@@ -157,28 +152,28 @@ describe("handleGetSsr", () => {
 describe("handleDumpState", () => {
   test("returns server state summary", () => {
     const ctx = createMockContext();
+    ctx.workspace.templates = [{}, {}];
+    ctx.workspace.inlineTemplates = [{}];
 
     const result = handleDumpState(ctx as never);
 
     expect(result).toEqual({
       workspaceRoot: "/test/workspace",
-      caseSensitive: true,
-      projectVersion: "1",
-      overlayRoots: ["/test/src"],
-      overlays: ["/test/src/component.overlay.ts"],
-      programRoots: ["/test/src/main.ts"],
+      fingerprint: "test@1",
+      templateCount: 2,
+      inlineTemplateCount: 1,
       programCache: {},
     });
   });
 
   test("returns error object on failure", () => {
     const ctx = createMockContext();
-    ctx.tsService.getService.mockImplementation(() => { throw new Error("TS service crashed"); });
+    ctx.workspace.snapshot.mockImplementation(() => { throw new Error("workspace crashed"); });
 
     const result = handleDumpState(ctx as never);
 
     expect(result).toHaveProperty("error");
-    expect((result as { error: string }).error).toContain("TS service crashed");
+    expect((result as { error: string }).error).toContain("workspace crashed");
     expect(ctx.logger.error).toHaveBeenCalledWith(expect.stringContaining("dumpState"));
   });
 });
