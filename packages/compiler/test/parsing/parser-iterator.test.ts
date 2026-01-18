@@ -18,11 +18,11 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
 
     const decl = ast.declaration;
     expect(decl.$kind).toBe("BindingIdentifier");
-    expect(decl.name).toBe("item");
+    expect(decl.name.name).toBe("item");
 
     const iterable = ast.iterable;
     expect(iterable.$kind).toBe("AccessScope");
-    expect(iterable.name).toBe("items");
+    expect(iterable.name.name).toBe("items");
   });
 
   test("item of items; key: id (semiIdx)", () => {
@@ -37,11 +37,11 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
 
     const decl = ast.declaration;
     expect(decl.$kind).toBe("BindingIdentifier");
-    expect(decl.name).toBe("item");
+    expect(decl.name.name).toBe("item");
 
     const iterable = ast.iterable;
     expect(iterable.$kind).toBe("AccessScope");
-    expect(iterable.name).toBe("items");
+    expect(iterable.name.name).toBe("items");
   });
 
   test("[value, index] of items", () => {
@@ -59,10 +59,10 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     const [valueBinding, indexBinding] = decl.elements;
 
     expect(valueBinding.$kind).toBe("BindingIdentifier");
-    expect(valueBinding.name).toBe("value");
+    expect(valueBinding.name.name).toBe("value");
 
     expect(indexBinding.$kind).toBe("BindingIdentifier");
-    expect(indexBinding.name).toBe("index");
+    expect(indexBinding.name.name).toBe("index");
   });
 
   test("{ key, value } of entries", () => {
@@ -78,9 +78,9 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     expect(decl.properties.length).toBe(2);
     expect(decl.properties.map(p => p.key)).toEqual(["key", "value"]);
     expect(decl.properties[0].value.$kind).toBe("BindingIdentifier");
-    expect(decl.properties[0].value.name).toBe("key");
+    expect(decl.properties[0].value.name.name).toBe("key");
     expect(decl.properties[1].value.$kind).toBe("BindingIdentifier");
-    expect(decl.properties[1].value.name).toBe("value");
+    expect(decl.properties[1].value.name.name).toBe("value");
   });
 
   test("{ key: alias } of entries", () => {
@@ -93,7 +93,7 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     expect(decl.properties.length).toBe(1);
     expect(decl.properties[0].key).toBe("key");
     expect(decl.properties[0].value.$kind).toBe("BindingIdentifier");
-    expect(decl.properties[0].value.name).toBe("alias");
+    expect(decl.properties[0].value.name.name).toBe("alias");
   });
 
   test("[first, , second, ...rest] of items", () => {
@@ -108,7 +108,7 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     expect(decl.elements[1].$kind).toBe("BindingPatternHole");
     expect(decl.elements[2].$kind).toBe("BindingIdentifier");
     expect(decl.rest?.$kind).toBe("BindingIdentifier");
-    expect(decl.rest?.name).toBe("rest");
+    expect(decl.rest?.name.name).toBe("rest");
   });
 
   test("{ a: foo = bar, ...rest } of entries", () => {
@@ -123,12 +123,12 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     expect(prop.key).toBe("a");
     expect(prop.value.$kind).toBe("BindingPatternDefault");
     expect(prop.value.target.$kind).toBe("BindingIdentifier");
-    expect(prop.value.target.name).toBe("foo");
+    expect(prop.value.target.name.name).toBe("foo");
     expect(prop.value.default.$kind).toBe("AccessScope");
-    expect(prop.value.default.name).toBe("bar");
+    expect(prop.value.default.name.name).toBe("bar");
 
     expect(decl.rest?.$kind).toBe("BindingIdentifier");
-    expect(decl.rest?.name).toBe("rest");
+    expect(decl.rest?.name.name).toBe("rest");
   });
 
   test("[] of items is accepted and produces an empty array pattern", () => {
@@ -145,7 +145,7 @@ describe("expression-parser / IsIterator (ForOfStatement)", () => {
     expect(ast.declaration.$kind).toBe("ArrayBindingPattern");
     expect(ast.declaration.elements.length).toBe(1);
     expect(ast.declaration.elements[0].$kind).toBe("BindingIdentifier");
-    expect(ast.declaration.elements[0].name).toBe("a");
+    expect(ast.declaration.elements[0].name.name).toBe("a");
   });
 
   test("{} of items is accepted and produces an empty object pattern", () => {

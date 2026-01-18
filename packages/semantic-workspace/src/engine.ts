@@ -1090,7 +1090,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
     }
     case "AU0101": {
       const name = offset != null && text && compilation
-        ? findBindingBehaviorAtOffset(compilation.exprTable ?? [], text, offset)?.name
+        ? findBindingBehaviorAtOffset(compilation.exprTable ?? [], offset)?.name
         : null;
       return {
         ...base,
@@ -1104,7 +1104,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
     }
     case "AU0103": {
       const name = offset != null && text && compilation
-        ? findValueConverterAtOffset(compilation.exprTable ?? [], text, offset)?.name
+        ? findValueConverterAtOffset(compilation.exprTable ?? [], offset)?.name
         : null;
       return {
         ...base,

@@ -510,7 +510,7 @@ test("completions map partial replacement spans to the matching slice of the tem
   // Simulate a TS completion that only replaces a subset of the overlay member span.
   const partialOverlaySpan = {
     start: memberSeg.overlaySpan.start + 2,
-    length: 3,
+    length: 2,
   };
 
   const service = new DefaultTemplateLanguageService(program, {

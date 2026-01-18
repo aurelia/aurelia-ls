@@ -30,7 +30,7 @@ const AURELIA_BUILTINS = new Set([
 type ExpressionAst = {
   $kind: string;
   span?: SourceSpan;
-  name?: string;
+  name?: { name: string; span?: SourceSpan };
   object?: ExpressionAst;
   expression?: ExpressionAst;
   func?: ExpressionAst;
@@ -185,12 +185,12 @@ function walkExpression(
 
   switch (node.$kind) {
     case "AccessScope": {
-      if (node.span && node.name) {
-        const modifiers = AURELIA_BUILTINS.has(node.name) ? ["defaultLibrary"] : undefined;
+      if (node.name?.span) {
+        const modifiers = AURELIA_BUILTINS.has(node.name.name) ? ["defaultLibrary"] : undefined;
         tokens.push({
           type: "variable",
           modifiers,
-          span: sliceSpan(node.span.start, node.span.start + node.name.length, node.span),
+          span: node.name.span,
         });
       }
       break;
@@ -198,25 +198,22 @@ function walkExpression(
 
     case "AccessMember": {
       walkExpression(node.object, text, tokens);
-      if (node.span && node.name) {
-        const propStart = findPropertyStart(text, node.span, node.name);
-        if (propStart !== -1) {
-          tokens.push({
-            type: "property",
-            span: sliceSpan(propStart, propStart + node.name.length, node.span),
-          });
-        }
+      if (node.name?.span) {
+        tokens.push({
+          type: "property",
+          span: node.name.span,
+        });
       }
       break;
     }
 
     case "CallScope": {
-      if (node.span && node.name) {
-        const modifiers = AURELIA_BUILTINS.has(node.name) ? ["defaultLibrary"] : undefined;
+      if (node.name?.span) {
+        const modifiers = AURELIA_BUILTINS.has(node.name.name) ? ["defaultLibrary"] : undefined;
         tokens.push({
           type: "function",
           modifiers,
-          span: sliceSpan(node.span.start, node.span.start + node.name.length, node.span),
+          span: node.name.span,
         });
       }
       for (const arg of node.args ?? []) {
@@ -227,14 +224,11 @@ function walkExpression(
 
     case "CallMember": {
       walkExpression(node.object, text, tokens);
-      if (node.span && node.name) {
-        const propStart = findPropertyStart(text, node.span, node.name);
-        if (propStart !== -1) {
-          tokens.push({
-            type: "function",
-            span: sliceSpan(propStart, propStart + node.name.length, node.span),
-          });
-        }
+      if (node.name?.span) {
+        tokens.push({
+          type: "function",
+          span: node.name.span,
+        });
       }
       for (const arg of node.args ?? []) {
         walkExpression(arg, text, tokens);
@@ -306,14 +300,11 @@ function walkExpression(
 
     case "ValueConverter": {
       walkExpression(node.expression, text, tokens);
-      if (node.name && node.span) {
-        const namePos = findPipeOrAmpName(text, node.span, "|", node.name);
-        if (namePos !== -1) {
-          tokens.push({
-            type: "aureliaConverter",
-            span: sliceSpan(namePos, namePos + node.name.length, node.span),
-          });
-        }
+      if (node.name?.span) {
+        tokens.push({
+          type: "aureliaConverter",
+          span: node.name.span,
+        });
       }
       for (const arg of node.args ?? []) {
         walkExpression(arg, text, tokens);
@@ -323,14 +314,11 @@ function walkExpression(
 
     case "BindingBehavior": {
       walkExpression(node.expression, text, tokens);
-      if (node.name && node.span) {
-        const namePos = findPipeOrAmpName(text, node.span, "&", node.name);
-        if (namePos !== -1) {
-          tokens.push({
-            type: "aureliaBehavior",
-            span: sliceSpan(namePos, namePos + node.name.length, node.span),
-          });
-        }
+      if (node.name?.span) {
+        tokens.push({
+          type: "aureliaBehavior",
+          span: node.name.span,
+        });
       }
       for (const arg of node.args ?? []) {
         walkExpression(arg, text, tokens);
@@ -370,11 +358,11 @@ function walkExpression(
 
     case "ForOfStatement": {
       const decl = node.declaration;
-      if (decl && decl.$kind === "BindingIdentifier" && decl.span && decl.name) {
+      if (decl && decl.$kind === "BindingIdentifier" && decl.name?.span) {
         tokens.push({
           type: "variable",
           modifiers: ["declaration"],
-          span: sliceSpan(decl.span.start, decl.span.start + decl.name.length, decl.span),
+          span: decl.name.span,
         });
       } else if (decl) {
         walkBindingPattern(decl, text, tokens);
@@ -432,11 +420,11 @@ function walkBindingPattern(
 
   switch (node.$kind) {
     case "BindingIdentifier": {
-      if (node.span && node.name) {
+      if (node.name?.span) {
         tokens.push({
           type: "variable",
           modifiers: ["declaration"],
-          span: sliceSpan(node.span.start, node.span.start + node.name.length, node.span),
+          span: node.name.span,
         });
       }
       break;

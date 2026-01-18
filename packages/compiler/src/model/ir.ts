@@ -483,11 +483,17 @@ export type AnyBindingExpression =
 
 /* ---- AST nodes ---- */
 
+export interface Identifier {
+  $kind: 'Identifier';
+  span: SourceSpan;
+  name: string;
+}
+
 export interface BindingBehaviorExpression {
   $kind: 'BindingBehavior';
   span: SourceSpan;
   expression: IsBindingBehavior;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
 }
 
@@ -495,7 +501,7 @@ export interface ValueConverterExpression {
   $kind: 'ValueConverter';
   span: SourceSpan;
   expression: IsValueConverter;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
 }
 
@@ -518,7 +524,7 @@ export interface ConditionalExpression {
 export interface AccessGlobalExpression {
   $kind: 'AccessGlobal';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
 }
 
 export interface AccessThisExpression {
@@ -535,7 +541,7 @@ export interface AccessBoundaryExpression {
 export interface AccessScopeExpression {
   $kind: 'AccessScope';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
   ancestor: number;
 }
 
@@ -543,7 +549,7 @@ export interface AccessMemberExpression {
   $kind: 'AccessMember';
   span: SourceSpan;
   object: IsLeftHandSide;
-  name: string;
+  name: Identifier;
   optional: boolean;
 }
 
@@ -571,7 +577,7 @@ export interface NewExpression {
 export interface CallScopeExpression {
   $kind: 'CallScope';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
   ancestor: number;
   optional: boolean;
@@ -581,7 +587,7 @@ export interface CallMemberExpression {
   $kind: 'CallMember';
   span: SourceSpan;
   object: IsLeftHandSide;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
   optionalMember: boolean;
   optionalCall: boolean;
@@ -598,7 +604,7 @@ export interface CallFunctionExpression {
 export interface CallGlobalExpression {
   $kind: 'CallGlobal';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
 }
 
@@ -655,7 +661,7 @@ export interface TaggedTemplateExpression {
 export interface BindingIdentifier {
   $kind: 'BindingIdentifier';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
 }
 
 // Kept in expr table for precise scoping of repeat; IR also carries a lighter ForOfIR.

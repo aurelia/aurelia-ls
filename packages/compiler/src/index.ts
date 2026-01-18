@@ -363,6 +363,7 @@ export type {
   AccessMemberExpression,
   AccessKeyedExpression,
   AccessThisExpression,
+  Identifier,
   PrimitiveLiteralExpression,
   BinaryExpression,
   UnaryExpression,

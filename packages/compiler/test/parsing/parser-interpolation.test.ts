@@ -244,7 +244,7 @@ describe("ExpressionParser / Interpolation AST", () => {
 
     const expr = ast.expressions[0];
     expect(expr.$kind).toBe("AccessScope");
-    expect(expr.name).toBe("name");
+    expect(expr.name.name).toBe("name");
     expect(expr.ancestor).toBe(0);
 
     // Interpolation span should cover the whole source.
@@ -283,9 +283,9 @@ describe("ExpressionParser / Interpolation AST", () => {
 
     const [aExpr, bExpr] = ast.expressions;
     expect(aExpr.$kind).toBe("AccessScope");
-    expect(aExpr.name).toBe("a");
+    expect(aExpr.name.name).toBe("a");
     expect(bExpr.$kind).toBe("AccessScope");
-    expect(bExpr.name).toBe("b");
+    expect(bExpr.name.name).toBe("b");
 
     expect(src.slice(aExpr.span.start, aExpr.span.end)).toBe("a");
     expect(src.slice(bExpr.span.start, bExpr.span.end)).toBe("b");
@@ -305,11 +305,11 @@ describe("ExpressionParser / Interpolation AST", () => {
     // Shape: Conditional(cond, 'a', b)
     expect(expr.$kind).toBe("Conditional");
     expect(expr.condition.$kind).toBe("AccessScope");
-    expect(expr.condition.name).toBe("cond");
+    expect(expr.condition.name.name).toBe("cond");
     expect(expr.yes.$kind).toBe("PrimitiveLiteral");
     expect(expr.yes.value).toBe("a");
     expect(expr.no.$kind).toBe("AccessScope");
-    expect(expr.no.name).toBe("b");
+    expect(expr.no.name.name).toBe("b");
 
     // Expression span should slice back to the ternary body (without `${` / `}`).
     const exprText = src.slice(expr.span.start, expr.span.end);
@@ -360,7 +360,7 @@ describe("ExpressionParser / Interpolation AST", () => {
     expect(ast.parts).toEqual(['"', '"']);
     expect(ast.expressions.length).toBe(1);
     expect(ast.expressions[0].$kind).toBe("AccessScope");
-    expect(ast.expressions[0].name).toBe("name");
+    expect(ast.expressions[0].name.name).toBe("name");
   });
 
   test("AST: realistic pattern with quotes and multiple interpolations", () => {
@@ -374,9 +374,9 @@ describe("ExpressionParser / Interpolation AST", () => {
 
     const [nameExpr, lenExpr] = ast.expressions;
     expect(nameExpr.$kind).toBe("AccessScope");
-    expect(nameExpr.name).toBe("name");
+    expect(nameExpr.name.name).toBe("name");
     expect(lenExpr.$kind).toBe("AccessScope");
-    expect(lenExpr.name).toBe("len");
+    expect(lenExpr.name.name).toBe("len");
 
     // Verify spans point to correct positions
     expect(src.slice(nameExpr.span.start, nameExpr.span.end)).toBe("name");
@@ -392,7 +392,7 @@ describe("ExpressionParser / Interpolation AST", () => {
     expect(ast.parts).toEqual(['"', '"']);
     expect(ast.expressions.length).toBe(1);
     expect(ast.expressions[0].$kind).toBe("AccessKeyed");
-    expect(ast.expressions[0].object.name).toBe("obj");
+    expect(ast.expressions[0].object.name.name).toBe("obj");
     expect(ast.expressions[0].key.value).toBe("key");
   });
 });

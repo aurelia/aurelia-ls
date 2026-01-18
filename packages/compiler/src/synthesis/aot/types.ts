@@ -28,6 +28,7 @@ import type {
   TemplateMetaIR,
 } from "../../model/index.js";
 import type { ControllerConfig } from "../../language/registry.js";
+import type { RuntimeAnyBindingExpression } from "./runtime-ast.js";
 
 /* =============================================================================
  * AOT PLAN MODULE - Top-level container
@@ -796,7 +797,8 @@ export interface SerializedLetBinding {
  */
 export interface SerializedExpression {
   id: ExprId;
-  ast: AnyBindingExpression;
+  /** Runtime-compatible AST (spans/Identifier nodes stripped) */
+  ast: RuntimeAnyBindingExpression;
 }
 
 /* =============================================================================

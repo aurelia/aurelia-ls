@@ -83,7 +83,7 @@ export type InstructionHit = {
 type ExpressionAst = {
   $kind?: string;
   span?: SourceSpan;
-  name?: string;
+  name?: { name: string; span?: SourceSpan };
   ancestor?: number;
   expression?: ExpressionAst;
   object?: ExpressionAst;
@@ -165,10 +165,10 @@ export class TemplateEditEngine {
     const bindableEdits = this.#renameBindableAttributeAt(compilation, text, offset, request.newName, syntax, preferRoots);
     if (bindableEdits?.length) return finalizeWorkspaceEdits(bindableEdits);
 
-    const converterEdits = this.#renameValueConverterAt(compilation, text, offset, request.newName, preferRoots);
+    const converterEdits = this.#renameValueConverterAt(compilation, offset, request.newName, preferRoots);
     if (converterEdits?.length) return finalizeWorkspaceEdits(converterEdits);
 
-    const behaviorEdits = this.#renameBindingBehaviorAt(compilation, text, offset, request.newName, preferRoots);
+    const behaviorEdits = this.#renameBindingBehaviorAt(compilation, offset, request.newName, preferRoots);
     if (behaviorEdits?.length) return finalizeWorkspaceEdits(behaviorEdits);
 
     return null;
@@ -259,12 +259,11 @@ export class TemplateEditEngine {
 
   #renameValueConverterAt(
     compilation: TemplateCompilation,
-    text: string,
     offset: number,
     newName: string,
     preferRoots: readonly string[],
   ): WorkspaceTextEdit[] | null {
-    const hit = findValueConverterAtOffset(compilation.exprTable ?? [], text, offset);
+    const hit = findValueConverterAtOffset(compilation.exprTable ?? [], offset);
     if (!hit) return null;
 
     const edits: WorkspaceTextEdit[] = [];
@@ -279,12 +278,11 @@ export class TemplateEditEngine {
 
   #renameBindingBehaviorAt(
     compilation: TemplateCompilation,
-    text: string,
     offset: number,
     newName: string,
     preferRoots: readonly string[],
   ): WorkspaceTextEdit[] | null {
-    const hit = findBindingBehaviorAtOffset(compilation.exprTable ?? [], text, offset);
+    const hit = findBindingBehaviorAtOffset(compilation.exprTable ?? [], offset);
     if (!hit) return null;
 
     const edits: WorkspaceTextEdit[] = [];
@@ -322,8 +320,8 @@ export class TemplateEditEngine {
   }
 
   #collectConverterEdits(name: string, newName: string, out: WorkspaceTextEdit[]): void {
-    this.#forEachTemplateCompilation((uri, text, compilation) => {
-      const spans = collectConverterSpans(compilation.exprTable ?? [], text, name);
+    this.#forEachTemplateCompilation((uri, _text, compilation) => {
+      const spans = collectConverterSpans(compilation.exprTable ?? [], name);
       for (const span of spans) {
         out.push({ uri, span, newText: newName });
       }
@@ -331,8 +329,8 @@ export class TemplateEditEngine {
   }
 
   #collectBehaviorEdits(name: string, newName: string, out: WorkspaceTextEdit[]): void {
-    this.#forEachTemplateCompilation((uri, text, compilation) => {
-      const spans = collectBehaviorSpans(compilation.exprTable ?? [], text, name);
+    this.#forEachTemplateCompilation((uri, _text, compilation) => {
+      const spans = collectBehaviorSpans(compilation.exprTable ?? [], name);
       for (const span of spans) {
         out.push({ uri, span, newText: newName });
       }
@@ -518,26 +516,26 @@ function resolveImportCandidate(
       return name ? { kind: "controller", name } : null;
     }
     case "aurelia/unknown-converter": {
-      const hit = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      const hit = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], offset);
       return hit ? { kind: "value-converter", name: hit.name } : null;
     }
     case "aurelia/unknown-behavior": {
-      const hit = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      const hit = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], offset);
       return hit ? { kind: "binding-behavior", name: hit.name } : null;
     }
     case "aurelia/expr-symbol-not-found": {
       const symbolKind = typeof data?.symbolKind === "string" ? data.symbolKind : null;
       if (symbolKind === "binding-behavior") {
-        const hit = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+        const hit = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], offset);
         return hit ? { kind: "binding-behavior", name: hit.name } : null;
       }
       if (symbolKind === "value-converter") {
-        const hit = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+        const hit = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], offset);
         return hit ? { kind: "value-converter", name: hit.name } : null;
       }
-      const converter = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      const converter = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], offset);
       if (converter) return { kind: "value-converter", name: converter.name };
-      const behavior = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], ctx.text, offset);
+      const behavior = findBindingBehaviorAtOffset(ctx.compilation.exprTable ?? [], offset);
       return behavior ? { kind: "binding-behavior", name: behavior.name } : null;
     }
     default:
@@ -1063,66 +1061,55 @@ function collectElementTagSpans(
 
 function collectConverterSpans(
   exprTable: readonly { id: string; ast: unknown }[],
-  text: string,
   name: string,
 ): SourceSpan[] {
   const spans: SourceSpan[] = [];
   for (const entry of exprTable) {
-    collectConverterNodes(entry.ast as ExpressionAst, text, name, spans);
+    collectConverterNodes(entry.ast as ExpressionAst, name, spans);
   }
   return spans;
 }
 
 function collectConverterNodes(
   node: ExpressionAst | null | undefined,
-  text: string,
   name: string,
   spans: SourceSpan[],
 ): void {
   if (!node || !node.$kind) return;
-  if (node.$kind === "ValueConverter" && node.name === name && node.span) {
-    const start = findPipeOrAmpName(text, node.span, "|", name);
-    if (start !== -1) {
-      spans.push({ start, end: start + name.length, ...(node.span.file ? { file: node.span.file } : {}) });
-    }
+  if (node.$kind === "ValueConverter" && node.name?.span && node.name.name === name) {
+    spans.push({ start: node.name.span.start, end: node.name.span.end, ...(node.name.span.file ? { file: node.name.span.file } : {}) });
   }
-  walkAstChildren(node, text, name, spans, collectConverterNodes);
+  walkAstChildren(node, name, spans, collectConverterNodes);
 }
 
 function collectBehaviorSpans(
   exprTable: readonly { id: string; ast: unknown }[],
-  text: string,
   name: string,
 ): SourceSpan[] {
   const spans: SourceSpan[] = [];
   for (const entry of exprTable) {
-    collectBehaviorNodes(entry.ast as ExpressionAst, text, name, spans);
+    collectBehaviorNodes(entry.ast as ExpressionAst, name, spans);
   }
   return spans;
 }
 
 function collectBehaviorNodes(
   node: ExpressionAst | null | undefined,
-  text: string,
   name: string,
   spans: SourceSpan[],
 ): void {
   if (!node || !node.$kind) return;
-  if (node.$kind === "BindingBehavior" && node.name === name && node.span) {
-    const start = findPipeOrAmpName(text, node.span, "&", name);
-    if (start !== -1) {
-      spans.push({ start, end: start + name.length, ...(node.span.file ? { file: node.span.file } : {}) });
-    }
+  if (node.$kind === "BindingBehavior" && node.name?.span && node.name.name === name) {
+    spans.push({ start: node.name.span.start, end: node.name.span.end, ...(node.name.span.file ? { file: node.name.span.file } : {}) });
   }
-  walkAstChildren(node, text, name, spans, collectBehaviorNodes);
+  walkAstChildren(node, name, spans, collectBehaviorNodes);
 }
 
 function walkAstChildren(
   node: ExpressionAst,
-  text: string,
   name: string,
   spans: SourceSpan[],
-  visitor: (node: ExpressionAst | null | undefined, text: string, name: string, spans: SourceSpan[]) => void,
+  visitor: (node: ExpressionAst | null | undefined, name: string, spans: SourceSpan[]) => void,
 ): void {
   const queue: (ExpressionAst | null | undefined)[] = [];
   queue.push(node.expression, node.object, node.func, node.left, node.right, node.condition, node.yes, node.no, node.target, node.value, node.key, node.declaration, node.iterable);
@@ -1131,17 +1118,16 @@ function walkAstChildren(
   if (node.expressions) queue.push(...node.expressions);
   for (const child of queue) {
     if (!child) continue;
-    visitor(child, text, name, spans);
+    visitor(child, name, spans);
   }
 }
 
 export function findValueConverterAtOffset(
   exprTable: readonly { id: string; ast: unknown }[],
-  text: string,
   offset: number,
 ): { name: string; exprId: string } | null {
   for (const entry of exprTable) {
-    const hit = findConverterInAst(entry.ast as ExpressionAst, text, offset);
+    const hit = findConverterInAst(entry.ast as ExpressionAst, offset);
     if (hit) return { name: hit, exprId: entry.id };
   }
   return null;
@@ -1149,43 +1135,35 @@ export function findValueConverterAtOffset(
 
 export function findBindingBehaviorAtOffset(
   exprTable: readonly { id: string; ast: unknown }[],
-  text: string,
   offset: number,
 ): { name: string; exprId: string } | null {
   for (const entry of exprTable) {
-    const hit = findBehaviorInAst(entry.ast as ExpressionAst, text, offset);
+    const hit = findBehaviorInAst(entry.ast as ExpressionAst, offset);
     if (hit) return { name: hit, exprId: entry.id };
   }
   return null;
 }
 
-function findConverterInAst(node: ExpressionAst | null | undefined, text: string, offset: number): string | null {
+function findConverterInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
   if (!node || !node.$kind) return null;
-  if (node.$kind === "ValueConverter" && node.name && node.span) {
-    const start = findPipeOrAmpName(text, node.span, "|", node.name);
-    if (start !== -1 && offset >= start && offset < start + node.name.length) {
-      return node.name;
-    }
+  if (node.$kind === "ValueConverter" && node.name?.span) {
+    if (spanContainsOffset(node.name.span, offset)) return node.name.name;
   }
-  return walkAstChildrenForHit(node, text, offset, findConverterInAst);
+  return walkAstChildrenForHit(node, offset, findConverterInAst);
 }
 
-function findBehaviorInAst(node: ExpressionAst | null | undefined, text: string, offset: number): string | null {
+function findBehaviorInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
   if (!node || !node.$kind) return null;
-  if (node.$kind === "BindingBehavior" && node.name && node.span) {
-    const start = findPipeOrAmpName(text, node.span, "&", node.name);
-    if (start !== -1 && offset >= start && offset < start + node.name.length) {
-      return node.name;
-    }
+  if (node.$kind === "BindingBehavior" && node.name?.span) {
+    if (spanContainsOffset(node.name.span, offset)) return node.name.name;
   }
-  return walkAstChildrenForHit(node, text, offset, findBehaviorInAst);
+  return walkAstChildrenForHit(node, offset, findBehaviorInAst);
 }
 
 function walkAstChildrenForHit(
   node: ExpressionAst,
-  text: string,
   offset: number,
-  finder: (node: ExpressionAst, text: string, offset: number) => string | null,
+  finder: (node: ExpressionAst, offset: number) => string | null,
 ): string | null {
   const queue: (ExpressionAst | null | undefined)[] = [];
   queue.push(node.expression, node.object, node.func, node.left, node.right, node.condition, node.yes, node.no, node.target, node.value, node.key, node.declaration, node.iterable);
@@ -1194,21 +1172,10 @@ function walkAstChildrenForHit(
   if (node.expressions) queue.push(...node.expressions);
   for (const child of queue) {
     if (!child) continue;
-    const hit = finder(child, text, offset);
+    const hit = finder(child, offset);
     if (hit) return hit;
   }
   return null;
-}
-
-function findPipeOrAmpName(text: string, span: SourceSpan, separator: "|" | "&", name: string): number {
-  const searchText = text.slice(span.start, span.end);
-  const sepIndex = searchText.lastIndexOf(separator);
-  if (sepIndex === -1) return -1;
-  const afterSep = searchText.slice(sepIndex + 1);
-  const whitespaceLen = afterSep.match(/^\s*/)?.[0].length ?? 0;
-  const nameStart = span.start + sepIndex + 1 + whitespaceLen;
-  const candidate = text.slice(nameStart, nameStart + name.length);
-  return candidate === name ? nameStart : -1;
 }
 
 function resourceRefMatches(

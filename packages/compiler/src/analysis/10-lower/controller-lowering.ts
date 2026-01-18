@@ -175,6 +175,18 @@ function buildValueProps(
     };
   }
 
+  // Portal defaults to literal selector strings when no command/interpolation.
+  // Use a quoted string literal expression so AOT/SSR get a valid AST.
+  if (controllerName === "portal" && raw.length > 0) {
+    return {
+      type: "propertyBinding",
+      to: propName,
+      from: toBindingSource(JSON.stringify(raw), valueLoc, table, "IsProperty"),
+      mode: "default",
+      loc: locSpan,
+    };
+  }
+
   // Case 3: No command, no interpolation → PropertyBinding
   // Treat value as expression for scope resolution (needed for LSP type-checking).
   // Note: Runtime uses SetPropertyInstruction for literals, but we need
