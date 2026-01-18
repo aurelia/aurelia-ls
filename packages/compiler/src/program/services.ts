@@ -32,6 +32,9 @@ import {
   type TypeRef,
 } from "../language/index.js";
 
+// Parsing imports (via barrel)
+import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../parsing/index.js";
+
 // Synthesis imports (via barrel)
 import type { TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/index.js";
 
@@ -476,6 +479,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     compilation: TemplateCompilation | null,
   ): CompletionItem[] {
     const { sem, resources, syntax } = resolveCompletionContext(this.program);
+    const attrParser = createAttributeParserFromRegistry(syntax);
 
     const exprInfo = query.exprAt(offset);
     if (exprInfo) {
@@ -491,11 +495,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     }
 
     if (context.kind === "attr-name") {
-      return collectAttributeNameCompletions(snapshot.text, context, resources, sem, syntax);
+      return collectAttributeNameCompletions(snapshot.text, context, resources, sem, syntax, attrParser);
     }
 
     if (context.kind === "attr-value") {
-      return collectAttributeValueCompletions(snapshot.text, context, resources);
+      return collectAttributeValueCompletions(snapshot.text, context, resources, syntax, attrParser);
     }
 
     return [];
@@ -991,9 +995,10 @@ function collectAttributeNameCompletions(
   resources: ResourceCollections,
   sem: SemanticsWithCaches,
   syntax: TemplateSyntaxRegistry,
+  attrParser: AttributeParser,
 ): CompletionItem[] {
   const typed = context.prefix;
-  const command = parseBindingCommandContext(typed, context.attrName);
+  const command = parseBindingCommandContext(typed, context.attrName, syntax);
   if (command) {
     return collectBindingCommandCompletions(
       syntax,
@@ -1002,14 +1007,18 @@ function collectAttributeNameCompletions(
     );
   }
 
-  let prefix = typed;
-  let rangeStart = context.attrStart;
-  if (prefix.startsWith(":") || prefix.startsWith("@")) {
-    prefix = prefix.slice(1);
-    rangeStart += 1;
+  const analysis = analyzeAttributeName(context.attrName, syntax, attrParser);
+  let targetSpan = analysis.targetSpan;
+  if (!targetSpan && !analysis.syntax.command) {
+    const symbol = leadingAttributeSymbol(context.attrName, syntax);
+    targetSpan = symbol
+      ? { start: symbol.length, end: context.attrName.length }
+      : { start: 0, end: context.attrName.length };
   }
-  const range = rangeFromOffsets(text, rangeStart, context.attrEnd);
-  const lowerPrefix = prefix.toLowerCase();
+  if (!targetSpan) return [];
+  if (typed.length > targetSpan.end) return [];
+  const range = rangeFromOffsets(text, context.attrStart + targetSpan.start, context.attrStart + targetSpan.end);
+  const lowerPrefix = typed.slice(targetSpan.start, Math.min(typed.length, targetSpan.end)).toLowerCase();
 
   const items: CompletionItem[] = [];
   const seen = new Set<string>();
@@ -1069,8 +1078,10 @@ function collectAttributeValueCompletions(
   text: string,
   context: Extract<TagContext, { kind: "attr-value" }>,
   resources: ResourceCollections,
+  syntax: TemplateSyntaxRegistry,
+  attrParser: AttributeParser,
 ): CompletionItem[] {
-  const attrTarget = normalizeAttributeTarget(context.attrName);
+  const attrTarget = normalizeAttributeTarget(context.attrName, syntax, attrParser);
   if (!attrTarget) return [];
 
   const range = rangeFromOffsets(text, context.valueStart, context.valueEnd);
@@ -1272,36 +1283,118 @@ function findTagContext(text: string, offset: number): TagContext | null {
 function parseBindingCommandContext(
   typed: string,
   attrName: string,
+  syntax: TemplateSyntaxRegistry,
 ): { commandOffset: number; rangeStart: number; rangeEnd: number } | null {
-  const lastDot = typed.lastIndexOf(".");
-  if (lastDot < 0) return null;
-  const colonIndex = typed.indexOf(":", lastDot + 1);
-  if (colonIndex >= 0 && colonIndex < typed.length) return null;
+  const candidates = commandDelimitersForPatterns(syntax);
+  let best: { commandOffset: number; rangeStart: number; rangeEnd: number } | null = null;
 
-  const fullDot = attrName.lastIndexOf(".");
-  if (fullDot < 0) return null;
-  let commandEnd = attrName.length;
-  const commandColon = attrName.indexOf(":", fullDot + 1);
-  if (commandColon >= 0) commandEnd = commandColon;
+  for (const candidate of candidates) {
+    const { delimiter, symbols } = candidate;
+    const typedIndex = typed.lastIndexOf(delimiter);
+    if (typedIndex < 0) continue;
 
-  return {
-    commandOffset: lastDot + 1,
-    rangeStart: fullDot + 1,
-    rangeEnd: commandEnd,
-  };
+    const afterTyped = typed.slice(typedIndex + delimiter.length);
+    if (containsSymbol(afterTyped, symbols)) continue;
+
+    const fullIndex = attrName.lastIndexOf(delimiter);
+    if (fullIndex < 0) continue;
+
+    const rangeStart = fullIndex + delimiter.length;
+    const rangeEnd = findNextSymbol(attrName, symbols, rangeStart) ?? attrName.length;
+    const commandOffset = typedIndex + delimiter.length;
+
+    if (!best || commandOffset > best.commandOffset) {
+      best = { commandOffset, rangeStart, rangeEnd };
+    }
+  }
+
+  return best;
 }
 
-function normalizeAttributeTarget(attrName: string): string {
-  let target = attrName.trim();
-  if (!target) return "";
-  if (target.startsWith(":") || target.startsWith("@")) {
-    target = target.slice(1);
+function commandDelimitersForPatterns(
+  syntax: TemplateSyntaxRegistry,
+): Array<{ delimiter: string; symbols: string }> {
+  const results: Array<{ delimiter: string; symbols: string }> = [];
+  const seen = new Set<string>();
+  for (const pattern of syntax.attributePatterns ?? []) {
+    if (pattern.interpret.kind !== "target-command") continue;
+    const delimiter = commandDelimiter(pattern.pattern);
+    if (!delimiter) continue;
+    const key = `${delimiter}|${pattern.symbols}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push({ delimiter, symbols: pattern.symbols });
   }
-  const dot = target.indexOf(".");
-  if (dot >= 0) target = target.slice(0, dot);
-  const colon = target.indexOf(":");
-  if (colon >= 0) target = target.slice(0, colon);
-  return target.toLowerCase();
+  return results;
+}
+
+function commandDelimiter(pattern: string): string | null {
+  const positions: number[] = [];
+  let idx = 0;
+  while (idx < pattern.length) {
+    const found = pattern.indexOf("PART", idx);
+    if (found < 0) break;
+    positions.push(found);
+    idx = found + 4;
+  }
+  if (positions.length < 2) return null;
+  const prevEnd = positions[positions.length - 2]! + 4;
+  const lastStart = positions[positions.length - 1]!;
+  const delimiter = pattern.slice(prevEnd, lastStart);
+  return delimiter.length ? delimiter : null;
+}
+
+function containsSymbol(text: string, symbols: string): boolean {
+  if (!symbols) return false;
+  for (let i = 0; i < text.length; i += 1) {
+    if (symbols.includes(text[i]!)) return true;
+  }
+  return false;
+}
+
+function findNextSymbol(text: string, symbols: string, start: number): number | null {
+  if (!symbols) return null;
+  for (let i = start; i < text.length; i += 1) {
+    if (symbols.includes(text[i]!)) return i;
+  }
+  return null;
+}
+
+function leadingAttributeSymbol(attrName: string, syntax: TemplateSyntaxRegistry): string | null {
+  for (const pattern of syntax.attributePatterns ?? []) {
+    const isSymbolPattern = pattern.interpret.kind === "fixed-command"
+      || (pattern.interpret.kind === "event-modifier" && pattern.interpret.injectCommand);
+    if (!isSymbolPattern) continue;
+    const symbol = leadingPatternSymbol(pattern.pattern, pattern.symbols);
+    if (symbol && attrName.startsWith(symbol)) return symbol;
+  }
+  return null;
+}
+
+function leadingPatternSymbol(pattern: string, symbols: string): string | null {
+  const partIndex = pattern.indexOf("PART");
+  if (partIndex <= 0) return null;
+  const prefix = pattern.slice(0, partIndex);
+  if (!prefix) return null;
+  if (symbols) {
+    for (let i = 0; i < prefix.length; i += 1) {
+      if (!symbols.includes(prefix[i]!)) return null;
+    }
+  }
+  return prefix;
+}
+
+function normalizeAttributeTarget(
+  attrName: string,
+  syntax: TemplateSyntaxRegistry,
+  attrParser: AttributeParser,
+): string {
+  const trimmed = attrName.trim();
+  if (!trimmed) return "";
+  const analysis = analyzeAttributeName(trimmed, syntax, attrParser);
+  const targetSpan = analysis.targetSpan ?? (analysis.syntax.command ? null : { start: 0, end: trimmed.length });
+  if (!targetSpan) return "";
+  return trimmed.slice(targetSpan.start, targetSpan.end).toLowerCase();
 }
 
 function resolveElement(resources: ResourceCollections, tagName: string): ElementRes | null {

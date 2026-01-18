@@ -296,11 +296,15 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       let detail = null;
       try {
         const compilation = this.program.getCompilation(uri);
+        const syntax = this.program.options.syntax
+          ?? buildTemplateSyntaxRegistry(prepareSemantics(this.program.options.semantics, {
+            ...(this.program.options.catalog ? { catalog: this.program.options.catalog } : {}),
+          }));
         detail = collectTemplateHover({
           compilation,
           text,
           offset,
-          bindingCommands: this.program.options.syntax?.bindingCommands,
+          syntax,
         });
       } catch (error) {
         debug.workspace("hover.collect.error", {

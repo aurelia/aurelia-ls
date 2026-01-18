@@ -4,7 +4,9 @@ import ts from "typescript";
 import {
   PRELUDE_TS,
   asDocumentUri,
+  analyzeAttributeName,
   canonicalDocumentUri,
+  createAttributeParserFromRegistry,
   debug,
   extractTemplateMeta,
   normalizePathForId,
@@ -18,6 +20,7 @@ import {
   type LinkedRow,
   type OverlayBuildArtifact,
   type OverlayDocumentSnapshot,
+  type AttributeParser,
   type ResourceDef,
   type SourceLocation,
   type SourceSpan,
@@ -25,6 +28,7 @@ import {
   type TemplateMetaIR,
   type TemplateMappingArtifact,
   type TemplateQueryFacade,
+  type TemplateSyntaxRegistry,
   type VmReflection,
   type ResourceScopeId,
 } from "@aurelia-ls/compiler";
@@ -99,6 +103,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #resourceScope: ResourceScopeId | null;
   #projectVersion = 0;
   #templateIndex: TemplateIndex;
+  #attrParser: AttributeParser | null = null;
+  #attrParserSyntax: TemplateSyntaxRegistry | null = null;
 
   constructor(options: SemanticWorkspaceEngineOptions) {
     this.#logger = options.logger;
@@ -296,14 +302,14 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (!targetSpan) return [];
 
     const diagnostics = this.diagnostics(canonical.uri);
-    const bindingCommands = this.#kernel.program.options.syntax?.bindingCommands ?? {};
+    const syntax = this.#attributeSyntaxContext();
     return collectWorkspaceCodeActions({
       request,
       uri: canonical.uri,
       text,
       compilation,
       diagnostics,
-      bindingCommands,
+      syntax,
       templateIndex: this.#templateIndex,
       definitionIndex: this.#definitionIndex,
       workspaceRoot: this.#workspaceRoot,
@@ -330,7 +336,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const compilation = this.#kernel.getCompilation(canonical.uri);
     if (!compilation) return null;
 
-    const bindingCommands = this.#kernel.program.options.syntax?.bindingCommands ?? {};
+    const syntax = this.#attributeSyntaxContext();
     const preferRoots = [this.#workspaceRoot];
 
     const elementEdits = this.#renameElementAt(compilation, text, offset, request.newName, preferRoots);
@@ -338,7 +344,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       return { edit: { edits: finalizeWorkspaceEdits(elementEdits) } };
     }
 
-    const bindableEdits = this.#renameBindableAttributeAt(compilation, text, offset, request.newName, bindingCommands, preferRoots);
+    const bindableEdits = this.#renameBindableAttributeAt(compilation, text, offset, request.newName, syntax, preferRoots);
     if (bindableEdits?.length) {
       return { edit: { edits: finalizeWorkspaceEdits(bindableEdits) } };
     }
@@ -424,6 +430,15 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #ensureTemplateContext(uri: DocumentUri): void {
     this.#ensureIndexFresh();
     this.#activateTemplate(uri);
+  }
+
+  #attributeSyntaxContext(): AttributeSyntaxContext {
+    const syntax = this.#projectIndex.currentSyntax();
+    if (!this.#attrParser || this.#attrParserSyntax !== syntax) {
+      this.#attrParser = createAttributeParserFromRegistry(syntax);
+      this.#attrParserSyntax = syntax;
+    }
+    return { syntax, parser: this.#attrParser };
   }
 
   #programOptions(vm: VmReflection, isJs: boolean, overlayBaseName?: string) {
@@ -518,12 +533,13 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (offset == null) return [];
     const compilation = this.#kernel.getCompilation(uri);
     if (!compilation) return [];
+    const syntax = this.#attributeSyntaxContext();
     return collectTemplateDefinitions({
       compilation,
       text,
       offset,
       resources: this.#definitionIndex,
-      bindingCommands: this.#kernel.program.options.syntax?.bindingCommands,
+      syntax,
       preferRoots: [this.#workspaceRoot],
       documentUri: uri,
     });
@@ -609,7 +625,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     text: string,
     offset: number,
     newName: string,
-    bindingCommands: BindingCommands,
+    syntax: AttributeSyntaxContext,
     preferRoots: readonly string[],
   ): WorkspaceTextEdit[] | null {
     const hits = findInstructionsAtOffset(compilation.linked.templates, offset);
@@ -621,7 +637,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       if (!target) continue;
 
       const edits: WorkspaceTextEdit[] = [];
-      this.#collectBindableAttributeEdits(target, newName, bindingCommands, edits);
+      this.#collectBindableAttributeEdits(target, newName, syntax, edits);
 
       const attrValue = target.bindable.attribute.value ?? target.property;
       const attrEdit = buildBindableAttributeEdit(target.bindable, attrValue, newName, this.lookupText.bind(this));
@@ -685,13 +701,13 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #collectBindableAttributeEdits(
     target: BindableTarget,
     newName: string,
-    bindingCommands: BindingCommands,
+    syntax: AttributeSyntaxContext,
     out: WorkspaceTextEdit[],
   ): void {
     this.#forEachTemplateCompilation((uri, text, compilation) => {
       const matches = collectBindableAttributeMatches(compilation, text, target);
       for (const match of matches) {
-        const replacement = renameAttributeName(match.attrName, newName, bindingCommands);
+        const replacement = renameAttributeName(match.attrName, newName, syntax);
         out.push({ uri, span: match.span, newText: replacement });
       }
     });
@@ -752,8 +768,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (diagnostics.length === 0) return [];
     const text = this.lookupText(uri);
     const compilation = text ? this.#kernel.getCompilation(uri) : null;
-    const bindingCommands = this.#kernel.program.options.syntax?.bindingCommands ?? {};
-    return diagnostics.map((diag) => mapWorkspaceDiagnostic(diag, { text, compilation, bindingCommands }));
+    const syntax = this.#attributeSyntaxContext();
+    return diagnostics.map((diag) => mapWorkspaceDiagnostic(diag, { text, compilation, syntax }));
   }
 
   #templateMetaDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
@@ -863,7 +879,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (!compilation) return [];
     const text = this.lookupText(uri);
     if (!text) return [];
-    return collectSemanticTokens(text, compilation);
+    const syntax = this.#attributeSyntaxContext();
+    return collectSemanticTokens(text, compilation, syntax.syntax, syntax.parser);
   }
 }
 
@@ -1184,7 +1201,10 @@ type InstructionHit = {
   owner?: InstructionOwner | null;
 };
 
-type BindingCommands = Readonly<Record<string, unknown>>;
+type AttributeSyntaxContext = {
+  syntax: TemplateSyntaxRegistry;
+  parser: AttributeParser;
+};
 
 type ExpressionAst = {
   $kind?: string;
@@ -1212,7 +1232,7 @@ type ExpressionAst = {
 type DiagnosticMapContext = {
   text: string | null;
   compilation: TemplateCompilation | null;
-  bindingCommands: BindingCommands;
+  syntax: AttributeSyntaxContext;
 };
 
 type CodeActionContext = {
@@ -1221,7 +1241,7 @@ type CodeActionContext = {
   text: string;
   compilation: TemplateCompilation;
   diagnostics: readonly WorkspaceDiagnostic[];
-  bindingCommands: BindingCommands;
+  syntax: AttributeSyntaxContext;
   templateIndex: TemplateIndex;
   definitionIndex: ResourceDefinitionIndex;
   workspaceRoot: string;
@@ -1327,12 +1347,12 @@ function spanIntersects(a: SourceSpan, b: SourceSpan): boolean {
 function resolveBindableCandidate(
   hit: InstructionHit,
   text: string,
-  bindingCommands: BindingCommands,
+  syntax: AttributeSyntaxContext,
   definitionIndex?: ResourceDefinitionIndex | null,
   preferRoots: readonly string[] = [],
 ): BindableCandidate | null {
   const attrName = attributeNameFromHit(text, hit);
-  const base = attributeBaseName(attrName, bindingCommands);
+  const base = attributeTargetName(attrName, syntax);
   if (!base) return null;
   const propertyName = dashToCamel(base);
   const attributeName = base !== propertyName ? base : null;
@@ -1369,16 +1389,25 @@ function attributeNameFromHit(text: string, hit: InstructionHit): string | null 
   return text.slice(span.start, span.end);
 }
 
-function attributeBaseName(attrName: string | null, bindingCommands: BindingCommands): string | null {
+function attributeTargetName(attrName: string | null, syntax: AttributeSyntaxContext): string | null {
   if (!attrName) return null;
-  if (attrName.startsWith(":") || attrName.startsWith("@")) {
-    return attrName.slice(1) || null;
+  const analysis = analyzeAttributeName(attrName, syntax.syntax, syntax.parser);
+  if (analysis.targetSpan) {
+    return attrName.slice(analysis.targetSpan.start, analysis.targetSpan.end);
   }
-  const parts = attrName.split(".");
-  if (parts.length < 2) return attrName;
-  const command = parts[parts.length - 1];
-  if (!command) return attrName;
-  return bindingCommands[command] ? parts.slice(0, -1).join(".") : attrName;
+  const target = analysis.syntax.target?.trim();
+  if (target && attrName.includes(target)) return target;
+  if (analysis.syntax.command) return null;
+  return attrName;
+}
+
+function attributeCommandName(attrName: string | null, syntax: AttributeSyntaxContext): string | null {
+  if (!attrName) return null;
+  const analysis = analyzeAttributeName(attrName, syntax.syntax, syntax.parser);
+  if (analysis.commandSpan?.kind === "text") {
+    return attrName.slice(analysis.commandSpan.start, analysis.commandSpan.end);
+  }
+  return null;
 }
 
 function resolveImportCandidate(
@@ -1404,11 +1433,11 @@ function resolveImportCandidate(
     case "aurelia/unknown-attribute": {
       const hit = findInstructionHit(ctx.compilation, offset);
       const attrName = hit ? attributeNameFromHit(ctx.text, hit) : null;
-      const base = attributeBaseName(attrName, ctx.bindingCommands);
+      const base = attributeTargetName(attrName, ctx.syntax);
       return base ? { kind: "attribute", name: base } : null;
     }
     case "aurelia/unknown-controller": {
-      const name = findControllerNameAtOffset(ctx.compilation, ctx.text, offset, ctx.bindingCommands);
+      const name = findControllerNameAtOffset(ctx.compilation, ctx.text, offset, ctx.syntax);
       return name ? { kind: "controller", name } : null;
     }
     case "aurelia/unknown-converter": {
@@ -1482,7 +1511,7 @@ function buildAddBindableAction(
   const hit = findInstructionHit(ctx.compilation, offset);
   if (!hit) return null;
 
-  const candidate = resolveBindableCandidate(hit, ctx.text, ctx.bindingCommands, ctx.definitionIndex, [ctx.workspaceRoot]);
+  const candidate = resolveBindableCandidate(hit, ctx.text, ctx.syntax, ctx.definitionIndex, [ctx.workspaceRoot]);
   if (!candidate || candidate.ownerKind !== "element" || !candidate.ownerFile) return null;
 
   const target = resolveExternalTemplateForComponent(candidate.ownerFile, ctx.templateIndex);
@@ -1717,13 +1746,13 @@ function findControllerNameAtOffset(
   compilation: TemplateCompilation,
   text: string,
   offset: number,
-  bindingCommands: BindingCommands,
+  syntax: AttributeSyntaxContext,
 ): string | null {
   const controller = compilation.query.controllerAt(offset);
   if (controller?.kind) return controller.kind;
   const hit = findInstructionHit(compilation, offset);
   const attrName = hit ? attributeNameFromHit(text, hit) : null;
-  const base = attributeBaseName(attrName, bindingCommands);
+  const base = attributeTargetName(attrName, syntax);
   return base ?? null;
 }
 
@@ -1765,7 +1794,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
     }
     case "AU1101": {
       const name = offset != null && text && compilation
-        ? findControllerNameAtOffset(compilation, text, offset, ctx.bindingCommands)
+        ? findControllerNameAtOffset(compilation, text, offset, ctx.syntax)
         : null;
       return {
         ...base,
@@ -1785,7 +1814,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
           ? (hit.instruction as { target?: { kind?: string } }).target
           : null;
         if (hit && target && typeof target === "object" && "kind" in target && target.kind === "unknown") {
-          const candidate = resolveBindableCandidate(hit, text, ctx.bindingCommands);
+          const candidate = resolveBindableCandidate(hit, text, ctx.syntax);
           if (candidate) {
             bindableData = {
               bindable: {
@@ -1798,7 +1827,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
             };
           } else {
             const raw = attributeNameFromHit(text, hit);
-            attrName = attributeBaseName(raw, ctx.bindingCommands);
+            attrName = attributeTargetName(raw, ctx.syntax);
           }
         }
       }
@@ -1834,7 +1863,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
       if (offset != null && text && compilation) {
         const hit = findInstructionHit(compilation, offset);
         const raw = hit ? attributeNameFromHit(text, hit) : null;
-        attrName = attributeBaseName(raw, ctx.bindingCommands);
+        attrName = attributeTargetName(raw, ctx.syntax);
       }
       return {
         ...base,
@@ -1898,10 +1927,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
       if (offset != null && text && compilation) {
         const hit = findInstructionHit(compilation, offset);
         const raw = hit ? attributeNameFromHit(text, hit) : null;
-        if (raw) {
-          const parts = raw.split(".");
-          if (parts.length > 1) command = parts[parts.length - 1] ?? null;
-        }
+        command = attributeCommandName(raw, ctx.syntax);
       }
       return {
         ...base,
@@ -2319,19 +2345,12 @@ function collectBindableInstructionMatches(
   results.push({ span: nameSpan, attrName });
 }
 
-function renameAttributeName(attrName: string, newBase: string, bindingCommands: BindingCommands): string {
+function renameAttributeName(attrName: string, newBase: string, syntax: AttributeSyntaxContext): string {
   if (!attrName) return newBase;
-  if (attrName.startsWith(":") || attrName.startsWith("@")) {
-    return `${attrName[0]}${newBase}`;
-  }
-  const parts = attrName.split(".");
-  if (parts.length > 1) {
-    const command = parts[parts.length - 1];
-    if (command && bindingCommands[command]) {
-      return `${newBase}.${command}`;
-    }
-  }
-  return newBase;
+  const analysis = analyzeAttributeName(attrName, syntax.syntax, syntax.parser);
+  const targetSpan = analysis.targetSpan ?? (analysis.syntax.command ? null : { start: 0, end: attrName.length });
+  if (!targetSpan) return newBase;
+  return `${attrName.slice(0, targetSpan.start)}${newBase}${attrName.slice(targetSpan.end)}`;
 }
 
 function collectElementTagSpans(

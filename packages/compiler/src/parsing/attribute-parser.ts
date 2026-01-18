@@ -1,4 +1,5 @@
 import type { BindingMode } from "../model/ir.js";
+import type { TextSpan } from "../model/index.js";
 import type { AttributePatternConfig, TemplateSyntaxRegistry } from "../language/registry.js";
 import { BUILTIN_ATTRIBUTE_PATTERNS, buildTemplateSyntaxRegistry, DEFAULT_SEMANTICS } from "../language/registry.js";
 
@@ -19,6 +20,18 @@ export class AttrSyntax {
     /** Pattern string that matched (from registry), or null for identity fallback. */
     public pattern: string | null = null,
   ) {}
+}
+
+export type AttrPartSpan = TextSpan & { text: string };
+
+export type AttrCommandSpan = TextSpan & { kind: "symbol" | "text" };
+
+export interface AttributeNameAnalysis {
+  readonly syntax: AttrSyntax;
+  readonly pattern: AttributePatternConfig | null;
+  readonly partSpans: readonly AttrPartSpan[] | null;
+  readonly targetSpan: TextSpan | null;
+  readonly commandSpan: AttrCommandSpan | null;
 }
 
 /* ---------- Internal representation ---------- */
@@ -44,7 +57,13 @@ class CompiledPattern {
   }
 
   tryMatch(input: string): string[] | null {
+    const match = this.tryMatchWithSpans(input);
+    return match ? match.parts : null;
+  }
+
+  tryMatchWithSpans(input: string): { parts: string[]; spans: AttrPartSpan[] } | null {
     const parts: string[] = [];
+    const spans: AttrPartSpan[] = [];
     const syms = this.symbolSet;
     let i = 0;
 
@@ -59,10 +78,12 @@ class CompiledPattern {
         const start = i;
         while (i < input.length && !syms.has(input[i]!)) i++;
         if (i === start) return null; // empty dynamic segment is invalid
-        parts.push(input.slice(start, i));
+        const text = input.slice(start, i);
+        parts.push(text);
+        spans.push({ start, end: i, text });
       }
     }
-    return i === input.length ? parts : null;
+    return i === input.length ? { parts, spans } : null;
   }
 }
 
@@ -184,7 +205,7 @@ function interpretConfig(
 export class AttributeParser {
   private readonly _compiled: CompiledPattern[] = [];
   private readonly _byKey = new Map<string, CompiledPattern>();
-  private readonly _cache = new Map<string, { pat: CompiledPattern; parts: readonly string[] }>();
+  private readonly _cache = new Map<string, { pat: CompiledPattern; parts: readonly string[]; spans: readonly AttrPartSpan[] }>();
   private _sealed = false;
 
   /**
@@ -204,24 +225,35 @@ export class AttributeParser {
   }
 
   parse(name: string, value: string): AttrSyntax {
+    return this.parseWithConfig(name, value).syntax;
+  }
+
+  parseWithConfig(
+    name: string,
+    value: string,
+  ): { syntax: AttrSyntax; config: AttributePatternConfig | null; partSpans: readonly AttrPartSpan[] | null } {
     this._sealed = true;
 
     // Fast path: cached interpretation for this name
     const cached = this._cache.get(name);
     if (cached) {
       const { pat, parts } = cached;
-      return interpretConfig(pat.config, name, value, parts);
+      return {
+        syntax: interpretConfig(pat.config, name, value, parts),
+        config: pat.config,
+        partSpans: cached.spans,
+      };
     }
 
     // Try all patterns, keep the best match by score.
-    let best: { pat: CompiledPattern; parts: string[] } | null = null;
+    let best: { pat: CompiledPattern; parts: string[]; spans: AttrPartSpan[] } | null = null;
     for (let i = 0; i < this._compiled.length; i++) {
       const pat = this._compiled[i]!;
-      const parts = pat.tryMatch(name);
-      if (!parts) continue;
+      const match = pat.tryMatchWithSpans(name);
+      if (!match) continue;
 
       if (!best) {
-        best = { pat, parts };
+        best = { pat, parts: match.parts, spans: match.spans };
       } else {
         const a = pat.score, b = best.pat.score;
         if (
@@ -229,18 +261,26 @@ export class AttributeParser {
           (a.statics === b.statics && (a.dynamics > b.dynamics ||
           (a.dynamics === b.dynamics && a.symbols > b.symbols)))
         ) {
-          best = { pat, parts };
+          best = { pat, parts: match.parts, spans: match.spans };
         }
       }
     }
 
     if (!best) {
       // No pattern matched: identity (target === rawName, no command)
-      return new AttrSyntax(name, value, name, null, null);
+      return {
+        syntax: new AttrSyntax(name, value, name, null, null),
+        config: null,
+        partSpans: null,
+      };
     }
 
     this._cache.set(name, best);
-    return interpretConfig(best.pat.config, name, value, best.parts);
+    return {
+      syntax: interpretConfig(best.pat.config, name, value, best.parts),
+      config: best.pat.config,
+      partSpans: best.spans,
+    };
   }
 }
 
@@ -268,4 +308,120 @@ export function createAttributeParserFromRegistry(registry: TemplateSyntaxRegist
   const parser = new AttributeParser();
   parser.registerPatterns(registry.attributePatterns);
   return parser;
+}
+
+export function analyzeAttributeName(
+  name: string,
+  registry: TemplateSyntaxRegistry,
+  parser?: AttributeParser,
+): AttributeNameAnalysis {
+  const attrParser = parser ?? createAttributeParserFromRegistry(registry);
+  const { syntax, config, partSpans } = attrParser.parseWithConfig(name, "");
+  const targetSpan = resolveTargetSpan(config, partSpans);
+  const commandSpan = resolveCommandSpan(config, partSpans, syntax.command, name);
+  return {
+    syntax,
+    pattern: config,
+    partSpans,
+    targetSpan,
+    commandSpan,
+  };
+}
+
+function resolveTargetSpan(
+  config: AttributePatternConfig | null,
+  partSpans: readonly AttrPartSpan[] | null,
+): TextSpan | null {
+  if (!config || !partSpans || partSpans.length === 0) return null;
+  switch (config.interpret.kind) {
+    case "target-command": {
+      if (partSpans.length < 2) return null;
+      return spanFromParts(partSpans, 0, partSpans.length - 2);
+    }
+    case "fixed-command":
+    case "mapped-fixed-command":
+    case "event-modifier":
+      return spanFromParts(partSpans, 0, 0);
+    case "fixed":
+      return null;
+  }
+  return null;
+}
+
+function resolveCommandSpan(
+  config: AttributePatternConfig | null,
+  partSpans: readonly AttrPartSpan[] | null,
+  command: string | null,
+  rawName: string,
+): AttrCommandSpan | null {
+  if (!config || !command) return null;
+  switch (config.interpret.kind) {
+    case "target-command": {
+      if (!partSpans || partSpans.length < 2) return null;
+      const last = partSpans[partSpans.length - 1]!;
+      return { start: last.start, end: last.end, kind: "text" };
+    }
+    case "fixed-command": {
+      const symbol = leadingSymbol(config.pattern, config.symbols);
+      if (symbol && rawName.startsWith(symbol)) {
+        return { start: 0, end: symbol.length, kind: "symbol" };
+      }
+      return findCommandSpan(rawName, command, 0);
+    }
+    case "mapped-fixed-command": {
+      const minIndex = partSpans?.[0]?.end ?? 0;
+      return findCommandSpan(rawName, command, minIndex);
+    }
+    case "event-modifier": {
+      if (config.interpret.injectCommand) {
+        const symbol = leadingSymbol(config.pattern, config.symbols);
+        if (symbol && rawName.startsWith(symbol)) {
+          return { start: 0, end: symbol.length, kind: "symbol" };
+        }
+        return findCommandSpan(rawName, command, 0);
+      }
+      if (partSpans && partSpans.length > 1) {
+        const first = partSpans[0];
+        const last = partSpans[partSpans.length - 1];
+        if (!first || !last) return findCommandSpan(rawName, command, 0);
+        const start = first.end;
+        const end = last.start;
+        const idx = rawName.indexOf(command, start);
+        if (idx >= 0 && idx + command.length <= end) {
+          return { start: idx, end: idx + command.length, kind: "text" };
+        }
+      }
+      return findCommandSpan(rawName, command, 0);
+    }
+    case "fixed":
+      return findCommandSpan(rawName, command, 0);
+  }
+  return null;
+}
+
+function spanFromParts(parts: readonly AttrPartSpan[], startIndex: number, endIndex: number): TextSpan | null {
+  if (startIndex < 0 || endIndex < startIndex || endIndex >= parts.length) return null;
+  const start = parts[startIndex]!.start;
+  const end = parts[endIndex]!.end;
+  return { start, end };
+}
+
+function leadingSymbol(pattern: string, symbols: string): string | null {
+  const partIndex = pattern.indexOf("PART");
+  if (partIndex <= 0) return null;
+  const prefix = pattern.slice(0, partIndex);
+  if (!prefix) return null;
+  if (symbols) {
+    for (let i = 0; i < prefix.length; i += 1) {
+      if (!symbols.includes(prefix[i]!)) return null;
+    }
+  }
+  return prefix;
+}
+
+function findCommandSpan(rawName: string, command: string, minIndex: number): AttrCommandSpan | null {
+  if (!command) return null;
+  const idx = rawName.lastIndexOf(command);
+  if (idx < minIndex) return null;
+  return { start: idx, end: idx + command.length, kind: "text" };
 }

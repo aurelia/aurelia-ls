@@ -318,9 +318,13 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     run(ctx) {
       const linked = ctx.require("20-resolve");
       const scope = ctx.require("30-bind");
+      const { syntax } = resolveSemanticsInputs(ctx.options);
+      const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(syntax);
       const aotOpts: AotPlanOptions = {
         templateFilePath: ctx.options.templateFilePath,
         includeLocations: ctx.options.aot?.includeLocations ?? false,
+        syntax,
+        attrParser,
       };
       return planAot(linked, scope, aotOpts);
     },

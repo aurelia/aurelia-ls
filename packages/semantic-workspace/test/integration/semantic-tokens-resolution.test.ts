@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolve } from "@aurelia-ls/resolution";
 import {
+  buildTemplateSyntaxRegistry,
   compileTemplate,
   DEFAULT_SEMANTICS,
   materializeSemanticsForScope,
@@ -100,7 +101,8 @@ function sliceToken(text: string, token: { span: { start: number; end: number } 
 
 function elementTokens(markup: string, semantics: SemanticsWithCaches) {
   const compilation = compileTemplateForSemanticTokens(markup, semantics);
-  return collectSemanticTokens(markup, compilation)
+  const syntax = buildTemplateSyntaxRegistry(semantics);
+  return collectSemanticTokens(markup, compilation, syntax)
     .filter((token) => token.type === "aureliaElement");
 }
 

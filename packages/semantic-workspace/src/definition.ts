@@ -1,4 +1,5 @@
 import {
+  analyzeAttributeName,
   canonicalDocumentUri,
   normalizePathForId,
   spanContainsOffset,
@@ -15,7 +16,9 @@ import {
   type SourceSpan,
   type SymbolId,
   type TemplateCompilation,
+  type AttributeParser,
   type DocumentUri,
+  type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
 import type { ResolutionResult } from "@aurelia-ls/resolution";
 import type { WorkspaceLocation } from "./types.js";
@@ -33,7 +36,10 @@ type ResourceDefinitionEntry = {
   readonly symbolId?: SymbolId;
 };
 
-type BindingCommands = Readonly<Record<string, unknown>>;
+type AttributeSyntaxContext = {
+  syntax: TemplateSyntaxRegistry;
+  parser: AttributeParser;
+};
 
 export function buildResourceDefinitionIndex(resolution: ResolutionResult): ResourceDefinitionIndex {
   const symbols = buildSymbolIdMap(resolution);
@@ -90,12 +96,12 @@ export function collectTemplateDefinitions(options: {
   text: string;
   offset: number;
   resources: ResourceDefinitionIndex;
-  bindingCommands?: BindingCommands | null;
+  syntax: AttributeSyntaxContext;
   preferRoots?: readonly string[] | null;
   documentUri?: DocumentUri | null;
 }): WorkspaceLocation[] {
   const { compilation, text, offset, resources } = options;
-  const bindingCommands = options.bindingCommands ?? {};
+  const syntax = options.syntax;
   const preferRoots = normalizeRoots(options.preferRoots ?? []);
   const results: WorkspaceLocation[] = [];
 
@@ -124,7 +130,7 @@ export function collectTemplateDefinitions(options: {
       attrName,
       hostTag: hit.hostTag,
       hostKind: hit.hostKind,
-      bindingCommands,
+      syntax,
       preferRoots,
     });
     if (defs.length) results.push(...defs);
@@ -289,7 +295,7 @@ function definitionsForInstruction(
     attrName: string;
     hostTag?: string;
     hostKind?: "custom" | "native" | "none";
-    bindingCommands: BindingCommands;
+    syntax: AttributeSyntaxContext;
     preferRoots: readonly string[];
   },
 ): WorkspaceLocation[] {
@@ -301,7 +307,7 @@ function definitionsForInstruction(
         const location = entry ? resourceLocation(entry) : null;
         return location ? [location] : [];
       }
-      const fallback = attributeBaseName(ctx.attrName, ctx.bindingCommands);
+      const fallback = attributeTargetName(ctx.attrName, ctx.syntax);
       if (!fallback) return [];
       const entry = findEntry(resources.attributes, fallback, null, ctx.preferRoots);
       const location = entry ? resourceLocation(entry) : null;
@@ -309,7 +315,7 @@ function definitionsForInstruction(
     }
     case "hydrateTemplateController": {
       const entry = findEntry(resources.controllers, instruction.res, null, ctx.preferRoots)
-        ?? findEntry(resources.controllers, attributeBaseName(ctx.attrName, ctx.bindingCommands) ?? "", null, ctx.preferRoots);
+        ?? findEntry(resources.controllers, attributeTargetName(ctx.attrName, ctx.syntax) ?? "", null, ctx.preferRoots);
       const location = entry ? resourceLocation(entry) : null;
       return location ? [location] : [];
     }
@@ -505,14 +511,16 @@ function pickPreferredEntry(
   return matches[0] ?? null;
 }
 
-function attributeBaseName(attrName: string | null, bindingCommands: BindingCommands): string | null {
+function attributeTargetName(attrName: string | null, syntax: AttributeSyntaxContext): string | null {
   if (!attrName) return null;
-  if (attrName.startsWith(":") || attrName.startsWith("@")) return attrName;
-  const parts = attrName.split(".");
-  if (parts.length < 2) return attrName;
-  const command = parts[parts.length - 1];
-  if (!command) return attrName;
-  return bindingCommands[command] ? parts.slice(0, -1).join(".") : attrName;
+  const analysis = analyzeAttributeName(attrName, syntax.syntax, syntax.parser);
+  if (analysis.targetSpan) {
+    return attrName.slice(analysis.targetSpan.start, analysis.targetSpan.end);
+  }
+  const target = analysis.syntax.target?.trim();
+  if (target && attrName.includes(target)) return target;
+  if (analysis.syntax.command) return null;
+  return attrName;
 }
 
 function looksLikeCustomElementTag(tag: string): boolean {

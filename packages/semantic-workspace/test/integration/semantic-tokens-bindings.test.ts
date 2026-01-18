@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { compileTemplate, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { buildTemplateSyntaxRegistry, compileTemplate, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 import { collectSemanticTokens } from "../../src/semantic-tokens.js";
 
 /* ===========================
@@ -35,13 +35,17 @@ function createVmReflection() {
 const VM = createVmReflection();
 
 function compileForTokens(markup: string) {
-  return compileTemplate({
-    html: markup,
-    templateFilePath: "test.html",
-    isJs: false,
-    vm: VM,
-    semantics: DEFAULT_SEMANTICS,
-  });
+  const syntax = buildTemplateSyntaxRegistry(DEFAULT_SEMANTICS);
+  return {
+    compilation: compileTemplate({
+      html: markup,
+      templateFilePath: "test.html",
+      isJs: false,
+      vm: VM,
+      semantics: DEFAULT_SEMANTICS,
+    }),
+    syntax,
+  };
 }
 
 function offsetToLineChar(text: string, offset: number): { line: number; char: number } {
@@ -81,17 +85,17 @@ function toRawTokens(tokens: { span: { start: number; end: number }; type: strin
 }
 
 function getBindingTokens(markup: string, tokenText?: string): { tokens: RawToken[]; text: string } {
-  const compilation = compileForTokens(markup);
+  const { compilation, syntax } = compileForTokens(markup);
   const text = tokenText ?? markup;
-  const tokens = collectSemanticTokens(text, compilation)
+  const tokens = collectSemanticTokens(text, compilation, syntax)
     .filter((token) => token.type === "aureliaCommand" || token.type === "aureliaController");
   return { tokens: toRawTokens(tokens, text), text };
 }
 
 function getInterpolationTokens(markup: string, tokenText?: string): { tokens: RawToken[]; text: string } {
-  const compilation = compileForTokens(markup);
+  const { compilation, syntax } = compileForTokens(markup);
   const text = tokenText ?? markup;
-  const tokens = collectSemanticTokens(text, compilation)
+  const tokens = collectSemanticTokens(text, compilation, syntax)
     .filter((token) => token.type === "aureliaExpression");
   return { tokens: toRawTokens(tokens, text), text };
 }

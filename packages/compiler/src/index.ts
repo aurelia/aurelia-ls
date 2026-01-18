@@ -25,12 +25,13 @@ export {
   TokenType,
   splitInterpolationText,
   AttrSyntax,
+  analyzeAttributeName,
   AttributeParser,
   createDefaultSyntax,
   createAttributeParserFromRegistry,
   registerBuiltins,
 } from "./parsing/index.js";
-export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
+export type { AttrCommandSpan, AttrPartSpan, AttributeNameAnalysis, ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
 
 // === Language / Semantics ===
 export {

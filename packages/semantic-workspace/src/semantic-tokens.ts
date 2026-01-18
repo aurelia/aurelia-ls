@@ -1,4 +1,5 @@
 import type {
+  AttributeParser,
   DOMNode,
   ElementNode,
   ExprTableEntry,
@@ -8,7 +9,9 @@ import type {
   SourceSpan,
   TemplateCompilation,
   TemplateMetaIR,
+  TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
+import { analyzeAttributeName, createAttributeParserFromRegistry } from "@aurelia-ls/compiler";
 import type { WorkspaceToken } from "./types.js";
 
 const AURELIA_BUILTINS = new Set([
@@ -51,14 +54,17 @@ type ExpressionAst = {
 export function collectSemanticTokens(
   text: string,
   compilation: TemplateCompilation,
+  syntax: TemplateSyntaxRegistry,
+  attrParser?: AttributeParser,
 ): WorkspaceToken[] {
   const template = compilation.linked.templates[0];
   if (!template) return [];
+  const parser = attrParser ?? createAttributeParserFromRegistry(syntax);
 
   const nodeMap = buildNodeMap(template.dom);
   const elementTokens = extractElementTokens(text, template.rows, nodeMap);
   const exprTokens = extractExpressionTokens(text, compilation.exprTable ?? [], compilation.exprSpans ?? new Map());
-  const commandTokens = extractBindingCommandTokens(text, template.rows);
+  const commandTokens = extractBindingCommandTokens(text, template.rows, syntax, parser);
   const delimiterTokens = extractInterpolationDelimiterTokens(text, template.rows);
   const metaTokens = extractMetaElementTokens(text, template.templateMeta);
 
@@ -475,17 +481,28 @@ type InstructionLike =
       def?: { rows?: { instructions: unknown[] }[] };
     };
 
-function extractBindingCommandTokens(text: string, rows: LinkedRow[]): WorkspaceToken[] {
+function extractBindingCommandTokens(
+  text: string,
+  rows: LinkedRow[],
+  syntax: TemplateSyntaxRegistry,
+  parser: AttributeParser,
+): WorkspaceToken[] {
   const tokens: WorkspaceToken[] = [];
   for (const row of rows) {
     for (const ins of row.instructions) {
-      extractBindingTokensFromIR(ins, text, tokens);
+      extractBindingTokensFromIR(ins, text, tokens, syntax, parser);
     }
   }
   return tokens;
 }
 
-function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: WorkspaceToken[]): void {
+function extractBindingTokensFromIR(
+  ins: InstructionLike,
+  text: string,
+  tokens: WorkspaceToken[],
+  syntax: TemplateSyntaxRegistry,
+  parser: AttributeParser,
+): void {
   const kind = instructionKind(ins);
   if (!kind) return;
 
@@ -493,7 +510,7 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
     const nested = "instructions" in ins ? ins.instructions : undefined;
     if (Array.isArray(nested)) {
       for (const letIns of nested) {
-        extractBindingTokensFromIR(letIns as InstructionLike, text, tokens);
+        extractBindingTokensFromIR(letIns as InstructionLike, text, tokens, syntax, parser);
       }
     }
     return;
@@ -505,6 +522,9 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
   const attrInfo = getAttributeNameInfo(text, loc);
   if (!attrInfo) return;
   const { attrName, nameStart } = attrInfo;
+  const analysis = analyzeAttributeName(attrName, syntax, parser);
+  const commandSpan = analysis.commandSpan;
+  const targetSpan = resolveTargetSpan(attrName, analysis);
 
   const targetKind = "target" in ins ? ins.target?.kind ?? null : null;
   const isElementBindable = targetKind === "element.bindable";
@@ -521,16 +541,15 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
       });
     }
 
-    const cmdInfo = findBindingCommandInAttr(attrName);
-    if (cmdInfo && cmdInfo.command !== res) {
-      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+    if (commandSpan && analysis.syntax.command && analysis.syntax.command !== res) {
+      emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
     }
 
     const nestedRows = nestedInstructionRows(ins);
     if (nestedRows) {
       for (const row of nestedRows) {
         for (const nestedIns of row.instructions) {
-          extractBindingTokensFromIR(nestedIns as InstructionLike, text, tokens);
+          extractBindingTokensFromIR(nestedIns as InstructionLike, text, tokens, syntax, parser);
         }
       }
     }
@@ -540,49 +559,36 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
   if (kind === "hydrateAttribute") {
     const res = instructionResName(hasRes(ins) ? ins.res : null);
     if (!res) return;
-    const cmdInfo = findBindingCommandInAttr(attrName);
-    if (cmdInfo) {
-      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+    if (commandSpan) {
+      emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
     }
-    const base = attributeBaseName(attrName, cmdInfo);
-    if (base) {
-      const start = nameStart + base.offset;
+    if (targetSpan) {
+      const start = nameStart + targetSpan.start;
       tokens.push({
         type: "aureliaAttribute",
-        span: sliceSpan(start, start + base.name.length, loc),
+        span: sliceSpan(start, start + (targetSpan.end - targetSpan.start), loc),
       });
     }
     return;
   }
 
   if (kind === "letBinding") {
-    const cmdInfo = findBindingCommandInAttr(attrName);
-    const base = attributeBaseName(attrName, cmdInfo);
-    if (base) {
+    if (targetSpan) {
       tokens.push({
         type: "variable",
         modifiers: ["declaration"],
-        span: sliceSpan(nameStart + base.offset, nameStart + base.offset + base.name.length, loc),
+        span: sliceSpan(nameStart + targetSpan.start, nameStart + targetSpan.end, loc),
       });
     }
-    if (attrName.startsWith(":")) {
-      emitCommandToken(nameStart, 1, loc, tokens);
-      return;
-    }
-    if (cmdInfo) {
-      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+    if (commandSpan) {
+      emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
     }
     return;
   }
 
   if (kind === "refBinding") {
-    if (attrName === "ref") {
-      emitCommandToken(nameStart, 3, loc, tokens);
-    } else {
-      const cmdInfo = findBindingCommandInAttr(attrName);
-      if (cmdInfo) {
-        emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
-      }
+    if (commandSpan) {
+      emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
     }
     return;
   }
@@ -608,7 +614,7 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
     const props = "props" in ins ? ins.props : undefined;
     if (Array.isArray(props)) {
       for (const prop of props) {
-        extractBindingTokensFromIR(prop as InstructionLike, text, tokens);
+        extractBindingTokensFromIR(prop as InstructionLike, text, tokens, syntax, parser);
       }
     }
     return;
@@ -616,34 +622,23 @@ function extractBindingTokensFromIR(ins: InstructionLike, text: string, tokens: 
 
   if (kind === "propertyBinding" || kind === "attributeBinding" ||
       kind === "stylePropertyBinding" || kind === "setProperty") {
-    const cmdInfo = findBindingCommandInAttr(attrName);
     if (isElementBindable) {
-      const base = attributeBaseName(attrName, cmdInfo);
-      if (base) {
+      if (targetSpan) {
         tokens.push({
           type: "aureliaBindable",
-          span: sliceSpan(nameStart + base.offset, nameStart + base.offset + base.name.length, loc),
+          span: sliceSpan(nameStart + targetSpan.start, nameStart + targetSpan.end, loc),
         });
       }
     }
-    if (attrName.startsWith(":")) {
-      emitCommandToken(nameStart, 1, loc, tokens);
-      return;
-    }
-    if (cmdInfo) {
-      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+    if (commandSpan) {
+      emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
     }
     return;
   }
 
   if (kind === "listenerBinding") {
-    if (attrName.startsWith("@")) {
-      emitCommandToken(nameStart, 1, loc, tokens);
-      return;
-    }
-    const cmdInfo = findBindingCommandInAttr(attrName);
-    if (cmdInfo) {
-      emitCommandToken(nameStart + cmdInfo.position, cmdInfo.command.length, loc, tokens);
+    if (commandSpan) {
+      emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
     }
   }
 }
@@ -853,19 +848,6 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
   return tokens;
 }
 
-function findBindingCommandInAttr(attrName: string): { command: string; position: number } | null {
-  const parts = attrName.split(".");
-  let position = 0;
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]!;
-    if (i > 0 && BINDING_COMMANDS.has(part)) {
-      return { command: part, position };
-    }
-    position += part.length + 1;
-  }
-  return null;
-}
-
 function findPropertyStart(text: string, span: SourceSpan, name: string): number {
   const slice = text.slice(span.start, span.end);
   const idx = slice.lastIndexOf(`.${name}`);
@@ -896,25 +878,6 @@ function tokenKey(token: WorkspaceToken): string {
   return `${token.type}:${token.span.start}:${token.span.end}:${mods}`;
 }
 
-const BINDING_COMMANDS = new Set([
-  "bind",
-  "two-way",
-  "from-view",
-  "to-view",
-  "one-time",
-  "one-way",
-  "trigger",
-  "delegate",
-  "capture",
-  "call",
-  "ref",
-  "for",
-  "as-element",
-  "spread",
-  "attr",
-  "style",
-]);
-
 function getAttributeNameInfo(
   text: string,
   loc: SourceSpan,
@@ -928,24 +891,14 @@ function getAttributeNameInfo(
   return { attrName, nameStart: loc.start + whitespaceOffset };
 }
 
-function attributeBaseName(
+function resolveTargetSpan(
   attrName: string,
-  cmdInfo: { command: string; position: number } | null,
-): { name: string; offset: number } | null {
-  let name = attrName;
-  if (cmdInfo) {
-    const sepIndex = cmdInfo.position - 1;
-    const baseEnd = sepIndex >= 0 && attrName[sepIndex] === "." ? sepIndex : cmdInfo.position;
-    name = attrName.slice(0, baseEnd);
-  }
-  if (!name) return null;
-  let offset = 0;
-  if (name.startsWith(":") || name.startsWith("@")) {
-    name = name.slice(1);
-    offset = 1;
-  }
-  if (!name) return null;
-  return { name, offset };
+  analysis: ReturnType<typeof analyzeAttributeName>,
+): { start: number; end: number } | null {
+  if (analysis.targetSpan) return analysis.targetSpan;
+  if (analysis.syntax.command) return null;
+  if (!attrName) return null;
+  return { start: 0, end: attrName.length };
 }
 
 function findMetaAttributeName(

@@ -1,13 +1,16 @@
 import {
+  analyzeAttributeName,
+  createAttributeParserFromRegistry,
   debug,
   isDebugEnabled,
-  type BindingCommandConfig,
+  type AttributeParser,
   type ExprId,
   type LinkedInstruction,
   type LinkedRow,
   type NodeId,
   type SourceSpan,
   type TemplateCompilation,
+  type TemplateSyntaxRegistry,
   spanContainsOffset,
   spanLength,
 } from "@aurelia-ls/compiler";
@@ -19,16 +22,16 @@ export interface TemplateHoverDetails {
   readonly nodeId?: NodeId;
 }
 
-type BindingCommands = Readonly<Record<string, BindingCommandConfig>>;
-
 export function collectTemplateHover(options: {
   compilation: TemplateCompilation;
   text: string;
   offset: number;
-  bindingCommands?: BindingCommands | null;
+  syntax?: TemplateSyntaxRegistry | null;
+  attrParser?: AttributeParser;
 }): TemplateHoverDetails | null {
   const { compilation, text, offset } = options;
-  const bindingCommands = options.bindingCommands ?? {};
+  const syntax = options.syntax ?? null;
+  const attrParser = syntax ? (options.attrParser ?? createAttributeParserFromRegistry(syntax)) : null;
   const debugEnabled = isDebugEnabled("workspace");
   if (debugEnabled) {
     const previewStart = Math.max(0, offset - 40);
@@ -36,7 +39,7 @@ export function collectTemplateHover(options: {
     debug.workspace("hover.start", {
       offset,
       preview: text.slice(previewStart, previewEnd),
-      bindingCommandCount: Object.keys(bindingCommands).length,
+      bindingCommandCount: Object.keys(syntax?.bindingCommands ?? {}).length,
       templateCount: compilation.linked.templates.length,
       exprTableCount: compilation.exprTable.length,
     });
@@ -136,7 +139,8 @@ export function collectTemplateHover(options: {
       applyInstructionHover(hit.instruction, hit.loc, {
         text,
         addLine,
-        bindingCommands,
+        syntax,
+        attrParser,
         hostTag: hit.hostTag,
         hostKind: hit.hostKind,
         debugEnabled,
@@ -145,7 +149,7 @@ export function collectTemplateHover(options: {
 
     if (primary) {
       const attrName = readAttributeName(text, primary.loc);
-      const command = attrName ? commandFromAttribute(attrName, bindingCommands) : null;
+      const command = attrName ? commandFromAttribute(attrName, syntax, attrParser) : null;
       if (command) addLine("Binding Command", command);
     }
   }
@@ -255,12 +259,18 @@ function applyInstructionHover(
   ctx: {
     text: string;
     addLine: (label: string, value: string) => void;
-    bindingCommands: BindingCommands;
+    syntax: TemplateSyntaxRegistry | null;
+    attrParser: AttributeParser | null;
     hostTag?: string;
     hostKind?: "custom" | "native" | "none";
     debugEnabled?: boolean;
   },
 ): void {
+  const attrName = readAttributeName(ctx.text, loc);
+  const analysis = attrName && ctx.syntax && ctx.attrParser
+    ? analyzeAttributeName(attrName, ctx.syntax, ctx.attrParser)
+    : null;
+
   switch (instruction.kind) {
     case "hydrateAttribute": {
       const resolvedName = instruction.res?.def.name ?? null;
@@ -268,8 +278,7 @@ function applyInstructionHover(
         ctx.addLine("Custom Attribute", resolvedName);
         break;
       }
-      const attrName = readAttributeName(ctx.text, loc);
-      const fallbackName = attributeBaseName(attrName, ctx.bindingCommands);
+      const fallbackName = attributeTargetName(attrName, analysis);
       if (fallbackName && ctx.debugEnabled) {
         debug.workspace("hover.fallback.custom-attribute", {
           attrName,
@@ -310,7 +319,6 @@ function applyInstructionHover(
       break;
   }
 
-  const attrName = readAttributeName(ctx.text, loc);
   if (!attrName) return;
   if (instruction.kind === "setAttribute" || instruction.kind === "attributeBinding") {
     ctx.addLine("Attribute", attrName);
@@ -367,24 +375,30 @@ function readAttributeName(text: string, loc: SourceSpan): string | null {
   return name.length ? name : null;
 }
 
-function attributeBaseName(attrName: string | null, bindingCommands: BindingCommands): string | null {
+function attributeTargetName(
+  attrName: string | null,
+  analysis: ReturnType<typeof analyzeAttributeName> | null,
+): string | null {
   if (!attrName) return null;
-  if (attrName.startsWith(":") || attrName.startsWith("@")) return attrName;
-  const parts = attrName.split(".");
-  if (parts.length < 2) return attrName;
-  const command = parts[parts.length - 1];
-  if (!command) return attrName;
-  return bindingCommands[command] ? parts.slice(0, -1).join(".") : attrName;
+  if (!analysis) return attrName;
+  if (analysis.targetSpan) {
+    return attrName.slice(analysis.targetSpan.start, analysis.targetSpan.end);
+  }
+  const target = analysis.syntax.target?.trim();
+  if (target && attrName.includes(target)) return target;
+  if (analysis.syntax.command) return null;
+  return attrName;
 }
 
-function commandFromAttribute(attrName: string, bindingCommands: BindingCommands): string | null {
-  if (attrName.startsWith(":") && bindingCommands["bind"]) return "bind";
-  if (attrName.startsWith("@") && bindingCommands["trigger"]) return "trigger";
-  const parts = attrName.split(".");
-  if (parts.length < 2) return null;
-  const command = parts[parts.length - 1];
-  if (!command) return null;
-  return bindingCommands[command] ? command : null;
+function commandFromAttribute(
+  attrName: string,
+  syntax: TemplateSyntaxRegistry | null,
+  attrParser: AttributeParser | null,
+): string | null {
+  if (!syntax || !attrParser) return null;
+  const analysis = analyzeAttributeName(attrName, syntax, attrParser);
+  if (!analysis.commandSpan) return null;
+  return analysis.syntax.command ?? null;
 }
 
 type ExpressionAst = {

@@ -828,6 +828,8 @@ export interface AotMappingEntry {
  * PLANNING OPTIONS
  * ============================================================================= */
 
+import type { TemplateSyntaxRegistry } from "../../language/index.js";
+import type { AttributeParser } from "../../parsing/index.js";
 import type { CompileTrace } from "../../shared/index.js";
 
 /**
@@ -839,6 +841,12 @@ export interface AotPlanOptions {
 
   /** Include source locations in plan nodes */
   includeLocations?: boolean;
+
+  /** Optional syntax registry (for binding attribute detection) */
+  syntax?: TemplateSyntaxRegistry;
+
+  /** Optional attribute parser (pre-configured with syntax patterns) */
+  attrParser?: AttributeParser;
 
   /** Optional trace for instrumentation */
   trace?: CompileTrace;

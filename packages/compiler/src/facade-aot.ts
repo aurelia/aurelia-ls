@@ -189,6 +189,8 @@ export function compileAot(
     const plan = planAot(linked, scoped, {
       templateFilePath: templatePath,
       trace,
+      syntax,
+      attrParser,
     });
     trace.event("compiler.aot.plan.done");
 
