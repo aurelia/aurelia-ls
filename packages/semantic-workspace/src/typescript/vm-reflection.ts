@@ -21,6 +21,7 @@ function hasSymbolFlag(symbol: ts.Symbol, flag: ts.SymbolFlags): boolean {
 export class VmReflectionService implements VmReflection {
   #activeTemplate: NormalizedPath | null = null;
   #lastDisplayName = "unknown";
+  #displayTemplate: NormalizedPath | null = null;
 
   constructor(
     private readonly ts: TsService,
@@ -30,6 +31,10 @@ export class VmReflectionService implements VmReflection {
 
   setActiveTemplate(templatePath: string | NormalizedPath | null): void {
     this.#activeTemplate = templatePath ? this.paths.canonical(templatePath) : null;
+    if (!this.#activeTemplate) {
+      this.#lastDisplayName = "unknown";
+      this.#displayTemplate = null;
+    }
   }
 
   getRootVmTypeExpr(): string {
@@ -41,6 +46,9 @@ export class VmReflectionService implements VmReflection {
   }
 
   getDisplayName(): string {
+    if (this.#activeTemplate && this.#displayTemplate !== this.#activeTemplate) {
+      this.#computeVmInstanceTypeExpr();
+    }
     return this.#lastDisplayName;
   }
 
@@ -50,6 +58,7 @@ export class VmReflectionService implements VmReflection {
 
   #computeVmInstanceTypeExpr(): string | null {
     if (!this.#activeTemplate) return null;
+    this.#displayTemplate = this.#activeTemplate;
     const companion = this.#findCompanionVm(this.#activeTemplate);
     if (!companion) return null;
 
