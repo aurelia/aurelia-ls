@@ -490,10 +490,45 @@ export interface RegistrationPlan {
 }
 
 export interface StyleProfile {
-  readonly name?: string;
-  readonly template?: Readonly<Record<string, string | number | boolean>>;
-  readonly naming?: Readonly<Record<string, string>>;
-  readonly aliases?: Readonly<Record<string, string | boolean>>;
+  readonly naming?: {
+    readonly element?: "convention" | "kebab" | "pascal" | "preserve";
+    readonly attribute?: "convention" | "kebab" | "camel" | "preserve";
+    readonly bindableProperty?: "camel" | "preserve";
+    readonly converter?: "kebab" | "camel" | "preserve";
+    readonly behavior?: "kebab" | "camel" | "preserve";
+    readonly controller?: "kebab" | "preserve";
+  };
+  readonly shorthand?: {
+    readonly prefer?: "registry-default" | "always" | "never";
+    readonly collapseSameName?: boolean;
+    readonly preserveCommandAliases?: boolean;
+  };
+  readonly imports?: {
+    readonly addWhenMissing?: "always" | "prompt";
+    readonly organize?: "preserve" | "sort" | "group";
+    readonly aliasStyle?: "preserve" | "kebab" | "camel";
+    readonly preferLocal?: boolean;
+  };
+  readonly refactors?: {
+    readonly renameStyle?: "preserve" | "attribute" | "property";
+    readonly updateTemplateAliases?: "preserve" | "normalize";
+    readonly updateCommandAliases?: "preserve" | "normalize";
+  };
+  readonly completion?: {
+    readonly insertShorthand?: "registry-default" | "always" | "never";
+    readonly insertCommandAliases?: "registry-default" | "preserve";
+    readonly includeEnumLiterals?: boolean;
+    readonly includeLiteralAttributes?: boolean;
+  };
+  readonly formatting?: {
+    readonly quoteStyle?: "double" | "single" | "preserve";
+    readonly multiBindingSeparator?: ";" | "preserve";
+    readonly whitespace?: "preserve";
+  };
+  readonly diagnostics?: {
+    readonly preferAttributeName?: "preserve" | "kebab" | "camel";
+    readonly suggestShorthand?: "on" | "off";
+  };
 }
 
 export interface SemanticSymbolSnapshot {

@@ -2,11 +2,12 @@ import type {
   DocumentUri,
   NormalizedPath,
   ResourceScopeId,
+  StyleProfile,
   TypeScriptServices,
   VmReflection,
 } from "@aurelia-ls/compiler";
 import type { ResolutionConfig, ResolutionResult, Logger as ResolutionLogger } from "@aurelia-ls/resolution";
-import type { SemanticWorkspaceEngine } from "@aurelia-ls/semantic-workspace";
+import type { SemanticWorkspaceEngine, RefactorOverrides } from "@aurelia-ls/semantic-workspace";
 import type { FixtureDescriptor, FixtureId } from "../fixtures/types.js";
 
 export type TemplateOpenMode = "none" | "external" | "all";
@@ -30,6 +31,8 @@ export interface WorkspaceHarnessOptions {
     readonly vm?: VmReflection;
     readonly isJs?: boolean;
     readonly typescript?: TypeScriptServices | false;
+    readonly styleProfile?: StyleProfile;
+    readonly refactorOverrides?: RefactorOverrides;
   };
 }
 

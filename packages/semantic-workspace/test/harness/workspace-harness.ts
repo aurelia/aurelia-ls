@@ -59,6 +59,8 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     ...(options.workspace?.vm ? { vm: options.workspace.vm } : {}),
     ...(options.workspace?.typescript !== undefined ? { typescript: options.workspace.typescript } : {}),
     ...(options.workspace?.isJs !== undefined ? { isJs: options.workspace.isJs } : {}),
+    ...(options.workspace?.styleProfile !== undefined ? { styleProfile: options.workspace.styleProfile } : {}),
+    ...(options.workspace?.refactorOverrides !== undefined ? { refactorOverrides: options.workspace.refactorOverrides } : {}),
   });
 
   const resolution = workspace.projectIndex.currentResolution();

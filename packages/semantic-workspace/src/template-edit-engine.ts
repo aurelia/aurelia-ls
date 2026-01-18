@@ -19,6 +19,7 @@ import {
   type ResourceScopeId,
   type SourceLocation,
   type SourceSpan,
+  type StyleProfile,
   type TemplateCompilation,
   type TemplateIR,
   type TemplateMetaIR,
@@ -36,6 +37,7 @@ import type {
   WorkspaceTextEdit,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
+import { StylePolicy, type RefactorOverrides } from "./style-profile.js";
 
 export interface TemplateIndex {
   readonly templates: readonly TemplateInfo[];
@@ -115,6 +117,7 @@ type CodeActionContext = {
   compilation: TemplateCompilation;
   diagnostics: readonly WorkspaceDiagnostic[];
   syntax: AttributeSyntaxContext;
+  style: StylePolicy;
   templateIndex: TemplateIndex;
   definitionIndex: ResourceDefinitionIndex;
   workspaceRoot: string;
@@ -151,10 +154,19 @@ export interface TemplateEditEngineContext {
   readonly getCompilation: (uri: DocumentUri) => TemplateCompilation | null;
   readonly ensureTemplate: (uri: DocumentUri) => void;
   readonly getAttributeSyntax: () => AttributeSyntaxContext;
+  readonly styleProfile?: StyleProfile | null;
+  readonly refactorOverrides?: RefactorOverrides | null;
 }
 
 export class TemplateEditEngine {
-  constructor(private readonly ctx: TemplateEditEngineContext) {}
+  readonly #style: StylePolicy;
+
+  constructor(private readonly ctx: TemplateEditEngineContext) {
+    this.#style = new StylePolicy({
+      profile: ctx.styleProfile ?? null,
+      refactors: ctx.refactorOverrides ?? null,
+    });
+  }
 
   renameAt(request: WorkspaceRenameRequest): WorkspaceTextEdit[] | null {
     const text = this.ctx.lookupText(request.uri);
@@ -202,6 +214,7 @@ export class TemplateEditEngine {
       compilation,
       diagnostics,
       syntax,
+      style: this.#style,
       templateIndex: this.ctx.templateIndex,
       definitionIndex: this.ctx.definitionIndex,
       workspaceRoot: this.ctx.workspaceRoot,
@@ -233,10 +246,11 @@ export class TemplateEditEngine {
 
     const target: ResourceTarget = { kind: "element", name: res.name, file: res.file ?? null };
     const edits: WorkspaceTextEdit[] = [];
-    this.#collectElementTagEdits(target, newName, edits);
+    const formattedName = this.#style.formatElementName(newName);
+    this.#collectElementTagEdits(target, formattedName, edits);
 
     const entry = findResourceEntry(this.ctx.definitionIndex.elements, target.name, target.file, preferRoots);
-    const nameEdit = entry ? buildResourceNameEdit(entry.def, target.name, newName, this.ctx.lookupText) : null;
+    const nameEdit = entry ? buildResourceNameEdit(entry.def, target.name, formattedName, this.ctx.lookupText) : null;
     if (nameEdit) edits.push(nameEdit);
 
     return edits.length ? edits : null;
@@ -261,10 +275,11 @@ export class TemplateEditEngine {
       if (!target) continue;
 
       const edits: WorkspaceTextEdit[] = [];
-      this.#collectBindableAttributeEdits(target, newName, syntax, edits);
+      const formattedName = this.#style.formatRenameTarget(newName);
+      this.#collectBindableAttributeEdits(target, formattedName, syntax, edits);
 
       const attrValue = target.bindable.attribute.value ?? target.property;
-      const attrEdit = buildBindableAttributeEdit(target.bindable, attrValue, newName, this.ctx.lookupText);
+      const attrEdit = buildBindableAttributeEdit(target.bindable, attrValue, formattedName, this.ctx.lookupText);
       if (attrEdit) edits.push(attrEdit);
 
       if (!edits.length) return null;
@@ -283,10 +298,11 @@ export class TemplateEditEngine {
     if (!hit) return null;
 
     const edits: WorkspaceTextEdit[] = [];
-    this.#collectConverterEdits(hit.name, newName, edits);
+    const formattedName = this.#style.formatConverterName(newName);
+    this.#collectConverterEdits(hit.name, formattedName, edits);
 
     const entry = findResourceEntry(this.ctx.definitionIndex.valueConverters, hit.name, null, preferRoots);
-    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, newName, this.ctx.lookupText) : null;
+    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, formattedName, this.ctx.lookupText) : null;
     if (nameEdit) edits.push(nameEdit);
 
     return edits.length ? edits : null;
@@ -302,10 +318,11 @@ export class TemplateEditEngine {
     if (!hit) return null;
 
     const edits: WorkspaceTextEdit[] = [];
-    this.#collectBehaviorEdits(hit.name, newName, edits);
+    const formattedName = this.#style.formatBehaviorName(newName);
+    this.#collectBehaviorEdits(hit.name, formattedName, edits);
 
     const entry = findResourceEntry(this.ctx.definitionIndex.bindingBehaviors, hit.name, null, preferRoots);
-    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, newName, this.ctx.lookupText) : null;
+    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, formattedName, this.ctx.lookupText) : null;
     if (nameEdit) edits.push(nameEdit);
 
     return edits.length ? edits : null;
@@ -579,7 +596,7 @@ function buildAddImportAction(
   if (hasImportForFile(meta, targetFile, containingFile, ctx.compilerOptions)) return null;
 
   const insertion = computeImportInsertion(ctx.text, template, meta);
-  const line = `${insertion.indent}<import from="${specifier}"></import>`;
+  const line = `${insertion.indent}<import from=${ctx.style.quote(specifier)}></import>`;
   const edit = buildInsertionEdit(ctx.uri, ctx.text, insertion.offset, line);
   const name = candidate.name;
   const id = `aurelia/add-import:${candidate.kind}:${name}`;
@@ -614,14 +631,15 @@ function buildAddBindableAction(
   const meta = template?.templateMeta ?? null;
   if (!meta) return null;
   const insertion = computeBindableInsertion(templateText, template, meta);
-  const attributePart = candidate.attributeName ? ` attribute="${candidate.attributeName}"` : "";
-  const line = `${insertion.indent}<bindable name="${candidate.propertyName}"${attributePart}></bindable>`;
+  const formatted = ctx.style.formatBindableDeclaration(candidate.propertyName, candidate.attributeName);
+  const attributePart = formatted.attributeName ? ` attribute=${ctx.style.quote(formatted.attributeName)}` : "";
+  const line = `${insertion.indent}<bindable name=${ctx.style.quote(formatted.propertyName)}${attributePart}></bindable>`;
   const edit = buildInsertionEdit(target.uri, templateText, insertion.offset, line);
 
-  const id = `aurelia/add-bindable:${candidate.ownerName}:${candidate.propertyName}`;
+  const id = `aurelia/add-bindable:${candidate.ownerName}:${formatted.propertyName}`;
   return {
     id,
-    title: `Add <bindable> '${candidate.propertyName}' to ${candidate.ownerName}`,
+    title: `Add <bindable> '${formatted.propertyName}' to ${candidate.ownerName}`,
     kind: "quickfix",
     edit: { edits: finalizeWorkspaceEdits([edit]) },
   };

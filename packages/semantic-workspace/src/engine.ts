@@ -21,6 +21,7 @@ import {
   type TemplateSyntaxRegistry,
   type VmReflection,
   type ResourceScopeId,
+  type StyleProfile,
 } from "@aurelia-ls/compiler";
 import {
   createNodeFileSystem,
@@ -54,6 +55,7 @@ import {
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
 import { buildResourceDefinitionIndex, collectTemplateDefinitions, collectTemplateReferences, type ResourceDefinitionIndex } from "./definition.js";
+import type { RefactorOverrides } from "./style-profile.js";
 import {
   TemplateEditEngine,
   attributeCommandName,
@@ -82,6 +84,8 @@ export interface SemanticWorkspaceEngineOptions {
   readonly isJs?: boolean;
   readonly overlayBaseName?: string;
   readonly resourceScope?: ResourceScopeId | null;
+  readonly styleProfile?: StyleProfile | null;
+  readonly refactorOverrides?: RefactorOverrides | null;
 }
 
 export class SemanticWorkspaceEngine implements SemanticWorkspace {
@@ -102,6 +106,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #templateIndex: TemplateIndex;
   #attrParser: AttributeParser | null = null;
   #attrParserSyntax: TemplateSyntaxRegistry | null = null;
+  readonly #styleProfile: StyleProfile | null;
+  readonly #refactorOverrides: RefactorOverrides | null;
 
   constructor(options: SemanticWorkspaceEngineOptions) {
     this.#logger = options.logger;
@@ -134,6 +140,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       : options.typescript ?? this.#env.typescript;
     this.#isJs = options.isJs ?? false;
     this.#overlayBaseName = options.overlayBaseName;
+    this.#styleProfile = options.styleProfile ?? null;
+    this.#refactorOverrides = options.refactorOverrides ?? null;
 
     this.#lookupText = options.lookupText;
     this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
@@ -400,6 +408,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         this.#kernel.ensureFromFile(uri);
       },
       getAttributeSyntax: this.#attributeSyntaxContext.bind(this),
+      styleProfile: this.#styleProfile,
+      refactorOverrides: this.#refactorOverrides,
     });
   }
 
