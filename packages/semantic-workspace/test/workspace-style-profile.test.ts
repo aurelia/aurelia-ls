@@ -127,6 +127,61 @@ describe("workspace style profile (refactors)", () => {
   });
 });
 
+describe("workspace style profile (convention naming)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+  let elementUri: string;
+  let elementText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("rename-cascade-basic"),
+      openTemplates: "none",
+      workspace: {
+        styleProfile: {
+          naming: { element: "convention" },
+        },
+      },
+    });
+    appUri = harness.openTemplate("src/app.html");
+    elementUri = harness.toDocumentUri("src/my-element.ts");
+
+    const app = harness.readText(appUri);
+    const element = harness.readText(elementUri);
+    if (!app || !element) {
+      throw new Error("Expected template text for rename-cascade-basic fixtures");
+    }
+    appText = app;
+    elementText = element;
+  });
+
+  it("applies convention naming rules for element renames", () => {
+    const position = findPosition(appText, "<my-element", 1);
+    const result = harness.workspace.refactor().rename({
+      uri: appUri,
+      position,
+      newName: "XMLParser",
+    });
+
+    if ("error" in result) {
+      throw new Error(`Rename failed: ${result.error.message}`);
+    }
+
+    const edits = result.edit.edits;
+    const openOffsets = findOffsets(appText, /<my-element/g).map((offset) => offset + 1);
+    const closeOffsets = findOffsets(appText, /<\/my-element>/g).map((offset) => offset + 2);
+    expectRenameEditsAtOffsets(edits, appUri, [...openOffsets, ...closeOffsets], "xml-parser");
+
+    const defMarker = 'name: "my-element"';
+    const defOffset = elementText.indexOf(defMarker);
+    if (defOffset < 0) {
+      throw new Error("Expected custom element name in my-element.ts");
+    }
+    expectRenameEditsAtOffsets(edits, elementUri, [defOffset + 'name: "'.length], "xml-parser");
+  });
+});
+
 describe("workspace style profile (rename style)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;

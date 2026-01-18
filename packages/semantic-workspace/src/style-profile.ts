@@ -1,4 +1,10 @@
 import type { StyleProfile } from "@aurelia-ls/compiler";
+import {
+  canonicalAttrName,
+  canonicalElementName,
+  canonicalSimpleName,
+  toKebabCase,
+} from "@aurelia-ls/resolution";
 
 export type RenameStyle = "preserve" | "attribute" | "property";
 
@@ -27,11 +33,15 @@ export class StylePolicy {
   }
 
   formatElementName(name: string): string {
-    return applyNaming(name, this.profile.naming?.element ?? "convention");
+    const style = this.profile.naming?.element ?? "convention";
+    if (style === "convention") return canonicalElementName(name);
+    return applyNaming(name, style);
   }
 
   formatAttributeName(name: string): string {
-    return applyNaming(name, this.profile.naming?.attribute ?? "convention");
+    const style = this.profile.naming?.attribute ?? "convention";
+    if (style === "convention") return canonicalAttrName(name);
+    return applyNaming(name, style);
   }
 
   formatBindablePropertyName(name: string): string {
@@ -41,15 +51,21 @@ export class StylePolicy {
   }
 
   formatConverterName(name: string): string {
-    return applyNaming(name, this.profile.naming?.converter ?? "convention");
+    const style = this.profile.naming?.converter ?? "convention";
+    if (style === "convention") return canonicalSimpleName(name);
+    return applyNaming(name, style);
   }
 
   formatBehaviorName(name: string): string {
-    return applyNaming(name, this.profile.naming?.behavior ?? "convention");
+    const style = this.profile.naming?.behavior ?? "convention";
+    if (style === "convention") return canonicalSimpleName(name);
+    return applyNaming(name, style);
   }
 
   formatControllerName(name: string): string {
-    return applyNaming(name, this.profile.naming?.controller ?? "convention");
+    const style = this.profile.naming?.controller ?? "convention";
+    if (style === "convention") return canonicalElementName(name);
+    return applyNaming(name, style);
   }
 
   formatRenameTarget(name: string): string {
@@ -95,13 +111,6 @@ function applyNaming(
     default:
       return name;
   }
-}
-
-function toKebabCase(value: string): string {
-  const withHyphens = value
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/[_\s]+/g, "-");
-  return withHyphens.replace(/-+/g, "-").toLowerCase();
 }
 
 function toCamelCase(value: string): string {
