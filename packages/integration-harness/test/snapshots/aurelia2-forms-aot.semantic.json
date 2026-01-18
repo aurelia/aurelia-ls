@@ -1461,7 +1461,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 439, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 429 },
           "origin": "source",
           "value": "au-field"
         },
@@ -1823,7 +1823,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 465, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 456 },
           "origin": "source",
           "value": "au-form"
         },

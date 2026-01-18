@@ -1656,7 +1656,7 @@
         "file": "playground/template-imports/src/counter.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 419, "file": "playground/template-imports/src/counter.ts", "pos": 184 },
+          "location": { "end": 208, "file": "playground/template-imports/src/counter.ts", "pos": 199 },
           "origin": "source",
           "value": "counter"
         },

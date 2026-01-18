@@ -1753,7 +1753,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 439, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 429 },
           "origin": "source",
           "value": "au-field"
         },
@@ -1973,7 +1973,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 7054, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+          "location": { "end": 108, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 93 },
           "origin": "source",
           "value": "aurelia-table"
         },
@@ -2101,7 +2101,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 2026, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+          "location": { "end": 204, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 192 },
           "origin": "source",
           "value": "aut-select"
         },
@@ -2192,7 +2192,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 2391, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+          "location": { "end": 183, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 173 },
           "origin": "source",
           "value": "aut-sort"
         },
@@ -2338,7 +2338,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 179, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 169 },
           "origin": "source",
           "value": "outclick"
         },
@@ -2608,7 +2608,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 465, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 456 },
           "origin": "source",
           "value": "au-form"
         },
@@ -3004,7 +3004,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 203, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 187 },
           "origin": "source",
           "value": "aut-pagination"
         },

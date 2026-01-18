@@ -152,10 +152,13 @@ describe("Full Pipeline: explicit-app", () => {
     expect(navBarTemplate.componentPath.endsWith("nav-bar.ts"), "Component path should end with .ts").toBe(true);
     expect(navBarTemplate.scopeId, "nav-bar should be in root scope").toBe("root");
 
-    // Find product-card template (local scope)
+    // Find product-card template (orphan with static dependencies → uses local scope)
     const productCardTemplate = result.templates.find(t => t.resourceName === "product-card");
     expect(productCardTemplate, "Should find product-card template").toBeTruthy();
-    expect(productCardTemplate.scopeId, "product-card is unknown/global scope").toBe("root");
+    // product-card is an orphan but has static dependencies (PriceTag, StockBadge),
+    // so its template must be compiled in its local scope to resolve those elements.
+    expect(productCardTemplate.scopeId.startsWith("local:"), "product-card uses its local scope").toBe(true);
+    expect(productCardTemplate.scopeId.includes("product-card"), "scope includes component path").toBe(true);
 
     // Components with INLINE templates should NOT appear in templates array
     // (price-tag and stock-badge have template: `<template>...` in their decorators)

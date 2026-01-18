@@ -5047,7 +5047,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 873, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "pos": 440 },
+          "location": { "end": 622, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "pos": 616 },
           "origin": "source",
           "value": "attr"
         }
@@ -5067,7 +5067,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/binding-behaviors/debounce.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 622, "file": "packages/resolution/test/apps/explicit-app/src/binding-behaviors/debounce.ts", "pos": 222 },
+          "location": { "end": 249, "file": "packages/resolution/test/apps/explicit-app/src/binding-behaviors/debounce.ts", "pos": 239 },
           "origin": "source",
           "value": "debounce"
         }
@@ -5147,7 +5147,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 794, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "pos": 298 },
+          "location": { "end": 480, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "pos": 474 },
           "origin": "source",
           "value": "self"
         }
@@ -5167,7 +5167,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 1630, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "pos": 529 },
+          "location": { "end": 715, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "pos": 707 },
           "origin": "source",
           "value": "signal"
         }
@@ -5187,7 +5187,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/binding-behaviors/throttle.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 561, "file": "packages/resolution/test/apps/explicit-app/src/binding-behaviors/throttle.ts", "pos": 222 },
+          "location": { "end": 249, "file": "packages/resolution/test/apps/explicit-app/src/binding-behaviors/throttle.ts", "pos": 239 },
           "origin": "source",
           "value": "throttle"
         }
@@ -5277,7 +5277,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 2382, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "pos": 537 },
+          "location": { "end": 737, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "pos": 722 },
           "origin": "source",
           "value": "updatetrigger"
         }
@@ -5321,7 +5321,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 3746, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 439 },
+          "location": { "end": 606, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 599 },
           "origin": "source",
           "value": "focus"
         },
@@ -5396,7 +5396,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/attributes/highlight.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 881, "file": "packages/resolution/test/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
+          "location": { "end": 299, "file": "packages/resolution/test/apps/explicit-app/src/attributes/highlight.ts", "pos": 288 },
           "origin": "source",
           "value": "highlight"
         },
@@ -5527,7 +5527,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 2947, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 438 },
+          "location": { "end": 603, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 597 },
           "origin": "source",
           "value": "show"
         },
@@ -5586,7 +5586,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/attributes/tooltip.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 501, "file": "packages/resolution/test/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+          "location": { "end": 213, "file": "packages/resolution/test/apps/explicit-app/src/attributes/tooltip.ts", "pos": 204 },
           "origin": "source",
           "value": "tooltip"
         },
@@ -5782,7 +5782,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 16714, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 1807 },
+          "location": { "end": 2093, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2081 },
           "origin": "source",
           "value": "au-compose"
         },
@@ -5872,7 +5872,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 11210, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1088 },
+          "location": { "end": 1266, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1257 },
           "origin": "source",
           "value": "au-slot"
         },
@@ -5999,7 +5999,7 @@
           },
           "pageSize": {
             "attribute": {
-              "location": { "end": 565, "file": "packages/resolution/test/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+              "location": { "end": 528, "file": "packages/resolution/test/apps/explicit-app/src/components/data-grid.ts", "pos": 517 },
               "origin": "source",
               "value": "page-size"
             },
@@ -6043,7 +6043,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/components/data-grid.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 672, "file": "packages/resolution/test/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+          "location": { "end": 352, "file": "packages/resolution/test/apps/explicit-app/src/components/data-grid.ts", "pos": 341 },
           "origin": "source",
           "value": "data-grid"
         },
@@ -6171,7 +6171,7 @@
         },
         "kind": "custom-element",
         "name": {
-          "location": { "end": 1047, "file": "packages/resolution/test/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 440, "file": "packages/resolution/test/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 426 },
           "origin": "source",
           "value": "fancy-button"
         },
@@ -6218,7 +6218,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/my-app.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 297, "file": "packages/resolution/test/apps/explicit-app/src/my-app.ts", "pos": 179 },
+          "location": { "end": 213, "file": "packages/resolution/test/apps/explicit-app/src/my-app.ts", "pos": 205 },
           "origin": "source",
           "value": "my-app"
         },
@@ -6265,7 +6265,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/components/nav-bar.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 298, "file": "packages/resolution/test/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
+          "location": { "end": 213, "file": "packages/resolution/test/apps/explicit-app/src/components/nav-bar.ts", "pos": 204 },
           "origin": "source",
           "value": "nav-bar"
         },
@@ -6370,7 +6370,7 @@
         },
         "kind": "custom-element",
         "name": {
-          "location": { "end": 701, "file": "packages/resolution/test/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 350, "file": "packages/resolution/test/apps/explicit-app/src/widgets/price-tag.ts", "pos": 339 },
           "origin": "source",
           "value": "price-tag"
         },
@@ -6522,7 +6522,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/widgets/product-card.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 844, "file": "packages/resolution/test/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
+          "location": { "end": 505, "file": "packages/resolution/test/apps/explicit-app/src/widgets/product-card.ts", "pos": 491 },
           "origin": "source",
           "value": "product-card"
         },
@@ -6568,7 +6568,7 @@
           },
           "inStock": {
             "attribute": {
-              "location": { "end": 567, "file": "packages/resolution/test/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+              "location": { "end": 530, "file": "packages/resolution/test/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 520 },
               "origin": "source",
               "value": "in-stock"
             },
@@ -6617,7 +6617,7 @@
         },
         "kind": "custom-element",
         "name": {
-          "location": { "end": 801, "file": "packages/resolution/test/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 305, "file": "packages/resolution/test/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 292 },
           "origin": "source",
           "value": "stock-badge"
         },
@@ -6744,7 +6744,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/components/user-card.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 676, "file": "packages/resolution/test/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
+          "location": { "end": 364, "file": "packages/resolution/test/apps/explicit-app/src/components/user-card.ts", "pos": 353 },
           "origin": "source",
           "value": "user-card"
         },
@@ -6835,7 +6835,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 11579, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 9861 },
+          "location": { "end": 10049, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 10042 },
           "origin": "source",
           "value": "catch"
         },
@@ -6894,7 +6894,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 7482, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 6593 },
+          "location": { "end": 6764, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 6758 },
           "origin": "source",
           "value": "else"
         },
@@ -6968,7 +6968,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 6591, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 843 },
+          "location": { "end": 1004, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1000 },
           "origin": "source",
           "value": "if"
         },
@@ -7021,7 +7021,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 8122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6473 },
+          "location": { "end": 6662, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6653 },
           "origin": "source",
           "value": "pending"
         },
@@ -7242,7 +7242,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 8706, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 874 },
+          "location": { "end": 1209, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1201 },
           "origin": "source",
           "value": "portal"
         },
@@ -7295,7 +7295,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 6471, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1176 },
+          "location": { "end": 1365, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1356 },
           "origin": "source",
           "value": "promise"
         },
@@ -7348,7 +7348,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 24178, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 1832 },
+          "location": { "end": 2035, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 2027 },
           "origin": "source",
           "value": "repeat"
         },
@@ -7401,7 +7401,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 8464, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1050 },
+          "location": { "end": 1219, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1211 },
           "origin": "source",
           "value": "switch"
         },
@@ -7454,7 +7454,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 9859, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8124 },
+          "location": { "end": 8312, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8306 },
           "origin": "source",
           "value": "then"
         },
@@ -7507,7 +7507,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts",
         "kind": "template-controller",
         "name": {
-          "location": { "end": 3640, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 612 },
+          "location": { "end": 777, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 771 },
           "origin": "source",
           "value": "with"
         },
@@ -7532,7 +7532,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/value-converters/currency.ts",
         "kind": "value-converter",
         "name": {
-          "location": { "end": 725, "file": "packages/resolution/test/apps/explicit-app/src/value-converters/currency.ts", "pos": 127 },
+          "location": { "end": 243, "file": "packages/resolution/test/apps/explicit-app/src/value-converters/currency.ts", "pos": 233 },
           "origin": "source",
           "value": "currency"
         }
@@ -7552,7 +7552,7 @@
         "file": "packages/resolution/test/apps/explicit-app/src/value-converters/date-format.ts",
         "kind": "value-converter",
         "name": {
-          "location": { "end": 898, "file": "packages/resolution/test/apps/explicit-app/src/value-converters/date-format.ts", "pos": 167 },
+          "location": { "end": 189, "file": "packages/resolution/test/apps/explicit-app/src/value-converters/date-format.ts", "pos": 183 },
           "origin": "source",
           "value": "date"
         }
@@ -7572,7 +7572,7 @@
         "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts",
         "kind": "value-converter",
         "name": {
-          "location": { "end": 1389, "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts", "pos": 804 },
+          "location": { "end": 992, "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts", "pos": 982 },
           "origin": "source",
           "value": "sanitize"
         }

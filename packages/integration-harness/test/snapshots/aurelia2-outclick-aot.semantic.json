@@ -1253,7 +1253,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 179, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 169 },
           "origin": "source",
           "value": "outclick"
         },

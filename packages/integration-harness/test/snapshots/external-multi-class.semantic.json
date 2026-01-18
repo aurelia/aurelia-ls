@@ -1230,7 +1230,7 @@
         "file": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 335, "file": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts", "pos": 210 },
+          "location": { "end": 238, "file": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts", "pos": 227 },
           "origin": "source",
           "value": "highlight"
         },
@@ -1573,7 +1573,7 @@
         "file": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 206, "file": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts", "pos": 85 },
+          "location": { "end": 111, "file": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts", "pos": 100 },
           "origin": "source",
           "value": "user-card"
         },

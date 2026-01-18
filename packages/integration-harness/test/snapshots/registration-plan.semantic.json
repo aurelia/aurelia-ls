@@ -1279,7 +1279,7 @@
         "file": "/src/entry.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
+          "location": { "end": 127, "file": "/src/entry.ts", "pos": 117 },
           "origin": "source",
           "value": "alpha-el"
         },
@@ -1474,7 +1474,7 @@
         "file": "/src/entry.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
+          "location": { "end": 183, "file": "/src/entry.ts", "pos": 174 },
           "origin": "source",
           "value": "beta-el"
         },

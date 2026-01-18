@@ -1439,7 +1439,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 6415, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 543 },
+          "location": { "end": 590, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 568 },
           "origin": "source",
           "value": "au-notification-host"
         },

@@ -2014,7 +2014,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 25121, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 565 },
+          "location": { "end": 602, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 590 },
           "origin": "source",
           "value": "google-map"
         },

@@ -1405,7 +1405,7 @@
         "file": "/src/entry.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 169, "file": "/src/entry.ts", "pos": 157 },
           "origin": "source",
           "value": "guarded-el"
         },
