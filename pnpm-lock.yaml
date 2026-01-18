@@ -204,7 +204,7 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
 
   packages/integration-harness:
@@ -216,7 +216,7 @@ importers:
         specifier: workspace:*
         version: link:../resolution
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
     devDependencies:
       '@aurelia/kernel':
@@ -268,7 +268,7 @@ importers:
         specifier: workspace:*
         version: link:../compiler
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
 
   packages/semantic-workspace:
@@ -280,7 +280,7 @@ importers:
         specifier: workspace:*
         version: link:../resolution
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
 
   packages/ssg:
@@ -338,7 +338,7 @@ importers:
         specifier: workspace:*
         version: link:../resolution
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
 
   packages/vite-plugin:
@@ -365,7 +365,7 @@ importers:
         specifier: link:../../aurelia/packages/runtime-html
         version: link:../../aurelia/packages/runtime-html
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
     devDependencies:
       vite:
@@ -375,7 +375,7 @@ importers:
   packages/vscode:
     dependencies:
       typescript:
-        specifier: ^5.7.0
+        specifier: ^5.5.4
         version: 5.9.3
       vscode-languageclient:
         specifier: ^9.0.1
