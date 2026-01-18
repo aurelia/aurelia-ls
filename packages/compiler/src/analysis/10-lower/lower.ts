@@ -62,7 +62,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
 
     // Build DOM tree (skipping meta elements)
     trace.event("lower.dom.start");
-    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, undefined, skipTags, projectionMap);
+    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, html, undefined, skipTags, projectionMap);
     trace.event("lower.dom.complete");
 
     // Collect instruction rows (skipping meta elements)

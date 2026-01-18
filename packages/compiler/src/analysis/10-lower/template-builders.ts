@@ -211,6 +211,7 @@ export function buildTemplateFrom(
       rootLike as { childNodes?: P5Node[] },
       ids,
       table.source,
+      table.sourceText,
       idMap,
       undefined,
       projectionMap,

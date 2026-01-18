@@ -396,6 +396,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       compilerOptions: this.#env.tsService.compilerOptions(),
       lookupText: this.lookupText.bind(this),
       getCompilation: (uri) => this.#kernel.getCompilation(uri),
+      ensureTemplate: (uri) => {
+        this.#kernel.ensureFromFile(uri);
+      },
       getAttributeSyntax: this.#attributeSyntaxContext.bind(this),
     });
   }
@@ -1028,7 +1031,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
           ? (hit.instruction as { target?: { kind?: string } }).target
           : null;
         if (hit && target && typeof target === "object" && "kind" in target && target.kind === "unknown") {
-          const candidate = resolveBindableCandidate(hit, text, ctx.syntax);
+          const candidate = resolveBindableCandidate(hit, ctx.syntax);
           if (candidate) {
             bindableData = {
               bindable: {
@@ -1040,7 +1043,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
               },
             };
           } else {
-            const raw = attributeNameFromHit(text, hit);
+            const raw = attributeNameFromHit(hit);
             attrName = attributeTargetName(raw, ctx.syntax);
           }
         }
@@ -1076,7 +1079,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
       let attrName: string | null = null;
       if (offset != null && text && compilation) {
         const hit = findInstructionHit(compilation, offset);
-        const raw = hit ? attributeNameFromHit(text, hit) : null;
+        const raw = hit ? attributeNameFromHit(hit) : null;
         attrName = attributeTargetName(raw, ctx.syntax);
       }
       return {
@@ -1140,7 +1143,7 @@ function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapCon
       let command: string | null = null;
       if (offset != null && text && compilation) {
         const hit = findInstructionHit(compilation, offset);
-        const raw = hit ? attributeNameFromHit(text, hit) : null;
+        const raw = hit ? attributeNameFromHit(hit) : null;
         command = attributeCommandName(raw, ctx.syntax);
       }
       return {

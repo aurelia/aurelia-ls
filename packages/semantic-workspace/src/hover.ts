@@ -4,16 +4,19 @@ import {
   debug,
   isDebugEnabled,
   type AttributeParser,
+  type DOMNode,
   type ExprId,
   type LinkedInstruction,
   type LinkedRow,
   type NodeId,
   type SourceSpan,
   type TemplateCompilation,
+  type TemplateIR,
   type TemplateSyntaxRegistry,
   spanContainsOffset,
   spanLength,
 } from "@aurelia-ls/compiler";
+import { buildDomIndex, findAttrForSpan, findDomNode } from "./template-dom.js";
 
 export interface TemplateHoverDetails {
   readonly lines: string[];
@@ -69,11 +72,9 @@ export function collectTemplateHover(options: {
   if (expr) {
     exprId = expr.exprId;
     span = span ?? expr.span;
-    const exprSpan = compilation.exprSpans.get(expr.exprId) ?? expr.span;
-    const pathAtOffset = exprSpan ? expressionPathAtOffset(text, exprSpan, offset) : null;
-    const label = chooseExpressionLabel(pathAtOffset, expr.memberPath)
-      ?? expressionTextFromSpan(text, exprSpan)
-      ?? "expression";
+    const exprAst = findExpressionAst(compilation.exprTable ?? [], expr.exprId);
+    const pathAtOffset = exprAst ? expressionLabelAtOffset(exprAst, offset) : null;
+    const label = chooseExpressionLabel(pathAtOffset, expr.memberPath) ?? "expression";
     addLine("Expression", label);
   }
 
@@ -123,7 +124,13 @@ export function collectTemplateHover(options: {
     debug.workspace("hover.node", { hit: false });
   }
 
-  const instructionHits = findInstructionsAtOffset(compilation.linked.templates, offset);
+  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
+  const instructionHits = findInstructionsAtOffset(
+    compilation.linked.templates,
+    compilation.ir.templates ?? [],
+    domIndex,
+    offset
+  );
   if (debugEnabled) {
     debug.workspace("hover.instructions", {
       hitCount: instructionHits.length,
@@ -136,8 +143,7 @@ export function collectTemplateHover(options: {
       span = span ?? primary.loc;
     }
     for (const hit of instructionHits) {
-      applyInstructionHover(hit.instruction, hit.loc, {
-        text,
+      applyInstructionHover(hit.instruction, hit.loc, hit.attrName ?? null, {
         addLine,
         syntax,
         attrParser,
@@ -148,7 +154,7 @@ export function collectTemplateHover(options: {
     }
 
     if (primary) {
-      const attrName = readAttributeName(text, primary.loc);
+      const attrName = primary.attrName ?? null;
       const command = attrName ? commandFromAttribute(attrName, syntax, attrParser) : null;
       if (command) addLine("Binding Command", command);
     }
@@ -204,24 +210,42 @@ type InstructionHit = {
   len: number;
   hostTag?: string;
   hostKind?: "custom" | "native" | "none";
+  attrName?: string | null;
+  attrNameSpan?: SourceSpan | null;
 };
 
 function findInstructionsAtOffset(
   templates: readonly { rows: readonly LinkedRow[] }[],
+  irTemplates: readonly TemplateIR[],
+  domIndex: ReturnType<typeof buildDomIndex>,
   offset: number,
 ): InstructionHit[] {
   const hits: InstructionHit[] = [];
   const addHit = (
     instruction: LinkedInstruction,
     host: { hostTag?: string; hostKind?: "custom" | "native" | "none" },
+    node: DOMNode | null,
   ) => {
     const loc = instruction.loc ?? null;
     if (!loc) return;
     if (!spanContainsOffset(loc, offset)) return;
-    hits.push({ instruction, loc, len: spanLength(loc), hostTag: host.hostTag, hostKind: host.hostKind });
+    const attr = node && (node.kind === "element" || node.kind === "template") ? findAttrForSpan(node, loc) : null;
+    hits.push({
+      instruction,
+      loc,
+      len: spanLength(loc),
+      hostTag: host.hostTag,
+      hostKind: host.hostKind,
+      attrName: attr?.name ?? null,
+      attrNameSpan: attr?.nameLoc ?? null,
+    });
   };
-  for (const template of templates) {
+  for (let ti = 0; ti < templates.length; ti += 1) {
+    const template = templates[ti];
+    const irTemplate = irTemplates[ti];
+    if (!template || !irTemplate) continue;
     for (const row of template.rows ?? []) {
+      const domNode = findDomNode(domIndex, ti, row.target);
       const host: { hostTag?: string; hostKind?: "custom" | "native" | "none" } =
         row.node.kind === "element"
           ? {
@@ -230,10 +254,10 @@ function findInstructionsAtOffset(
           }
           : {};
       for (const instruction of row.instructions ?? []) {
-        addHit(instruction, host);
+        addHit(instruction, host, domNode);
         if (instruction.kind === "hydrateElement" || instruction.kind === "hydrateAttribute" || instruction.kind === "hydrateTemplateController") {
           for (const prop of instruction.props ?? []) {
-            addHit(prop, host);
+            addHit(prop, host, domNode);
           }
         }
       }
@@ -256,8 +280,8 @@ function findRow(
 function applyInstructionHover(
   instruction: LinkedInstruction,
   loc: SourceSpan,
+  attrName: string | null,
   ctx: {
-    text: string;
     addLine: (label: string, value: string) => void;
     syntax: TemplateSyntaxRegistry | null;
     attrParser: AttributeParser | null;
@@ -266,7 +290,6 @@ function applyInstructionHover(
     debugEnabled?: boolean;
   },
 ): void {
-  const attrName = readAttributeName(ctx.text, loc);
   const analysis = attrName && ctx.syntax && ctx.attrParser
     ? analyzeAttributeName(attrName, ctx.syntax, ctx.attrParser)
     : null;
@@ -368,13 +391,6 @@ function describeBindableFallback(
   return name;
 }
 
-function readAttributeName(text: string, loc: SourceSpan): string | null {
-  const raw = text.slice(loc.start, loc.end);
-  const eq = raw.indexOf("=");
-  const name = (eq === -1 ? raw : raw.slice(0, eq)).trim();
-  return name.length ? name : null;
-}
-
 function attributeTargetName(
   attrName: string | null,
   analysis: ReturnType<typeof analyzeAttributeName> | null,
@@ -401,10 +417,16 @@ function commandFromAttribute(
   return analysis.syntax.command ?? null;
 }
 
+type IdentifierAst = {
+  $kind: "Identifier";
+  span: SourceSpan;
+  name: string;
+};
+
 type ExpressionAst = {
   $kind: string;
   span?: SourceSpan;
-  name?: { name: string; span?: SourceSpan };
+  name?: IdentifierAst;
   expression?: ExpressionAst;
   object?: ExpressionAst;
   func?: ExpressionAst;
@@ -415,13 +437,18 @@ type ExpressionAst = {
   yes?: ExpressionAst;
   no?: ExpressionAst;
   target?: ExpressionAst;
-  value?: ExpressionAst;
+  value?: unknown;
   key?: ExpressionAst;
   parts?: ExpressionAst[];
   expressions?: ExpressionAst[];
+  elements?: ExpressionAst[];
+  values?: ExpressionAst[];
+  body?: ExpressionAst;
+  params?: ExpressionAst[];
   declaration?: ExpressionAst;
   iterable?: ExpressionAst;
   ancestor?: number;
+  optional?: boolean;
 };
 
 function findValueConverterAtOffset(
@@ -467,42 +494,189 @@ function walkAstChildren(
   offset: number,
   finder: (node: ExpressionAst, offset: number) => string | null,
 ): string | null {
-  const queue: (ExpressionAst | null | undefined)[] = [];
-  queue.push(node.expression, node.object, node.func, node.left, node.right, node.condition, node.yes, node.no, node.target, node.value, node.key, node.declaration, node.iterable);
-  if (node.args) queue.push(...node.args);
-  if (node.parts) queue.push(...node.parts);
-  if (node.expressions) queue.push(...node.expressions);
-  for (const child of queue) {
-    if (!child) continue;
+  for (const child of collectAstChildren(node)) {
     const hit = finder(child, offset);
     if (hit) return hit;
   }
   return null;
 }
 
-function expressionTextFromSpan(text: string, span: SourceSpan | null | undefined): string | null {
-  if (!span) return null;
-  const raw = text.slice(span.start, span.end).trim();
-  if (!raw) return null;
-  if (raw.startsWith("${") && raw.endsWith("}")) {
-    const inner = raw.slice(2, -1).trim();
-    return inner || raw;
+function findExpressionAst(
+  exprTable: readonly { id: ExprId; ast: unknown }[],
+  exprId: ExprId,
+): ExpressionAst | null {
+  for (const entry of exprTable) {
+    if (entry.id === exprId) return entry.ast as ExpressionAst;
   }
-  return raw;
+  return null;
 }
 
-function expressionPathAtOffset(text: string, span: SourceSpan, offset: number): string | null {
-  if (offset < span.start || offset > span.end) return null;
-  const exprText = text.slice(span.start, span.end);
-  const localOffset = Math.max(0, Math.min(offset - span.start, exprText.length));
-  let start = localOffset;
-  while (start > 0 && isPathChar(exprText.charCodeAt(start - 1))) start -= 1;
-  let end = localOffset;
-  while (end < exprText.length && isPathChar(exprText.charCodeAt(end))) end += 1;
-  let candidate = exprText.slice(start, end).trim();
-  if (!candidate) return null;
-  candidate = candidate.replace(/^[.\[]+|[.\]]+$/g, "");
-  return candidate || null;
+function expressionLabelAtOffset(ast: ExpressionAst, offset: number): string | null {
+  const hit = findLabelAst(ast, offset);
+  if (!hit) return null;
+  return renderExpressionLabel(hit);
+}
+
+function findLabelAst(node: ExpressionAst | null | undefined, offset: number): ExpressionAst | null {
+  if (!node || !node.span || !spanContainsOffset(node.span, offset)) return null;
+  const children = collectAstChildren(node);
+  for (const child of children) {
+    const hit = findLabelAst(child, offset);
+    if (hit) return hit;
+  }
+  return isLabelCandidate(node) ? node : null;
+}
+
+function collectAstChildren(node: ExpressionAst): ExpressionAst[] {
+  const children: ExpressionAst[] = [];
+  const push = (child?: unknown) => {
+    if (isExpressionAst(child)) children.push(child);
+  };
+
+  push(node.expression);
+  push(node.object);
+  push(node.func);
+  push(node.left);
+  push(node.right);
+  push(node.condition);
+  push(node.yes);
+  push(node.no);
+  push(node.target);
+  push(node.value);
+  push(node.key);
+  push(node.declaration);
+  push(node.iterable);
+  push(node.body);
+  if (node.args) node.args.forEach(push);
+  if (node.parts) node.parts.forEach(push);
+  if (node.expressions) node.expressions.forEach(push);
+  if (node.elements) node.elements.forEach(push);
+  if (node.values) node.values.forEach(push);
+  if (node.params) node.params.forEach(push);
+
+  const patternDefault = node as ExpressionAst & { default?: ExpressionAst };
+  if (patternDefault.default) children.push(patternDefault.default);
+
+  return children;
+}
+
+function isExpressionAst(value: unknown): value is ExpressionAst {
+  return !!value && typeof value === "object" && "$kind" in (value as { $kind: unknown });
+}
+
+function isLabelCandidate(node: ExpressionAst): boolean {
+  switch (node.$kind) {
+    case "AccessScope":
+    case "AccessMember":
+    case "AccessKeyed":
+    case "AccessGlobal":
+    case "AccessThis":
+    case "AccessBoundary":
+    case "CallScope":
+    case "CallMember":
+    case "CallGlobal":
+    case "CallFunction":
+    case "ValueConverter":
+    case "BindingBehavior":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function renderExpressionLabel(node: ExpressionAst): string | null {
+  switch (node.$kind) {
+    case "AccessScope": {
+      const name = node.name?.name ?? null;
+      return renderScopedName(node.ancestor, name);
+    }
+    case "AccessMember": {
+      return renderMemberName(node.object, node.name?.name ?? null);
+    }
+    case "AccessKeyed": {
+      return renderKeyedName(node.object, node.key);
+    }
+    case "AccessGlobal":
+      return node.name?.name ?? null;
+    case "AccessThis":
+      return renderThisName(node.ancestor);
+    case "AccessBoundary":
+      return "this";
+    case "CallScope": {
+      const name = node.name?.name ?? null;
+      return renderScopedName(node.ancestor, name);
+    }
+    case "CallMember": {
+      return renderMemberName(node.object, node.name?.name ?? null);
+    }
+    case "CallGlobal":
+      return node.name?.name ?? null;
+    case "CallFunction":
+      return node.func ? renderExpressionLabel(node.func) : null;
+    case "ValueConverter":
+    case "BindingBehavior":
+      return node.name?.name ?? null;
+    default:
+      return null;
+  }
+}
+
+function renderScopedName(ancestor: number | undefined, name: string | null): string | null {
+  if (!name) return null;
+  const prefix = renderAncestorPrefix(ancestor ?? 0);
+  return prefix ? `${prefix}.${name}` : name;
+}
+
+function renderThisName(ancestor: number | undefined): string {
+  const count = ancestor ?? 0;
+  if (count <= 0) return "$this";
+  return renderAncestorPrefix(count);
+}
+
+function renderAncestorPrefix(count: number): string {
+  if (count <= 0) return "";
+  return Array.from({ length: count }, () => "$parent").join(".");
+}
+
+function renderMemberName(object: ExpressionAst | null | undefined, name: string | null): string | null {
+  if (!name) return null;
+  const base = object ? renderExpressionLabel(object) : null;
+  return base ? `${base}.${name}` : name;
+}
+
+function renderKeyedName(object: ExpressionAst | null | undefined, key: ExpressionAst | null | undefined): string | null {
+  const base = object ? renderExpressionLabel(object) : null;
+  if (!base) return null;
+  const keyLabel = renderKeyLabel(key) ?? "?";
+  return `${base}[${keyLabel}]`;
+}
+
+function renderKeyLabel(node: ExpressionAst | null | undefined): string | null {
+  if (!node) return null;
+  switch (node.$kind) {
+    case "PrimitiveLiteral":
+      return formatLiteral(node.value);
+    case "AccessScope":
+    case "AccessMember":
+    case "AccessKeyed":
+    case "AccessGlobal":
+    case "AccessThis":
+    case "AccessBoundary":
+    case "CallScope":
+    case "CallMember":
+    case "CallGlobal":
+    case "CallFunction":
+      return renderExpressionLabel(node);
+    default:
+      return null;
+  }
+}
+
+function formatLiteral(value: unknown): string {
+  if (value === undefined) return "undefined";
+  if (value === null) return "null";
+  if (typeof value === "string") return JSON.stringify(value);
+  return String(value);
 }
 
 function chooseExpressionLabel(primary: string | null | undefined, secondary: string | null | undefined): string | null {
@@ -510,19 +684,6 @@ function chooseExpressionLabel(primary: string | null | undefined, secondary: st
   if (!primary) return secondary ?? null;
   if (!secondary) return primary ?? null;
   return primary.length >= secondary.length ? primary : secondary;
-}
-
-function isPathChar(code: number): boolean {
-  return (
-    (code >= 48 && code <= 57)
-    || (code >= 65 && code <= 90)
-    || (code >= 97 && code <= 122)
-    || code === 95 /* _ */
-    || code === 36 /* $ */
-    || code === 46 /* . */
-    || code === 91 /* [ */
-    || code === 93 /* ] */
-  );
 }
 
 function looksLikeCustomElementTag(tag: string): boolean {

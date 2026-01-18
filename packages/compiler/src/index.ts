@@ -336,6 +336,7 @@ export type {
   CommentNode,
   BaseNode,
   Attr,
+  TemplateIR,
   NodeId,
 } from "./model/index.js";
 

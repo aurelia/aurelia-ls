@@ -4,7 +4,6 @@ import ts from "typescript";
 import {
   analyzeAttributeName,
   canonicalDocumentUri,
-  extractTemplateMeta,
   normalizePathForId,
   offsetAtPosition,
   spanContainsOffset,
@@ -12,6 +11,7 @@ import {
   toSourceFileId,
   type AttributeParser,
   type BindableDef,
+  type DOMNode,
   type DocumentUri,
   type LinkedInstruction,
   type LinkedRow,
@@ -20,11 +20,14 @@ import {
   type SourceLocation,
   type SourceSpan,
   type TemplateCompilation,
+  type TemplateIR,
   type TemplateMetaIR,
+  type TemplateNode,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
 import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/resolution";
 import type { ResourceDefinitionIndex } from "./definition.js";
+import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
 import type {
   WorkspaceCodeAction,
   WorkspaceCodeActionRequest,
@@ -78,6 +81,8 @@ export type InstructionHit = {
   hostTag?: string;
   hostKind?: "custom" | "native" | "none";
   owner?: InstructionOwner | null;
+  attrName?: string | null;
+  attrNameSpan?: SourceSpan | null;
 };
 
 type ExpressionAst = {
@@ -115,6 +120,8 @@ type CodeActionContext = {
   workspaceRoot: string;
   compilerOptions: ts.CompilerOptions;
   lookupText: (uri: DocumentUri) => string | null;
+  getCompilation: (uri: DocumentUri) => TemplateCompilation | null;
+  ensureTemplate: (uri: DocumentUri) => void;
 };
 
 type BindableCandidate = {
@@ -142,6 +149,7 @@ export interface TemplateEditEngineContext {
   readonly compilerOptions: ts.CompilerOptions;
   readonly lookupText: (uri: DocumentUri) => string | null;
   readonly getCompilation: (uri: DocumentUri) => TemplateCompilation | null;
+  readonly ensureTemplate: (uri: DocumentUri) => void;
   readonly getAttributeSyntax: () => AttributeSyntaxContext;
 }
 
@@ -155,14 +163,15 @@ export class TemplateEditEngine {
     if (offset == null) return null;
     const compilation = this.ctx.getCompilation(request.uri);
     if (!compilation) return null;
+    const domIndex = buildDomIndex(compilation.ir.templates ?? []);
 
     const syntax = this.ctx.getAttributeSyntax();
     const preferRoots = [this.ctx.workspaceRoot];
 
-    const elementEdits = this.#renameElementAt(compilation, text, offset, request.newName, preferRoots);
+    const elementEdits = this.#renameElementAt(compilation, domIndex, text, offset, request.newName, preferRoots);
     if (elementEdits?.length) return finalizeWorkspaceEdits(elementEdits);
 
-    const bindableEdits = this.#renameBindableAttributeAt(compilation, text, offset, request.newName, syntax, preferRoots);
+    const bindableEdits = this.#renameBindableAttributeAt(compilation, domIndex, text, offset, request.newName, syntax, preferRoots);
     if (bindableEdits?.length) return finalizeWorkspaceEdits(bindableEdits);
 
     const converterEdits = this.#renameValueConverterAt(compilation, offset, request.newName, preferRoots);
@@ -198,11 +207,14 @@ export class TemplateEditEngine {
       workspaceRoot: this.ctx.workspaceRoot,
       compilerOptions: this.ctx.compilerOptions,
       lookupText: this.ctx.lookupText,
+      getCompilation: this.ctx.getCompilation,
+      ensureTemplate: this.ctx.ensureTemplate,
     }, targetSpan);
   }
 
   #renameElementAt(
     compilation: TemplateCompilation,
+    domIndex: ReturnType<typeof buildDomIndex>,
     text: string,
     offset: number,
     newName: string,
@@ -212,7 +224,9 @@ export class TemplateEditEngine {
     if (!node || node.kind !== "element") return null;
     const row = findLinkedRow(compilation.linked.templates, node.templateIndex, node.id);
     if (!row || row.node.kind !== "element") return null;
-    const tagSpan = elementTagSpanAtOffset(text, node.span, row.node.tag, offset);
+    const domNode = findDomNode(domIndex, node.templateIndex, node.id);
+    if (!domNode || domNode.kind !== "element") return null;
+    const tagSpan = elementTagSpanAtOffset(domNode, offset);
     if (!tagSpan) return null;
     const res = row.node.custom?.def ?? null;
     if (!res) return null;
@@ -230,17 +244,19 @@ export class TemplateEditEngine {
 
   #renameBindableAttributeAt(
     compilation: TemplateCompilation,
+    domIndex: ReturnType<typeof buildDomIndex>,
     text: string,
     offset: number,
     newName: string,
     syntax: AttributeSyntaxContext,
     preferRoots: readonly string[],
   ): WorkspaceTextEdit[] | null {
-    const hits = findInstructionsAtOffset(compilation.linked.templates, offset);
+    const hits = findInstructionsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
     for (const hit of hits) {
-      const nameSpan = attributeNameSpan(text, hit.loc);
+      const nameSpan = hit.attrNameSpan ?? null;
       if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
-      const attrName = text.slice(nameSpan.start, nameSpan.end);
+      const attrName = hit.attrName ?? null;
+      if (!attrName) continue;
       const target = resolveBindableTarget(hit.instruction, this.ctx.definitionIndex, preferRoots);
       if (!target) continue;
 
@@ -297,7 +313,7 @@ export class TemplateEditEngine {
 
   #collectElementTagEdits(target: ResourceTarget, newName: string, out: WorkspaceTextEdit[]): void {
     this.#forEachTemplateCompilation((uri, text, compilation) => {
-      const spans = collectElementTagSpans(compilation, text, target);
+      const spans = collectElementTagSpans(compilation, target);
       for (const span of spans) {
         out.push({ uri, span, newText: newName });
       }
@@ -311,7 +327,7 @@ export class TemplateEditEngine {
     out: WorkspaceTextEdit[],
   ): void {
     this.#forEachTemplateCompilation((uri, text, compilation) => {
-      const matches = collectBindableAttributeMatches(compilation, text, target);
+      const matches = collectBindableAttributeMatches(compilation, target);
       for (const match of matches) {
         const replacement = renameAttributeName(match.attrName, newName, syntax);
         out.push({ uri, span: match.span, newText: replacement });
@@ -421,12 +437,11 @@ function spanIntersects(a: SourceSpan, b: SourceSpan): boolean {
 
 export function resolveBindableCandidate(
   hit: InstructionHit,
-  text: string,
   syntax: AttributeSyntaxContext,
   definitionIndex?: ResourceDefinitionIndex | null,
   preferRoots: readonly string[] = [],
 ): BindableCandidate | null {
-  const attrName = attributeNameFromHit(text, hit);
+  const attrName = attributeNameFromHit(hit);
   const base = attributeTargetName(attrName, syntax);
   if (!base) return null;
   const propertyName = dashToCamel(base);
@@ -458,10 +473,8 @@ export function resolveBindableCandidate(
   return null;
 }
 
-export function attributeNameFromHit(text: string, hit: InstructionHit): string | null {
-  const span = attributeNameSpan(text, hit.loc);
-  if (!span) return null;
-  return text.slice(span.start, span.end);
+export function attributeNameFromHit(hit: InstructionHit): string | null {
+  return hit.attrName ?? null;
 }
 
 export function attributeTargetName(attrName: string | null, syntax: AttributeSyntaxContext): string | null {
@@ -507,7 +520,7 @@ function resolveImportCandidate(
     }
     case "aurelia/unknown-attribute": {
       const hit = findInstructionHit(ctx.compilation, offset);
-      const attrName = hit ? attributeNameFromHit(ctx.text, hit) : null;
+      const attrName = hit ? attributeNameFromHit(hit) : null;
       const base = attributeTargetName(attrName, ctx.syntax);
       return base ? { kind: "attribute", name: base } : null;
     }
@@ -560,11 +573,12 @@ function buildAddImportAction(
   const specifier = moduleSpecifierFromFile(targetFile, containingFile);
   if (!specifier) return null;
 
-  const templatePath = canonicalDocumentUri(ctx.uri).path;
-  const meta = extractTemplateMeta(ctx.text, templatePath);
+  const template = ctx.compilation.ir.templates[0] ?? null;
+  const meta = template?.templateMeta ?? null;
+  if (!meta) return null;
   if (hasImportForFile(meta, targetFile, containingFile, ctx.compilerOptions)) return null;
 
-  const insertion = computeImportInsertion(ctx.text, meta);
+  const insertion = computeImportInsertion(ctx.text, template, meta);
   const line = `${insertion.indent}<import from="${specifier}"></import>`;
   const edit = buildInsertionEdit(ctx.uri, ctx.text, insertion.offset, line);
   const name = candidate.name;
@@ -586,7 +600,7 @@ function buildAddBindableAction(
   const hit = findInstructionHit(ctx.compilation, offset);
   if (!hit) return null;
 
-  const candidate = resolveBindableCandidate(hit, ctx.text, ctx.syntax, ctx.definitionIndex, [ctx.workspaceRoot]);
+  const candidate = resolveBindableCandidate(hit, ctx.syntax, ctx.definitionIndex, [ctx.workspaceRoot]);
   if (!candidate || candidate.ownerKind !== "element" || !candidate.ownerFile) return null;
 
   const target = resolveExternalTemplateForComponent(candidate.ownerFile, ctx.templateIndex);
@@ -594,8 +608,12 @@ function buildAddBindableAction(
   const templateText = ctx.lookupText(target.uri);
   if (!templateText) return null;
 
-  const meta = extractTemplateMeta(templateText, target.path);
-  const insertion = computeBindableInsertion(templateText, meta);
+  ctx.ensureTemplate(target.uri);
+  const targetCompilation = ctx.getCompilation(target.uri);
+  const template = targetCompilation?.ir.templates[0] ?? null;
+  const meta = template?.templateMeta ?? null;
+  if (!meta) return null;
+  const insertion = computeBindableInsertion(templateText, template, meta);
   const attributePart = candidate.attributeName ? ` attribute="${candidate.attributeName}"` : "";
   const line = `${insertion.indent}<bindable name="${candidate.propertyName}"${attributePart}></bindable>`;
   const edit = buildInsertionEdit(target.uri, templateText, insertion.offset, line);
@@ -625,7 +643,7 @@ function buildLineInsertion(text: string, offset: number, line: string): string 
   return `${needsLeading ? newline : ""}${line}${needsTrailing ? newline : ""}`;
 }
 
-function computeImportInsertion(text: string, meta: TemplateMetaIR): InsertContext {
+function computeImportInsertion(text: string, template: TemplateIR | null, meta: TemplateMetaIR): InsertContext {
   const lastImport = pickLastByEnd(meta.imports);
   if (lastImport) {
     return { offset: lastImport.elementLoc.end, indent: lineIndentAt(text, lastImport.elementLoc.start) };
@@ -634,10 +652,10 @@ function computeImportInsertion(text: string, meta: TemplateMetaIR): InsertConte
   if (firstBindable) {
     return { offset: firstBindable.elementLoc.start, indent: lineIndentAt(text, firstBindable.elementLoc.start) };
   }
-  return findTemplateRootInsert(text) ?? { offset: 0, indent: "" };
+  return templateRootInsert(text, template) ?? { offset: 0, indent: "" };
 }
 
-function computeBindableInsertion(text: string, meta: TemplateMetaIR): InsertContext {
+function computeBindableInsertion(text: string, template: TemplateIR | null, meta: TemplateMetaIR): InsertContext {
   const lastBindable = pickLastByEnd(meta.bindables);
   if (lastBindable) {
     return { offset: lastBindable.elementLoc.end, indent: lineIndentAt(text, lastBindable.elementLoc.start) };
@@ -646,7 +664,7 @@ function computeBindableInsertion(text: string, meta: TemplateMetaIR): InsertCon
   if (lastImport) {
     return { offset: lastImport.elementLoc.end, indent: lineIndentAt(text, lastImport.elementLoc.start) };
   }
-  return findTemplateRootInsert(text) ?? { offset: 0, indent: "" };
+  return templateRootInsert(text, template) ?? { offset: 0, indent: "" };
 }
 
 function pickLastByEnd<T extends { elementLoc: SourceSpan }>(items: readonly T[]): T | null {
@@ -669,12 +687,13 @@ function pickFirstByStart<T extends { elementLoc: SourceSpan }>(items: readonly 
   return best;
 }
 
-function findTemplateRootInsert(text: string): InsertContext | null {
-  const match = text.match(/^[\s\r\n]*<template\b[^>]*>/i);
-  if (!match) return null;
-  const offset = match[0].length;
-  const tagStart = match[0].search(/<template\b/i);
-  const openIndent = lineIndentAt(text, Math.max(0, tagStart));
+function templateRootInsert(text: string, template: TemplateIR | null): InsertContext | null {
+  if (!template) return null;
+  const root = template.dom.children.find((child): child is TemplateNode => child.kind === "template");
+  const tagEnd = root?.openTagEnd ?? null;
+  if (!tagEnd) return null;
+  const offset = tagEnd.start;
+  const openIndent = lineIndentAt(text, Math.max(0, offset));
   const after = text.slice(offset);
   const childIndentMatch = after.match(/\r?\n([ \t]*)\S/);
   const childIndent = childIndentMatch?.[1] ?? `${openIndent}${detectIndentUnit(text)}`;
@@ -802,7 +821,8 @@ function hasImportForFile(
 }
 
 export function findInstructionHit(compilation: TemplateCompilation, offset: number): InstructionHit | null {
-  const hits = findInstructionsAtOffset(compilation.linked.templates, offset);
+  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
+  const hits = findInstructionsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
   return hits[0] ?? null;
 }
 
@@ -819,31 +839,35 @@ export function findElementNameAtOffset(
 
 export function findControllerNameAtOffset(
   compilation: TemplateCompilation,
-  text: string,
+  _text: string,
   offset: number,
   syntax: AttributeSyntaxContext,
 ): string | null {
   const controller = compilation.query.controllerAt(offset);
   if (controller?.kind) return controller.kind;
   const hit = findInstructionHit(compilation, offset);
-  const attrName = hit ? attributeNameFromHit(text, hit) : null;
+  const attrName = hit ? attributeNameFromHit(hit) : null;
   const base = attributeTargetName(attrName, syntax);
   return base ?? null;
 }
 
 function findInstructionsAtOffset(
   templates: readonly { rows: readonly LinkedRow[] }[],
+  irTemplates: readonly TemplateIR[],
+  domIndex: ReturnType<typeof buildDomIndex>,
   offset: number,
 ): InstructionHit[] {
   const hits: InstructionHit[] = [];
   const addHit = (
     instruction: LinkedInstruction,
     host: { hostTag?: string; hostKind?: "custom" | "native" | "none" },
+    node: DOMNode | null,
     owner?: InstructionOwner | null,
   ) => {
     const loc = instruction.loc ?? null;
     if (!loc) return;
     if (!spanContainsOffset(loc, offset)) return;
+    const attr = node && (node.kind === "element" || node.kind === "template") ? findAttrForSpan(node, loc) : null;
     hits.push({
       instruction,
       loc,
@@ -851,11 +875,17 @@ function findInstructionsAtOffset(
       hostTag: host.hostTag,
       hostKind: host.hostKind,
       ...(owner ? { owner } : {}),
+      attrName: attr?.name ?? null,
+      attrNameSpan: attr?.nameLoc ?? null,
     });
   };
 
-  for (const template of templates) {
+  for (let ti = 0; ti < templates.length; ti += 1) {
+    const template = templates[ti];
+    const irTemplate = irTemplates[ti];
+    if (!template || !irTemplate) continue;
     for (const row of template.rows ?? []) {
+      const domNode = findDomNode(domIndex, ti, row.target);
       const host: { hostTag?: string; hostKind?: "custom" | "native" | "none" } =
         row.node.kind === "element"
           ? {
@@ -867,7 +897,7 @@ function findInstructionsAtOffset(
         ? { kind: "element", name: row.node.custom.def.name, file: row.node.custom.def.file ?? null }
         : null;
       for (const instruction of row.instructions ?? []) {
-        addHit(instruction, host, elementOwner);
+        addHit(instruction, host, domNode, elementOwner);
         if (
           instruction.kind === "hydrateElement"
           || instruction.kind === "hydrateAttribute"
@@ -891,7 +921,7 @@ function findInstructionsAtOffset(
                   ? { kind: "controller", name: instruction.res }
                   : null;
           for (const prop of instruction.props ?? []) {
-            addHit(prop, host, owner);
+            addHit(prop, host, domNode, owner);
           }
         }
       }
@@ -952,21 +982,28 @@ function resolveBindableTarget(
 
 function collectBindableAttributeMatches(
   compilation: TemplateCompilation,
-  text: string,
   target: BindableTarget,
 ): Array<{ span: SourceSpan; attrName: string }> {
   const results: Array<{ span: SourceSpan; attrName: string }> = [];
-  for (const template of compilation.linked.templates ?? []) {
+  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
+  const templates = compilation.linked.templates ?? [];
+  const irTemplates = compilation.ir.templates ?? [];
+
+  for (let ti = 0; ti < templates.length; ti += 1) {
+    const template = templates[ti];
+    const irTemplate = irTemplates[ti];
+    if (!template || !irTemplate) continue;
     for (const row of template.rows ?? []) {
+      const domNode = findDomNode(domIndex, ti, row.target);
       for (const instruction of row.instructions ?? []) {
-        collectBindableInstructionMatches(instruction, target, text, results);
+        collectBindableInstructionMatches(instruction, domNode, target, results);
         if (
           instruction.kind === "hydrateElement"
           || instruction.kind === "hydrateAttribute"
           || instruction.kind === "hydrateTemplateController"
         ) {
           for (const prop of instruction.props ?? []) {
-            collectBindableInstructionMatches(prop, target, text, results);
+            collectBindableInstructionMatches(prop, domNode, target, results);
           }
         }
       }
@@ -977,8 +1014,8 @@ function collectBindableAttributeMatches(
 
 function collectBindableInstructionMatches(
   instruction: LinkedInstruction,
+  node: DOMNode | null,
   target: BindableTarget,
-  text: string,
   results: Array<{ span: SourceSpan; attrName: string }>,
 ): void {
   if (instruction.kind !== "propertyBinding" && instruction.kind !== "attributeBinding" && instruction.kind !== "setProperty") {
@@ -1001,9 +1038,11 @@ function collectBindableInstructionMatches(
   }
 
   if (instruction.to !== target.property) return;
-  const nameSpan = attributeNameSpan(text, loc);
-  if (!nameSpan) return;
-  const attrName = text.slice(nameSpan.start, nameSpan.end);
+  if (!node || (node.kind !== "element" && node.kind !== "template")) return;
+  const attr = findAttrForSpan(node, loc);
+  const nameSpan = attr?.nameLoc ?? null;
+  const attrName = attr?.name ?? null;
+  if (!nameSpan || !attrName) return;
   results.push({ span: nameSpan, attrName });
 }
 
@@ -1017,11 +1056,10 @@ function renameAttributeName(attrName: string, newBase: string, syntax: Attribut
 
 function collectElementTagSpans(
   compilation: TemplateCompilation,
-  text: string,
   target: ResourceTarget,
 ): SourceSpan[] {
   const results: SourceSpan[] = [];
-  const irTemplates = (compilation.ir as { templates?: Array<{ dom: { id: string; kind: string; tag?: string; loc?: SourceSpan | null; children?: unknown[] } }> } | null)?.templates ?? [];
+  const irTemplates = compilation.ir.templates ?? [];
   const linkedTemplates = compilation.linked.templates ?? [];
 
   for (let i = 0; i < irTemplates.length; i += 1) {
@@ -1033,20 +1071,20 @@ function collectElementTagSpans(
       rowsByTarget.set(row.target, row);
     }
 
-    const stack: Array<{ id: string; kind: string; tag?: string; loc?: SourceSpan | null; children?: unknown[] }> = [irTemplate.dom];
+    const stack: DOMNode[] = [irTemplate.dom];
     while (stack.length) {
       const node = stack.pop();
       if (!node) continue;
       if (node.kind === "element") {
         const row = rowsByTarget.get(node.id);
-        if (row?.node.kind === "element" && row.node.custom?.def && node.loc) {
+        if (row?.node.kind === "element" && row.node.custom?.def) {
           if (resourceRefMatches(row.node.custom.def, target.name, target.file)) {
-            results.push(...elementTagNameSpans(text, node.loc, row.node.tag));
+            results.push(...elementTagSpans(node));
           }
         }
       }
       if (node.kind === "element" || node.kind === "template") {
-        const children = node.children as Array<{ id: string; kind: string; tag?: string; loc?: SourceSpan | null; children?: unknown[] }> | undefined;
+        const children = node.children;
         if (children?.length) {
           for (let c = children.length - 1; c >= 0; c -= 1) {
             stack.push(children[c]!);
@@ -1222,57 +1260,6 @@ function findLinkedRow(
   return template.rows.find((row) => row.target === nodeId) ?? null;
 }
 
-function elementTagSpanAtOffset(
-  text: string,
-  span: SourceSpan | undefined,
-  tag: string,
-  offset: number,
-): SourceSpan | null {
-  if (!span) return null;
-  const openStart = span.start + 1;
-  const openEnd = openStart + tag.length;
-  if (offset >= openStart && offset < openEnd) {
-    return { start: openStart, end: openEnd, ...(span.file ? { file: span.file } : {}) };
-  }
-  const closePattern = `</${tag}>`;
-  const closeTagStart = text.lastIndexOf(closePattern, span.end);
-  if (closeTagStart !== -1 && closeTagStart > span.start) {
-    const closeNameStart = closeTagStart + 2;
-    const closeNameEnd = closeNameStart + tag.length;
-    if (offset >= closeNameStart && offset < closeNameEnd) {
-      return { start: closeNameStart, end: closeNameEnd, ...(span.file ? { file: span.file } : {}) };
-    }
-  }
-  return null;
-}
-
-function elementTagNameSpans(text: string, span: SourceSpan, tag: string): SourceSpan[] {
-  const spans: SourceSpan[] = [];
-  const openStart = span.start + 1;
-  spans.push({ start: openStart, end: openStart + tag.length, ...(span.file ? { file: span.file } : {}) });
-
-  const closePattern = `</${tag}>`;
-  const closeTagStart = text.lastIndexOf(closePattern, span.end);
-  if (closeTagStart !== -1 && closeTagStart > span.start) {
-    const closeNameStart = closeTagStart + 2;
-    const closeNameEnd = closeNameStart + tag.length;
-    spans.push({ start: closeNameStart, end: closeNameEnd, ...(span.file ? { file: span.file } : {}) });
-  }
-
-  return spans;
-}
-
-function attributeNameSpan(text: string, loc: SourceSpan): SourceSpan | null {
-  const raw = text.slice(loc.start, loc.end);
-  const eq = raw.indexOf("=");
-  const namePart = (eq === -1 ? raw : raw.slice(0, eq)).trim();
-  if (!namePart) return null;
-  const nameOffset = raw.indexOf(namePart);
-  if (nameOffset < 0) return null;
-  const start = loc.start + nameOffset;
-  const end = start + namePart.length;
-  return { start, end, ...(loc.file ? { file: loc.file } : {}) };
-}
 
 export function resolveModuleSpecifier(
   specifier: string,

@@ -41,6 +41,12 @@ export interface Attr {
   value: string | null; // null for boolean attrs
   // NOTE: For HTML, authoring case is preserved here; normalization happens later.
   caseSensitive?: boolean;
+  /** Full attribute span (name + optional value). */
+  loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
+  /** Attribute value-only span (inside quotes). */
+  valueLoc?: SourceSpan | null;
 }
 
 export interface ElementNode extends BaseNode {
@@ -49,6 +55,12 @@ export interface ElementNode extends BaseNode {
   attrs: Attr[];         // static attrs only
   children: DOMNode[];
   selfClosed?: boolean;
+  /** Tag name span for the opening tag. */
+  tagLoc?: SourceSpan | null;
+  /** Tag name span for the closing tag, if present. */
+  closeTagLoc?: SourceSpan | null;
+  /** End of opening tag (`>`). */
+  openTagEnd?: SourceSpan | null;
 }
 
 // NOTE: Each TemplateIR has a synthetic fragment root (this node) with id '0'.
@@ -56,6 +68,12 @@ export interface TemplateNode extends BaseNode {
   kind: 'template';
   attrs: Attr[];
   children: DOMNode[];
+  /** Tag name span for the opening tag (always "template" when present). */
+  tagLoc?: SourceSpan | null;
+  /** Tag name span for the closing tag, if present. */
+  closeTagLoc?: SourceSpan | null;
+  /** End of opening tag (`>`). */
+  openTagEnd?: SourceSpan | null;
 }
 
 export interface TextNode extends BaseNode {
@@ -797,6 +815,8 @@ export type ExprTableEntry =
 export interface Located<T> {
   value: T;
   loc: SourceSpan;
+  /** Attribute name span for attribute-backed values. */
+  nameLoc?: SourceSpan | null;
 }
 
 /**
@@ -833,6 +853,8 @@ export interface ImportMetaIR extends MetaElementBase {
   namedAliases: Array<{
     /** The export name (X in X.as="Y") */
     exportName: Located<string>;
+    /** The ".as" span inside the attribute name. */
+    asLoc?: SourceSpan | null;
     /** The alias (Y in X.as="Y") */
     alias: Located<string>;
   }>;

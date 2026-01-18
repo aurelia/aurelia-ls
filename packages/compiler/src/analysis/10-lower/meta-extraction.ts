@@ -24,7 +24,7 @@ import type {
   TemplateMetaIR,
 } from "../../model/ir.js";
 import type { SourceFile } from "../../model/source.js";
-import { toSpan, type P5Element } from "./lower-shared.js";
+import { attrNameLoc, toSpan, type P5Element } from "./lower-shared.js";
 import { META_ELEMENT_TAGS } from "./dom-builder.js";
 
 type P5DocumentFragment = DefaultTreeAdapterMap["documentFragment"];
@@ -220,12 +220,13 @@ function extractImport(
       const alias = attr.value;
 
       // Get spans and extract original case-sensitive export name from source
-      const exportNameSpan = extractNamedAliasExportSpan(el, attr.name, source, sourceText);
-      const exportName = sourceText.slice(exportNameSpan.start, exportNameSpan.end);
+      const namedSpans = extractNamedAliasSpans(el, attr.name, source);
+      const exportName = sourceText.slice(namedSpans.exportNameLoc.start, namedSpans.exportNameLoc.end);
       const aliasSpan = extractAttrValue(el, attr.name, alias, source, sourceText);
 
       namedAliases.push({
-        exportName: { value: exportName, loc: exportNameSpan },
+        exportName: { value: exportName, loc: namedSpans.exportNameLoc },
+        asLoc: namedSpans.asLoc,
         alias: aliasSpan,
       });
     }
@@ -285,7 +286,7 @@ function extractShadowDom(
 
   // If mode attribute exists, get its value span; otherwise use element span
   const modeLocated: Located<"open" | "closed"> = modeAttr && loc
-    ? { value: modeValue, loc: extractAttrValue(el, "mode", modeValue, source, sourceText).loc }
+    ? extractAttrValue(el, "mode", modeValue, source, sourceText)
     : { value: modeValue, loc: getElementSpan(loc, source) };
 
   return {
@@ -370,14 +371,15 @@ function extractTemplateMetaAttrs(
 
     // Create a synthetic element span for the attribute
     const attrSpan = toSpan(attrLoc, source) ?? createEmptySpan(source);
+    const attrNameSpan = toSpan(attrNameLoc(el, attr.name, sourceText), source) ?? attrSpan;
 
     switch (attrName) {
       case "use-shadow-dom": {
         const modeValue = attr.value === "closed" ? "closed" : "open";
         callbacks.onShadowDom({
-          mode: { value: modeValue, loc: attrSpan },
+          mode: extractAttrValue(el, attr.name, modeValue, source, sourceText),
           elementLoc: attrSpan,
-          tagLoc: attrSpan, // For attribute form, tag span = attribute span
+          tagLoc: attrNameSpan, // For attribute form, tag span = attribute name
         });
         break;
       }
@@ -385,14 +387,14 @@ function extractTemplateMetaAttrs(
       case "containerless":
         callbacks.onContainerless({
           elementLoc: attrSpan,
-          tagLoc: attrSpan,
+          tagLoc: attrNameSpan,
         });
         break;
 
       case "capture":
         callbacks.onCapture({
           elementLoc: attrSpan,
-          tagLoc: attrSpan,
+          tagLoc: attrNameSpan,
         });
         break;
 
@@ -401,7 +403,7 @@ function extractTemplateMetaAttrs(
         callbacks.onAlias({
           names,
           elementLoc: attrSpan,
-          tagLoc: attrSpan,
+          tagLoc: attrNameSpan,
         });
         break;
       }
@@ -415,7 +417,7 @@ function extractTemplateMetaAttrs(
             mode: null,
             attribute: null,
             elementLoc: attrSpan,
-            tagLoc: attrSpan,
+            tagLoc: attrNameSpan,
           });
         }
         break;
@@ -481,18 +483,19 @@ function getTagNameSpan(
  * Extract an attribute value with its span.
  * Returns Located<string> with the value and span of just the value (not the attribute name).
  */
-function extractAttrValue(
+function extractAttrValue<T extends string>(
   el: P5Element,
   attrName: string,
-  value: string,
+  value: T,
   source: SourceFile,
   sourceText: string
-): Located<string> {
+): Located<T> {
   const loc = el.sourceCodeLocation as ElementLocation | undefined;
   const attrLoc = loc?.attrs?.[attrName];
+  const nameLoc = attrLoc ? (toSpan(attrNameLoc(el, attrName, sourceText), source) ?? null) : null;
 
   if (!attrLoc) {
-    return { value, loc: createEmptySpan(source) };
+    return { value, loc: createEmptySpan(source), nameLoc };
   }
 
   // Parse the attribute text to find value boundaries
@@ -503,7 +506,7 @@ function extractAttrValue(
   const eqIdx = attrText.indexOf("=");
   if (eqIdx === -1) {
     // Boolean attribute, no value
-    return { value, loc: toSpan(attrLoc, source) ?? createEmptySpan(source) };
+    return { value, loc: toSpan(attrLoc, source) ?? createEmptySpan(source), nameLoc };
   }
 
   // Find value start (skip whitespace and opening quote)
@@ -530,6 +533,7 @@ function extractAttrValue(
       start: attrStart + valueStart,
       end: attrStart + valueEnd,
     },
+    nameLoc,
   };
 }
 
@@ -537,17 +541,16 @@ function extractAttrValue(
  * Extract the span for the export name in a named alias attribute.
  * For `Foo.as="bar"`, returns the span of "Foo".
  */
-function extractNamedAliasExportSpan(
+function extractNamedAliasSpans(
   el: P5Element,
   attrName: string,
   source: SourceFile,
-  _sourceText: string
-): SourceSpan {
+): { exportNameLoc: SourceSpan; asLoc: SourceSpan | null } {
   const loc = el.sourceCodeLocation as ElementLocation | undefined;
   const attrLoc = loc?.attrs?.[attrName];
 
   if (!attrLoc) {
-    return createEmptySpan(source);
+    return { exportNameLoc: createEmptySpan(source), asLoc: null };
   }
 
   // Export name is from start of attribute to ".as"
@@ -555,11 +558,10 @@ function extractNamedAliasExportSpan(
   const start = attrLoc.startOffset;
   const end = start + exportName.length;
 
-  return {
-    file: source.id,
-    start,
-    end,
-  };
+  const exportNameLoc: SourceSpan = { file: source.id, start, end };
+  const asLoc: SourceSpan = { file: source.id, start: end, end: end + 3 };
+
+  return { exportNameLoc, asLoc };
 }
 
 /**
@@ -575,12 +577,14 @@ function parseCommaSeparatedNames(
 ): Located<string>[] {
   const loc = el.sourceCodeLocation as ElementLocation | undefined;
   const attrLoc = loc?.attrs?.[attrName];
+  const nameLoc = attrLoc ? (toSpan(attrNameLoc(el, attrName, sourceText), source) ?? null) : null;
 
   if (!attrLoc) {
     // No location info, return simple parse
     return value.split(",").map(s => s.trim()).filter(Boolean).map(name => ({
       value: name,
       loc: createEmptySpan(source),
+      nameLoc,
     }));
   }
 
@@ -589,7 +593,7 @@ function parseCommaSeparatedNames(
   const attrText = sourceText.slice(attrStart, attrLoc.endOffset);
   const eqIdx = attrText.indexOf("=");
   if (eqIdx === -1) {
-    return [{ value, loc: toSpan(attrLoc, source) ?? createEmptySpan(source) }];
+    return [{ value, loc: toSpan(attrLoc, source) ?? createEmptySpan(source), nameLoc }];
   }
 
   let valueOffset = eqIdx + 1;
@@ -626,6 +630,7 @@ function parseCommaSeparatedNames(
         start: nameStart,
         end: nameEnd,
       },
+      nameLoc,
     });
 
     currentOffset += part.length + 1; // +1 for comma

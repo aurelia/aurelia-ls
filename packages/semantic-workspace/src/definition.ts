@@ -6,6 +6,7 @@ import {
   spanLength,
   toSourceFileId,
   type BindableDef,
+  type DOMNode,
   type ExprId,
   type LinkedInstruction,
   type LinkedRow,
@@ -16,12 +17,14 @@ import {
   type SourceSpan,
   type SymbolId,
   type TemplateCompilation,
+  type TemplateIR,
   type AttributeParser,
   type DocumentUri,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
 import type { ResolutionResult } from "@aurelia-ls/resolution";
 import type { WorkspaceLocation } from "./types.js";
+import { buildDomIndex, elementTagSpanAtOffset, findAttrForSpan, findDomNode } from "./template-dom.js";
 
 export interface ResourceDefinitionIndex {
   readonly elements: ReadonlyMap<string, ResourceDefinitionEntry[]>;
@@ -104,12 +107,14 @@ export function collectTemplateDefinitions(options: {
   const syntax = options.syntax;
   const preferRoots = normalizeRoots(options.preferRoots ?? []);
   const results: WorkspaceLocation[] = [];
+  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
 
   const node = compilation.query.nodeAt(offset);
   if (node?.kind === "element") {
     const row = findRow(compilation.linked.templates, node.templateIndex, node.id);
     if (row?.node.kind === "element") {
-      const tagSpan = elementTagSpanAtOffset(text, node.span, row.node.tag, offset);
+      const domNode = findDomNode(domIndex, node.templateIndex, node.id);
+      const tagSpan = domNode && domNode.kind === "element" ? elementTagSpanAtOffset(domNode, offset) : null;
       if (tagSpan) {
         const resolved = row.node.custom?.def ?? null;
         const entry = resolved
@@ -121,11 +126,12 @@ export function collectTemplateDefinitions(options: {
     }
   }
 
-  const instructionHits = findInstructionsAtOffset(compilation.linked.templates, offset);
+  const instructionHits = findInstructionsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
   for (const hit of instructionHits) {
-    const nameSpan = attributeNameSpan(text, hit.loc);
+    const nameSpan = hit.attrNameSpan ?? null;
     if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
-    const attrName = text.slice(nameSpan.start, nameSpan.end);
+    const attrName = hit.attrName ?? null;
+    if (!attrName) continue;
     const defs = definitionsForInstruction(hit.instruction, resources, {
       attrName,
       hostTag: hit.hostTag,
@@ -203,24 +209,42 @@ type InstructionHit = {
   len: number;
   hostTag?: string;
   hostKind?: "custom" | "native" | "none";
+  attrName?: string | null;
+  attrNameSpan?: SourceSpan | null;
 };
 
 function findInstructionsAtOffset(
   templates: readonly { rows: readonly LinkedRow[] }[],
+  irTemplates: readonly TemplateIR[],
+  domIndex: ReturnType<typeof buildDomIndex>,
   offset: number,
 ): InstructionHit[] {
   const hits: InstructionHit[] = [];
   const addHit = (
     instruction: LinkedInstruction,
     host: { hostTag?: string; hostKind?: "custom" | "native" | "none" },
+    node: DOMNode | null,
   ) => {
     const loc = instruction.loc ?? null;
     if (!loc) return;
     if (!spanContainsOffset(loc, offset)) return;
-    hits.push({ instruction, loc, len: spanLength(loc), hostTag: host.hostTag, hostKind: host.hostKind });
+    const attr = node && (node.kind === "element" || node.kind === "template") ? findAttrForSpan(node, loc) : null;
+    hits.push({
+      instruction,
+      loc,
+      len: spanLength(loc),
+      hostTag: host.hostTag,
+      hostKind: host.hostKind,
+      attrName: attr?.name ?? null,
+      attrNameSpan: attr?.nameLoc ?? null,
+    });
   };
-  for (const template of templates) {
+  for (let ti = 0; ti < templates.length; ti += 1) {
+    const template = templates[ti];
+    const irTemplate = irTemplates[ti];
+    if (!template || !irTemplate) continue;
     for (const row of template.rows ?? []) {
+      const domNode = findDomNode(domIndex, ti, row.target);
       const host: { hostTag?: string; hostKind?: "custom" | "native" | "none" } =
         row.node.kind === "element"
           ? {
@@ -229,10 +253,10 @@ function findInstructionsAtOffset(
           }
           : {};
       for (const instruction of row.instructions ?? []) {
-        addHit(instruction, host);
+        addHit(instruction, host, domNode);
         if (instruction.kind === "hydrateElement" || instruction.kind === "hydrateAttribute" || instruction.kind === "hydrateTemplateController") {
           for (const prop of instruction.props ?? []) {
-            addHit(prop, host);
+            addHit(prop, host, domNode);
           }
         }
       }
@@ -252,41 +276,6 @@ function findRow(
   return template.rows.find((row) => row.target === nodeId) ?? null;
 }
 
-function elementTagSpanAtOffset(
-  text: string,
-  span: SourceSpan | undefined,
-  tag: string,
-  offset: number,
-): SourceSpan | null {
-  if (!span) return null;
-  const openStart = span.start + 1;
-  const openEnd = openStart + tag.length;
-  if (offset >= openStart && offset < openEnd) {
-    return { start: openStart, end: openEnd, ...(span.file ? { file: span.file } : {}) };
-  }
-  const closePattern = `</${tag}>`;
-  const closeTagStart = text.lastIndexOf(closePattern, span.end);
-  if (closeTagStart !== -1 && closeTagStart > span.start) {
-    const closeNameStart = closeTagStart + 2;
-    const closeNameEnd = closeNameStart + tag.length;
-    if (offset >= closeNameStart && offset < closeNameEnd) {
-      return { start: closeNameStart, end: closeNameEnd, ...(span.file ? { file: span.file } : {}) };
-    }
-  }
-  return null;
-}
-
-function attributeNameSpan(text: string, loc: SourceSpan): SourceSpan | null {
-  const raw = text.slice(loc.start, loc.end);
-  const eq = raw.indexOf("=");
-  const namePart = (eq === -1 ? raw : raw.slice(0, eq)).trim();
-  if (!namePart) return null;
-  const nameOffset = raw.indexOf(namePart);
-  if (nameOffset < 0) return null;
-  const start = loc.start + nameOffset;
-  const end = start + namePart.length;
-  return { start, end, ...(loc.file ? { file: loc.file } : {}) };
-}
 
 function definitionsForInstruction(
   instruction: LinkedInstruction,

@@ -1,4 +1,5 @@
 import type {
+  Attr,
   AttributeParser,
   DOMNode,
   ElementNode,
@@ -11,7 +12,7 @@ import type {
   TemplateMetaIR,
   TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
-import { analyzeAttributeName, createAttributeParserFromRegistry } from "@aurelia-ls/compiler";
+import { analyzeAttributeName, createAttributeParserFromRegistry, spanContainsOffset, spanLength } from "@aurelia-ls/compiler";
 import type { WorkspaceToken } from "./types.js";
 
 const AURELIA_BUILTINS = new Set([
@@ -27,10 +28,16 @@ const AURELIA_BUILTINS = new Set([
   "$parent",
 ]);
 
+type IdentifierAst = {
+  $kind: "Identifier";
+  span: SourceSpan;
+  name: string;
+};
+
 type ExpressionAst = {
   $kind: string;
   span?: SourceSpan;
-  name?: { name: string; span?: SourceSpan };
+  name?: IdentifierAst;
   object?: ExpressionAst;
   expression?: ExpressionAst;
   func?: ExpressionAst;
@@ -45,6 +52,10 @@ type ExpressionAst = {
   right?: ExpressionAst;
   parts?: ExpressionAst[];
   expressions?: ExpressionAst[];
+  elements?: ExpressionAst[];
+  values?: ExpressionAst[];
+  properties?: { value?: ExpressionAst }[];
+  body?: ExpressionAst;
   declaration?: ExpressionAst;
   iterable?: ExpressionAst;
   ancestor?: number;
@@ -62,11 +73,13 @@ export function collectSemanticTokens(
   const parser = attrParser ?? createAttributeParserFromRegistry(syntax);
 
   const nodeMap = buildNodeMap(template.dom);
-  const elementTokens = extractElementTokens(text, template.rows, nodeMap);
-  const exprTokens = extractExpressionTokens(text, compilation.exprTable ?? [], compilation.exprSpans ?? new Map());
-  const commandTokens = extractBindingCommandTokens(text, template.rows, syntax, parser);
-  const delimiterTokens = extractInterpolationDelimiterTokens(text, template.rows);
-  const metaTokens = extractMetaElementTokens(text, template.templateMeta);
+  const attrIndex = buildAttrIndex(template.dom);
+  const elementIndex = buildElementIndex(template.dom);
+  const elementTokens = extractElementTokens(template.rows, nodeMap);
+  const exprTokens = extractExpressionTokens(compilation.exprTable ?? [], compilation.exprSpans ?? new Map());
+  const commandTokens = extractBindingCommandTokens(template.rows, syntax, parser, attrIndex, elementIndex);
+  const delimiterTokens = extractInterpolationDelimiterTokens(template.rows);
+  const metaTokens = extractMetaElementTokens(template.templateMeta);
 
   const all = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens, ...metaTokens];
   all.sort((a, b) => {
@@ -101,8 +114,74 @@ function buildNodeMap(root: DOMNode): Map<string, DOMNode> {
   return map;
 }
 
+type AttrIndexEntry = { attr: Attr; loc: SourceSpan; nameLoc: SourceSpan | null };
+
+function buildAttrIndex(root: DOMNode): AttrIndexEntry[] {
+  const entries: AttrIndexEntry[] = [];
+  const stack: DOMNode[] = [root];
+  while (stack.length) {
+    const node = stack.pop()!;
+    if (node.kind === "element" || node.kind === "template") {
+      for (const attr of node.attrs ?? []) {
+        if (!attr.loc) continue;
+        entries.push({ attr, loc: attr.loc, nameLoc: attr.nameLoc ?? null });
+      }
+      for (let i = node.children.length - 1; i >= 0; i -= 1) {
+        stack.push(node.children[i]!);
+      }
+    }
+  }
+  return entries;
+}
+
+function findAttrByLoc(entries: AttrIndexEntry[], loc: SourceSpan): Attr | null {
+  let best: Attr | null = null;
+  let bestLen = Number.POSITIVE_INFINITY;
+  for (const entry of entries) {
+    if (!spanContainsOffset(entry.loc, loc.start)) continue;
+    const len = spanLength(entry.loc);
+    if (len < bestLen) {
+      bestLen = len;
+      best = entry.attr;
+    }
+  }
+  return best;
+}
+
+function buildElementIndex(root: DOMNode): ElementNode[] {
+  const elements: ElementNode[] = [];
+  const stack: DOMNode[] = [root];
+  while (stack.length) {
+    const node = stack.pop()!;
+    if (node.kind === "element") {
+      elements.push(node as ElementNode);
+    }
+    if (node.kind === "element" || node.kind === "template") {
+      for (let i = node.children.length - 1; i >= 0; i -= 1) {
+        stack.push(node.children[i]!);
+      }
+    }
+  }
+  return elements;
+}
+
+function findElementByLoc(elements: ElementNode[], loc: SourceSpan): ElementNode | null {
+  let best: ElementNode | null = null;
+  let bestLen = Number.POSITIVE_INFINITY;
+  for (const el of elements) {
+    const span = el.loc ?? null;
+    if (!span) continue;
+    if (!spanContainsOffset(span, loc.start)) continue;
+    const len = spanLength(span);
+    if (len < bestLen) {
+      bestLen = len;
+      best = el;
+    }
+  }
+  return best;
+}
+
 function extractElementTokens(
-  text: string,
   rows: LinkedRow[],
   nodeMap: Map<string, DOMNode>,
 ): WorkspaceToken[] {
@@ -115,47 +194,34 @@ function extractElementTokens(
 
     const nodeSem = row.node as NodeSem & { kind: "element" };
     const element = node as ElementNode;
-    const loc = element.loc;
-    if (!loc) continue;
-
-    const tagStart = loc.start + 1;
-    const tagLength = element.tag.length;
     if (element.tag === "let") {
-      tokens.push({
-        type: "aureliaMetaElement",
-        span: sliceSpan(tagStart, tagStart + tagLength, loc),
-      });
-
-      if (!element.selfClosed) {
-        const closeTagPattern = `</${element.tag}>`;
-        const closeTagStart = text.lastIndexOf(closeTagPattern, loc.end);
-        if (closeTagStart !== -1) {
-          const closeNameStart = closeTagStart + 2;
-          tokens.push({
-            type: "aureliaMetaElement",
-            span: sliceSpan(closeNameStart, closeNameStart + tagLength, loc),
-          });
-        }
+      if (element.tagLoc) {
+        tokens.push({
+          type: "aureliaMetaElement",
+          span: element.tagLoc,
+        });
+      }
+      if (element.closeTagLoc) {
+        tokens.push({
+          type: "aureliaMetaElement",
+          span: element.closeTagLoc,
+        });
       }
       continue;
     }
 
     if (!nodeSem.custom) continue;
-    tokens.push({
-      type: "aureliaElement",
-      span: sliceSpan(tagStart, tagStart + tagLength, loc),
-    });
-
-    if (!element.selfClosed) {
-      const closeTagPattern = `</${element.tag}>`;
-      const closeTagStart = text.lastIndexOf(closeTagPattern, loc.end);
-      if (closeTagStart !== -1) {
-        const closeNameStart = closeTagStart + 2;
-        tokens.push({
-          type: "aureliaElement",
-          span: sliceSpan(closeNameStart, closeNameStart + tagLength, loc),
-        });
-      }
+    if (element.tagLoc) {
+      tokens.push({
+        type: "aureliaElement",
+        span: element.tagLoc,
+      });
+    }
+    if (element.closeTagLoc) {
+      tokens.push({
+        type: "aureliaElement",
+        span: element.closeTagLoc,
+      });
     }
   }
 
@@ -163,7 +229,6 @@ function extractElementTokens(
 }
 
 function extractExpressionTokens(
-  text: string,
   exprTable: readonly ExprTableEntry[],
   exprSpans: ReadonlyMap<string, SourceSpan>,
 ): WorkspaceToken[] {
@@ -171,14 +236,13 @@ function extractExpressionTokens(
   for (const entry of exprTable) {
     const exprSpan = exprSpans.get(entry.id);
     if (!exprSpan) continue;
-    walkExpression(entry.ast as ExpressionAst, text, tokens);
+    walkExpression(entry.ast as ExpressionAst, tokens);
   }
   return tokens;
 }
 
 function walkExpression(
   node: ExpressionAst | null | undefined,
-  text: string,
   tokens: WorkspaceToken[],
 ): void {
   if (!node || !node.$kind) return;
@@ -197,7 +261,7 @@ function walkExpression(
     }
 
     case "AccessMember": {
-      walkExpression(node.object, text, tokens);
+      walkExpression(node.object, tokens);
       if (node.name?.span) {
         tokens.push({
           type: "property",
@@ -217,13 +281,13 @@ function walkExpression(
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, text, tokens);
+        walkExpression(arg, tokens);
       }
       break;
     }
 
     case "CallMember": {
-      walkExpression(node.object, text, tokens);
+      walkExpression(node.object, tokens);
       if (node.name?.span) {
         tokens.push({
           type: "function",
@@ -231,7 +295,7 @@ function walkExpression(
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, text, tokens);
+        walkExpression(arg, tokens);
       }
       break;
     }
@@ -261,45 +325,45 @@ function walkExpression(
     }
 
     case "Conditional": {
-      walkExpression(node.condition, text, tokens);
-      walkExpression(node.yes, text, tokens);
-      walkExpression(node.no, text, tokens);
+      walkExpression(node.condition, tokens);
+      walkExpression(node.yes, tokens);
+      walkExpression(node.no, tokens);
       break;
     }
 
     case "Binary": {
-      walkExpression(node.left, text, tokens);
-      walkExpression(node.right, text, tokens);
+      walkExpression(node.left, tokens);
+      walkExpression(node.right, tokens);
       break;
     }
 
     case "Unary": {
-      walkExpression(node.expression, text, tokens);
+      walkExpression(node.expression, tokens);
       break;
     }
 
     case "Assign": {
-      walkExpression(node.target, text, tokens);
-      walkExpression(node.value, text, tokens);
+      walkExpression(node.target, tokens);
+      walkExpression(node.value, tokens);
       break;
     }
 
     case "AccessKeyed": {
-      walkExpression(node.object, text, tokens);
-      walkExpression(node.key, text, tokens);
+      walkExpression(node.object, tokens);
+      walkExpression(node.key, tokens);
       break;
     }
 
     case "CallFunction": {
-      walkExpression(node.func, text, tokens);
+      walkExpression(node.func, tokens);
       for (const arg of node.args ?? []) {
-        walkExpression(arg, text, tokens);
+        walkExpression(arg, tokens);
       }
       break;
     }
 
     case "ValueConverter": {
-      walkExpression(node.expression, text, tokens);
+      walkExpression(node.expression, tokens);
       if (node.name?.span) {
         tokens.push({
           type: "aureliaConverter",
@@ -307,13 +371,13 @@ function walkExpression(
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, text, tokens);
+        walkExpression(arg, tokens);
       }
       break;
     }
 
     case "BindingBehavior": {
-      walkExpression(node.expression, text, tokens);
+      walkExpression(node.expression, tokens);
       if (node.name?.span) {
         tokens.push({
           type: "aureliaBehavior",
@@ -321,37 +385,35 @@ function walkExpression(
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, text, tokens);
+        walkExpression(arg, tokens);
       }
       break;
     }
 
     case "ArrayLiteral": {
-      const arr = node as ExpressionAst & { elements?: ExpressionAst[] };
-      for (const el of arr.elements ?? []) {
-        walkExpression(el, text, tokens);
+      for (const el of node.elements ?? []) {
+        walkExpression(el, tokens);
       }
       break;
     }
 
     case "ObjectLiteral": {
-      const obj = node as ExpressionAst & { values?: ExpressionAst[] };
-      for (const val of obj.values ?? []) {
-        walkExpression(val, text, tokens);
+      for (const val of node.values ?? []) {
+        walkExpression(val, tokens);
       }
       break;
     }
 
     case "Template": {
       for (const expr of node.expressions ?? []) {
-        walkExpression(expr, text, tokens);
+        walkExpression(expr, tokens);
       }
       break;
     }
 
     case "Interpolation": {
       for (const expr of node.expressions ?? []) {
-        walkExpression(expr, text, tokens);
+        walkExpression(expr, tokens);
       }
       break;
     }
@@ -365,41 +427,37 @@ function walkExpression(
           span: decl.name.span,
         });
       } else if (decl) {
-        walkBindingPattern(decl, text, tokens);
+        walkBindingPattern(decl, tokens);
       }
-      walkExpression(node.iterable, text, tokens);
+      walkExpression(node.iterable, tokens);
       break;
     }
 
     case "ArrowFunction": {
-      const fn = node as ExpressionAst & { params?: ExpressionAst[]; body?: ExpressionAst };
-      for (const param of fn.params ?? []) {
-        walkBindingPattern(param, text, tokens);
+      for (const param of node.args ?? []) {
+        walkBindingPattern(param, tokens);
       }
-      walkExpression(fn.body, text, tokens);
+      walkExpression(node.body, tokens);
       break;
     }
 
     case "Paren": {
-      walkExpression(node.expression, text, tokens);
+      walkExpression(node.expression, tokens);
       break;
     }
 
     case "TaggedTemplate": {
-      walkExpression(node.func, text, tokens);
-      const cooked = (node as ExpressionAst & { cooked?: ExpressionAst }).cooked;
-      if (cooked) {
-        for (const expr of cooked.expressions ?? []) {
-          walkExpression(expr, text, tokens);
-        }
+      walkExpression(node.func, tokens);
+      for (const expr of node.expressions ?? []) {
+        walkExpression(expr, tokens);
       }
       break;
     }
 
     case "New": {
-      walkExpression(node.func, text, tokens);
+      walkExpression(node.func, tokens);
       for (const arg of node.args ?? []) {
-        walkExpression(arg, text, tokens);
+        walkExpression(arg, tokens);
       }
       break;
     }
@@ -413,7 +471,6 @@ function walkExpression(
 
 function walkBindingPattern(
   node: ExpressionAst,
-  text: string,
   tokens: WorkspaceToken[],
 ): void {
   if (!node || !node.$kind) return;
@@ -431,24 +488,26 @@ function walkBindingPattern(
     }
 
     case "ArrayBindingPattern": {
-      const pattern = node as ExpressionAst & { elements?: ExpressionAst[] };
-      for (const el of pattern.elements ?? []) {
-        walkBindingPattern(el, text, tokens);
+      for (const el of node.elements ?? []) {
+        walkBindingPattern(el, tokens);
       }
       break;
     }
 
     case "ObjectBindingPattern": {
-      const pattern = node as ExpressionAst & { properties?: ExpressionAst[] };
-      for (const prop of pattern.properties ?? []) {
-        walkBindingPattern(prop, text, tokens);
+      for (const prop of node.properties ?? []) {
+        if (prop.value) {
+          walkBindingPattern(prop.value, tokens);
+        }
       }
       break;
     }
 
     case "BindingPatternDefault": {
-      const def = node as ExpressionAst & { binding?: ExpressionAst };
-      walkBindingPattern(def.binding as ExpressionAst, text, tokens);
+      const def = node as ExpressionAst & { target?: ExpressionAst };
+      if (def.target) {
+        walkBindingPattern(def.target, tokens);
+      }
       break;
     }
   }
@@ -470,15 +529,16 @@ type InstructionLike =
     };
 
 function extractBindingCommandTokens(
-  text: string,
   rows: LinkedRow[],
   syntax: TemplateSyntaxRegistry,
   parser: AttributeParser,
+  attrIndex: AttrIndexEntry[],
+  elementIndex: ElementNode[],
 ): WorkspaceToken[] {
   const tokens: WorkspaceToken[] = [];
   for (const row of rows) {
     for (const ins of row.instructions) {
-      extractBindingTokensFromIR(ins, text, tokens, syntax, parser);
+      extractBindingTokensFromIR(ins, tokens, syntax, parser, attrIndex, elementIndex);
     }
   }
   return tokens;
@@ -486,10 +546,11 @@ function extractBindingCommandTokens(
 
 function extractBindingTokensFromIR(
   ins: InstructionLike,
-  text: string,
   tokens: WorkspaceToken[],
   syntax: TemplateSyntaxRegistry,
   parser: AttributeParser,
+  attrIndex: AttrIndexEntry[],
+  elementIndex: ElementNode[],
 ): void {
   const kind = instructionKind(ins);
   if (!kind) return;
@@ -498,7 +559,7 @@ function extractBindingTokensFromIR(
     const nested = "instructions" in ins ? ins.instructions : undefined;
     if (Array.isArray(nested)) {
       for (const letIns of nested) {
-        extractBindingTokensFromIR(letIns as InstructionLike, text, tokens, syntax, parser);
+        extractBindingTokensFromIR(letIns as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex);
       }
     }
     return;
@@ -507,9 +568,29 @@ function extractBindingTokensFromIR(
   const loc = ins.loc;
   if (!loc) return;
 
-  const attrInfo = getAttributeNameInfo(text, loc);
-  if (!attrInfo) return;
-  const { attrName, nameStart } = attrInfo;
+  if (kind === "hydrateElement") {
+    if (!instructionResName(hasRes(ins) ? ins.res : null)) return;
+    const element = findElementByLoc(elementIndex, loc);
+    if (element?.tagLoc) {
+      tokens.push({ type: "aureliaElement", span: element.tagLoc });
+    }
+    if (element?.closeTagLoc) {
+      tokens.push({ type: "aureliaElement", span: element.closeTagLoc });
+    }
+    const props = "props" in ins ? ins.props : undefined;
+    if (Array.isArray(props)) {
+      for (const prop of props) {
+        extractBindingTokensFromIR(prop as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex);
+      }
+    }
+    return;
+  }
+
+  const attr = findAttrByLoc(attrIndex, loc);
+  const attrName = attr?.name ?? null;
+  const nameSpan = attr?.nameLoc ?? null;
+  if (!attrName || !nameSpan) return;
+  const nameStart = nameSpan.start;
   const analysis = analyzeAttributeName(attrName, syntax, parser);
   const commandSpan = analysis.commandSpan;
   const targetSpan = resolveTargetSpan(attrName, analysis);
@@ -520,12 +601,10 @@ function extractBindingTokensFromIR(
   if (kind === "hydrateTemplateController") {
     const res = instructionResName(hasRes(ins) ? ins.res : null);
     if (!res) return;
-    const controllerPos = attrName.indexOf(res);
-    if (controllerPos !== -1) {
-      const start = nameStart + controllerPos;
+    if (targetSpan) {
       tokens.push({
         type: "aureliaController",
-        span: sliceSpan(start, start + res.length, loc),
+        span: sliceSpan(nameStart + targetSpan.start, nameStart + targetSpan.end, loc),
       });
     }
 
@@ -537,7 +616,7 @@ function extractBindingTokensFromIR(
     if (nestedRows) {
       for (const row of nestedRows) {
         for (const nestedIns of row.instructions) {
-          extractBindingTokensFromIR(nestedIns as InstructionLike, text, tokens, syntax, parser);
+          extractBindingTokensFromIR(nestedIns as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex);
         }
       }
     }
@@ -577,33 +656,6 @@ function extractBindingTokensFromIR(
   if (kind === "refBinding") {
     if (commandSpan) {
       emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
-    }
-    return;
-  }
-
-  if (kind === "hydrateElement") {
-    const elementName = instructionResName(hasRes(ins) ? ins.res : null);
-    if (!elementName) return;
-    const openTagStart = loc.start + 1;
-    tokens.push({
-      type: "aureliaElement",
-      span: sliceSpan(openTagStart, openTagStart + elementName.length, loc),
-    });
-
-    const closeTagPattern = `</${elementName}>`;
-    const closeTagStart = text.lastIndexOf(closeTagPattern, loc.end);
-    if (closeTagStart !== -1 && closeTagStart > loc.start) {
-      const closeNameStart = closeTagStart + 2;
-      tokens.push({
-        type: "aureliaElement",
-        span: sliceSpan(closeNameStart, closeNameStart + elementName.length, loc),
-      });
-    }
-    const props = "props" in ins ? ins.props : undefined;
-    if (Array.isArray(props)) {
-      for (const prop of props) {
-        extractBindingTokensFromIR(prop as InstructionLike, text, tokens, syntax, parser);
-      }
     }
     return;
   }
@@ -671,11 +723,11 @@ function emitCommandToken(
   });
 }
 
-function extractInterpolationDelimiterTokens(text: string, rows: LinkedRow[]): WorkspaceToken[] {
+function extractInterpolationDelimiterTokens(rows: LinkedRow[]): WorkspaceToken[] {
   const tokens: WorkspaceToken[] = [];
   for (const row of rows) {
     for (const ins of row.instructions) {
-      extractDelimitersFromInstruction(ins, text, tokens);
+      extractDelimitersFromInstruction(ins, tokens);
     }
   }
   return tokens;
@@ -683,7 +735,6 @@ function extractInterpolationDelimiterTokens(text: string, rows: LinkedRow[]): W
 
 function extractDelimitersFromInstruction(
   ins: LinkedInstruction,
-  text: string,
   tokens: WorkspaceToken[],
 ): void {
   const from = (ins as { from?: { kind?: string; exprs?: { loc?: SourceSpan | null }[] } }).from;
@@ -695,7 +746,7 @@ function extractDelimitersFromInstruction(
     if (def?.rows) {
       for (const nestedRow of def.rows) {
         for (const nestedIns of nestedRow.instructions) {
-          extractDelimitersFromIR(nestedIns as { type?: string; from?: unknown; def?: { rows: { instructions: unknown[] }[] } }, text, tokens);
+          extractDelimitersFromIR(nestedIns as { type?: string; from?: unknown; def?: { rows: { instructions: unknown[] }[] } }, tokens);
         }
       }
     }
@@ -704,7 +755,6 @@ function extractDelimitersFromInstruction(
 
 function extractDelimitersFromIR(
   ins: { type?: string; from?: unknown; def?: { rows: { instructions: unknown[] }[] } },
-  _text: string,
   tokens: WorkspaceToken[],
 ): void {
   const from = ins.from as { kind?: string; exprs?: { loc?: SourceSpan | null }[] } | undefined;
@@ -714,7 +764,7 @@ function extractDelimitersFromIR(
   if (ins.type === "hydrateTemplateController" && ins.def?.rows) {
     for (const nestedRow of ins.def.rows) {
       for (const nestedIns of nestedRow.instructions) {
-        extractDelimitersFromIR(nestedIns as typeof ins, "", tokens);
+        extractDelimitersFromIR(nestedIns as typeof ins, tokens);
       }
     }
   }
@@ -740,7 +790,7 @@ function emitDelimiterTokensFromInterp(
   }
 }
 
-function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined): WorkspaceToken[] {
+function extractMetaElementTokens(meta: TemplateMetaIR | undefined): WorkspaceToken[] {
   if (!meta) return [];
   const tokens: WorkspaceToken[] = [];
 
@@ -748,24 +798,21 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
     if (imp.tagLoc && imp.tagLoc.start < imp.tagLoc.end) {
       tokens.push({ type: "aureliaMetaElement", span: imp.tagLoc });
     }
-    const fromAttr = findMetaAttributeName(text, imp.from.loc, "from");
-    if (fromAttr) {
-      tokens.push({ type: "aureliaMetaAttribute", span: fromAttr });
+    if (imp.from.nameLoc) {
+      tokens.push({ type: "aureliaMetaAttribute", span: imp.from.nameLoc });
     }
     if (imp.from.loc && imp.from.loc.start < imp.from.loc.end) {
       tokens.push({ type: "string", span: imp.from.loc });
     }
     if (imp.defaultAlias?.loc && imp.defaultAlias.loc.start < imp.defaultAlias.loc.end) {
-      const asAttr = findMetaAttributeName(text, imp.defaultAlias.loc, "as");
-      if (asAttr) {
-        tokens.push({ type: "aureliaMetaAttribute", span: asAttr });
+      if (imp.defaultAlias.nameLoc) {
+        tokens.push({ type: "aureliaMetaAttribute", span: imp.defaultAlias.nameLoc });
       }
       tokens.push({ type: "variable", modifiers: ["declaration"], span: imp.defaultAlias.loc });
     }
     for (const na of imp.namedAliases) {
-      const asSpan = findNamedAliasAttributeSpan(text, na.exportName.loc);
-      if (asSpan) {
-        tokens.push({ type: "aureliaMetaAttribute", span: asSpan });
+      if (na.asLoc) {
+        tokens.push({ type: "aureliaMetaAttribute", span: na.asLoc });
       }
       if (na.exportName.loc && na.exportName.loc.start < na.exportName.loc.end) {
         tokens.push({ type: "variable", span: na.exportName.loc });
@@ -780,24 +827,21 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
     if (bindable.tagLoc && bindable.tagLoc.start < bindable.tagLoc.end) {
       tokens.push({ type: "aureliaMetaElement", span: bindable.tagLoc });
     }
-    const nameAttr = findMetaAttributeName(text, bindable.name.loc, "name");
-    if (nameAttr) {
-      tokens.push({ type: "aureliaMetaAttribute", span: nameAttr });
+    if (bindable.name.nameLoc) {
+      tokens.push({ type: "aureliaMetaAttribute", span: bindable.name.nameLoc });
     }
     if (bindable.name.loc && bindable.name.loc.start < bindable.name.loc.end) {
       tokens.push({ type: "aureliaBindable", modifiers: ["declaration"], span: bindable.name.loc });
     }
     if (bindable.mode?.loc && bindable.mode.loc.start < bindable.mode.loc.end) {
-      const modeAttr = findMetaAttributeName(text, bindable.mode.loc, "mode");
-      if (modeAttr) {
-        tokens.push({ type: "aureliaMetaAttribute", span: modeAttr });
+      if (bindable.mode.nameLoc) {
+        tokens.push({ type: "aureliaMetaAttribute", span: bindable.mode.nameLoc });
       }
       tokens.push({ type: "keyword", span: bindable.mode.loc });
     }
     if (bindable.attribute?.loc && bindable.attribute.loc.start < bindable.attribute.loc.end) {
-      const attributeAttr = findMetaAttributeName(text, bindable.attribute.loc, "attribute");
-      if (attributeAttr) {
-        tokens.push({ type: "aureliaMetaAttribute", span: attributeAttr });
+      if (bindable.attribute.nameLoc) {
+        tokens.push({ type: "aureliaMetaAttribute", span: bindable.attribute.nameLoc });
       }
       tokens.push({ type: "aureliaAttribute", span: bindable.attribute.loc });
     }
@@ -807,9 +851,8 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
     tokens.push({ type: "aureliaMetaElement", span: meta.shadowDom.tagLoc });
   }
   if (meta.shadowDom?.mode?.loc) {
-    const modeAttr = findMetaAttributeName(text, meta.shadowDom.mode.loc, "mode");
-    if (modeAttr) {
-      tokens.push({ type: "aureliaMetaAttribute", span: modeAttr });
+    if (meta.shadowDom.mode.nameLoc) {
+      tokens.push({ type: "aureliaMetaAttribute", span: meta.shadowDom.mode.nameLoc });
     }
   }
   if (meta.containerless?.tagLoc) {
@@ -824,9 +867,8 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
     }
     for (const name of alias.names) {
       if (name.loc) {
-        const aliasAttr = findMetaAttributeName(text, name.loc, "name");
-        if (aliasAttr) {
-          tokens.push({ type: "aureliaMetaAttribute", span: aliasAttr });
+        if (name.nameLoc) {
+          tokens.push({ type: "aureliaMetaAttribute", span: name.nameLoc });
         }
         tokens.push({ type: "variable", modifiers: ["declaration"], span: name.loc });
       }
@@ -834,24 +876,6 @@ function extractMetaElementTokens(text: string, meta: TemplateMetaIR | undefined
   }
 
   return tokens;
-}
-
-function findPropertyStart(text: string, span: SourceSpan, name: string): number {
-  const slice = text.slice(span.start, span.end);
-  const idx = slice.lastIndexOf(`.${name}`);
-  if (idx === -1) return -1;
-  return span.start + idx + 1;
-}
-
-function findPipeOrAmpName(text: string, span: SourceSpan, separator: "|" | "&", name: string): number {
-  const searchText = text.slice(span.start, span.end);
-  const sepIndex = searchText.lastIndexOf(separator);
-  if (sepIndex === -1) return -1;
-  const afterSep = searchText.slice(sepIndex + 1);
-  const whitespaceLen = afterSep.match(/^\s*/)?.[0].length ?? 0;
-  const nameStart = span.start + sepIndex + 1 + whitespaceLen;
-  const candidate = text.slice(nameStart, nameStart + name.length);
-  return candidate === name ? nameStart : -1;
 }
 
 function sliceSpan(start: number, end: number, base?: SourceSpan): SourceSpan {
@@ -866,19 +890,6 @@ function tokenKey(token: WorkspaceToken): string {
   return `${token.type}:${token.span.start}:${token.span.end}:${mods}`;
 }
 
-function getAttributeNameInfo(
-  text: string,
-  loc: SourceSpan,
-): { attrName: string; nameStart: number } | null {
-  const attrText = text.slice(loc.start, loc.end);
-  const eqPos = attrText.indexOf("=");
-  const rawAttrName = eqPos !== -1 ? attrText.slice(0, eqPos) : attrText;
-  const attrName = rawAttrName.trim();
-  if (!attrName) return null;
-  const whitespaceOffset = rawAttrName.indexOf(attrName);
-  return { attrName, nameStart: loc.start + whitespaceOffset };
-}
-
 function resolveTargetSpan(
   attrName: string,
   analysis: ReturnType<typeof analyzeAttributeName>,
@@ -887,34 +898,4 @@ function resolveTargetSpan(
   if (analysis.syntax.command) return null;
   if (!attrName) return null;
   return { start: 0, end: attrName.length };
-}
-
-function findMetaAttributeName(
-  text: string,
-  valueLoc: SourceSpan,
-  expectedName?: string,
-): SourceSpan | null {
-  if (valueLoc.start <= 0) return null;
-  const eqPos = text.lastIndexOf("=", valueLoc.start);
-  if (eqPos === -1) return null;
-  let end = eqPos;
-  while (end > 0 && /\s/.test(text[end - 1]!)) {
-    end -= 1;
-  }
-  let start = end;
-  while (start > 0 && /[A-Za-z0-9_.:-]/.test(text[start - 1]!)) {
-    start -= 1;
-  }
-  if (start >= end) return null;
-  const name = text.slice(start, end);
-  if (expectedName && name.toLowerCase() !== expectedName.toLowerCase()) {
-    return null;
-  }
-  return valueLoc.file ? { start, end, file: valueLoc.file } : { start, end };
-}
-
-function findNamedAliasAttributeSpan(text: string, exportLoc: SourceSpan): SourceSpan | null {
-  const start = exportLoc.end;
-  if (text.slice(start, start + 3) !== ".as") return null;
-  return exportLoc.file ? { start, end: start + 3, file: exportLoc.file } : { start, end: start + 3 };
 }

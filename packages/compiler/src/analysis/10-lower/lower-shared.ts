@@ -124,6 +124,32 @@ export function attrLoc(el: P5Element, attrName: string): P5Loc | null {
 }
 
 /**
+ * Returns the location of just the attribute name.
+ * Parse5's attrLoc covers the full `name="value"` span.
+ */
+export function attrNameLoc(el: P5Element, attrName: string, sourceText: string): P5Loc | null {
+  const loc = attrLoc(el, attrName);
+  if (!loc || loc.startOffset == null || loc.endOffset == null) return loc;
+
+  const attrStart = loc.startOffset;
+  const attrEnd = loc.endOffset;
+  const attrText = sourceText.slice(attrStart, attrEnd);
+
+  let i = 0;
+  while (i < attrText.length && /\s/.test(attrText[i]!)) i++;
+  const nameStart = i;
+  while (i < attrText.length) {
+    const ch = attrText[i]!;
+    if (ch === "=" || /\s/.test(ch)) break;
+    i++;
+  }
+  const nameEnd = i;
+  if (nameEnd <= nameStart) return null;
+
+  return { ...loc, startOffset: attrStart + nameStart, endOffset: attrStart + nameEnd };
+}
+
+/**
  * Returns the location of just the attribute value (inside quotes).
  * Parse5's attrLoc covers the full `name="value"` span, but expression parsing
  * needs the value-only span so local offsets rebase correctly.
