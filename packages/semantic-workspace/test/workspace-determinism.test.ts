@@ -12,6 +12,7 @@ describe("workspace determinism (fingerprint)", () => {
     });
   });
 
+  // NOTE: This suite only covers fingerprint stability. Incremental invalidation is tracked in workspace-incremental-churn.
   it("keeps snapshot fingerprints stable for identical inputs", () => {
     const first = harness.workspace.snapshot().meta.fingerprint;
     const second = harness.workspace.snapshot().meta.fingerprint;
