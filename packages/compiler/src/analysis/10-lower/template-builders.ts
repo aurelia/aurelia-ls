@@ -41,9 +41,19 @@ export type TemplateBuildContext = {
   templateIds: TemplateIdAllocator;
 };
 
+export type ProjectionEntry = {
+  host: P5Element;
+  projections: ProjectionDef[];
+};
+
+export type ProjectionIndex = {
+  map: ProjectionMap;
+  entries: ProjectionEntry[];
+};
+
 const DEFAULT_SLOT_NAME = "default";
 
-export function buildProjectionMap(
+export function buildProjectionIndex(
   rootLike: { childNodes?: P5Node[] },
   attrParser: AttributeParser,
   table: ExprTable,
@@ -52,8 +62,9 @@ export function buildProjectionMap(
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
   skipTags?: Set<string>,
-): ProjectionMap {
+): ProjectionIndex {
   const projectionMap: ProjectionMap = new WeakMap();
+  const entries: ProjectionEntry[] = [];
   extractProjections(
     rootLike,
     attrParser,
@@ -63,9 +74,10 @@ export function buildProjectionMap(
     collectRows,
     ctx,
     projectionMap,
+    entries,
     skipTags,
   );
-  return projectionMap;
+  return { map: projectionMap, entries };
 }
 
 export function templateOfElementChildren(
@@ -76,7 +88,7 @@ export function templateOfElementChildren(
   catalog: ResourceCatalog,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
-  origin?: TemplateOrigin,
+  origin: TemplateOrigin,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
@@ -104,7 +116,7 @@ export function templateOfElementChildrenWithMap(
   catalog: ResourceCatalog,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
-  origin?: TemplateOrigin,
+  origin: TemplateOrigin,
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
@@ -165,7 +177,7 @@ export function templateOfTemplateContent(
   catalog: ResourceCatalog,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
-  origin?: TemplateOrigin,
+  origin: TemplateOrigin,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   return buildTemplateFrom(
@@ -203,7 +215,9 @@ export function makeWrapperTemplate(
       instructions: [inner],
     },
   ];
-  const t: TemplateIR = { id: ctx.templateIds.allocate(), dom, rows };
+  const host = "host" in inner.def.origin ? inner.def.origin.host : undefined;
+  const origin: TemplateOrigin = { kind: "synthetic", reason: "controller-wrapper", ...(host ? { host } : {}) };
+  const t: TemplateIR = { id: ctx.templateIds.allocate(), dom, rows, origin };
   nestedTemplates.push(t);
   return t;
 }
@@ -218,12 +232,13 @@ export function buildTemplateFrom(
   catalog: ResourceCatalog,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
-  origin?: TemplateOrigin,
+  origin: TemplateOrigin,
 ): TemplateIR {
   const templateId = ctx.templateIds.allocate();
   const templateCtx: TemplateBuildContext = { templateId, templateIds: ctx.templateIds };
+  const domIdMap = idMap ?? new WeakMap<P5Node, NodeId>();
 
-  const projectionMap = buildProjectionMap(
+  const projectionIndex = buildProjectionIndex(
     rootLike as { childNodes?: P5Node[] },
     attrParser,
     table,
@@ -242,9 +257,9 @@ export function buildTemplateFrom(
       ids,
       table.source,
       table.sourceText,
-      idMap,
+      domIdMap,
       undefined,
-      projectionMap,
+      projectionIndex.map,
     ),
     loc: null,
   };
@@ -259,11 +274,33 @@ export function buildTemplateFrom(
     catalog,
     templateCtx,
     undefined,
-    projectionMap,
+    projectionIndex.map,
   );
-  const t: TemplateIR = { id: templateId, dom, rows, ...(origin ? { origin } : {}) };
+  applyProjectionOrigins(projectionIndex.entries, domIdMap, templateId);
+  const t: TemplateIR = { id: templateId, dom, rows, origin };
   nestedTemplates.push(t);
   return t;
+}
+
+export function applyProjectionOrigins(
+  entries: ProjectionEntry[],
+  idMap: WeakMap<P5Node, NodeId>,
+  templateId: TemplateId,
+): void {
+  if (entries.length === 0) return;
+  for (const entry of entries) {
+    const hostId = idMap.get(entry.host as P5Node);
+    if (!hostId) {
+      throw new Error(`Projection origin host node not found for template ${templateId}.`);
+    }
+    for (const projection of entry.projections) {
+      projection.def.origin = {
+        kind: "projection",
+        host: { templateId, nodeId: hostId },
+        slot: projection.slot ?? null,
+      };
+    }
+  }
 }
 
 function extractProjections(
@@ -275,6 +312,7 @@ function extractProjections(
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
   projectionMap: ProjectionMap,
+  entries: ProjectionEntry[],
   skipTags?: Set<string>,
 ): void {
   const kids = rootLike.childNodes ?? [];
@@ -292,6 +330,7 @@ function extractProjections(
         collectRows,
         ctx,
         projectionMap,
+        entries,
         skipTags,
       );
       continue;
@@ -308,6 +347,7 @@ function extractProjections(
     );
     if (projections && projections.length > 0) {
       projectionMap.set(kid, projections);
+      entries.push({ host: kid, projections });
     }
 
     const childRoot = kid.nodeName === "template"
@@ -322,6 +362,7 @@ function extractProjections(
       collectRows,
       ctx,
       projectionMap,
+      entries,
       skipTags,
     );
   }
@@ -404,6 +445,7 @@ function extractElementProjections(
       catalog,
       collectRows,
       ctx,
+      { kind: "synthetic", reason: "projection" },
     );
     defs.push({ slot: slotName, def });
   }

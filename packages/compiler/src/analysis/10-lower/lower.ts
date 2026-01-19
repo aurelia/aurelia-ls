@@ -1,16 +1,16 @@
 import { parseFragment } from "parse5";
 
-import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode } from "../../model/ir.js";
+import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode, NodeId } from "../../model/ir.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ResourceCatalog } from "../../language/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
-import { ExprTable, DomIdAllocator } from "./lower-shared.js";
+import { ExprTable, DomIdAllocator, type P5Node } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
-import { buildProjectionMap, type TemplateBuildContext } from "./template-builders.js";
+import { applyProjectionOrigins, buildProjectionIndex, type TemplateBuildContext } from "./template-builders.js";
 import { TemplateIdAllocator } from "../../model/identity.js";
 
 export interface BuildIrOptions {
@@ -54,7 +54,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     // Tags to skip during DOM building and row collection
     const skipTags = META_ELEMENT_TAGS;
 
-    const projectionMap = buildProjectionMap(
+    const projectionIndex = buildProjectionIndex(
       p5,
       opts.attrParser,
       table,
@@ -67,14 +67,17 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
 
     // Build DOM tree (skipping meta elements)
     trace.event("lower.dom.start");
-    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, html, undefined, skipTags, projectionMap);
+    const domIdMap = new WeakMap<P5Node, NodeId>();
+    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, html, domIdMap, skipTags, projectionIndex.map);
     trace.event("lower.dom.complete");
 
     // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, rootCtx, skipTags, projectionMap);
+    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, rootCtx, skipTags, projectionIndex.map);
     trace.event("lower.rows.complete");
+
+    applyProjectionOrigins(projectionIndex.entries, domIdMap, rootTemplateId);
 
     // Build root template with meta
     const root: TemplateIR = {
@@ -83,6 +86,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
       rows,
       name: opts.name!,
       templateMeta,
+      origin: { kind: "root", file: table.source.id },
     };
 
     const result: IrModule = {

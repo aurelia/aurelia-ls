@@ -14,6 +14,7 @@ import type {
   NodeId,
   PropertyBindingIR,
   SourceSpan,
+  TemplateOrigin,
   TemplateHostRef,
   TemplateIR,
 } from "../../model/ir.js";
@@ -363,7 +364,7 @@ function buildRightmostController(
     catalog,
     collectRows,
     ctx,
-    { kind: "controller", host },
+    { kind: "controller", host, controller: name },
   );
 
   // Build switch branch info for case/default-case controllers
@@ -440,7 +441,7 @@ function buildPromiseController(
     catalog,
     collectRows,
     ctx,
-    { kind: "controller", host },
+    { kind: "controller", host, controller: "promise" },
   );
   injectPromiseBranchesIntoDef(el, def, idMap, attrParser, table, nestedTemplates, catalog, props[0]!, collectRows, ctx);
   return [createHydrateInstruction("promise", def, props, locSpan)];
@@ -521,9 +522,14 @@ function injectPromiseBranchesIntoDef(
     }
 
     // Build branch definition
+    const branchOrigin: TemplateOrigin = {
+      kind: "branch",
+      host: { templateId: def.id, nodeId: target },
+      branch: branch.kind,
+    };
     const branchDef = branch.isTemplate
-      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows, ctx)
-      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx);
+      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin)
+      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin);
 
     for (const row of branchDef.rows) {
       row.instructions = row.instructions.filter((ins) => !isBranchMarker(ins));

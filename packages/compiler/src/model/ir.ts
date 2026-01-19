@@ -427,13 +427,17 @@ export interface TemplateHostRef {
 }
 
 export type TemplateOrigin =
-  | { kind: "controller"; host: TemplateHostRef };
+  | { kind: "root"; file: SourceFileId }
+  | { kind: "controller"; host: TemplateHostRef; controller: TemplateControllerRes }
+  | { kind: "branch"; host: TemplateHostRef; branch: ControllerBranchInfo["kind"] }
+  | { kind: "projection"; host: TemplateHostRef; slot: string | null }
+  | { kind: "synthetic"; reason: string; host?: TemplateHostRef };
 
 // NOTE: Nested TemplateIR instances appear under controllers; their NodeIds start at '0' independently.
 /** Each template has a synthetic fragment root (<template>-like) as `dom`. */
 export interface TemplateIR {
   /** Stable identifier for this template within the module. */
-  id?: TemplateId;
+  id: TemplateId;
   dom: TemplateNode; // root with children = top-level nodes
   rows: InstructionRow[];
   name?: string;
@@ -447,7 +451,7 @@ export interface TemplateIR {
    */
   templateMeta?: TemplateMetaIR;
   /** Provenance for nested templates (e.g., template controllers). */
-  origin?: TemplateOrigin;
+  origin: TemplateOrigin;
 }
 
 /* ===========================

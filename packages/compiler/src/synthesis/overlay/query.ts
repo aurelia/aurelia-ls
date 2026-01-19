@@ -17,7 +17,7 @@ import type { TypeRef } from "../../language/registry.js";
 // Model imports
 import type { BindingMode, DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR, TemplateId } from "../../model/ir.js";
 import type { FrameId } from "../../model/symbols.js";
-import { brandString, idKey } from "../../model/identity.js";
+import { idKey } from "../../model/identity.js";
 import { pickNarrowestContaining, spanContainsOffset } from "../../model/span.js";
 
 // Local imports
@@ -136,7 +136,7 @@ function indexDomAll(templates: TemplateIR[]): TemplateDomIndex {
   const templateIndexById = new Map<TemplateId, number>();
 
   templates?.forEach((t, ti) => {
-    const templateId = resolveTemplateId(t, ti);
+    const templateId = t.id;
     templateIdByIndex[ti] = templateId;
     templateIndexById.set(templateId, ti);
 
@@ -161,10 +161,6 @@ function indexDomAll(templates: TemplateIR[]): TemplateDomIndex {
     domByTemplate.set(ti, domMap);
   });
   return { nodes, nodesByTemplate, domByTemplate, templateIdByIndex, templateIndexById };
-}
-
-function resolveTemplateId(template: TemplateIR, index: number): TemplateId {
-  return template.id ?? brandString<"TemplateId">(`t${index}`);
 }
 
 function rowKey(templateIndex: number, id: NodeId): string {
@@ -208,11 +204,13 @@ function indexTemplateOrigins(
   const out: OriginCandidate[] = [];
   for (let i = 0; i < templates.length; i += 1) {
     const template = templates[i];
-    if (!template?.origin || template.origin.kind !== "controller") continue;
-    const hostTemplateIndex = templateIndexById.get(template.origin.host.templateId);
+    if (!template) continue;
+    const origin = template.origin;
+    if (origin.kind !== "controller" && origin.kind !== "branch") continue;
+    const hostTemplateIndex = templateIndexById.get(origin.host.templateId);
     if (hostTemplateIndex == null) continue;
     const domMap = domByTemplate.get(hostTemplateIndex);
-    const hostNode = domMap?.get(idKey(template.origin.host.nodeId));
+    const hostNode = domMap?.get(idKey(origin.host.nodeId));
     const hostSpan = hostNode?.loc ?? null;
     if (!hostSpan) continue;
     out.push({ templateIndex: i, hostSpan });
