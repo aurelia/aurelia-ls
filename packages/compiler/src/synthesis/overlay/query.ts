@@ -15,9 +15,9 @@ import type {
 import type { TypeRef } from "../../language/registry.js";
 
 // Model imports
-import type { BindingMode, DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR } from "../../model/ir.js";
+import type { BindingMode, DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR, TemplateId } from "../../model/ir.js";
 import type { FrameId } from "../../model/symbols.js";
-import { idKey } from "../../model/identity.js";
+import { brandString, idKey } from "../../model/identity.js";
 import { pickNarrowestContaining, spanContainsOffset } from "../../model/span.js";
 
 // Local imports
@@ -66,14 +66,21 @@ export function buildTemplateQuery(
   typecheck: TypecheckModule,
 ): TemplateQueryFacade {
   if (!irModule) return buildPendingQueryFacade(mapping, typecheck);
-  const nodes = indexDomAll(irModule);
+  const domIndex = indexDomAll(irModule.templates);
+  const originCandidates = indexTemplateOrigins(irModule.templates, domIndex.templateIndexById, domIndex.domByTemplate);
   const rowsByTarget = indexRowsAll(linked);
   const expectedByExpr = typecheck.expectedByExpr;
   const controllers = indexControllers(linked);
 
   return {
     nodeAt(htmlOffset) {
-      return pickNodeAt(nodes, rowsByTarget, htmlOffset);
+      const origin = pickOriginTemplateAt(originCandidates, htmlOffset);
+      if (origin) {
+        const originNodes = domIndex.nodesByTemplate.get(origin.templateIndex);
+        const hit = originNodes ? pickNodeAt(originNodes, rowsByTarget, htmlOffset) : null;
+        if (hit) return hit;
+      }
+      return pickNodeAt(domIndex.nodes, rowsByTarget, htmlOffset);
     },
     bindablesFor(node) {
       const row = rowsByTarget.get(rowKey(node.templateIndex, node.id));
@@ -113,13 +120,33 @@ type NodeIndex = {
   hostKind: "custom" | "native" | "none";
 };
 
-function indexDomAll(ir: { templates: TemplateIR[] }): NodeIndex[] {
-  const out: NodeIndex[] = [];
-  ir.templates?.forEach((t, ti) => {
+type TemplateDomIndex = {
+  nodes: NodeIndex[];
+  nodesByTemplate: Map<number, NodeIndex[]>;
+  domByTemplate: Map<number, Map<string, DOMNode>>;
+  templateIdByIndex: TemplateId[];
+  templateIndexById: Map<TemplateId, number>;
+};
+
+function indexDomAll(templates: TemplateIR[]): TemplateDomIndex {
+  const nodes: NodeIndex[] = [];
+  const nodesByTemplate = new Map<number, NodeIndex[]>();
+  const domByTemplate = new Map<number, Map<string, DOMNode>>();
+  const templateIdByIndex: TemplateId[] = [];
+  const templateIndexById = new Map<TemplateId, number>();
+
+  templates?.forEach((t, ti) => {
+    const templateId = resolveTemplateId(t, ti);
+    templateIdByIndex[ti] = templateId;
+    templateIndexById.set(templateId, ti);
+
+    const templateNodes: NodeIndex[] = [];
+    const domMap = new Map<string, DOMNode>();
     const stack: DOMNode[] = [t.dom];
     while (stack.length) {
       const n = stack.pop()!;
-      out.push({ id: n.id, node: n, templateIndex: ti, span: n.loc ?? null, kind: n.kind, hostKind: "none" });
+      templateNodes.push({ id: n.id, node: n, templateIndex: ti, span: n.loc ?? null, kind: n.kind, hostKind: "none" });
+      domMap.set(idKey(n.id), n);
       switch (n.kind) {
         case "element":
         case "template":
@@ -129,8 +156,15 @@ function indexDomAll(ir: { templates: TemplateIR[] }): NodeIndex[] {
           break;
       }
     }
+    nodes.push(...templateNodes);
+    nodesByTemplate.set(ti, templateNodes);
+    domByTemplate.set(ti, domMap);
   });
-  return out;
+  return { nodes, nodesByTemplate, domByTemplate, templateIdByIndex, templateIndexById };
+}
+
+function resolveTemplateId(template: TemplateIR, index: number): TemplateId {
+  return template.id ?? brandString<"TemplateId">(`t${index}`);
 }
 
 function rowKey(templateIndex: number, id: NodeId): string {
@@ -159,6 +193,45 @@ function indexControllers(linked: LinkedSemanticsModule): ControllerIndex[] {
     }
   }
   return out;
+}
+
+type OriginCandidate = {
+  templateIndex: number;
+  hostSpan: SourceSpan;
+};
+
+function indexTemplateOrigins(
+  templates: TemplateIR[],
+  templateIndexById: Map<TemplateId, number>,
+  domByTemplate: Map<number, Map<string, DOMNode>>,
+): OriginCandidate[] {
+  const out: OriginCandidate[] = [];
+  for (let i = 0; i < templates.length; i += 1) {
+    const template = templates[i];
+    if (!template?.origin || template.origin.kind !== "controller") continue;
+    const hostTemplateIndex = templateIndexById.get(template.origin.host.templateId);
+    if (hostTemplateIndex == null) continue;
+    const domMap = domByTemplate.get(hostTemplateIndex);
+    const hostNode = domMap?.get(idKey(template.origin.host.nodeId));
+    const hostSpan = hostNode?.loc ?? null;
+    if (!hostSpan) continue;
+    out.push({ templateIndex: i, hostSpan });
+  }
+  return out;
+}
+
+function pickOriginTemplateAt(candidates: OriginCandidate[], offset: number): OriginCandidate | null {
+  let best: OriginCandidate | null = null;
+  let bestLen = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    if (!spanContainsOffset(candidate.hostSpan, offset)) continue;
+    const len = candidate.hostSpan.end - candidate.hostSpan.start;
+    if (len < bestLen) {
+      bestLen = len;
+      best = candidate;
+    }
+  }
+  return best;
 }
 
 function pickNodeAt(nodes: NodeIndex[], rows: Map<string, LinkedRow>, offset: number): TemplateNodeInfo | null {

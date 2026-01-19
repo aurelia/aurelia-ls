@@ -1,12 +1,13 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ResourceCatalog } from "../../language/registry.js";
-import type { InstructionRow, TemplateIR } from "../../model/ir.js";
+import type { InstructionRow, TemplateHostRef, TemplateIR } from "../../model/ir.js";
 import { collectControllers } from "./controller-lowering.js";
 import { lowerElementAttributes } from "./element-lowering.js";
 import type { ExprTable, DomIdAllocator, P5Node, P5Template, ProjectionMap } from "./lower-shared.js";
 import { findAttr, isElement, isText } from "./lower-shared.js";
 import { lowerLetElement } from "./let-lowering.js";
 import { lowerTextNode } from "./text-lowering.js";
+import type { TemplateBuildContext } from "./template-builders.js";
 
 export function collectRows(
   p: { childNodes?: P5Node[] },
@@ -16,6 +17,7 @@ export function collectRows(
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[],
   catalog: ResourceCatalog,
+  ctx: TemplateBuildContext,
   skipTags?: Set<string>,
   projectionMap?: ProjectionMap,
 ): void {
@@ -29,7 +31,7 @@ export function collectRows(
         // But process their children - parse5 may have nested content inside them
         if (skipTags?.has(tag)) {
           // Recursively process children
-          collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
+          collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, ctx, skipTags, projectionMap);
           continue;
         }
 
@@ -49,7 +51,8 @@ export function collectRows(
           continue;
         }
 
-        const ctrlRows = collectControllers(n, attrParser, table, nestedTemplates, catalog, collectRows);
+        const host: TemplateHostRef = { templateId: ctx.templateId, nodeId: target };
+        const ctrlRows = collectControllers(n, attrParser, table, nestedTemplates, catalog, collectRows, ctx, host);
         const nodeRows =
           ctrlRows.length > 0
             ? ctrlRows
@@ -70,12 +73,13 @@ export function collectRows(
                 nestedTemplates,
                 rows,
                 catalog,
+                ctx,
                 skipTags,
                 projectionMap,
               );
             }
           } else {
-            collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
+            collectRows(n, ids, attrParser, table, nestedTemplates, rows, catalog, ctx, skipTags, projectionMap);
           }
         }
         ids.exitElement();

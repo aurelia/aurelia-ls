@@ -10,7 +10,8 @@ import { ExprTable, DomIdAllocator } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
-import { buildProjectionMap } from "./template-builders.js";
+import { buildProjectionMap, type TemplateBuildContext } from "./template-builders.js";
+import { TemplateIdAllocator } from "../../model/identity.js";
 
 export interface BuildIrOptions {
   file?: string;
@@ -41,6 +42,9 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const ids = new DomIdAllocator();
     const table = new ExprTable(opts.exprParser, source, html);
     const nestedTemplates: TemplateIR[] = [];
+    const templateIds = new TemplateIdAllocator();
+    const rootTemplateId = templateIds.allocate();
+    const rootCtx: TemplateBuildContext = { templateId: rootTemplateId, templateIds };
 
     // Extract meta elements (<import>, <bindable>, etc.) before DOM building
     trace.event("lower.meta.start");
@@ -57,6 +61,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
       nestedTemplates,
       catalog,
       collectRows,
+      rootCtx,
       skipTags,
     );
 
@@ -68,11 +73,12 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
+    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, rootCtx, skipTags, projectionMap);
     trace.event("lower.rows.complete");
 
     // Build root template with meta
     const root: TemplateIR = {
+      id: rootTemplateId,
       dom: domRoot,
       rows,
       name: opts.name!,

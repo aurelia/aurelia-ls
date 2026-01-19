@@ -421,9 +421,19 @@ export interface IrModule {
   meta?: Record<string, unknown>;
 }
 
+export interface TemplateHostRef {
+  templateId: TemplateId;
+  nodeId: NodeId;
+}
+
+export type TemplateOrigin =
+  | { kind: "controller"; host: TemplateHostRef };
+
 // NOTE: Nested TemplateIR instances appear under controllers; their NodeIds start at '0' independently.
 /** Each template has a synthetic fragment root (<template>-like) as `dom`. */
 export interface TemplateIR {
+  /** Stable identifier for this template within the module. */
+  id?: TemplateId;
   dom: TemplateNode; // root with children = top-level nodes
   rows: InstructionRow[];
   name?: string;
@@ -436,6 +446,8 @@ export interface TemplateIR {
    * - Refactoring
    */
   templateMeta?: TemplateMetaIR;
+  /** Provenance for nested templates (e.g., template controllers). */
+  origin?: TemplateOrigin;
 }
 
 /* ===========================

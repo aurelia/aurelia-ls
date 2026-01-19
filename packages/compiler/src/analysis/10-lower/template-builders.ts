@@ -6,7 +6,10 @@ import type {
   TemplateIR,
   TemplateNode,
   NodeId,
+  TemplateId,
+  TemplateOrigin,
 } from "../../model/ir.js";
+import type { TemplateIdAllocator } from "../../model/identity.js";
 import { buildDomChildren } from "./dom-builder.js";
 import { isControllerAttr } from "./element-lowering.js";
 import { resolveElementDef } from "./resource-utils.js";
@@ -28,9 +31,15 @@ export type RowCollector = (
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[],
   catalog: ResourceCatalog,
+  ctx: TemplateBuildContext,
   skipTags?: Set<string>,
   projectionMap?: ProjectionMap,
 ) => void;
+
+export type TemplateBuildContext = {
+  templateId: TemplateId;
+  templateIds: TemplateIdAllocator;
+};
 
 const DEFAULT_SLOT_NAME = "default";
 
@@ -41,6 +50,7 @@ export function buildProjectionMap(
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
   collectRows: RowCollector,
+  ctx: TemplateBuildContext,
   skipTags?: Set<string>,
 ): ProjectionMap {
   const projectionMap: ProjectionMap = new WeakMap();
@@ -51,6 +61,7 @@ export function buildProjectionMap(
     nestedTemplates,
     catalog,
     collectRows,
+    ctx,
     projectionMap,
     skipTags,
   );
@@ -63,7 +74,9 @@ export function templateOfElementChildren(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin?: TemplateOrigin,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
@@ -77,7 +90,9 @@ export function templateOfElementChildren(
     table,
     nestedTemplates,
     catalog,
-    collectRows
+    collectRows,
+    ctx,
+    origin,
   );
 }
 
@@ -87,7 +102,9 @@ export function templateOfElementChildrenWithMap(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin?: TemplateOrigin,
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
@@ -102,7 +119,9 @@ export function templateOfElementChildrenWithMap(
     table,
     nestedTemplates,
     catalog,
-    collectRows
+    collectRows,
+    ctx,
+    origin,
   );
   return { def, idMap };
 }
@@ -144,7 +163,9 @@ export function templateOfTemplateContent(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin?: TemplateOrigin,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   return buildTemplateFrom(
@@ -155,13 +176,16 @@ export function templateOfTemplateContent(
     table,
     nestedTemplates,
     catalog,
-    collectRows
+    collectRows,
+    ctx,
+    origin,
   );
 }
 
 export function makeWrapperTemplate(
   inner: HydrateTemplateControllerIR,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  ctx: TemplateBuildContext,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   const commentId = ids.withinChildren(() => ids.nextComment());
@@ -179,7 +203,7 @@ export function makeWrapperTemplate(
       instructions: [inner],
     },
   ];
-  const t: TemplateIR = { dom, rows };
+  const t: TemplateIR = { id: ctx.templateIds.allocate(), dom, rows };
   nestedTemplates.push(t);
   return t;
 }
@@ -192,8 +216,13 @@ export function buildTemplateFrom(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin?: TemplateOrigin,
 ): TemplateIR {
+  const templateId = ctx.templateIds.allocate();
+  const templateCtx: TemplateBuildContext = { templateId, templateIds: ctx.templateIds };
+
   const projectionMap = buildProjectionMap(
     rootLike as { childNodes?: P5Node[] },
     attrParser,
@@ -201,6 +230,7 @@ export function buildTemplateFrom(
     nestedTemplates,
     catalog,
     collectRows,
+    templateCtx,
   );
   const dom: TemplateNode = {
     kind: "template",
@@ -227,10 +257,11 @@ export function buildTemplateFrom(
     nestedTemplates,
     rows,
     catalog,
+    templateCtx,
     undefined,
     projectionMap,
   );
-  const t: TemplateIR = { dom, rows };
+  const t: TemplateIR = { id: templateId, dom, rows, ...(origin ? { origin } : {}) };
   nestedTemplates.push(t);
   return t;
 }
@@ -242,6 +273,7 @@ function extractProjections(
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
   collectRows: RowCollector,
+  ctx: TemplateBuildContext,
   projectionMap: ProjectionMap,
   skipTags?: Set<string>,
 ): void {
@@ -258,6 +290,7 @@ function extractProjections(
         nestedTemplates,
         catalog,
         collectRows,
+        ctx,
         projectionMap,
         skipTags,
       );
@@ -271,6 +304,7 @@ function extractProjections(
       nestedTemplates,
       catalog,
       collectRows,
+      ctx,
     );
     if (projections && projections.length > 0) {
       projectionMap.set(kid, projections);
@@ -286,6 +320,7 @@ function extractProjections(
       nestedTemplates,
       catalog,
       collectRows,
+      ctx,
       projectionMap,
       skipTags,
     );
@@ -299,6 +334,7 @@ function extractElementProjections(
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
   collectRows: RowCollector,
+  ctx: TemplateBuildContext,
 ): ProjectionDef[] | null {
   const authoredTag = el.nodeName.toLowerCase();
   const asElement = findAttr(el, "as-element");
@@ -367,6 +403,7 @@ function extractElementProjections(
       nestedTemplates,
       catalog,
       collectRows,
+      ctx,
     );
     defs.push({ slot: slotName, def });
   }

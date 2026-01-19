@@ -14,6 +14,7 @@ import type {
   NodeId,
   PropertyBindingIR,
   SourceSpan,
+  TemplateHostRef,
   TemplateIR,
 } from "../../model/ir.js";
 import { resolveControllerAttr } from "./element-lowering.js";
@@ -26,6 +27,7 @@ import {
   templateOfElementChildrenWithMap,
   templateOfTemplateContent,
 } from "./template-builders.js";
+import type { TemplateBuildContext } from "./template-builders.js";
 
 // -----------------------------------------------------------------------------
 // Trigger kind helpers
@@ -210,7 +212,9 @@ export function collectControllers(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  host: TemplateHostRef,
 ): HydrateTemplateControllerIR[] {
   const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; config: ControllerConfig }[] = [];
   for (const a of el.attrs ?? []) {
@@ -238,7 +242,7 @@ export function collectControllers(
   const rightmost = candidates[candidates.length - 1];
   if (!rightmost) return [];
 
-  let current = buildRightmostController(el, rightmost, attrParser, table, nestedTemplates, catalog, collectRows);
+  let current = buildRightmostController(el, rightmost, attrParser, table, nestedTemplates, catalog, collectRows, ctx, host);
 
   for (let i = candidates.length - 2; i >= 0; i--) {
     const candidate = candidates[i];
@@ -253,7 +257,7 @@ export function collectControllers(
 
     const nextLayer: HydrateTemplateControllerIR[] = [];
     for (const inner of current) {
-      const def = makeWrapperTemplate(inner, nestedTemplates);
+      const def = makeWrapperTemplate(inner, nestedTemplates, ctx);
       nextLayer.push({
         type: "hydrateTemplateController",
         res: proto.res,
@@ -331,7 +335,9 @@ function buildRightmostController(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  host: TemplateHostRef,
 ): HydrateTemplateControllerIR[] {
   const { a, s, config } = rightmost;
   const loc = attrLoc(el, a.name);
@@ -345,11 +351,20 @@ function buildRightmostController(
 
   // Promise needs special handling for branch injection
   if (hasPromiseBranches(config)) {
-    return buildPromiseController(el, props as PropertyBindingIR[], locSpan, attrParser, table, nestedTemplates, catalog, collectRows);
+    return buildPromiseController(el, props as PropertyBindingIR[], locSpan, attrParser, table, nestedTemplates, catalog, collectRows, ctx, host);
   }
 
   // All other controllers just need the template definition
-  const def = templateOfElementChildren(el, attrParser, table, nestedTemplates, catalog, collectRows);
+  const def = templateOfElementChildren(
+    el,
+    attrParser,
+    table,
+    nestedTemplates,
+    catalog,
+    collectRows,
+    ctx,
+    { kind: "controller", host },
+  );
 
   // Build switch branch info for case/default-case controllers
   const branch = buildSwitchBranchInfo(config, props);
@@ -413,10 +428,21 @@ function buildPromiseController(
   table: ExprTable,
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  host: TemplateHostRef,
 ): HydrateTemplateControllerIR[] {
-  const { def, idMap } = templateOfElementChildrenWithMap(el, attrParser, table, nestedTemplates, catalog, collectRows);
-  injectPromiseBranchesIntoDef(el, def, idMap, attrParser, table, nestedTemplates, catalog, props[0]!, collectRows);
+  const { def, idMap } = templateOfElementChildrenWithMap(
+    el,
+    attrParser,
+    table,
+    nestedTemplates,
+    catalog,
+    collectRows,
+    ctx,
+    { kind: "controller", host },
+  );
+  injectPromiseBranchesIntoDef(el, def, idMap, attrParser, table, nestedTemplates, catalog, props[0]!, collectRows, ctx);
   return [createHydrateInstruction("promise", def, props, locSpan)];
 }
 
@@ -471,7 +497,8 @@ function injectPromiseBranchesIntoDef(
   nestedTemplates: TemplateIR[],
   catalog: ResourceCatalog,
   valueProp: PropertyBindingIR,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
 ): void {
   const kids =
     el.nodeName.toLowerCase() === "template"
@@ -495,8 +522,8 @@ function injectPromiseBranchesIntoDef(
 
     // Build branch definition
     const branchDef = branch.isTemplate
-      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows)
-      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows);
+      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows, ctx)
+      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx);
 
     for (const row of branchDef.rows) {
       row.instructions = row.instructions.filter((ins) => !isBranchMarker(ins));

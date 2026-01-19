@@ -529,7 +529,7 @@ function discoverTemplates(
     if (!resource.file) continue;
 
     const componentPath = resource.file;
-    const scopeId = computeScopeId(site, resourceGraph);
+    const scopeId = scopeIdForResource(resource, registration, resourceGraph, componentPath);
     const className = unwrapSourced(resource.className) ?? "unknown";
     const resourceName = unwrapSourced(resource.name) ?? "unknown";
     const inlineTemplate = unwrapSourced(resource.inlineTemplate);
@@ -575,10 +575,7 @@ function discoverTemplates(
     if (!resource.file) continue;
 
     const componentPath = resource.file;
-    const localScopeId = `local:${componentPath}` as ResourceScopeId;
-    const scopeId = resourceGraph.scopes[localScopeId]
-      ? localScopeId
-      : resourceGraph.root;
+    const scopeId = scopeIdForComponent(componentPath, resourceGraph);
     const className = unwrapSourced(resource.className) ?? "unknown";
     const resourceName = unwrapSourced(resource.name) ?? "unknown";
     const inlineTemplate = unwrapSourced(resource.inlineTemplate);
@@ -639,6 +636,36 @@ function resolveTemplatePath(
   }
 
   return normalizePathForId(resolvePath(dir, htmlName));
+}
+
+function scopeIdForComponent(
+  componentPath: NormalizedPath,
+  resourceGraph: ResourceGraph,
+): ResourceScopeId {
+  const localScopeId = `local:${componentPath}` as ResourceScopeId;
+  if (localScopeId in resourceGraph.scopes) return localScopeId;
+  return resourceGraph.root;
+}
+
+function scopeIdForResource(
+  resource: ResourceDef,
+  registration: RegistrationAnalysis,
+  resourceGraph: ResourceGraph,
+  componentPath: NormalizedPath,
+): ResourceScopeId {
+  const localOwners: NormalizedPath[] = [];
+  for (const site of registration.sites) {
+    if (site.resourceRef.kind !== "resolved") continue;
+    if (site.resourceRef.resource !== resource) continue;
+    if (site.scope.kind !== "local") continue;
+    localOwners.push(site.scope.owner);
+  }
+  if (localOwners.length > 0) {
+    const owner = [...localOwners].sort()[0]!;
+    const localScopeId = `local:${owner}` as ResourceScopeId;
+    if (localScopeId in resourceGraph.scopes) return localScopeId;
+  }
+  return scopeIdForComponent(componentPath, resourceGraph);
 }
 
 /**

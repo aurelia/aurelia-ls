@@ -210,3 +210,37 @@ describe("workspace definition (workspace-contract)", () => {
     });
   });
 });
+
+describe("workspace definition (stacked controllers)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let summaryUri: string;
+  let summaryText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    summaryUri = harness.openTemplate("src/views/summary-panel.html");
+    const summary = harness.readText(summaryUri);
+    if (!summary) {
+      throw new Error("Expected template text for workspace-contract summary-panel");
+    }
+    const marker = "    </div>\n\n    <template if-not.bind=\"stats.items.length\">";
+    const injection = "    <pulse-dot data-stack=\"true\" if.bind=\"stats.items.length\" repeat.for=\"dot of stats.items\" active.bind=\"dot.delta !== undefined\"></pulse-dot>\n\n";
+    if (!summary.includes(marker)) {
+      throw new Error("Expected marker not found in summary-panel template");
+    }
+    summaryText = summary.replace(marker, `    </div>\n\n${injection}    <template if-not.bind=\"stats.items.length\">`);
+    harness.updateTemplate(summaryUri, summaryText);
+  });
+
+  it("resolves custom element definitions under stacked controllers", () => {
+    const query = harness.workspace.query(summaryUri);
+    const defs = query.definition(findPosition(summaryText, "<pulse-dot data-stack", 1));
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/src/components/pulse-dot.ts",
+      textIncludes: "PulseDot",
+    });
+  });
+});

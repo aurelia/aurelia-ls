@@ -1,6 +1,8 @@
 import {
   analyzeAttributeName,
   canonicalDocumentUri,
+  debug,
+  isDebugEnabled,
   normalizePathForId,
   spanContainsOffset,
   spanLength,
@@ -33,6 +35,7 @@ export interface ResourceDefinitionIndex {
   readonly controllers: ReadonlyMap<string, ResourceDefinitionEntry[]>;
   readonly valueConverters: ReadonlyMap<string, ResourceDefinitionEntry[]>;
   readonly bindingBehaviors: ReadonlyMap<string, ResourceDefinitionEntry[]>;
+  readonly bySymbolId: ReadonlyMap<SymbolId, ResourceDefinitionEntry>;
 }
 
 type ResourceDefinitionEntry = {
@@ -52,6 +55,7 @@ export function buildResourceDefinitionIndex(resolution: ResolutionResult): Reso
   const controllers = new Map<string, ResourceDefinitionEntry[]>();
   const valueConverters = new Map<string, ResourceDefinitionEntry[]>();
   const bindingBehaviors = new Map<string, ResourceDefinitionEntry[]>();
+  const bySymbolId = new Map<SymbolId, ResourceDefinitionEntry>();
 
   for (const def of resolution.resources) {
     const name = unwrapSourced(def.name);
@@ -60,6 +64,9 @@ export function buildResourceDefinitionIndex(resolution: ResolutionResult): Reso
       def,
       symbolId: symbols.get(symbolKey(def.kind, name, def.file ?? null)),
     };
+    if (entry.symbolId) {
+      bySymbolId.set(entry.symbolId, entry);
+    }
     switch (def.kind) {
       case "custom-element":
         addEntry(elements, name, entry);
@@ -92,6 +99,7 @@ export function buildResourceDefinitionIndex(resolution: ResolutionResult): Reso
     controllers,
     valueConverters,
     bindingBehaviors,
+    bySymbolId,
   };
 }
 
@@ -109,22 +117,29 @@ export function collectTemplateDefinitions(options: {
   const preferRoots = normalizeRoots(options.preferRoots ?? []);
   const results: WorkspaceLocation[] = [];
   const domIndex = buildDomIndex(compilation.ir.templates ?? []);
+  const debugEnabled = isDebugEnabled("workspace");
+  if (debugEnabled) {
+    debug.workspace("definition.start", { offset, uri: options.documentUri ?? null });
+  }
 
-  const node = compilation.query.nodeAt(offset);
-  if (node?.kind === "element") {
-    const row = findRow(compilation.linked.templates, node.templateIndex, node.id);
-    if (row?.node.kind === "element") {
-      const domNode = findDomNode(domIndex, node.templateIndex, node.id);
-      const tagSpan = domNode && domNode.kind === "element" ? elementTagSpanAtOffset(domNode, offset) : null;
-      if (tagSpan) {
-        const resolved = row.node.custom?.def ?? null;
-        const entry = resolved
-          ? findEntry(resources.elements, resolved.name, resolved.file ?? null)
-          : (looksLikeCustomElementTag(row.node.tag) ? findEntry(resources.elements, row.node.tag, null, preferRoots) : null);
-        const location = entry ? resourceLocation(entry) : null;
-        if (location) results.push(location);
-      }
-    }
+  const elementHit = findElementDefinitionHit(compilation, domIndex, offset);
+  if (debugEnabled) {
+    debug.workspace("definition.element", {
+      hit: !!elementHit,
+      templateIndex: elementHit?.templateIndex ?? null,
+      nodeId: elementHit?.row.target ?? null,
+      tag: elementHit?.row.node.tag ?? null,
+      tagSpan: elementHit?.tagSpan ?? null,
+    });
+  }
+  if (elementHit) {
+    const { row, tagSpan } = elementHit;
+    const resolved = row.node.custom?.def ?? null;
+    const entry = resolved
+      ? findEntry(resources.elements, resolved.name, resolved.file ?? null)
+      : (looksLikeCustomElementTag(row.node.tag) ? findEntry(resources.elements, row.node.tag, null, preferRoots) : null);
+    const location = entry ? resourceLocation(entry) : null;
+    if (location && tagSpan) results.push(location);
   }
 
   const instructionHits = findInstructionsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
@@ -153,6 +168,20 @@ export function collectTemplateDefinitions(options: {
   const behaviorHit = findBindingBehaviorAtOffset(compilation.exprTable ?? [], offset);
   if (behaviorHit) {
     const entry = findEntry(resources.bindingBehaviors, behaviorHit.name, null, preferRoots);
+    const location = entry ? resourceLocation(entry) : null;
+    if (location) results.push(location);
+  }
+
+  const resourceHits = collectTemplateResourceReferences({
+    compilation,
+    resources,
+    syntax,
+    preferRoots,
+    documentUri: options.documentUri ?? null,
+  });
+  for (const hit of resourceHits) {
+    if (!hit.symbolId || !spanContainsOffset(hit.span, offset)) continue;
+    const entry = resources.bySymbolId.get(hit.symbolId);
     const location = entry ? resourceLocation(entry) : null;
     if (location) results.push(location);
   }
@@ -381,6 +410,31 @@ function findRow(
   return template.rows.find((row) => row.target === nodeId) ?? null;
 }
 
+type ElementDefinitionHit = {
+  row: LinkedRow & { node: { kind: "element"; tag: string; custom?: { def?: { name: string; file?: string } } } };
+  tagSpan: SourceSpan;
+  templateIndex: number;
+};
+
+function findElementDefinitionHit(
+  compilation: TemplateCompilation,
+  domIndex: ReturnType<typeof buildDomIndex>,
+  offset: number,
+): ElementDefinitionHit | null {
+  const node = compilation.query.nodeAt(offset);
+  if (node?.kind === "element") {
+    const row = findRow(compilation.linked.templates, node.templateIndex, node.id);
+    if (row?.node.kind === "element") {
+      const domNode = findDomNode(domIndex, node.templateIndex, node.id);
+      const tagSpan = domNode && domNode.kind === "element" ? elementTagSpanAtOffset(domNode, offset) : null;
+      if (tagSpan) {
+        return { row: row as ElementDefinitionHit["row"], tagSpan, templateIndex: node.templateIndex };
+      }
+    }
+  }
+  return null;
+}
+
 
 function definitionsForInstruction(
   instruction: LinkedInstruction,
@@ -504,6 +558,13 @@ function findBindableDef(def: ResourceDef, name: string): BindableDef | null {
 function resourceLocation(entry: ResourceDefinitionEntry): WorkspaceLocation | null {
   const loc = resourceSourceLocation(entry.def);
   if (!loc) return null;
+  if (!entry.symbolId && isDebugEnabled("workspace")) {
+    debug.workspace("definition.resource.noSymbol", {
+      kind: entry.def.kind,
+      name: resourceDebugName(entry.def),
+      file: entry.def.file ?? null,
+    });
+  }
   return sourceLocationToWorkspaceLocation(loc, entry.symbolId);
 }
 
@@ -536,6 +597,10 @@ function resourceSourceLocation(def: ResourceDef): SourceLocation | null {
     return { file: def.file, pos: 0, end: 0 };
   }
   return null;
+}
+
+function resourceDebugName(def: ResourceDef): string | null {
+  return unwrapSourced(def.name) ?? null;
 }
 
 function findEntry(

@@ -293,14 +293,23 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         const meta = this.#metaDefinition(canonical.uri, pos) ?? [];
         const local = this.#definitionAt(canonical.uri, pos);
         const baseDefs = base.definition(pos);
-        return mergeLocations(meta, local, baseDefs);
+        return mergeLocationsRanked(canonical.uri, [
+          { rank: 0, items: meta },
+          { rank: 1, items: local },
+          { rank: 2, items: baseDefs },
+        ]);
       },
       references: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
         this.#syncTemplateOverlaysForReferences(canonical.uri);
-        const local = this.#referencesAt(canonical.uri, pos);
+        const local = this.#localReferencesAt(canonical.uri, pos);
+        const resourceRefs = this.#resourceReferencesAt(canonical.uri, pos);
         const baseRefs = base.references(pos);
-        return mergeLocationsWithIds(local, baseRefs);
+        return mergeLocationsWithIdsRanked(canonical.uri, [
+          { rank: 0, items: local },
+          { rank: 1, items: resourceRefs },
+          { rank: 2, items: baseRefs },
+        ]);
       },
       completions: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
@@ -537,24 +546,37 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     });
   }
 
-  #referencesAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
-    const text = this.lookupText(uri);
-    if (!text) return [];
-    const offset = offsetAtPosition(text, pos);
-    if (offset == null) return [];
-    const compilation = this.#kernel.getCompilation(uri);
-    if (!compilation) return [];
-    const local = collectTemplateReferences({
-      compilation,
-      text,
-      offset,
+  #localReferencesAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
+    const ctx = this.#referenceContext(uri, pos);
+    if (!ctx) return [];
+    return collectTemplateReferences({
+      compilation: ctx.compilation,
+      text: ctx.text,
+      offset: ctx.offset,
       documentUri: uri,
     });
-    const resourceRefs = this.#resourceReferencesAt(uri, offset);
-    return mergeLocationsWithIds(local, resourceRefs);
   }
 
-  #resourceReferencesAt(uri: DocumentUri, offset: number): WorkspaceLocation[] {
+  #referenceContext(
+    uri: DocumentUri,
+    pos: { line: number; character: number },
+  ): { text: string; offset: number; compilation: TemplateCompilation } | null {
+    const text = this.lookupText(uri);
+    if (!text) return null;
+    const offset = offsetAtPosition(text, pos);
+    if (offset == null) return null;
+    const compilation = this.#kernel.getCompilation(uri);
+    if (!compilation) return null;
+    return { text, offset, compilation };
+  }
+
+  #resourceReferencesAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
+    const ctx = this.#referenceContext(uri, pos);
+    if (!ctx) return [];
+    return this.#resourceReferencesAtOffset(uri, ctx.offset);
+  }
+
+  #resourceReferencesAtOffset(uri: DocumentUri, offset: number): WorkspaceLocation[] {
     const index = this.#ensureResourceReferenceIndex(uri);
     const occurrences = index.byUri.get(uri);
     if (!occurrences || occurrences.length === 0) return [];
@@ -570,7 +592,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       const refs = index.bySymbol.get(symbolId);
       if (refs && refs.length > 0) results.push(...refs);
     }
-    return mergeLocationsWithIds(results, []);
+    return results;
   }
 
   #ensureResourceReferenceIndex(activeUri: DocumentUri): ResourceReferenceIndex {
@@ -1101,64 +1123,92 @@ function isWithinSpan(offset: number, span: SourceSpan | undefined): boolean {
   return span ? spanContainsOffset(span, offset) : false;
 }
 
-function mergeLocations(...lists: readonly (readonly WorkspaceLocation[])[]): WorkspaceLocation[] {
-  const results: WorkspaceLocation[] = [];
-  const seen = new Set<string>();
-  for (const list of lists) {
-    for (const loc of list) {
-      const key = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      results.push(loc);
-    }
+type RankedLocationList = {
+  rank: number;
+  items: readonly WorkspaceLocation[];
+};
+
+function compareLocationOrder(
+  a: WorkspaceLocation,
+  b: WorkspaceLocation,
+  aRank: number,
+  bRank: number,
+  currentUri: DocumentUri | null,
+): number {
+  if (aRank !== bRank) return aRank - bRank;
+  if (currentUri) {
+    const current = String(currentUri);
+    const aCurrent = String(a.uri) === current ? 0 : 1;
+    const bCurrent = String(b.uri) === current ? 0 : 1;
+    if (aCurrent !== bCurrent) return aCurrent - bCurrent;
   }
-  results.sort((a, b) => {
-    const uriDelta = String(a.uri).localeCompare(String(b.uri));
-    if (uriDelta !== 0) return uriDelta;
-    const startDelta = a.span.start - b.span.start;
-    if (startDelta !== 0) return startDelta;
-    return a.span.end - b.span.end;
-  });
-  return results;
+  const uriDelta = String(a.uri).localeCompare(String(b.uri));
+  if (uriDelta !== 0) return uriDelta;
+  const startDelta = a.span.start - b.span.start;
+  if (startDelta !== 0) return startDelta;
+  return a.span.end - b.span.end;
 }
 
-function mergeLocationsWithIds(...lists: readonly (readonly WorkspaceLocation[])[]): WorkspaceLocation[] {
-  const candidates: WorkspaceLocation[] = [];
+function mergeLocationsRanked(
+  currentUri: DocumentUri | null,
+  lists: readonly RankedLocationList[],
+): WorkspaceLocation[] {
+  const canonicalCurrent = currentUri ? canonicalDocumentUri(currentUri).uri : null;
+  const bySpan = new Map<string, { loc: WorkspaceLocation; rank: number }>();
+  for (const list of lists) {
+    for (const loc of list.items) {
+      const key = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
+      const existing = bySpan.get(key);
+      if (!existing || list.rank < existing.rank) {
+        bySpan.set(key, { loc, rank: list.rank });
+      }
+    }
+  }
+  const results = Array.from(bySpan.values());
+  results.sort((a, b) => compareLocationOrder(a.loc, b.loc, a.rank, b.rank, canonicalCurrent));
+  return results.map((entry) => entry.loc);
+}
+
+function mergeLocationsWithIdsRanked(
+  currentUri: DocumentUri | null,
+  lists: readonly RankedLocationList[],
+): WorkspaceLocation[] {
+  const canonicalCurrent = currentUri ? canonicalDocumentUri(currentUri).uri : null;
+  const candidates: Array<{ loc: WorkspaceLocation; rank: number }> = [];
   const spanHasIds = new Set<string>();
   for (const list of lists) {
-    for (const loc of list) {
+    for (const loc of list.items) {
       const spanKey = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
       const hasIds = !!(loc.symbolId || loc.exprId || loc.nodeId);
       if (hasIds) spanHasIds.add(spanKey);
-      candidates.push(loc);
+      candidates.push({ loc, rank: list.rank });
     }
   }
 
-  const results: WorkspaceLocation[] = [];
-  const seen = new Set<string>();
-  for (const loc of candidates) {
+  const byKey = new Map<string, { loc: WorkspaceLocation; rank: number }>();
+  for (const candidate of candidates) {
+    const { loc, rank } = candidate;
     const spanKey = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
     const hasIds = !!(loc.symbolId || loc.exprId || loc.nodeId);
     if (!hasIds && spanHasIds.has(spanKey)) continue;
     const key = `${spanKey}:${loc.symbolId ?? ""}:${loc.exprId ?? ""}:${loc.nodeId ?? ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    results.push(loc);
+    const existing = byKey.get(key);
+    if (!existing || rank < existing.rank) {
+      byKey.set(key, { loc, rank });
+    }
   }
+
+  const results = Array.from(byKey.values());
   results.sort((a, b) => {
-    const uriDelta = String(a.uri).localeCompare(String(b.uri));
-    if (uriDelta !== 0) return uriDelta;
-    const startDelta = a.span.start - b.span.start;
-    if (startDelta !== 0) return startDelta;
-    const endDelta = a.span.end - b.span.end;
-    if (endDelta !== 0) return endDelta;
-    const symbolDelta = String(a.symbolId ?? "").localeCompare(String(b.symbolId ?? ""));
+    const primary = compareLocationOrder(a.loc, b.loc, a.rank, b.rank, canonicalCurrent);
+    if (primary !== 0) return primary;
+    const symbolDelta = String(a.loc.symbolId ?? "").localeCompare(String(b.loc.symbolId ?? ""));
     if (symbolDelta !== 0) return symbolDelta;
-    const exprDelta = String(a.exprId ?? "").localeCompare(String(b.exprId ?? ""));
+    const exprDelta = String(a.loc.exprId ?? "").localeCompare(String(b.loc.exprId ?? ""));
     if (exprDelta !== 0) return exprDelta;
-    return String(a.nodeId ?? "").localeCompare(String(b.nodeId ?? ""));
+    return String(a.loc.nodeId ?? "").localeCompare(String(b.loc.nodeId ?? ""));
   });
-  return results;
+  return results.map((entry) => entry.loc);
 }
 
 function buildOverlaySnapshot(

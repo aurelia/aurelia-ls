@@ -301,3 +301,14 @@ export class SequentialIdAllocator<TBrand extends string> {
 }
 
 export class FrameIdAllocator extends SequentialIdAllocator<"FrameId"> {}
+
+/** Sequential allocator for TemplateId to keep template identity stable within a module. */
+export class TemplateIdAllocator {
+  private next = 0;
+
+  public allocate(): TemplateId {
+    const id = brandString<"TemplateId">(`t${this.next}`);
+    this.next += 1;
+    return id;
+  }
+}
