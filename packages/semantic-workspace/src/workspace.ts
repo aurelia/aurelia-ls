@@ -191,10 +191,38 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
 
   reconfigure(options: SemanticWorkspaceKernelOptions): boolean {
     const next = normalizeOptions(options, this.#languageOptions, this.#lookupText);
-    const preview = this.#createProgram(new InMemoryProvenanceIndex(), next.program);
-    const nextFingerprint = next.fingerprint ?? preview.optionsFingerprint;
+    const nextFingerprint = next.fingerprint ?? this.#workspaceFingerprint;
+    const nextConfigHash = next.configHash ?? computeConfigHash(next.program);
+    const languageChanged = next.language !== this.#languageOptions;
+    const lookupChanged = next.lookupText !== this.#lookupText;
 
-    if (preview.optionsFingerprint === this.program.optionsFingerprint && nextFingerprint === this.#workspaceFingerprint) {
+    if (this.program.updateOptions) {
+      const result = this.program.updateOptions(next.program);
+      const updated = result.changed
+        || nextFingerprint !== this.#workspaceFingerprint
+        || nextConfigHash !== this.#configHash
+        || languageChanged
+        || lookupChanged;
+
+      if (!updated) return false;
+
+      this.#programOptions = next.program;
+      this.#languageOptions = next.language;
+      this.#lookupText = next.lookupText;
+      this.buildService = new DefaultTemplateBuildService(this.program);
+      this.languageService = new DefaultTemplateLanguageService(this.program, {
+        ...this.#languageOptions,
+        buildService: this.#languageOptions.buildService ?? this.buildService,
+      });
+      this.#configHash = nextConfigHash;
+      this.#workspaceFingerprint = nextFingerprint;
+      return true;
+    }
+
+    const preview = this.#createProgram(new InMemoryProvenanceIndex(), next.program);
+    const previewFingerprint = next.fingerprint ?? preview.optionsFingerprint;
+
+    if (preview.optionsFingerprint === this.program.optionsFingerprint && previewFingerprint === this.#workspaceFingerprint) {
       return false;
     }
 
@@ -208,8 +236,8 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       ...this.#languageOptions,
       buildService: this.#languageOptions.buildService ?? this.buildService,
     });
-    this.#configHash = next.configHash ?? computeConfigHash(this.#programOptions);
-    this.#workspaceFingerprint = nextFingerprint;
+    this.#configHash = nextConfigHash;
+    this.#workspaceFingerprint = previewFingerprint;
     return true;
   }
 

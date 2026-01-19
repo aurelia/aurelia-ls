@@ -1,4 +1,5 @@
 <template>
   <import from="./shared/highlight"></import>
-  <div highlight.bind="message">${message}</div>
+  <import from="./shared/titlecase"></import>
+  <div highlight.bind="message">${message | titlecase}</div>
 </template>

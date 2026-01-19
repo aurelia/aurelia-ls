@@ -1,8 +1,9 @@
+import fs from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 import { createSemanticWorkspaceKernel } from "../src/workspace.js";
-import type { DocumentUri, ResourceGraph, ResourceScopeId } from "@aurelia-ls/compiler";
+import type { DocumentUri, ResourceGraph, ResourceScopeId, TemplateProgramCacheStats } from "@aurelia-ls/compiler";
 
 type Kernel = ReturnType<typeof createSemanticWorkspaceKernel>;
 
@@ -20,13 +21,13 @@ function createVmReflection() {
 const VM = createVmReflection();
 
 function mutateTemplate(text: string): string {
-  const marker = "${message}";
+  const marker = "</template>";
   const index = text.indexOf(marker);
   if (index < 0) {
     throw new Error(`Marker not found: ${marker}`);
   }
-  const insertAt = index + marker.length;
-  return `${text.slice(0, insertAt)}!${text.slice(insertAt)}`;
+  const insertAt = index;
+  return `${text.slice(0, insertAt)}  <!-- churn -->\n${text.slice(insertAt)}`;
 }
 
 function summarizeScopes(graph: ResourceGraph): { root: ResourceScopeId; scopes: string[] } {
@@ -36,14 +37,6 @@ function summarizeScopes(graph: ResourceGraph): { root: ResourceScopeId; scopes:
   };
 }
 
-function pickAlternateScope(graph: ResourceGraph, current: ResourceScopeId | null): ResourceScopeId {
-  const scopes = Object.keys(graph.scopes) as ResourceScopeId[];
-  for (const scope of scopes) {
-    if (scope !== current) return scope;
-  }
-  throw new Error("Expected at least two scopes in incremental-churn fixture.");
-}
-
 function getDocStats(kernel: Kernel, uri: DocumentUri) {
   const stats = kernel.getCacheStats(uri);
   const doc = stats.documents[0];
@@ -51,6 +44,36 @@ function getDocStats(kernel: Kernel, uri: DocumentUri) {
     throw new Error(`Expected cache stats for ${String(uri)}`);
   }
   return doc;
+}
+
+function getWorkspaceDocStats(
+  workspace: { getCacheStats: (target?: DocumentUri) => TemplateProgramCacheStats },
+  uri: DocumentUri,
+): TemplateProgramCacheStats["documents"][number] {
+  const stats = workspace.getCacheStats(uri);
+  const doc = stats.documents[0];
+  if (!doc) {
+    throw new Error(`Expected cache stats for ${String(uri)}`);
+  }
+  return doc;
+}
+
+async function withFileMutation(
+  filePath: string,
+  mutate: (text: string) => string,
+  run: () => Promise<void> | void,
+) {
+  const original = fs.readFileSync(filePath, "utf8");
+  const next = mutate(original);
+  if (next === original) {
+    throw new Error(`Mutation produced no change for ${filePath}`);
+  }
+  fs.writeFileSync(filePath, next);
+  try {
+    await run();
+  } finally {
+    fs.writeFileSync(filePath, original);
+  }
 }
 
 describe("workspace incremental churn (incremental-churn)", () => {
@@ -149,7 +172,6 @@ describe("workspace incremental churn (incremental-churn)", () => {
     kernel.getCompilation(betaUri);
     const betaAfterContent = getDocStats(kernel, betaUri);
 
-    const nextScope = pickAlternateScope(harness.resolution.resourceGraph, rootScope);
     const configBefore = kernel.snapshot().meta.configHash;
     const updated = kernel.reconfigure({
       program: {
@@ -159,7 +181,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
         catalog: harness.resolution.catalog,
         syntax: harness.resolution.syntax,
         resourceGraph: harness.resolution.resourceGraph,
-        resourceScope: nextScope,
+        overlayBaseName: "__churn__",
       },
     });
 
@@ -172,10 +194,103 @@ describe("workspace incremental churn (incremental-churn)", () => {
     expect(betaAfterConfig.compilation?.programCacheHit).toBe(false);
   });
 
-  // Gap: no cross-file dependency tracking yet; these are placeholders for W6.
-  describe("dependency invalidation (TODO)", () => {
-    it.todo("invalidates template when custom element bindables change");
-    it.todo("invalidates template when VM property types change");
-    it.todo("invalidates template when imported converter definition changes");
+  describe("dependency invalidation (workspace)", () => {
+    it("invalidates templates that depend on a custom element when bindables change", async () => {
+      const harness = await createWorkspaceHarness({
+        fixtureId: asFixtureId("incremental-churn"),
+        openTemplates: "none",
+      });
+      const workspace = harness.workspace;
+      const appUri = harness.openTemplate("src/app.html");
+      const betaUri = harness.openTemplate("src/beta.html");
+
+      workspace.getCompilation(appUri);
+      workspace.getCompilation(betaUri);
+      const betaBefore = getWorkspaceDocStats(workspace, betaUri);
+
+      const alphaPath = harness.resolvePath("src/alpha.ts");
+      await withFileMutation(alphaPath, (text) => {
+        return text.replace("template,", "template,\\n  bindables: { level: {} },");
+      }, async () => {
+        workspace.invalidateProject("alpha bindables");
+        workspace.snapshot();
+
+        workspace.getCompilation(appUri);
+        const appAfter = getWorkspaceDocStats(workspace, appUri);
+        workspace.getCompilation(betaUri);
+        const betaAfter = getWorkspaceDocStats(workspace, betaUri);
+
+        expect(appAfter.compilation?.programCacheHit).toBe(false);
+        expect(betaAfter.contentHash).toBe(betaBefore.contentHash);
+        expect(betaAfter.compilation?.programCacheHit).toBe(true);
+      });
+    });
+
+    it("invalidates templates that depend on a custom attribute when bindables change", async () => {
+      const harness = await createWorkspaceHarness({
+        fixtureId: asFixtureId("incremental-churn"),
+        openTemplates: "none",
+      });
+      const workspace = harness.workspace;
+      const appUri = harness.openTemplate("src/app.html");
+      const alphaUri = harness.openTemplate("src/alpha.html");
+      const betaUri = harness.openTemplate("src/beta.html");
+
+      workspace.getCompilation(appUri);
+      workspace.getCompilation(alphaUri);
+      workspace.getCompilation(betaUri);
+      const appBefore = getWorkspaceDocStats(workspace, appUri);
+
+      const highlightPath = harness.resolvePath("src/shared/highlight.ts");
+      await withFileMutation(highlightPath, (text) => {
+        return text.replace("@bindable value = \"\";", "@bindable value = \"\";\\n  @bindable tone = \"\";");
+      }, async () => {
+        workspace.invalidateProject("highlight bindables");
+        workspace.snapshot();
+
+        workspace.getCompilation(alphaUri);
+        const alphaAfter = getWorkspaceDocStats(workspace, alphaUri);
+        workspace.getCompilation(betaUri);
+        const betaAfter = getWorkspaceDocStats(workspace, betaUri);
+        workspace.getCompilation(appUri);
+        const appAfter = getWorkspaceDocStats(workspace, appUri);
+
+        expect(alphaAfter.compilation?.programCacheHit).toBe(false);
+        expect(betaAfter.compilation?.programCacheHit).toBe(false);
+        expect(appAfter.contentHash).toBe(appBefore.contentHash);
+        expect(appAfter.compilation?.programCacheHit).toBe(true);
+      });
+    });
+
+    it("invalidates templates that import a value converter when its definition changes", async () => {
+      const harness = await createWorkspaceHarness({
+        fixtureId: asFixtureId("incremental-churn"),
+        openTemplates: "none",
+      });
+      const workspace = harness.workspace;
+      const alphaUri = harness.openTemplate("src/alpha.html");
+      const betaUri = harness.openTemplate("src/beta.html");
+
+      workspace.getCompilation(alphaUri);
+      workspace.getCompilation(betaUri);
+      const betaBefore = getWorkspaceDocStats(workspace, betaUri);
+
+      const converterPath = harness.resolvePath("src/shared/titlecase.ts");
+      await withFileMutation(converterPath, (text) => {
+        return text.replace('valueConverter("titlecase")', 'valueConverter("titlecase-v2")');
+      }, async () => {
+        workspace.invalidateProject("converter rename");
+        workspace.snapshot();
+
+        workspace.getCompilation(alphaUri);
+        const alphaAfter = getWorkspaceDocStats(workspace, alphaUri);
+        workspace.getCompilation(betaUri);
+        const betaAfter = getWorkspaceDocStats(workspace, betaUri);
+
+        expect(alphaAfter.compilation?.programCacheHit).toBe(false);
+        expect(betaAfter.contentHash).toBe(betaBefore.contentHash);
+        expect(betaAfter.compilation?.programCacheHit).toBe(true);
+      });
+    });
   });
 });
