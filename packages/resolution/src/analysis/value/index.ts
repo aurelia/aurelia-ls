@@ -94,6 +94,7 @@ export {
   extractBoolean,
   extractStringArray,
   getProperty,
+  getPropertyKeySpan,
   extractStringProp,
   extractStringPropWithSpan,
   extractBooleanProp,

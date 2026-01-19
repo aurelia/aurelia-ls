@@ -21,7 +21,6 @@ import type {
   CustomAttributeDef,
   CustomElementDef,
   NormalizedPath,
-  TextSpan,
   ValueConverterDef,
   TemplateControllerDef,
   ResourceDef,
@@ -29,19 +28,15 @@ import type {
 import type { AnalysisGap } from '../analysis/types.js';
 import { gap } from '../analysis/types.js';
 import type { DefineCall } from '../extraction/file-facts.js';
-import type { AnalyzableValue } from '../analysis/value/types.js';
+import type { AnalyzableValue, ClassValue } from '../analysis/value/types.js';
 import {
-  extractString,
-  extractBoolean,
   extractStringWithSpan,
   extractStringProp,
   extractStringPropWithSpan,
-  extractBindingModeProp,
   extractBooleanProp,
   extractStringArrayProp,
   getProperty,
 } from '../analysis/value/types.js';
-import type { BindableInput } from '../semantics/resource-def.js';
 import {
   buildBindableDefs,
   buildBindingBehaviorDef,
@@ -50,6 +45,7 @@ import {
   buildTemplateControllerDef,
   buildValueConverterDef,
 } from '../semantics/resource-def.js';
+import type { BindableInput } from '../semantics/resource-def.js';
 import {
   canonicalElementName,
   canonicalAttrName,
@@ -57,6 +53,12 @@ import {
   canonicalBindableName,
   canonicalAliases,
 } from '../util/naming.js';
+import {
+  findPrimaryBindable,
+  getStaticBindableInputs,
+  mergeBindableInputs,
+  parseBindablesValue,
+} from './bindables.js';
 
 // =============================================================================
 // Main Export
@@ -76,7 +78,8 @@ export interface DefineMatchResult {
  */
 export function matchDefine(
   defineCall: DefineCall,
-  filePath: NormalizedPath
+  filePath: NormalizedPath,
+  classes: readonly ClassValue[] = [],
 ): DefineMatchResult {
   const gaps: AnalysisGap[] = [];
 
@@ -90,14 +93,15 @@ export function matchDefine(
     ));
     return { resource: null, gaps };
   }
+  const classValue = findClassValue(className, classes);
 
   // Dispatch based on resource type
   switch (defineCall.resourceType) {
     case 'CustomElement':
-      return buildElementDef(defineCall, className, filePath, gaps);
+      return buildElementDef(defineCall, className, filePath, gaps, classValue);
 
     case 'CustomAttribute':
-      return buildAttributeDef(defineCall, className, filePath, gaps);
+      return buildAttributeDef(defineCall, className, filePath, gaps, classValue);
 
     case 'ValueConverter':
       return buildValueConverterDefFromDefine(defineCall, className, filePath, gaps);
@@ -136,9 +140,12 @@ function buildElementDef(
   defineCall: DefineCall,
   className: string,
   filePath: NormalizedPath,
-  gaps: AnalysisGap[]
+  gaps: AnalysisGap[],
+  cls: ClassValue | null
 ): DefineMatchResult {
   const def = defineCall.definition;
+  const staticBindables = cls ? getStaticBindableInputs(cls) : [];
+  const memberBindables = cls?.bindableMembers ?? [];
 
   // Handle string-only definition: CustomElement.define('my-element', MyClass)
   const stringName = extractStringWithSpan(def);
@@ -155,6 +162,11 @@ function buildElementDef(
       file: filePath,
       span: defineCall.span,
       nameSpan: stringName.span,
+      bindables: buildBindableDefs(
+        mergeBindableInputs(staticBindables, memberBindables),
+        filePath,
+        defineCall.span,
+      ),
       boundary: true,
       containerless: false,
     });
@@ -184,6 +196,10 @@ function buildElementDef(
   const aliases = extractStringArrayProp(def, 'aliases');
   const bindablesProp = getProperty(def, 'bindables');
   const bindables = bindablesProp ? parseBindablesValue(bindablesProp) : [];
+  const mergedBindables = mergeBindableInputs(
+    [...staticBindables, ...bindables],
+    memberBindables,
+  );
   const containerless = extractBooleanProp(def, 'containerless') ?? false;
   const template = extractStringProp(def, 'template');
 
@@ -194,7 +210,7 @@ function buildElementDef(
     span: defineCall.span,
     nameSpan: nameProp?.span,
     aliases: canonicalAliases([...aliases]),
-    bindables: buildBindableDefs(bindables, filePath, defineCall.span),
+    bindables: buildBindableDefs(mergedBindables, filePath, defineCall.span),
     containerless,
     boundary: true,
     inlineTemplate: template,
@@ -211,9 +227,12 @@ function buildAttributeDef(
   defineCall: DefineCall,
   className: string,
   filePath: NormalizedPath,
-  gaps: AnalysisGap[]
+  gaps: AnalysisGap[],
+  cls: ClassValue | null
 ): DefineMatchResult {
   const def = defineCall.definition;
+  const staticBindables = cls ? getStaticBindableInputs(cls) : [];
+  const memberBindables = cls?.bindableMembers ?? [];
 
   // Handle string-only definition
   const stringName = extractStringWithSpan(def);
@@ -230,6 +249,11 @@ function buildAttributeDef(
       file: filePath,
       span: defineCall.span,
       nameSpan: stringName.span,
+      bindables: buildBindableDefs(
+        mergeBindableInputs(staticBindables, memberBindables),
+        filePath,
+        defineCall.span,
+      ),
       noMultiBindings: false,
     });
     return { resource, gaps };
@@ -258,11 +282,15 @@ function buildAttributeDef(
   const aliases = extractStringArrayProp(def, 'aliases');
   const bindablesProp = getProperty(def, 'bindables');
   const bindables = bindablesProp ? parseBindablesValue(bindablesProp) : [];
+  const mergedBindables = mergeBindableInputs(
+    [...staticBindables, ...bindables],
+    memberBindables,
+  );
   const isTemplateController = extractBooleanProp(def, 'isTemplateController') ?? false;
   const noMultiBindings = extractBooleanProp(def, 'noMultiBindings') ?? false;
   const defaultProperty = extractStringProp(def, 'defaultProperty');
-  const primary = resolvePrimaryName(bindables, defaultProperty);
-  const bindablesWithPrimary = applyPrimaryBindable(bindables, primary);
+  const primary = resolvePrimaryName(mergedBindables, defaultProperty);
+  const bindablesWithPrimary = applyPrimaryBindable(mergedBindables, primary);
 
   if (isTemplateController) {
     const resource = buildTemplateControllerDef({
@@ -415,77 +443,6 @@ function buildBindingBehaviorDefFromDefine(
   return { resource, gaps };
 }
 
-// =============================================================================
-// Bindables Parsing
-// =============================================================================
-
-/**
- * Parse bindables from definition object.
- */
-function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
-  const result: BindableInput[] = [];
-
-  // Array form: bindables: ['prop1', 'prop2'] or bindables: [{ name: 'prop1', mode: 'twoWay' }]
-  if (value.kind === 'array') {
-    for (const element of value.elements) {
-      // String element
-      const stringName = extractString(element);
-      if (stringName !== undefined) {
-        result.push({ name: stringName });
-        continue;
-      }
-
-      // Object element
-      if (element.kind === 'object') {
-        const nameProp = extractStringPropWithSpan(element, 'name');
-        if (nameProp) {
-          const attrProp = extractStringPropWithSpan(element, 'attribute');
-          result.push({
-            name: nameProp.value,
-            mode: extractBindingModeProp(element, 'mode'),
-            primary: extractBooleanProp(element, 'primary'),
-            attribute: attrProp?.value,
-            attributeSpan: attrProp?.span,
-          });
-        }
-      }
-    }
-  }
-
-  // Object form: bindables: { prop1: { mode: 'twoWay' }, prop2: {} }
-  if (value.kind === 'object') {
-    for (const [name, propValue] of value.properties) {
-      if (propValue.kind === 'object') {
-        const attrProp = extractStringPropWithSpan(propValue, 'attribute');
-        result.push({
-          name,
-          mode: extractBindingModeProp(propValue, 'mode'),
-          primary: extractBooleanProp(propValue, 'primary'),
-          attribute: attrProp?.value,
-          attributeSpan: attrProp?.span,
-        });
-      } else {
-        result.push({ name });
-      }
-    }
-  }
-
-  return result;
-}
-
-/**
- * Find the primary bindable name.
- */
-function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
-  for (const b of bindables) {
-    if (b.primary) return b.name;
-  }
-  if (bindables.length === 1) {
-    return bindables[0]?.name;
-  }
-  return undefined;
-}
-
 function resolvePrimaryName(
   bindables: BindableInput[],
   defaultProperty: string | undefined,
@@ -531,5 +488,17 @@ function invalidNameGap(className: string, resourceType: string): AnalysisGap {
     { kind: 'invalid-resource-name', className, reason: `Could not derive valid ${resourceType} name from .define() call` },
     `Provide an explicit name in the definition object.`,
   );
+}
+
+function findClassValue(
+  className: string,
+  classes: readonly ClassValue[],
+): ClassValue | null {
+  for (const cls of classes) {
+    if (cls.className === className) {
+      return cls;
+    }
+  }
+  return null;
 }
 

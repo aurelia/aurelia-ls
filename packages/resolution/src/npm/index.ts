@@ -386,8 +386,12 @@ function matchClassForResource(cls: ClassValue, context?: FileContext): Analysis
   return { analyzed: null, gaps };
 }
 
-function matchDefineForResource(call: DefineCall, filePath: NormalizedPath): AnalysisMatchResult {
-  const result = matchDefine(call, filePath);
+function matchDefineForResource(
+  call: DefineCall,
+  filePath: NormalizedPath,
+  classes: readonly ClassValue[] = [],
+): AnalysisMatchResult {
+  const result = matchDefine(call, filePath, classes);
   return {
     analyzed: result.resource ? wrapAnalyzedResource(result.resource, "define") : null,
     gaps: result.gaps,
@@ -835,7 +839,7 @@ async function extractFromTypeScriptSource(
     }
 
     for (const call of facts.defineCalls) {
-      const matchResult = matchDefineForResource(call, facts.path);
+      const matchResult = matchDefineForResource(call, facts.path, facts.classes);
       gaps.push(...matchResult.gaps);
 
       if (matchResult.analyzed) {

@@ -11,6 +11,7 @@ import {
   transformStatement,
   transformMethod,
   transformModuleExports,
+  getPropertyKeySpan,
   type AnalyzableValue,
   type StatementValue,
 } from '../../../src/analysis/value/index.js';
@@ -207,6 +208,9 @@ describe('transformExpression', () => {
         const method = result.methods.get('register')!;
         expect(method.params).toHaveLength(1);
         expect(method.params[0]?.name).toBe('c');
+        const span = getPropertyKeySpan(result, 'register');
+        expect(span).toBeDefined();
+        expect(span!.start).toBeLessThan(span!.end);
       }
     });
 

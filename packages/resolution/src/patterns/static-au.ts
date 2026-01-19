@@ -18,10 +18,8 @@
 
 import type {
   BindingBehaviorDef,
-  BindingMode,
   CustomAttributeDef,
   CustomElementDef,
-  TextSpan,
   ValueConverterDef,
   TemplateControllerDef,
   ResourceDef,
@@ -29,18 +27,13 @@ import type {
 import type { AnalysisGap } from '../analysis/types.js';
 import type { ClassValue, AnalyzableValue } from '../analysis/value/types.js';
 import {
-  extractString,
-  extractBoolean,
   extractStringWithSpan,
-  extractStringArray,
   extractStringProp,
   extractStringPropWithSpan,
-  extractBindingModeProp,
   extractBooleanProp,
   extractStringArrayProp,
   getProperty,
 } from '../analysis/value/types.js';
-import type { BindableInput } from '../semantics/resource-def.js';
 import {
   buildBindableDefs,
   buildBindingBehaviorDef,
@@ -55,6 +48,12 @@ import {
   canonicalSimpleName,
   canonicalAliases,
 } from '../util/naming.js';
+import {
+  findPrimaryBindable,
+  getStaticBindableInputs,
+  mergeBindableInputs,
+  parseBindablesValue,
+} from './bindables.js';
 
 // =============================================================================
 // Main Export
@@ -145,6 +144,11 @@ function buildElementDef(
   const aliases = extractStringArrayProp(au, 'aliases');
   const bindablesProp = getProperty(au, 'bindables');
   const bindables = bindablesProp ? parseBindablesValue(bindablesProp) : [];
+  const staticBindables = getStaticBindableInputs(cls);
+  const mergedBindables = mergeBindableInputs(
+    [...staticBindables, ...bindables],
+    cls.bindableMembers,
+  );
   const containerless = extractBooleanProp(au, 'containerless') ?? false;
   const template = extractStringProp(au, 'template');
 
@@ -155,7 +159,7 @@ function buildElementDef(
     span: cls.span,
     nameSpan: nameProp?.span,
     aliases: canonicalAliases([...aliases]),
-    bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
+    bindables: buildBindableDefs(mergedBindables, cls.filePath, au.span ?? cls.span),
     containerless,
     boundary: true,
     inlineTemplate: template,
@@ -190,11 +194,16 @@ function buildAttributeDef(
   const aliases = extractStringArrayProp(au, 'aliases');
   const bindablesProp = getProperty(au, 'bindables');
   const bindables = bindablesProp ? parseBindablesValue(bindablesProp) : [];
+  const staticBindables = getStaticBindableInputs(cls);
+  const mergedBindables = mergeBindableInputs(
+    [...staticBindables, ...bindables],
+    cls.bindableMembers,
+  );
   const isTemplateController = extractBooleanProp(au, 'isTemplateController') ?? false;
   const noMultiBindings = extractBooleanProp(au, 'noMultiBindings') ?? false;
 
   // Find primary
-  const primary = findPrimaryBindable(bindables);
+  const primary = findPrimaryBindable(mergedBindables);
 
   if (isTemplateController) {
     const resource = buildTemplateControllerDef({
@@ -204,7 +213,7 @@ function buildAttributeDef(
       span: cls.span,
       nameSpan: nameProp?.span,
       aliases: canonicalAliases([...aliases]),
-      bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
+      bindables: buildBindableDefs(mergedBindables, cls.filePath, au.span ?? cls.span),
       noMultiBindings,
     });
     return { resource, gaps };
@@ -217,7 +226,7 @@ function buildAttributeDef(
     span: cls.span,
     nameSpan: nameProp?.span,
     aliases: canonicalAliases([...aliases]),
-    bindables: buildBindableDefs(bindables, cls.filePath, au.span ?? cls.span),
+    bindables: buildBindableDefs(mergedBindables, cls.filePath, au.span ?? cls.span),
     primary,
     noMultiBindings,
   });
@@ -291,74 +300,4 @@ function buildBindingBehaviorDefFromAu(
   return { resource, gaps };
 }
 
-// =============================================================================
-// Bindables Parsing
-// =============================================================================
-
-/**
- * Parse bindables from static $au.
- */
-function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
-  const result: BindableInput[] = [];
-
-  // Array form: bindables: ['prop1', 'prop2'] or bindables: [{ name: 'prop1', mode: 'twoWay' }]
-  if (value.kind === 'array') {
-    for (const element of value.elements) {
-      // String element
-      const stringName = extractString(element);
-      if (stringName !== undefined) {
-        result.push({ name: stringName });
-        continue;
-      }
-
-      // Object element
-      if (element.kind === 'object') {
-        const nameProp = extractStringPropWithSpan(element, 'name');
-        if (nameProp) {
-          const attrProp = extractStringPropWithSpan(element, 'attribute');
-          result.push({
-            name: nameProp.value,
-            mode: extractBindingModeProp(element, 'mode'),
-            primary: extractBooleanProp(element, 'primary'),
-            attribute: attrProp?.value,
-            attributeSpan: attrProp?.span,
-          });
-        }
-      }
-    }
-  }
-
-  // Object form: bindables: { prop1: { mode: 'twoWay' }, prop2: {} }
-  if (value.kind === 'object') {
-    for (const [name, propValue] of value.properties) {
-      if (propValue.kind === 'object') {
-        const attrProp = extractStringPropWithSpan(propValue, 'attribute');
-        result.push({
-          name,
-          mode: extractBindingModeProp(propValue, 'mode'),
-          primary: extractBooleanProp(propValue, 'primary'),
-          attribute: attrProp?.value,
-          attributeSpan: attrProp?.span,
-        });
-      } else {
-        result.push({ name });
-      }
-    }
-  }
-
-  return result;
-}
-
-/**
- * Find the primary bindable name.
- */
-function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
-  for (const b of bindables) {
-    if (b.primary) return b.name;
-  }
-  if (bindables.length === 1) {
-    return bindables[0]?.name;
-  }
-  return undefined;
-}
 

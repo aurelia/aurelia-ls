@@ -151,13 +151,14 @@ export function matchExpected(cls: ClassValue, context?: FileContext): ResourceD
  */
 export function matchDefineCalls(
   defineCalls: readonly DefineCall[],
-  filePath: NormalizedPath
+  filePath: NormalizedPath,
+  classes: readonly ClassValue[] = []
 ): FileMatchResult {
   const resources: ResourceDef[] = [];
   const gaps: AnalysisGap[] = [];
 
   for (const call of defineCalls) {
-    const result = matchDefine(call, filePath);
+    const result = matchDefine(call, filePath, classes);
     gaps.push(...result.gaps);
 
     if (result.resource) {
@@ -195,7 +196,7 @@ export function matchFileFacts(
   gaps.push(...classResult.gaps);
 
   // 2. Match define calls
-  const defineResult = matchDefineCalls(facts.defineCalls, facts.path);
+  const defineResult = matchDefineCalls(facts.defineCalls, facts.path, facts.classes);
   resources.push(...defineResult.resources);
   gaps.push(...defineResult.gaps);
 

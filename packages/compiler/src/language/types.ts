@@ -509,6 +509,18 @@ export interface StyleProfile {
     readonly aliasStyle?: "preserve" | "kebab" | "camel";
     readonly preferLocal?: boolean;
   };
+  readonly declaration?: {
+    readonly resource?: {
+      readonly element?: "preserve" | "decorator" | "define" | "static-au" | "convention";
+      readonly attribute?: "preserve" | "decorator" | "define" | "static-au" | "convention";
+      readonly controller?: "preserve" | "decorator" | "define" | "static-au" | "convention";
+      readonly converter?: "preserve" | "decorator" | "define" | "static-au" | "convention";
+      readonly behavior?: "preserve" | "decorator" | "define" | "static-au" | "convention";
+    };
+    readonly bindable?: {
+      readonly prefer?: "template" | "member-decorator" | "resource-config" | "static-bindables" | "static-au";
+    };
+  };
   readonly refactors?: {
     readonly renameStyle?: "preserve" | "attribute" | "property";
     readonly updateTemplateAliases?: "preserve" | "normalize";

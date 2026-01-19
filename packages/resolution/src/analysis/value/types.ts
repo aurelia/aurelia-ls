@@ -85,6 +85,7 @@ export interface ArrayValue {
 export interface ObjectValue {
   readonly kind: 'object';
   readonly properties: ReadonlyMap<string, AnalyzableValue>;
+  readonly propertyKeySpans?: ReadonlyMap<string, TextSpan>;
   readonly methods: ReadonlyMap<string, MethodValue>;
   readonly span?: TextSpan;
 }
@@ -606,9 +607,14 @@ export function array(elements: readonly AnalyzableValue[], span?: TextSpan): Ar
 export function object(
   properties: ReadonlyMap<string, AnalyzableValue>,
   methods: ReadonlyMap<string, MethodValue> = new Map(),
-  span?: TextSpan
+  span?: TextSpan,
+  propertyKeySpans?: ReadonlyMap<string, TextSpan>
 ): ObjectValue {
-  return { kind: 'object', properties, methods, span };
+  const result: ObjectValue = { kind: 'object', properties, methods, span };
+  if (propertyKeySpans && propertyKeySpans.size > 0) {
+    return { ...result, propertyKeySpans };
+  }
+  return result;
 }
 
 /** Create a reference value */
@@ -753,6 +759,13 @@ export function getProperty(value: AnalyzableValue | undefined, key: string): An
   const resolved = getResolvedValue(value);
   if (resolved.kind !== 'object') return undefined;
   return resolved.properties.get(key);
+}
+
+export function getPropertyKeySpan(value: AnalyzableValue | undefined, key: string): TextSpan | undefined {
+  if (!value) return undefined;
+  const resolved = getResolvedValue(value);
+  if (resolved.kind !== 'object') return undefined;
+  return resolved.propertyKeySpans?.get(key);
 }
 
 /**

@@ -20,6 +20,7 @@ import {
   classVal,
   unknown,
   method,
+  getPropertyKeySpan,
   // Statement constructors
   returnStmt,
   exprStmt,
@@ -91,6 +92,17 @@ describe('Value Model Types', () => {
       expect(obj.kind).toBe('object');
       expect(obj.methods.has('register')).toBe(true);
       expect(obj.methods.get('register')?.params[0]?.name).toBe('container');
+    });
+
+    it('creates object with property key spans', () => {
+      const props = new Map<string, AnalyzableValue>([
+        ['name', literal('foo')],
+      ]);
+      const keySpans = new Map([['name', { start: 5, end: 9 }]]);
+      const obj = object(props, new Map(), undefined, keySpans);
+
+      expect(obj.kind).toBe('object');
+      expect(getPropertyKeySpan(obj, 'name')).toEqual({ start: 5, end: 9 });
     });
 
     it('creates reference values', () => {

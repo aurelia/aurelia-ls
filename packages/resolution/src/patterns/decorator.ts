@@ -14,10 +14,8 @@
 
 import type {
   BindingBehaviorDef,
-  BindingMode,
   CustomAttributeDef,
   CustomElementDef,
-  NormalizedPath,
   TextSpan,
   ValueConverterDef,
   TemplateControllerDef,
@@ -27,17 +25,11 @@ import type { AnalysisGap } from '../analysis/types.js';
 import type {
   ClassValue,
   DecoratorApplication,
-  BindableMember,
-  AnalyzableValue,
 } from '../analysis/value/types.js';
 import {
-  extractString,
   extractStringWithSpan,
-  extractBoolean,
-  extractStringArray,
   extractStringProp,
   extractStringPropWithSpan,
-  extractBindingModeProp,
   extractBooleanProp,
   extractStringArrayProp,
   getProperty,
@@ -58,6 +50,13 @@ import {
   canonicalBindableName,
   canonicalAliases,
 } from '../util/naming.js';
+import {
+  applyImplicitPrimary,
+  findPrimaryBindable,
+  getStaticBindableInputs,
+  mergeBindableInputs,
+  parseBindablesValue,
+} from './bindables.js';
 
 // =============================================================================
 // Main Export
@@ -125,7 +124,7 @@ interface ElementMeta {
   name?: string;
   nameSpan?: TextSpan;
   aliases: string[];
-  bindables: BindableConfig[];
+  bindables: BindableInput[];
   containerless: boolean;
   template?: string;
   decoratorSpan?: TextSpan;
@@ -135,7 +134,7 @@ interface AttributeMeta {
   name?: string;
   nameSpan?: TextSpan;
   aliases: string[];
-  bindables: BindableConfig[];
+  bindables: BindableInput[];
   isTemplateController: boolean;
   noMultiBindings: boolean;
   defaultProperty?: string;
@@ -147,14 +146,6 @@ interface SimpleResourceMeta {
   nameSpan?: TextSpan;
   aliases: string[];
   decoratorSpan?: TextSpan;
-}
-
-interface BindableConfig {
-  name: string;
-  mode?: BindingMode;
-  primary?: boolean;
-  attribute?: string;
-  attributeSpan?: TextSpan;
 }
 
 /**
@@ -205,7 +196,7 @@ interface ParsedResourceDecorator {
   name?: string;
   nameSpan?: TextSpan;
   aliases: string[];
-  bindables: BindableConfig[];
+  bindables: BindableInput[];
   containerless: boolean;
   isTemplateController: boolean;
   noMultiBindings: boolean;
@@ -316,61 +307,6 @@ function parseSimpleDecorator(dec: DecoratorApplication): SimpleResourceMeta {
   return result;
 }
 
-/**
- * Parse a bindables value (array or object form).
- */
-function parseBindablesValue(value: AnalyzableValue): BindableConfig[] {
-  const result: BindableConfig[] = [];
-
-  // Array form: bindables: ['prop1', 'prop2'] or bindables: [{ name: 'prop1', mode: 'twoWay' }]
-  if (value.kind === 'array') {
-    for (const element of value.elements) {
-      // String element
-      const stringName = extractString(element);
-      if (stringName !== undefined) {
-        result.push({ name: stringName });
-        continue;
-      }
-
-      // Object element
-      if (element.kind === 'object') {
-        const nameProp = extractStringPropWithSpan(element, 'name');
-        if (nameProp) {
-          const attrProp = extractStringPropWithSpan(element, 'attribute');
-          result.push({
-            name: nameProp.value,
-            mode: extractBindingModeProp(element, 'mode'),
-            primary: extractBooleanProp(element, 'primary'),
-            attribute: attrProp?.value,
-            attributeSpan: attrProp?.span,
-          });
-        }
-      }
-    }
-  }
-
-  // Object form: bindables: { prop1: { mode: 'twoWay' }, prop2: {} }
-  if (value.kind === 'object') {
-    for (const [name, propValue] of value.properties) {
-      if (propValue.kind === 'object') {
-        const attrProp = extractStringPropWithSpan(propValue, 'attribute');
-        result.push({
-          name,
-          mode: extractBindingModeProp(propValue, 'mode'),
-          primary: extractBooleanProp(propValue, 'primary'),
-          attribute: attrProp?.value,
-          attributeSpan: attrProp?.span,
-        });
-      } else {
-        // Just the property name, no config
-        result.push({ name });
-      }
-    }
-  }
-
-  return result;
-}
-
 // =============================================================================
 // Metadata Merging
 // =============================================================================
@@ -440,8 +376,14 @@ function buildElementDef(
     return null;
   }
 
-  // Merge bindables from decorator and @bindable members
-  const bindables = buildBindableInputs(elementMeta.bindables, cls.bindableMembers);
+  // Merge bindables from decorator, static bindables, and @bindable members
+  const staticBindables = getStaticBindableInputs(cls);
+  const mergedBindables = mergeBindableInputs(
+    [...elementMeta.bindables, ...staticBindables],
+    cls.bindableMembers,
+  );
+  const sortedBindables = [...mergedBindables].sort((a, b) => a.name.localeCompare(b.name));
+  const bindables = applyImplicitPrimary(sortedBindables);
 
   return buildCustomElementDef({
     name,
@@ -476,7 +418,13 @@ function buildAttributeDef(
   }
 
   // Merge bindables
-  const bindables = buildBindableInputs(attrMeta.bindables, cls.bindableMembers);
+  const staticBindables = getStaticBindableInputs(cls);
+  const mergedBindables = mergeBindableInputs(
+    [...attrMeta.bindables, ...staticBindables],
+    cls.bindableMembers,
+  );
+  const sortedBindables = [...mergedBindables].sort((a, b) => a.name.localeCompare(b.name));
+  const bindables = applyImplicitPrimary(sortedBindables);
   const primary = resolvePrimaryName(bindables, attrMeta.defaultProperty);
   const bindablesWithPrimary = applyPrimaryBindable(bindables, primary);
   const isTC = attrMeta.isTemplateController || meta.templateController;
@@ -558,85 +506,6 @@ function buildBindingBehaviorDefFromMeta(
 // =============================================================================
 // Bindable Building
 // =============================================================================
-
-/**
- * Build bindable inputs from decorator config and @bindable members.
- */
-function buildBindableInputs(
-  fromDecorator: BindableConfig[],
-  fromMembers: readonly BindableMember[]
-): BindableInput[] {
-  const merged = new Map<string, BindableInput>();
-
-  // First, add decorator bindables
-  for (const config of fromDecorator) {
-    merged.set(config.name, {
-      name: config.name,
-      mode: config.mode,
-      primary: config.primary,
-      attribute: config.attribute,
-      attributeSpan: config.attributeSpan,
-    });
-  }
-
-  // Then merge with @bindable members (can add type info)
-  for (const member of fromMembers) {
-    const existing = merged.get(member.name);
-
-    // Extract mode/primary from @bindable(...) args if present
-    let mode: BindingMode | undefined = existing?.mode;
-    let primary: boolean | undefined = existing?.primary;
-    let attribute: string | undefined = existing?.attribute;
-    let attributeSpan: TextSpan | undefined = existing?.attributeSpan;
-
-    if (member.args.length > 0) {
-      const arg = member.args[0];
-      if (arg?.kind === 'object') {
-        mode = mode ?? extractBindingModeProp(arg, 'mode');
-        primary = primary ?? extractBooleanProp(arg, 'primary');
-        const attrProp = extractStringPropWithSpan(arg, 'attribute');
-        attribute = attribute ?? attrProp?.value;
-        attributeSpan = attributeSpan ?? attrProp?.span;
-      }
-    }
-
-    merged.set(member.name, {
-      name: member.name,
-      mode,
-      primary,
-      attribute,
-      attributeSpan,
-      type: member.type,
-      span: member.span,
-    });
-  }
-
-  const inputs = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-  const only = inputs.length === 1 ? inputs[0] : undefined;
-  if (only && !inputs.some((b) => b.primary)) {
-    inputs[0] = { ...only, primary: true };
-  }
-
-  return inputs;
-}
-
-/**
- * Find the primary bindable name.
- */
-function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
-  // Explicit primary
-  for (const b of bindables) {
-    if (b.primary) return b.name;
-  }
-
-  // Single bindable is implicitly primary
-  if (bindables.length === 1) {
-    return bindables[0]?.name;
-  }
-
-  return undefined;
-}
 
 function resolvePrimaryName(
   bindables: BindableInput[],

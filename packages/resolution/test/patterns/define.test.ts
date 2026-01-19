@@ -9,11 +9,13 @@ import type { NormalizedPath, TextSpan } from "@aurelia-ls/compiler";
 import { matchDefine } from "../../src/patterns/define.js";
 import {
   array,
+  classVal,
   importVal,
   literal,
   object,
   ref,
   type AnalyzableValue,
+  type BindableMember,
 } from "../../src/analysis/value/types.js";
 import { unwrapSourced } from "../../src/semantics/sourced.js";
 
@@ -121,6 +123,30 @@ describe("matchDefine - CustomElement", () => {
     expect(unwrapSourced(bindables.format?.attribute)).toBe("format");
   });
 
+  it("uses bindable key spans from object form", () => {
+    const keySpan: TextSpan = { start: 10, end: 18 };
+    const bindablesObject = object(
+      new Map([["value", object(new Map())]]),
+      new Map(),
+      undefined,
+      new Map([["value", keySpan]]),
+    );
+
+    const def = object(new Map([
+      ["name", literal("au-card")],
+      ["bindables", bindablesObject],
+    ]));
+
+    const result = matchDefine(
+      defineCall("CustomElement", def, ref("AuCard")),
+      FILE
+    );
+
+    const bindables = result.resource?.bindables ?? {};
+    expect(bindables.value?.property.location?.pos).toBe(keySpan.start);
+    expect(bindables.value?.property.location?.end).toBe(keySpan.end);
+  });
+
   it("accepts classRef imports as class names", () => {
     const result = matchDefine(
       defineCall(
@@ -134,6 +160,109 @@ describe("matchDefine - CustomElement", () => {
     expect(result.gaps.length).toBe(0);
     expect(unwrapSourced(result.resource?.className)).toBe("ImportedElement");
     expect(unwrapSourced(result.resource?.name)).toBe("imported-element");
+  });
+
+  it("merges static and member bindables with define bindables", () => {
+    const staticBindables = object(new Map([
+      ["value", object(new Map([
+        ["mode", literal("twoWay")],
+        ["attribute", literal("static-value")],
+      ]))],
+      ["staticOnly", object(new Map([
+        ["mode", literal("toView")],
+      ]))],
+    ]));
+
+    const memberBindables: BindableMember[] = [
+      {
+        name: "value",
+        args: [object(new Map([
+          ["mode", literal("oneTime")],
+          ["attribute", literal("member-value")],
+        ]))],
+        type: "string",
+        span: SPAN,
+      },
+      {
+        name: "memberOnly",
+        args: [],
+        type: "number",
+        span: SPAN,
+      },
+    ];
+
+    const cls = classVal(
+      "FancyCard",
+      FILE,
+      [],
+      new Map([["bindables", staticBindables]]),
+      memberBindables,
+      [],
+      SPAN
+    );
+
+    const def = object(new Map([
+      ["name", literal("FancyCard")],
+      ["bindables", array([
+        object(new Map([
+          ["name", literal("value")],
+          ["mode", literal("fromView")],
+          ["attribute", literal("def-value")],
+        ])),
+        literal("defOnly"),
+      ])],
+    ]));
+
+    const result = matchDefine(
+      defineCall("CustomElement", def, ref("FancyCard")),
+      FILE,
+      [cls]
+    );
+
+    const bindables = result.resource?.bindables ?? {};
+    expect(Object.keys(bindables).sort()).toEqual(["defOnly", "memberOnly", "staticOnly", "value"]);
+    expect(unwrapSourced(bindables.value?.mode)).toBe("fromView");
+    expect(unwrapSourced(bindables.value?.attribute)).toBe("def-value");
+    expect(unwrapSourced(bindables.value?.type)).toBe("string");
+    expect(unwrapSourced(bindables.staticOnly?.mode)).toBe("toView");
+    expect(unwrapSourced(bindables.staticOnly?.attribute)).toBe("staticOnly");
+    expect(unwrapSourced(bindables.memberOnly?.type)).toBe("number");
+  });
+
+  it("includes class bindables for string-only definitions", () => {
+    const staticBindables = object(new Map([
+      ["value", object(new Map([
+        ["mode", literal("twoWay")],
+      ]))],
+    ]));
+
+    const memberBindables: BindableMember[] = [
+      {
+        name: "memberOnly",
+        args: [],
+        span: SPAN,
+      },
+    ];
+
+    const cls = classVal(
+      "AlertCard",
+      FILE,
+      [],
+      new Map([["bindables", staticBindables]]),
+      memberBindables,
+      [],
+      SPAN
+    );
+
+    const result = matchDefine(
+      defineCall("CustomElement", literal("alert-card"), ref("AlertCard")),
+      FILE,
+      [cls]
+    );
+
+    const bindables = result.resource?.bindables ?? {};
+    expect(Object.keys(bindables).sort()).toEqual(["memberOnly", "value"]);
+    expect(unwrapSourced(bindables.value?.mode)).toBe("twoWay");
   });
 });
 

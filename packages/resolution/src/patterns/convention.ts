@@ -23,10 +23,8 @@ import type {
   ResourceDef,
 } from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../analysis/types.js';
-import type { ClassValue, BindableMember } from '../analysis/value/types.js';
-import { extractBindingModeProp, extractBooleanProp } from '../analysis/value/types.js';
+import type { ClassValue } from '../analysis/value/types.js';
 import type { FileContext } from '../extraction/file-facts.js';
-import type { BindableInput } from '../semantics/resource-def.js';
 import {
   buildBindableDefs,
   buildBindingBehaviorDef,
@@ -40,6 +38,7 @@ import {
   canonicalAttrName,
   canonicalSimpleName,
 } from '../util/naming.js';
+import { findPrimaryBindable, getStaticBindableInputs, mergeBindableInputs } from './bindables.js';
 
 // =============================================================================
 // Main Export
@@ -133,7 +132,9 @@ function buildElementDef(
   cls: ClassValue,
   name: string
 ): CustomElementDef {
-  const bindables = buildBindableInputs(cls.bindableMembers);
+  const staticBindables = getStaticBindableInputs(cls);
+  const bindables = mergeBindableInputs(staticBindables, cls.bindableMembers)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return buildCustomElementDef({
     name,
@@ -150,7 +151,9 @@ function buildAttributeDef(
   cls: ClassValue,
   name: string
 ): CustomAttributeDef | TemplateControllerDef {
-  const bindables = buildBindableInputs(cls.bindableMembers);
+  const staticBindables = getStaticBindableInputs(cls);
+  const bindables = mergeBindableInputs(staticBindables, cls.bindableMembers)
+    .sort((a, b) => a.name.localeCompare(b.name));
   const primary = findPrimaryBindable(bindables);
 
   return buildCustomAttributeDef({
@@ -186,56 +189,5 @@ function buildBindingBehaviorDefFromConvention(
     file: cls.filePath,
     span: cls.span,
   });
-}
-
-// =============================================================================
-// Bindable Building
-// =============================================================================
-
-/**
- * Build bindable inputs from @bindable members only.
- * (Convention resources don't have decorator-level bindables config)
- */
-function buildBindableInputs(
-  members: readonly BindableMember[]
-): BindableInput[] {
-  const result: BindableInput[] = [];
-
-  for (const member of members) {
-    // Extract mode/primary from @bindable(...) args if present
-    let mode: BindableInput['mode'];
-    let primary: boolean | undefined;
-
-    if (member.args.length > 0) {
-      const arg = member.args[0];
-      if (arg?.kind === 'object') {
-        mode = extractBindingModeProp(arg, 'mode');
-        primary = extractBooleanProp(arg, 'primary');
-      }
-    }
-
-    result.push({
-      name: member.name,
-      mode,
-      primary,
-      type: member.type,
-      span: member.span,
-    });
-  }
-
-  return result.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Find the primary bindable name.
- */
-function findPrimaryBindable(bindables: BindableInput[]): string | undefined {
-  for (const b of bindables) {
-    if (b.primary) return b.name;
-  }
-  if (bindables.length === 1) {
-    return bindables[0]?.name;
-  }
-  return undefined;
 }
 

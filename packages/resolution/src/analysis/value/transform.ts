@@ -253,40 +253,51 @@ function transformObjectLiteral(
 ): AnalyzableValue {
   const properties = new Map<string, AnalyzableValue>();
   const methods = new Map<string, MethodValue>();
+  const propertyKeySpans = new Map<string, TextSpan>();
 
   for (const prop of expr.properties) {
     // Property assignment: { key: value }
     if (ts.isPropertyAssignment(prop)) {
       const key = getPropertyName(prop.name, sf);
-      if (key === null) {
+      if (!key) {
         // Computed property name we can't resolve - skip with warning
         continue;
       }
-      properties.set(key, transformExpression(prop.initializer, sf));
+      properties.set(key.name, transformExpression(prop.initializer, sf));
+      if (key.span) {
+        propertyKeySpans.set(key.name, key.span);
+      }
     }
     // Shorthand property: { x } means { x: x }
     else if (ts.isShorthandPropertyAssignment(prop)) {
       const name = prop.name.text;
       properties.set(name, ref(name, undefined, nodeSpan(prop, sf)));
+      propertyKeySpans.set(name, nodeSpan(prop.name, sf));
     }
     // Method definition: { method() { } }
     else if (ts.isMethodDeclaration(prop)) {
       const key = getPropertyName(prop.name, sf);
-      if (key === null) continue;
+      if (!key) continue;
 
       const params = transformParameters(prop.parameters, sf);
       const body = prop.body ? transformBlock(prop.body, sf) : [];
-      methods.set(key, method(key, params, body, nodeSpan(prop, sf)));
+      methods.set(key.name, method(key.name, params, body, nodeSpan(prop, sf)));
+      if (key.span) {
+        propertyKeySpans.set(key.name, key.span);
+      }
     }
     // Getter: { get x() { } }
     else if (ts.isGetAccessorDeclaration(prop)) {
       const key = getPropertyName(prop.name, sf);
-      if (key === null) continue;
+      if (!key) continue;
       // Treat getter as unknown value for now
-      properties.set(key, unknown(
-        gap(`getter "${key}"`, { kind: 'function-return', functionName: `get ${key}` }, 'Getter return values cannot be statically analyzed'),
+      properties.set(key.name, unknown(
+        gap(`getter "${key.name}"`, { kind: 'function-return', functionName: `get ${key.name}` }, 'Getter return values cannot be statically analyzed'),
         nodeSpan(prop, sf)
       ));
+      if (key.span) {
+        propertyKeySpans.set(key.name, key.span);
+      }
     }
     // Setter: { set x(v) { } }
     else if (ts.isSetAccessorDeclaration(prop)) {
@@ -303,38 +314,45 @@ function transformObjectLiteral(
     }
   }
 
-  return object(properties, methods, span);
+  return object(
+    properties,
+    methods,
+    span,
+    propertyKeySpans.size > 0 ? propertyKeySpans : undefined
+  );
 }
 
 /**
  * Get the string name of a property, or null if it's a computed property
  * that can't be statically determined.
  */
-function getPropertyName(name: ts.PropertyName, sf: ts.SourceFile): string | null {
+type PropertyNameInfo = { name: string; span?: TextSpan };
+
+function getPropertyName(name: ts.PropertyName, sf: ts.SourceFile): PropertyNameInfo | null {
   if (ts.isIdentifier(name)) {
-    return name.text;
+    return { name: name.text, span: nodeSpan(name, sf) };
   }
   if (ts.isStringLiteral(name)) {
-    return name.text;
+    return { name: name.text, span: nodeSpan(name, sf) };
   }
   if (ts.isNumericLiteral(name)) {
-    return name.text;
+    return { name: name.text, span: nodeSpan(name, sf) };
   }
   if (ts.isComputedPropertyName(name)) {
     // Try to evaluate simple computed names
     const expr = name.expression;
     if (ts.isStringLiteral(expr)) {
-      return expr.text;
+      return { name: expr.text, span: nodeSpan(expr, sf) };
     }
     if (ts.isNumericLiteral(expr)) {
-      return expr.text;
+      return { name: expr.text, span: nodeSpan(expr, sf) };
     }
     // Complex computed property - can't determine statically
     return null;
   }
   if (ts.isPrivateIdentifier(name)) {
     // Private identifiers start with #
-    return `#${name.text}`;
+    return { name: `#${name.text}`, span: nodeSpan(name, sf) };
   }
   return null;
 }
