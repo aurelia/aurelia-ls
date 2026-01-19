@@ -4,6 +4,7 @@ import {
   normalizePathForId,
   spanContainsOffset,
   spanLength,
+  stableHash,
   toSourceFileId,
   type BindableDef,
   type DOMNode,
@@ -24,7 +25,7 @@ import {
 } from "@aurelia-ls/compiler";
 import type { ResolutionResult } from "@aurelia-ls/resolution";
 import type { WorkspaceLocation } from "./types.js";
-import { buildDomIndex, elementTagSpanAtOffset, findAttrForSpan, findDomNode } from "./template-dom.js";
+import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
 
 export interface ResourceDefinitionIndex {
   readonly elements: ReadonlyMap<string, ResourceDefinitionEntry[]>;
@@ -176,11 +177,12 @@ export function collectTemplateReferences(options: {
   const match = findLocalScopeSymbolAtOffset(compilation, offset, lookup);
   if (!match) return [];
 
+  const symbolId = localSymbolId(options.documentUri ?? null, match);
   const results: WorkspaceLocation[] = [];
   const documentUri = options.documentUri ?? null;
   if (match.symbol.span) {
     const loc = spanLocation(match.symbol.span, documentUri);
-    if (loc) results.push(loc);
+    if (loc) results.push(symbolId ? { ...loc, symbolId } : loc);
   }
 
   const exprTable = compilation.exprTable ?? [];
@@ -196,8 +198,102 @@ export function collectTemplateReferences(options: {
       if (!resolved) continue;
       if (resolved.frame.id !== match.frame.id || resolved.symbol.name !== match.symbol.name) continue;
       const loc = spanLocation(access.span, documentUri);
-      if (loc) results.push(loc);
+      if (loc) results.push(symbolId ? { ...loc, symbolId } : loc);
     }
+  }
+
+  return results;
+}
+
+export function collectTemplateResourceReferences(options: {
+  compilation: TemplateCompilation;
+  resources: ResourceDefinitionIndex;
+  syntax: AttributeSyntaxContext;
+  preferRoots?: readonly string[] | null;
+  documentUri?: DocumentUri | null;
+}): WorkspaceLocation[] {
+  const { compilation, resources } = options;
+  const syntax = options.syntax;
+  const preferRoots = normalizeRoots(options.preferRoots ?? []);
+  const results: WorkspaceLocation[] = [];
+  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
+  const documentUri = options.documentUri ?? null;
+
+  for (let ti = 0; ti < compilation.linked.templates.length; ti += 1) {
+    const template = compilation.linked.templates[ti];
+    const domTemplate = compilation.ir.templates?.[ti];
+    if (!template || !domTemplate) continue;
+    for (const row of template.rows ?? []) {
+      if (row.node.kind !== "element") continue;
+      const domNode = findDomNode(domIndex, ti, row.target);
+      if (!domNode || domNode.kind !== "element") continue;
+      const entry = row.node.custom?.def
+        ? findEntry(resources.elements, row.node.custom.def.name, row.node.custom.def.file ?? null)
+        : (looksLikeCustomElementTag(row.node.tag)
+          ? findEntry(resources.elements, row.node.tag, null, preferRoots)
+          : null);
+      if (!entry?.symbolId) continue;
+      for (const span of elementTagSpans(domNode)) {
+        const loc = spanLocation(span, documentUri);
+        if (loc) results.push({ ...loc, symbolId: entry.symbolId, nodeId: row.target });
+      }
+    }
+  }
+
+  const instructionHits = collectInstructionHits(compilation.linked.templates, compilation.ir.templates ?? [], domIndex);
+  for (const hit of instructionHits) {
+    const span = hit.attrNameSpan ?? null;
+    if (!span) continue;
+    switch (hit.instruction.kind) {
+      case "hydrateAttribute": {
+        const res = hit.instruction.res?.def ?? null;
+        const entry = res
+          ? findEntry(resources.attributes, res.name, res.file ?? null)
+          : (() => {
+            const name = attributeTargetName(hit.attrName ?? null, syntax);
+            return name ? findEntry(resources.attributes, name, null, preferRoots) : null;
+          })();
+        if (!entry?.symbolId) break;
+        const loc = spanLocation(span, documentUri);
+        if (loc) results.push({ ...loc, symbolId: entry.symbolId });
+        break;
+      }
+      case "hydrateTemplateController": {
+        const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots)
+          ?? (() => {
+            const name = attributeTargetName(hit.attrName ?? null, syntax);
+            return name ? findEntry(resources.controllers, name, null, preferRoots) : null;
+          })();
+        if (!entry?.symbolId) break;
+        const loc = spanLocation(span, documentUri);
+        if (loc) results.push({ ...loc, symbolId: entry.symbolId });
+        break;
+      }
+      case "propertyBinding":
+      case "attributeBinding":
+      case "setProperty": {
+        const target = hit.instruction.target as { kind?: string } | null | undefined;
+        if (!target || typeof target !== "object" || !("kind" in target)) break;
+        const symbolId = bindableSymbolIdForTarget(target, hit.instruction.to, resources, hit.hostTag, preferRoots);
+        if (!symbolId) break;
+        const loc = spanLocation(span, documentUri);
+        if (loc) results.push({ ...loc, symbolId });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  const exprRefs = collectExprResources(compilation.exprTable ?? []);
+  for (const ref of exprRefs) {
+    const entry = ref.kind === "valueConverter"
+      ? findEntry(resources.valueConverters, ref.name, null, preferRoots)
+      : findEntry(resources.bindingBehaviors, ref.name, null, preferRoots);
+    if (!entry?.symbolId) continue;
+    const loc = spanLocation(ref.span, documentUri);
+    if (!loc) continue;
+    results.push({ ...loc, symbolId: entry.symbolId, exprId: ref.exprId });
   }
 
   return results;
@@ -213,11 +309,10 @@ type InstructionHit = {
   attrNameSpan?: SourceSpan | null;
 };
 
-function findInstructionsAtOffset(
+function collectInstructionHits(
   templates: readonly { rows: readonly LinkedRow[] }[],
   irTemplates: readonly TemplateIR[],
   domIndex: ReturnType<typeof buildDomIndex>,
-  offset: number,
 ): InstructionHit[] {
   const hits: InstructionHit[] = [];
   const addHit = (
@@ -227,7 +322,6 @@ function findInstructionsAtOffset(
   ) => {
     const loc = instruction.loc ?? null;
     if (!loc) return;
-    if (!spanContainsOffset(loc, offset)) return;
     const attr = node && (node.kind === "element" || node.kind === "template") ? findAttrForSpan(node, loc) : null;
     hits.push({
       instruction,
@@ -262,8 +356,19 @@ function findInstructionsAtOffset(
       }
     }
   }
-  hits.sort((a, b) => a.len - b.len);
   return hits;
+}
+
+function findInstructionsAtOffset(
+  templates: readonly { rows: readonly LinkedRow[] }[],
+  irTemplates: readonly TemplateIR[],
+  domIndex: ReturnType<typeof buildDomIndex>,
+  offset: number,
+): InstructionHit[] {
+  const hits = collectInstructionHits(templates, irTemplates, domIndex);
+  const filtered = hits.filter((hit) => spanContainsOffset(hit.loc, offset));
+  filtered.sort((a, b) => a.len - b.len);
+  return filtered;
 }
 
 function findRow(
@@ -320,6 +425,18 @@ function definitionsForInstruction(
   }
 }
 
+function bindableSymbolIdForTarget(
+  target: { kind?: string },
+  to: string,
+  resources: ResourceDefinitionIndex,
+  hostTag?: string,
+  preferRoots?: readonly string[],
+): SymbolId | null {
+  const resolved = resolveBindableForTarget(target, to, resources, hostTag, preferRoots);
+  if (!resolved?.entry.symbolId) return null;
+  return bindableSymbolId(resolved.entry.symbolId, resolved.property);
+}
+
 function bindableLocationsForTarget(
   target: { kind?: string },
   to: string,
@@ -327,42 +444,52 @@ function bindableLocationsForTarget(
   hostTag?: string,
   preferRoots?: readonly string[],
 ): WorkspaceLocation[] {
+  const resolved = resolveBindableForTarget(target, to, resources, hostTag, preferRoots);
+  if (!resolved) return [];
+  const symbolId = resolved.entry.symbolId ? bindableSymbolId(resolved.entry.symbolId, resolved.property) : undefined;
+  const location = bindableLocation(resolved.entry.def, resolved.bindable, symbolId);
+  return location ? [location] : [];
+}
+
+function resolveBindableForTarget(
+  target: { kind?: string },
+  to: string,
+  resources: ResourceDefinitionIndex,
+  hostTag?: string,
+  preferRoots?: readonly string[],
+): { entry: ResourceDefinitionEntry; bindable: BindableDef; property: string } | null {
   switch (target.kind) {
     case "element.bindable": {
       const t = target as { element: { def: { name: string; file?: string } } };
       const entry = findEntry(resources.elements, t.element.def.name, t.element.def.file ?? null);
-      if (!entry) return [];
+      if (!entry) return null;
       const bindable = findBindableDef(entry.def, to);
-      const location = bindable ? bindableLocation(entry.def, bindable) : null;
-      return location ? [location] : [];
+      return bindable ? { entry, bindable, property: to } : null;
     }
     case "attribute.bindable": {
       const t = target as { attribute: { def: { name: string; file?: string; isTemplateController?: boolean } } };
       const map = t.attribute.def.isTemplateController ? resources.controllers : resources.attributes;
       const entry = findEntry(map, t.attribute.def.name, t.attribute.def.file ?? null);
-      if (!entry) return [];
+      if (!entry) return null;
       const bindable = findBindableDef(entry.def, to);
-      const location = bindable ? bindableLocation(entry.def, bindable) : null;
-      return location ? [location] : [];
+      return bindable ? { entry, bindable, property: to } : null;
     }
     case "controller.prop": {
       const t = target as { controller: { res: string } };
       const entry = findEntry(resources.controllers, t.controller.res, null);
-      if (!entry) return [];
+      if (!entry) return null;
       const bindable = findBindableDef(entry.def, to);
-      const location = bindable ? bindableLocation(entry.def, bindable) : null;
-      return location ? [location] : [];
+      return bindable ? { entry, bindable, property: to } : null;
     }
     case "unknown": {
-      if (!hostTag || !looksLikeCustomElementTag(hostTag)) return [];
+      if (!hostTag || !looksLikeCustomElementTag(hostTag)) return null;
       const entry = findEntry(resources.elements, hostTag, null, preferRoots);
-      if (!entry) return [];
+      if (!entry) return null;
       const bindable = findBindableDef(entry.def, to);
-      const location = bindable ? bindableLocation(entry.def, bindable) : null;
-      return location ? [location] : [];
+      return bindable ? { entry, bindable, property: to } : null;
     }
     default:
-      return [];
+      return null;
   }
 }
 
@@ -380,13 +507,14 @@ function resourceLocation(entry: ResourceDefinitionEntry): WorkspaceLocation | n
   return sourceLocationToWorkspaceLocation(loc, entry.symbolId);
 }
 
-function bindableLocation(def: ResourceDef, bindable: BindableDef): WorkspaceLocation | null {
+function bindableLocation(def: ResourceDef, bindable: BindableDef, symbolId?: SymbolId): WorkspaceLocation | null {
   const loc =
     readLocation(bindable.property)
     ?? readLocation(bindable.attribute)
     ?? resourceSourceLocation(def);
   if (!loc) return null;
-  return sourceLocationToWorkspaceLocation(loc);
+  const base = sourceLocationToWorkspaceLocation(loc);
+  return symbolId ? { ...base, symbolId } : base;
 }
 
 function sourceLocationToWorkspaceLocation(loc: SourceLocation, symbolId?: SymbolId): WorkspaceLocation {
@@ -604,7 +732,10 @@ function findLocalScopeDefinition(
   const lookup = buildScopeLookup(scopeTemplate);
   const match = findLocalScopeSymbolAtOffset(compilation, offset, lookup);
   if (!match?.symbol.span) return null;
-  return spanLocation(match.symbol.span, documentUri);
+  const loc = spanLocation(match.symbol.span, documentUri);
+  if (!loc) return null;
+  const symbolId = localSymbolId(documentUri, match);
+  return symbolId ? { ...loc, symbolId } : loc;
 }
 
 function ascendFrame(
@@ -654,6 +785,27 @@ function spanLocation(span: SourceSpan, documentUri: DocumentUri | null): Worksp
   if (!span.file) return null;
   const canonical = canonicalDocumentUri(span.file);
   return { uri: canonical.uri, span };
+}
+
+function localSymbolId(documentUri: DocumentUri | null, match: ScopeSymbolMatch): SymbolId | null {
+  const canonical = documentUri ? canonicalDocumentUri(documentUri) : null;
+  const file = match.symbol.span?.file ?? canonical?.file ?? null;
+  if (!file) return null;
+  const normalized = String(normalizePathForId(file));
+  return stableHash({
+    kind: "local",
+    file: normalized,
+    frame: String(match.frame.id),
+    name: match.symbol.name,
+  }) as SymbolId;
+}
+
+function bindableSymbolId(owner: SymbolId, property: string): SymbolId {
+  return stableHash({
+    kind: "bindable",
+    owner,
+    property,
+  }) as SymbolId;
 }
 
 function parseLocalPath(path: string): { name: string; ancestorDepth: number; rootOnly: boolean } | null {
@@ -713,9 +865,12 @@ function findAccessScopeAtOffset(
   let best: { name: string; ancestor?: number; span?: SourceSpan } | null = null;
   const visit = (current: ExpressionAst | null | undefined) => {
     if (!current || !current.$kind) return;
-    if (current.$kind === "AccessScope" && current.name?.span && spanContainsOffset(current.name.span, offset)) {
-      if (!best || spanLength(current.name.span) < spanLength(best.span ?? current.name.span)) {
-        best = { name: current.name.name, ancestor: current.ancestor, span: current.name.span };
+    if (current.$kind === "AccessScope") {
+      const ident = readIdentifier(current.name, current.span);
+      if (ident?.span && spanContainsOffset(ident.span, offset)) {
+        if (!best || spanLength(ident.span) < spanLength(best.span ?? ident.span)) {
+          best = { name: ident.name, ancestor: current.ancestor, span: ident.span };
+        }
       }
     }
     const queue: (ExpressionAst | null | undefined)[] = [];
@@ -752,8 +907,11 @@ function collectAccessScopeNodes(
   out: AccessScopeInfo[],
 ): void {
   if (!node || !node.$kind) return;
-  if (node.$kind === "AccessScope" && node.name?.span) {
-    out.push({ name: node.name.name, ancestor: node.ancestor, span: node.name.span });
+  if (node.$kind === "AccessScope") {
+    const ident = readIdentifier(node.name, node.span);
+    if (ident?.span) {
+      out.push({ name: ident.name, ancestor: node.ancestor, span: ident.span });
+    }
   }
   const queue: (ExpressionAst | null | undefined)[] = [];
   queue.push(
@@ -780,10 +938,12 @@ function collectAccessScopeNodes(
   }
 }
 
+type IdentifierLike = { name: string; span?: SourceSpan } | string | null | undefined;
+
 type ExpressionAst = {
   $kind: string;
   span?: SourceSpan;
-  name?: { name: string; span?: SourceSpan };
+  name?: IdentifierLike;
   expression?: ExpressionAst;
   object?: ExpressionAst;
   func?: ExpressionAst;
@@ -802,6 +962,71 @@ type ExpressionAst = {
   iterable?: ExpressionAst;
   ancestor?: number;
 };
+
+function readIdentifier(
+  ident: IdentifierLike,
+  fallbackSpan?: SourceSpan | null,
+): { name: string; span?: SourceSpan } | null {
+  if (!ident) return null;
+  if (typeof ident === "string") {
+    return { name: ident, span: fallbackSpan ?? undefined };
+  }
+  const span = ident.span ?? fallbackSpan ?? undefined;
+  return { name: ident.name, span };
+}
+
+type ExprResourceRef = {
+  kind: "bindingBehavior" | "valueConverter";
+  name: string;
+  span: SourceSpan;
+  exprId: ExprId;
+};
+
+function collectExprResources(exprTable: readonly { id: ExprId; ast: unknown }[]): ExprResourceRef[] {
+  const refs: ExprResourceRef[] = [];
+  for (const entry of exprTable) {
+    walkExprResourceRefs(entry.ast as ExpressionAst | null | undefined, entry.id, refs);
+  }
+  return refs;
+}
+
+function walkExprResourceRefs(
+  node: ExpressionAst | null | undefined,
+  exprId: ExprId,
+  out: ExprResourceRef[],
+): void {
+  if (!node || !node.$kind) return;
+  if (node.$kind === "BindingBehavior") {
+    const ident = readIdentifier(node.name, node.span);
+    if (ident?.span) out.push({ kind: "bindingBehavior", name: ident.name, span: ident.span, exprId });
+  } else if (node.$kind === "ValueConverter") {
+    const ident = readIdentifier(node.name, node.span);
+    if (ident?.span) out.push({ kind: "valueConverter", name: ident.name, span: ident.span, exprId });
+  }
+  const queue: (ExpressionAst | null | undefined)[] = [];
+  queue.push(
+    node.expression,
+    node.object,
+    node.func,
+    node.left,
+    node.right,
+    node.condition,
+    node.yes,
+    node.no,
+    node.target,
+    node.value,
+    node.key,
+    node.declaration,
+    node.iterable,
+  );
+  if (node.args) queue.push(...node.args);
+  if (node.parts) queue.push(...node.parts);
+  if (node.expressions) queue.push(...node.expressions);
+  for (const child of queue) {
+    if (!child) continue;
+    walkExprResourceRefs(child, exprId, out);
+  }
+}
 
 function findValueConverterAtOffset(
   exprTable: readonly { id: ExprId; ast: unknown }[],
@@ -827,9 +1052,10 @@ function findBindingBehaviorAtOffset(
 
 function findConverterInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
   if (!node || !node.$kind) return null;
-  if (node.$kind === "ValueConverter" && node.name?.span) {
-    if (spanContainsOffset(node.name.span, offset)) {
-      return node.name.name;
+  if (node.$kind === "ValueConverter") {
+    const ident = readIdentifier(node.name, node.span);
+    if (ident?.span && spanContainsOffset(ident.span, offset)) {
+      return ident.name;
     }
   }
   return walkAstChildren(node, offset, findConverterInAst);
@@ -837,9 +1063,10 @@ function findConverterInAst(node: ExpressionAst | null | undefined, offset: numb
 
 function findBehaviorInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
   if (!node || !node.$kind) return null;
-  if (node.$kind === "BindingBehavior" && node.name?.span) {
-    if (spanContainsOffset(node.name.span, offset)) {
-      return node.name.name;
+  if (node.$kind === "BindingBehavior") {
+    const ident = readIdentifier(node.name, node.span);
+    if (ident?.span && spanContainsOffset(ident.span, offset)) {
+      return ident.name;
     }
   }
   return walkAstChildren(node, offset, findBehaviorInAst);

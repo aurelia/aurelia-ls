@@ -602,8 +602,12 @@ function materializeLetSymbols(
 
   // Surface all <let> names as locals in the current frame.
   if (publishEnv) {
-    const names = ins.instructions.map(lb => lb.to);
-    addUniqueSymbols(currentFrame, frames, names.map(n => ({ kind: "let" as const, name: n, span: spanOfLet(ins, n)! })), diags);
+    const symbols = ins.instructions.map((lb) => ({
+      kind: "let" as const,
+      name: lb.to,
+      span: normalizeSpanMaybe(lb.loc ?? null),
+    }));
+    addUniqueSymbols(currentFrame, frames, symbols, diags);
   }
 }
 
@@ -611,11 +615,6 @@ function createLetValueMap(): Record<string, ExprId> {
   const map: Record<string, ExprId> = {};
   Object.setPrototypeOf(map, null);
   return map;
-}
-
-function spanOfLet(ins: LinkedHydrateLetElement, _name: string): SourceSpan | null | undefined {
-  // TODO(linker-carry): Thread per-let SourceSpan through LinkedHydrateLetElement if needed.
-  return normalizeSpanMaybe(ins.loc ?? null);
 }
 
 /* =============================================================================

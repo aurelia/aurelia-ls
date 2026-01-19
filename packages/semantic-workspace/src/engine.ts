@@ -22,6 +22,7 @@ import {
   type TemplateSyntaxRegistry,
   type VmReflection,
   type ResourceScopeId,
+  type SymbolId,
   type StyleProfile,
 } from "@aurelia-ls/compiler";
 import {
@@ -55,7 +56,7 @@ import {
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
-import { buildResourceDefinitionIndex, collectTemplateDefinitions, collectTemplateReferences, type ResourceDefinitionIndex } from "./definition.js";
+import { buildResourceDefinitionIndex, collectTemplateDefinitions, collectTemplateReferences, collectTemplateResourceReferences, type ResourceDefinitionIndex } from "./definition.js";
 import type { RefactorOverrides } from "./style-profile.js";
 import {
   TemplateEditEngine,
@@ -102,6 +103,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #overlayBaseName?: string;
   #workspaceRoot: string;
   #definitionIndex: ResourceDefinitionIndex;
+  #resourceReferenceIndex: ResourceReferenceIndex | null = null;
   #resourceScope: ResourceScopeId | null;
   #projectVersion = 0;
   #templateIndex: TemplateIndex;
@@ -191,6 +193,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     }
     this.#componentHashes = nextComponentHashes;
     this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentResolution());
+    this.#resourceReferenceIndex = null;
     this.#kernel.reconfigure({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
       fingerprint: this.#projectIndex.currentFingerprint(),
@@ -228,6 +231,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
   setResourceScope(scope: ResourceScopeId | null): boolean {
     this.#resourceScope = scope;
+    this.#resourceReferenceIndex = null;
     return this.#kernel.reconfigure({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
       fingerprint: this.#projectIndex.currentFingerprint(),
@@ -296,7 +300,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         this.#syncTemplateOverlaysForReferences(canonical.uri);
         const local = this.#referencesAt(canonical.uri, pos);
         const baseRefs = base.references(pos);
-        return mergeLocations(local, baseRefs);
+        return mergeLocationsWithIds(local, baseRefs);
       },
       completions: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
@@ -540,12 +544,131 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (offset == null) return [];
     const compilation = this.#kernel.getCompilation(uri);
     if (!compilation) return [];
-    return collectTemplateReferences({
+    const local = collectTemplateReferences({
       compilation,
       text,
       offset,
       documentUri: uri,
     });
+    const resourceRefs = this.#resourceReferencesAt(uri, offset);
+    return mergeLocationsWithIds(local, resourceRefs);
+  }
+
+  #resourceReferencesAt(uri: DocumentUri, offset: number): WorkspaceLocation[] {
+    const index = this.#ensureResourceReferenceIndex(uri);
+    const occurrences = index.byUri.get(uri);
+    if (!occurrences || occurrences.length === 0) return [];
+    const symbolIds = new Set<SymbolId>();
+    for (const occ of occurrences) {
+      if (spanContainsOffset(occ.span, offset)) {
+        symbolIds.add(occ.symbolId);
+      }
+    }
+    if (symbolIds.size === 0) return [];
+    const results: WorkspaceLocation[] = [];
+    for (const symbolId of symbolIds) {
+      const refs = index.bySymbol.get(symbolId);
+      if (refs && refs.length > 0) results.push(...refs);
+    }
+    return mergeLocationsWithIds(results, []);
+  }
+
+  #ensureResourceReferenceIndex(activeUri: DocumentUri): ResourceReferenceIndex {
+    this.#ensureIndexFresh();
+    const currentFingerprint = this.#kernel.snapshot().meta.fingerprint;
+    if (this.#resourceReferenceIndex?.fingerprint === currentFingerprint) {
+      return this.#resourceReferenceIndex;
+    }
+
+    const sources = this.#kernel.sources;
+    const syntax = this.#attributeSyntaxContext();
+    const preferRoots = [this.#workspaceRoot];
+    const bySymbol = new Map<SymbolId, WorkspaceLocation[]>();
+    const byUri = new Map<DocumentUri, ResourceReferenceOccurrence[]>();
+
+    const loadTemplate = (uri: DocumentUri, text: string | null) => {
+      if (!text) return null;
+      if (!sources.get(uri)) {
+        this.#kernel.open(uri, text);
+      }
+      return text;
+    };
+
+    const active = canonicalDocumentUri(activeUri).uri;
+
+    for (const entry of this.#templateIndex.templates) {
+      const canonical = canonicalDocumentUri(entry.templatePath);
+      const text = loadTemplate(canonical.uri, this.lookupText(canonical.uri));
+      if (!text) continue;
+      this.#activateTemplate(canonical.uri);
+      const compilation = this.#kernel.getCompilation(canonical.uri);
+      if (!compilation) continue;
+      const refs = collectTemplateResourceReferences({
+        compilation,
+        resources: this.#definitionIndex,
+        syntax,
+        preferRoots,
+        documentUri: canonical.uri,
+      });
+      if (refs.length === 0) continue;
+      const occurrences: ResourceReferenceOccurrence[] = [];
+      for (const ref of refs) {
+        const symbolId = ref.symbolId;
+        if (!symbolId) continue;
+        occurrences.push({ span: ref.span, symbolId });
+        const list = bySymbol.get(symbolId);
+        if (list) {
+          list.push(ref);
+        } else {
+          bySymbol.set(symbolId, [ref]);
+        }
+      }
+      if (occurrences.length > 0) {
+        byUri.set(canonical.uri, occurrences);
+      }
+    }
+
+    for (const entry of this.#templateIndex.inlineTemplates) {
+      const inlinePath = inlineTemplatePath(entry.componentPath);
+      const canonical = canonicalDocumentUri(inlinePath);
+      const text = loadTemplate(canonical.uri, entry.content);
+      if (!text) continue;
+      this.#activateTemplate(canonical.uri);
+      const compilation = this.#kernel.getCompilation(canonical.uri);
+      if (!compilation) continue;
+      const refs = collectTemplateResourceReferences({
+        compilation,
+        resources: this.#definitionIndex,
+        syntax,
+        preferRoots,
+        documentUri: canonical.uri,
+      });
+      if (refs.length === 0) continue;
+      const occurrences: ResourceReferenceOccurrence[] = [];
+      for (const ref of refs) {
+        const symbolId = ref.symbolId;
+        if (!symbolId) continue;
+        occurrences.push({ span: ref.span, symbolId });
+        const list = bySymbol.get(symbolId);
+        if (list) {
+          list.push(ref);
+        } else {
+          bySymbol.set(symbolId, [ref]);
+        }
+      }
+      if (occurrences.length > 0) {
+        byUri.set(canonical.uri, occurrences);
+      }
+    }
+
+    this.#activateTemplate(active);
+    const fingerprint = this.#kernel.snapshot().meta.fingerprint;
+    this.#resourceReferenceIndex = {
+      fingerprint,
+      bySymbol,
+      byUri,
+    };
+    return this.#resourceReferenceIndex;
   }
 
   #syncTemplateOverlaysForReferences(activeUri: DocumentUri): void {
@@ -999,6 +1122,45 @@ function mergeLocations(...lists: readonly (readonly WorkspaceLocation[])[]): Wo
   return results;
 }
 
+function mergeLocationsWithIds(...lists: readonly (readonly WorkspaceLocation[])[]): WorkspaceLocation[] {
+  const candidates: WorkspaceLocation[] = [];
+  const spanHasIds = new Set<string>();
+  for (const list of lists) {
+    for (const loc of list) {
+      const spanKey = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
+      const hasIds = !!(loc.symbolId || loc.exprId || loc.nodeId);
+      if (hasIds) spanHasIds.add(spanKey);
+      candidates.push(loc);
+    }
+  }
+
+  const results: WorkspaceLocation[] = [];
+  const seen = new Set<string>();
+  for (const loc of candidates) {
+    const spanKey = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
+    const hasIds = !!(loc.symbolId || loc.exprId || loc.nodeId);
+    if (!hasIds && spanHasIds.has(spanKey)) continue;
+    const key = `${spanKey}:${loc.symbolId ?? ""}:${loc.exprId ?? ""}:${loc.nodeId ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(loc);
+  }
+  results.sort((a, b) => {
+    const uriDelta = String(a.uri).localeCompare(String(b.uri));
+    if (uriDelta !== 0) return uriDelta;
+    const startDelta = a.span.start - b.span.start;
+    if (startDelta !== 0) return startDelta;
+    const endDelta = a.span.end - b.span.end;
+    if (endDelta !== 0) return endDelta;
+    const symbolDelta = String(a.symbolId ?? "").localeCompare(String(b.symbolId ?? ""));
+    if (symbolDelta !== 0) return symbolDelta;
+    const exprDelta = String(a.exprId ?? "").localeCompare(String(b.exprId ?? ""));
+    if (exprDelta !== 0) return exprDelta;
+    return String(a.nodeId ?? "").localeCompare(String(b.nodeId ?? ""));
+  });
+  return results;
+}
+
 function buildOverlaySnapshot(
   templateUri: DocumentUri,
   overlay: { overlayPath: string; text: string },
@@ -1012,6 +1174,17 @@ function buildOverlaySnapshot(
     templateUri: templateCanonical.uri,
   };
 }
+
+type ResourceReferenceOccurrence = {
+  span: SourceSpan;
+  symbolId: SymbolId;
+};
+
+type ResourceReferenceIndex = {
+  fingerprint: string;
+  bySymbol: Map<SymbolId, WorkspaceLocation[]>;
+  byUri: Map<DocumentUri, ResourceReferenceOccurrence[]>;
+};
 
 type DiagnosticMapContext = {
   text: string | null;
