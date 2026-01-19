@@ -158,10 +158,16 @@ export { emptyFileFacts, emptyFileContext } from "./extraction/file-facts.js";
 // Core types for static value analysis (used by FileFacts.classes)
 export type {
   AnalyzableValue,
+  ArrayValue,
+  ObjectValue,
   ClassValue,
   DecoratorApplication,
   BindableMember,
   LexicalScope,
+} from "./analysis/index.js";
+export {
+  extractStringProp,
+  getProperty,
 } from "./analysis/index.js";
 
 // === Pattern Matchers (New) ===

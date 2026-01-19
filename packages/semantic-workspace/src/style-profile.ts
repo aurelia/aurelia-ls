@@ -7,6 +7,12 @@ import {
 } from "@aurelia-ls/resolution";
 
 export type RenameStyle = "preserve" | "attribute" | "property";
+export type BindableDeclarationKind =
+  | "template"
+  | "member-decorator"
+  | "resource-config"
+  | "static-bindables"
+  | "static-au";
 
 export interface RefactorOverrides {
   readonly preferShorthand?: boolean;
@@ -23,6 +29,11 @@ export class StylePolicy {
   readonly renameStyle: RenameStyle;
   readonly preferShorthand: boolean;
   readonly quoteStyle: "double" | "single" | "preserve";
+  readonly bindableDeclaration?: BindableDeclarationKind;
+  readonly importOrganization: "preserve" | "sort" | "group";
+  readonly importAddWhenMissing: "always" | "prompt";
+  readonly importAliasStyle: "preserve" | "kebab" | "camel";
+  readonly preferLocalImports: boolean;
 
   constructor(options: StylePolicyOptions = {}) {
     this.profile = options.profile ?? {};
@@ -30,6 +41,11 @@ export class StylePolicy {
     const shorthandPreference = this.profile.shorthand?.prefer ?? "registry-default";
     this.preferShorthand = options.refactors?.preferShorthand ?? shorthandPreference === "always";
     this.quoteStyle = this.profile.formatting?.quoteStyle ?? "preserve";
+    this.bindableDeclaration = this.profile.declaration?.bindable?.prefer;
+    this.importOrganization = this.profile.imports?.organize ?? "preserve";
+    this.importAddWhenMissing = this.profile.imports?.addWhenMissing ?? "prompt";
+    this.importAliasStyle = this.profile.imports?.aliasStyle ?? "preserve";
+    this.preferLocalImports = this.profile.imports?.preferLocal ?? false;
   }
 
   formatElementName(name: string): string {
@@ -83,9 +99,10 @@ export class StylePolicy {
     attributeName: string | null,
   ): { propertyName: string; attributeName: string | null } {
     const property = this.formatBindablePropertyName(propertyName);
+    const attribute = attributeName ? this.formatAttributeName(attributeName) : null;
     return {
       propertyName: property,
-      attributeName,
+      attributeName: attribute,
     };
   }
 

@@ -281,3 +281,51 @@ describe("workspace style profile (code actions)", () => {
     }
   });
 });
+
+describe("workspace style profile (bindable declaration)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("rename-cascade-basic"),
+      openTemplates: "none",
+      workspace: {
+        styleProfile: {
+          declaration: { bindable: { prefer: "member-decorator" } },
+        },
+      },
+    });
+    appUri = harness.openTemplate("src/app.html");
+    const text = harness.readText(appUri);
+    if (!text) {
+      throw new Error("Expected template text for rename-cascade-basic app.html");
+    }
+    appText = text;
+  });
+
+  it("adds @bindable when prefer member-decorator", () => {
+    const mutated = insertBefore(
+      appText,
+      "heading.bind=\"heading\"",
+      "    middle-name.bind=\"middleName\"\n",
+    );
+    harness.updateTemplate(appUri, mutated, 2);
+
+    const position = findPosition(mutated, "middle-name.bind", 1);
+    const actions = harness.workspace.refactor().codeActions({ uri: appUri, position });
+    const action = actions.find((entry) => entry.id === "aurelia/add-bindable:my-element:middleName");
+
+    expect(action).toBeDefined();
+    const targetUri = harness.toDocumentUri("src/my-element.ts");
+    const edits = action?.edit?.edits.filter((entry) => String(entry.uri) === String(targetUri)) ?? [];
+    expect(edits.length > 0).toBe(true);
+    expect(edits.some((entry) => entry.newText.includes("@bindable"))).toBe(true);
+    expect(edits.some((entry) => entry.newText.includes("middleName"))).toBe(true);
+
+    const templateUri = harness.toDocumentUri("src/my-element.html");
+    const templateEdit = action?.edit?.edits.find((entry) => String(entry.uri) === String(templateUri));
+    expect(templateEdit).toBeUndefined();
+  });
+});

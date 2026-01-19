@@ -401,6 +401,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       workspaceRoot: this.#workspaceRoot,
       templateIndex: this.#templateIndex,
       definitionIndex: this.#definitionIndex,
+      facts: this.#projectIndex.currentResolution().facts,
       compilerOptions: this.#env.tsService.compilerOptions(),
       lookupText: this.lookupText.bind(this),
       getCompilation: (uri) => this.#kernel.getCompilation(uri),

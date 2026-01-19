@@ -15,10 +15,12 @@ import {
   type DocumentUri,
   type LinkedInstruction,
   type LinkedRow,
+  type NormalizedPath,
   type ResourceDef,
   type ResourceScopeId,
   type SourceLocation,
   type SourceSpan,
+  type TextSpan,
   type StyleProfile,
   type TemplateCompilation,
   type TemplateIR,
@@ -26,6 +28,17 @@ import {
   type TemplateNode,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
+import {
+  DECORATOR_NAMES,
+  extractStringProp,
+  getProperty,
+  type AnalyzableValue,
+  type ArrayValue,
+  type ClassValue,
+  type DecoratorApplication,
+  type FileFacts,
+  type ObjectValue,
+} from "@aurelia-ls/resolution";
 import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/resolution";
 import type { ResourceDefinitionIndex } from "./definition.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
@@ -37,7 +50,7 @@ import type {
   WorkspaceTextEdit,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
-import { StylePolicy, type RefactorOverrides } from "./style-profile.js";
+import { StylePolicy, type BindableDeclarationKind, type RefactorOverrides } from "./style-profile.js";
 
 export interface TemplateIndex {
   readonly templates: readonly TemplateInfo[];
@@ -120,6 +133,7 @@ type CodeActionContext = {
   style: StylePolicy;
   templateIndex: TemplateIndex;
   definitionIndex: ResourceDefinitionIndex;
+  facts: ReadonlyMap<NormalizedPath, FileFacts>;
   workspaceRoot: string;
   compilerOptions: ts.CompilerOptions;
   lookupText: (uri: DocumentUri) => string | null;
@@ -140,6 +154,53 @@ type ImportCandidate = {
   name: string;
 };
 
+type SourceContext = {
+  uri: DocumentUri;
+  text: string;
+  sourceFile: ts.SourceFile;
+};
+
+type BindableDeclarationTarget =
+  | {
+    kind: "template";
+    templateUri: DocumentUri;
+    templateText: string;
+    template: TemplateIR;
+    meta: TemplateMetaIR;
+  }
+  | {
+    kind: "member-decorator";
+    source: SourceContext;
+    classDecl: ts.ClassDeclaration;
+    classValue: ClassValue;
+  }
+  | {
+    kind: "resource-config";
+    source: SourceContext;
+    config: ObjectValue;
+  }
+  | {
+    kind: "static-bindables";
+    source: SourceContext;
+    classDecl: ts.ClassDeclaration;
+    classValue: ClassValue;
+    bindables: ArrayValue | ObjectValue | null;
+  }
+  | {
+    kind: "static-au";
+    source: SourceContext;
+    classDecl: ts.ClassDeclaration;
+    classValue: ClassValue;
+    resourceKind: "custom-element" | "custom-attribute" | "template-controller";
+    au: ObjectValue | null;
+  };
+
+type BindableDeclarationSurface = {
+  kind: BindableDeclarationKind;
+  target: BindableDeclarationTarget;
+  existing: boolean;
+};
+
 type InsertContext = {
   offset: number;
   indent: string;
@@ -149,6 +210,7 @@ export interface TemplateEditEngineContext {
   readonly workspaceRoot: string;
   readonly templateIndex: TemplateIndex;
   readonly definitionIndex: ResourceDefinitionIndex;
+  readonly facts: ReadonlyMap<NormalizedPath, FileFacts>;
   readonly compilerOptions: ts.CompilerOptions;
   readonly lookupText: (uri: DocumentUri) => string | null;
   readonly getCompilation: (uri: DocumentUri) => TemplateCompilation | null;
@@ -217,6 +279,7 @@ export class TemplateEditEngine {
       style: this.#style,
       templateIndex: this.ctx.templateIndex,
       definitionIndex: this.ctx.definitionIndex,
+      facts: this.ctx.facts,
       workspaceRoot: this.ctx.workspaceRoot,
       compilerOptions: this.ctx.compilerOptions,
       lookupText: this.ctx.lookupText,
@@ -619,30 +682,364 @@ function buildAddBindableAction(
 
   const candidate = resolveBindableCandidate(hit, ctx.syntax, ctx.definitionIndex, [ctx.workspaceRoot]);
   if (!candidate || candidate.ownerKind !== "element" || !candidate.ownerFile) return null;
-
-  const target = resolveExternalTemplateForComponent(candidate.ownerFile, ctx.templateIndex);
+  const target = resolveBindableDeclarationTarget(ctx, candidate);
   if (!target) return null;
-  const templateText = ctx.lookupText(target.uri);
-  if (!templateText) return null;
 
-  ctx.ensureTemplate(target.uri);
-  const targetCompilation = ctx.getCompilation(target.uri);
-  const template = targetCompilation?.ir.templates[0] ?? null;
-  const meta = template?.templateMeta ?? null;
-  if (!meta) return null;
-  const insertion = computeBindableInsertion(templateText, template, meta);
   const formatted = ctx.style.formatBindableDeclaration(candidate.propertyName, candidate.attributeName);
-  const attributePart = formatted.attributeName ? ` attribute=${ctx.style.quote(formatted.attributeName)}` : "";
-  const line = `${insertion.indent}<bindable name=${ctx.style.quote(formatted.propertyName)}${attributePart}></bindable>`;
-  const edit = buildInsertionEdit(target.uri, templateText, insertion.offset, line);
+  const edits = buildBindableDeclarationEdits(target, formatted, ctx);
+  if (!edits.length) return null;
 
   const id = `aurelia/add-bindable:${candidate.ownerName}:${formatted.propertyName}`;
   return {
     id,
-    title: `Add <bindable> '${formatted.propertyName}' to ${candidate.ownerName}`,
+    title: `Add bindable '${formatted.propertyName}' to ${candidate.ownerName}`,
     kind: "quickfix",
-    edit: { edits: finalizeWorkspaceEdits([edit]) },
+    edit: { edits: finalizeWorkspaceEdits(edits) },
   };
+}
+
+function resolveBindableDeclarationTarget(
+  ctx: CodeActionContext,
+  candidate: BindableCandidate,
+): BindableDeclarationTarget | null {
+  const surfaces = collectBindableDeclarationSurfaces(ctx, candidate);
+  if (!surfaces.length) return null;
+
+  const preferred = ctx.style.bindableDeclaration;
+  if (preferred) {
+    return surfaces.find((surface) => surface.kind === preferred)?.target ?? null;
+  }
+
+  const priority: BindableDeclarationKind[] = [
+    "template",
+    "member-decorator",
+    "resource-config",
+    "static-bindables",
+    "static-au",
+  ];
+
+  for (const kind of priority) {
+    const existing = surfaces.find((surface) => surface.kind === kind && surface.existing);
+    if (existing) return existing.target;
+  }
+
+  for (const kind of priority) {
+    const available = surfaces.find((surface) => surface.kind === kind);
+    if (available) return available.target;
+  }
+
+  return null;
+}
+
+function collectBindableDeclarationSurfaces(
+  ctx: CodeActionContext,
+  candidate: BindableCandidate,
+): BindableDeclarationSurface[] {
+  const surfaces: BindableDeclarationSurface[] = [];
+  const preferRoots = [ctx.workspaceRoot];
+  const entry = findResourceEntry(ctx.definitionIndex.elements, candidate.ownerName, candidate.ownerFile, preferRoots);
+  const def = entry?.def ?? null;
+  const className = def?.className.value ?? null;
+  const resourceKind = def?.kind ?? null;
+
+  const templateTarget = resolveTemplateBindableTarget(ctx, candidate);
+  if (templateTarget) {
+    surfaces.push({
+      kind: "template",
+      target: templateTarget,
+      existing: templateTarget.meta.bindables.length > 0,
+    });
+  }
+
+  const classTarget = className ? findClassTarget(ctx, className, candidate.ownerFile) : null;
+  if (classTarget) {
+    const classValue = classTarget.classValue;
+    surfaces.push({
+      kind: "member-decorator",
+      target: {
+        kind: "member-decorator",
+        source: classTarget.source,
+        classDecl: classTarget.classDecl,
+        classValue,
+      },
+      existing: classValue.bindableMembers.length > 0,
+    });
+
+    const bindablesValue = classValue.staticMembers.get("bindables") ?? null;
+    const bindablesNode = bindablesValue && (bindablesValue.kind === "array" || bindablesValue.kind === "object")
+      ? bindablesValue
+      : null;
+    surfaces.push({
+      kind: "static-bindables",
+      target: {
+        kind: "static-bindables",
+        source: classTarget.source,
+        classDecl: classTarget.classDecl,
+        classValue,
+        bindables: bindablesNode,
+      },
+      existing: bindablesValue !== null,
+    });
+
+    if (resourceKind === "custom-element" || resourceKind === "custom-attribute" || resourceKind === "template-controller") {
+      const auValue = classValue.staticMembers.get("$au") ?? null;
+      const auNode = auValue && auValue.kind === "object" ? auValue : null;
+      const expectedType = resourceKind === "template-controller" ? "custom-attribute" : resourceKind;
+      const auType = auNode ? extractStringProp(auNode, "type") : null;
+      if (!auNode || auType === expectedType) {
+        surfaces.push({
+          kind: "static-au",
+          target: {
+            kind: "static-au",
+            source: classTarget.source,
+            classDecl: classTarget.classDecl,
+            classValue,
+            resourceKind,
+            au: auNode,
+          },
+          existing: auNode !== null,
+        });
+      }
+    }
+  }
+
+  const configTarget = className ? findResourceConfigTarget(ctx, className) : null;
+  if (configTarget) {
+    const hasBindables = getProperty(configTarget.config, "bindables") !== undefined;
+    surfaces.push({
+      kind: "resource-config",
+      target: configTarget,
+      existing: hasBindables,
+    });
+  }
+
+  return surfaces;
+}
+
+function resolveTemplateBindableTarget(
+  ctx: CodeActionContext,
+  candidate: BindableCandidate,
+): Extract<BindableDeclarationTarget, { kind: "template" }> | null {
+  if (candidate.ownerKind !== "element" || !candidate.ownerFile) return null;
+  const target = resolveExternalTemplateForComponent(candidate.ownerFile, ctx.templateIndex);
+  if (!target) return null;
+  const templateText = ctx.lookupText(target.uri);
+  if (!templateText) return null;
+  ctx.ensureTemplate(target.uri);
+  const targetCompilation = ctx.getCompilation(target.uri);
+  const template = targetCompilation?.ir.templates[0] ?? null;
+  const meta = template?.templateMeta ?? null;
+  if (!template || !meta) return null;
+  return {
+    kind: "template",
+    templateUri: target.uri,
+    templateText,
+    template,
+    meta,
+  };
+}
+
+function findClassTarget(
+  ctx: CodeActionContext,
+  className: string,
+  preferredFile: string | null,
+): { classValue: ClassValue; classDecl: ts.ClassDeclaration; source: SourceContext } | null {
+  const match = findClassValue(ctx.facts, className, preferredFile);
+  if (!match) return null;
+  const source = loadSourceContext(match.fileFacts.path, ctx.lookupText);
+  if (!source) return null;
+  const classDecl = findClassDeclaration(source.sourceFile, className);
+  if (!classDecl) return null;
+  return { classValue: match.classValue, classDecl, source };
+}
+
+function findResourceConfigTarget(
+  ctx: CodeActionContext,
+  className: string,
+): Extract<BindableDeclarationTarget, { kind: "resource-config" }> | null {
+  const defineTarget = findDefineConfigTarget(ctx, className);
+  if (defineTarget) return defineTarget;
+  const decoratorTarget = findDecoratorConfigTarget(ctx, className);
+  if (decoratorTarget) return decoratorTarget;
+  return null;
+}
+
+function findDefineConfigTarget(
+  ctx: CodeActionContext,
+  className: string,
+): Extract<BindableDeclarationTarget, { kind: "resource-config" }> | null {
+  for (const fileFacts of ctx.facts.values()) {
+    const defineCall = fileFacts.defineCalls.find((call) => {
+      if (call.resourceType !== "CustomElement" && call.resourceType !== "CustomAttribute") return false;
+      return resolveClassRefName(call.classRef) === className;
+    });
+    if (!defineCall) continue;
+    if (defineCall.definition.kind !== "object") continue;
+    const source = loadSourceContext(fileFacts.path, ctx.lookupText);
+    if (!source) continue;
+    return { kind: "resource-config", source, config: defineCall.definition };
+  }
+  return null;
+}
+
+function findDecoratorConfigTarget(
+  ctx: CodeActionContext,
+  className: string,
+): Extract<BindableDeclarationTarget, { kind: "resource-config" }> | null {
+  const classMatch = findClassValue(ctx.facts, className, null);
+  if (!classMatch) return null;
+  const source = loadSourceContext(classMatch.fileFacts.path, ctx.lookupText);
+  if (!source) return null;
+  const decorator = findResourceDecorator(classMatch.classValue.decorators);
+  if (!decorator) return null;
+  const configArg = decorator.args.find((arg) => arg.kind === "object") ?? null;
+  if (!configArg || configArg.kind !== "object") return null;
+  return { kind: "resource-config", source, config: configArg };
+}
+
+function buildBindableDeclarationEdits(
+  target: BindableDeclarationTarget,
+  formatted: { propertyName: string; attributeName: string | null },
+  ctx: CodeActionContext,
+): WorkspaceTextEdit[] {
+  switch (target.kind) {
+    case "template":
+      return buildTemplateBindableEdits(target, formatted, ctx);
+    case "member-decorator":
+      return buildMemberDecoratorEdits(target, formatted, ctx);
+    case "resource-config":
+      return buildResourceConfigBindableEdits(target, formatted, ctx);
+    case "static-bindables":
+      return buildStaticBindablesEdits(target, formatted, ctx);
+    case "static-au":
+      return buildStaticAuEdits(target, formatted, ctx);
+  }
+}
+
+function buildTemplateBindableEdits(
+  target: Extract<BindableDeclarationTarget, { kind: "template" }>,
+  formatted: { propertyName: string; attributeName: string | null },
+  ctx: CodeActionContext,
+): WorkspaceTextEdit[] {
+  const insertion = computeBindableInsertion(target.templateText, target.template, target.meta);
+  const attributePart = formatted.attributeName ? ` attribute=${ctx.style.quote(formatted.attributeName)}` : "";
+  const line = `${insertion.indent}<bindable name=${ctx.style.quote(formatted.propertyName)}${attributePart}></bindable>`;
+  return [buildInsertionEdit(target.templateUri, target.templateText, insertion.offset, line)];
+}
+
+function buildMemberDecoratorEdits(
+  target: Extract<BindableDeclarationTarget, { kind: "member-decorator" }>,
+  formatted: { propertyName: string; attributeName: string | null },
+  ctx: CodeActionContext,
+): WorkspaceTextEdit[] {
+  const edits: WorkspaceTextEdit[] = [];
+  const importEdit = ensureNamedImport(target.source, "bindable");
+  if (importEdit) edits.push(importEdit);
+
+  const insertion = computeClassMemberInsertion(target.source.text, target.classDecl, target.classValue);
+  const decorator = formatted.attributeName
+    ? `@bindable({ attribute: ${ctx.style.quote(formatted.attributeName)} })`
+    : "@bindable";
+  const block = [
+    `${insertion.indent}${decorator}`,
+    `${insertion.indent}${formatted.propertyName}!: unknown;`,
+  ].join(detectNewline(target.source.text));
+  const newText = buildBlockInsertion(target.source.text, insertion.offset, block);
+  edits.push(buildRawInsertionEdit(target.source, insertion.offset, newText));
+  return edits;
+}
+
+function buildResourceConfigBindableEdits(
+  target: Extract<BindableDeclarationTarget, { kind: "resource-config" }>,
+  formatted: { propertyName: string; attributeName: string | null },
+  ctx: CodeActionContext,
+): WorkspaceTextEdit[] {
+  const edits: WorkspaceTextEdit[] = [];
+  const bindablesValue = getProperty(target.config, "bindables") ?? null;
+  const entry = buildBindableObjectEntry(formatted, ctx.style);
+
+  if (bindablesValue && (bindablesValue.kind === "object" || bindablesValue.kind === "array")) {
+    const edit = buildBindableValueInsertion(target.source, bindablesValue, entry, formatted, ctx);
+    if (edit) edits.push(edit);
+    return edits;
+  }
+
+  if (!target.config.span) return edits;
+  const bindablesLiteral = `bindables: { ${entry} }`;
+  const edit = buildObjectInsertionEdit(target.source, target.config.span, bindablesLiteral);
+  if (edit) edits.push(edit);
+  return edits;
+}
+
+function buildStaticBindablesEdits(
+  target: Extract<BindableDeclarationTarget, { kind: "static-bindables" }>,
+  formatted: { propertyName: string; attributeName: string | null },
+  ctx: CodeActionContext,
+): WorkspaceTextEdit[] {
+  const edits: WorkspaceTextEdit[] = [];
+  const entry = buildBindableObjectEntry(formatted, ctx.style);
+
+  if (target.bindables) {
+    const edit = buildBindableValueInsertion(target.source, target.bindables, entry, formatted, ctx);
+    if (edit) edits.push(edit);
+    return edits;
+  }
+
+  const insertion = computeClassMemberInsertion(target.source.text, target.classDecl, target.classValue);
+  const newline = detectNewline(target.source.text);
+  const indentUnit = detectIndentUnit(target.source.text);
+  const innerIndent = `${insertion.indent}${indentUnit}`;
+  const block = [
+    `${insertion.indent}static bindables = {`,
+    `${innerIndent}${entry},`,
+    `${insertion.indent}};`,
+  ].join(newline);
+  const newText = buildBlockInsertion(target.source.text, insertion.offset, block);
+  edits.push(buildRawInsertionEdit(target.source, insertion.offset, newText));
+  return edits;
+}
+
+function buildStaticAuEdits(
+  target: Extract<BindableDeclarationTarget, { kind: "static-au" }>,
+  formatted: { propertyName: string; attributeName: string | null },
+  ctx: CodeActionContext,
+): WorkspaceTextEdit[] {
+  const edits: WorkspaceTextEdit[] = [];
+  const entry = buildBindableObjectEntry(formatted, ctx.style);
+  const expectedType = target.resourceKind === "template-controller" ? "custom-attribute" : target.resourceKind;
+
+  if (target.au) {
+    const bindablesValue = getProperty(target.au, "bindables") ?? null;
+    if (bindablesValue && (bindablesValue.kind === "object" || bindablesValue.kind === "array")) {
+      const edit = buildBindableValueInsertion(target.source, bindablesValue, entry, formatted, ctx);
+      if (edit) edits.push(edit);
+      return edits;
+    }
+    if (target.au.span) {
+      const bindablesLiteral = `bindables: { ${entry} }`;
+      const edit = buildObjectInsertionEdit(target.source, target.au.span, bindablesLiteral);
+      if (edit) edits.push(edit);
+    }
+    return edits;
+  }
+
+  const insertion = computeClassMemberInsertion(target.source.text, target.classDecl, target.classValue);
+  const newline = detectNewline(target.source.text);
+  const indentUnit = detectIndentUnit(target.source.text);
+  const innerIndent = `${insertion.indent}${indentUnit}`;
+  const entries = [
+    `type: ${ctx.style.quote(expectedType)}`,
+    ...(target.resourceKind === "template-controller" ? ["isTemplateController: true"] : []),
+    `bindables: { ${entry} }`,
+  ];
+  const block = [
+    `${insertion.indent}static $au = {`,
+    ...entries.map((line) => `${innerIndent}${line},`),
+    `${insertion.indent}};`,
+  ].join(newline);
+  const newText = buildBlockInsertion(target.source.text, insertion.offset, block);
+  edits.push(buildRawInsertionEdit(target.source, insertion.offset, newText));
+  return edits;
 }
 
 function buildInsertionEdit(uri: DocumentUri, text: string, offset: number, line: string): WorkspaceTextEdit {
@@ -659,6 +1056,214 @@ function buildLineInsertion(text: string, offset: number, line: string): string 
   const needsLeading = offset > 0 && before !== "\n" && before !== "\r";
   const needsTrailing = offset < text.length && after !== "\n" && after !== "\r";
   return `${needsLeading ? newline : ""}${line}${needsTrailing ? newline : ""}`;
+}
+
+function buildRawInsertionEdit(source: SourceContext, offset: number, newText: string): WorkspaceTextEdit {
+  const canonical = canonicalDocumentUri(source.uri);
+  const span: SourceSpan = { start: offset, end: offset, file: canonical.file };
+  return { uri: canonical.uri, span, newText };
+}
+
+function buildBlockInsertion(text: string, offset: number, block: string): string {
+  const newline = detectNewline(text);
+  const before = offset > 0 ? text[offset - 1] : "";
+  const after = offset < text.length ? text[offset] : "";
+  const needsLeading = offset > 0 && before !== "\n" && before !== "\r";
+  const needsTrailing = offset < text.length && after !== "\n" && after !== "\r";
+  return `${needsLeading ? newline : ""}${block}${needsTrailing ? newline : ""}`;
+}
+
+function buildObjectInsertionEdit(
+  source: SourceContext,
+  span: TextSpan,
+  entry: string,
+): WorkspaceTextEdit | null {
+  const insertion = buildDelimitedInsertion(source.text, span, entry, "}");
+  if (!insertion) return null;
+  return buildRawInsertionEdit(source, insertion.offset, insertion.text);
+}
+
+function buildArrayInsertionEdit(
+  source: SourceContext,
+  span: TextSpan,
+  entry: string,
+): WorkspaceTextEdit | null {
+  const insertion = buildDelimitedInsertion(source.text, span, entry, "]");
+  if (!insertion) return null;
+  return buildRawInsertionEdit(source, insertion.offset, insertion.text);
+}
+
+function buildDelimitedInsertion(
+  text: string,
+  span: TextSpan,
+  entry: string,
+  closingChar: "}" | "]",
+): { offset: number; text: string } | null {
+  if (span.end <= span.start) return null;
+  const slice = text.slice(span.start, span.end);
+  if (!slice.includes(closingChar)) return null;
+  const offset = span.end - 1;
+  const newline = detectNewline(text);
+  const isMultiline = slice.includes("\n");
+  const needsComma = needsCommaBeforeClose(slice, closingChar);
+  if (!isMultiline) {
+    const spacer = needsComma ? ", " : " ";
+    return { offset, text: `${spacer}${entry}` };
+  }
+  const indent = `${lineIndentAt(text, span.start)}${detectIndentUnit(text)}`;
+  const prefix = needsComma ? "," : "";
+  return { offset, text: `${prefix}${newline}${indent}${entry}` };
+}
+
+function needsCommaBeforeClose(slice: string, closingChar: "}" | "]"): boolean {
+  const closeIndex = slice.lastIndexOf(closingChar);
+  if (closeIndex <= 0) return false;
+  let i = closeIndex - 1;
+  while (i >= 0 && /\s/.test(slice[i]!)) i -= 1;
+  if (i < 0) return false;
+  return slice[i] !== ",";
+}
+
+function buildBindableObjectEntry(
+  formatted: { propertyName: string; attributeName: string | null },
+  style: StylePolicy,
+): string {
+  if (formatted.attributeName && formatted.attributeName !== formatted.propertyName) {
+    return `${formatted.propertyName}: { attribute: ${style.quote(formatted.attributeName)} }`;
+  }
+  return `${formatted.propertyName}: true`;
+}
+
+function buildBindableArrayEntry(
+  formatted: { propertyName: string; attributeName: string | null },
+  style: StylePolicy,
+): string {
+  if (formatted.attributeName && formatted.attributeName !== formatted.propertyName) {
+    return `{ name: ${style.quote(formatted.propertyName)}, attribute: ${style.quote(formatted.attributeName)} }`;
+  }
+  return style.quote(formatted.propertyName);
+}
+
+function buildBindableValueInsertion(
+  source: SourceContext,
+  bindablesValue: ObjectValue | ArrayValue,
+  objectEntry: string,
+  formatted: { propertyName: string; attributeName: string | null },
+  ctx: CodeActionContext,
+): WorkspaceTextEdit | null {
+  if (!bindablesValue.span) return null;
+  if (bindablesValue.kind === "object") {
+    return buildObjectInsertionEdit(source, bindablesValue.span, objectEntry);
+  }
+  if (bindablesValue.kind === "array") {
+    const arrayEntry = buildBindableArrayEntry(formatted, ctx.style);
+    return buildArrayInsertionEdit(source, bindablesValue.span, arrayEntry);
+  }
+  return null;
+}
+
+function computeClassMemberInsertion(
+  text: string,
+  classDecl: ts.ClassDeclaration,
+  classValue: ClassValue,
+): { offset: number; indent: string } {
+  const bindableSpans = classValue.bindableMembers
+    .map((member) => member.span)
+    .filter((span): span is TextSpan => Boolean(span));
+  if (bindableSpans.length > 0) {
+    const last = bindableSpans.reduce((a, b) => (a.end >= b.end ? a : b));
+    return { offset: last.end, indent: lineIndentAt(text, last.start) };
+  }
+
+  if (classDecl.members.length > 0) {
+    const last = classDecl.members[classDecl.members.length - 1]!;
+    const offset = last.getEnd();
+    const indent = lineIndentAt(text, last.getStart());
+    return { offset, indent };
+  }
+
+  const offset = classDecl.members.pos;
+  const indent = `${lineIndentAt(text, classDecl.getStart())}${detectIndentUnit(text)}`;
+  return { offset, indent };
+}
+
+function ensureNamedImport(source: SourceContext, name: string): WorkspaceTextEdit | null {
+  const sf = source.sourceFile;
+  const imports = sf.statements.filter(ts.isImportDeclaration);
+  for (const decl of imports) {
+    const clause = decl.importClause;
+    if (!clause || !clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) continue;
+    for (const element of clause.namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (importedName === name) {
+        return null;
+      }
+    }
+  }
+
+  const preferred = findDecoratorImport(imports, source.text);
+  if (preferred && preferred.namedBindings) {
+    const insert = buildNamedImportInsertion(source.text, sf, preferred.namedBindings, name);
+    return buildRawInsertionEdit(source, insert.offset, insert.text);
+  }
+
+  const moduleSpecifier = preferred?.specifier ?? "@aurelia/runtime-html";
+  const line = `import { ${name} } from ${JSON.stringify(moduleSpecifier)};`;
+  const offset = imports.length > 0 ? imports[imports.length - 1]!.getEnd() : 0;
+  const newText = buildLineInsertion(source.text, offset, line);
+  return buildRawInsertionEdit(source, offset, newText);
+}
+
+function findDecoratorImport(
+  imports: readonly ts.ImportDeclaration[],
+  text: string,
+): { namedBindings: ts.NamedImports | null; specifier: string } | null {
+  const decoratorNames = new Set<string>([
+    DECORATOR_NAMES.customElement,
+    DECORATOR_NAMES.customAttribute,
+    DECORATOR_NAMES.templateController,
+    DECORATOR_NAMES.valueConverter,
+    DECORATOR_NAMES.bindingBehavior,
+    DECORATOR_NAMES.bindable,
+  ]);
+  for (const decl of imports) {
+    const spec = decl.moduleSpecifier;
+    if (!ts.isStringLiteral(spec)) continue;
+    const clause = decl.importClause;
+    const namedBindings = clause?.namedBindings;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+    for (const element of namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (decoratorNames.has(importedName)) {
+        return { namedBindings, specifier: spec.text };
+      }
+    }
+  }
+  return null;
+}
+
+function buildNamedImportInsertion(
+  text: string,
+  sf: ts.SourceFile,
+  named: ts.NamedImports,
+  name: string,
+): { offset: number; text: string } {
+  const start = named.getStart(sf);
+  const end = named.getEnd();
+  const slice = text.slice(start, end);
+  const isMultiline = slice.includes("\n");
+  const needsComma = needsCommaBeforeClose(slice, "}");
+  const offset = end - 1;
+  if (!isMultiline) {
+    const spacer = needsComma ? ", " : " ";
+    return { offset, text: `${spacer}${name}` };
+  }
+  const indent = named.elements.length > 0
+    ? lineIndentAt(text, named.elements[0]!.getStart(sf))
+    : `${lineIndentAt(text, start)}${detectIndentUnit(text)}`;
+  const prefix = needsComma ? "," : "";
+  const newline = detectNewline(text);
+  return { offset, text: `${prefix}${newline}${indent}${name}` };
 }
 
 function computeImportInsertion(text: string, template: TemplateIR | null, meta: TemplateMetaIR): InsertContext {
@@ -757,6 +1362,85 @@ function moduleSpecifierFromFile(targetFile: string, containingFile: string): st
     relative = `./${relative}`;
   }
   return relative;
+}
+
+function loadSourceContext(
+  filePath: NormalizedPath,
+  lookupText: (uri: DocumentUri) => string | null,
+): SourceContext | null {
+  const canonical = canonicalDocumentUri(filePath);
+  const text = lookupText(canonical.uri);
+  if (!text) return null;
+  const sourceFile = ts.createSourceFile(
+    canonical.path,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKindForPath(canonical.path),
+  );
+  return { uri: canonical.uri, text, sourceFile };
+}
+
+function scriptKindForPath(filePath: string): ts.ScriptKind {
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".tsx")) return ts.ScriptKind.TSX;
+  if (lower.endsWith(".jsx")) return ts.ScriptKind.JSX;
+  if (lower.endsWith(".js")) return ts.ScriptKind.JS;
+  if (lower.endsWith(".mjs")) return ts.ScriptKind.JS;
+  if (lower.endsWith(".cjs")) return ts.ScriptKind.JS;
+  if (lower.endsWith(".mts")) return ts.ScriptKind.TS;
+  if (lower.endsWith(".cts")) return ts.ScriptKind.TS;
+  return ts.ScriptKind.TS;
+}
+
+function findClassDeclaration(
+  sourceFile: ts.SourceFile,
+  className: string,
+): ts.ClassDeclaration | null {
+  for (const statement of sourceFile.statements) {
+    if (ts.isClassDeclaration(statement) && statement.name?.text === className) {
+      return statement;
+    }
+  }
+  return null;
+}
+
+function findClassValue(
+  facts: ReadonlyMap<NormalizedPath, FileFacts>,
+  className: string,
+  preferredFile: string | null,
+): { fileFacts: FileFacts; classValue: ClassValue } | null {
+  if (preferredFile) {
+    const normalized = normalizePathForId(preferredFile);
+    for (const fileFacts of facts.values()) {
+      if (normalizePathForId(fileFacts.path) !== normalized) continue;
+      const classValue = fileFacts.classes.find((cls) => cls.className === className);
+      if (classValue) return { fileFacts, classValue };
+    }
+  }
+
+  for (const fileFacts of facts.values()) {
+    const classValue = fileFacts.classes.find((cls) => cls.className === className);
+    if (classValue) return { fileFacts, classValue };
+  }
+
+  return null;
+}
+
+function resolveClassRefName(value: AnalyzableValue): string | null {
+  if (value.kind === "reference") return value.name;
+  if (value.kind === "import") return value.exportName;
+  return null;
+}
+
+function findResourceDecorator(
+  decorators: readonly DecoratorApplication[],
+): DecoratorApplication | null {
+  const element = decorators.find((dec) => dec.name === DECORATOR_NAMES.customElement);
+  if (element) return element;
+  const attribute = decorators.find((dec) => dec.name === DECORATOR_NAMES.customAttribute);
+  if (attribute) return attribute;
+  return null;
 }
 
 function stripKnownExtension(filePath: string): string {
