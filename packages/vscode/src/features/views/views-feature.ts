@@ -1,4 +1,4 @@
-import type { FeatureModule } from "../../core/feature-registry.js";
+import type { FeatureModule } from "../../core/feature-graph.js";
 
 export const ViewsFeature: FeatureModule = {
   id: "views.workspace",
@@ -7,3 +7,4 @@ export const ViewsFeature: FeatureModule = {
     ctx.logger.debug("views.feature.init");
   },
 };
+

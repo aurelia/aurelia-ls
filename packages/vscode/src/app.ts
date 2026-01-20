@@ -3,15 +3,17 @@ import { AureliaLanguageClient } from "./client-core.js";
 import { ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
 import { createClientContext, type ClientContext } from "./core/context.js";
-import { FeatureRegistry } from "./core/feature-registry.js";
+import { FeatureGraph } from "./core/feature-graph.js";
 import { LspFacade } from "./core/lsp-facade.js";
 import { CapabilityStore } from "./core/capabilities.js";
 import { ConfigService } from "./core/config.js";
 import { ObservabilityService } from "./core/observability.js";
 import { PresentationStore } from "./core/presentation-store.js";
+import { QueryClient } from "./core/query-client.js";
+import { ServiceRegistry } from "./core/service-registry.js";
 import { VirtualDocRegistry } from "./core/virtual-docs-registry.js";
 import { DefaultFeatures } from "./features/index.js";
-import type { FeatureModule } from "./core/feature-registry.js";
+import type { FeatureModule } from "./core/feature-graph.js";
 
 export interface ClientAppOptions {
   vscode?: VscodeApi;
@@ -46,8 +48,10 @@ export class ClientApp {
 
     const capabilities = new CapabilityStore();
     const presentation = new PresentationStore();
+    const queries = new QueryClient(lsp, observability);
     const virtualDocs = new VirtualDocRegistry(vscode);
-    const features = new FeatureRegistry();
+    const features = new FeatureGraph();
+    const services = new ServiceRegistry();
 
     const ctx = createClientContext({
       extension: this.#context,
@@ -63,12 +67,14 @@ export class ClientApp {
       config,
       capabilities,
       presentation,
+      queries,
       virtualDocs,
       features,
-      services: {},
+      services,
     });
 
     this.#ctx = ctx;
+    ctx.disposables.add(services);
 
     const featureModules = this.#options.features ?? DefaultFeatures;
     features.register(...featureModules);
@@ -100,7 +106,7 @@ export class ClientApp {
   async deactivate(): Promise<void> {
     const ctx = this.#ctx;
     if (ctx) {
-      ctx.features.deactivateAll();
+      ctx.features.deactivateAll(ctx);
       ctx.disposables.dispose();
     }
     try {
@@ -111,3 +117,4 @@ export class ClientApp {
     this.#ctx = null;
   }
 }
+

@@ -1,4 +1,4 @@
-import type { FeatureModule } from "../core/feature-registry.js";
+import type { FeatureModule } from "../core/feature-graph.js";
 import { CommandFeatures } from "./commands/index.js";
 import { DiagnosticsFeatures } from "./diagnostics/index.js";
 import { InlineFeatures } from "./inline/index.js";
@@ -14,3 +14,4 @@ export const DefaultFeatures: FeatureModule[] = [
   ...StatusFeatures,
   ...ViewFeatures,
 ];
+

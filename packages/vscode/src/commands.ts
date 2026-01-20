@@ -1,6 +1,7 @@
 import type { ExtensionContext, TextEditor } from "vscode";
-import type { LspFacade } from "./core/lsp-facade.js";
 import type { ObservabilityService } from "./core/observability.js";
+import type { QueryClient } from "./core/query-client.js";
+import { QueryPolicies } from "./core/query-policy.js";
 import { type VirtualDocProvider } from "./virtual-docs.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
 import type { MappingEntry, OverlayBuildArtifactShape, OverlayResponse } from "./types.js";
@@ -35,7 +36,7 @@ function formatCalls(calls: NonNullable<OverlayBuildArtifactShape["calls"]>): st
 
 export function registerCommands(
   context: ExtensionContext,
-  lsp: LspFacade,
+  queries: QueryClient,
   virtualDocs: VirtualDocProvider,
   observability: ObservabilityService,
   vscode: VscodeApi = getVscodeApi(),
@@ -57,7 +58,7 @@ export function registerCommands(
         }
         const uri = editor.document.uri.toString();
         logger.info("showOverlay.request", { uri });
-        const overlay = extractOverlayArtifact(await lsp.getOverlay(uri));
+        const overlay = extractOverlayArtifact(await queries.getOverlay(uri, QueryPolicies.overlay));
         if (!overlay) {
           vscode.window.showInformationMessage("No overlay found for this document");
           return;
@@ -84,7 +85,7 @@ export function registerCommands(
         }
         const uri = editor.document.uri.toString();
         logger.info("showOverlayMapping.request", { uri });
-        const mapping = await lsp.getMapping(uri);
+        const mapping = await queries.getMapping(uri, QueryPolicies.mapping);
         const overlayLabel = mapping?.overlayPath ?? "<overlay unavailable>";
         const mappingEntries = mapping?.mapping?.entries ?? [];
         if (mappingEntries.length) {
@@ -94,7 +95,7 @@ export function registerCommands(
           return;
         }
 
-        const overlay = extractOverlayArtifact(await lsp.getOverlay(uri));
+        const overlay = extractOverlayArtifact(await queries.getOverlay(uri, QueryPolicies.overlay));
         if (overlay?.calls?.length) {
           const body = [`Overlay: ${overlay.overlay.path}`, "", formatCalls(overlay.calls)].join("\n");
           const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Overlay Mapping\n\n${body}` });
@@ -118,7 +119,10 @@ export function registerCommands(
         const uri = editor.document.uri.toString();
         const position = editor.selection.active;
         logger.info("showTemplateInfo.request", { uri, line: position.line, character: position.character });
-        const result = await lsp.queryAtPosition(uri, position);
+        const result = await queries.queryAtPosition(uri, position, {
+          ...QueryPolicies.queryAtPosition,
+          docVersion: editor.document.version,
+        });
         if (!result) {
           vscode.window.showInformationMessage("No query info available for this document");
           return;
@@ -146,7 +150,7 @@ export function registerCommands(
         }
         const uri = editor.document.uri.toString();
         logger.info("showSsrPreview.request", { uri });
-        const response = await lsp.getSsr(uri);
+        const response = await queries.getSsr(uri, QueryPolicies.ssr);
         const ssr = response?.artifact ?? response?.ssr ?? null;
         if (!ssr) {
           vscode.window.showInformationMessage("No SSR output for this document");
@@ -165,7 +169,7 @@ export function registerCommands(
     vscode.commands.registerCommand("aurelia.dumpState", () => {
       void run("dumpState", async () => {
         logger.info("dumpState.request");
-        const state = await lsp.dumpState();
+        const state = await queries.dumpState(QueryPolicies.dumpState);
         logger.write("debug", JSON.stringify(state, null, 2), undefined, { raw: true, force: true });
         vscode.window.showInformationMessage("Dumped state to 'Aurelia LS (Client)' output.");
       });

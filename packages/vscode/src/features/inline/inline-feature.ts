@@ -1,4 +1,4 @@
-import type { FeatureModule } from "../../core/feature-registry.js";
+import type { FeatureModule } from "../../core/feature-graph.js";
 
 export const InlineUxFeature: FeatureModule = {
   id: "inline.ux",
@@ -7,3 +7,4 @@ export const InlineUxFeature: FeatureModule = {
     ctx.logger.debug("inline.feature.init");
   },
 };
+

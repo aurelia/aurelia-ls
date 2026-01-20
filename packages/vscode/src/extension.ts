@@ -1,7 +1,7 @@
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
 import type { AureliaLanguageClient } from "./client-core.js";
-import type { FeatureModule } from "./core/feature-registry.js";
+import type { FeatureModule } from "./core/feature-graph.js";
 import { ClientApp } from "./app.js";
 import type { ExtensionContext } from "vscode";
 
@@ -24,3 +24,4 @@ export async function deactivate() {
   await app?.deactivate();
   app = undefined;
 }
+

@@ -1,12 +1,13 @@
 import { StatusService } from "../../status.js";
-import type { FeatureModule } from "../../core/feature-registry.js";
+import type { FeatureModule } from "../../core/feature-graph.js";
+import { StatusServiceToken } from "../../service-tokens.js";
 
 export const StatusFeature: FeatureModule = {
   id: "status.bar",
   isEnabled: (ctx) => ctx.config.current.features.statusBar,
   activate: (ctx) => {
     const status = new StatusService(ctx.vscode);
-    ctx.services.status = status;
+    const registration = ctx.services.register(StatusServiceToken, status, { dispose: () => status.dispose() });
 
     ctx.lsp.onOverlayReady((payload) => {
       status.overlayReady(payload);
@@ -19,6 +20,7 @@ export const StatusFeature: FeatureModule = {
       });
     });
 
-    return { dispose: () => status.dispose() };
+    return registration;
   },
 };
+

@@ -1,4 +1,4 @@
-import type { FeatureModule } from "../../core/feature-registry.js";
+import type { FeatureModule } from "../../core/feature-graph.js";
 
 export const DiagnosticsFeature: FeatureModule = {
   id: "diagnostics.ux",
@@ -7,3 +7,4 @@ export const DiagnosticsFeature: FeatureModule = {
     ctx.logger.debug("diagnostics.feature.init");
   },
 };
+
