@@ -62,6 +62,52 @@ function expectDefinition(
   return hit!;
 }
 
+function compareLocationOrder(
+  a: { uri: string; span: { start: number; end: number }; symbolId?: string; exprId?: string; nodeId?: string },
+  b: { uri: string; span: { start: number; end: number }; symbolId?: string; exprId?: string; nodeId?: string },
+  currentUri: string,
+): number {
+  const aCurrent = String(a.uri) === String(currentUri) ? 0 : 1;
+  const bCurrent = String(b.uri) === String(currentUri) ? 0 : 1;
+  if (aCurrent !== bCurrent) return aCurrent - bCurrent;
+  const uriDelta = String(a.uri).localeCompare(String(b.uri));
+  if (uriDelta !== 0) return uriDelta;
+  const startDelta = a.span.start - b.span.start;
+  if (startDelta !== 0) return startDelta;
+  const endDelta = a.span.end - b.span.end;
+  if (endDelta !== 0) return endDelta;
+  const symbolDelta = String(a.symbolId ?? "").localeCompare(String(b.symbolId ?? ""));
+  if (symbolDelta !== 0) return symbolDelta;
+  const exprDelta = String(a.exprId ?? "").localeCompare(String(b.exprId ?? ""));
+  if (exprDelta !== 0) return exprDelta;
+  return String(a.nodeId ?? "").localeCompare(String(b.nodeId ?? ""));
+}
+
+function expectOrderedLocations(
+  locs: readonly { uri: string; span: { start: number; end: number }; symbolId?: string; exprId?: string; nodeId?: string }[],
+  currentUri: string,
+): void {
+  for (let i = 1; i < locs.length; i += 1) {
+    const prev = locs[i - 1];
+    const next = locs[i];
+    expect(
+      compareLocationOrder(prev, next, currentUri) <= 0,
+      `Expected ordered definitions, got ${String(prev?.uri)} before ${String(next?.uri)}`,
+    ).toBe(true);
+  }
+}
+
+function expectNoDuplicateSpans(
+  locs: readonly { uri: string; span: { start: number; end: number } }[],
+): void {
+  const seen = new Set<string>();
+  for (const loc of locs) {
+    const key = `${String(loc.uri)}:${loc.span.start}:${loc.span.end}`;
+    expect(seen.has(key), `Duplicate definition span: ${key}`).toBe(false);
+    seen.add(key);
+  }
+}
+
 describe("workspace definition (workspace-contract)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;
@@ -288,6 +334,8 @@ describe("workspace definition (workspace-contract)", () => {
     try {
       const query = harness.workspace.query(appUri);
       const defs = query.definition(findPosition(injected, "${filters}", 2));
+      expectOrderedLocations(defs, appUri);
+      expectNoDuplicateSpans(defs);
       const localIndex = defs.findIndex((loc) => {
         if (!String(loc.uri).endsWith("/src/my-app.html")) return false;
         const start = Math.max(0, Math.min(loc.span.start, injected.length));
@@ -464,5 +512,42 @@ describe("workspace definition (import alias conflicts)", () => {
       String(loc.uri).endsWith("/src/attributes/badge.ts")
     );
     expect(hasBadge).toBe(false);
+  });
+});
+
+describe("workspace definition (third-party resources)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-imports-aurelia2-table"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) {
+      throw new Error("Expected template text for template-imports-aurelia2-table");
+    }
+    appText = app;
+  });
+
+  it("resolves third-party element definitions", () => {
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(findPosition(appText, "<aut-pagination", 1));
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts",
+      textIncludes: "AutPaginationCustomElement",
+    });
+  });
+
+  it("resolves third-party custom attribute definitions", () => {
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(findPosition(appText, "aurelia-table", 1));
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
+      textIncludes: "AureliaTableCustomAttribute",
+    });
   });
 });

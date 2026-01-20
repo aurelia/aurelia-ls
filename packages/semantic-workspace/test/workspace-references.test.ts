@@ -213,3 +213,48 @@ describe("workspace references (import alias conflicts)", () => {
     expect(refSymbolIds).toEqual(new Set([autSort!.symbolId as string]));
   });
 });
+
+describe("workspace references (third-party resources)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-imports-aurelia2-table"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) {
+      throw new Error("Expected template text for template-imports-aurelia2-table");
+    }
+    appText = app;
+  });
+
+  it("finds references for third-party elements and attributes", () => {
+    const query = harness.workspace.query(appUri);
+
+    const elementOffset = appText.indexOf("aut-pagination");
+    if (elementOffset < 0) {
+      throw new Error("Expected aut-pagination element in template-imports-aurelia2-table");
+    }
+    const elementRefs = query.references(positionAt(appText, elementOffset + 1));
+    expectReferencesAtOffsets(elementRefs, appUri, [elementOffset]);
+    const elementSymbolIds = new Set(
+      elementRefs.map((loc) => loc.symbolId).filter((id): id is string => !!id),
+    );
+    expect(elementSymbolIds.size).toBe(1);
+
+    const attributeOffset = appText.indexOf("aurelia-table");
+    if (attributeOffset < 0) {
+      throw new Error("Expected aurelia-table attribute in template-imports-aurelia2-table");
+    }
+    const attributeRefs = query.references(positionAt(appText, attributeOffset + 1));
+    expectReferencesAtOffsets(attributeRefs, appUri, [attributeOffset]);
+    const attributeSymbolIds = new Set(
+      attributeRefs.map((loc) => loc.symbolId).filter((id): id is string => !!id),
+    );
+    expect(attributeSymbolIds.size).toBe(1);
+  });
+});

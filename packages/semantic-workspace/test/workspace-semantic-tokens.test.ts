@@ -57,6 +57,17 @@ function expectOrderedTokens(tokens: readonly TokenLike[]): void {
   }
 }
 
+function expectUniqueTokens(tokens: readonly TokenLike[]): void {
+  const seen = new Set<string>();
+  for (const token of tokens) {
+    const key = `${token.type}:${token.span.start}:${token.span.end}`;
+    if (seen.has(key)) {
+      throw new Error(`Duplicate token entry: ${key}`);
+    }
+    seen.add(key);
+  }
+}
+
 describe("workspace semantic tokens (workspace-contract)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;
@@ -85,6 +96,10 @@ describe("workspace semantic tokens (workspace-contract)", () => {
 
   it("orders tokens by span start then length", () => {
     expectOrderedTokens(tokens);
+  });
+
+  it("dedupes tokens by span and type", () => {
+    expectUniqueTokens(tokens);
   });
 
   it("emits command/controller tokens", () => {

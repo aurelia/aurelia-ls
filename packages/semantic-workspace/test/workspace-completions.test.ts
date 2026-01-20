@@ -59,6 +59,16 @@ function expectOrderedCompletions(items: readonly { label: string; sortText?: st
   }
 }
 
+function expectUniqueLabels(items: readonly { label: string }[]): void {
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item.label)) {
+      throw new Error(`Duplicate completion label: ${item.label}`);
+    }
+    seen.add(item.label);
+  }
+}
+
 describe("workspace completions (workspace-contract)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;
@@ -88,6 +98,12 @@ describe("workspace completions (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const completions = query.completions(findPosition(appText, "<summary-panel", 1));
     expectOrderedCompletions(completions);
+  });
+
+  it("dedupes completion labels", () => {
+    const query = harness.workspace.query(appUri);
+    const completions = query.completions(findPosition(appText, "<summary-panel", 1));
+    expectUniqueLabels(completions);
   });
 
   it("completes custom element bindables", () => {
@@ -137,5 +153,49 @@ describe("workspace completions (workspace-contract)", () => {
     } finally {
       harness.updateTemplate(appUri, appText);
     }
+  });
+});
+
+describe("workspace completions (third-party resources)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-imports-aurelia2-table"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const text = harness.readText(appUri);
+    if (!text) {
+      throw new Error("Expected template text for template-imports-aurelia2-table my-app.html");
+    }
+    appText = text;
+  });
+
+  it("completes third-party element tags in template", () => {
+    const query = harness.workspace.query(appUri);
+    const completions = query.completions(findPosition(appText, "<aut-pagination", 1));
+    expect(hasLabel(completions, "aut-pagination")).toBe(true);
+  });
+
+  it("completes third-party custom attributes in template", () => {
+    const query = harness.workspace.query(appUri);
+    const completions = query.completions(findPosition(appText, "aurelia-table", 1));
+    expect(hasLabel(completions, "aurelia-table")).toBe(true);
+  });
+
+  it("completes third-party bindables by prefix", () => {
+    const query = harness.workspace.query(appUri);
+    const completions = query.completions(findPosition(appText, "current-page.bind", 1));
+    expect(hasLabel(completions, "current-page")).toBe(true);
+    expectOrderedCompletions(completions);
+
+    const pageSize = query.completions(findPosition(appText, "page-size.bind", 1));
+    expect(hasLabel(pageSize, "page-size")).toBe(true);
+
+    const totalItems = query.completions(findPosition(appText, "total-items.bind", 1));
+    expect(hasLabel(totalItems, "total-items")).toBe(true);
   });
 });

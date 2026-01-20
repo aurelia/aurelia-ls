@@ -12,6 +12,7 @@ import type {
 } from "@aurelia-ls/compiler";
 import { debug } from "@aurelia-ls/compiler";
 import { sourcedValue } from "./sourced.js";
+import { canonicalAttrName } from "../util/naming.js";
 
 export interface BindableInput {
   readonly name: string;
@@ -44,7 +45,7 @@ export function buildBindableDef(
   const attributeSpan = bindable.attributeSpan ?? span;
   const mode = bindable.mode;
   const primary = bindable.primary ?? false;
-  const attribute = bindable.attribute ?? bindable.name;
+  const attribute = canonicalAttrName(bindable.attribute ?? bindable.name);
   debug.resolution("bindable.def", {
     name: bindable.name,
     mode,

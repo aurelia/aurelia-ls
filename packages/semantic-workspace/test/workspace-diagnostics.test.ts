@@ -23,6 +23,20 @@ function spanCoversOffset(span: { start: number; end: number }, offset: number):
   return offset >= span.start && offset < span.end;
 }
 
+function expectNoDuplicateDiagnostics(
+  diags: readonly { code: string; span?: { start: number; end: number } | null }[],
+): void {
+  const seen = new Set<string>();
+  for (const diag of diags) {
+    if (!diag.span) continue;
+    const key = `${diag.code}:${diag.span.start}:${diag.span.end}`;
+    if (seen.has(key)) {
+      throw new Error(`Duplicate diagnostic entry: ${key}`);
+    }
+    seen.add(key);
+  }
+}
+
 describe("workspace diagnostics (rename-cascade-basic)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;
@@ -123,5 +137,18 @@ describe("workspace diagnostics (workspace-contract)", () => {
       const next = spans[i];
       expect(prev.start <= next.start).toBe(true);
     }
+  });
+
+  it("dedupes diagnostics with identical spans", () => {
+    const mutated = insertBefore(
+      appText,
+      "stats.bind=\"stats\"",
+      "    missing-first.bind=\"stats\"\n    missing-second.bind=\"stats\"\n",
+    );
+    harness.updateTemplate(appUri, mutated, 3);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const unknowns = diags.filter((diag) => diag.code === "aurelia/unknown-bindable");
+    expectNoDuplicateDiagnostics(unknowns);
   });
 });
