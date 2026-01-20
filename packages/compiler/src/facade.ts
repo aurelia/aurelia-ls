@@ -133,7 +133,7 @@ export function compileTemplate(
     query: overlayArtifacts.query,
     exprTable: overlayArtifacts.exprTable,
     exprSpans: overlayArtifacts.exprSpans,
-    diagnostics: buildDiagnostics(linked, scope, typecheck),
+    diagnostics: buildDiagnostics(ir, linked, scope, typecheck),
     meta: collectStageMeta(session, [
       "10-lower",
       "20-resolve",
@@ -151,11 +151,13 @@ export function compileTemplate(
  * ------------------------ */
 
 function buildDiagnostics(
+  ir: StageOutputs["10-lower"],
   linked: StageOutputs["20-resolve"],
   scope: StageOutputs["30-bind"],
   typecheck: StageOutputs["40-typecheck"],
 ): TemplateDiagnostics {
   const flat = [
+    ...(ir?.diags ?? []),
     ...(linked?.diags ?? []),
     ...(scope?.diags ?? []),
     ...(typecheck?.diags ?? []),

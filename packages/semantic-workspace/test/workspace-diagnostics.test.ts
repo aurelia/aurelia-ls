@@ -23,6 +23,14 @@ function spanCoversOffset(span: { start: number; end: number }, offset: number):
   return offset >= span.start && offset < span.end;
 }
 
+function findDiagnostic(
+  diags: readonly { code: string; span?: { start: number; end: number } | null }[],
+  code: string,
+  offset: number,
+): { code: string; span?: { start: number; end: number } | null; data?: unknown } | undefined {
+  return diags.find((diag) => diag.code === code && diag.span && spanCoversOffset(diag.span, offset));
+}
+
 function expectNoDuplicateDiagnostics(
   diags: readonly { code: string; span?: { start: number; end: number } | null }[],
 ): void {
@@ -107,11 +115,7 @@ describe("workspace diagnostics (workspace-contract)", () => {
 
     const diags = harness.workspace.query(appUri).diagnostics();
     const offset = findOffset(mutated, "if-not.bind");
-    const match = diags.find((diag) =>
-      diag.code === "aurelia/unknown-controller"
-      && diag.span
-      && spanCoversOffset(diag.span, offset)
-    );
+    const match = findDiagnostic(diags, "aurelia/unknown-controller", offset);
 
     expect(match).toBeDefined();
     if (match?.data && typeof match.data === "object") {
@@ -150,5 +154,256 @@ describe("workspace diagnostics (workspace-contract)", () => {
     const diags = harness.workspace.query(appUri).diagnostics();
     const unknowns = diags.filter((diag) => diag.code === "aurelia/unknown-bindable");
     expectNoDuplicateDiagnostics(unknowns);
+  });
+
+  it("maps unknown binding command diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div foo.unknowncommand=\"bar\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 4);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "unknowncommand") + 1;
+    const match = findDiagnostic(diags, "aurelia/unknown-command", offset);
+
+    expect(match).toBeDefined();
+    if (match?.data && typeof match.data === "object") {
+      const data = match.data as { aurCode?: string; command?: string };
+      expect(data.aurCode).toBe("AUR0713");
+      expect(data.command).toBe("unknowncommand");
+    }
+  });
+
+  it("maps invalid binding patterns from repeat headers", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <ul repeat.for=\"item items\"></ul>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 5);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "item items") + "item ".length;
+    const match = findDiagnostic(diags, "aurelia/invalid-binding-pattern", offset);
+    expect(match).toBeDefined();
+  });
+
+  it("marks expression parse errors as recovery diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div title.bind=\"foo(\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 6);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "foo(") + "foo(".length;
+    const match = findDiagnostic(diags, "aurelia/expr-parse-error", offset);
+    expect(match).toBeDefined();
+    if (match?.data && typeof match.data === "object") {
+      const recovery = (match.data as { recovery?: boolean }).recovery;
+      expect(recovery).toBe(true);
+    }
+  });
+
+  it("maps duplicate binding behavior diagnostics", () => {
+    const snippet = "title.bind=\"name & debounce & debounce\"";
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      `  <div ${snippet}></div>\n\n`,
+    );
+    harness.updateTemplate(appUri, mutated, 7);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const start = findOffset(mutated, snippet);
+    const first = start + "title.bind=\"name & ".length;
+    const second = start + "title.bind=\"name & debounce & ".length;
+    const match = diags.find((diag) => {
+      if (diag.code !== "aurelia/invalid-binding-pattern" || !diag.span) return false;
+      const aurCode = diag.data && typeof diag.data === "object"
+        ? (diag.data as { aurCode?: string }).aurCode
+        : undefined;
+      if (aurCode !== "AUR0102") return false;
+      return spanCoversOffset(diag.span, first) || spanCoversOffset(diag.span, second);
+    });
+    expect(match).toBeDefined();
+  });
+
+  it("maps conflicting rate-limit behavior diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div title.bind=\"name & debounce & throttle\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 8);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const start = findOffset(mutated, "title.bind=\"name & debounce & throttle\"");
+    const debounce = start + "title.bind=\"name & ".length;
+    const throttle = start + "title.bind=\"name & debounce & ".length;
+    const match = diags.find((diag) => {
+      if (diag.code !== "aurelia/invalid-binding-pattern" || !diag.span) return false;
+      const aurCode = diag.data && typeof diag.data === "object"
+        ? (diag.data as { aurCode?: string }).aurCode
+        : undefined;
+      if (aurCode !== "AUR9996") return false;
+      return spanCoversOffset(diag.span, debounce) || spanCoversOffset(diag.span, throttle);
+    });
+    expect(match).toBeDefined();
+  });
+
+  it("maps $host assignment diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div title.bind=\"$host = 1\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 9);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "$host") + 1;
+    const match = findDiagnostic(diags, "aurelia/invalid-binding-pattern", offset);
+    expect(match).toBeDefined();
+    if (match?.data && typeof match.data === "object") {
+      const aurCode = (match.data as { aurCode?: string }).aurCode;
+      expect(aurCode).toBe("AUR0106");
+    }
+  });
+
+  it("reports unresolved import diagnostics from template meta", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <import from=\"./__missing__.html\"></import>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 10);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "__missing__") + 1;
+    const match = findDiagnostic(diags, "aurelia/unresolved-import", offset);
+    expect(match).toBeDefined();
+  });
+
+  it("reports alias conflicts in template meta", () => {
+    const aliasName = "alias-dupe";
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      `  <alias name=\"${aliasName}\"></alias>\n  <alias name=\"${aliasName}\"></alias>\n\n`,
+    );
+    harness.updateTemplate(appUri, mutated, 11);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = mutated.lastIndexOf(aliasName) + 1;
+    const match = findDiagnostic(diags, "aurelia/alias-conflict", offset);
+    expect(match).toBeDefined();
+  });
+
+  it("reports bindable declaration conflicts in template meta", () => {
+    const bindableName = "bindable-dupe";
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      `  <bindable name=\"${bindableName}\"></bindable>\n  <bindable name=\"${bindableName}\"></bindable>\n\n`,
+    );
+    harness.updateTemplate(appUri, mutated, 12);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = mutated.lastIndexOf(bindableName) + 1;
+    const match = findDiagnostic(diags, "aurelia/bindable-decl-conflict", offset);
+    expect(match).toBeDefined();
+  });
+
+  it("maps unknown element diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <missing-element></missing-element>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 13);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "missing-element") + 1;
+    const match = findDiagnostic(diags, "aurelia/unknown-element", offset);
+    expect(match).toBeDefined();
+    if (match?.data && typeof match.data === "object") {
+      const aurCode = (match.data as { aurCode?: string }).aurCode;
+      expect(aurCode).toBe("AUR0752");
+    }
+  });
+
+  it("maps unknown attribute diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div missing-attr.bind=\"title\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 14);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "missing-attr") + 1;
+    const match = findDiagnostic(diags, "aurelia/unknown-attribute", offset);
+    expect(match).toBeDefined();
+    if (match?.data && typeof match.data === "object") {
+      const aurCode = (match.data as { aurCode?: string }).aurCode;
+      expect(aurCode).toBe("AUR0753");
+    }
+  });
+
+  it("maps unknown value converter diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div title.bind=\"title | missing\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 15);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "missing") + 1;
+    const match = findDiagnostic(diags, "aurelia/expr-symbol-not-found", offset);
+    expect(match).toBeDefined();
+    if (match?.data && typeof match.data === "object") {
+      const data = match.data as { aurCode?: string; symbolKind?: string; name?: string };
+      expect(data.aurCode).toBe("AUR0103");
+      expect(data.symbolKind).toBe("value-converter");
+      expect(data.name).toBe("missing");
+    }
+  });
+
+  it("maps unknown binding behavior diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div title.bind=\"title & missing\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 16);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "missing") + 1;
+    const match = findDiagnostic(diags, "aurelia/expr-symbol-not-found", offset);
+    expect(match).toBeDefined();
+    if (match?.data && typeof match.data === "object") {
+      const data = match.data as { aurCode?: string; symbolKind?: string; name?: string };
+      expect(data.aurCode).toBe("AUR0101");
+      expect(data.symbolKind).toBe("binding-behavior");
+      expect(data.name).toBe("missing");
+    }
+  });
+
+  it("maps type mismatch diagnostics", () => {
+    const mutated = insertBefore(
+      appText,
+      "<summary-panel",
+      "  <div if.bind=\"filters.search\"></div>\n\n",
+    );
+    harness.updateTemplate(appUri, mutated, 17);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const offset = findOffset(mutated, "filters.search") + 1;
+    const match = findDiagnostic(diags, "aurelia/expr-type-mismatch", offset);
+    expect(match).toBeDefined();
   });
 });
