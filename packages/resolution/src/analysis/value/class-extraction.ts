@@ -52,7 +52,7 @@ export function extractClassValue(
   const decorators = extractDecorators(node, sf);
 
   // Extract static members
-  const staticMembers = extractStaticMembers(node, sf, gaps);
+  const staticMembers = extractStaticMembers(node, sf, gaps, filePath);
 
   // Extract @bindable members
   const bindableMembers = extractBindableMembers(node, sf, checker);
@@ -150,7 +150,8 @@ function extractDecoratorApplication(
 function extractStaticMembers(
   node: ts.ClassDeclaration,
   sf: ts.SourceFile,
-  gaps: AnalysisGap[]
+  gaps: AnalysisGap[],
+  filePath: NormalizedPath,
 ): ReadonlyMap<string, AnalyzableValue> {
   const members = new Map<string, AnalyzableValue>();
 
@@ -175,7 +176,8 @@ function extractStaticMembers(
       gaps.push(gap(
         `static ${name} for ${className}`,
         { kind: 'spread-unknown', spreadOf: '(object spread)' },
-        `Replace spread with explicit properties for static analysis.`
+        'Replace spread with explicit properties for static analysis.',
+        { file: filePath },
       ));
     }
   }

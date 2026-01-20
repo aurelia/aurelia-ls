@@ -423,7 +423,8 @@ function extractVariableStatement(
       gaps.push(gap(
         `destructuring export: ${patternText}`,
         { kind: 'unsupported-pattern', path, reason: 'destructuring-export' },
-        `Destructuring export patterns like "export const ${patternText} = ..." are not analyzed`
+        `Destructuring export patterns like "export const ${patternText} = ..." are not analyzed`,
+        { file: path }
       ));
     }
   }
@@ -456,7 +457,8 @@ function extractFunctionDeclaration(
       gap: gap(
         'anonymous default function export',
         { kind: 'unsupported-pattern', path, reason: 'anonymous-default-function' },
-        'Anonymous default function exports like "export default function() { ... }" are not analyzed'
+        'Anonymous default function exports like "export default function() { ... }" are not analyzed',
+        { file: path }
       ),
     };
   }

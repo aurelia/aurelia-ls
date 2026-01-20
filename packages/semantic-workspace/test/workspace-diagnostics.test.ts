@@ -1,6 +1,8 @@
+import path from "node:path";
+import { canonicalPath } from "@aurelia-ls/resolution";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
-import { asFixtureId } from "./fixtures/index.js";
+import { asFixtureId, getFixture, resolveFixtureRoot } from "./fixtures/index.js";
 
 function insertBefore(text: string, marker: string, insert: string): string {
   const index = text.indexOf(marker);
@@ -405,5 +407,46 @@ describe("workspace diagnostics (workspace-contract)", () => {
     const offset = findOffset(mutated, "filters.search") + 1;
     const match = findDiagnostic(diags, "aurelia/expr-type-mismatch", offset);
     expect(match).toBeDefined();
+  });
+});
+
+describe("workspace diagnostics (gap/confidence)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+
+  beforeAll(async () => {
+    const fixtureId = asFixtureId("workspace-contract");
+    const fixture = getFixture(fixtureId);
+    const root = resolveFixtureRoot(fixture);
+    if (!root) {
+      throw new Error("Expected workspace-contract fixture root.");
+    }
+    const failOnFiles = [canonicalPath(path.join(root, "src/my-app.ts"))];
+
+    harness = await createWorkspaceHarness({
+      fixture,
+      openTemplates: "none",
+      resolution: {
+        partialEvaluation: { failOnFiles },
+      },
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+  });
+
+  it("reports gap and confidence diagnostics when partial evaluation fails", () => {
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const gap = diags.find((diag) => diag.code === "aurelia/gap/partial-eval");
+    expect(gap).toBeDefined();
+    if (gap?.data && typeof gap.data === "object") {
+      const gapKind = (gap.data as { gapKind?: string }).gapKind;
+      expect(gapKind).toBe("analysis-failed");
+    }
+
+    const confidence = diags.find((diag) => diag.code === "aurelia/confidence/low");
+    expect(confidence).toBeDefined();
+    if (confidence?.data && typeof confidence.data === "object") {
+      const value = (confidence.data as { confidence?: string }).confidence;
+      expect(value).toBe("conservative");
+    }
   });
 });

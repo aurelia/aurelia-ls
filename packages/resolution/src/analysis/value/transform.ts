@@ -13,6 +13,7 @@
 
 import ts from 'typescript';
 import type { TextSpan } from '@aurelia-ls/compiler';
+import { canonicalPath } from '../../util/naming.js';
 import { gap } from '../types.js';
 import type {
   AnalyzableValue,
@@ -39,6 +40,15 @@ import {
   forOfStmt,
   unknownStmt,
 } from './types.js';
+
+function gapWithFile(
+  sf: ts.SourceFile,
+  what: Parameters<typeof gap>[0],
+  why: Parameters<typeof gap>[1],
+  suggestion: Parameters<typeof gap>[2],
+): ReturnType<typeof gap> {
+  return gap(what, why, suggestion, { file: canonicalPath(sf.fileName) });
+}
 
 // =============================================================================
 // Expression Transformation
@@ -154,7 +164,12 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
   if (ts.isTemplateExpression(expr)) {
     // Template with substitutions - can't statically evaluate
     return unknown(
-      gap('template literal', { kind: 'dynamic-value', expression: expr.getText(sf) }, 'Template literals with substitutions cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'template literal',
+        { kind: 'dynamic-value', expression: expr.getText(sf) },
+        'Template literals with substitutions cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -167,7 +182,12 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
   // Conditional expression: cond ? then : else
   if (ts.isConditionalExpression(expr)) {
     return unknown(
-      gap('conditional expression', { kind: 'dynamic-value', expression: expr.getText(sf) }, 'Conditional expressions cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'conditional expression',
+        { kind: 'dynamic-value', expression: expr.getText(sf) },
+        'Conditional expressions cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -178,7 +198,12 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
     // Just note we saw a class
     const name = expr.name?.text ?? '(anonymous class)';
     return unknown(
-      gap(`class expression "${name}"`, { kind: 'dynamic-value', expression: 'class expression' }, 'Class expressions are not tracked - use class declarations'),
+      gapWithFile(
+        sf,
+        `class expression "${name}"`,
+        { kind: 'dynamic-value', expression: 'class expression' },
+        'Class expressions are not tracked - use class declarations',
+      ),
       span
     );
   }
@@ -186,7 +211,12 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
   // Await expression
   if (ts.isAwaitExpression(expr)) {
     return unknown(
-      gap('await expression', { kind: 'dynamic-value', expression: 'await ...' }, 'Async values cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'await expression',
+        { kind: 'dynamic-value', expression: 'await ...' },
+        'Async values cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -194,7 +224,12 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
   // Yield expression
   if (ts.isYieldExpression(expr)) {
     return unknown(
-      gap('yield expression', { kind: 'dynamic-value', expression: 'yield ...' }, 'Generator values cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'yield expression',
+        { kind: 'dynamic-value', expression: 'yield ...' },
+        'Generator values cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -205,14 +240,24 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
   // with a `questionDotToken` property. We check for this and produce a specific gap.
   if ('questionDotToken' in expr && (expr as { questionDotToken?: unknown }).questionDotToken) {
     return unknown(
-      gap('optional chain', { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) }, 'Optional chaining introduces runtime conditionality'),
+      gapWithFile(
+        sf,
+        'optional chain',
+        { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) },
+        'Optional chaining introduces runtime conditionality',
+      ),
       span
     );
   }
 
   // Default: unknown expression type
   return unknown(
-    gap('expression', { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) }, `Unsupported expression type: ${ts.SyntaxKind[expr.kind]}`),
+    gapWithFile(
+      sf,
+      'expression',
+      { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) },
+      `Unsupported expression type: ${ts.SyntaxKind[expr.kind]}`,
+    ),
     span
   );
 }
@@ -292,7 +337,12 @@ function transformObjectLiteral(
       if (!key) continue;
       // Treat getter as unknown value for now
       properties.set(key.name, unknown(
-        gap(`getter "${key.name}"`, { kind: 'function-return', functionName: `get ${key.name}` }, 'Getter return values cannot be statically analyzed'),
+        gapWithFile(
+          sf,
+          `getter "${key.name}"`,
+          { kind: 'function-return', functionName: `get ${key.name}` },
+          'Getter return values cannot be statically analyzed',
+        ),
         nodeSpan(prop, sf)
       ));
       if (key.span) {
@@ -380,7 +430,12 @@ function transformElementAccess(
 
   // Dynamic index - can't analyze
   return unknown(
-    gap('element access', { kind: 'computed-property', expression: expr.argumentExpression.getText(sf) }, 'Dynamic property access cannot be statically analyzed'),
+    gapWithFile(
+      sf,
+      'element access',
+      { kind: 'computed-property', expression: expr.argumentExpression.getText(sf) },
+      'Dynamic property access cannot be statically analyzed',
+    ),
     span
   );
 }
@@ -400,8 +455,12 @@ function transformCallExpression(
     const specifier = expr.arguments[0];
     const specifierText = specifier ? specifier.getText(sf).slice(0, 50) : '?';
     return unknown(
-      gap('dynamic import', { kind: 'dynamic-value', expression: `import(${specifierText})` },
-          'Dynamic imports cannot be statically resolved - use static import declarations'),
+      gapWithFile(
+        sf,
+        'dynamic import',
+        { kind: 'dynamic-value', expression: `import(${specifierText})` },
+        'Dynamic imports cannot be statically resolved - use static import declarations',
+      ),
       span
     );
   }
@@ -508,7 +567,12 @@ function transformBinaryExpression(
   // We could try to evaluate simple cases like string concatenation
   // For now, treat as unknown
   return unknown(
-    gap('binary expression', { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) }, 'Binary expressions cannot be statically analyzed'),
+    gapWithFile(
+      sf,
+      'binary expression',
+      { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) },
+      'Binary expressions cannot be statically analyzed',
+    ),
     span
   );
 }
@@ -554,7 +618,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
     // Flatten block into parent - this shouldn't happen at top level
     // but handle gracefully
     return unknownStmt(
-      gap('block', { kind: 'dynamic-value', expression: '{ ... }' }, 'Nested blocks are flattened'),
+      gapWithFile(
+        sf,
+        'block',
+        { kind: 'dynamic-value', expression: '{ ... }' },
+        'Nested blocks are flattened',
+      ),
       span
     );
   }
@@ -562,7 +631,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // For statement (traditional for loop)
   if (ts.isForStatement(stmt)) {
     return unknownStmt(
-      gap('for loop', { kind: 'loop-variable', variable: 'i' }, 'Traditional for loops cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'for loop',
+        { kind: 'loop-variable', variable: 'i' },
+        'Traditional for loops cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -570,7 +644,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // For-in statement
   if (ts.isForInStatement(stmt)) {
     return unknownStmt(
-      gap('for-in loop', { kind: 'loop-variable', variable: getLoopVariable(stmt.initializer, sf) }, 'For-in loops cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'for-in loop',
+        { kind: 'loop-variable', variable: getLoopVariable(stmt.initializer, sf) },
+        'For-in loops cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -578,7 +657,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // While statement
   if (ts.isWhileStatement(stmt)) {
     return unknownStmt(
-      gap('while loop', { kind: 'loop-variable', variable: '(condition)' }, 'While loops cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'while loop',
+        { kind: 'loop-variable', variable: '(condition)' },
+        'While loops cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -586,7 +670,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // Do-while statement
   if (ts.isDoStatement(stmt)) {
     return unknownStmt(
-      gap('do-while loop', { kind: 'loop-variable', variable: '(condition)' }, 'Do-while loops cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'do-while loop',
+        { kind: 'loop-variable', variable: '(condition)' },
+        'Do-while loops cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -594,7 +683,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // Switch statement
   if (ts.isSwitchStatement(stmt)) {
     return unknownStmt(
-      gap('switch statement', { kind: 'conditional-registration', condition: stmt.expression.getText(sf) }, 'Switch statements cannot be statically analyzed'),
+      gapWithFile(
+        sf,
+        'switch statement',
+        { kind: 'conditional-registration', condition: stmt.expression.getText(sf) },
+        'Switch statements cannot be statically analyzed',
+      ),
       span
     );
   }
@@ -604,7 +698,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
     // We could try to analyze the try block, but error handling
     // suggests dynamic behavior
     return unknownStmt(
-      gap('try statement', { kind: 'dynamic-value', expression: 'try { ... }' }, 'Try statements suggest dynamic behavior'),
+      gapWithFile(
+        sf,
+        'try statement',
+        { kind: 'dynamic-value', expression: 'try { ... }' },
+        'Try statements suggest dynamic behavior',
+      ),
       span
     );
   }
@@ -612,7 +711,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // Throw statement
   if (ts.isThrowStatement(stmt)) {
     return unknownStmt(
-      gap('throw statement', { kind: 'dynamic-value', expression: 'throw ...' }, 'Throw statements are not analyzed'),
+      gapWithFile(
+        sf,
+        'throw statement',
+        { kind: 'dynamic-value', expression: 'throw ...' },
+        'Throw statements are not analyzed',
+      ),
       span
     );
   }
@@ -622,7 +726,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
     // Local function declarations create bindings - handled in scope
     // For now, just note it
     return unknownStmt(
-      gap('function declaration', { kind: 'function-return', functionName: stmt.name?.text ?? '(anonymous)' }, 'Local function declarations create scope bindings'),
+      gapWithFile(
+        sf,
+        'function declaration',
+        { kind: 'function-return', functionName: stmt.name?.text ?? '(anonymous)' },
+        'Local function declarations create scope bindings',
+      ),
       span
     );
   }
@@ -630,7 +739,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // Class declaration (local class)
   if (ts.isClassDeclaration(stmt)) {
     return unknownStmt(
-      gap('class declaration', { kind: 'dynamic-value', expression: `class ${stmt.name?.text ?? '(anonymous)'}` }, 'Local class declarations create scope bindings'),
+      gapWithFile(
+        sf,
+        'class declaration',
+        { kind: 'dynamic-value', expression: `class ${stmt.name?.text ?? '(anonymous)'}` },
+        'Local class declarations create scope bindings',
+      ),
       span
     );
   }
@@ -639,7 +753,12 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   if (ts.isEmptyStatement(stmt)) {
     // Skip empty statements
     return unknownStmt(
-      gap('empty statement', { kind: 'dynamic-value', expression: ';' }, 'Empty statement'),
+      gapWithFile(
+        sf,
+        'empty statement',
+        { kind: 'dynamic-value', expression: ';' },
+        'Empty statement',
+      ),
       span
     );
   }
@@ -648,14 +767,24 @@ export function transformStatement(stmt: ts.Statement, sf: ts.SourceFile): State
   // but handle gracefully
   if (ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt) || ts.isExportAssignment(stmt)) {
     return unknownStmt(
-      gap('import/export', { kind: 'dynamic-value', expression: stmt.getText(sf).slice(0, 30) }, 'Import/export declarations are module-level'),
+      gapWithFile(
+        sf,
+        'import/export',
+        { kind: 'dynamic-value', expression: stmt.getText(sf).slice(0, 30) },
+        'Import/export declarations are module-level',
+      ),
       span
     );
   }
 
   // Default: unknown statement
   return unknownStmt(
-    gap('statement', { kind: 'dynamic-value', expression: stmt.getText(sf).slice(0, 30) }, `Unsupported statement type: ${ts.SyntaxKind[stmt.kind]}`),
+    gapWithFile(
+      sf,
+      'statement',
+      { kind: 'dynamic-value', expression: stmt.getText(sf).slice(0, 30) },
+      `Unsupported statement type: ${ts.SyntaxKind[stmt.kind]}`,
+    ),
     span
   );
 }

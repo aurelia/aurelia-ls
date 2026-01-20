@@ -90,6 +90,7 @@ export function matchDefine(
       `define call at ${defineCall.span.start}`,
       { kind: 'dynamic-value', expression: 'classRef' },
       'The class reference in .define() must be a simple identifier.',
+      { file: filePath },
     ));
     return { resource: null, gaps };
   }
@@ -152,7 +153,7 @@ function buildElementDef(
   if (stringName) {
     const name = canonicalElementName(stringName.value);
     if (!name) {
-      gaps.push(invalidNameGap(className, 'element'));
+      gaps.push(invalidNameGap(className, 'element', filePath));
       return { resource: null, gaps };
     }
 
@@ -179,6 +180,7 @@ function buildElementDef(
       `definition for ${className}`,
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
+      { file: filePath },
     ));
     return { resource: null, gaps };
   }
@@ -188,7 +190,7 @@ function buildElementDef(
   const rawName = nameProp?.value ?? className;
   const name = canonicalElementName(rawName);
   if (!name) {
-    gaps.push(invalidNameGap(className, 'element'));
+    gaps.push(invalidNameGap(className, 'element', filePath));
     return { resource: null, gaps };
   }
 
@@ -239,7 +241,7 @@ function buildAttributeDef(
   if (stringName) {
     const name = canonicalAttrName(stringName.value);
     if (!name) {
-      gaps.push(invalidNameGap(className, 'attribute'));
+      gaps.push(invalidNameGap(className, 'attribute', filePath));
       return { resource: null, gaps };
     }
 
@@ -265,6 +267,7 @@ function buildAttributeDef(
       `definition for ${className}`,
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
+      { file: filePath },
     ));
     return { resource: null, gaps };
   }
@@ -274,7 +277,7 @@ function buildAttributeDef(
   const rawName = nameProp?.value ?? className;
   const name = canonicalAttrName(rawName);
   if (!name) {
-    gaps.push(invalidNameGap(className, 'attribute'));
+    gaps.push(invalidNameGap(className, 'attribute', filePath));
     return { resource: null, gaps };
   }
 
@@ -338,7 +341,7 @@ function buildValueConverterDefFromDefine(
   if (stringName) {
     const name = canonicalSimpleName(stringName.value);
     if (!name) {
-      gaps.push(invalidNameGap(className, 'value converter'));
+      gaps.push(invalidNameGap(className, 'value converter', filePath));
       return { resource: null, gaps };
     }
 
@@ -358,6 +361,7 @@ function buildValueConverterDefFromDefine(
       `definition for ${className}`,
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
+      { file: filePath },
     ));
     return { resource: null, gaps };
   }
@@ -367,7 +371,7 @@ function buildValueConverterDefFromDefine(
   const rawName = nameProp?.value ?? className;
   const name = canonicalSimpleName(rawName);
   if (!name) {
-    gaps.push(invalidNameGap(className, 'value converter'));
+    gaps.push(invalidNameGap(className, 'value converter', filePath));
     return { resource: null, gaps };
   }
 
@@ -399,7 +403,7 @@ function buildBindingBehaviorDefFromDefine(
   if (stringName) {
     const name = canonicalSimpleName(stringName.value);
     if (!name) {
-      gaps.push(invalidNameGap(className, 'binding behavior'));
+      gaps.push(invalidNameGap(className, 'binding behavior', filePath));
       return { resource: null, gaps };
     }
 
@@ -419,6 +423,7 @@ function buildBindingBehaviorDefFromDefine(
       `definition for ${className}`,
       { kind: 'dynamic-value', expression: 'definition object' },
       'The definition in .define() must be an object literal or string.',
+      { file: filePath },
     ));
     return { resource: null, gaps };
   }
@@ -428,7 +433,7 @@ function buildBindingBehaviorDefFromDefine(
   const rawName = nameProp?.value ?? className;
   const name = canonicalSimpleName(rawName);
   if (!name) {
-    gaps.push(invalidNameGap(className, 'binding behavior'));
+    gaps.push(invalidNameGap(className, 'binding behavior', filePath));
     return { resource: null, gaps };
   }
 
@@ -482,11 +487,16 @@ function applyPrimaryBindable(
 // Helpers
 // =============================================================================
 
-function invalidNameGap(className: string, resourceType: string): AnalysisGap {
+function invalidNameGap(
+  className: string,
+  resourceType: string,
+  filePath: NormalizedPath,
+): AnalysisGap {
   return gap(
     `resource name for ${className}`,
     { kind: 'invalid-resource-name', className, reason: `Could not derive valid ${resourceType} name from .define() call` },
-    `Provide an explicit name in the definition object.`,
+    'Provide an explicit name in the definition object.',
+    { file: filePath },
   );
 }
 
