@@ -119,6 +119,21 @@ describe("workspace definition (workspace-contract)", () => {
     });
   });
 
+  it("maps <import> tag vs attribute value positions", () => {
+    const query = harness.workspace.query(appUri);
+    const tagDefs = query.definition(findPosition(appText, "<import from", 1));
+    expect(tagDefs).toHaveLength(0);
+
+    const attrDefs = query.definition(findPosition(appText, "from=\"./views/summary-panel\"", 1));
+    expect(attrDefs).toHaveLength(0);
+
+    const valueDefs = query.definition(findPosition(appText, "./views/summary-panel", 2));
+    expectDefinition(harness, valueDefs, {
+      uriEndsWith: "/src/views/summary-panel.ts",
+      textIncludes: "SummaryPanel",
+    });
+  });
+
   it("resolves inline custom elements", () => {
     const query = harness.workspace.query(appUri);
     const defs = query.definition(findPosition(appText, "<inline-note", 1));
@@ -157,6 +172,25 @@ describe("workspace definition (workspace-contract)", () => {
     expectDefinition(harness, defs, {
       uriEndsWith: "/src/views/summary-panel.ts",
       textIncludes: "updatedAt",
+    });
+  });
+
+  it("maps attribute, command, and expression segments distinctly", () => {
+    const query = harness.workspace.query(appUri);
+    const attrDefs = query.definition(findPosition(appText, "copy-to-clipboard.bind", 1));
+    expectDefinition(harness, attrDefs, {
+      uriEndsWith: "/src/resources.ts",
+      textIncludes: "CopyToClipboard",
+    });
+
+    const commandPos = findPosition(appText, "copy-to-clipboard.bind", "copy-to-clipboard.".length + 1);
+    const commandDefs = query.definition(commandPos);
+    expect(commandDefs).toHaveLength(0);
+
+    const exprDefs = query.definition(findPosition(appText, "noteMessage", 1));
+    expectDefinition(harness, exprDefs, {
+      uriEndsWith: "/src/my-app.ts",
+      textIncludes: "noteMessage",
     });
   });
 

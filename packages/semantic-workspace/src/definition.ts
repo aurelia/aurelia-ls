@@ -148,6 +148,10 @@ export function collectTemplateDefinitions(options: {
     if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
     const attrName = hit.attrName ?? null;
     if (!attrName) continue;
+    const spans = resolveAttributeSpans(attrName, nameSpan, syntax);
+    const matchSpan = spans.target ?? nameSpan;
+    if (!spanContainsOffset(matchSpan, offset)) continue;
+    if (spans.command && spanContainsOffset(spans.command, offset)) continue;
     const defs = definitionsForInstruction(hit.instruction, resources, {
       attrName,
       hostTag: hit.hostTag,
@@ -271,8 +275,10 @@ export function collectTemplateResourceReferences(options: {
 
   const instructionHits = collectInstructionHits(compilation.linked.templates, compilation.ir.templates ?? [], domIndex);
   for (const hit of instructionHits) {
-    const span = hit.attrNameSpan ?? null;
-    if (!span) continue;
+    const nameSpan = hit.attrNameSpan ?? null;
+    if (!nameSpan) continue;
+    const attrName = hit.attrName ?? null;
+    const span = attrName ? (resolveAttributeSpans(attrName, nameSpan, syntax).target ?? nameSpan) : nameSpan;
     switch (hit.instruction.kind) {
       case "hydrateAttribute": {
         const res = hit.instruction.res?.def ?? null;
@@ -703,6 +709,29 @@ function attributeTargetName(attrName: string | null, syntax: AttributeSyntaxCon
   if (target && attrName.includes(target)) return target;
   if (analysis.syntax.command) return null;
   return attrName;
+}
+
+function resolveAttributeSpans(
+  attrName: string,
+  nameSpan: SourceSpan,
+  syntax: AttributeSyntaxContext,
+): { target: SourceSpan | null; command: SourceSpan | null } {
+  const analysis = analyzeAttributeName(attrName, syntax.syntax, syntax.parser);
+  const target = analysis.targetSpan
+    ? {
+      start: nameSpan.start + analysis.targetSpan.start,
+      end: nameSpan.start + analysis.targetSpan.end,
+      file: nameSpan.file,
+    }
+    : null;
+  const command = analysis.commandSpan
+    ? {
+      start: nameSpan.start + analysis.commandSpan.start,
+      end: nameSpan.start + analysis.commandSpan.end,
+      file: nameSpan.file,
+    }
+    : null;
+  return { target, command };
 }
 
 function looksLikeCustomElementTag(tag: string): boolean {
