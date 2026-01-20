@@ -7,6 +7,7 @@ import {
   expectReferencesAtOffsets,
   expectToken,
   findOffset,
+  findOffsets,
   findPosition,
   hasLabel,
   positionAt,
@@ -53,6 +54,44 @@ describe("workspace binding shorthand syntax", () => {
     expectToken(tokens, appText, { type: "aureliaCommand", text: "@" });
     expectToken(tokens, appText, { type: "aureliaCommand", text: "trigger" });
     expectToken(tokens, appText, { type: "aureliaCommand", text: "delegate" });
+  });
+
+  it("completes view-model members in shorthand bindings", () => {
+    const pos = findPosition(appText, ":class=\"state\"", ":class=\"".length);
+    const completions = harness.workspace.query(appUri).completions(pos);
+    expect(hasLabel(completions, "state")).toBe(true);
+    expect(hasLabel(completions, "message")).toBe(true);
+    expect(hasLabel(completions, "isActive")).toBe(true);
+  });
+
+  it("finds references for interpolated properties", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "${count}", 3);
+    const refs = query.references(pos);
+
+    const templateOffset = findOffset(appText, "${count}", 3);
+    expectLocationAtOffset(refs, appUri, templateOffset, "Missing template reference for count");
+
+    const vmText = harness.readText("src/my-app.ts");
+    if (!vmText) throw new Error("Expected view-model text for binding-shorthand-syntax fixture");
+    const vmUri = harness.toDocumentUri("src/my-app.ts");
+    const vmOffset = findOffset(vmText, "count = 0", 1);
+    expectLocationAtOffset(refs, vmUri, vmOffset, "Missing view-model reference for count");
+  });
+
+  it("finds references for shorthand-bound properties", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, ":value=\"message\"", ":value=\"".length + 1);
+    const refs = query.references(pos);
+
+    const templateOffset = findOffset(appText, ":value=\"message\"", ":value=\"".length + 1);
+    expectLocationAtOffset(refs, appUri, templateOffset, "Missing template reference for message");
+
+    const vmText = harness.readText("src/my-app.ts");
+    if (!vmText) throw new Error("Expected view-model text for binding-shorthand-syntax fixture");
+    const vmUri = harness.toDocumentUri("src/my-app.ts");
+    const vmOffset = findOffset(vmText, "message = \"Hello\"", 1);
+    expectLocationAtOffset(refs, vmUri, vmOffset, "Missing view-model reference for message");
   });
 });
 
@@ -137,6 +176,28 @@ describe("workspace portal chain", () => {
     expectToken(tokens, appText, { type: "aureliaController", text: "with" });
     expectToken(tokens, appText, { type: "aureliaController", text: "portal" });
   });
+
+  it("completes members in with-bound scopes", () => {
+    const pos = findPosition(appText, "${title}", 3);
+    const completions = harness.workspace.query(appUri).completions(pos);
+    expect(hasLabel(completions, "title")).toBe(true);
+    expect(hasLabel(completions, "note")).toBe(true);
+  });
+
+  it("finds references for portal chain bindings", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "showPortal", 1);
+    const refs = query.references(pos);
+
+    const templateOffset = findOffset(appText, "showPortal", 1);
+    expectLocationAtOffset(refs, appUri, templateOffset, "Missing template reference for showPortal");
+
+    const vmText = harness.readText("src/my-app.ts");
+    if (!vmText) throw new Error("Expected view-model text for portal-chain fixture");
+    const vmUri = harness.toDocumentUri("src/my-app.ts");
+    const vmOffset = findOffset(vmText, "showPortal = true", 1);
+    expectLocationAtOffset(refs, vmUri, vmOffset, "Missing view-model reference for showPortal");
+  });
 });
 
 describe("workspace portal deep nesting", () => {
@@ -177,6 +238,29 @@ describe("workspace portal deep nesting", () => {
     expectToken(tokens, appText, { type: "aureliaController", text: "if" });
     expectToken(tokens, appText, { type: "aureliaController", text: "portal" });
     expectToken(tokens, appText, { type: "aureliaController", text: "repeat" });
+  });
+
+  it("resolves catch branch locals", () => {
+    const pos = findPosition(appText, "err.message", 1);
+    const defs = harness.workspace.query(appUri).definition(pos);
+    const declOffset = findOffset(appText, "catch.bind=\"err\"", "catch.bind=\"".length + 1);
+    expectLocationAtOffset(defs, appUri, declOffset, "Missing definition for catch alias");
+  });
+
+  it("completes promise branch members", () => {
+    const pos = findPosition(appText, "result.show", "result.".length);
+    const completions = harness.workspace.query(appUri).completions(pos);
+    expect(hasLabel(completions, "show")).toBe(true);
+    expect(hasLabel(completions, "items")).toBe(true);
+  });
+
+  it("finds references for promise branch locals", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "result.show", 1);
+    const refs = query.references(pos);
+    const showOffset = findOffset(appText, "result.show", 1);
+    const itemsOffset = findOffset(appText, "result.items", 1);
+    expectReferencesAtOffsets(refs, appUri, [showOffset, itemsOffset]);
   });
 });
 
@@ -219,5 +303,12 @@ describe("workspace let edge cases", () => {
     const outerDecl = findOffset(appText, "<let total.bind=\"baseTotal\">", "<let ".length + 1);
     const hasOuter = refs.some((loc) => String(loc.uri) === String(appUri) && spanCoversOffset(loc.span, outerDecl));
     expect(hasOuter).toBe(false);
+  });
+
+  it("completes repeat locals in shadowed scopes", () => {
+    const pos = findPosition(appText, "entry.name", "entry.".length);
+    const completions = harness.workspace.query(appUri).completions(pos);
+    expect(hasLabel(completions, "name")).toBe(true);
+    expect(hasLabel(completions, "total")).toBe(true);
   });
 });

@@ -153,11 +153,14 @@ function buildFrameTypeExpr(
   // Overlay object (value overlay) if present
   const overlayObj = frame.overlay?.kind === "value" && hints?.overlayBase ? hints.overlayBase : null;
 
-  // Root after overlay shadow:  Omit<VM, keyof Overlay>
-  const rootAfterOverlay = overlayObj != null ? `Omit<${wrap(rootVm)}, keyof ${wrap(overlayObj)}>` : wrap(rootVm);
+  // Use parent frame context as the base when available so nested controllers inherit overlay scope.
+  const baseContext = parentTypeExpr ? stripHelpers(parentTypeExpr) : rootVm;
 
-  // Root after overlay & locals shadow:  Omit<Root', 'k1'|'k2'|...>
-  const rootAfterAll = localEntries.length > 0 ? `Omit<${wrap(rootAfterOverlay)}, ${localKeysUnion}>` : rootAfterOverlay;
+  // Base after overlay shadow:  Omit<Base, keyof Overlay>
+  const baseAfterOverlay = overlayObj != null ? `Omit<${wrap(baseContext)}, keyof ${wrap(overlayObj)}>` : wrap(baseContext);
+
+  // Base after overlay & locals shadow:  Omit<Base', 'k1'|'k2'|...>
+  const baseAfterAll = localEntries.length > 0 ? `Omit<${wrap(baseAfterOverlay)}, ${localKeysUnion}>` : baseAfterOverlay;
 
   // Overlay reduced by locals: Omit<Overlay, 'k1'|'k2'|...>
   const overlayAfterLocals = overlayObj != null ? (localEntries.length > 0 ? `Omit<${wrap(overlayObj)}, ${localKeysUnion}>` : wrap(overlayObj)) : "{}";
@@ -168,9 +171,9 @@ function buildFrameTypeExpr(
   const thisSeg = overlayObj != null ? `{ $this: ${wrap(overlayObj)} }` : "{}";
 
   // Final frame type:
-  //   Omit<VM, keyof Overlay | LocalKeys> & Omit<Overlay, LocalKeys> & Locals & { $parent: ... } & { $vm: VM } & { $this?: Overlay }
+  //   Omit<Base, keyof Overlay | LocalKeys> & Omit<Overlay, LocalKeys> & Locals & { $parent: ... } & { $vm: VM } & { $this?: Overlay }
   return [
-    wrap(rootAfterAll),
+    wrap(baseAfterAll),
     wrap(overlayAfterLocals),
     wrap(localsType),
     wrap(parentSeg),
@@ -185,6 +188,11 @@ function safeProp(n: string): string {
 
 function escapeKey(s: string): string {
   return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function stripHelpers(typeExpr: string): string {
+  const helperKeys = "'$parent' | '$vm' | '$this'";
+  return `Omit<${wrap(typeExpr)}, ${helperKeys}>`;
 }
 
 /* ===================================================================================== */

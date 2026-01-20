@@ -3,8 +3,10 @@ import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 import {
   expectDefinition,
+  expectLocationAtOffset,
   expectReferencesAtOffsets,
   expectToken,
+  findOffset,
   findOffsets,
   findPosition,
   hasLabel,
@@ -50,6 +52,30 @@ describe("workspace template control scenarios", () => {
     const hover = query.hover(pos);
     expect(hover?.contents ?? "").toContain("Template Controller");
     expect(hover?.contents ?? "").toContain("promise");
+  });
+
+  it("resolves with.bind overlay members", () => {
+    const query = harness.workspace.query(controllersUri);
+    const pos = findPosition(controllersText, "${displayName}", 3);
+    const defs = query.definition(pos);
+    expectDefinition(harness.readText.bind(harness), defs, {
+      uriEndsWith: "/src/components/controllers-branches.ts",
+      textIncludes: "displayName",
+    });
+  });
+
+  it("resolves promise branch alias definitions", () => {
+    const query = harness.workspace.query(controllersUri);
+
+    const dataPos = findPosition(controllersText, "${data.displayName}", 3);
+    const dataDefs = query.definition(dataPos);
+    const dataDecl = findOffset(controllersText, "then.from-view=\"data\"", "then.from-view=\"".length + 1);
+    expectLocationAtOffset(dataDefs, controllersUri, dataDecl, "Missing definition for promise then alias");
+
+    const errPos = findPosition(controllersText, "${err.message}", 3);
+    const errDefs = query.definition(errPos);
+    const errDecl = findOffset(controllersText, "catch.from-view=\"err\"", "catch.from-view=\"".length + 1);
+    expectLocationAtOffset(errDefs, controllersUri, errDecl, "Missing definition for promise catch alias");
   });
 
   it("resolves switch case bindings to view-model definitions", () => {

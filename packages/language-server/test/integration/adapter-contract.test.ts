@@ -585,22 +585,557 @@ describe("adapter contract (template control scenarios)", () => {
   });
 });
 
-describe.skip("adapter contract (binding shorthand syntax)", () => {
-  it.todo("mirrors workspace outputs for binding-shorthand-syntax fixture");
+describe("adapter contract (binding shorthand syntax)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: DocumentUri;
+  let appText: string;
+  let appLspUri: string;
+  let lookupText: LookupTextFn;
+  let lspDiagnosticsByUri: Map<string, unknown[]>;
+
+  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
+
+  const serverState: {
+    connection: ReturnType<typeof startServer>["connection"] | null;
+    child: ReturnType<typeof startServer>["child"] | null;
+    dispose: (() => void) | null;
+    getStderr: (() => string) | null;
+  } = { connection: null, child: null, dispose: null, getStderr: null };
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("binding-shorthand-syntax"),
+      openTemplates: "none",
+      resolution: { stripSourcedNodes },
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) throw new Error("Expected template text for binding-shorthand-syntax fixture");
+    appText = app;
+    lookupText = (uri) => harness.readText(uri) ?? null;
+    appLspUri = fileUri(harness.root, "src/my-app.html");
+
+    const { connection, child, dispose, getStderr } = startServer(harness.root);
+    serverState.connection = connection;
+    serverState.child = child;
+    serverState.dispose = dispose;
+    serverState.getStderr = getStderr;
+
+    await initialize(connection, child, getStderr, harness.root);
+    openDocument(connection, appLspUri, "html", appText);
+    const appDiags = await waitForDiagnostics(connection, child, getStderr, appLspUri, 10000);
+    lspDiagnosticsByUri = new Map([[appLspUri, appDiags as unknown[]]]);
+  });
+
+  afterAll(async () => {
+    if (serverState.dispose) serverState.dispose();
+    if (serverState.child) {
+      serverState.child.kill("SIGKILL");
+      await waitForExit(serverState.child);
+    }
+  });
+
+  it("mirrors hover/definition/references/completions", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceQuery = harness.workspace.query(appUri);
+    const defPos = findPosition(appText, ":value=\"message\"", ":value=\"".length + 1);
+
+    const workspaceHover = workspaceQuery.hover(defPos);
+    const expectedHover = normalizeHover(mapWorkspaceHover(workspaceHover, lookupText));
+    const lspHover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+    });
+    expect(normalizeHover(lspHover)).toEqual(expectedHover);
+
+    const workspaceDefs = workspaceQuery.definition(defPos);
+    const expectedDefs = normalizeLocations(mapWorkspaceLocations(workspaceDefs, lookupText));
+    const lspDefs = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+    });
+    expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
+
+    const refPos = findPosition(appText, "${count}", 3);
+    const workspaceRefs = workspaceQuery.references(refPos);
+    const expectedRefs = normalizeLocations(mapWorkspaceLocations(workspaceRefs, lookupText));
+    const lspRefs = await connection.sendRequest("textDocument/references", {
+      textDocument: { uri: appLspUri },
+      position: refPos,
+      context: { includeDeclaration: true },
+    });
+    expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
+
+    const completionPos = findPosition(appText, ":class=\"state\"", ":class=\"".length + 1);
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const lspCompletions = await connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: appLspUri },
+      position: completionPos,
+    });
+    expect(normalizeCompletions(lspCompletions)).toEqual(normalizeCompletions(expectedItems));
+  });
+
+  it("mirrors semantic tokens and diagnostics", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceTokens = harness.workspace.query(appUri).semanticTokens();
+    const expectedTokens = encodeTokens(workspaceTokens, appText);
+    const lspTokens = await connection.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri: appLspUri },
+    });
+    const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
+    expect(actualTokens).toEqual(expectedTokens);
+
+    const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedDiagnostics),
+    );
+  });
 });
 
-describe.skip("adapter contract (template local scopes)", () => {
-  it.todo("mirrors workspace outputs for template-local-scopes fixture");
+describe("adapter contract (template local scopes)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: DocumentUri;
+  let appText: string;
+  let appLspUri: string;
+  let lookupText: LookupTextFn;
+  let lspDiagnosticsByUri: Map<string, unknown[]>;
+
+  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
+
+  const serverState: {
+    connection: ReturnType<typeof startServer>["connection"] | null;
+    child: ReturnType<typeof startServer>["child"] | null;
+    dispose: (() => void) | null;
+    getStderr: (() => string) | null;
+  } = { connection: null, child: null, dispose: null, getStderr: null };
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-local-scopes"),
+      openTemplates: "none",
+      resolution: { stripSourcedNodes },
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) throw new Error("Expected template text for template-local-scopes fixture");
+    appText = app;
+    lookupText = (uri) => harness.readText(uri) ?? null;
+    appLspUri = fileUri(harness.root, "src/my-app.html");
+
+    const { connection, child, dispose, getStderr } = startServer(harness.root);
+    serverState.connection = connection;
+    serverState.child = child;
+    serverState.dispose = dispose;
+    serverState.getStderr = getStderr;
+
+    await initialize(connection, child, getStderr, harness.root);
+    openDocument(connection, appLspUri, "html", appText);
+    const appDiags = await waitForDiagnostics(connection, child, getStderr, appLspUri, 10000);
+    lspDiagnosticsByUri = new Map([[appLspUri, appDiags as unknown[]]]);
+  });
+
+  afterAll(async () => {
+    if (serverState.dispose) serverState.dispose();
+    if (serverState.child) {
+      serverState.child.kill("SIGKILL");
+      await waitForExit(serverState.child);
+    }
+  });
+
+  it("mirrors hover/definition/references/completions", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceQuery = harness.workspace.query(appUri);
+    const hoverPos = findPosition(appText, "repeat.for", 1);
+
+    const workspaceHover = workspaceQuery.hover(hoverPos);
+    const expectedHover = normalizeHover(mapWorkspaceHover(workspaceHover, lookupText));
+    const lspHover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: appLspUri },
+      position: hoverPos,
+    });
+    expect(normalizeHover(lspHover)).toEqual(expectedHover);
+
+    const defPos = findPosition(appText, "${label}", 3);
+    const workspaceDefs = workspaceQuery.definition(defPos);
+    const expectedDefs = normalizeLocations(mapWorkspaceLocations(workspaceDefs, lookupText));
+    const lspDefs = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+    });
+    expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
+
+    const workspaceRefs = workspaceQuery.references(defPos);
+    const expectedRefs = normalizeLocations(mapWorkspaceLocations(workspaceRefs, lookupText));
+    const lspRefs = await connection.sendRequest("textDocument/references", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+      context: { includeDeclaration: true },
+    });
+    expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
+
+    const completionPos = findPosition(appText, "item.name", "item.".length);
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const lspCompletions = await connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: appLspUri },
+      position: completionPos,
+    });
+    expect(normalizeCompletions(lspCompletions)).toEqual(normalizeCompletions(expectedItems));
+  });
+
+  it("mirrors semantic tokens and diagnostics", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceTokens = harness.workspace.query(appUri).semanticTokens();
+    const expectedTokens = encodeTokens(workspaceTokens, appText);
+    const lspTokens = await connection.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri: appLspUri },
+    });
+    const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
+    expect(actualTokens).toEqual(expectedTokens);
+
+    const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedDiagnostics),
+    );
+  });
 });
 
-describe.skip("adapter contract (portal chain)", () => {
-  it.todo("mirrors workspace outputs for portal-chain fixture");
+describe("adapter contract (portal chain)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: DocumentUri;
+  let appText: string;
+  let appLspUri: string;
+  let lookupText: LookupTextFn;
+  let lspDiagnosticsByUri: Map<string, unknown[]>;
+
+  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
+
+  const serverState: {
+    connection: ReturnType<typeof startServer>["connection"] | null;
+    child: ReturnType<typeof startServer>["child"] | null;
+    dispose: (() => void) | null;
+    getStderr: (() => string) | null;
+  } = { connection: null, child: null, dispose: null, getStderr: null };
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("portal-chain"),
+      openTemplates: "none",
+      resolution: { stripSourcedNodes },
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) throw new Error("Expected template text for portal-chain fixture");
+    appText = app;
+    lookupText = (uri) => harness.readText(uri) ?? null;
+    appLspUri = fileUri(harness.root, "src/my-app.html");
+
+    const { connection, child, dispose, getStderr } = startServer(harness.root);
+    serverState.connection = connection;
+    serverState.child = child;
+    serverState.dispose = dispose;
+    serverState.getStderr = getStderr;
+
+    await initialize(connection, child, getStderr, harness.root);
+    openDocument(connection, appLspUri, "html", appText);
+    const appDiags = await waitForDiagnostics(connection, child, getStderr, appLspUri, 10000);
+    lspDiagnosticsByUri = new Map([[appLspUri, appDiags as unknown[]]]);
+  });
+
+  afterAll(async () => {
+    if (serverState.dispose) serverState.dispose();
+    if (serverState.child) {
+      serverState.child.kill("SIGKILL");
+      await waitForExit(serverState.child);
+    }
+  });
+
+  it("mirrors hover/definition/references/completions", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceQuery = harness.workspace.query(appUri);
+    const hoverPos = findPosition(appText, "portal.bind", 1);
+
+    const workspaceHover = workspaceQuery.hover(hoverPos);
+    const expectedHover = normalizeHover(mapWorkspaceHover(workspaceHover, lookupText));
+    const lspHover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: appLspUri },
+      position: hoverPos,
+    });
+    expect(normalizeHover(lspHover)).toEqual(expectedHover);
+
+    const defPos = findPosition(appText, "showPortal", 1);
+    const workspaceDefs = workspaceQuery.definition(defPos);
+    const expectedDefs = normalizeLocations(mapWorkspaceLocations(workspaceDefs, lookupText));
+    const lspDefs = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+    });
+    expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
+
+    const workspaceRefs = workspaceQuery.references(defPos);
+    const expectedRefs = normalizeLocations(mapWorkspaceLocations(workspaceRefs, lookupText));
+    const lspRefs = await connection.sendRequest("textDocument/references", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+      context: { includeDeclaration: true },
+    });
+    expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
+
+    const completionPos = findPosition(appText, "${title}", 3);
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const lspCompletions = await connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: appLspUri },
+      position: completionPos,
+    });
+    expect(normalizeCompletions(lspCompletions)).toEqual(normalizeCompletions(expectedItems));
+  });
+
+  it("mirrors semantic tokens and diagnostics", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceTokens = harness.workspace.query(appUri).semanticTokens();
+    const expectedTokens = encodeTokens(workspaceTokens, appText);
+    const lspTokens = await connection.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri: appLspUri },
+    });
+    const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
+    expect(actualTokens).toEqual(expectedTokens);
+
+    const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedDiagnostics),
+    );
+  });
 });
 
-describe.skip("adapter contract (portal deep nesting)", () => {
-  it.todo("mirrors workspace outputs for portal-deep-nesting fixture");
+describe("adapter contract (portal deep nesting)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: DocumentUri;
+  let appText: string;
+  let appLspUri: string;
+  let lookupText: LookupTextFn;
+  let lspDiagnosticsByUri: Map<string, unknown[]>;
+
+  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
+
+  const serverState: {
+    connection: ReturnType<typeof startServer>["connection"] | null;
+    child: ReturnType<typeof startServer>["child"] | null;
+    dispose: (() => void) | null;
+    getStderr: (() => string) | null;
+  } = { connection: null, child: null, dispose: null, getStderr: null };
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("portal-deep-nesting"),
+      openTemplates: "none",
+      resolution: { stripSourcedNodes },
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) throw new Error("Expected template text for portal-deep-nesting fixture");
+    appText = app;
+    lookupText = (uri) => harness.readText(uri) ?? null;
+    appLspUri = fileUri(harness.root, "src/my-app.html");
+
+    const { connection, child, dispose, getStderr } = startServer(harness.root);
+    serverState.connection = connection;
+    serverState.child = child;
+    serverState.dispose = dispose;
+    serverState.getStderr = getStderr;
+
+    await initialize(connection, child, getStderr, harness.root);
+    openDocument(connection, appLspUri, "html", appText);
+    const appDiags = await waitForDiagnostics(connection, child, getStderr, appLspUri, 10000);
+    lspDiagnosticsByUri = new Map([[appLspUri, appDiags as unknown[]]]);
+  });
+
+  afterAll(async () => {
+    if (serverState.dispose) serverState.dispose();
+    if (serverState.child) {
+      serverState.child.kill("SIGKILL");
+      await waitForExit(serverState.child);
+    }
+  });
+
+  it("mirrors hover/definition/references/completions", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceQuery = harness.workspace.query(appUri);
+    const hoverPos = findPosition(appText, "promise.bind", 1);
+
+    const workspaceHover = workspaceQuery.hover(hoverPos);
+    const expectedHover = normalizeHover(mapWorkspaceHover(workspaceHover, lookupText));
+    const lspHover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: appLspUri },
+      position: hoverPos,
+    });
+    expect(normalizeHover(lspHover)).toEqual(expectedHover);
+
+    const defPos = findPosition(appText, "result.show", 1);
+    const workspaceDefs = workspaceQuery.definition(defPos);
+    const expectedDefs = normalizeLocations(mapWorkspaceLocations(workspaceDefs, lookupText));
+    const lspDefs = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+    });
+    expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
+
+    const workspaceRefs = workspaceQuery.references(defPos);
+    const expectedRefs = normalizeLocations(mapWorkspaceLocations(workspaceRefs, lookupText));
+    const lspRefs = await connection.sendRequest("textDocument/references", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+      context: { includeDeclaration: true },
+    });
+    expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
+
+    const completionPos = findPosition(appText, "item.label", "item.".length);
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const lspCompletions = await connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: appLspUri },
+      position: completionPos,
+    });
+    expect(normalizeCompletions(lspCompletions)).toEqual(normalizeCompletions(expectedItems));
+  });
+
+  it("mirrors semantic tokens and diagnostics", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceTokens = harness.workspace.query(appUri).semanticTokens();
+    const expectedTokens = encodeTokens(workspaceTokens, appText);
+    const lspTokens = await connection.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri: appLspUri },
+    });
+    const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
+    expect(actualTokens).toEqual(expectedTokens);
+
+    const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedDiagnostics),
+    );
+  });
 });
 
-describe.skip("adapter contract (let edge cases)", () => {
-  it.todo("mirrors workspace outputs for let-edge-cases fixture");
+describe("adapter contract (let edge cases)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: DocumentUri;
+  let appText: string;
+  let appLspUri: string;
+  let lookupText: LookupTextFn;
+  let lspDiagnosticsByUri: Map<string, unknown[]>;
+
+  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
+
+  const serverState: {
+    connection: ReturnType<typeof startServer>["connection"] | null;
+    child: ReturnType<typeof startServer>["child"] | null;
+    dispose: (() => void) | null;
+    getStderr: (() => string) | null;
+  } = { connection: null, child: null, dispose: null, getStderr: null };
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("let-edge-cases"),
+      openTemplates: "none",
+      resolution: { stripSourcedNodes },
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) throw new Error("Expected template text for let-edge-cases fixture");
+    appText = app;
+    lookupText = (uri) => harness.readText(uri) ?? null;
+    appLspUri = fileUri(harness.root, "src/my-app.html");
+
+    const { connection, child, dispose, getStderr } = startServer(harness.root);
+    serverState.connection = connection;
+    serverState.child = child;
+    serverState.dispose = dispose;
+    serverState.getStderr = getStderr;
+
+    await initialize(connection, child, getStderr, harness.root);
+    openDocument(connection, appLspUri, "html", appText);
+    const appDiags = await waitForDiagnostics(connection, child, getStderr, appLspUri, 10000);
+    lspDiagnosticsByUri = new Map([[appLspUri, appDiags as unknown[]]]);
+  });
+
+  afterAll(async () => {
+    if (serverState.dispose) serverState.dispose();
+    if (serverState.child) {
+      serverState.child.kill("SIGKILL");
+      await waitForExit(serverState.child);
+    }
+  });
+
+  it("mirrors hover/definition/references/completions", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceQuery = harness.workspace.query(appUri);
+    const hoverPos = findPosition(appText, "repeat.for", 1);
+
+    const workspaceHover = workspaceQuery.hover(hoverPos);
+    const expectedHover = normalizeHover(mapWorkspaceHover(workspaceHover, lookupText));
+    const lspHover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: appLspUri },
+      position: hoverPos,
+    });
+    expect(normalizeHover(lspHover)).toEqual(expectedHover);
+
+    const defPos = findPosition(appText, "${total}", 3);
+    const workspaceDefs = workspaceQuery.definition(defPos);
+    const expectedDefs = normalizeLocations(mapWorkspaceLocations(workspaceDefs, lookupText));
+    const lspDefs = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+    });
+    expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
+
+    const workspaceRefs = workspaceQuery.references(defPos);
+    const expectedRefs = normalizeLocations(mapWorkspaceLocations(workspaceRefs, lookupText));
+    const lspRefs = await connection.sendRequest("textDocument/references", {
+      textDocument: { uri: appLspUri },
+      position: defPos,
+      context: { includeDeclaration: true },
+    });
+    expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
+
+    const completionPos = findPosition(appText, "entry.name", "entry.".length);
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const lspCompletions = await connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: appLspUri },
+      position: completionPos,
+    });
+    expect(normalizeCompletions(lspCompletions)).toEqual(normalizeCompletions(expectedItems));
+  });
+
+  it("mirrors semantic tokens and diagnostics", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceTokens = harness.workspace.query(appUri).semanticTokens();
+    const expectedTokens = encodeTokens(workspaceTokens, appText);
+    const lspTokens = await connection.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri: appLspUri },
+    });
+    const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
+    expect(actualTokens).toEqual(expectedTokens);
+
+    const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedDiagnostics),
+    );
+  });
 });
