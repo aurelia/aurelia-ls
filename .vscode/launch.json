@@ -13,7 +13,7 @@
         "${workspaceFolder}/packages/vscode/out/**/*.js",
         "${workspaceFolder}/packages/language-server/out/**/*.js"
       ],
-      "preLaunchTask": "build:tsc"
+      "preLaunchTask": "build:vscode-extension"
     },
     {
       "name": "Attach to Server",

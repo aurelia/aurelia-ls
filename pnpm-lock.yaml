@@ -374,6 +374,9 @@ importers:
 
   packages/vscode:
     dependencies:
+      '@aurelia-ls/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       typescript:
         specifier: ^5.5.4
         version: 5.9.3
