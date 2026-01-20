@@ -194,6 +194,19 @@ describe("workspace definition (workspace-contract)", () => {
     });
   });
 
+  it("maps template controller target vs command segments", () => {
+    const query = harness.workspace.query(summaryUri);
+    const targetDefs = query.definition(findPosition(summaryText, "if-not.bind", 1));
+    expectDefinition(harness, targetDefs, {
+      uriEndsWith: "/src/attributes/if-not.ts",
+      textIncludes: "IfNot",
+    });
+
+    const commandPos = findPosition(summaryText, "if-not.bind", "if-not.".length + 1);
+    const commandDefs = query.definition(commandPos);
+    expect(commandDefs).toHaveLength(0);
+  });
+
   it("resolves template controller definitions", () => {
     const query = harness.workspace.query(summaryUri);
     const defs = query.definition(findPosition(summaryText, "if-not.bind", 1));
@@ -251,6 +264,77 @@ describe("workspace definition (workspace-contract)", () => {
       uriEndsWith: "/src/views/table-panel.html",
       textIncludes: "item of displayItems",
     });
+  });
+});
+
+describe("workspace definition (position mapping: shorthand)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("binding-shorthand-syntax"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) {
+      throw new Error("Expected template text for binding-shorthand-syntax fixture");
+    }
+    appText = app;
+  });
+
+  it("treats @ and : command symbols as non-definitions", () => {
+    const query = harness.workspace.query(appUri);
+    const atDefs = query.definition(findPosition(appText, "@click", 0));
+    expect(atDefs).toHaveLength(0);
+
+    const colonDefs = query.definition(findPosition(appText, ":value", 0));
+    expect(colonDefs).toHaveLength(0);
+  });
+
+  it("maps shorthand command expressions to view-model definitions", () => {
+    const query = harness.workspace.query(appUri);
+    const clickDefs = query.definition(findPosition(appText, "onClick()", 1));
+    expectDefinition(harness, clickDefs, {
+      uriEndsWith: "/src/my-app.ts",
+      textIncludes: "onClick",
+    });
+
+    const messageDefs = query.definition(findPosition(appText, ":value=\"message\"", ":value=\"".length + 1));
+    expectDefinition(harness, messageDefs, {
+      uriEndsWith: "/src/my-app.ts",
+      textIncludes: "message",
+    });
+  });
+});
+
+describe("workspace definition (position mapping: meta elements)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let templateUri: string;
+  let templateText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("rename-cascade-basic"),
+      openTemplates: "none",
+    });
+    templateUri = harness.openTemplate("src/my-element.html");
+    const template = harness.readText(templateUri);
+    if (!template) {
+      throw new Error("Expected template text for rename-cascade-basic fixture");
+    }
+    templateText = template;
+  });
+
+  it("does not resolve meta element attribute name/value positions", () => {
+    const query = harness.workspace.query(templateUri);
+    const nameDefs = query.definition(findPosition(templateText, "name=\"extra\"", 1));
+    expect(nameDefs).toHaveLength(0);
+
+    const valueDefs = query.definition(findPosition(templateText, "extra", 1));
+    expect(valueDefs).toHaveLength(0);
   });
 });
 
