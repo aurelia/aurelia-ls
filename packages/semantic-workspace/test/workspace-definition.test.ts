@@ -452,4 +452,17 @@ describe("workspace definition (import alias conflicts)", () => {
     );
     expect(hasTooltip).toBe(false);
   });
+
+  it("prefers named template import aliases over local registrations", () => {
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(findPosition(appText, "badge=\"Primary\"", 1));
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/src/attributes/aut-sort.ts",
+      textIncludes: "AutSort",
+    });
+    const hasBadge = defs.some((loc) =>
+      String(loc.uri).endsWith("/src/attributes/badge.ts")
+    );
+    expect(hasBadge).toBe(false);
+  });
 });

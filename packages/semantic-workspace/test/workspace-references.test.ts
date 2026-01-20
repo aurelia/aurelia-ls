@@ -134,3 +134,43 @@ describe("workspace references (workspace-contract)", () => {
     expectReferencesAtOffsets(refs, appUri, offsets);
   });
 });
+
+describe("workspace references (import alias conflicts)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-import-alias-conflicts"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) {
+      throw new Error("Expected template text for template-import-alias-conflicts");
+    }
+    appText = app;
+  });
+
+  it("uses named import alias references for custom attributes", () => {
+    const badgeIndex = appText.indexOf("badge=\"Primary\"");
+    if (badgeIndex < 0) {
+      throw new Error("Expected badge attribute in template-import-alias-conflicts");
+    }
+    const badgeOffset = badgeIndex + 1;
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(positionAt(appText, badgeOffset));
+    const autSort = defs.find((loc) =>
+      String(loc.uri).endsWith("/src/attributes/aut-sort.ts")
+    );
+    expect(autSort?.symbolId).toBeDefined();
+
+    const refs = query.references(positionAt(appText, badgeOffset));
+    expectReferencesAtOffsets(refs, appUri, [badgeOffset]);
+    const refSymbolIds = new Set(
+      refs.map((loc) => loc.symbolId).filter((id): id is string => !!id)
+    );
+    expect(refSymbolIds).toEqual(new Set([autSort!.symbolId as string]));
+  });
+});
