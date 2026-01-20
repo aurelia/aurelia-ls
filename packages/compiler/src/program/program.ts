@@ -71,6 +71,7 @@ interface CachedCompilation {
   readonly version: number;
   readonly contentHash: string;
   readonly optionsFingerprint: string;
+  readonly scopeId: ResourceScopeId | null;
 }
 
 interface CoreStageCacheEntry {
@@ -78,6 +79,7 @@ interface CoreStageCacheEntry {
   readonly version: number;
   readonly contentHash: string;
   readonly optionsFingerprint: string;
+  readonly scopeId: ResourceScopeId | null;
 }
 
 const STAGE_ORDER: readonly StageKey[] = [
@@ -296,8 +298,14 @@ export class DefaultTemplateProgram implements TemplateProgram {
     const snap = this.snapshot(canonical.uri);
     const startedAt = nowMs();
     const contentHash = hashSnapshotContent(snap);
+    const scopeId = resolveScopeId(this.options);
     const cached = this.compilationCache.get(canonical.uri);
-    if (cached && cached.optionsFingerprint === this.optionsFingerprint && cached.contentHash === contentHash) {
+    if (
+      cached &&
+      cached.scopeId === scopeId &&
+      cached.optionsFingerprint === this.optionsFingerprint &&
+      cached.contentHash === contentHash
+    ) {
       if (!this.dependencyIndex.has(canonical.uri)) {
         this.dependencyIndex.set(canonical.uri, buildDependencyRecord(cached.compilation, this.options));
       }
@@ -315,6 +323,27 @@ export class DefaultTemplateProgram implements TemplateProgram {
       this.emitCacheAccess("overlay", canonical.uri, snap.version, contentHash, stageReuse, true);
       this.emitMaterialization("overlay", canonical.uri, durationMs, stageReuse, true);
       return cached.compilation;
+    }
+    if (cached) {
+      if (cached.scopeId !== scopeId) {
+        debug.workspace("program.cache.scope-miss", {
+          uri: canonical.uri,
+          cachedScope: cached.scopeId ?? null,
+          currentScope: scopeId ?? null,
+        });
+      } else if (cached.optionsFingerprint !== this.optionsFingerprint) {
+        debug.workspace("program.cache.fingerprint-miss", {
+          uri: canonical.uri,
+          cachedFingerprint: cached.optionsFingerprint,
+          currentFingerprint: this.optionsFingerprint,
+        });
+      } else if (cached.contentHash !== contentHash) {
+        debug.workspace("program.cache.content-miss", {
+          uri: canonical.uri,
+          cachedHash: cached.contentHash,
+          currentHash: contentHash,
+        });
+      }
     }
 
     // NOTE: program-level cache is guarded by content hash + options fingerprint.
@@ -340,6 +369,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
       version: snap.version,
       contentHash,
       optionsFingerprint: this.optionsFingerprint,
+      scopeId,
     });
 
     const stageReuse = summarizeStageMeta(compilation.meta);
@@ -349,6 +379,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
       version: snap.version,
       contentHash,
       optionsFingerprint: this.optionsFingerprint,
+      scopeId,
     });
     this.dependencyIndex.set(canonical.uri, buildDependencyRecord(compilation, this.options));
     this.recordAccess(canonical.uri, "overlay", {
@@ -446,11 +477,22 @@ export class DefaultTemplateProgram implements TemplateProgram {
     const nextHints = normalizeFingerprintHints(rest);
     const nextOptions: ResolvedProgramOptions = { ...rest, fingerprints: nextHints };
     const nextFingerprint = computeProgramOptionsFingerprint(rest, nextHints);
+    debug.workspace("program.update", {
+      currentFingerprint: this.optionsFingerprint,
+      nextFingerprint,
+      cacheEntries: this.compilationCache.size,
+    });
 
     if (nextFingerprint === this.optionsFingerprint) {
       this.options = nextOptions;
       this.fingerprintHints = nextHints;
-      return { changed: false, invalidated: [], retained: Array.from(this.compilationCache.keys()), mode: "none" };
+      const retained = Array.from(this.compilationCache.keys());
+      debug.workspace("program.update.result", {
+        mode: "none",
+        invalidated: 0,
+        retained: retained.length,
+      });
+      return { changed: false, invalidated: [], retained, mode: "none" };
     }
 
     if (isGlobalOptionChange(this.options, nextOptions, this.fingerprintHints, nextHints)) {
@@ -459,6 +501,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
       this.optionsFingerprint = nextFingerprint;
       this.fingerprintHints = nextHints;
       this.invalidateAll();
+      debug.workspace("program.update.result", {
+        mode: "global",
+        invalidated: invalidated.length,
+        retained: 0,
+      });
       return { changed: true, invalidated, retained: [], mode: "global" };
     }
 
@@ -498,6 +545,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
     this.optionsFingerprint = nextFingerprint;
     this.fingerprintHints = nextHints;
 
+    debug.workspace("program.update.result", {
+      mode: "dependency",
+      invalidated: invalidated.length,
+      retained: retained.length,
+    });
     return { changed: true, invalidated, retained, mode: "dependency" };
   }
 
@@ -507,6 +559,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
   ): Partial<Record<StageKey, StageOutputs[StageKey]>> | null {
     const cached = this.coreCache.get(uri);
     if (!cached) return null;
+    if (cached.scopeId !== resolveScopeId(this.options)) return null;
     if (cached.optionsFingerprint !== this.optionsFingerprint) return null;
     if (cached.contentHash !== contentHash) return null;
     return {
@@ -594,6 +647,10 @@ export class DefaultTemplateProgram implements TemplateProgram {
   }
 
   private resetDocumentState(canonical: CanonicalDocumentUri, dropSource: boolean): void {
+    debug.workspace("program.reset", {
+      uri: canonical.uri,
+      dropSource,
+    });
     this.compilationCache.delete(canonical.uri);
     this.coreCache.delete(canonical.uri);
     this.accessTrace.delete(canonical.uri);

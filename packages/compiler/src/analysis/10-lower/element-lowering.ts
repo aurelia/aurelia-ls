@@ -36,6 +36,14 @@ import {
 } from "./lower-shared.js";
 import { resolveAttrDef, resolveElementDef } from "./resource-utils.js";
 
+function isPromiseBranchAttr(
+  parsed: ReturnType<AttributeParser["parse"]>,
+  catalog: ResourceCatalog,
+): boolean {
+  const controller = catalog.resources.controllers[parsed.target];
+  return controller?.linksTo === "promise" && controller.trigger.kind === "branch";
+}
+
 // Character codes for multi-binding parsing
 const Char_Backslash = 0x5C;  // \
 const Char_Colon = 0x3A;      // :
@@ -230,6 +238,7 @@ export function lowerElementAttributes(
 
     if (a.name === "as-element" || a.name === "containerless") continue;
     if (isControllerAttr(s, catalog)) continue;
+    if (isPromiseBranchAttr(s, catalog)) continue;
 
     // Config-driven command handling
     if (s.command) {

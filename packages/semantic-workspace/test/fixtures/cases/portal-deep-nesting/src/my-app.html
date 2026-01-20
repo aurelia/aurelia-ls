@@ -1,0 +1,15 @@
+<template>
+  <div promise.bind="loadTask">
+    <template then.bind="result">
+      <div if.bind="result.show" portal.bind="target">
+        <div repeat.for="item of result.items">
+          <span>${item.label}</span>
+        </div>
+      </div>
+    </template>
+    <template catch.bind="err">
+      <div>${err.message}</div>
+    </template>
+  </div>
+  <div id="portal-root"></div>
+</template>

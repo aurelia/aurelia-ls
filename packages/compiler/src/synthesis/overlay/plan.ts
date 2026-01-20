@@ -211,7 +211,8 @@ function collectOneLambdaPerExpression(
         // headers are mapped for scope only; no overlay lambda
         break;
 
-      case "IsProperty": {
+      case "IsProperty":
+      case "IsFunction": {
         const expr = renderExpressionFromAst(entry.ast);
         if (expr) {
           const lambda = `o => ${expr.code}`;

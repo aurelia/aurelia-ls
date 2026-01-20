@@ -9,6 +9,7 @@ __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)
 __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.flag);
 __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.matcher);
 __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.inputClass);
+__au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.doIt());
 __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.btnClass);
 __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.btn);
 __au$access<(Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.pressed);

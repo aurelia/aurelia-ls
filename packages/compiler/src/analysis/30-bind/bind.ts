@@ -460,7 +460,8 @@ function populateControllerFrame(
       });
 
       // Add alias symbol (the variable that receives the resolved/rejected value)
-      const aliasName = branch.local && branch.local.length > 0 ? branch.local : branchKind;
+      const defaultAlias = config.injects?.alias?.defaultName ?? branchKind;
+      const aliasName = branch.local && branch.local.length > 0 ? branch.local : defaultAlias;
       addUniqueSymbols(targetFrame, frames, [{
         kind: "alias",
         name: aliasName,

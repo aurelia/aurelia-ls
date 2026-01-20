@@ -397,3 +397,210 @@ describe("adapter contract (workspace-contract)", () => {
     await waitForDiagnostics(connection, child, getStderr, appLspUri, 10000);
   });
 });
+
+describe("adapter contract (template control scenarios)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let controllersUri: DocumentUri;
+  let controllersText: string;
+  let projectionUri: DocumentUri;
+  let projectionText: string;
+  let deepUri: DocumentUri;
+  let deepText: string;
+  let localsUri: DocumentUri;
+  let localsText: string;
+  let controllersLspUri: string;
+  let projectionLspUri: string;
+  let deepLspUri: string;
+  let localsLspUri: string;
+  let lookupText: LookupTextFn;
+  let lspDiagnosticsByUri: Map<string, unknown[]>;
+
+  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
+
+  const serverState: {
+    connection: ReturnType<typeof startServer>["connection"] | null;
+    child: ReturnType<typeof startServer>["child"] | null;
+    dispose: (() => void) | null;
+    getStderr: (() => string) | null;
+  } = { connection: null, child: null, dispose: null, getStderr: null };
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-control-scenarios"),
+      openTemplates: "none",
+      resolution: { stripSourcedNodes },
+    });
+    controllersUri = harness.openTemplate("src/components/controllers-branches.html");
+    projectionUri = harness.openTemplate("src/components/projection-demo.html");
+    deepUri = harness.openTemplate("src/components/deep-nesting.html");
+    localsUri = harness.openTemplate("src/components/locals-demo.html");
+
+    const controllers = harness.readText(controllersUri);
+    const projection = harness.readText(projectionUri);
+    const deep = harness.readText(deepUri);
+    const locals = harness.readText(localsUri);
+    if (!controllers || !projection || !deep || !locals) {
+      throw new Error("Expected template text for template-control-scenarios fixtures");
+    }
+    controllersText = controllers;
+    projectionText = projection;
+    deepText = deep;
+    localsText = locals;
+
+    lookupText = (uri) => harness.readText(uri) ?? null;
+
+    controllersLspUri = fileUri(harness.root, "src/components/controllers-branches.html");
+    projectionLspUri = fileUri(harness.root, "src/components/projection-demo.html");
+    deepLspUri = fileUri(harness.root, "src/components/deep-nesting.html");
+    localsLspUri = fileUri(harness.root, "src/components/locals-demo.html");
+
+    const { connection, child, dispose, getStderr } = startServer(harness.root);
+    serverState.connection = connection;
+    serverState.child = child;
+    serverState.dispose = dispose;
+    serverState.getStderr = getStderr;
+
+    await initialize(connection, child, getStderr, harness.root);
+
+    openDocument(connection, controllersLspUri, "html", controllersText);
+    const controllersDiags = await waitForDiagnostics(connection, child, getStderr, controllersLspUri, 10000);
+    openDocument(connection, projectionLspUri, "html", projectionText);
+    const projectionDiags = await waitForDiagnostics(connection, child, getStderr, projectionLspUri, 10000);
+    openDocument(connection, deepLspUri, "html", deepText);
+    const deepDiags = await waitForDiagnostics(connection, child, getStderr, deepLspUri, 10000);
+    openDocument(connection, localsLspUri, "html", localsText);
+    const localsDiags = await waitForDiagnostics(connection, child, getStderr, localsLspUri, 10000);
+
+    lspDiagnosticsByUri = new Map([
+      [controllersLspUri, controllersDiags as unknown[]],
+      [projectionLspUri, projectionDiags as unknown[]],
+      [deepLspUri, deepDiags as unknown[]],
+      [localsLspUri, localsDiags as unknown[]],
+    ]);
+  });
+
+  afterAll(async () => {
+    if (serverState.dispose) serverState.dispose();
+    if (serverState.child) {
+      serverState.child.kill("SIGKILL");
+      await waitForExit(serverState.child);
+    }
+  });
+
+  it("mirrors hover and definition results (controllers-branches)", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const pos = findPosition(controllersText, "promise.bind", 1);
+    const workspaceQuery = harness.workspace.query(controllersUri);
+
+    const workspaceHover = workspaceQuery.hover(pos);
+    const expectedHover = normalizeHover(mapWorkspaceHover(workspaceHover, lookupText));
+    const lspHover = await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: controllersLspUri },
+      position: pos,
+    });
+    expect(normalizeHover(lspHover)).toEqual(expectedHover);
+
+    const defPos = findPosition(controllersText, "modePrimary", 1);
+    const workspaceDefs = workspaceQuery.definition(defPos);
+    const expectedDefs = normalizeLocations(mapWorkspaceLocations(workspaceDefs, lookupText));
+    const lspDefs = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: controllersLspUri },
+      position: defPos,
+    });
+    expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
+  });
+
+  it("mirrors projection definitions", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const pos = findPosition(projectionText, "<my-card", 1);
+    const workspaceDefs = harness.workspace.query(projectionUri).definition(pos);
+    const expectedDefs = normalizeLocations(mapWorkspaceLocations(workspaceDefs, lookupText));
+    const lspDefs = await connection.sendRequest("textDocument/definition", {
+      textDocument: { uri: projectionLspUri },
+      position: pos,
+    });
+    expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
+  });
+
+  it("mirrors references and completions (locals-demo)", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const pos = findPosition(localsText, "item.name", 1);
+    const workspaceQuery = harness.workspace.query(localsUri);
+
+    const workspaceRefs = workspaceQuery.references(pos);
+    const expectedRefs = normalizeLocations(mapWorkspaceLocations(workspaceRefs, lookupText));
+    const lspRefs = await connection.sendRequest("textDocument/references", {
+      textDocument: { uri: localsLspUri },
+      position: pos,
+      context: { includeDeclaration: true },
+    });
+    expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
+
+    const completionPos = findPosition(localsText, "item.name", "item.".length);
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const lspCompletions = await connection.sendRequest("textDocument/completion", {
+      textDocument: { uri: localsLspUri },
+      position: completionPos,
+    });
+    expect(normalizeCompletions(lspCompletions)).toEqual(normalizeCompletions(expectedItems));
+  });
+
+  it("mirrors semantic tokens (deep-nesting)", async () => {
+    const connection = serverState.connection;
+    if (!connection) throw new Error("Missing LSP connection");
+
+    const workspaceTokens = harness.workspace.query(deepUri).semanticTokens();
+    const expected = encodeTokens(workspaceTokens, deepText);
+    const lspTokens = await connection.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri: deepLspUri },
+    });
+    const actual = (lspTokens as { data?: number[] } | null)?.data ?? [];
+    expect(actual).toEqual(expected);
+  });
+
+  it("mirrors diagnostics output", () => {
+    const expectedControllers = mapWorkspaceDiagnostics(controllersUri, harness.workspace.diagnostics(controllersUri), lookupText);
+    const expectedProjection = mapWorkspaceDiagnostics(projectionUri, harness.workspace.diagnostics(projectionUri), lookupText);
+    const expectedDeep = mapWorkspaceDiagnostics(deepUri, harness.workspace.diagnostics(deepUri), lookupText);
+    const expectedLocals = mapWorkspaceDiagnostics(localsUri, harness.workspace.diagnostics(localsUri), lookupText);
+
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(controllersLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedControllers),
+    );
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(projectionLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedProjection),
+    );
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(deepLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedDeep),
+    );
+    expect(normalizeDiagnostics(lspDiagnosticsByUri.get(localsLspUri) ?? [])).toEqual(
+      normalizeDiagnostics(expectedLocals),
+    );
+  });
+});
+
+describe.skip("adapter contract (binding shorthand syntax)", () => {
+  it.todo("mirrors workspace outputs for binding-shorthand-syntax fixture");
+});
+
+describe.skip("adapter contract (template local scopes)", () => {
+  it.todo("mirrors workspace outputs for template-local-scopes fixture");
+});
+
+describe.skip("adapter contract (portal chain)", () => {
+  it.todo("mirrors workspace outputs for portal-chain fixture");
+});
+
+describe.skip("adapter contract (portal deep nesting)", () => {
+  it.todo("mirrors workspace outputs for portal-deep-nesting fixture");
+});
+
+describe.skip("adapter contract (let edge cases)", () => {
+  it.todo("mirrors workspace outputs for let-edge-cases fixture");
+});

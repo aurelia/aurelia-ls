@@ -1,6 +1,6 @@
 {
   "targets": 4,
-  "expressions": 15,
+  "expressions": 16,
   "instructions": [
     {
       "kind": "controller",
@@ -180,7 +180,7 @@
         {
           "kind": "controller",
           "target": 0,
-          "name": "pending",
+          "name": "then",
           "template": 0,
           "bindings": [
             { "property": "value", "expr": "outerPromise", "mode": "toView" }
@@ -189,7 +189,7 @@
         {
           "kind": "controller",
           "target": 1,
-          "name": "then",
+          "name": "pending",
           "template": 1,
           "bindings": [
             { "property": "value", "expr": "outerPromise", "mode": "toView" }
@@ -197,13 +197,13 @@
         }
       ],
       "templates": [
-        { "name": "pending_12", "instructions": [] },
         {
-          "name": "then_13",
+          "name": "then_12",
           "instructions": [
             { "kind": "text", "target": 0, "text": "${outer.name}: ${inner.value}" }
           ]
-        }
+        },
+        { "name": "pending_13", "instructions": [] }
       ]
     }
   ]

@@ -188,6 +188,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
     const nextComponentHashes = buildComponentHashes(this.#templateIndex);
     const componentInvalidations = collectComponentInvalidations(prevTemplateIndex, prevComponentHashes, this.#templateIndex, nextComponentHashes);
+    if (componentInvalidations.length > 0) {
+      debug.workspace("component.invalidate", { uris: componentInvalidations });
+    }
     for (const uri of componentInvalidations) {
       this.#kernel.program.invalidateTemplate(uri);
     }
@@ -301,10 +304,13 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       },
       references: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
-        this.#syncTemplateOverlaysForReferences(canonical.uri);
         const local = this.#localReferencesAt(canonical.uri, pos);
         const resourceRefs = this.#resourceReferencesAt(canonical.uri, pos);
-        const baseRefs = base.references(pos);
+        let baseRefs: readonly WorkspaceLocation[] = [];
+        if (local.length === 0 && resourceRefs.length === 0) {
+          this.#syncTemplateOverlaysForReferences(canonical.uri);
+          baseRefs = base.references(pos);
+        }
         return mergeLocationsWithIdsRanked(canonical.uri, [
           { rank: 0, items: local },
           { rank: 1, items: resourceRefs },
@@ -316,7 +322,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         return base.completions(pos);
       },
       diagnostics: () => this.diagnostics(canonical.uri),
-      semanticTokens: () => this.#semanticTokens(canonical.uri),
+      semanticTokens: () => {
+        this.#ensureTemplateContext(canonical.uri);
+        return this.#semanticTokens(canonical.uri);
+      },
     };
   }
 

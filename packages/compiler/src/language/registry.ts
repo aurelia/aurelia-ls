@@ -259,7 +259,7 @@ export const BUILTIN_CONTROLLERS: Record<string, TemplateControllerDef> = {
     scope: 'overlay',
     cardinality: 'zero-one',
     linksTo: 'promise',
-    injects: { alias: { prop: 'value', defaultName: 'data' } },
+    injects: { alias: { prop: 'value', defaultName: 'then' } },
   }),
 
   catch: controller('catch', {
@@ -267,7 +267,7 @@ export const BUILTIN_CONTROLLERS: Record<string, TemplateControllerDef> = {
     scope: 'overlay',
     cardinality: 'zero-one',
     linksTo: 'promise',
-    injects: { alias: { prop: 'value', defaultName: 'error' } },
+    injects: { alias: { prop: 'value', defaultName: 'catch' } },
   }),
 };
 

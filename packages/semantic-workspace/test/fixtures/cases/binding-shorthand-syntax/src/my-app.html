@@ -1,0 +1,10 @@
+<template>
+  <input ref="inputRef" value.bind="message" class.bind="state">
+  <input :value="message" :class="state">
+  <button @click="onClick()"></button>
+  <button click.trigger="onClick()"></button>
+  <input @keyup.trigger="onKey($event)">
+  <input @keyup.delegate="onKey($event)">
+  <div class="status ${state}" if.bind="isActive">Active</div>
+  <span>${count}</span>
+</template>

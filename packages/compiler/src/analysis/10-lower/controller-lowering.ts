@@ -6,6 +6,7 @@ import type {
   BindingMode,
   ControllerBindableIR,
   ControllerBranchInfo,
+  DOMNode,
   ExprRef,
   HydrateTemplateControllerIR,
   InstructionIR,
@@ -20,7 +21,7 @@ import type {
 } from "../../model/ir.js";
 import { resolveControllerAttr } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Loc, P5Node, P5Template } from "./lower-shared.js";
-import { attrLoc, attrValueLoc, findAttr, parseRepeatTailProps, toBindingSource, toExprRef, toMode, toSpan, tryToInterpIR } from "./lower-shared.js";
+import { attrLoc, attrValueLoc, parseRepeatTailProps, toBindingSource, toExprRef, toMode, toSpan, tryToInterpIR } from "./lower-shared.js";
 import type { RowCollector } from "./template-builders.js";
 import {
   makeWrapperTemplate,
@@ -82,6 +83,23 @@ function buildSwitchBranchInfo(
   }
 
   return null;
+}
+
+/**
+ * Build promise branch info for then/catch/pending controllers.
+ * Uses the authored value as the alias when present.
+ */
+function buildPromiseBranchInfo(
+  config: ControllerConfig,
+  raw: string,
+): ControllerBranchInfo | null {
+  if (config.linksTo !== "promise") return null;
+  if (config.trigger.kind !== "branch") return null;
+  const name = config.name;
+  if (name !== "then" && name !== "catch" && name !== "pending") return null;
+  if (name === "pending") return { kind: "pending" };
+  const alias = raw.trim();
+  return { kind: name, ...(alias.length > 0 ? { local: alias } : {}) };
 }
 
 // -----------------------------------------------------------------------------
@@ -251,10 +269,10 @@ export function collectControllers(
     const { a, s, config } = candidate;
     const loc = attrLoc(el, a.name);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
+    const raw = a.value ?? "";
     const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, catalog.bindingCommands);
 
-    // Build switch branch info for case/default-case controllers
-    const branch = buildSwitchBranchInfo(config, proto.props);
+    const branch = buildPromiseBranchInfo(config, raw) ?? buildSwitchBranchInfo(config, proto.props);
 
     const nextLayer: HydrateTemplateControllerIR[] = [];
     for (const inner of current) {
@@ -368,7 +386,7 @@ function buildRightmostController(
   );
 
   // Build switch branch info for case/default-case controllers
-  const branch = buildSwitchBranchInfo(config, props);
+  const branch = buildPromiseBranchInfo(config, raw) ?? buildSwitchBranchInfo(config, props);
 
   return [createHydrateInstruction(name, def, props, locSpan, branch)];
 }
@@ -515,49 +533,82 @@ function injectPromiseBranchesIntoDef(
     const target = idMap.get(kid as P5Node);
     if (!target) continue;
 
-    // Remove branch marker from host row
     const hostRow = def.rows.find((r) => r.target === target);
+    const preservedInstructions = hostRow
+      ? hostRow.instructions.filter((ins) => !isBranchMarker(ins) && !isPromiseBranchController(ins, branch.kind))
+      : [];
+
+    // Remove branch marker/controller from host row
     if (hostRow) {
-      hostRow.instructions = hostRow.instructions.filter((ins) => !isBranchMarker(ins));
+      hostRow.instructions = hostRow.instructions.filter((ins) => !isBranchMarker(ins) && !isPromiseBranchController(ins, branch.kind));
+      if (preservedInstructions.length > 0) {
+        hostRow.instructions = [];
+      }
     }
 
-    // Build branch definition
     const branchOrigin: TemplateOrigin = {
       kind: "branch",
       host: { templateId: def.id, nodeId: target },
       branch: branch.kind,
     };
-    const branchDef = branch.isTemplate
-      ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin)
-      : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin);
+
+    const branchDef = preservedInstructions.length > 0
+      ? templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin)
+      : (branch.isTemplate
+          ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin)
+          : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin));
+
+    branchDef.origin = branchOrigin;
 
     for (const row of branchDef.rows) {
       row.instructions = row.instructions.filter((ins) => !isBranchMarker(ins));
     }
 
+    if (preservedInstructions.length > 0) {
+      const branchTarget = branchDef.dom.children[0]?.id ?? null;
+      if (branchTarget != null) {
+        const branchRow = branchDef.rows.find((r) => r.target === branchTarget);
+        if (branchRow) {
+          branchRow.instructions = preservedInstructions;
+        } else {
+          branchDef.rows.push({ target: branchTarget, instructions: preservedInstructions });
+        }
+      }
+    }
+
+    const descendants = collectBranchDescendantIds(kid, idMap);
+    if (descendants.size > 0) {
+      def.rows = def.rows.filter((row) => !descendants.has(row.target));
+      stripDomChildren(def.dom, target);
+    }
+
     // Build branch info
     const branchInfo = branch.kind === "pending"
       ? { kind: "pending" as const }
-      : { kind: branch.kind, local: branch.aliasVar ?? branch.kind };
+      : { kind: branch.kind, ...(branch.aliasVar != null ? { local: branch.aliasVar } : {}) };
 
-    def.rows.push({
-      target,
-      instructions: [
-        {
-          type: "hydrateTemplateController",
-          res: branch.kind,  // Use actual branch name (then/catch/pending), not "promise"
-          def: branchDef,
-          props: [valueProp],
-          alias: branch.kind === "pending" ? null : branch.kind,
-          branch: branchInfo,
-          containerless: false,
-          loc: toSpan(
-            branch.loc ?? (branch.isTemplate ? (kid as P5Template).sourceCodeLocation : (kid as P5Element).sourceCodeLocation),
-            table.source
-          ),
-        },
-      ],
-    });
+    const branchInstruction: HydrateTemplateControllerIR = {
+      type: "hydrateTemplateController",
+      res: branch.kind,  // Use actual branch name (then/catch/pending), not "promise"
+      def: branchDef,
+      props: [valueProp],
+      alias: branch.kind === "pending" ? null : branch.kind,
+      branch: branchInfo,
+      containerless: false,
+      loc: toSpan(
+        branch.loc ?? (branch.isTemplate ? (kid as P5Template).sourceCodeLocation : (kid as P5Element).sourceCodeLocation),
+        table.source
+      ),
+    };
+
+    if (hostRow) {
+      hostRow.instructions.push(branchInstruction);
+    } else {
+      def.rows.push({
+        target,
+        instructions: [branchInstruction],
+      });
+    }
   }
 }
 
@@ -571,49 +622,15 @@ type PromiseBranchInfo = {
 function detectPromiseBranch(kid: P5Element, attrParser: AttributeParser): PromiseBranchInfo | null {
   const isTemplate = kid.nodeName.toLowerCase() === "template";
 
-  if (isTemplate) {
-    const thenAttr = findAttr(kid, "then");
-    if (thenAttr) {
-      return {
-        kind: "then",
-        aliasVar: thenAttr.value?.length ? thenAttr.value : "then",
-        loc: (kid as P5Template).sourceCodeLocation,
-        isTemplate: true,
-      };
-    }
-
-    const catchAttr = findAttr(kid, "catch");
-    if (catchAttr) {
-      return {
-        kind: "catch",
-        aliasVar: catchAttr.value?.length ? catchAttr.value : "catch",
-        loc: (kid as P5Template).sourceCodeLocation,
-        isTemplate: true,
-      };
-    }
-
-    const pendingAttr = findAttr(kid, "pending");
-    if (pendingAttr) {
-      return {
-        kind: "pending",
-        aliasVar: null,
-        loc: (kid as P5Template).sourceCodeLocation,
-        isTemplate: true,
-      };
-    }
-
-    return null;
-  }
-
-  // Non-template element
   for (const a of kid.attrs ?? []) {
     const parsed = attrParser.parse(a.name, a.value ?? "");
     if (parsed.target === "then" || parsed.target === "catch" || parsed.target === "pending") {
+      const raw = (a.value ?? "").trim();
       return {
         kind: parsed.target,
-        aliasVar: parsed.target === "pending" ? null : (a.value?.length ? a.value : parsed.target),
+        aliasVar: parsed.target === "pending" ? null : (raw.length ? raw : null),
         loc: attrLoc(kid, a.name),
-        isTemplate: false,
+        isTemplate,
       };
     }
   }
@@ -631,6 +648,45 @@ function isBranchMarker(ins: InstructionIR): boolean {
   return false;
 }
 
+function isPromiseBranchController(ins: InstructionIR, kind: PromiseBranchInfo["kind"]): boolean {
+  if (ins.type !== "hydrateTemplateController") return false;
+  return ins.res === kind;
+}
+
 function isElementNode(n: P5Node): n is P5Element {
   return "tagName" in n;
+}
+
+function collectBranchDescendantIds(
+  node: P5Element,
+  idMap: WeakMap<P5Node, NodeId>,
+): Set<NodeId> {
+  const out = new Set<NodeId>();
+  const visit = (n: P5Node) => {
+    const id = idMap.get(n);
+    if (id != null) out.add(id);
+    if (isElementNode(n)) {
+      const children = n.nodeName.toLowerCase() === "template"
+        ? (n as P5Template).content.childNodes ?? []
+        : n.childNodes ?? [];
+      for (const child of children) visit(child);
+    }
+  };
+  const rootChildren = node.nodeName.toLowerCase() === "template"
+    ? (node as P5Template).content.childNodes ?? []
+    : node.childNodes ?? [];
+  for (const child of rootChildren) visit(child);
+  return out;
+}
+
+function stripDomChildren(node: DOMNode, target: NodeId): boolean {
+  if (node.id === target && (node.kind === "element" || node.kind === "template")) {
+    node.children = [];
+    return true;
+  }
+  if (node.kind !== "element" && node.kind !== "template") return false;
+  for (const child of node.children ?? []) {
+    if (stripDomChildren(child, target)) return true;
+  }
+  return false;
 }

@@ -222,6 +222,14 @@ export function collectExprMemberSegments(
         }
         return parentPath;
       }
+      case "BindingBehavior":
+        walk(node.expression, base, acc, inheritedPath);
+        for (const arg of node.args ?? []) walk(arg, base, acc, undefined);
+        return inheritedPath;
+      case "ValueConverter":
+        walk(node.expression, base, acc, inheritedPath);
+        for (const arg of node.args ?? []) walk(arg, base, acc, undefined);
+        return inheritedPath;
       case "CallScope":
         for (const a of node.args ?? []) walk(a, base, acc, undefined);
         return walk({ $kind: "AccessScope", name: node.name, ancestor: node.ancestor, span: node.name.span }, base, acc, inheritedPath);

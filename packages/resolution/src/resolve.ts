@@ -653,6 +653,9 @@ function scopeIdForResource(
   resourceGraph: ResourceGraph,
   componentPath: NormalizedPath,
 ): ResourceScopeId {
+  const componentScope = scopeIdForComponent(componentPath, resourceGraph);
+  if (componentScope !== resourceGraph.root) return componentScope;
+
   const localOwners: NormalizedPath[] = [];
   for (const site of registration.sites) {
     if (site.resourceRef.kind !== "resolved") continue;
@@ -665,7 +668,7 @@ function scopeIdForResource(
     const localScopeId = `local:${owner}` as ResourceScopeId;
     if (localScopeId in resourceGraph.scopes) return localScopeId;
   }
-  return scopeIdForComponent(componentPath, resourceGraph);
+  return componentScope;
 }
 
 /**

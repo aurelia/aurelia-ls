@@ -68,18 +68,22 @@ export function collectSemanticTokens(
   syntax: TemplateSyntaxRegistry,
   attrParser?: AttributeParser,
 ): WorkspaceToken[] {
-  const template = compilation.linked.templates[0];
-  if (!template) return [];
+  const templates = compilation.linked.templates;
+  if (!templates.length) return [];
   const parser = attrParser ?? createAttributeParserFromRegistry(syntax);
 
-  const nodeMap = buildNodeMap(template.dom);
-  const attrIndex = buildAttrIndex(template.dom);
-  const elementIndex = buildElementIndex(template.dom);
-  const elementTokens = extractElementTokens(template.rows, nodeMap);
+  const { attrIndex, elementIndex } = buildTemplateIndexes(templates);
+  const elementTokens: WorkspaceToken[] = [];
+  const commandTokens: WorkspaceToken[] = [];
+  const delimiterTokens: WorkspaceToken[] = [];
+  for (const tmpl of templates) {
+    const nodeMap = tmpl.dom ? buildNodeMap(tmpl.dom) : new Map<string, DOMNode>();
+    elementTokens.push(...extractElementTokens(tmpl.rows, nodeMap));
+    commandTokens.push(...extractBindingCommandTokens(tmpl.rows, syntax, parser, attrIndex, elementIndex));
+    delimiterTokens.push(...extractInterpolationDelimiterTokens(tmpl.rows));
+  }
   const exprTokens = extractExpressionTokens(compilation.exprTable ?? [], compilation.exprSpans ?? new Map());
-  const commandTokens = extractBindingCommandTokens(template.rows, syntax, parser, attrIndex, elementIndex);
-  const delimiterTokens = extractInterpolationDelimiterTokens(template.rows);
-  const metaTokens = extractMetaElementTokens(template.templateMeta);
+  const metaTokens = extractMetaElementTokens(templates[0]?.templateMeta);
 
   const all = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens, ...metaTokens];
   all.sort((a, b) => {
@@ -98,6 +102,19 @@ export function collectSemanticTokens(
     deduped.push(token);
   }
   return deduped;
+}
+
+function buildTemplateIndexes(
+  templates: ReadonlyArray<TemplateCompilation["linked"]["templates"][number]>,
+): { attrIndex: AttrIndexEntry[]; elementIndex: ElementNode[] } {
+  const attrIndex: AttrIndexEntry[] = [];
+  const elementIndex: ElementNode[] = [];
+  for (const tmpl of templates) {
+    if (!tmpl?.dom) continue;
+    attrIndex.push(...buildAttrIndex(tmpl.dom));
+    elementIndex.push(...buildElementIndex(tmpl.dom));
+  }
+  return { attrIndex, elementIndex };
 }
 
 function buildNodeMap(root: DOMNode): Map<string, DOMNode> {
@@ -895,7 +912,12 @@ function resolveTargetSpan(
   analysis: ReturnType<typeof analyzeAttributeName>,
 ): { start: number; end: number } | null {
   if (analysis.targetSpan) return analysis.targetSpan;
-  if (analysis.syntax.command) return null;
+  if (analysis.syntax.command) {
+    if (analysis.syntax.target && analysis.syntax.target === attrName) {
+      return { start: 0, end: attrName.length };
+    }
+    return null;
+  }
   if (!attrName) return null;
   return { start: 0, end: attrName.length };
 }
