@@ -72,6 +72,10 @@ describe("workspace references (workspace-contract)", () => {
   let modelsText: string;
   let viewModelUri: string;
   let viewModelText: string;
+  let inlineComponentUri: string;
+  let inlineComponentText: string;
+  let inlineTemplateUri: string;
+  let inlineTemplateText: string;
 
   beforeAll(async () => {
     harness = await createWorkspaceHarness({
@@ -97,6 +101,21 @@ describe("workspace references (workspace-contract)", () => {
     detailText = detail;
     modelsText = models;
     viewModelText = viewModel;
+
+    const inlineEntry = harness.inlineTemplates.find((entry) =>
+      entry.componentPath.endsWith("inline-note.ts"),
+    );
+    if (!inlineEntry) {
+      throw new Error("Expected inline template entry for inline-note.ts");
+    }
+    inlineTemplateUri = inlineEntry.uri;
+    inlineTemplateText = inlineEntry.content ?? "";
+    inlineComponentUri = harness.toDocumentUri(inlineEntry.componentPath);
+    const inlineComponent = harness.readText(inlineComponentUri);
+    if (!inlineComponent || !inlineTemplateText) {
+      throw new Error("Expected inline template content for inline-note");
+    }
+    inlineComponentText = inlineComponent;
   });
 
   it("finds <let> references", () => {
@@ -132,6 +151,26 @@ describe("workspace references (workspace-contract)", () => {
     const refs = query.references(findPosition(viewModelText, "viewMode:", 1));
     const offsets = findOffsets(appText, /\bviewMode\b/g);
     expectReferencesAtOffsets(refs, appUri, offsets);
+  });
+
+  it("finds template call references when starting from TypeScript symbols", () => {
+    const query = harness.workspace.query(viewModelUri);
+    const resetRefs = query.references(findPosition(viewModelText, "resetFilters()", 1));
+    const resetOffsets = findOffsets(appText, /\bresetFilters\b/g);
+    expectReferencesAtOffsets(resetRefs, appUri, resetOffsets);
+
+    const selectRefs = query.references(findPosition(viewModelText, "selectDevice(", 1));
+    const selectOffsets = findOffsets(appText, /\bselectDevice\b/g);
+    expectReferencesAtOffsets(selectRefs, appUri, selectOffsets);
+  });
+
+  it("finds inline template references when starting from TypeScript symbols", () => {
+    const query = harness.workspace.query(inlineComponentUri);
+    const refs = query.references(
+      findPosition(inlineComponentText, "@bindable message", "@bindable ".length + 1),
+    );
+    const offsets = findOffsets(inlineTemplateText, /\bmessage\b/g);
+    expectReferencesAtOffsets(refs, inlineTemplateUri, offsets);
   });
 });
 
