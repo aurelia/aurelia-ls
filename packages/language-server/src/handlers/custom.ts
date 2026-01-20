@@ -7,6 +7,7 @@
 import type { Position } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
+import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 
 type MaybeUriParam = { uri?: string } | string | null;
 
@@ -100,6 +101,15 @@ export function handleDumpState(ctx: ServerContext) {
   }
 }
 
+export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
+  try {
+    return buildCapabilities(ctx);
+  } catch (e) {
+    ctx.logger.error(`[capabilities] failed: ${formatError(e)}`);
+    return buildCapabilitiesFallback();
+  }
+}
+
 /**
  * Registers all custom Aurelia request handlers on the connection.
  */
@@ -109,4 +119,5 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/queryAtPosition", (params: { uri: string; position: Position }) => handleQueryAtPosition(ctx, params));
   ctx.connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => handleGetSsr(ctx, params));
   ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
+  ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
 }

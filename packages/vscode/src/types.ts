@@ -68,7 +68,68 @@ export interface SsrResponse {
 }
 
 export interface CapabilitiesResponse {
-  version?: string;
-  features?: Record<string, boolean>;
-  data?: Record<string, unknown>;
+  schema?: "aurelia.capabilities/1";
+  server?: {
+    version?: string;
+    workspaceVersion?: string;
+  };
+  contracts?: {
+    query?: { version?: string };
+    refactor?: { version?: string };
+    diagnostics?: { version?: string; taxonomy?: string };
+    semanticTokens?: { version?: string; legendHash?: string };
+    presentation?: { version?: string };
+    mapping?: { version?: string };
+  };
+  workspace?: {
+    meta?: {
+      fingerprint?: string;
+      configHash?: string;
+      docCount?: number;
+    };
+    artifacts?: {
+      semantics?: boolean;
+      catalog?: boolean;
+      syntax?: boolean;
+      resourceGraph?: boolean;
+      provenance?: boolean;
+      semanticSnapshot?: boolean;
+      apiSurface?: boolean;
+      featureUsage?: boolean;
+      registrationPlan?: boolean;
+    };
+    indexes?: {
+      resourceIndex?: boolean;
+      symbolGraph?: boolean;
+      usageIndex?: boolean;
+      scopeIndex?: boolean;
+      templateIndex?: boolean;
+    };
+  };
+  lsp?: {
+    optional?: {
+      documentSymbol?: boolean;
+      workspaceSymbol?: boolean;
+      documentHighlight?: boolean;
+      selectionRange?: boolean;
+      linkedEditingRange?: boolean;
+      foldingRange?: boolean;
+      inlayHint?: boolean;
+      codeLens?: boolean;
+      documentLink?: boolean;
+      callHierarchy?: boolean;
+      documentColor?: boolean;
+      semanticTokensDelta?: boolean;
+    };
+  };
+  custom?: {
+    overlay?: boolean;
+    mapping?: boolean;
+    queryAtPosition?: boolean;
+    ssr?: boolean;
+    dumpState?: boolean;
+  };
+  notifications?: {
+    overlayReady?: boolean;
+  };
 }
