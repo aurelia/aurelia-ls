@@ -69,6 +69,9 @@ function parseDebugEnv(): Set<string> {
 /** Enabled channels (parsed once at module load, can be refreshed) */
 let enabledChannels = parseDebugEnv();
 
+/** Additional channels created outside of this module */
+const extraChannels = new Map<string, DebugChannel>();
+
 /** Check if a channel is enabled */
 function isEnabled(channel: string): boolean {
   return enabledChannels.has("*") || enabledChannels.has(channel.toLowerCase());
@@ -186,6 +189,20 @@ function createChannel(name: string): DebugChannel {
 }
 
 /**
+ * Get or create an extra debug channel by name.
+ * Channels are refreshed when refreshDebugChannels() is called.
+ */
+export function getDebugChannel(name: string): DebugChannel {
+  const key = name.trim().toLowerCase();
+  if (!key) return () => {};
+  const existing = extraChannels.get(key);
+  if (existing) return existing;
+  const channel = createChannel(key);
+  extraChannels.set(key, channel);
+  return channel;
+}
+
+/**
  * Refresh debug channels (re-reads environment variable).
  * Call this if AURELIA_DEBUG changes at runtime.
  */
@@ -203,6 +220,9 @@ export function refreshDebugChannels(): void {
   debug.transform = createChannel("transform");
   debug.resolution = createChannel("resolution");
   debug.vite = createChannel("vite");
+  for (const name of extraChannels.keys()) {
+    extraChannels.set(name, createChannel(name));
+  }
 }
 
 /**

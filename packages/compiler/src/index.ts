@@ -275,6 +275,7 @@ export {
 // === Debug Channels ===
 export {
   debug,
+  getDebugChannel,
   refreshDebugChannels,
   configureDebug,
   isDebugEnabled,

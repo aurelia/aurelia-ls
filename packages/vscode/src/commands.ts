@@ -1,16 +1,9 @@
 import type { ExtensionContext, TextEditor } from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node.js";
+import type { LspFacade } from "./core/lsp-facade.js";
+import type { ObservabilityService } from "./core/observability.js";
 import { type VirtualDocProvider } from "./virtual-docs.js";
-import { type ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-import type {
-  MappingEntry,
-  MappingResponse,
-  OverlayBuildArtifactShape,
-  OverlayResponse,
-  SsrResponse,
-  TemplateInfoResponse,
-} from "./types.js";
+import type { MappingEntry, OverlayBuildArtifactShape, OverlayResponse } from "./types.js";
 
 function activeEditor(vscode: VscodeApi): TextEditor | null {
   return vscode.window.activeTextEditor ?? null;
@@ -42,22 +35,29 @@ function formatCalls(calls: NonNullable<OverlayBuildArtifactShape["calls"]>): st
 
 export function registerCommands(
   context: ExtensionContext,
-  client: LanguageClient,
+  lsp: LspFacade,
   virtualDocs: VirtualDocProvider,
-  logger: ClientLogger,
+  observability: ObservabilityService,
   vscode: VscodeApi = getVscodeApi(),
 ) {
+  const logger = observability.logger.child("commands");
+  const errors = observability.errors;
+  const trace = observability.trace;
+
+  const run = <T>(id: string, fn: () => Promise<T>) =>
+    errors.capture(`command.${id}`, () => trace.spanAsync(`command.${id}`, fn), { context: { command: id } });
+
   context.subscriptions.push(
-    vscode.commands.registerCommand("aurelia.showOverlay", async () => {
-      const editor = activeEditor(vscode);
-      if (!editor) {
-        vscode.window.showInformationMessage("No active editor");
-        return;
-      }
-      const uri = editor.document.uri.toString();
-      logger.log(`[client] aurelia.showOverlay request for ${uri}`);
-      try {
-        const overlay = extractOverlayArtifact(await client.sendRequest<OverlayResponse>("aurelia/getOverlay", { uri }));
+    vscode.commands.registerCommand("aurelia.showOverlay", () => {
+      void run("showOverlay", async () => {
+        const editor = activeEditor(vscode);
+        if (!editor) {
+          vscode.window.showInformationMessage("No active editor");
+          return;
+        }
+        const uri = editor.document.uri.toString();
+        logger.info("showOverlay.request", { uri });
+        const overlay = extractOverlayArtifact(await lsp.getOverlay(uri));
         if (!overlay) {
           vscode.window.showInformationMessage("No overlay found for this document");
           return;
@@ -70,25 +70,21 @@ export function registerCommands(
         virtualDocs.update(vUri, overlay.overlay.text);
         const doc = await vscode.workspace.openTextDocument(vUri);
         await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        logger.error(`[client] aurelia.showOverlay error: ${message}`);
-        vscode.window.showErrorMessage(`Show Generated Overlay failed: ${message}`);
-      }
+      });
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("aurelia.showOverlayMapping", async () => {
-      const editor = activeEditor(vscode);
-      if (!editor) {
-        vscode.window.showInformationMessage("No active editor");
-        return;
-      }
-      const uri = editor.document.uri.toString();
-      logger.log(`[client] aurelia.showOverlayMapping request for ${uri}`);
-      try {
-        const mapping = await client.sendRequest<MappingResponse | null>("aurelia/getMapping", { uri });
+    vscode.commands.registerCommand("aurelia.showOverlayMapping", () => {
+      void run("showOverlayMapping", async () => {
+        const editor = activeEditor(vscode);
+        if (!editor) {
+          vscode.window.showInformationMessage("No active editor");
+          return;
+        }
+        const uri = editor.document.uri.toString();
+        logger.info("showOverlayMapping.request", { uri });
+        const mapping = await lsp.getMapping(uri);
         const overlayLabel = mapping?.overlayPath ?? "<overlay unavailable>";
         const mappingEntries = mapping?.mapping?.entries ?? [];
         if (mappingEntries.length) {
@@ -98,7 +94,7 @@ export function registerCommands(
           return;
         }
 
-        const overlay = extractOverlayArtifact(await client.sendRequest<OverlayResponse>("aurelia/getOverlay", { uri }));
+        const overlay = extractOverlayArtifact(await lsp.getOverlay(uri));
         if (overlay?.calls?.length) {
           const body = [`Overlay: ${overlay.overlay.path}`, "", formatCalls(overlay.calls)].join("\n");
           const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Overlay Mapping\n\n${body}` });
@@ -107,26 +103,22 @@ export function registerCommands(
         }
 
         vscode.window.showInformationMessage("No overlay mapping available for this document");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        logger.error(`[client] aurelia.showOverlayMapping error: ${message}`);
-        vscode.window.showErrorMessage(`Show Overlay Mapping failed: ${message}`);
-      }
+      });
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("aurelia.showTemplateInfo", async () => {
-      const editor = activeEditor(vscode);
-      if (!editor) {
-        vscode.window.showInformationMessage("No active editor");
-        return;
-      }
-      const uri = editor.document.uri.toString();
-      const position = editor.selection.active;
-      logger.log(`[client] aurelia.showTemplateInfo request for ${uri} @ ${position.line}:${position.character}`);
-      try {
-        const result = await client.sendRequest<TemplateInfoResponse | null>("aurelia/queryAtPosition", { uri, position });
+    vscode.commands.registerCommand("aurelia.showTemplateInfo", () => {
+      void run("showTemplateInfo", async () => {
+        const editor = activeEditor(vscode);
+        if (!editor) {
+          vscode.window.showInformationMessage("No active editor");
+          return;
+        }
+        const uri = editor.document.uri.toString();
+        const position = editor.selection.active;
+        logger.info("showTemplateInfo.request", { uri, line: position.line, character: position.character });
+        const result = await lsp.queryAtPosition(uri, position);
         if (!result) {
           vscode.window.showInformationMessage("No query info available for this document");
           return;
@@ -140,25 +132,21 @@ export function registerCommands(
         ];
         const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: `# Template Info\n\n${lines.join("\n")}` });
         await vscode.window.showTextDocument(doc, { preview: true });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        logger.error(`[client] aurelia.showTemplateInfo error: ${message}`);
-        vscode.window.showErrorMessage(`Show Template Info failed: ${message}`);
-      }
+      });
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("aurelia.showSsrPreview", async () => {
-      const editor = activeEditor(vscode);
-      if (!editor) {
-        vscode.window.showInformationMessage("No active editor");
-        return;
-      }
-      const uri = editor.document.uri.toString();
-      logger.log(`[client] aurelia.showSsrPreview request for ${uri}`);
-      try {
-        const response = await client.sendRequest<SsrResponse>("aurelia/getSsr", { uri });
+    vscode.commands.registerCommand("aurelia.showSsrPreview", () => {
+      void run("showSsrPreview", async () => {
+        const editor = activeEditor(vscode);
+        if (!editor) {
+          vscode.window.showInformationMessage("No active editor");
+          return;
+        }
+        const uri = editor.document.uri.toString();
+        logger.info("showSsrPreview.request", { uri });
+        const response = await lsp.getSsr(uri);
         const ssr = response?.artifact ?? response?.ssr ?? null;
         if (!ssr) {
           vscode.window.showInformationMessage("No SSR output for this document");
@@ -168,26 +156,19 @@ export function registerCommands(
         await vscode.window.showTextDocument(htmlDoc, { preview: true });
         const manifestDoc = await vscode.workspace.openTextDocument({ language: "json", content: ssr.manifest.text });
         await vscode.window.showTextDocument(manifestDoc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
-        logger.log(`[client] SSR preview opened: ${ssr.html.path} / ${ssr.manifest.path}`);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        logger.error(`[client] aurelia.showSsrPreview error: ${message}`);
-        vscode.window.showErrorMessage(`Show SSR Preview failed: ${message}`);
-      }
+        logger.info("showSsrPreview.opened", { html: ssr.html.path, manifest: ssr.manifest.path });
+      });
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("aurelia.dumpState", async () => {
-      logger.log("[client] aurelia.dumpState");
-      try {
-        const state = await client.sendRequest<unknown>("aurelia/dumpState");
-        logger.log(JSON.stringify(state, null, 2));
+    vscode.commands.registerCommand("aurelia.dumpState", () => {
+      void run("dumpState", async () => {
+        logger.info("dumpState.request");
+        const state = await lsp.dumpState();
+        logger.write("debug", JSON.stringify(state, null, 2), undefined, { raw: true, force: true });
         vscode.window.showInformationMessage("Dumped state to 'Aurelia LS (Client)' output.");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        logger.error(`[client] dumpState error: ${message}`);
-      }
+      });
     }),
   );
 }

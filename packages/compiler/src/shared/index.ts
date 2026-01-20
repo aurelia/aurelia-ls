@@ -111,6 +111,7 @@ export {
 // Debug Channels (decision/data visibility)
 export {
   debug,
+  getDebugChannel,
   refreshDebugChannels,
   configureDebug,
   isDebugEnabled,

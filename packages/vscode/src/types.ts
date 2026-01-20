@@ -66,3 +66,9 @@ export interface SsrResponse {
   artifact?: SsrArtifactShape | null;
   ssr?: SsrArtifactShape | null;
 }
+
+export interface CapabilitiesResponse {
+  version?: string;
+  features?: Record<string, boolean>;
+  data?: Record<string, unknown>;
+}

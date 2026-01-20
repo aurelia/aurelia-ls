@@ -26,7 +26,19 @@
   },
   "license": "MIT",
   "activationEvents": [
-    "onLanguage:html"
+    "onLanguage:html",
+    "onCommand:aurelia.showOverlay",
+    "onCommand:aurelia.showOverlayMapping",
+    "onCommand:aurelia.showTemplateInfo",
+    "onCommand:aurelia.showSsrPreview",
+    "onCommand:aurelia.dumpState",
+    "onCommand:aurelia.observability.menu",
+    "onCommand:aurelia.observability.toggleDebug",
+    "onCommand:aurelia.observability.toggleTrace",
+    "onCommand:aurelia.observability.setDebugChannels",
+    "onCommand:aurelia.observability.setLogLevel",
+    "onCommand:aurelia.observability.setTraceMinDuration",
+    "onCommand:aurelia.observability.openOutput"
   ],
   "contributes": {
     "snippets": [
@@ -39,8 +51,136 @@
       { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
       { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
       { "command": "aurelia.showTemplateInfo", "title": "Aurelia: Show Template Info" },
-      { "command": "aurelia.dumpState", "title": "Aurelia: Dump Server State" }
-    ]
+      { "command": "aurelia.showSsrPreview", "title": "Aurelia: Show SSR Preview" },
+      { "command": "aurelia.dumpState", "title": "Aurelia: Dump Server State" },
+      { "command": "aurelia.observability.menu", "title": "Aurelia: Observability Menu" },
+      { "command": "aurelia.observability.toggleDebug", "title": "Aurelia: Toggle Debug Channels" },
+      { "command": "aurelia.observability.toggleTrace", "title": "Aurelia: Toggle Trace" },
+      { "command": "aurelia.observability.setDebugChannels", "title": "Aurelia: Set Debug Channels" },
+      { "command": "aurelia.observability.setLogLevel", "title": "Aurelia: Set Log Level" },
+      { "command": "aurelia.observability.setTraceMinDuration", "title": "Aurelia: Set Trace Min Duration" },
+      { "command": "aurelia.observability.openOutput", "title": "Aurelia: Show Output Channel" }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Aurelia",
+      "properties": {
+        "aurelia.features.commands": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Aurelia command registrations."
+        },
+        "aurelia.features.debugCommands": {
+          "type": "boolean",
+          "default": false,
+          "description": "Expose developer-only Aurelia commands."
+        },
+        "aurelia.features.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Aurelia status bar UI."
+        },
+        "aurelia.features.views": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Aurelia views and tree panels."
+        },
+        "aurelia.features.inline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline Aurelia annotations."
+        },
+        "aurelia.features.diagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Aurelia diagnostics UI enhancements."
+        },
+        "aurelia.observability.logging.level": {
+          "type": "string",
+          "enum": ["trace", "debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Minimum log level for client output."
+        },
+        "aurelia.observability.logging.format": {
+          "type": "string",
+          "enum": ["pretty", "json"],
+          "default": "pretty",
+          "description": "Log output format."
+        },
+        "aurelia.observability.logging.timestamps": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include timestamps in client logs."
+        },
+        "aurelia.observability.debug.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable structured debug channels for Aurelia tooling."
+        },
+        "aurelia.observability.debug.channels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Debug channels to enable (comma-separated if entered as a string)."
+        },
+        "aurelia.observability.debug.format": {
+          "type": "string",
+          "enum": ["pretty", "json"],
+          "default": "pretty",
+          "description": "Debug output format."
+        },
+        "aurelia.observability.debug.timestamps": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include timestamps in debug output."
+        },
+        "aurelia.observability.trace.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable trace spans for client operations."
+        },
+        "aurelia.observability.trace.minDurationMs": {
+          "type": "number",
+          "default": 0,
+          "description": "Minimum duration for trace spans to be logged (ms)."
+        },
+        "aurelia.observability.trace.logEvents": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log trace events in addition to spans."
+        },
+        "aurelia.observability.trace.logAttributes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Log trace attributes for spans and events."
+        },
+        "aurelia.observability.errors.notify": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show error notifications for client failures."
+        },
+        "aurelia.observability.errors.showOutput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reveal the Aurelia output channel on errors."
+        },
+        "aurelia.observability.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Aurelia observability status bar item."
+        },
+        "aurelia.observability.statusBar.alwaysVisible": {
+          "type": "boolean",
+          "default": false,
+          "description": "Keep the observability status bar visible even when debug/trace are off."
+        },
+        "aurelia.experimental.ai": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable experimental AI features."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run bundle",
@@ -51,6 +191,7 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
+    "@aurelia-ls/compiler": "workspace:*",
     "typescript": "^5.5.4",
     "vscode-languageclient": "^9.0.1"
   },

@@ -43,19 +43,35 @@ export class AureliaLanguageClient {
   #client: LanguageClient | undefined;
   #logger: ClientLogger;
   #vscode: VscodeApi;
+  #serverEnv: Record<string, string> | null = null;
 
   constructor(logger: ClientLogger, vscode: VscodeApi = getVscodeApi()) {
     this.#logger = logger;
     this.#vscode = vscode;
   }
 
-  async start(context: ExtensionContext): Promise<LanguageClient> {
+  setServerEnv(env: Record<string, string> | null): void {
+    this.#serverEnv = env;
+  }
+
+  async start(context: ExtensionContext, options: { serverEnv?: Record<string, string> } = {}): Promise<LanguageClient> {
     if (this.#client) return this.#client;
     const serverModule = await resolveServerModule(context, this.#logger, this.#vscode);
+    if (options.serverEnv) {
+      this.#serverEnv = options.serverEnv;
+    }
+    const serverEnv = options.serverEnv ?? this.#serverEnv;
+    const execOptions = serverEnv ? { env: { ...process.env, ...serverEnv } } : undefined;
 
     const serverOptions: ServerOptions = {
-      run: { module: serverModule, transport: TransportKind.ipc },
-      debug: { module: serverModule, transport: TransportKind.ipc, options: { execArgv: ["--inspect=6009"] } },
+      run: { module: serverModule, transport: TransportKind.ipc, options: execOptions },
+      debug: {
+        module: serverModule,
+        transport: TransportKind.ipc,
+        options: execOptions
+          ? { ...execOptions, execArgv: ["--inspect=6009"] }
+          : { execArgv: ["--inspect=6009"] },
+      },
     };
 
     const fileEvents = [
@@ -72,10 +88,26 @@ export class AureliaLanguageClient {
       synchronize: { fileEvents },
     };
 
-    this.#client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
-    await this.#client.start();
+    const client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
+    await client.start();
+    this.#client = client;
     this.#logger.log("[client] started");
-    return this.#client;
+    return client;
+  }
+
+  async restart(context: ExtensionContext, options: { serverEnv?: Record<string, string> } = {}): Promise<LanguageClient> {
+    const existing = this.#client;
+    this.#client = undefined;
+    try {
+      const started = await this.start(context, options);
+      if (existing) {
+        try { await existing.stop(); } catch {}
+      }
+      return started;
+    } catch (err) {
+      this.#client = existing;
+      throw err;
+    }
   }
 
   async stop(): Promise<void> {
