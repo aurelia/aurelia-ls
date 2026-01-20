@@ -202,6 +202,28 @@ describe("workspace symbol graph (workspace-contract)", () => {
     expectSortedByContract(refsForId, appUri);
   });
 
+  it("keeps symbol ids stable across no-op edits", () => {
+    const pos = findPosition(appText, "${total}", 2);
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(pos);
+    const def = expectDefinition(harness, defs, {
+      uriEndsWith: "/src/my-app.html",
+      textIncludes: "total.bind",
+    });
+    expect(typeof def.symbolId).toBe("string");
+
+    harness.updateTemplate(appUri, appText);
+
+    const defsAfter = harness.workspace.query(appUri).definition(pos);
+    const defAfter = expectDefinition(harness, defsAfter, {
+      uriEndsWith: "/src/my-app.html",
+      textIncludes: "total.bind",
+    });
+    expect(defAfter.symbolId).toBe(def.symbolId);
+    expect(defAfter.uri).toBe(def.uri);
+    expect(defAfter.span).toEqual(def.span);
+  });
+
   it("keeps tag spans for nested custom elements", () => {
     const compilation = harness.workspace.getCompilation(summaryUri);
     expect(compilation).toBeTruthy();

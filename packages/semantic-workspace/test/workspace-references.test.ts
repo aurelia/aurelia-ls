@@ -70,6 +70,8 @@ describe("workspace references (workspace-contract)", () => {
   let detailText: string;
   let modelsUri: string;
   let modelsText: string;
+  let viewModelUri: string;
+  let viewModelText: string;
 
   beforeAll(async () => {
     harness = await createWorkspaceHarness({
@@ -80,18 +82,21 @@ describe("workspace references (workspace-contract)", () => {
     tableUri = harness.openTemplate("src/views/table-panel.html");
     detailUri = harness.toDocumentUri("src/components/device-detail.html");
     modelsUri = harness.toDocumentUri("src/models.ts");
+    viewModelUri = harness.toDocumentUri("src/my-app.ts");
 
     const app = harness.readText(appUri);
     const table = harness.readText(tableUri);
     const detail = harness.readText(detailUri);
     const models = harness.readText(modelsUri);
-    if (!app || !table || !detail || !models) {
+    const viewModel = harness.readText(viewModelUri);
+    if (!app || !table || !detail || !models || !viewModel) {
       throw new Error("Expected template text for workspace-contract fixtures");
     }
     appText = app;
     tableText = table;
     detailText = detail;
     modelsText = models;
+    viewModelText = viewModel;
   });
 
   it("finds <let> references", () => {
@@ -120,5 +125,12 @@ describe("workspace references (workspace-contract)", () => {
       throw new Error("Expected rating property in models.ts");
     }
     expectReferencesAtOffsets(refs, modelsUri, [modelsOffset]);
+  });
+
+  it("finds template references when starting from TypeScript symbols", () => {
+    const query = harness.workspace.query(viewModelUri);
+    const refs = query.references(findPosition(viewModelText, "viewMode:", 1));
+    const offsets = findOffsets(appText, /\bviewMode\b/g);
+    expectReferencesAtOffsets(refs, appUri, offsets);
   });
 });

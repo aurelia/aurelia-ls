@@ -8,9 +8,12 @@ import {
   createAttributeParserFromRegistry,
   debug,
   normalizePathForId,
+  normalizeSpan,
   offsetAtPosition,
+  projectGeneratedSpanToDocumentSpan,
   spanContainsOffset,
   stableHash,
+  toSourceSpan,
   type DocumentUri,
   type OverlayBuildArtifact,
   type OverlayDocumentSnapshot,
@@ -304,6 +307,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       },
       references: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
+        if (!this.#isTemplateUri(canonical.uri)) {
+          const baseRefs = this.#referencesFromTypeScript(canonical.uri, pos);
+          return mergeLocationsWithIdsRanked(canonical.uri, [{ rank: 0, items: baseRefs }]);
+        }
         const local = this.#localReferencesAt(canonical.uri, pos);
         const resourceRefs = this.#resourceReferencesAt(canonical.uri, pos);
         let baseRefs: readonly WorkspaceLocation[] = [];
@@ -566,6 +573,139 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     });
   }
 
+  #referencesFromTypeScript(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
+    const text = this.lookupText(uri);
+    if (!text) return [];
+    const offset = offsetAtPosition(text, pos);
+    if (offset == null) return [];
+
+    this.#syncTemplateOverlaysForReferences(uri);
+
+    const canonical = canonicalDocumentUri(uri);
+    const filePath = this.#env.paths.canonical(canonical.path);
+    const refs = this.#env.tsService.getService().getReferencesAtPosition(filePath, offset) ?? [];
+    const results: WorkspaceLocation[] = [];
+    const provenance = this.#kernel.provenance;
+    for (const ref of refs) {
+      const refCanonical = canonicalDocumentUri(ref.fileName);
+      const span = normalizeSpan(
+        toSourceSpan(
+          { start: ref.textSpan.start, end: ref.textSpan.start + ref.textSpan.length },
+          refCanonical.file,
+        ),
+      );
+      const mapped = projectGeneratedSpanToDocumentSpan(provenance, refCanonical.uri, span);
+      if (mapped) {
+        results.push({
+          uri: mapped.uri,
+          span: mapped.span,
+          ...(mapped.exprId ? { exprId: mapped.exprId } : {}),
+          ...(mapped.nodeId ? { nodeId: mapped.nodeId } : {}),
+        });
+        continue;
+      }
+      if (isOverlayPath(refCanonical.path)) continue;
+      results.push({ uri: refCanonical.uri, span });
+    }
+
+    const symbolName = this.#symbolNameAt(filePath, offset, text);
+    const templateRefs = symbolName
+      ? this.#templateReferencesForVmMember(canonical.uri, canonical.path, symbolName)
+      : [];
+    if (templateRefs.length) {
+      results.push(...templateRefs);
+    }
+
+    debug.workspace("references.ts", {
+      uri: canonical.uri,
+      symbol: symbolName ?? null,
+      tsRefs: refs.length,
+      templateRefs: templateRefs.length,
+      total: results.length,
+    });
+
+    return results;
+  }
+
+  #symbolNameAt(filePath: string, offset: number, text: string): string | null {
+    const service = this.#env.tsService.getService();
+    const program = service.getProgram();
+    const sourceFile = program?.getSourceFile(filePath) ?? program?.getSourceFile(path.resolve(filePath));
+    if (!sourceFile || !program) return null;
+    const checker = program.getTypeChecker();
+    const token = this.#findTokenAtOffset(sourceFile, offset);
+    if (!token) return extractIdentifierAt(text, offset);
+    const symbol = checker?.getSymbolAtLocation(token);
+    const name = symbol?.getName();
+    if (name && name !== "default") return name;
+    if (ts.isIdentifier(token)) return token.text;
+    return extractIdentifierAt(text, offset);
+  }
+
+  #findTokenAtOffset(sourceFile: ts.SourceFile, offset: number): ts.Node | null {
+    let best: ts.Node | null = null;
+
+    const visit = (node: ts.Node) => {
+      const start = node.getStart(sourceFile);
+      const end = node.getEnd();
+      if (offset < start || offset >= end) return;
+
+      if (!best) {
+        best = node;
+      } else {
+        const bestStart = best.getStart(sourceFile);
+        const bestEnd = best.getEnd();
+        if (end - start < bestEnd - bestStart) {
+          best = node;
+        }
+      }
+
+      node.forEachChild(visit);
+    };
+
+    visit(sourceFile);
+    return best;
+  }
+
+  #templateReferencesForVmMember(activeUri: DocumentUri, vmPath: string, memberName: string): WorkspaceLocation[] {
+    const normalizedVm = normalizePathForId(path.resolve(vmPath));
+    const results: WorkspaceLocation[] = [];
+    const sources = this.#kernel.sources;
+    let activated = false;
+
+    for (const [templateUri, componentPath] of this.#templateIndex.templateToComponent.entries()) {
+      const normalizedComponent = normalizePathForId(path.resolve(componentPath));
+      if (normalizedComponent !== normalizedVm) continue;
+      const text = this.lookupText(templateUri);
+      if (!text) continue;
+      if (!sources.get(templateUri)) {
+        this.#kernel.open(templateUri, text);
+      }
+      this.#activateTemplate(templateUri);
+      activated = true;
+      const compilation = this.#kernel.getCompilation(templateUri);
+      const mapping = compilation?.mapping;
+      if (!mapping) continue;
+
+      for (const entry of mapping.entries) {
+        for (const segment of entry.segments ?? []) {
+          if (segment.path !== memberName) continue;
+          results.push({
+            uri: templateUri,
+            span: segment.htmlSpan,
+            ...(entry.exprId ? { exprId: entry.exprId } : {}),
+          });
+        }
+      }
+    }
+
+    if (activated) {
+      this.#activateTemplate(activeUri);
+    }
+
+    return results;
+  }
+
   #referenceContext(
     uri: DocumentUri,
     pos: { line: number; character: number },
@@ -583,6 +723,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const ctx = this.#referenceContext(uri, pos);
     if (!ctx) return [];
     return this.#resourceReferencesAtOffset(uri, ctx.offset);
+  }
+
+  #isTemplateUri(uri: DocumentUri): boolean {
+    return this.#templateIndex.templateToComponent.has(uri);
   }
 
   #resourceReferencesAtOffset(uri: DocumentUri, offset: number): WorkspaceLocation[] {
@@ -1232,6 +1376,34 @@ function buildOverlaySnapshot(
     text: overlay.text,
     templateUri: templateCanonical.uri,
   };
+}
+
+function isOverlayPath(path: string): boolean {
+  return path.includes(".__au.") && path.includes(".overlay.");
+}
+
+function extractIdentifierAt(text: string, offset: number): string | null {
+  if (offset < 0 || offset >= text.length) return null;
+  let start = offset;
+  while (start > 0 && isIdentifierChar(text.charCodeAt(start - 1))) {
+    start -= 1;
+  }
+  let end = offset;
+  while (end < text.length && isIdentifierChar(text.charCodeAt(end))) {
+    end += 1;
+  }
+  if (end <= start) return null;
+  return text.slice(start, end);
+}
+
+function isIdentifierChar(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 95 /* _ */ ||
+    code === 36 /* $ */
+  );
 }
 
 type ResourceReferenceOccurrence = {

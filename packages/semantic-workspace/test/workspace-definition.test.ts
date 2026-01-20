@@ -101,6 +101,15 @@ describe("workspace definition (workspace-contract)", () => {
     expect(typeof hit.symbolId).toBe("string");
   });
 
+  it("does not invent definitions for native elements or attributes", () => {
+    const query = harness.workspace.query(appUri);
+    const elementDefs = query.definition(findPosition(appText, "<section class=\"app-shell\"", 1));
+    expect(elementDefs).toHaveLength(0);
+
+    const attrDefs = query.definition(findPosition(appText, "class=\"app-shell\"", 1));
+    expect(attrDefs).toHaveLength(0);
+  });
+
   it("resolves <import> definition targets", () => {
     const query = harness.workspace.query(appUri);
     const defs = query.definition(findPosition(appText, "./views/summary-panel", 2));
