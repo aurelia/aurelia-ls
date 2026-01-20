@@ -40,6 +40,23 @@ function expectToken(
   return hit!;
 }
 
+function expectOrderedTokens(tokens: readonly TokenLike[]): void {
+  for (let i = 1; i < tokens.length; i += 1) {
+    const prev = tokens[i - 1];
+    const next = tokens[i];
+    const startDelta = prev.span.start - next.span.start;
+    if (startDelta < 0) continue;
+    if (startDelta > 0) {
+      throw new Error(`Token order violated: ${prev.type} starts after ${next.type}`);
+    }
+    const prevLen = prev.span.end - prev.span.start;
+    const nextLen = next.span.end - next.span.start;
+    if (prevLen > nextLen) {
+      throw new Error(`Token order violated: ${prev.type} length > ${next.type} length at same start`);
+    }
+  }
+}
+
 describe("workspace semantic tokens (workspace-contract)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;
@@ -64,6 +81,10 @@ describe("workspace semantic tokens (workspace-contract)", () => {
     expectToken(tokens, appText, { type: "aureliaElement", text: "summary-panel" });
     expectToken(tokens, appText, { type: "aureliaBindable", text: "stats" });
     expectToken(tokens, appText, { type: "aureliaAttribute", text: "copy-to-clipboard" });
+  });
+
+  it("orders tokens by span start then length", () => {
+    expectOrderedTokens(tokens);
   });
 
   it("emits command/controller tokens", () => {

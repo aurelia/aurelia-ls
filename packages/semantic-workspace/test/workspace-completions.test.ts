@@ -37,6 +37,28 @@ function hasLabel(items: readonly { label: string }[], label: string): boolean {
   return items.some((item) => item.label === label);
 }
 
+function compareCompletionOrder(
+  a: { label: string; sortText?: string },
+  b: { label: string; sortText?: string },
+): number {
+  const aKey = a.sortText ?? a.label;
+  const bKey = b.sortText ?? b.label;
+  const keyDelta = aKey.localeCompare(bKey);
+  if (keyDelta !== 0) return keyDelta;
+  return a.label.localeCompare(b.label);
+}
+
+function expectOrderedCompletions(items: readonly { label: string; sortText?: string }[]): void {
+  for (let i = 1; i < items.length; i += 1) {
+    const prev = items[i - 1];
+    const next = items[i];
+    expect(
+      compareCompletionOrder(prev, next) <= 0,
+      `Expected ordered completions, got "${prev?.label}" before "${next?.label}"`,
+    ).toBe(true);
+  }
+}
+
 describe("workspace completions (workspace-contract)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;
@@ -60,6 +82,12 @@ describe("workspace completions (workspace-contract)", () => {
     const completions = query.completions(findPosition(appText, "<summary-panel", 1));
     expect(hasLabel(completions, "summary-panel")).toBe(true);
     expect(hasLabel(completions, "table-panel")).toBe(true);
+  });
+
+  it("orders completions by relevance then label", () => {
+    const query = harness.workspace.query(appUri);
+    const completions = query.completions(findPosition(appText, "<summary-panel", 1));
+    expectOrderedCompletions(completions);
   });
 
   it("completes custom element bindables", () => {

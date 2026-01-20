@@ -282,8 +282,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const mapped = this.#mapDiagnostics(canonical.uri, base);
     const meta = this.#templateMetaDiagnostics(canonical.uri);
     const gaps = this.#catalogDiagnostics(canonical.uri);
-    if (!meta.length && !gaps.length) return mapped;
-    return [...mapped, ...meta, ...gaps];
+    const combined = !meta.length && !gaps.length ? mapped : [...mapped, ...meta, ...gaps];
+    return sortDiagnostics(combined);
   }
 
   query(uri: DocumentUri): SemanticQuery {
@@ -1676,6 +1676,32 @@ function mergeDiagnosticData(
   if (!base && !next) return undefined;
   if (!next || Object.keys(next).length === 0) return base;
   return { ...(base ?? {}), ...next };
+}
+
+function sortDiagnostics(diagnostics: readonly WorkspaceDiagnostic[]): WorkspaceDiagnostic[] {
+  if (diagnostics.length < 2) return diagnostics.slice();
+  return diagnostics
+    .map((diag, index) => ({ diag, index }))
+    .sort((a, b) => {
+      const spanA = a.diag.span;
+      const spanB = b.diag.span;
+      if (spanA && spanB) {
+        const startDelta = spanA.start - spanB.start;
+        if (startDelta !== 0) return startDelta;
+        const endDelta = spanA.end - spanB.end;
+        if (endDelta !== 0) return endDelta;
+      } else if (spanA && !spanB) {
+        return -1;
+      } else if (!spanA && spanB) {
+        return 1;
+      }
+      const codeDelta = String(a.diag.code ?? "").localeCompare(String(b.diag.code ?? ""));
+      if (codeDelta !== 0) return codeDelta;
+      const messageDelta = String(a.diag.message ?? "").localeCompare(String(b.diag.message ?? ""));
+      if (messageDelta !== 0) return messageDelta;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.diag);
 }
 
 function gapCodeForKind(kind: string): string {

@@ -463,13 +463,24 @@ function mapDiagnostics(diags: readonly { code: string | number; message: string
 }
 
 function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceCompletionItem[] {
-  return items.map((item) => ({
+  const mapped = items.map((item, index) => ({
     label: item.label,
     ...(item.detail ? { detail: item.detail } : {}),
     ...(item.documentation ? { documentation: item.documentation } : {}),
     ...(item.sortText ? { sortText: item.sortText } : {}),
     ...(item.insertText ? { insertText: item.insertText } : {}),
+    _index: index,
   }));
+  mapped.sort((a, b) => {
+    const aKey = a.sortText ?? a.label;
+    const bKey = b.sortText ?? b.label;
+    const keyDelta = aKey.localeCompare(bKey);
+    if (keyDelta !== 0) return keyDelta;
+    const labelDelta = a.label.localeCompare(b.label);
+    if (labelDelta !== 0) return labelDelta;
+    return a._index - b._index;
+  });
+  return mapped.map(({ _index: _unused, ...item }) => item);
 }
 
 function mapLocations(

@@ -105,4 +105,23 @@ describe("workspace diagnostics (workspace-contract)", () => {
       expect(aurCode).toBe("AUR0754");
     }
   });
+
+  it("orders diagnostics by span position", () => {
+    const mutated = insertBefore(
+      appText,
+      "stats.bind=\"stats\"",
+      "    missing-first.bind=\"stats\"\n    missing-second.bind=\"stats\"\n",
+    );
+    harness.updateTemplate(appUri, mutated, 2);
+
+    const diags = harness.workspace.query(appUri).diagnostics();
+    const unknowns = diags.filter((diag) => diag.code === "aurelia/unknown-bindable" && diag.span);
+    expect(unknowns.length).toBeGreaterThanOrEqual(2);
+    const spans = unknowns.map((diag) => diag.span!);
+    for (let i = 1; i < spans.length; i += 1) {
+      const prev = spans[i - 1];
+      const next = spans[i];
+      expect(prev.start <= next.start).toBe(true);
+    }
+  });
 });

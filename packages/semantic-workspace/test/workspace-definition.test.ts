@@ -166,6 +166,24 @@ describe("workspace definition (workspace-contract)", () => {
     });
   });
 
+  it("dedupes definition locations for custom attributes", () => {
+    const appQuery = harness.workspace.query(appUri);
+    const defs = appQuery.definition(findPosition(appText, "copy-to-clipboard.bind", 1));
+    const matches = defs.filter((loc) =>
+      String(loc.uri).endsWith("/src/resources.ts")
+      && spanText(harness, loc).includes("CopyToClipboard")
+    );
+    expect(matches).toHaveLength(1);
+  });
+
+  it("normalizes definition URIs", () => {
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(findPosition(appText, "<summary-panel", 1));
+    for (const loc of defs) {
+      expect(String(loc.uri).includes("\\")).toBe(false);
+    }
+  });
+
   it("resolves bindable definitions", () => {
     const query = harness.workspace.query(appUri);
     const defs = query.definition(findPosition(appText, "updated-at.bind", 1));
@@ -255,6 +273,38 @@ describe("workspace definition (workspace-contract)", () => {
       uriEndsWith: "/src/my-app.html",
       textIncludes: "total.bind",
     });
+  });
+
+  it("orders local definitions before base definitions when locals shadow VM members", () => {
+    const marker = "  <let total.bind=\"filteredItems.length\"></let>";
+    if (!appText.includes(marker)) {
+      throw new Error("Expected <let total.bind> marker not found");
+    }
+    const injected = appText.replace(
+      marker,
+      `${marker}\n  <let filters.bind=\"filters\"></let>\n  <p>\${filters}</p>`,
+    );
+    harness.updateTemplate(appUri, injected, 2);
+    try {
+      const query = harness.workspace.query(appUri);
+      const defs = query.definition(findPosition(injected, "${filters}", 2));
+      const localIndex = defs.findIndex((loc) => {
+        if (!String(loc.uri).endsWith("/src/my-app.html")) return false;
+        const start = Math.max(0, Math.min(loc.span.start, injected.length));
+        const end = Math.max(start, Math.min(loc.span.end, injected.length));
+        return injected.slice(start, end).includes("filters");
+      });
+      expect(localIndex).toBe(0);
+      const baseIndex = defs.findIndex((loc) =>
+        String(loc.uri).endsWith("/src/my-app.ts")
+        || String(loc.uri).includes(".__au.ttc.overlay")
+      );
+      if (baseIndex >= 0) {
+        expect(baseIndex).toBeGreaterThan(localIndex);
+      }
+    } finally {
+      harness.updateTemplate(appUri, appText, 2);
+    }
   });
 
   it("resolves repeat.for iterator definitions", () => {
