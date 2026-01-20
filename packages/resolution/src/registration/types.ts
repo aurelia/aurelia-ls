@@ -48,7 +48,7 @@
  * @module
  */
 
-import type { NormalizedPath, ResourceDef, SourceSpan } from "@aurelia-ls/compiler";
+import type { NormalizedPath, ResourceDef, SourceSpan, Sourced } from "@aurelia-ls/compiler";
 import type { PluginManifest } from "../plugins/types.js";
 
 // =============================================================================
@@ -167,6 +167,14 @@ export interface RegistrationSite {
    * Enables: diagnostics, go-to-definition, refactoring.
    */
   readonly span: SourceSpan;
+
+  /**
+   * Optional alias name for template import registrations.
+   *
+   * Example: `<import from="./foo" as="bar">` => alias "bar".
+   * Only present when the registration introduces a local alias.
+   */
+  readonly alias?: Sourced<string> | null;
 }
 
 /**

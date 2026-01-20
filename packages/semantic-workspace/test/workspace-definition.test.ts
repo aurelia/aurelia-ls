@@ -421,3 +421,35 @@ describe("workspace definition (stacked controllers)", () => {
     });
   });
 });
+
+describe("workspace definition (import alias conflicts)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-import-alias-conflicts"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const app = harness.readText(appUri);
+    if (!app) {
+      throw new Error("Expected template text for template-import-alias-conflicts");
+    }
+    appText = app;
+  });
+
+  it("prefers template import aliases over global registrations", () => {
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(findPosition(appText, "tooltip=\"Refresh\"", 1));
+    expectDefinition(harness, defs, {
+      uriEndsWith: "/src/attributes/aut-sort.ts",
+      textIncludes: "AutSort",
+    });
+    const hasTooltip = defs.some((loc) =>
+      String(loc.uri).endsWith("/src/attributes/tooltip.ts")
+    );
+    expect(hasTooltip).toBe(false);
+  });
+});

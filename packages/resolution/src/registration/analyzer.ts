@@ -1,4 +1,4 @@
-import { debug, toSourceFileId, type NormalizedPath, type ResourceDef, type SourceSpan } from "@aurelia-ls/compiler";
+import { debug, toSourceFileId, type NormalizedPath, type ResourceDef, type SourceSpan, type Sourced } from "@aurelia-ls/compiler";
 import type { FileFacts, FileContext, ImportDeclaration, RegistrationCall, TemplateImport } from "../extraction/file-facts.js";
 import type { ClassValue, AnalyzableValue } from "../analysis/value/types.js";
 import { extractStringArrayProp, getProperty } from "../analysis/value/types.js";
@@ -20,7 +20,7 @@ import type {
   UnresolvedRegistration,
   UnresolvedPattern,
 } from "./types.js";
-import { unwrapSourced } from "../semantics/sourced.js";
+import { sourcedValue, unwrapSourced } from "../semantics/sourced.js";
 
 /**
  * Registration analyzer interface.
@@ -592,12 +592,14 @@ function findTemplateImportSites(
     // Case 1: Named aliases - create one site per alias
     if (imp.namedAliases.length > 0) {
       for (const alias of imp.namedAliases) {
-        const resourceRef = resolveNamedAliasImport(imp, alias.exportName, context);
+        const resourceRef = resolveNamedAliasImport(imp, alias.exportName.value, context);
+        const aliasValue = sourcedValue(alias.alias.value, templateFile, alias.alias.loc);
         sites.push({
           resourceRef,
           scope,
           evidence,
           span: imp.span,
+          alias: aliasValue,
         });
       }
       continue;
@@ -605,7 +607,8 @@ function findTemplateImportSites(
 
     // Case 2: Default alias - single site
     if (imp.defaultAlias) {
-      const site = createSiteFromTemplateImport(imp, scope, evidence, templateFile, context);
+      const aliasValue = sourcedValue(imp.defaultAlias.value, templateFile, imp.defaultAlias.loc);
+      const site = createSiteFromTemplateImport(imp, scope, evidence, templateFile, context, aliasValue);
       sites.push(site);
       continue;
     }
@@ -627,6 +630,7 @@ function createSiteFromTemplateImport(
   evidence: RegistrationEvidence,
   _templateFile: NormalizedPath,
   context: AnalysisContext,
+  alias?: Sourced<string> | null,
 ): RegistrationSite {
   const resourceRef = resolveTemplateImportRef(imp, context);
 
@@ -635,6 +639,7 @@ function createSiteFromTemplateImport(
     scope,
     evidence,
     span: imp.span, // Already a SourceSpan, no conversion needed
+    ...(alias ? { alias } : {}),
   };
 }
 
@@ -754,11 +759,12 @@ function resolveTemplateImportRef(
 
   // If we have a default alias, try to find a resource with that name
   if (imp.defaultAlias) {
+    const alias = imp.defaultAlias.value;
     const resolved = context.resolveExportedClass(imp.resolvedPath, "default")
-      ?? context.resolveExportedClass(imp.resolvedPath, imp.defaultAlias);
+      ?? context.resolveExportedClass(imp.resolvedPath, alias);
     const resource = resolved
       ? context.findResourceByResolvedPath(resolved.path, resolved.className)
-      : context.findResourceByResolvedPath(imp.resolvedPath, imp.defaultAlias);
+      : context.findResourceByResolvedPath(imp.resolvedPath, alias);
     if (resource) {
       return { kind: "resolved", resource };
     }

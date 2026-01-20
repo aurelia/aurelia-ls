@@ -8,7 +8,7 @@
  * - FileContext: Project-level context (siblings, templates) — assembled separately
  */
 
-import type { NormalizedPath, TextSpan, SourceSpan, BindingMode } from '@aurelia-ls/compiler';
+import type { NormalizedPath, TextSpan, SourceSpan, BindingMode, Located } from '@aurelia-ls/compiler';
 import type { AnalysisGap } from '../analysis/types.js';
 import type { ClassValue, LexicalScope, AnalyzableValue, ResolutionContext } from '../analysis/value/types.js';
 import type { SiblingFile } from '../project/types.js';
@@ -300,8 +300,12 @@ export interface TemplateContent {
 export interface TemplateImport {
   readonly moduleSpecifier: string;
   readonly resolvedPath: NormalizedPath | null;
-  readonly defaultAlias: string | null;
-  readonly namedAliases: readonly { exportName: string; alias: string }[];
+  readonly defaultAlias: Located<string> | null;
+  readonly namedAliases: readonly {
+    exportName: Located<string>;
+    alias: Located<string>;
+    asLoc?: SourceSpan | null;
+  }[];
   readonly span: SourceSpan;
   readonly moduleSpecifierSpan: SourceSpan;
 }

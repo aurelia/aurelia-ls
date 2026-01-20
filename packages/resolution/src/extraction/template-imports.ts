@@ -47,9 +47,10 @@ export function extractTemplateImports(
  * Preserves source spans as SourceSpan (with file) rather than downgrading to TextSpan.
  */
 function convertImportMeta(imp: ImportMetaIR, templatePath: NormalizedPath): TemplateImport {
-  const namedAliases: readonly { exportName: string; alias: string }[] = imp.namedAliases.map((na) => ({
-    exportName: na.exportName.value,
-    alias: na.alias.value,
+  const namedAliases = imp.namedAliases.map((na) => ({
+    exportName: na.exportName,
+    alias: na.alias,
+    ...(na.asLoc ? { asLoc: na.asLoc } : {}),
   }));
 
   const file = toSourceFileId(templatePath);
@@ -57,7 +58,7 @@ function convertImportMeta(imp: ImportMetaIR, templatePath: NormalizedPath): Tem
   return {
     moduleSpecifier: imp.from.value,
     resolvedPath: null, // Will be resolved by import resolution phase
-    defaultAlias: imp.defaultAlias?.value ?? null,
+    defaultAlias: imp.defaultAlias ?? null,
     namedAliases,
     span: {
       file,

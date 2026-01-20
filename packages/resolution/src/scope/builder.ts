@@ -21,6 +21,7 @@ import {
   type ValueConverterDef,
   type ValueConverterSig,
   type BindingBehaviorSig,
+  type Sourced,
 } from "@aurelia-ls/compiler";
 import type { RegistrationAnalysis, RegistrationEvidence } from "../registration/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
@@ -91,7 +92,7 @@ export function buildResourceGraph(
         scopeData = { className, resources: createEmptyCollections() };
         localScopes.set(scopeKey, scopeData);
       }
-      addToCollections(scopeData.resources, resource);
+      addToCollections(scopeData.resources, resource, site.alias ?? null);
     }
   }
 
@@ -160,19 +161,35 @@ function createEmptyCollections(): MutableResourceCollections {
   };
 }
 
-function addToCollections(collections: MutableResourceCollections, resource: ResourceDef): void {
+function addToCollections(
+  collections: MutableResourceCollections,
+  resource: ResourceDef,
+  alias?: Sourced<string> | null,
+): void {
   const name = unwrapSourced(resource.name);
   if (!name) return;
+  const aliasName = alias ? unwrapSourced(alias) : null;
+  const aliasKey = aliasName ? aliasName.toLowerCase() : null;
+  const nameKey = name.toLowerCase();
   switch (resource.kind) {
-    case "custom-element":
-      collections.elements[name] = resourceToElement(resource);
+    case "custom-element": {
+      const entry = resourceToElement(resource);
+      collections.elements[name] = entry;
+      if (aliasKey && aliasKey !== nameKey) collections.elements[aliasKey] = entry;
       break;
-    case "custom-attribute":
-      collections.attributes[name] = resourceToAttribute(resource);
+    }
+    case "custom-attribute": {
+      const entry = resourceToAttribute(resource);
+      collections.attributes[name] = entry;
+      if (aliasKey && aliasKey !== nameKey) collections.attributes[aliasKey] = entry;
       break;
-    case "template-controller":
-      collections.attributes[name] = resourceToTemplateController(resource);
+    }
+    case "template-controller": {
+      const entry = resourceToTemplateController(resource);
+      collections.attributes[name] = entry;
+      if (aliasKey && aliasKey !== nameKey) collections.attributes[aliasKey] = entry;
       break;
+    }
     case "value-converter":
       collections.valueConverters[name] = resourceToValueConverter(resource);
       break;

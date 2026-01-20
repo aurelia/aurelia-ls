@@ -45,7 +45,7 @@ describe("Template Import Extraction", () => {
 
       expect(imports).toHaveLength(1);
       expect(imports[0]!.moduleSpecifier).toBe("./foo");
-      expect(imports[0]!.defaultAlias).toBe("bar");
+      expect(imports[0]!.defaultAlias?.value).toBe("bar");
     });
 
     it("extracts import with named alias", () => {
@@ -58,7 +58,8 @@ describe("Template Import Extraction", () => {
       expect(imports).toHaveLength(1);
       expect(imports[0]!.moduleSpecifier).toBe("./converters");
       expect(imports[0]!.namedAliases).toHaveLength(1);
-      expect(imports[0]!.namedAliases[0]).toEqual({ exportName: "DateFormat", alias: "df" });
+      expect(imports[0]!.namedAliases[0]?.exportName.value).toBe("DateFormat");
+      expect(imports[0]!.namedAliases[0]?.alias.value).toBe("df");
     });
 
     it("extracts import with multiple named aliases", () => {
@@ -70,8 +71,10 @@ describe("Template Import Extraction", () => {
 
       expect(imports).toHaveLength(1);
       expect(imports[0]!.namedAliases).toHaveLength(2);
-      expect(imports[0]!.namedAliases[0]).toEqual({ exportName: "Foo", alias: "foo" });
-      expect(imports[0]!.namedAliases[1]).toEqual({ exportName: "Bar", alias: "bar" });
+      expect(imports[0]!.namedAliases[0]?.exportName.value).toBe("Foo");
+      expect(imports[0]!.namedAliases[0]?.alias.value).toBe("foo");
+      expect(imports[0]!.namedAliases[1]?.exportName.value).toBe("Bar");
+      expect(imports[0]!.namedAliases[1]?.alias.value).toBe("bar");
     });
 
     it("extracts multiple imports", () => {
