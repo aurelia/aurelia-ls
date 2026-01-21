@@ -281,6 +281,31 @@ describe("workspace references (import alias conflicts)", () => {
 
     const refs = query.references(positionAt(appText, badgeOffset));
     expectReferencesAtOffsets(refs, appUri, [badgeOffset]);
+    expectOrderedReferences(refs, appUri);
+    expectNoDuplicateReferenceSpans(refs);
+    const refSymbolIds = new Set(
+      refs.map((loc) => loc.symbolId).filter((id): id is string => !!id)
+    );
+    expect(refSymbolIds).toEqual(new Set([autSort!.symbolId as string]));
+  });
+
+  it("uses simple import aliases for custom attributes", () => {
+    const tooltipIndex = appText.indexOf("tooltip=\"Refresh\"");
+    if (tooltipIndex < 0) {
+      throw new Error("Expected tooltip attribute in template-import-alias-conflicts");
+    }
+    const tooltipOffset = tooltipIndex + 1;
+    const query = harness.workspace.query(appUri);
+    const defs = query.definition(positionAt(appText, tooltipOffset));
+    const autSort = defs.find((loc) =>
+      String(loc.uri).endsWith("/src/attributes/aut-sort.ts")
+    );
+    expect(autSort?.symbolId).toBeDefined();
+
+    const refs = query.references(positionAt(appText, tooltipOffset));
+    expectReferencesAtOffsets(refs, appUri, [tooltipOffset]);
+    expectOrderedReferences(refs, appUri);
+    expectNoDuplicateReferenceSpans(refs);
     const refSymbolIds = new Set(
       refs.map((loc) => loc.symbolId).filter((id): id is string => !!id)
     );

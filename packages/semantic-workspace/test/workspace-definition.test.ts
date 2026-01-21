@@ -491,10 +491,13 @@ describe("workspace definition (import alias conflicts)", () => {
   it("prefers template import aliases over global registrations", () => {
     const query = harness.workspace.query(appUri);
     const defs = query.definition(findPosition(appText, "tooltip=\"Refresh\"", 1));
-    expectDefinition(harness, defs, {
+    expectOrderedLocations(defs, appUri);
+    expectNoDuplicateSpans(defs);
+    const hit = expectDefinition(harness, defs, {
       uriEndsWith: "/src/attributes/aut-sort.ts",
       textIncludes: "AutSort",
     });
+    expect(typeof hit.symbolId).toBe("string");
     const hasTooltip = defs.some((loc) =>
       String(loc.uri).endsWith("/src/attributes/tooltip.ts")
     );
@@ -504,10 +507,13 @@ describe("workspace definition (import alias conflicts)", () => {
   it("prefers named template import aliases over local registrations", () => {
     const query = harness.workspace.query(appUri);
     const defs = query.definition(findPosition(appText, "badge=\"Primary\"", 1));
-    expectDefinition(harness, defs, {
+    expectOrderedLocations(defs, appUri);
+    expectNoDuplicateSpans(defs);
+    const hit = expectDefinition(harness, defs, {
       uriEndsWith: "/src/attributes/aut-sort.ts",
       textIncludes: "AutSort",
     });
+    expect(typeof hit.symbolId).toBe("string");
     const hasBadge = defs.some((loc) =>
       String(loc.uri).endsWith("/src/attributes/badge.ts")
     );
