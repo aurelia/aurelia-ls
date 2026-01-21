@@ -969,8 +969,10 @@ function collectTagNameCompletions(
   const items: CompletionItem[] = [];
   const seen = new Set<string>();
 
-  for (const element of Object.values(resources.elements)) {
-    const names = [element.name, ...(element.aliases ?? [])].filter((name): name is string => !!name);
+  for (const [key, element] of Object.entries(resources.elements)) {
+    const names = new Set(
+      [key, element.name, ...(element.aliases ?? [])].filter((name): name is string => !!name),
+    );
     for (const name of names) {
       if (!name.toLowerCase().startsWith(prefix)) continue;
       if (seen.has(name)) continue;
@@ -1044,9 +1046,11 @@ function collectAttributeNameCompletions(
     }
   }
 
-  for (const attr of Object.values(resources.attributes ?? {})) {
+  for (const [key, attr] of Object.entries(resources.attributes ?? {})) {
     const detail = attr.isTemplateController ? "Template Controller" : "Custom Attribute";
-    const names = [attr.name, ...(attr.aliases ?? [])].filter((name): name is string => !!name);
+    const names = new Set(
+      [key, attr.name, ...(attr.aliases ?? [])].filter((name): name is string => !!name),
+    );
     for (const name of names) {
       push(name, detail);
     }

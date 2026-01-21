@@ -191,11 +191,42 @@ describe("workspace completions (third-party resources)", () => {
     const completions = query.completions(findPosition(appText, "current-page.bind", 1));
     expect(hasLabel(completions, "current-page")).toBe(true);
     expectOrderedCompletions(completions);
+    expectUniqueLabels(completions);
 
     const pageSize = query.completions(findPosition(appText, "page-size.bind", 1));
     expect(hasLabel(pageSize, "page-size")).toBe(true);
 
     const totalItems = query.completions(findPosition(appText, "total-items.bind", 1));
     expect(hasLabel(totalItems, "total-items")).toBe(true);
+  });
+});
+
+describe("workspace completions (import alias conflicts)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("template-import-alias-conflicts"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const text = harness.readText(appUri);
+    if (!text) {
+      throw new Error("Expected template text for template-import-alias-conflicts");
+    }
+    appText = text;
+  });
+
+  it("dedupes alias completions for attribute positions", () => {
+    const query = harness.workspace.query(appUri);
+    const completions = query.completions(
+      findPosition(appText, "<button tooltip", "<button ".length),
+    );
+    expect(hasLabel(completions, "tooltip")).toBe(true);
+    expect(hasLabel(completions, "badge")).toBe(true);
+    expectOrderedCompletions(completions);
+    expectUniqueLabels(completions);
   });
 });
