@@ -656,43 +656,43 @@
         "google-map": {
           "bindables": {
             "autoInfoWindow": {
-              "attribute": "autoInfoWindow",
+              "attribute": "auto-info-window",
               "name": "autoInfoWindow",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "autoUpdateBounds": {
-              "attribute": "autoUpdateBounds",
+              "attribute": "auto-update-bounds",
               "name": "autoUpdateBounds",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "disableDefaultUi": {
-              "attribute": "disableDefaultUi",
+              "attribute": "disable-default-ui",
               "name": "disableDefaultUi",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "drawEnabled": {
-              "attribute": "drawEnabled",
+              "attribute": "draw-enabled",
               "name": "drawEnabled",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "drawingControl": {
-              "attribute": "drawingControl",
+              "attribute": "drawing-control",
               "name": "drawingControl",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "drawingControlOptions": {
-              "attribute": "drawingControlOptions",
+              "attribute": "drawing-control-options",
               "name": "drawingControlOptions",
               "primary": false,
               "type": { "kind": "ts", "name": "google.maps.drawing.DrawingControlOptions" }
             },
             "drawMode": {
-              "attribute": "drawMode",
+              "attribute": "draw-mode",
               "name": "drawMode",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
@@ -710,13 +710,13 @@
               "type": { "kind": "ts", "name": "number" }
             },
             "mapLoaded": {
-              "attribute": "mapLoaded",
+              "attribute": "map-loaded",
               "name": "mapLoaded",
               "primary": false,
               "type": { "kind": "ts", "name": "(map: google.maps.Map) => void" }
             },
             "mapType": {
-              "attribute": "mapType",
+              "attribute": "map-type",
               "name": "mapType",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
@@ -728,7 +728,7 @@
               "type": { "kind": "ts", "name": "MarkerInput[]" }
             },
             "onEvent": {
-              "attribute": "onEvent",
+              "attribute": "on-event",
               "name": "onEvent",
               "primary": false,
               "type": { "kind": "ts", "name": "(event: GoogleMapsEvent) => void" }
@@ -1086,43 +1086,43 @@
             "google-map": {
               "bindables": {
                 "autoInfoWindow": {
-                  "attribute": "autoInfoWindow",
+                  "attribute": "auto-info-window",
                   "name": "autoInfoWindow",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "autoUpdateBounds": {
-                  "attribute": "autoUpdateBounds",
+                  "attribute": "auto-update-bounds",
                   "name": "autoUpdateBounds",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "disableDefaultUi": {
-                  "attribute": "disableDefaultUi",
+                  "attribute": "disable-default-ui",
                   "name": "disableDefaultUi",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "drawEnabled": {
-                  "attribute": "drawEnabled",
+                  "attribute": "draw-enabled",
                   "name": "drawEnabled",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "drawingControl": {
-                  "attribute": "drawingControl",
+                  "attribute": "drawing-control",
                   "name": "drawingControl",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "drawingControlOptions": {
-                  "attribute": "drawingControlOptions",
+                  "attribute": "drawing-control-options",
                   "name": "drawingControlOptions",
                   "primary": false,
                   "type": { "kind": "ts", "name": "google.maps.drawing.DrawingControlOptions" }
                 },
                 "drawMode": {
-                  "attribute": "drawMode",
+                  "attribute": "draw-mode",
                   "name": "drawMode",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
@@ -1140,13 +1140,13 @@
                   "type": { "kind": "ts", "name": "number" }
                 },
                 "mapLoaded": {
-                  "attribute": "mapLoaded",
+                  "attribute": "map-loaded",
                   "name": "mapLoaded",
                   "primary": false,
                   "type": { "kind": "ts", "name": "(map: google.maps.Map) => void" }
                 },
                 "mapType": {
-                  "attribute": "mapType",
+                  "attribute": "map-type",
                   "name": "mapType",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
@@ -1158,7 +1158,7 @@
                   "type": { "kind": "ts", "name": "MarkerInput[]" }
                 },
                 "onEvent": {
-                  "attribute": "onEvent",
+                  "attribute": "on-event",
                   "name": "onEvent",
                   "primary": false,
                   "type": { "kind": "ts", "name": "(event: GoogleMapsEvent) => void" }
@@ -1577,7 +1577,7 @@
             "attribute": {
               "location": { "end": 1115, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1074 },
               "origin": "source",
-              "value": "autoInfoWindow"
+              "value": "auto-info-window"
             },
             "mode": {
               "location": { "end": 1115, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1074 },
@@ -1603,7 +1603,7 @@
             "attribute": {
               "location": { "end": 1071, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1027 },
               "origin": "source",
-              "value": "autoUpdateBounds"
+              "value": "auto-update-bounds"
             },
             "mode": {
               "location": { "end": 1071, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1027 },
@@ -1629,7 +1629,7 @@
             "attribute": {
               "location": { "end": 983, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 939 },
               "origin": "source",
-              "value": "disableDefaultUi"
+              "value": "disable-default-ui"
             },
             "mode": {
               "location": { "end": 983, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 939 },
@@ -1655,7 +1655,7 @@
             "attribute": {
               "location": { "end": 1352, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1313 },
               "origin": "source",
-              "value": "drawEnabled"
+              "value": "draw-enabled"
             },
             "mode": {
               "location": { "end": 1352, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1313 },
@@ -1681,7 +1681,7 @@
             "attribute": {
               "location": { "end": 1477, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1445 },
               "origin": "source",
-              "value": "drawingControl"
+              "value": "drawing-control"
             },
             "mode": {
               "location": { "end": 1477, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1445 },
@@ -1707,7 +1707,7 @@
             "attribute": {
               "location": { "end": 1564, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1480 },
               "origin": "source",
-              "value": "drawingControlOptions"
+              "value": "drawing-control-options"
             },
             "mode": {
               "location": { "end": 1564, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1480 },
@@ -1733,7 +1733,7 @@
             "attribute": {
               "location": { "end": 1385, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1355 },
               "origin": "source",
-              "value": "drawMode"
+              "value": "draw-mode"
             },
             "mode": {
               "location": { "end": 1385, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1355 },
@@ -1811,7 +1811,7 @@
             "attribute": {
               "location": { "end": 1254, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1201 },
               "origin": "source",
-              "value": "mapLoaded"
+              "value": "map-loaded"
             },
             "mode": {
               "location": { "end": 1254, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1201 },
@@ -1837,7 +1837,7 @@
             "attribute": {
               "location": { "end": 1148, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1118 },
               "origin": "source",
-              "value": "mapType"
+              "value": "map-type"
             },
             "mode": {
               "location": { "end": 1148, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1118 },
@@ -1889,7 +1889,7 @@
             "attribute": {
               "location": { "end": 1310, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1257 },
               "origin": "source",
-              "value": "onEvent"
+              "value": "on-event"
             },
             "mode": {
               "location": { "end": 1310, "file": "aurelia2-plugins/packages/aurelia2-google-maps/src/google-maps.ts", "pos": 1257 },

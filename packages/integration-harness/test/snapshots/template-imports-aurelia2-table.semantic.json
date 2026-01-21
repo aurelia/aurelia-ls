@@ -1867,22 +1867,35 @@
       { "kind": "unresolved-import", "message": "import \"Metadata\" from \"@aurelia/metadata\": Module \"aurelia/packages/metadata/dist/types/index.d.ts\" does not export \"Metadata\"", "resource": "aurelia/packages/kernel/src/utilities.ts" },
       {
         "kind": "unsupported-pattern",
-        "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed"
+        "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/binding/interfaces-bindings.ts"
       },
       { "kind": "dynamic-value", "message": "static $au for OneTimeBindingBehavior: Ensure static $au is an object literal, not a computed value." },
       { "kind": "dynamic-value", "message": "static $au for ToViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
       { "kind": "dynamic-value", "message": "static $au for FromViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
       { "kind": "dynamic-value", "message": "static $au for TwoWayBindingBehavior: Ensure static $au is an object literal, not a computed value." },
-      { "kind": "unsupported-pattern", "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed" },
-      { "kind": "unsupported-pattern", "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed" },
-      { "kind": "unsupported-pattern", "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed" }
+      {
+        "kind": "unsupported-pattern",
+        "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+      },
+      {
+        "kind": "unsupported-pattern",
+        "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+      },
+      {
+        "kind": "unsupported-pattern",
+        "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/utilities-metadata.ts"
+      }
     ],
     "resources": {
       "attributes": {
         "aurelia-table": {
           "bindables": {
             "api": { "attribute": "api", "mode": "twoWay", "name": "api", "primary": false },
-            "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+            "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
             "data": {
               "attribute": "data",
               "name": "data",
@@ -1890,20 +1903,20 @@
               "type": { "kind": "ts", "name": "never[]" }
             },
             "dataSource": {
-              "attribute": "dataSource",
+              "attribute": "data-source",
               "name": "dataSource",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
-            "displayData": { "attribute": "displayData", "mode": "twoWay", "name": "displayData", "primary": false },
+            "displayData": { "attribute": "display-data", "mode": "twoWay", "name": "displayData", "primary": false },
             "filters": {
               "attribute": "filters",
               "name": "filters",
               "primary": false,
               "type": { "kind": "ts", "name": "never[]" }
             },
-            "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-            "totalItems": { "attribute": "totalItems", "mode": "twoWay", "name": "totalItems", "primary": false }
+            "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+            "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
           },
           "className": "AureliaTableCustomAttribute",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
@@ -1927,7 +1940,7 @@
             },
             "row": { "attribute": "row", "mode": "twoWay", "name": "row", "primary": false },
             "selectedClass": {
-              "attribute": "selectedClass",
+              "attribute": "selected-class",
               "name": "selectedClass",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
@@ -2093,11 +2106,11 @@
           "bindables": {
             "activated": { "attribute": "activated", "name": "activated", "primary": false },
             "activating": { "attribute": "activating", "name": "activating", "primary": false },
-            "callbackContext": { "attribute": "callbackContext", "name": "callbackContext", "primary": false },
+            "callbackContext": { "attribute": "callback-context", "name": "callbackContext", "primary": false },
             "deactivated": { "attribute": "deactivated", "name": "deactivated", "primary": false },
             "deactivating": { "attribute": "deactivating", "name": "deactivating", "primary": false },
             "position": { "attribute": "position", "name": "position", "primary": false },
-            "renderContext": { "attribute": "renderContext", "name": "renderContext", "primary": false },
+            "renderContext": { "attribute": "render-context", "name": "renderContext", "primary": false },
             "strict": { "attribute": "strict", "name": "strict", "primary": false },
             "target": { "attribute": "target", "name": "target", "primary": false }
           },
@@ -2263,11 +2276,11 @@
           "props": {
             "activated": { "attribute": "activated", "name": "activated", "primary": false },
             "activating": { "attribute": "activating", "name": "activating", "primary": false },
-            "callbackContext": { "attribute": "callbackContext", "name": "callbackContext", "primary": false },
+            "callbackContext": { "attribute": "callback-context", "name": "callbackContext", "primary": false },
             "deactivated": { "attribute": "deactivated", "name": "deactivated", "primary": false },
             "deactivating": { "attribute": "deactivating", "name": "deactivating", "primary": false },
             "position": { "attribute": "position", "name": "position", "primary": false },
-            "renderContext": { "attribute": "renderContext", "name": "renderContext", "primary": false },
+            "renderContext": { "attribute": "render-context", "name": "renderContext", "primary": false },
             "strict": { "attribute": "strict", "name": "strict", "primary": false },
             "target": { "attribute": "target", "name": "target", "primary": false }
           },
@@ -2322,7 +2335,7 @@
             "composing": { "attribute": "composing", "name": "composing", "primary": false },
             "composition": { "attribute": "composition", "name": "composition", "primary": false },
             "model": { "attribute": "model", "name": "model", "primary": false },
-            "scopeBehavior": { "attribute": "scopeBehavior", "name": "scopeBehavior", "primary": false },
+            "scopeBehavior": { "attribute": "scope-behavior", "name": "scopeBehavior", "primary": false },
             "tag": { "attribute": "tag", "name": "tag", "primary": false },
             "template": { "attribute": "template", "name": "template", "primary": false }
           },
@@ -2392,51 +2405,51 @@
         "aut-pagination": {
           "bindables": {
             "boundaryLinks": {
-              "attribute": "boundaryLinks",
+              "attribute": "boundary-links",
               "name": "boundaryLinks",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
-            "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+            "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
             "directionLinks": {
-              "attribute": "directionLinks",
+              "attribute": "direction-links",
               "name": "directionLinks",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "firstText": {
-              "attribute": "firstText",
+              "attribute": "first-text",
               "name": "firstText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
             "hideSinglePage": {
-              "attribute": "hideSinglePage",
+              "attribute": "hide-single-page",
               "name": "hideSinglePage",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "lastText": {
-              "attribute": "lastText",
+              "attribute": "last-text",
               "name": "lastText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
             "nextText": {
-              "attribute": "nextText",
+              "attribute": "next-text",
               "name": "nextText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
-            "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-            "paginationSize": { "attribute": "paginationSize", "name": "paginationSize", "primary": false },
+            "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+            "paginationSize": { "attribute": "pagination-size", "name": "paginationSize", "primary": false },
             "previousText": {
-              "attribute": "previousText",
+              "attribute": "previous-text",
               "name": "previousText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
-            "totalItems": { "attribute": "totalItems", "name": "totalItems", "primary": false }
+            "totalItems": { "attribute": "total-items", "name": "totalItems", "primary": false }
           },
           "boundary": true,
           "capture": false,
@@ -4243,15 +4256,28 @@
     { "kind": "unresolved-import", "message": "import \"Metadata\" from \"@aurelia/metadata\": Module \"aurelia/packages/metadata/dist/types/index.d.ts\" does not export \"Metadata\"", "resource": "aurelia/packages/kernel/src/utilities.ts" },
     {
       "kind": "unsupported-pattern",
-      "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed"
+      "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/binding/interfaces-bindings.ts"
     },
     { "kind": "dynamic-value", "message": "static $au for OneTimeBindingBehavior: Ensure static $au is an object literal, not a computed value." },
     { "kind": "dynamic-value", "message": "static $au for ToViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
     { "kind": "dynamic-value", "message": "static $au for FromViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
     { "kind": "dynamic-value", "message": "static $au for TwoWayBindingBehavior: Ensure static $au is an object literal, not a computed value." },
-    { "kind": "unsupported-pattern", "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed" },
-    { "kind": "unsupported-pattern", "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed" },
-    { "kind": "unsupported-pattern", "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed" }
+    {
+      "kind": "unsupported-pattern",
+      "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+    },
+    {
+      "kind": "unsupported-pattern",
+      "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+    },
+    {
+      "kind": "unsupported-pattern",
+      "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/utilities-metadata.ts"
+    }
   ],
   "graph": {
     "root": "root",
@@ -4265,7 +4291,7 @@
             "aurelia-table": {
               "bindables": {
                 "api": { "attribute": "api", "mode": "twoWay", "name": "api", "primary": false },
-                "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+                "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
                 "data": {
                   "attribute": "data",
                   "name": "data",
@@ -4273,20 +4299,20 @@
                   "type": { "kind": "ts", "name": "never[]" }
                 },
                 "dataSource": {
-                  "attribute": "dataSource",
+                  "attribute": "data-source",
                   "name": "dataSource",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
-                "displayData": { "attribute": "displayData", "mode": "twoWay", "name": "displayData", "primary": false },
+                "displayData": { "attribute": "display-data", "mode": "twoWay", "name": "displayData", "primary": false },
                 "filters": {
                   "attribute": "filters",
                   "name": "filters",
                   "primary": false,
                   "type": { "kind": "ts", "name": "never[]" }
                 },
-                "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-                "totalItems": { "attribute": "totalItems", "mode": "twoWay", "name": "totalItems", "primary": false }
+                "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+                "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
               },
               "className": "AureliaTableCustomAttribute",
               "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
@@ -4310,7 +4336,7 @@
                 },
                 "row": { "attribute": "row", "mode": "twoWay", "name": "row", "primary": false },
                 "selectedClass": {
-                  "attribute": "selectedClass",
+                  "attribute": "selected-class",
                   "name": "selectedClass",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
@@ -4516,51 +4542,51 @@
             "aut-pagination": {
               "bindables": {
                 "boundaryLinks": {
-                  "attribute": "boundaryLinks",
+                  "attribute": "boundary-links",
                   "name": "boundaryLinks",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
-                "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+                "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
                 "directionLinks": {
-                  "attribute": "directionLinks",
+                  "attribute": "direction-links",
                   "name": "directionLinks",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "firstText": {
-                  "attribute": "firstText",
+                  "attribute": "first-text",
                   "name": "firstText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
                 "hideSinglePage": {
-                  "attribute": "hideSinglePage",
+                  "attribute": "hide-single-page",
                   "name": "hideSinglePage",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "lastText": {
-                  "attribute": "lastText",
+                  "attribute": "last-text",
                   "name": "lastText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
                 "nextText": {
-                  "attribute": "nextText",
+                  "attribute": "next-text",
                   "name": "nextText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
-                "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-                "paginationSize": { "attribute": "paginationSize", "name": "paginationSize", "primary": false },
+                "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+                "paginationSize": { "attribute": "pagination-size", "name": "paginationSize", "primary": false },
                 "previousText": {
-                  "attribute": "previousText",
+                  "attribute": "previous-text",
                   "name": "previousText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
-                "totalItems": { "attribute": "totalItems", "name": "totalItems", "primary": false }
+                "totalItems": { "attribute": "total-items", "name": "totalItems", "primary": false }
               },
               "boundary": true,
               "capture": false,
@@ -4639,11 +4665,11 @@
               "bindables": {
                 "activated": { "attribute": "activated", "name": "activated", "primary": false },
                 "activating": { "attribute": "activating", "name": "activating", "primary": false },
-                "callbackContext": { "attribute": "callbackContext", "name": "callbackContext", "primary": false },
+                "callbackContext": { "attribute": "callback-context", "name": "callbackContext", "primary": false },
                 "deactivated": { "attribute": "deactivated", "name": "deactivated", "primary": false },
                 "deactivating": { "attribute": "deactivating", "name": "deactivating", "primary": false },
                 "position": { "attribute": "position", "name": "position", "primary": false },
-                "renderContext": { "attribute": "renderContext", "name": "renderContext", "primary": false },
+                "renderContext": { "attribute": "render-context", "name": "renderContext", "primary": false },
                 "strict": { "attribute": "strict", "name": "strict", "primary": false },
                 "target": { "attribute": "target", "name": "target", "primary": false }
               },
@@ -4922,7 +4948,7 @@
                 "composing": { "attribute": "composing", "name": "composing", "primary": false },
                 "composition": { "attribute": "composition", "name": "composition", "primary": false },
                 "model": { "attribute": "model", "name": "model", "primary": false },
-                "scopeBehavior": { "attribute": "scopeBehavior", "name": "scopeBehavior", "primary": false },
+                "scopeBehavior": { "attribute": "scope-behavior", "name": "scopeBehavior", "primary": false },
                 "tag": { "attribute": "tag", "name": "tag", "primary": false },
                 "template": { "attribute": "template", "name": "template", "primary": false }
               },
@@ -5256,7 +5282,7 @@
             "attribute": {
               "location": { "end": 371, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 319 },
               "origin": "source",
-              "value": "currentPage"
+              "value": "current-page"
             },
             "mode": {
               "location": { "end": 371, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 319 },
@@ -5304,7 +5330,7 @@
             "attribute": {
               "location": { "end": 190, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 159 },
               "origin": "source",
-              "value": "dataSource"
+              "value": "data-source"
             },
             "mode": {
               "location": { "end": 190, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 159 },
@@ -5330,7 +5356,7 @@
             "attribute": {
               "location": { "end": 280, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 228 },
               "origin": "source",
-              "value": "displayData"
+              "value": "display-data"
             },
             "mode": {
               "location": { "end": 280, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 228 },
@@ -5378,7 +5404,7 @@
             "attribute": {
               "location": { "end": 396, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 377 },
               "origin": "source",
-              "value": "pageSize"
+              "value": "page-size"
             },
             "mode": {
               "location": { "end": 396, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 377 },
@@ -5399,7 +5425,7 @@
             "attribute": {
               "location": { "end": 453, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 402 },
               "origin": "source",
-              "value": "totalItems"
+              "value": "total-items"
             },
             "mode": {
               "location": { "end": 453, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 402 },
@@ -5523,7 +5549,7 @@
             "attribute": {
               "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
               "origin": "source",
-              "value": "selectedClass"
+              "value": "selected-class"
             },
             "mode": {
               "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
@@ -5937,7 +5963,7 @@
             "attribute": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
               "origin": "source",
-              "value": "scopeBehavior"
+              "value": "scope-behavior"
             },
             "mode": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
@@ -6186,7 +6212,7 @@
             "attribute": {
               "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
               "origin": "source",
-              "value": "boundaryLinks"
+              "value": "boundary-links"
             },
             "mode": {
               "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
@@ -6212,7 +6238,7 @@
             "attribute": {
               "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
               "origin": "source",
-              "value": "currentPage"
+              "value": "current-page"
             },
             "mode": {
               "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
@@ -6234,7 +6260,7 @@
             "attribute": {
               "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
               "origin": "source",
-              "value": "directionLinks"
+              "value": "direction-links"
             },
             "mode": {
               "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
@@ -6260,7 +6286,7 @@
             "attribute": {
               "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
               "origin": "source",
-              "value": "firstText"
+              "value": "first-text"
             },
             "mode": {
               "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
@@ -6286,7 +6312,7 @@
             "attribute": {
               "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
               "origin": "source",
-              "value": "hideSinglePage"
+              "value": "hide-single-page"
             },
             "mode": {
               "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
@@ -6312,7 +6338,7 @@
             "attribute": {
               "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
               "origin": "source",
-              "value": "lastText"
+              "value": "last-text"
             },
             "mode": {
               "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
@@ -6338,7 +6364,7 @@
             "attribute": {
               "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
               "origin": "source",
-              "value": "nextText"
+              "value": "next-text"
             },
             "mode": {
               "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
@@ -6364,7 +6390,7 @@
             "attribute": {
               "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
               "origin": "source",
-              "value": "pageSize"
+              "value": "page-size"
             },
             "mode": {
               "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
@@ -6385,7 +6411,7 @@
             "attribute": {
               "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
               "origin": "source",
-              "value": "paginationSize"
+              "value": "pagination-size"
             },
             "mode": {
               "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
@@ -6406,7 +6432,7 @@
             "attribute": {
               "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
               "origin": "source",
-              "value": "previousText"
+              "value": "previous-text"
             },
             "mode": {
               "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
@@ -6432,7 +6458,7 @@
             "attribute": {
               "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
-              "value": "totalItems"
+              "value": "total-items"
             },
             "mode": {
               "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
@@ -6867,7 +6893,7 @@
             "attribute": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
               "origin": "source",
-              "value": "callbackContext"
+              "value": "callback-context"
             },
             "mode": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
@@ -6951,7 +6977,7 @@
             "attribute": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },
               "origin": "source",
-              "value": "renderContext"
+              "value": "render-context"
             },
             "mode": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },

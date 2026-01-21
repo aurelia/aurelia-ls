@@ -591,13 +591,13 @@
         "au-notification-host": {
           "bindables": {
             "containerClass": {
-              "attribute": "containerClass",
+              "attribute": "container-class",
               "name": "containerClass",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
             "hostClass": {
-              "attribute": "hostClass",
+              "attribute": "host-class",
               "name": "hostClass",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
@@ -983,13 +983,13 @@
             "au-notification-host": {
               "bindables": {
                 "containerClass": {
-                  "attribute": "containerClass",
+                  "attribute": "container-class",
                   "name": "containerClass",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
                 "hostClass": {
-                  "attribute": "hostClass",
+                  "attribute": "host-class",
                   "name": "hostClass",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
@@ -1340,7 +1340,7 @@
             "attribute": {
               "location": { "end": 869, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 832 },
               "origin": "source",
-              "value": "containerClass"
+              "value": "container-class"
             },
             "mode": {
               "location": { "end": 869, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 832 },
@@ -1366,7 +1366,7 @@
             "attribute": {
               "location": { "end": 829, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 797 },
               "origin": "source",
-              "value": "hostClass"
+              "value": "host-class"
             },
             "mode": {
               "location": { "end": 829, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 797 },

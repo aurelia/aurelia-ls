@@ -1796,15 +1796,28 @@
       },
       {
         "kind": "unsupported-pattern",
-        "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed"
+        "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/binding/interfaces-bindings.ts"
       },
       { "kind": "dynamic-value", "message": "static $au for OneTimeBindingBehavior: Ensure static $au is an object literal, not a computed value." },
       { "kind": "dynamic-value", "message": "static $au for ToViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
       { "kind": "dynamic-value", "message": "static $au for FromViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
       { "kind": "dynamic-value", "message": "static $au for TwoWayBindingBehavior: Ensure static $au is an object literal, not a computed value." },
-      { "kind": "unsupported-pattern", "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed" },
-      { "kind": "unsupported-pattern", "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed" },
-      { "kind": "unsupported-pattern", "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed" }
+      {
+        "kind": "unsupported-pattern",
+        "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+      },
+      {
+        "kind": "unsupported-pattern",
+        "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+      },
+      {
+        "kind": "unsupported-pattern",
+        "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed",
+        "resource": "aurelia/packages/runtime-html/src/utilities-metadata.ts"
+      }
     ],
     "resources": {
       "attributes": {
@@ -1950,11 +1963,11 @@
           "bindables": {
             "activated": { "attribute": "activated", "name": "activated", "primary": false },
             "activating": { "attribute": "activating", "name": "activating", "primary": false },
-            "callbackContext": { "attribute": "callbackContext", "name": "callbackContext", "primary": false },
+            "callbackContext": { "attribute": "callback-context", "name": "callbackContext", "primary": false },
             "deactivated": { "attribute": "deactivated", "name": "deactivated", "primary": false },
             "deactivating": { "attribute": "deactivating", "name": "deactivating", "primary": false },
             "position": { "attribute": "position", "name": "position", "primary": false },
-            "renderContext": { "attribute": "renderContext", "name": "renderContext", "primary": false },
+            "renderContext": { "attribute": "render-context", "name": "renderContext", "primary": false },
             "strict": { "attribute": "strict", "name": "strict", "primary": false },
             "target": { "attribute": "target", "name": "target", "primary": false }
           },
@@ -2120,11 +2133,11 @@
           "props": {
             "activated": { "attribute": "activated", "name": "activated", "primary": false },
             "activating": { "attribute": "activating", "name": "activating", "primary": false },
-            "callbackContext": { "attribute": "callbackContext", "name": "callbackContext", "primary": false },
+            "callbackContext": { "attribute": "callback-context", "name": "callbackContext", "primary": false },
             "deactivated": { "attribute": "deactivated", "name": "deactivated", "primary": false },
             "deactivating": { "attribute": "deactivating", "name": "deactivating", "primary": false },
             "position": { "attribute": "position", "name": "position", "primary": false },
-            "renderContext": { "attribute": "renderContext", "name": "renderContext", "primary": false },
+            "renderContext": { "attribute": "render-context", "name": "renderContext", "primary": false },
             "strict": { "attribute": "strict", "name": "strict", "primary": false },
             "target": { "attribute": "target", "name": "target", "primary": false }
           },
@@ -2179,7 +2192,7 @@
             "composing": { "attribute": "composing", "name": "composing", "primary": false },
             "composition": { "attribute": "composition", "name": "composition", "primary": false },
             "model": { "attribute": "model", "name": "model", "primary": false },
-            "scopeBehavior": { "attribute": "scopeBehavior", "name": "scopeBehavior", "primary": false },
+            "scopeBehavior": { "attribute": "scope-behavior", "name": "scopeBehavior", "primary": false },
             "tag": { "attribute": "tag", "name": "tag", "primary": false },
             "template": { "attribute": "template", "name": "template", "primary": false }
           },
@@ -4019,15 +4032,28 @@
     },
     {
       "kind": "unsupported-pattern",
-      "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed"
+      "message": "destructuring export: { default: defaultMode, oneTime, toView, fromView, twoWay }: Destructuring export patterns like \"export const { default: defaultMode, oneTime, toView, fromView, twoWay } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/binding/interfaces-bindings.ts"
     },
     { "kind": "dynamic-value", "message": "static $au for OneTimeBindingBehavior: Ensure static $au is an object literal, not a computed value." },
     { "kind": "dynamic-value", "message": "static $au for ToViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
     { "kind": "dynamic-value", "message": "static $au for FromViewBindingBehavior: Ensure static $au is an object literal, not a computed value." },
     { "kind": "dynamic-value", "message": "static $au for TwoWayBindingBehavior: Ensure static $au is an object literal, not a computed value." },
-    { "kind": "unsupported-pattern", "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed" },
-    { "kind": "unsupported-pattern", "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed" },
-    { "kind": "unsupported-pattern", "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed" }
+    {
+      "kind": "unsupported-pattern",
+      "message": "destructuring export: { enter, exit }: Destructuring export patterns like \"export const { enter, exit } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+    },
+    {
+      "kind": "unsupported-pattern",
+      "message": "destructuring export: { wrap, unwrap }: Destructuring export patterns like \"export const { wrap, unwrap } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/templating/watchers.ts"
+    },
+    {
+      "kind": "unsupported-pattern",
+      "message": "destructuring export: { annotation }: Destructuring export patterns like \"export const { annotation } = ...\" are not analyzed",
+      "resource": "aurelia/packages/runtime-html/src/utilities-metadata.ts"
+    }
   ],
   "graph": {
     "root": "root",
@@ -4096,11 +4122,11 @@
               "bindables": {
                 "activated": { "attribute": "activated", "name": "activated", "primary": false },
                 "activating": { "attribute": "activating", "name": "activating", "primary": false },
-                "callbackContext": { "attribute": "callbackContext", "name": "callbackContext", "primary": false },
+                "callbackContext": { "attribute": "callback-context", "name": "callbackContext", "primary": false },
                 "deactivated": { "attribute": "deactivated", "name": "deactivated", "primary": false },
                 "deactivating": { "attribute": "deactivating", "name": "deactivating", "primary": false },
                 "position": { "attribute": "position", "name": "position", "primary": false },
-                "renderContext": { "attribute": "renderContext", "name": "renderContext", "primary": false },
+                "renderContext": { "attribute": "render-context", "name": "renderContext", "primary": false },
                 "strict": { "attribute": "strict", "name": "strict", "primary": false },
                 "target": { "attribute": "target", "name": "target", "primary": false }
               },
@@ -4379,7 +4405,7 @@
                 "composing": { "attribute": "composing", "name": "composing", "primary": false },
                 "composition": { "attribute": "composition", "name": "composition", "primary": false },
                 "model": { "attribute": "model", "name": "model", "primary": false },
-                "scopeBehavior": { "attribute": "scopeBehavior", "name": "scopeBehavior", "primary": false },
+                "scopeBehavior": { "attribute": "scope-behavior", "name": "scopeBehavior", "primary": false },
                 "tag": { "attribute": "tag", "name": "tag", "primary": false },
                 "template": { "attribute": "template", "name": "template", "primary": false }
               },
@@ -5008,7 +5034,7 @@
             "attribute": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
               "origin": "source",
-              "value": "scopeBehavior"
+              "value": "scope-behavior"
             },
             "mode": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
@@ -5796,7 +5822,7 @@
             "attribute": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
               "origin": "source",
-              "value": "callbackContext"
+              "value": "callback-context"
             },
             "mode": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
@@ -5880,7 +5906,7 @@
             "attribute": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },
               "origin": "source",
-              "value": "renderContext"
+              "value": "render-context"
             },
             "mode": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },

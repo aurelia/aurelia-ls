@@ -225,7 +225,7 @@ describe("matchDefine - CustomElement", () => {
     expect(unwrapSourced(bindables.value?.attribute)).toBe("def-value");
     expect(unwrapSourced(bindables.value?.type)).toBe("string");
     expect(unwrapSourced(bindables.staticOnly?.mode)).toBe("toView");
-    expect(unwrapSourced(bindables.staticOnly?.attribute)).toBe("staticOnly");
+    expect(unwrapSourced(bindables.staticOnly?.attribute)).toBe("static-only");
     expect(unwrapSourced(bindables.memberOnly?.type)).toBe("number");
   });
 

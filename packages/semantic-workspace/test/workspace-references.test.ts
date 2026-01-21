@@ -60,6 +60,52 @@ function expectReferencesAtOffsets(
   }
 }
 
+function compareReferenceOrder(
+  a: { uri: string; span: { start: number; end: number }; symbolId?: string; exprId?: string; nodeId?: string },
+  b: { uri: string; span: { start: number; end: number }; symbolId?: string; exprId?: string; nodeId?: string },
+  currentUri: string,
+): number {
+  const aCurrent = String(a.uri) === String(currentUri) ? 0 : 1;
+  const bCurrent = String(b.uri) === String(currentUri) ? 0 : 1;
+  if (aCurrent !== bCurrent) return aCurrent - bCurrent;
+  const uriDelta = String(a.uri).localeCompare(String(b.uri));
+  if (uriDelta !== 0) return uriDelta;
+  const startDelta = a.span.start - b.span.start;
+  if (startDelta !== 0) return startDelta;
+  const endDelta = a.span.end - b.span.end;
+  if (endDelta !== 0) return endDelta;
+  const symbolDelta = String(a.symbolId ?? "").localeCompare(String(b.symbolId ?? ""));
+  if (symbolDelta !== 0) return symbolDelta;
+  const exprDelta = String(a.exprId ?? "").localeCompare(String(b.exprId ?? ""));
+  if (exprDelta !== 0) return exprDelta;
+  return String(a.nodeId ?? "").localeCompare(String(b.nodeId ?? ""));
+}
+
+function expectOrderedReferences(
+  refs: readonly { uri: string; span: { start: number; end: number }; symbolId?: string; exprId?: string; nodeId?: string }[],
+  currentUri: string,
+): void {
+  for (let i = 1; i < refs.length; i += 1) {
+    const prev = refs[i - 1];
+    const next = refs[i];
+    expect(
+      compareReferenceOrder(prev, next, currentUri) <= 0,
+      `Expected ordered references, got ${String(prev?.uri)} before ${String(next?.uri)}`,
+    ).toBe(true);
+  }
+}
+
+function expectNoDuplicateReferenceSpans(
+  refs: readonly { uri: string; span: { start: number; end: number } }[],
+): void {
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    const key = `${String(ref.uri)}:${ref.span.start}:${ref.span.end}`;
+    expect(seen.has(key), `Duplicate reference span: ${key}`).toBe(false);
+    seen.add(key);
+  }
+}
+
 describe("workspace references (workspace-contract)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let appUri: string;
@@ -146,11 +192,33 @@ describe("workspace references (workspace-contract)", () => {
     expectReferencesAtOffsets(refs, modelsUri, [modelsOffset]);
   });
 
+  it("orders and dedupes cross-file references", () => {
+    const query = harness.workspace.query(tableUri);
+    const refs = query.references(findPosition(tableText, "item.rating", "item.".length));
+    expectOrderedReferences(refs, tableUri);
+    expectNoDuplicateReferenceSpans(refs);
+
+    const hasCurrent = refs.some((loc) => String(loc.uri) === String(tableUri));
+    if (hasCurrent) {
+      let seenOther = false;
+      for (const loc of refs) {
+        const isCurrent = String(loc.uri) === String(tableUri);
+        if (!isCurrent) {
+          seenOther = true;
+        } else {
+          expect(seenOther).toBe(false);
+        }
+      }
+    }
+  });
+
   it("finds template references when starting from TypeScript symbols", () => {
     const query = harness.workspace.query(viewModelUri);
     const refs = query.references(findPosition(viewModelText, "viewMode:", 1));
     const offsets = findOffsets(appText, /\bviewMode\b/g);
     expectReferencesAtOffsets(refs, appUri, offsets);
+    expectOrderedReferences(refs, viewModelUri);
+    expectNoDuplicateReferenceSpans(refs);
   });
 
   it("finds template call references when starting from TypeScript symbols", () => {
@@ -158,10 +226,14 @@ describe("workspace references (workspace-contract)", () => {
     const resetRefs = query.references(findPosition(viewModelText, "resetFilters()", 1));
     const resetOffsets = findOffsets(appText, /\bresetFilters\b/g);
     expectReferencesAtOffsets(resetRefs, appUri, resetOffsets);
+    expectOrderedReferences(resetRefs, viewModelUri);
+    expectNoDuplicateReferenceSpans(resetRefs);
 
     const selectRefs = query.references(findPosition(viewModelText, "selectDevice(", 1));
     const selectOffsets = findOffsets(appText, /\bselectDevice\b/g);
     expectReferencesAtOffsets(selectRefs, appUri, selectOffsets);
+    expectOrderedReferences(selectRefs, viewModelUri);
+    expectNoDuplicateReferenceSpans(selectRefs);
   });
 
   it("finds inline template references when starting from TypeScript symbols", () => {
@@ -171,6 +243,8 @@ describe("workspace references (workspace-contract)", () => {
     );
     const offsets = findOffsets(inlineTemplateText, /\bmessage\b/g);
     expectReferencesAtOffsets(refs, inlineTemplateUri, offsets);
+    expectOrderedReferences(refs, inlineComponentUri);
+    expectNoDuplicateReferenceSpans(refs);
   });
 });
 

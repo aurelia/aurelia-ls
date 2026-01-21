@@ -60,7 +60,7 @@
         { "attribute": "composing", "name": "composing" },
         { "attribute": "composition", "name": "composition" },
         { "attribute": "model", "name": "model" },
-        { "attribute": "scopeBehavior", "name": "scopeBehavior" },
+        { "attribute": "scope-behavior", "name": "scopeBehavior" },
         { "attribute": "tag", "name": "tag" },
         { "attribute": "template", "name": "template" }
       ],
@@ -153,11 +153,11 @@
       "bindables": [
         { "attribute": "activated", "name": "activated" },
         { "attribute": "activating", "name": "activating" },
-        { "attribute": "callbackContext", "name": "callbackContext" },
+        { "attribute": "callback-context", "name": "callbackContext" },
         { "attribute": "deactivated", "name": "deactivated" },
         { "attribute": "deactivating", "name": "deactivating" },
         { "attribute": "position", "name": "position" },
-        { "attribute": "renderContext", "name": "renderContext" },
+        { "attribute": "render-context", "name": "renderContext" },
         { "attribute": "strict", "name": "strict" },
         { "attribute": "target", "name": "target" }
       ],

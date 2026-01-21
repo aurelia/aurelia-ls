@@ -79,7 +79,7 @@
         { "attribute": "composing", "name": "composing" },
         { "attribute": "composition", "name": "composition" },
         { "attribute": "model", "name": "model" },
-        { "attribute": "scopeBehavior", "name": "scopeBehavior" },
+        { "attribute": "scope-behavior", "name": "scopeBehavior" },
         { "attribute": "tag", "name": "tag" },
         { "attribute": "template", "name": "template" }
       ],
@@ -147,10 +147,10 @@
     },
     {
       "bindables": [
-        { "attribute": "inStock", "name": "inStock" },
+        { "attribute": "in-stock", "name": "inStock" },
         { "attribute": "name", "name": "name" },
         { "attribute": "price", "name": "price" },
-        { "attribute": "stockCount", "name": "stockCount" }
+        { "attribute": "stock-count", "name": "stockCount" }
       ],
       "id": "sym:57a9c4d3b0b122b7b4bc529deec5f84d787b18614aba2a546d2190d68f90fb96",
       "kind": "custom-element",
@@ -228,11 +228,11 @@
       "bindables": [
         { "attribute": "activated", "name": "activated" },
         { "attribute": "activating", "name": "activating" },
-        { "attribute": "callbackContext", "name": "callbackContext" },
+        { "attribute": "callback-context", "name": "callbackContext" },
         { "attribute": "deactivated", "name": "deactivated" },
         { "attribute": "deactivating", "name": "deactivating" },
         { "attribute": "position", "name": "position" },
-        { "attribute": "renderContext", "name": "renderContext" },
+        { "attribute": "render-context", "name": "renderContext" },
         { "attribute": "strict", "name": "strict" },
         { "attribute": "target", "name": "target" }
       ],
