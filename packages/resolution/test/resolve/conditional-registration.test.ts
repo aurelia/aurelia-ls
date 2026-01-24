@@ -24,7 +24,7 @@ describe("Full Pipeline: conditional registration guards", () => {
     ).toBe(true);
 
     const conditionalDiagnostics = result.diagnostics.filter(
-      (d) => d.code === "gap:conditional-registration"
+      (d) => d.code === "aurelia/gap/unknown-registration" && d.data?.gapKind === "conditional-registration"
     );
     expect(conditionalDiagnostics.length).toBe(0);
   });
@@ -50,11 +50,12 @@ describe("Full Pipeline: conditional registration guards", () => {
     ).toBe(true);
 
     const conditional = result.diagnostics.find(
-      (d) => d.code === "gap:conditional-registration"
+      (d) => d.code === "aurelia/gap/unknown-registration" && d.data?.gapKind === "conditional-registration"
     );
     expect(conditional).toBeTruthy();
     const expectedSource = normalizePathForId("/src/main.ts");
-    expect(conditional?.source).toBe(expectedSource);
+    expect(conditional?.source).toBe("resolution");
+    expect(conditional?.uri).toBe(expectedSource);
     expect(result.catalog.confidence).toBe("partial");
     expect(result.semanticSnapshot.confidence).toBe("partial");
     expect(result.catalog.gaps).toEqual(
@@ -83,11 +84,12 @@ describe("Full Pipeline: conditional registration guards", () => {
 
     const result = resolve(program);
     const unresolved = result.diagnostics.find(
-      (d) => d.code === "gap:unresolved-import"
+      (d) => d.code === "aurelia/gap/partial-eval" && d.data?.gapKind === "unresolved-import"
     );
     expect(unresolved).toBeTruthy();
     const expectedSource = normalizePathForId("/src/main.ts");
-    expect(unresolved?.source).toBe(expectedSource);
+    expect(unresolved?.source).toBe("resolution");
+    expect(unresolved?.uri).toBe(expectedSource);
     expect(result.catalog.confidence).toBe("conservative");
     expect(result.semanticSnapshot.confidence).toBe("conservative");
     expect(result.catalog.gaps).toEqual(
@@ -121,7 +123,7 @@ describe("Full Pipeline: conditional registration guards", () => {
     ).toBe(false);
 
     const conditionalDiagnostics = result.diagnostics.filter(
-      (d) => d.code === "gap:conditional-registration"
+      (d) => d.code === "aurelia/gap/unknown-registration" && d.data?.gapKind === "conditional-registration"
     );
     expect(conditionalDiagnostics.length).toBe(0);
   });
@@ -172,7 +174,7 @@ describe("Full Pipeline: conditional registration guards", () => {
     ).toBe(true);
 
     const conditionalDiagnostics = result.diagnostics.filter(
-      (d) => d.code === "gap:conditional-registration"
+      (d) => d.code === "aurelia/gap/unknown-registration" && d.data?.gapKind === "conditional-registration"
     );
     expect(conditionalDiagnostics.length).toBe(0);
   });

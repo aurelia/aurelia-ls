@@ -1,6 +1,6 @@
 [
   {
-    "name": "DG-01 duplicate let names in with overlay -> AU1202",
+    "name": "DG-01 duplicate let names in with overlay -> aurelia/invalid-binding-pattern",
     "markup": "<div with.bind=\"ctx\"><let a.bind=\"x\"></let><let a.bind=\"y\"></let></div>",
     "expect": {
       "frames": [
@@ -16,12 +16,12 @@
         { "kind": "expr", "code": "y", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": [
-        { "code": "AU1202" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "DG-02 repeat header missing 'of' -> AU1201",
+    "name": "DG-02 repeat header missing 'of' -> aurelia/invalid-binding-pattern",
     "markup": "<ul repeat.for=\"item items\"></ul>",
     "expect": {
       "frames": [
@@ -33,12 +33,12 @@
         { "kind": "forOfHeader", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1201" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "DG-03 repeat header bad destructuring -> AU1201",
+    "name": "DG-03 repeat header bad destructuring -> aurelia/invalid-binding-pattern",
     "markup": "<ul repeat.for=\"{x,,y} of items\"></ul>",
     "expect": {
       "frames": [
@@ -50,12 +50,12 @@
         { "kind": "forOfHeader", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1201" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "DG-04 invalid binding expression surfaces AU1203",
+    "name": "DG-04 invalid binding expression surfaces aurelia/expr-parse-error",
     "markup": "<div title.bind=\"foo(\"></div>",
     "expect": {
       "frames": [
@@ -66,12 +66,12 @@
         { "kind": "expr", "code": "foo(", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1203" }
+        { "code": "aurelia/expr-parse-error" }
       ]
     }
   },
   {
-    "name": "DG-05 iterator local conflicts with let name -> AU1202",
+    "name": "DG-05 iterator local conflicts with let name -> aurelia/invalid-binding-pattern",
     "markup": "<ul repeat.for=\"item of items\"><let item.bind=\"other\"></let></ul>",
     "expect": {
       "frames": [
@@ -93,12 +93,12 @@
         { "kind": "expr", "code": "other", "frame": "overlay:iterator@1" }
       ],
       "diags": [
-        { "code": "AU1202" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "DG-06 invalid expression in listener context surfaces AU1203",
+    "name": "DG-06 invalid expression in listener context surfaces aurelia/expr-parse-error",
     "markup": "<button click.trigger=\"handle(\"></button>",
     "expect": {
       "frames": [
@@ -109,12 +109,12 @@
         { "kind": "expr", "code": "handle(", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1203" }
+        { "code": "aurelia/expr-parse-error" }
       ]
     }
   },
   {
-    "name": "DG-07 invalid expression in interpolation surfaces AU1203",
+    "name": "DG-07 invalid expression in interpolation surfaces aurelia/expr-parse-error",
     "markup": "<div>${foo(}</div>",
     "expect": {
       "frames": [
@@ -125,7 +125,7 @@
         { "kind": "expr", "code": "foo(", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1203" }
+        { "code": "aurelia/expr-parse-error" }
       ]
     }
   },
@@ -248,13 +248,13 @@
         { "kind": "expr", "code": "bar[", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1203" },
-        { "code": "AU1203" }
+        { "code": "aurelia/expr-parse-error" },
+        { "code": "aurelia/expr-parse-error" }
       ]
     }
   },
   {
-    "name": "DG-13 let shadowing contextual variable -> AU1202",
+    "name": "DG-13 let shadowing contextual variable -> aurelia/invalid-binding-pattern",
     "markup": "<ul repeat.for=\"i of items\"><let $index.bind=\"0\"></let></ul>",
     "expect": {
       "frames": [
@@ -276,12 +276,12 @@
         { "kind": "expr", "code": "0", "frame": "overlay:iterator@1" }
       ],
       "diags": [
-        { "code": "AU1202" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "DG-14 invalid expression in controller value surfaces AU1203",
+    "name": "DG-14 invalid expression in controller value surfaces aurelia/expr-parse-error",
     "markup": "<div if.bind=\"foo(\"></div>",
     "expect": {
       "frames": [
@@ -292,12 +292,12 @@
         { "kind": "expr", "code": "foo(", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1203" }
+        { "code": "aurelia/expr-parse-error" }
       ]
     }
   },
   {
-    "name": "DG-15 invalid expression in repeat collection surfaces AU1201",
+    "name": "DG-15 invalid expression in repeat collection surfaces aurelia/invalid-binding-pattern",
     "markup": "<ul repeat.for=\"i of items[\"></ul>",
     "expect": {
       "frames": [
@@ -309,7 +309,7 @@
         { "kind": "forOfHeader", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1201" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
@@ -339,3 +339,4 @@
     }
   }
 ]
+

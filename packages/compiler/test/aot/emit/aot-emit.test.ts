@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createFailureRecorder, fmtList, diffByKey } from "../../_helpers/test-utils.js";
+import { createFailureRecorder, fmtList, diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 import { deepMergeSemantics } from "../../_helpers/semantics-merge.js";
 
 import {
@@ -137,7 +137,10 @@ function runPipeline(markup: string, ctx: CompilerContext): unknown {
     name: "test",
     catalog: ctx.sem.catalog,
   });
-  const linked = resolveHost(ir, ctx.sem);
+  const linked = resolveHost(ir, ctx.sem, {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+  });
   const scope = bindScopes(linked);
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });

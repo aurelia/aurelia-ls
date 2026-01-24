@@ -15,6 +15,7 @@ import type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPat
 import type { Origin, Provenance } from "./origin.js";
 import type { SourceSpan, TextSpan } from "./span.js";
 import type { CompilerDiagnostic } from "./diagnostics.js";
+import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../diagnostics/catalog/index.js";
 
 export type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
 export type { SourceSpan, TextSpan } from "./span.js";
@@ -396,14 +397,11 @@ export interface InstructionRow {
 /**
  * IR-level diagnostic codes (lowering phase).
  *
- * Code ranges:
- * - AU07xx: Template compilation errors (matches runtime template-compiler)
+ * Canonical diagnostics surface for template lowering.
  */
-export type IrDiagCode =
-  | "AU0704"  // Invalid <let> command (must be property-kind command from config)
-  | "AU0705"; // Unknown binding command
+export type IrDiagCode = DiagnosticCodeForStage<"lower">;
 
-export type IrDiagnostic = CompilerDiagnostic<IrDiagCode>;
+export type IrDiagnostic = CompilerDiagnostic<IrDiagCode, DiagnosticDataFor<IrDiagCode>>;
 
 /* ===========================
  * Module container

@@ -57,13 +57,13 @@ describe("Full Pipeline: explicit-app", () => {
     // - product-card: Test fixture with local deps but not globally registered
     // Filter to app diagnostics only (exclude Aurelia framework via path mapping)
     const appDiagnostics = result.diagnostics.filter(d =>
-      d.source?.includes("/explicit-app/src/")
+      d.uri?.includes("/explicit-app/src/")
     );
-    const orphanDiagnostics = appDiagnostics.filter(d => d.code.startsWith("RES000"));
+    const orphanDiagnostics = appDiagnostics.filter(d => d.code.startsWith("aurelia/resolution/orphan-"));
     expect(orphanDiagnostics.length, "Should have 2 app orphan diagnostics").toBe(2);
 
     const orphanNames = orphanDiagnostics
-      .filter(d => d.code === "RES0001")
+      .filter(d => d.code === "aurelia/resolution/orphan-element")
       .map(d => d.message.match(/element '([^']+)'/)?.[1])
       .sort();
     expect(orphanNames).toEqual(["my-app", "product-card"]);

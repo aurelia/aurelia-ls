@@ -19,7 +19,7 @@ import type {
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
 
 // Shared imports (via barrel)
-import type { VmReflection, CompilerDiagnostic } from "./shared/index.js";
+import type { VmReflection, CompilerDiagnostic, ModuleResolver } from "./shared/index.js";
 
 // Pipeline imports (via barrel)
 import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints, StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/index.js";
@@ -46,6 +46,7 @@ export interface CompileOptions {
   localImports?: readonly LocalImportDef[];
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
+  moduleResolver: ModuleResolver;
   overlayBaseName?: string;
   cache?: CacheOptions;
   fingerprints?: FingerprintHints;
@@ -85,6 +86,7 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
     semantics: opts.semantics,
+    moduleResolver: opts.moduleResolver,
     overlay: {
       isJs: opts.isJs,
       filename: overlayBaseName,

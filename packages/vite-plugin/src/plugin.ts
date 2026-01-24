@@ -511,19 +511,18 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         };
 
         // Start async resolution (will complete before first request)
-        resolutionPromise = createResolutionContext(
-          tsconfigPath,
-          logger,
-          {
-            defines: resolutionDefines,
-            thirdParty: resolvedOptions.conventions.thirdParty,
-            conventions: resolvedOptions.conventions.config,
-            policy: resolvedOptions.policy,
-            packagePath: resolvedOptions.packagePath,
-            packageRoots: resolvedOptions.packageRoots,
-            templateExtensions: resolvedOptions.conventions.config.templateExtensions,
-            styleExtensions: resolvedOptions.conventions.config.styleExtensions,
-          },
+          resolutionPromise = createResolutionContext(
+            tsconfigPath,
+            logger,
+            {
+              defines: resolutionDefines,
+              thirdParty: resolvedOptions.conventions.thirdParty,
+              conventions: resolvedOptions.conventions.config,
+              packagePath: resolvedOptions.packagePath,
+              packageRoots: resolvedOptions.packageRoots,
+              templateExtensions: resolvedOptions.conventions.config.templateExtensions,
+              styleExtensions: resolvedOptions.conventions.config.styleExtensions,
+            },
         ).then((ctx) => {
           resolutionContext = ctx;
           pluginState.resolution = ctx;

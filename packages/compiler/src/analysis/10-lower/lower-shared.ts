@@ -11,6 +11,8 @@ import type {
   IrDiagnostic,
   SourceSpan,
 } from "../../model/ir.js";
+import { diagnosticsCatalog, type DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
 import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/expression-parser.js";
 import { extractInterpolationSegments } from "../../parsing/expression-parser.js";
 import { deterministicStringId } from "../../model/identity.js";
@@ -54,14 +56,17 @@ export class ExprTable {
     public readonly sourceText: string,
   ) {}
 
-  public addDiag(code: IrDiagCode, message: string, loc: P5Loc | null): void {
-    this.diags.push({
-      code,
+  public addDiag<Code extends IrDiagCode>(
+    code: Code,
+    message: string,
+    loc: P5Loc | null,
+    data?: DiagnosticDataFor<Code>,
+  ): void {
+    this.diags.push(lowerDiagnosticEmitter.emit(code, {
       message,
-      source: "lower",
-      severity: "error",
       span: toSpan(loc, this.source),
-    });
+      data,
+    }));
   }
 
   public add(code: string, loc: P5Loc | null, expressionType: ExpressionType): ExprRef {
@@ -82,6 +87,11 @@ export class ExprTable {
     return { id, code, loc: toSpan(loc, this.source) };
   }
 }
+
+const lowerDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, IrDiagCode>(
+  diagnosticsCatalog,
+  { source: "lower" },
+);
 
 /**
  * Get the binding mode for a command.

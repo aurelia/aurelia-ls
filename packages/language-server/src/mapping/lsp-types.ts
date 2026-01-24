@@ -8,6 +8,7 @@ import {
   type Location,
   type WorkspaceEdit,
   type Diagnostic,
+  type DiagnosticRelatedInformation,
   type Range,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -15,12 +16,14 @@ import { pathToFileURL } from "node:url";
 import type {
   WorkspaceCompletionItem,
   WorkspaceDiagnostic,
+  WorkspaceDiagnostics,
   WorkspaceEdit as SemanticWorkspaceEdit,
   WorkspaceHover,
   WorkspaceLocation,
 } from "@aurelia-ls/semantic-workspace";
 import {
   canonicalDocumentUri,
+  type DiagnosticSurface,
   type DocumentSpan,
   type DocumentUri,
 } from "@aurelia-ls/compiler";
@@ -56,7 +59,8 @@ export function spanToRange(loc: DocumentSpan, lookupText: LookupTextFn): Range 
   return { start: doc.positionAt(loc.span.start), end: doc.positionAt(loc.span.end) };
 }
 
-function toLspSeverity(sev: "error" | "warning" | "info"): LspDiagnosticSeverity {
+function toLspSeverity(sev?: "error" | "warning" | "info"): LspDiagnosticSeverity | undefined {
+  if (!sev) return undefined;
   switch (sev) {
     case "warning":
       return LspDiagnosticSeverity.Warning;
@@ -69,25 +73,52 @@ function toLspSeverity(sev: "error" | "warning" | "info"): LspDiagnosticSeverity
 
 export function mapWorkspaceDiagnostics(
   uri: DocumentUri,
-  diags: readonly WorkspaceDiagnostic[],
+  diags: WorkspaceDiagnostics,
   lookupText: LookupTextFn,
+  options?: { surface?: DiagnosticSurface },
 ): Diagnostic[] {
   const mapped: Diagnostic[] = [];
-  for (const diag of diags) {
+  const surface = options?.surface ?? "lsp";
+  const entries = diags.bySurface.get(surface) ?? [];
+  for (const diag of entries) {
     if (!diag.span) continue;
-    const range = spanToRange({ uri, span: diag.span }, lookupText);
+    const targetUri = diag.uri ?? uri;
+    const range = spanToRange({ uri: targetUri, span: diag.span }, lookupText);
     if (!range) continue;
+    const severity = toLspSeverity(diag.severity);
+    const related = mapRelatedDiagnostics(diag, targetUri, lookupText);
     const base: Diagnostic = {
       range,
       message: diag.message,
-      severity: toLspSeverity(diag.severity),
       code: diag.code,
       source: diag.source ?? "aurelia",
     };
+    if (severity !== undefined) base.severity = severity;
     if (diag.data) base.data = diag.data;
+    if (related.length > 0) base.relatedInformation = related;
     mapped.push(base);
   }
   return mapped;
+}
+
+function mapRelatedDiagnostics(
+  diag: WorkspaceDiagnostic,
+  defaultUri: DocumentUri,
+  lookupText: LookupTextFn,
+): DiagnosticRelatedInformation[] {
+  const related = diag.related ?? [];
+  if (related.length === 0) return [];
+  const results: DiagnosticRelatedInformation[] = [];
+  for (const entry of related) {
+    if (!entry.span) continue;
+    const range = spanToRange({ uri: defaultUri, span: entry.span }, lookupText);
+    if (!range) continue;
+    results.push({
+      message: entry.message,
+      location: { uri: toLspUri(defaultUri), range },
+    });
+  }
+  return results;
 }
 
 export function mapWorkspaceCompletions(items: readonly WorkspaceCompletionItem[]): CompletionItem[] {

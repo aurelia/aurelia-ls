@@ -27,14 +27,14 @@
     }
   },
   {
-    "name": "R-E-04 unknown event produces AU1103",
+    "name": "R-E-04 unknown event produces aurelia/unknown-event",
     "markup": "<div @xyz=\"fn()\"></div>",
     "expect": {
       "items": [
         { "kind": "event", "to": "xyz", "type": "unknown" }
       ],
       "diags": [
-        { "code": "AU1103" }
+        { "code": "aurelia/unknown-event" }
       ]
     }
   },
@@ -132,24 +132,24 @@
         { "kind": "event", "to": "click", "type": "unknown" }
       ],
       "diags": [
-        { "code": "AU1103" }
+        { "code": "aurelia/unknown-event" }
       ]
     }
   },
   {
-    "name": "R-E-14 unknown event name produces AU1103",
+    "name": "R-E-14 unknown event name produces aurelia/unknown-event",
     "markup": "<div @transitionend=\"onEnd()\"></div>",
     "expect": {
       "items": [
         { "kind": "event", "to": "transitionend", "type": "unknown" }
       ],
       "diags": [
-        { "code": "AU1103" }
+        { "code": "aurelia/unknown-event" }
       ]
     }
   },
   {
-    "name": "R-E-15 clear both global and per-element event maps -> AU1103 for input event",
+    "name": "R-E-15 clear both global and per-element event maps -> aurelia/unknown-event for input event",
     "semOverrides": {
       "events": {
         "byName": {},
@@ -162,7 +162,7 @@
         { "kind": "event", "to": "input", "type": "unknown" }
       ],
       "diags": [
-        { "code": "AU1103" }
+        { "code": "aurelia/unknown-event" }
       ]
     }
   },
@@ -179,7 +179,7 @@
         { "kind": "event", "to": "click", "type": "unknown", "capture": true }
       ],
       "diags": [
-        { "code": "AU1103" }
+        { "code": "aurelia/unknown-event" }
       ]
     }
   },
@@ -199,8 +199,9 @@
         { "kind": "event", "to": "click", "type": "unknown" }
       ],
       "diags": [
-        { "code": "AU1103" }
+        { "code": "aurelia/unknown-event" }
       ]
     }
   }
 ]
+

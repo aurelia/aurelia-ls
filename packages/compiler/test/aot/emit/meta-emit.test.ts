@@ -16,6 +16,7 @@ import {
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 // Run full pipeline: markup → SerializedDefinition
 function compileTemplate(markup: string) {
@@ -27,7 +28,10 @@ function compileTemplate(markup: string) {
     name: "test",
     catalog: DEFAULT_SEMANTICS.catalog,
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+  const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+  });
   const scope = bindScopes(linked);
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });

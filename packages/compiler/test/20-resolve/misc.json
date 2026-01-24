@@ -9,14 +9,14 @@
     }
   },
   {
-    "name": "R-M-02 view-model.ref -> component ref (AU1102 for unknown element)",
+    "name": "R-M-02 view-model.ref -> component ref (aurelia/unknown-element for unknown element)",
     "markup": "<my-el view-model.ref=\"vm\"></my-el>",
     "expect": {
       "items": [
         { "kind": "ref", "on": "component" }
       ],
       "diags": [
-        { "code": "AU1102" }
+        { "code": "aurelia/unknown-element" }
       ]
     }
   },
@@ -30,14 +30,14 @@
     }
   },
   {
-    "name": "R-M-04 view-model.ref -> component ref (AU1102 for unknown element)",
+    "name": "R-M-04 view-model.ref -> component ref (aurelia/unknown-element for unknown element)",
     "markup": "<my-card view-model.ref=\"vm\"></my-card>",
     "expect": {
       "items": [
         { "kind": "ref", "on": "component" }
       ],
       "diags": [
-        { "code": "AU1102" }
+        { "code": "aurelia/unknown-element" }
       ]
     }
   },
@@ -47,3 +47,4 @@
     "expect": { "items": [] }
   }
 ]
+

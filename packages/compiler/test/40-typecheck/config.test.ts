@@ -20,6 +20,9 @@ import {
   type BindingContext,
   type TypecheckConfig,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
+
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "test.html" };
 
 // Helper to create config with specific overrides
 function config(overrides: Partial<TypecheckConfig> = {}): TypecheckConfig {
@@ -334,11 +337,11 @@ describe("cascade suppression", () => {
 
   test("no type diagnostic when target.kind === 'unknown' (resolve failed)", () => {
     // Bind to a property that doesn't exist on the element
-    // This will produce a resolve error (AU1104) but should NOT produce a type error
+    // This will produce a resolve error (aurelia/unknown-bindable) but should NOT produce a type error
     const markup = '<div nonexistent.bind="42"></div>';
 
     const ir = lowerDocument(markup, opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
     const scope = bindScopes(linked);
     const tc = typecheck({
       linked,
@@ -365,7 +368,7 @@ describe("cascade suppression", () => {
     const markup = '<input disabled.bind="\'yes\'">';
 
     const ir = lowerDocument(markup, opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
     const scope = bindScopes(linked);
     const tc = typecheck({
       linked,
@@ -381,7 +384,8 @@ describe("cascade suppression", () => {
 
     // Should produce a type mismatch diagnostic
     expect(tc.diags.length).toBeGreaterThan(0);
-    expect(tc.diags[0]?.code).toBe("AU1301");
+    expect(tc.diags[0]?.code).toBe("aurelia/expr-type-mismatch");
+    expect(tc.diags[0]?.severity).toBe("error");
   });
 });
 
@@ -406,7 +410,7 @@ describe("style binding syntax", () => {
 
   test("width.style produces stylePropertyBinding with target.kind=style", () => {
     const ir = lowerDocument('<div width.style="100"></div>', opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
     const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
 
     expect(ins?.kind).toBe("stylePropertyBinding");
@@ -415,7 +419,7 @@ describe("style binding syntax", () => {
 
   test("width.style expects type string (style.property context)", () => {
     const ir = lowerDocument('<div width.style="100"></div>', opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
     const scope = bindScopes(linked);
     const tc = typecheck({ linked, scope, ir, rootVmType: "RootVm", config: { preset: "standard" } });
 

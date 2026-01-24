@@ -1,4 +1,5 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../_helpers/vector-runner.js";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes } from "@aurelia-ls/compiler";
 
@@ -53,12 +54,14 @@ interface BindDiff {
   extraDiags: string[];
 }
 
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
+
 runVectorTests<BindExpect, BindIntent, BindDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Bind (30)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
+    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
     const scope = bindScopes(linked);
     return reduceScopeToBindIntent({ ir, linked, scope });
   },

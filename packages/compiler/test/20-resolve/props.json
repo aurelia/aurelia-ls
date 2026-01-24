@@ -72,14 +72,14 @@
     }
   },
   {
-    "name": "R-P-09 unknown property produces AU1104",
+    "name": "R-P-09 unknown property produces aurelia/unknown-bindable",
     "markup": "<div foo.bind=\"x\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -91,7 +91,7 @@
         { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -112,7 +112,7 @@
         { "kind": "prop", "to": "minLength", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -124,7 +124,7 @@
         { "kind": "prop", "to": "tabIndex", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -136,7 +136,7 @@
         { "kind": "prop", "to": "outerHTML", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -184,7 +184,7 @@
         { "kind": "prop", "to": "formTarget", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -196,7 +196,7 @@
         { "kind": "prop", "to": "maxLength", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -334,7 +334,7 @@
         { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -364,7 +364,7 @@
         { "kind": "prop", "to": "inputMode", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -405,7 +405,7 @@
         { "kind": "prop", "to": "class", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -428,56 +428,56 @@
         { "kind": "prop", "to": "htmlFor", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-P-43 property binding on <template> has no element -> AU1104",
+    "name": "R-P-43 property binding on <template> has no element -> aurelia/unknown-bindable",
     "markup": "<template title.bind=\"t\"></template>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "title", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-P-44 au-slot unknown bindable -> AU1104",
+    "name": "R-P-44 au-slot unknown bindable -> aurelia/unknown-bindable",
     "markup": "<au-slot foo.bind=\"x\"></au-slot>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-P-45 au-compose unknown bindable -> AU1104",
+    "name": "R-P-45 au-compose unknown bindable -> aurelia/unknown-bindable",
     "markup": "<au-compose bogus.bind=\"x\"></au-compose>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "bogus", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-P-46 unknown custom element -> AU1102 root cause, AU1104 suppressed",
-    "comment": "AU1102 is the root cause; AU1104 is suppressed via stub propagation to avoid cascading errors",
+    "name": "R-P-46 unknown custom element -> aurelia/unknown-element root cause, aurelia/unknown-bindable suppressed",
+    "comment": "aurelia/unknown-element is the root cause; aurelia/unknown-bindable is suppressed via stub propagation to avoid cascading errors",
     "markup": "<x-unknown bar.bind=\"y\"></x-unknown>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "bar", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1102" }
+        { "code": "aurelia/unknown-element" }
       ]
     }
   },
@@ -502,7 +502,7 @@
         { "kind": "prop", "to": "subject", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -525,7 +525,7 @@
         { "kind": "prop", "to": "value", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -629,3 +629,4 @@
     }
   }
 ]
+

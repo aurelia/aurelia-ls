@@ -29,7 +29,7 @@ import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type Ao
 
 // Local imports
 import { PipelineEngine } from "./engine.js";
-import type { StageDefinition, StageKey, StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./engine.js";
+import type { StageDefinition, StageKey, StageOutputs, PipelineOptions, CacheOptions, FingerprintHints, ModuleResolver } from "./engine.js";
 import { stableHash, stableHashSemantics } from "./hash.js";
 
 /* =======================================================================================
@@ -48,6 +48,7 @@ export interface CoreCompileOptions {
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   vm: VmReflection;
+  moduleResolver: ModuleResolver;
   cache?: CacheOptions;
   fingerprints?: FingerprintHints;
 }
@@ -76,6 +77,7 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
     semantics: opts.semantics,
+    moduleResolver: opts.moduleResolver,
   };
   if (opts.catalog) pipelineOpts.catalog = opts.catalog;
   if (opts.syntax) pipelineOpts.syntax = opts.syntax;
@@ -171,14 +173,16 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
 
   definitions.push({
     key: "20-resolve",
-    version: "2",
+    version: "3",
     deps: ["10-lower"],
     fingerprint(ctx) {
       const { sem } = resolveSemanticsInputs(ctx.options);
+      const moduleResolverFingerprint = ctx.options.fingerprints?.moduleResolver ?? "custom";
       return {
         sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(sem),
         resourceGraph: scopeFingerprint(ctx.options),
         localImports: ctx.options.localImports ? stableHash(ctx.options.localImports) : null,
+        moduleResolver: moduleResolverFingerprint,
       };
     },
     run(ctx) {
@@ -189,6 +193,8 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         scope: scoped.scopeId,
         ...(ctx.options.resourceGraph !== undefined ? { graph: ctx.options.resourceGraph } : {}),
         ...(ctx.options.localImports ? { localImports: ctx.options.localImports } : {}),
+        moduleResolver: ctx.options.moduleResolver,
+        templateFilePath: ctx.options.templateFilePath,
         trace: ctx.options.trace,
       };
       return resolveHost(ir, scoped.sem, resolveOpts);

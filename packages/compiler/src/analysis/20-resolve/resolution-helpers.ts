@@ -20,17 +20,23 @@ import type {
   TargetSem,
 } from "./types.js";
 import { camelCase } from "./name-normalizer.js";
-import { buildDiagnostic, type CompilerDiagnostic } from "../../shared/diagnostics.js";
+import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
+import { diagnosticsCatalog, type DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
 import { type Diagnosed, pure, diag, withStub } from "../../shared/diagnosed.js";
 
-export function pushDiag(diags: SemDiagnostic[], code: SemDiagCode, message: string, span?: SourceSpan | null): void {
-  const diag: CompilerDiagnostic = buildDiagnostic({
-    code,
-    message,
-    span,
-    source: "resolve-host",
-  });
-  diags.push(diag as SemDiagnostic);
+export const resolveDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, SemDiagCode>(
+  diagnosticsCatalog,
+  { source: "resolve-host" },
+);
+
+export function pushDiag<Code extends SemDiagCode>(
+  diags: SemDiagnostic[],
+  code: Code,
+  message: string,
+  span?: SourceSpan | null,
+  data?: DiagnosticDataFor<Code>,
+): void {
+  diags.push(resolveDiagnosticEmitter.emit(code, { message, span, data }));
 }
 
 export function resolvePropertyTarget(
@@ -87,7 +93,7 @@ export function resolveAttrTarget(host: NodeSem, to: string): TargetSem {
  *
  * Returns Diagnosed<ControllerSem>:
  * - On success: pure({ res, config }) with no diagnostics
- * - On failure: diag(AU1101, { res, config: STUB }) with stub controller
+ * - On failure: diag(aurelia/unknown-controller, { res, config: STUB }) with stub controller
  *
  * The stub config is marked with isStub() to enable cascade suppression.
  */
@@ -117,11 +123,13 @@ export function resolveControllerSem(
 
   // 3. Unknown controller - return stub + diagnostic
   debug.resolve("controller.unknown", { name: res });
-  const diagnostic = buildDiagnostic({
-    code: "AU1101" as SemDiagCode,
+  const diagnostic = resolveDiagnosticEmitter.emit("aurelia/unknown-controller", {
     message: `Unknown template controller '${res}'.`,
     span,
-    source: "resolve-host",
+    data: {
+      resourceKind: "template-controller",
+      name: res,
+    },
   });
 
   const stubConfig = withStub({ ...STUB_CONTROLLER_CONFIG }, { span: span ?? undefined, diagnostic });

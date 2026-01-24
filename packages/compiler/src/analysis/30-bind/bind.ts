@@ -49,7 +49,8 @@ import type { ControllerConfig } from "../../language/registry.js";
 
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";
-import { buildDiagnostic } from "../../shared/diagnostics.js";
+import { diagnosticsCatalog, type DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
 import { exprIdsOf, collectBindingNames, findBadInPattern } from "../../shared/expr-utils.js";
 import { normalizeSpanMaybe } from "../../model/span.js";
 import type { Origin, Provenance } from "../../model/origin.js";
@@ -58,6 +59,11 @@ import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/
 import { debug } from "../../shared/debug.js";
 
 function assertUnreachable(_x: never): never { throw new Error("unreachable"); }
+
+const bindDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, ScopeDiagCode>(
+  diagnosticsCatalog,
+  { source: "bind" },
+);
 
 /* =============================================================================
  * Options
@@ -385,7 +391,7 @@ function populateControllerFrame(
   diags: ScopeDiagnostic[],
 ): void {
   // === Stub Propagation ===
-  // If the controller config is a stub (from AU1101 unknown controller in resolve),
+  // If the controller config is a stub (from aurelia/unknown-controller in resolve),
   // we can't reliably extract iterator/value bindings or set up scope correctly.
   // Skip gracefully — the root cause diagnostic was already emitted in resolve.
   if (isStub(config)) {
@@ -415,12 +421,12 @@ function populateControllerFrame(
     const forOfAst = forOfIndex.get(forOfAstId);
     if (!forOfAst) return;
     if (forOfAst.$kind === "BadExpression") {
-      addDiag(diags, "AU1201", forOfAst.message ?? "Invalid or unsupported iterator header.", forOfAst.span);
+      addDiag(diags, "aurelia/invalid-binding-pattern", forOfAst.message ?? "Invalid or unsupported iterator header.", forOfAst.span);
       return;
     }
     const badPattern = findBadInPattern(forOfAst.declaration);
     if (badPattern) {
-      addDiag(diags, "AU1201", badPattern.message ?? "Invalid or unsupported iterator header.", badPattern.span);
+      addDiag(diags, "aurelia/invalid-binding-pattern", badPattern.message ?? "Invalid or unsupported iterator header.", badPattern.span);
       return;
     }
 
@@ -562,7 +568,7 @@ function addUniqueSymbols(targetFrame: FrameId, frames: ScopeFrame[], symbols: S
   const existing = new Set(f.symbols.map(s => s.name));
   for (const s of symbols) {
     if (existing.has(s.name)) {
-      addDiag(diags, "AU1202", `Duplicate local '${s.name}' in the same scope.`, s.span ?? null);
+      addDiag(diags, "aurelia/invalid-binding-pattern", `Duplicate local '${s.name}' in the same scope.`, s.span ?? null);
       continue;
     }
     f.symbols.push(s);
@@ -678,7 +684,7 @@ function reportBadExpression(ref: ExprRef, ctx: BadExprContext): void {
   const message = bad.message ?? "Invalid or unsupported expression.";
   const parseOrigin = unwrapOrigin(bad.origin ?? null);
   const bindOrigin = preferOrigin(parseOrigin, provenanceFromSpan("bind", span ?? ref.loc ?? null, "invalid expression surfaced during bind").origin ?? null);
-  addDiag(ctx.diags, "AU1203", message, span ?? ref.loc ?? null, bindOrigin);
+  addDiag(ctx.diags, "aurelia/expr-parse-error", message, span ?? ref.loc ?? null, bindOrigin, { recovery: true });
 }
 
 /* =============================================================================
@@ -708,6 +714,18 @@ function unwrapOrigin(source: Origin | Provenance | null): Origin | null {
   return (source as Origin).kind ? (source as Origin) : (source as Provenance).origin ?? null;
 }
 
-function addDiag(diags: ScopeDiagnostic[], code: ScopeDiagCode, message: string, span?: SourceSpan | null, origin?: Origin | null): void {
-  diags.push(buildDiagnostic({ code, message, span, origin: origin ?? null, source: "bind" }) as ScopeDiagnostic);
+function addDiag<Code extends ScopeDiagCode>(
+  diags: ScopeDiagnostic[],
+  code: Code,
+  message: string,
+  span?: SourceSpan | null,
+  origin?: Origin | null,
+  data?: DiagnosticDataFor<Code>,
+): void {
+  diags.push(bindDiagnosticEmitter.emit(code, {
+    message,
+    span,
+    origin: origin ?? null,
+    data,
+  }));
 }

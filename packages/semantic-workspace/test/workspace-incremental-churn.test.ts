@@ -19,6 +19,7 @@ function createVmReflection() {
 }
 
 const VM = createVmReflection();
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 function mutateTemplate(text: string): string {
   const marker = "</template>";
@@ -113,6 +114,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
         catalog: harness.resolution.catalog,
         syntax: harness.resolution.syntax,
         resourceGraph: harness.resolution.resourceGraph,
+        moduleResolver: NOOP_MODULE_RESOLVER,
         ...(scopeId !== null ? { resourceScope: scopeId } : {}),
       },
     });
@@ -182,6 +184,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
         syntax: harness.resolution.syntax,
         resourceGraph: harness.resolution.resourceGraph,
         overlayBaseName: "__churn__",
+        moduleResolver: NOOP_MODULE_RESOLVER,
       },
     });
 

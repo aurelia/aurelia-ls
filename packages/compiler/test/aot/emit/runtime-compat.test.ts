@@ -29,6 +29,7 @@ import {
   type SerializedHydrateTemplateController,
   type NestedTemplateHtmlNode,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 // =============================================================================
 // Test Helpers
@@ -55,7 +56,10 @@ function compileTemplate(markup: string): CompileResult {
     name: "test",
     catalog: DEFAULT_SEMANTICS.catalog,
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+  const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+  });
   const scope = bindScopes(linked);
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
 

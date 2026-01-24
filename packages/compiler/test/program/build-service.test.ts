@@ -8,6 +8,7 @@ import {
   canonicalDocumentUri,
   deriveTemplatePaths,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 test("build service exposes canonical overlay artifacts", () => {
   const program = createProgram();
@@ -117,6 +118,7 @@ function createProgram(opts = {}) {
     vm: createVmReflection(),
     isJs: false,
     semantics: DEFAULT_SEMANTICS,
+    moduleResolver: noopModuleResolver,
     ...opts,
   });
 }

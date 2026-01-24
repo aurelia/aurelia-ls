@@ -10,7 +10,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap, ExperimentalPolicy } from "@aurelia-ls/resolution";
+import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/resolution";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -42,7 +42,6 @@ export type {
   DirectoryMatch,
 } from "@aurelia-ls/resolution";
 
-export type { ExperimentalPolicy };
 
 // Local imports for internal use
 import type {
@@ -430,10 +429,6 @@ export interface ExplicitAttributeConfig {
  * **`rebuild-graph`**: Most thorough. Rebuilds everything including the
  * ResourceGraph from scratch based on the new semantics. Use when third-party
  * resources must introduce scope structure changes (rare).
- *
- * **Not to be confused with `ExperimentalPolicy`** (top-level `policy` option),
- * which controls gap/confidence diagnostic behavior. This is a separate concern
- * specific to third-party resource merging.
  *
  * @default "root-scope"
  */
@@ -989,27 +984,7 @@ export interface AureliaPluginOptions {
    */
   debug?: DebugOptions;
 
-  /**
-   * Experimental policy for gap/confidence diagnostic control.
-   *
-   * - `gaps`: Promote `gap:*` diagnostics to a configured severity (info/warning/error)
-   * - `confidence.min`: Emit diagnostic when catalog confidence falls below threshold
-   *
-   * Behavior is diagnostic-only — resources are never skipped or excluded.
-   *
-   * **Not to be confused with `thirdParty.policy`**, which controls merge strategy.
-   *
-   * @example
-   * ```ts
-   * policy: {
-   *   gaps: "error",                  // Treat gaps as errors
-   *   confidence: { min: "high" },    // Warn if confidence < high
-   * }
-   * ```
-   *
-   * @experimental
-   */
-  policy?: ExperimentalPolicy;
+ 
 
   // ---------------------------------------------------------------------------
   // Advanced
@@ -1225,8 +1200,6 @@ export interface ResolvedAureliaOptions {
   /** Resolved debug options */
   debug: ResolvedDebugOptions;
 
-  /** Experimental policy (gap/confidence consumption) */
-  policy?: ExperimentalPolicy;
 
   /** Experimental options (as-is, no expansion) */
   experimental: ExperimentalOptions;

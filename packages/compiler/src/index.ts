@@ -151,7 +151,7 @@ export type {
 } from "./synthesis/index.js";
 
 // VmReflection and SynthesisOptions are from shared (cross-cutting)
-export type { VmReflection, SynthesisOptions } from "./shared/index.js";
+export type { VmReflection, SynthesisOptions, ModuleResolver } from "./shared/index.js";
 
 // === Synthesis (AOT) ===
 export {
@@ -249,6 +249,9 @@ export type {
 // === Shared Infrastructure ===
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./shared/index.js";
 export type { CompilerDiagnostic, ExprSpanIndex } from "./shared/index.js";
+
+// === Diagnostics Catalog ===
+export * from "./diagnostics/index.js";
 
 // === Instrumentation (Tracing) ===
 export {

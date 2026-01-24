@@ -39,6 +39,7 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 // =============================================================================
 // Test Fixtures
@@ -65,6 +66,7 @@ const COMPLEX_TEMPLATE = `<template>
 </template>`;
 
 const SIMPLE_TEMPLATE = `<template>\${message}</template>`;
+const RESOLVE_OPTS_BASE = { moduleResolver: noopModuleResolver, templateFilePath: "test.html" };
 
 function createVmReflection() {
   return {
@@ -78,6 +80,7 @@ function createProgram(trace?: CompileTrace) {
     vm: createVmReflection(),
     isJs: false,
     semantics: DEFAULT_SEMANTICS,
+    moduleResolver: noopModuleResolver,
     trace,
   });
 }
@@ -113,6 +116,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
 
       // Stage 2: Resolve
       const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
       });
@@ -165,6 +169,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
       });
 
       resolveHost(ir, DEFAULT_SEMANTICS, {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
       });
@@ -194,6 +199,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
       });
 
       resolveHost(ir, DEFAULT_SEMANTICS, {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
       });
@@ -254,6 +260,7 @@ describe("Trace Integration: AOT Synthesis", () => {
       });
 
       const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
       });
@@ -313,6 +320,7 @@ describe("Trace Integration: Overlay Synthesis", () => {
       });
 
       const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
       });
@@ -872,7 +880,11 @@ describe("Trace Integration: Multiple Template Compilation", () => {
             catalog: DEFAULT_SEMANTICS.catalog,
           });
 
-          resolveHost(ir, DEFAULT_SEMANTICS, { trace });
+          resolveHost(ir, DEFAULT_SEMANTICS, {
+            moduleResolver: noopModuleResolver,
+            templateFilePath: file,
+            trace,
+          });
         });
       }
     });

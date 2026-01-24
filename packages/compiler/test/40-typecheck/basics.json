@@ -23,7 +23,7 @@
         { "code": "123", "type": "number" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "123", "expected": "boolean", "actual": "number" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "123", "expected": "boolean", "actual": "number" }
       ]
     }
   }

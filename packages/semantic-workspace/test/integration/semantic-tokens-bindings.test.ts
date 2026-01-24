@@ -33,6 +33,7 @@ function createVmReflection() {
 }
 
 const VM = createVmReflection();
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 function compileForTokens(markup: string) {
   const syntax = buildTemplateSyntaxRegistry(DEFAULT_SEMANTICS);
@@ -43,6 +44,7 @@ function compileForTokens(markup: string) {
       isJs: false,
       vm: VM,
       semantics: DEFAULT_SEMANTICS,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     }),
     syntax,
   };

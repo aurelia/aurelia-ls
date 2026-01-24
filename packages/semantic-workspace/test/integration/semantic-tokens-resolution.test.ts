@@ -39,6 +39,7 @@ function createVmReflection() {
 }
 
 const VM = createVmReflection();
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 function createProgramFromApp(appPath: string): ts.Program {
   const configPath = path.join(appPath, "tsconfig.json");
@@ -68,6 +69,7 @@ function compileTemplateForSemanticTokens(
     semantics,
     resourceGraph: semantics.resourceGraph,
     resourceScope: semantics.defaultScope ?? null,
+    moduleResolver: NOOP_MODULE_RESOLVER,
   });
 }
 

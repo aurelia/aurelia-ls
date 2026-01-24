@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
+import type { DiagnosticSurface } from "@aurelia-ls/compiler";
+import type { SemanticWorkspaceEngine } from "../src/engine.js";
+import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../src/types.js";
 
 function insertBefore(text: string, marker: string, insert: string): string {
   const index = text.indexOf(marker);
@@ -8,6 +11,20 @@ function insertBefore(text: string, marker: string, insert: string): string {
     throw new Error(`Marker not found: ${marker}`);
   }
   return text.slice(0, index) + insert + text.slice(index);
+}
+
+function diagnosticsForSurface(
+  routed: WorkspaceDiagnostics,
+  surface: DiagnosticSurface = "lsp",
+): readonly WorkspaceDiagnostic[] {
+  return routed.bySurface.get(surface) ?? [];
+}
+
+function expectNoNormalizationIssues(workspace: SemanticWorkspaceEngine, uri: string): void {
+  const issues = workspace.debugDiagnosticsPipeline(uri).normalization.issues;
+  if (issues.length > 0) {
+    throw new Error(`Normalization issues detected:\n${JSON.stringify(issues, null, 2)}`);
+  }
 }
 
 describe("workspace-editing-loop (workspace-contract)", () => {
@@ -44,8 +61,9 @@ describe("workspace-editing-loop (workspace-contract)", () => {
     }
     const mutated = insertBefore(text, "<summary-panel", "  <unknown-widget></unknown-widget>\n  ");
     local.updateTemplate(uri, mutated, 2);
-    const diags = local.workspace.query(uri).diagnostics();
+    const diags = diagnosticsForSurface(local.workspace.query(uri).diagnostics());
     expect(diags.length).toBeGreaterThan(0);
+    expectNoNormalizationIssues(local.workspace, uri);
   });
 
   it.todo("resolves definitions for element tags once TypeScript services are wired");

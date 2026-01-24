@@ -1,5 +1,5 @@
 import { runVectorTests, getDirname, lowerOpts, createCompilerContext } from "../../_helpers/vector-runner.js";
-import { diffByKey } from "../../_helpers/test-utils.js";
+import { diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes, planAot } from "@aurelia-ls/compiler";
 
@@ -88,12 +88,14 @@ interface AotPlanDiff {
   extraScopes: string[];
 }
 
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
+
 runVectorTests<AotPlanExpect, AotPlanIntent, AotPlanDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "AOT Plan (aot:plan)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
+    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
     const scope = bindScopes(linked);
     const plan = planAot(linked, scope, { templateFilePath: "test.html" });
     return reducePlanIntent(plan);

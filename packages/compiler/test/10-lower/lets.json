@@ -89,24 +89,24 @@
     "expect": { "lets": [], "expressions": [] }
   },
   {
-    "name": "LL-09 invalid let command (.trigger) emits AU0704",
+    "name": "LL-09 invalid let command (.trigger) emits aurelia/invalid-command-usage",
     "markup": "<let foo.trigger=\"bar\"></let>",
     "expect": {
       "lets": [],
       "expressions": [],
       "diags": [
-        { "code": "AU0704" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
   {
-    "name": "LL-10 invalid let command (.capture) emits AU0704",
+    "name": "LL-10 invalid let command (.capture) emits aurelia/invalid-command-usage",
     "markup": "<let foo.capture=\"bar\"></let>",
     "expect": {
       "lets": [],
       "expressions": [],
       "diags": [
-        { "code": "AU0704" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },

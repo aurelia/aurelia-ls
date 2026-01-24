@@ -13,6 +13,8 @@ import {
   toSourceFileId,
 } from "@aurelia-ls/compiler";
 
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
+
 function hasSpan(value: unknown): boolean {
   if (!value) return false;
   if (Array.isArray(value)) {
@@ -32,6 +34,7 @@ describe("compileAot facade", () => {
     const result = compileAot("<div>${msg}</div>", {
       semantics: DEFAULT_SEMANTICS,
       catalog: sem.catalog,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     expect(result.template).toBe("<div><!--au--> </div>");
@@ -49,6 +52,7 @@ describe("compileAot facade", () => {
       semantics: DEFAULT_SEMANTICS,
       templatePath,
       stripSpans: false,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     const expr = result.codeResult.expressions[0];
@@ -64,10 +68,12 @@ describe("compileAot facade", () => {
     const deduped = compileAot(markup, {
       semantics: DEFAULT_SEMANTICS,
       deduplicateExpressions: true,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
     const noDedup = compileAot(markup, {
       semantics: DEFAULT_SEMANTICS,
       deduplicateExpressions: false,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     expect(deduped.codeResult.expressions.length).toBe(1);
@@ -92,6 +98,7 @@ describe("compileAot facade", () => {
       localImports,
       syntax,
       attrParser,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     const [hydrate] = result.codeResult.definition.instructions[0] ?? [];

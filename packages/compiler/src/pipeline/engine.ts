@@ -16,7 +16,7 @@ import type {
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
 
 // Shared imports (via barrel)
-import type { VmReflection, SynthesisOptions, CompileTrace } from "../shared/index.js";
+import type { VmReflection, SynthesisOptions, CompileTrace, ModuleResolver } from "../shared/index.js";
 import { NOOP_TRACE, CompilerAttributes } from "../shared/index.js";
 
 // Analysis imports (via barrel)
@@ -28,6 +28,8 @@ import type { OverlayPlanModule, OverlayEmitResult, AotPlanModule } from "../syn
 // Local imports
 import { stableHash } from "./hash.js";
 import { FileStageCache, type StageCache, type StageCacheEntry, createDefaultCacheDir } from "./cache.js";
+
+export type { ModuleResolver } from "../shared/index.js";
 
 /**
  * Stage keys (loosely aligned to the original phases, with product-specific planning/emit steps).
@@ -71,6 +73,7 @@ export interface PipelineOptions {
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
   localImports?: readonly LocalImportDef[];
+  moduleResolver: ModuleResolver;
   vm?: VmReflection;
   /** Pipeline-wide cache knobs. */
   cache?: CacheOptions;
@@ -126,6 +129,7 @@ export interface FingerprintHints {
   vm?: FingerprintToken;
   overlay?: FingerprintToken;
   analyze?: FingerprintToken;
+  moduleResolver?: FingerprintToken;
   [extra: string]: FingerprintToken | undefined;
 }
 

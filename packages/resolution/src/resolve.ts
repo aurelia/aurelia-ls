@@ -3,6 +3,8 @@ import type {
   CatalogConfidence,
   CatalogGap,
   ApiSurfaceSnapshot,
+  CompilerDiagnostic,
+  RawDiagnostic,
   NormalizedPath,
   ResourceCatalog,
   ResourceGraph,
@@ -14,7 +16,14 @@ import type {
   TemplateSyntaxRegistry,
   CompileTrace,
 } from "@aurelia-ls/compiler";
-import { normalizePathForId, NOOP_TRACE, debug } from "@aurelia-ls/compiler";
+import {
+  asDocumentUri,
+  createDiagnosticEmitter,
+  diagnosticsByCategory,
+  normalizePathForId,
+  NOOP_TRACE,
+  debug,
+} from "@aurelia-ls/compiler";
 import type { FileFacts, FileContext } from "./extraction/file-facts.js";
 import type { AnalysisGap } from "./analysis/types.js";
 import type { DefineMap } from "./defines.js";
@@ -152,12 +161,9 @@ export interface InlineTemplateInfo {
 /**
  * Diagnostic from resolution.
  */
-export interface ResolutionDiagnostic {
-  code: string;
-  message: string;
-  source?: NormalizedPath;
-  severity: "error" | "warning" | "info";
-}
+export type ResolutionDiagnostic = RawDiagnostic;
+
+const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "resolution" });
 
 /**
  * Main entry point: run the full resolution pipeline.
@@ -349,6 +355,7 @@ export function resolve(
         name: s.resourceRef.name,
         reason: s.resourceRef.reason,
         file: getFileFromEvidence(s.evidence),
+        span: s.span,
       }));
 
     // Merge all diagnostics: matcher gaps + orphans + unresolved patterns + unresolved refs
@@ -400,19 +407,25 @@ export function resolve(
 /**
  * Convert an AnalysisGap to a ResolutionDiagnostic.
  *
- * The source field is only included when gap has location information.
+ * The uri field is only included when gap has location information.
  * The file path is normalized since GapLocation.file is a plain string.
  */
 function gapToDiagnostic(gap: AnalysisGap): ResolutionDiagnostic {
-  const diagnostic: ResolutionDiagnostic = {
-    code: gap.why.kind === "cache-corrupt" ? "cache:corrupt" : `gap:${gap.why.kind}`,
+  const code = mapGapKindToCode(gap.why.kind);
+  const uri = gap.where?.file
+    ? asDocumentUri(normalizePathForId(gap.where.file))
+    : undefined;
+  const diagnostic = toRawDiagnostic(GAP_EMITTER.emit(code, {
     message: `${gap.what}: ${gap.suggestion}`,
-    severity: "warning",
-  };
-  if (gap.where?.file) {
-    diagnostic.source = normalizePathForId(gap.where.file);
-  }
-  return diagnostic;
+    severity: code === "aurelia/gap/cache-corrupt" ? "warning" : "info",
+    data: { gapKind: gap.why.kind },
+  }));
+  return uri ? { ...diagnostic, uri } : diagnostic;
+}
+
+function toRawDiagnostic(diag: CompilerDiagnostic): RawDiagnostic {
+  const { span, ...rest } = diag;
+  return span ? { ...rest, span } : { ...rest };
 }
 
 function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
@@ -637,6 +650,44 @@ function resolveTemplatePath(
 
   return normalizePathForId(resolvePath(dir, htmlName));
 }
+
+function mapGapKindToCode(kind: string): "aurelia/gap/partial-eval" | "aurelia/gap/unknown-registration" | "aurelia/gap/cache-corrupt" {
+  if (kind === "cache-corrupt") return "aurelia/gap/cache-corrupt";
+  if (UNKNOWN_REGISTRATION_GAP_KINDS.has(kind)) return "aurelia/gap/unknown-registration";
+  if (PARTIAL_EVAL_GAP_KINDS.has(kind)) return "aurelia/gap/partial-eval";
+  return "aurelia/gap/partial-eval";
+}
+
+const UNKNOWN_REGISTRATION_GAP_KINDS = new Set([
+  "dynamic-value",
+  "function-return",
+  "computed-property",
+  "spread-unknown",
+  "unsupported-pattern",
+  "conditional-registration",
+  "loop-variable",
+  "invalid-resource-name",
+]);
+
+const PARTIAL_EVAL_GAP_KINDS = new Set([
+  "package-not-found",
+  "invalid-package-json",
+  "missing-package-field",
+  "entry-point-not-found",
+  "no-entry-points",
+  "complex-exports",
+  "workspace-no-source-dir",
+  "workspace-entry-not-found",
+  "unresolved-import",
+  "circular-import",
+  "external-package",
+  "legacy-decorators",
+  "no-source",
+  "minified-code",
+  "unsupported-format",
+  "analysis-failed",
+  "parse-error",
+]);
 
 function scopeIdForComponent(
   componentPath: NormalizedPath,

@@ -18,6 +18,7 @@ export const CustomCapabilityKeys = {
   mapping: "mapping",
   queryAtPosition: "queryAtPosition",
   ssr: "ssr",
+  diagnostics: "diagnostics",
   dumpState: "dumpState",
 } as const;
 
@@ -183,6 +184,7 @@ export function buildCapabilities(ctx: ServerContext): CapabilitiesResponse {
       mapping: true,
       queryAtPosition: true,
       ssr: false,
+      diagnostics: true,
       dumpState: true,
     },
     notifications: {
@@ -257,6 +259,7 @@ export function buildCapabilitiesFallback(): CapabilitiesResponse {
       mapping: false,
       queryAtPosition: false,
       ssr: false,
+      diagnostics: false,
       dumpState: false,
     },
     notifications: {

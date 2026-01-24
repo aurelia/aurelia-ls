@@ -4,6 +4,7 @@ import {
   DEFAULT_SEMANTICS,
   DefaultTemplateProgram,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 function createProgram() {
   return new DefaultTemplateProgram({
@@ -17,6 +18,7 @@ function createProgram() {
     },
     isJs: false,
     semantics: DEFAULT_SEMANTICS,
+    moduleResolver: noopModuleResolver,
   });
 }
 

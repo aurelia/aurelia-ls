@@ -118,7 +118,7 @@ describe("workspace code actions (workspace-contract)", () => {
 
     const position = findPosition(mutated, "if-not.bind", 1);
     const actions = harness.workspace.refactor().codeActions({ uri: appUri, position });
-    const action = actions.find((entry) => entry.id === "aurelia/add-import:controller:if-not");
+    const action = actions.find((entry) => entry.id === "aurelia/add-import:template-controller:if-not");
 
     expect(action).toBeDefined();
     const edit = action?.edit?.edits.find((entry) => String(entry.uri) === String(appUri));
@@ -178,7 +178,7 @@ describe("workspace code actions (workspace-contract)", () => {
 
     const position = findPosition(mutated, "status-badge", 1);
     const actions = harness.workspace.refactor().codeActions({ uri: appUri, position });
-    const action = actions.find((entry) => entry.id === "aurelia/add-import:element:status-badge");
+    const action = actions.find((entry) => entry.id === "aurelia/add-import:custom-element:status-badge");
 
     expect(action).toBeDefined();
     const edit = action?.edit?.edits.find((entry) => String(entry.uri) === String(appUri));
@@ -198,7 +198,7 @@ describe("workspace code actions (workspace-contract)", () => {
 
     const position = findPosition(mutated, "tooltip.bind", 1);
     const actions = harness.workspace.refactor().codeActions({ uri: appUri, position });
-    const action = actions.find((entry) => entry.id === "aurelia/add-import:attribute:tooltip");
+    const action = actions.find((entry) => entry.id === "aurelia/add-import:custom-attribute:tooltip");
 
     expect(action).toBeDefined();
     const edit = action?.edit?.edits.find((entry) => String(entry.uri) === String(appUri));

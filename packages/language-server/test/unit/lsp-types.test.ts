@@ -17,11 +17,15 @@ import {
   asDocumentUri,
   canonicalDocumentUri,
   type DocumentUri,
+  type DiagnosticDataRecord,
+  type DiagnosticSpec,
+  type DiagnosticSurface,
   type SourceSpan,
 } from "@aurelia-ls/compiler";
 import type {
   WorkspaceCompletionItem,
   WorkspaceDiagnostic,
+  WorkspaceDiagnostics,
   WorkspaceEdit,
   WorkspaceHover,
   WorkspaceLocation,
@@ -39,6 +43,54 @@ const lookupText: LookupTextFn = (uri) => textByUri.get(uri) ?? null;
 
 function makeSpan(uri: DocumentUri, start: number, end: number): SourceSpan {
   return { start, end, file: canonicalDocumentUri(uri).file };
+}
+
+const TEST_SPEC: DiagnosticSpec<DiagnosticDataRecord> = {
+  category: "toolchain",
+  status: "canonical",
+  defaultSeverity: "warning",
+  impact: "degraded",
+  actionability: "manual",
+  span: "span",
+  stages: ["resolve"],
+};
+
+function makeDiagnostic(input: {
+  code: string;
+  message: string;
+  severity?: "error" | "warning" | "info";
+  span?: SourceSpan;
+  data?: Readonly<Record<string, unknown>>;
+  uri?: DocumentUri;
+}): WorkspaceDiagnostic {
+  const severity = input.severity ?? "warning";
+  const raw = {
+    code: input.code,
+    message: input.message,
+    ...(input.severity ? { severity: input.severity } : {}),
+    ...(input.span ? { span: input.span } : {}),
+    ...(input.data ? { data: input.data } : {}),
+    ...(input.uri ? { uri: input.uri } : {}),
+  };
+  return {
+    raw,
+    code: input.code,
+    spec: TEST_SPEC,
+    message: input.message,
+    severity,
+    impact: TEST_SPEC.impact,
+    actionability: TEST_SPEC.actionability,
+    span: input.span,
+    uri: input.uri,
+    data: input.data ?? {},
+  };
+}
+
+function toRouted(
+  diags: WorkspaceDiagnostic[],
+  surface: DiagnosticSurface = "lsp",
+): WorkspaceDiagnostics {
+  return { bySurface: new Map([[surface, diags]]), suppressed: [] };
 }
 
 describe("toLspUri", () => {
@@ -85,16 +137,17 @@ describe("spanToRange", () => {
 describe("mapWorkspaceDiagnostics", () => {
   test("maps diagnostics with spans", () => {
     const diagnostics: WorkspaceDiagnostic[] = [
-      {
+      makeDiagnostic({
         code: "AU1000",
         message: "Missing property",
         severity: "warning",
         span: makeSpan(spanUri, 6, 10),
         data: { confidence: "high" },
-      },
+        uri: spanUri,
+      }),
     ];
 
-    const mapped = mapWorkspaceDiagnostics(spanUri, diagnostics, lookupText);
+    const mapped = mapWorkspaceDiagnostics(spanUri, toRouted(diagnostics), lookupText);
     expect(mapped).toHaveLength(1);
     expect(mapped[0]?.severity).toBe(2); // DiagnosticSeverity.Warning
     expect(mapped[0]?.data).toEqual({ confidence: "high" });
@@ -102,10 +155,10 @@ describe("mapWorkspaceDiagnostics", () => {
 
   test("skips diagnostics without spans", () => {
     const diagnostics: WorkspaceDiagnostic[] = [
-      { code: "AU1001", message: "No span", severity: "error" },
+      makeDiagnostic({ code: "AU1001", message: "No span", severity: "error" }),
     ];
 
-    const mapped = mapWorkspaceDiagnostics(spanUri, diagnostics, lookupText);
+    const mapped = mapWorkspaceDiagnostics(spanUri, toRouted(diagnostics), lookupText);
     expect(mapped).toEqual([]);
   });
 });

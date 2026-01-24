@@ -564,7 +564,6 @@ export function normalizeOptions(
     conventions: normalizeConventionOptions(opts.conventions, opts.thirdParty),
     compiler: normalizeCompilerOptions(opts.compiler),
     debug: normalizeDebugOptions(opts.debug, context.root),
-    policy: opts.policy,
     experimental: { ...DEFAULT_EXPERIMENTAL_OPTIONS, ...opts.experimental },
     hooks: { ...DEFAULT_HOOKS, ...opts.hooks },
   };
@@ -857,7 +856,6 @@ export function mergeConfigs(
 
   merged.compiler = { ...fileConfig.compiler, ...inlineConfig.compiler };
   merged.debug = { ...fileConfig.debug, ...inlineConfig.debug };
-  merged.policy = inlineConfig.policy ?? fileConfig.policy;
   merged.experimental = { ...fileConfig.experimental, ...inlineConfig.experimental };
   merged.hooks = { ...fileConfig.hooks, ...inlineConfig.hooks };
 

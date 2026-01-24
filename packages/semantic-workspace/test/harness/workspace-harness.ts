@@ -8,11 +8,8 @@ import {
 } from "@aurelia-ls/compiler";
 import { createNodeFileSystem, type ResolutionConfig, type ResolutionResult, type Logger as ResolutionLogger } from "@aurelia-ls/resolution";
 import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/resolution/npm";
-import {
-  createSemanticWorkspace,
-  inlineTemplatePath,
-  type SemanticWorkspaceEngine,
-} from "@aurelia-ls/semantic-workspace";
+import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../../src/engine.js";
+import { inlineTemplatePath } from "../../src/templates.js";
 import { getFixture, resolveFixtureRoot } from "../fixtures/index.js";
 import type { WorkspaceHarness, WorkspaceHarnessOptions, WorkspaceTemplateEntry } from "./types.js";
 

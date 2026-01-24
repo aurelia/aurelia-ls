@@ -1,7 +1,7 @@
 /* =======================================================================================
  * SCOPE GRAPH MODEL (editor-agnostic)
  * ---------------------------------------------------------------------------------------
- * - Diagnostics for scoping stage (AU12xx)
+ * - Diagnostics for scoping stage
  * - Frame ids/kinds and provenance (origin)
  * - Overlay base metadata
  * - Locals (let/iterator/contextual/alias)
@@ -36,6 +36,7 @@ import type { SourceSpan, BindingSourceIR } from "./ir.js";
 import type { FrameId, ExprId, ReadonlyExprIdMap } from "./identity.js";
 import type { Provenance } from "./origin.js";
 import type { CompilerDiagnostic } from "./diagnostics.js";
+import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../diagnostics/catalog/index.js";
 
 export type { FrameId } from "./identity.js";
 
@@ -43,13 +44,10 @@ export type { FrameId } from "./identity.js";
  * Diagnostics (scoping only)
  * =========================== */
 
-/** AU12xx = ScopeGraph diagnostics (scoping-only; type errors belong to Typecheck). */
-export type ScopeDiagCode =
-  | "AU1201" // Invalid/unsupported repeat destructuring pattern (MVP: shallow only)
-  | "AU1202" // Duplicate local name in the same frame
-  | "AU1203"; // Invalid or unsupported expression (parser error)
+/** ScopeGraph diagnostics (scoping-only; type errors belong to Typecheck). */
+export type ScopeDiagCode = DiagnosticCodeForStage<"bind">;
 
-export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode>;
+export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode, DiagnosticDataFor<ScopeDiagCode>>;
 
 /* ===========================
  * Frames & templates

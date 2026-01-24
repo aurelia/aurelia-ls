@@ -150,7 +150,7 @@ type BindableCandidate = {
 };
 
 type ImportCandidate = {
-  kind: "element" | "attribute" | "controller" | "value-converter" | "binding-behavior";
+  kind: "custom-element" | "custom-attribute" | "template-controller" | "value-converter" | "binding-behavior";
   name: string;
 };
 
@@ -596,17 +596,17 @@ function resolveImportCandidate(
   switch (diagnostic.code) {
     case "aurelia/unknown-element": {
       const name = findElementNameAtOffset(ctx.compilation, offset);
-      return name ? { kind: "element", name } : null;
+      return name ? { kind: "custom-element", name } : null;
     }
     case "aurelia/unknown-attribute": {
       const hit = findInstructionHit(ctx.compilation, offset);
       const attrName = hit ? attributeNameFromHit(hit) : null;
       const base = attributeTargetName(attrName, ctx.syntax);
-      return base ? { kind: "attribute", name: base } : null;
+      return base ? { kind: "custom-attribute", name: base } : null;
     }
     case "aurelia/unknown-controller": {
       const name = findControllerNameAtOffset(ctx.compilation, ctx.text, offset, ctx.syntax);
-      return name ? { kind: "controller", name } : null;
+      return name ? { kind: "template-controller", name } : null;
     }
     case "aurelia/unknown-converter": {
       const hit = findValueConverterAtOffset(ctx.compilation.exprTable ?? [], offset);
@@ -1494,11 +1494,11 @@ function resourceMapForKind(
   kind: ImportCandidate["kind"],
 ): ReadonlyMap<string, ResourceDefinitionEntry[]> {
   switch (kind) {
-    case "element":
+    case "custom-element":
       return index.elements;
-    case "attribute":
+    case "custom-attribute":
       return index.attributes;
-    case "controller":
+    case "template-controller":
       return index.controllers;
     case "value-converter":
       return index.valueConverters;

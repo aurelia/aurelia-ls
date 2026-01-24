@@ -6,18 +6,27 @@ import {
   asDocumentUri,
   canonicalDocumentUri,
   createAttributeParserFromRegistry,
+  createDefaultCodeResolver,
   debug,
+  diagnosticsCatalog,
   normalizePathForId,
   normalizeSpan,
   offsetAtPosition,
   projectGeneratedSpanToDocumentSpan,
+  runDiagnosticsPipeline,
   spanContainsOffset,
   stableHash,
   toSourceSpan,
+  type DiagnosticDataRecord,
+  type DiagnosticSpec,
+  type DiagnosticSurface,
+  type DiagnosticsPipelineResult,
   type DocumentUri,
   type OverlayBuildArtifact,
   type OverlayDocumentSnapshot,
   type AttributeParser,
+  type RawDiagnostic,
+  type TemplateLanguageDiagnostic,
   type SourceSpan,
   type TemplateCompilation,
   type TemplateMappingArtifact,
@@ -36,7 +45,7 @@ import {
   type ResolutionResult,
   type TemplateInfo,
 } from "@aurelia-ls/resolution";
-import type { TypeScriptServices } from "@aurelia-ls/compiler";
+import type { ModuleResolver, TypeScriptServices } from "@aurelia-ls/compiler";
 import {
   createTypeScriptEnvironment,
   type TypeScriptEnvironment,
@@ -48,6 +57,7 @@ import {
   type SemanticQuery,
   type SemanticWorkspace,
   type WorkspaceDiagnostic,
+  type WorkspaceDiagnostics,
   type WorkspaceHover,
   type WorkspaceLocation,
   type WorkspaceRefactorResult,
@@ -63,15 +73,6 @@ import { buildResourceDefinitionIndex, collectTemplateDefinitions, collectTempla
 import type { RefactorOverrides } from "./style-profile.js";
 import {
   TemplateEditEngine,
-  attributeCommandName,
-  attributeNameFromHit,
-  attributeTargetName,
-  findBindingBehaviorAtOffset,
-  findControllerNameAtOffset,
-  findElementNameAtOffset,
-  findInstructionHit,
-  findValueConverterAtOffset,
-  resolveBindableCandidate,
   resolveModuleSpecifier,
   type AttributeSyntaxContext,
   type TemplateIndex,
@@ -113,6 +114,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #attrParser: AttributeParser | null = null;
   #attrParserSyntax: TemplateSyntaxRegistry | null = null;
   #componentHashes: Map<DocumentUri, string> = new Map();
+  #diagnosticsCache: DiagnosticsCache | null = null;
   readonly #styleProfile: StyleProfile | null;
   readonly #refactorOverrides: RefactorOverrides | null;
 
@@ -275,15 +277,17 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     };
   }
 
-  diagnostics(uri: DocumentUri): readonly WorkspaceDiagnostic[] {
+  diagnostics(uri: DocumentUri): WorkspaceDiagnostics {
     const canonical = canonicalDocumentUri(uri);
     this.#ensureTemplateContext(canonical.uri);
-    const base = this.#kernel.diagnostics(canonical.uri);
-    const mapped = this.#mapDiagnostics(canonical.uri, base);
-    const meta = this.#templateMetaDiagnostics(canonical.uri);
-    const gaps = this.#catalogDiagnostics(canonical.uri);
-    const combined = !meta.length && !gaps.length ? mapped : [...mapped, ...meta, ...gaps];
-    return sortDiagnostics(combined);
+    return this.#diagnosticsForUri(canonical.uri);
+  }
+
+  // Debug/testing hook to assert normalization contract health (D16).
+  debugDiagnosticsPipeline(uri: DocumentUri): DiagnosticsPipelineResult {
+    const canonical = canonicalDocumentUri(uri);
+    this.#ensureTemplateContext(canonical.uri);
+    return this.#diagnosticsPipeline(canonical.uri);
   }
 
   query(uri: DocumentUri): SemanticQuery {
@@ -343,7 +347,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   collectCodeActions(request: WorkspaceCodeActionRequest): readonly WorkspaceCodeAction[] {
     const canonical = canonicalDocumentUri(request.uri);
     this.#ensureTemplateContext(canonical.uri);
-    const diagnostics = this.diagnostics(canonical.uri);
+    const diagnostics = this.#diagnosticsForSurface(canonical.uri, "lsp");
     return this.#templateEditEngine().codeActions({ ...request, uri: canonical.uri }, diagnostics);
   }
 
@@ -465,6 +469,11 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const resourceGraph = this.#projectIndex.currentResourceGraph();
     const defaultScope = semantics.defaultScope ?? resourceGraph.root ?? null;
     const resourceScope = this.#resourceScope ?? defaultScope;
+    const moduleResolver: ModuleResolver = (specifier, containingFile) => {
+      const canonical = canonicalDocumentUri(containingFile);
+      const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri) ?? canonical.path;
+      return resolveModuleSpecifier(specifier, componentPath, this.#env.tsService.compilerOptions());
+    };
     return {
       vm,
       isJs,
@@ -472,6 +481,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       catalog,
       syntax,
       resourceGraph,
+      moduleResolver,
       ...(overlayBaseName !== undefined ? { overlayBaseName } : {}),
       ...(resourceScope !== null ? { resourceScope } : {}),
     };
@@ -886,114 +896,91 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     setter(componentPath);
   }
 
-  #mapDiagnostics(uri: DocumentUri, diagnostics: readonly WorkspaceDiagnostic[]): WorkspaceDiagnostic[] {
-    if (diagnostics.length === 0) return [];
-    const text = this.lookupText(uri);
-    const compilation = text ? this.#kernel.getCompilation(uri) : null;
-    const syntax = this.#attributeSyntaxContext();
-    return diagnostics.map((diag) => mapWorkspaceDiagnostic(diag, { text, compilation, syntax }));
+  #diagnosticsForUri(uri: DocumentUri): WorkspaceDiagnostics {
+    const canonical = canonicalDocumentUri(uri).uri;
+    const pipeline = this.#diagnosticsPipeline(canonical);
+    return filterRoutedDiagnosticsByUri(pipeline.aggregated, canonical);
   }
 
-  #templateMetaDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
-    const compilation = this.#kernel.getCompilation(uri);
-    const template = compilation?.linked?.templates?.[0];
-    if (!template?.templateMeta) return [];
-    const templatePath = this.#templateIndex.templateToComponent.get(uri) ?? canonicalDocumentUri(uri).path;
-    const diagnostics: WorkspaceDiagnostic[] = [];
-    const meta = template.templateMeta;
-
-    for (const imp of meta.imports) {
-      const specifier = imp.from.value;
-      const resolvedPath = resolveModuleSpecifier(specifier, templatePath, this.#env.tsService.compilerOptions());
-      if (resolvedPath) continue;
-      diagnostics.push({
-        code: "aurelia/unresolved-import",
-        message: `Cannot resolve module '${specifier}'`,
-        severity: "error",
-        source: "aurelia",
-        span: imp.from.loc,
-      });
-    }
-
-    const aliasSeen = new Map<string, SourceSpan>();
-    for (const alias of meta.aliases) {
-      for (const name of alias.names) {
-        const key = name.value.toLowerCase();
-        if (aliasSeen.has(key)) {
-          diagnostics.push({
-            code: "aurelia/alias-conflict",
-            message: `Alias '${name.value}' is already declared.`,
-            severity: "warning",
-            source: "aurelia",
-            span: name.loc,
-          });
-        } else {
-          aliasSeen.set(key, name.loc);
-        }
-      }
-    }
-
-    const bindableSeen = new Map<string, SourceSpan>();
-    for (const bindable of meta.bindables) {
-      const key = bindable.name.value.toLowerCase();
-      if (bindableSeen.has(key)) {
-        diagnostics.push({
-          code: "aurelia/bindable-decl-conflict",
-          message: `Bindable '${bindable.name.value}' is already declared.`,
-          severity: "warning",
-          source: "aurelia",
-          span: bindable.name.loc,
-        });
-      } else {
-        bindableSeen.set(key, bindable.name.loc);
-      }
-    }
-
-    return diagnostics;
+  #diagnosticsForSurface(uri: DocumentUri, surface: DiagnosticSurface): readonly WorkspaceDiagnostic[] {
+    const routed = this.#diagnosticsForUri(uri);
+    return routed.bySurface.get(surface) ?? [];
   }
 
-  #catalogDiagnostics(uri: DocumentUri): WorkspaceDiagnostic[] {
+  #diagnosticsPipeline(activeUri: DocumentUri): DiagnosticsPipelineResult {
+    const fingerprint = this.#diagnosticsFingerprint();
+    const cached = this.#diagnosticsCache;
+    if (cached && cached.fingerprint === fingerprint) {
+      return cached.pipeline;
+    }
+
+    const raw = this.#collectRawDiagnostics(activeUri);
     const catalog = this.#projectIndex.currentCatalog();
-    const gaps = catalog.gaps ?? [];
-    if (gaps.length === 0 && !catalog.confidence) return [];
+    const gapCount = catalog.gaps?.length ?? 0;
+    const policyContext = {
+      gapCount,
+      ...(catalog.confidence ? { catalogConfidence: catalog.confidence } : {}),
+    };
 
-    const templatePath = canonicalDocumentUri(uri).path;
-    const componentPath = this.#templateIndex.templateToComponent.get(uri) ?? null;
-    const normalizedTemplate = normalizePathForId(templatePath);
-    const normalizedComponent = componentPath ? normalizePathForId(componentPath) : null;
+    const pipeline = runDiagnosticsPipeline(raw, {
+      catalog: DIAGNOSTICS_CATALOG,
+      resolver: DIAGNOSTICS_RESOLVER,
+      externalSpecsBySource: DIAGNOSTICS_EXTERNAL_SPECS,
+      policyContext,
+      aggregationContext: { dedupe: true, sort: true },
+    });
 
-    const results: WorkspaceDiagnostic[] = [];
-    for (const gap of gaps) {
-      if (gap.resource) {
-        const normalizedResource = normalizePathForId(gap.resource);
-        if (normalizedResource !== normalizedTemplate && normalizedResource !== normalizedComponent) {
-          continue;
+    if (pipeline.normalization.issues.length > 0) {
+      debug.workspace("diagnostics.normalize.issues", {
+        issueCount: pipeline.normalization.issues.length,
+        issues: pipeline.normalization.issues,
+      });
+    }
+
+    this.#diagnosticsCache = { fingerprint, pipeline };
+    return pipeline;
+  }
+
+  #diagnosticsFingerprint(): string {
+    const docs = Array.from(this.#kernel.sources.all())
+      .filter((doc) => this.#isTemplateUri(doc.uri))
+      .map((doc) => ({
+        uri: doc.uri,
+        version: doc.version,
+        textHash: stableHash(doc.text),
+      }))
+      .sort((a, b) => String(a.uri).localeCompare(String(b.uri)));
+    return stableHash({
+      project: this.#projectIndex.currentFingerprint(),
+      docs,
+    });
+  }
+
+  #collectRawDiagnostics(activeUri: DocumentUri): RawDiagnostic[] {
+    const raw: RawDiagnostic[] = [];
+    const sources = this.#kernel.sources;
+    const active = canonicalDocumentUri(activeUri).uri;
+
+    for (const snapshot of sources.all()) {
+      const uri = snapshot.uri;
+      if (!this.#isTemplateUri(uri)) continue;
+      this.#activateTemplate(uri);
+      try {
+        const diagnostics = this.#kernel.languageService.getDiagnostics(uri).all;
+        for (const diag of diagnostics) {
+          raw.push(toRawDiagnostic(diag));
         }
-      } else {
-        continue;
+      } catch (error) {
+        debug.workspace("diagnostics.collect.error", {
+          uri,
+          message: error instanceof Error ? error.message : String(error),
+        });
       }
-
-      results.push({
-        code: gapCodeForKind(gap.kind),
-        message: gap.message,
-        severity: "info",
-        source: "aurelia",
-        data: { gapKind: gap.kind },
-      });
     }
 
-    const confidence = catalog.confidence;
-    if (confidence && confidence !== "complete" && confidence !== "high" && results.length > 0) {
-      results.push({
-        code: "aurelia/confidence/low",
-        message: `Catalog confidence '${confidence}'.`,
-        severity: "info",
-        source: "aurelia",
-        data: { confidence },
-      });
-    }
-
-    return results;
+    this.#activateTemplate(active);
+    raw.push(...this.#projectIndex.currentResolution().diagnostics);
+    return raw;
   }
 
   #semanticTokens(uri: DocumentUri): readonly WorkspaceToken[] {
@@ -1417,11 +1404,26 @@ type ResourceReferenceIndex = {
   byUri: Map<DocumentUri, ResourceReferenceOccurrence[]>;
 };
 
-type DiagnosticMapContext = {
-  text: string | null;
-  compilation: TemplateCompilation | null;
-  syntax: AttributeSyntaxContext;
+type DiagnosticsCache = {
+  fingerprint: string;
+  pipeline: DiagnosticsPipelineResult;
 };
+
+const DIAGNOSTICS_CATALOG = diagnosticsCatalog;
+const DIAGNOSTICS_RESOLVER = createDefaultCodeResolver(DIAGNOSTICS_CATALOG);
+const TYPESCRIPT_DIAGNOSTIC_SPEC: DiagnosticSpec<DiagnosticDataRecord> = {
+  category: "toolchain",
+  status: "canonical",
+  impact: "degraded",
+  actionability: "manual",
+  span: "span",
+  stages: ["typecheck"],
+  surfaces: ["lsp", "vscode-inline"],
+  description: "External TypeScript diagnostic.",
+};
+const DIAGNOSTICS_EXTERNAL_SPECS = {
+  typescript: TYPESCRIPT_DIAGNOSTIC_SPEC,
+} as const satisfies Readonly<Record<string, DiagnosticSpec<DiagnosticDataRecord>>>;
 
 function mergeCodeActions(
   primary: readonly WorkspaceCodeAction[],
@@ -1445,272 +1447,67 @@ function matchesActionKind(actionKind: string | undefined, kinds: readonly strin
   return kinds.some((kind) => actionKind === kind || actionKind.startsWith(`${kind}.`));
 }
 
-function mapWorkspaceDiagnostic(diag: WorkspaceDiagnostic, ctx: DiagnosticMapContext): WorkspaceDiagnostic {
-  if (diag.source === "typescript") {
-    return {
-      ...diag,
-      code: String(diag.code),
-      source: "typescript",
-    };
-  }
-
+function toRawDiagnostic(diag: TemplateLanguageDiagnostic): RawDiagnostic {
+  const location = diag.location ?? null;
+  const related = diag.related?.map((entry) => ({
+    message: entry.message,
+    ...(entry.location?.span ? { span: entry.location.span } : {}),
+  }));
   const code = String(diag.code);
-  const span = diag.span;
-  const offset = span?.start ?? null;
-  const text = ctx.text;
-  const compilation = ctx.compilation;
-  const base = {
+  const data = buildDiagnosticData(diag);
+  return {
+    code,
     message: diag.message,
-    severity: diag.severity,
-    span: diag.span,
-    source: "aurelia" as const,
+    source: diag.source,
+    ...(diag.severity ? { severity: diag.severity } : {}),
+    ...(location ? { uri: location.uri, span: location.span } : {}),
+    ...(related && related.length > 0 ? { related } : {}),
+    ...(data && Object.keys(data).length > 0 ? { data } : {}),
+    ...(diag.origin !== undefined ? { origin: diag.origin } : {}),
   };
+}
 
-  switch (code) {
-    case "AU1102":
-    case "AU1107": {
-      const name = offset != null && text && compilation
-        ? findElementNameAtOffset(compilation, offset)
-        : null;
-      return {
-        ...base,
-        code: "aurelia/unknown-element",
-        data: mergeDiagnosticData(diag.data, {
-          aurCode: "AUR0752",
-          ...(name ? { resourceKind: "element", name } : {}),
-        }),
-      };
-    }
-    case "AU1101": {
-      const name = offset != null && text && compilation
-        ? findControllerNameAtOffset(compilation, text, offset, ctx.syntax)
-        : null;
-      return {
-        ...base,
-        code: "aurelia/unknown-controller",
-        data: mergeDiagnosticData(diag.data, {
-          aurCode: "AUR0754",
-          ...(name ? { resourceKind: "controller", name } : {}),
-        }),
-      };
-    }
-    case "AU1104": {
-      let bindableData: Record<string, unknown> | null = null;
-      let attrName: string | null = null;
-      if (offset != null && text && compilation) {
-        const hit = findInstructionHit(compilation, offset);
-        const target = hit
-          ? (hit.instruction as { target?: { kind?: string } }).target
-          : null;
-        if (hit && target && typeof target === "object" && "kind" in target && target.kind === "unknown") {
-          const candidate = resolveBindableCandidate(hit, ctx.syntax);
-          if (candidate) {
-            bindableData = {
-              bindable: {
-                name: candidate.propertyName,
-                attribute: candidate.attributeName ?? undefined,
-                ownerKind: candidate.ownerKind,
-                ownerName: candidate.ownerName,
-                ...(candidate.ownerFile ? { ownerFile: candidate.ownerFile } : {}),
-              },
-            };
-          } else {
-            const raw = attributeNameFromHit(hit);
-            attrName = attributeTargetName(raw, ctx.syntax);
-          }
-        }
-      }
-      if (bindableData) {
-        return {
-          ...base,
-          code: "aurelia/unknown-bindable",
-          data: mergeDiagnosticData(diag.data, {
-            aurCode: "AUR0707",
-            ...bindableData,
-          }),
-        };
-      }
-      if (attrName) {
-        return {
-          ...base,
-          code: "aurelia/unknown-attribute",
-          data: mergeDiagnosticData(diag.data, {
-            aurCode: "AUR0753",
-            resourceKind: "attribute",
-            name: attrName,
-          }),
-        };
-      }
-      return {
-        ...base,
-        code: "aurelia/unknown-bindable",
-        data: mergeDiagnosticData(diag.data, { aurCode: "AUR0707" }),
-      };
-    }
-    case "AU1108": {
-      let attrName: string | null = null;
-      if (offset != null && text && compilation) {
-        const hit = findInstructionHit(compilation, offset);
-        const raw = hit ? attributeNameFromHit(hit) : null;
-        attrName = attributeTargetName(raw, ctx.syntax);
-      }
-      return {
-        ...base,
-        code: "aurelia/unknown-attribute",
-        data: mergeDiagnosticData(diag.data, {
-          aurCode: "AUR0753",
-          ...(attrName ? { resourceKind: "attribute", name: attrName } : {}),
-        }),
-      };
-    }
-    case "AU0101": {
-      const name = offset != null && text && compilation
-        ? findBindingBehaviorAtOffset(compilation.exprTable ?? [], offset)?.name
-        : null;
-      return {
-        ...base,
-        code: "aurelia/expr-symbol-not-found",
-        data: mergeDiagnosticData(diag.data, {
-          aurCode: "AUR0101",
-          symbolKind: "binding-behavior",
-          ...(name ? { name } : {}),
-        }),
-      };
-    }
-    case "AU0103": {
-      const name = offset != null && text && compilation
-        ? findValueConverterAtOffset(compilation.exprTable ?? [], offset)?.name
-        : null;
-      return {
-        ...base,
-        code: "aurelia/expr-symbol-not-found",
-        data: mergeDiagnosticData(diag.data, {
-          aurCode: "AUR0103",
-          symbolKind: "value-converter",
-          ...(name ? { name } : {}),
-        }),
-      };
-    }
-    case "AU0102":
-    case "AU0106":
-    case "AU9996": {
-      const aurCode = code === "AU0102"
-        ? "AUR0102"
-        : code === "AU0106"
-          ? "AUR0106"
-          : "AUR9996";
-      return {
-        ...base,
-        code: "aurelia/invalid-binding-pattern",
-        data: mergeDiagnosticData(diag.data, { aurCode }),
-      };
-    }
-    case "AU0704":
-      return {
-        ...base,
-        code: "aurelia/invalid-command-usage",
-        data: mergeDiagnosticData(diag.data, { aurCode: "AUR0704" }),
-      };
-    case "AU0705": {
-      let command: string | null = null;
-      if (offset != null && text && compilation) {
-        const hit = findInstructionHit(compilation, offset);
-        const raw = hit ? attributeNameFromHit(hit) : null;
-        command = attributeCommandName(raw, ctx.syntax);
-      }
-      return {
-        ...base,
-        code: "aurelia/unknown-command",
-        data: mergeDiagnosticData(diag.data, {
-          aurCode: "AUR0713",
-          ...(command ? { command } : {}),
-        }),
-      };
-    }
-    case "AU0810":
-    case "AU0813":
-    case "AU0815":
-    case "AU0816":
-      return {
-        ...base,
-        code: "aurelia/invalid-command-usage",
-        data: mergeDiagnosticData(diag.data, { aurCode: `AUR${code.slice(2)}` }),
-      };
-    case "AU1106":
-      return {
-        ...base,
-        code: "aurelia/invalid-command-usage",
-      };
-    case "AU1201":
-    case "AU1202":
-      return {
-        ...base,
-        code: "aurelia/invalid-binding-pattern",
-      };
-    case "AU1203":
-      return {
-        ...base,
-        code: "aurelia/expr-parse-error",
-        data: mergeDiagnosticData(diag.data, { recovery: true }),
-      };
-    case "AU1301":
-    case "AU1302":
-    case "AU1303":
-      return {
-        ...base,
-        code: "aurelia/expr-type-mismatch",
-      };
-    default:
-      return {
-        ...base,
-        code: `aurelia/${code}`,
-        data: diag.data,
-      };
+function buildDiagnosticData(
+  diag: TemplateLanguageDiagnostic,
+): Readonly<Record<string, unknown>> | undefined {
+  if (diag.source !== "typescript") return diag.data;
+  const extra: Record<string, unknown> = { tsCode: diag.code };
+  if (diag.tags?.length) {
+    extra.tags = diag.tags;
   }
+  if (!diag.data || Object.keys(diag.data).length === 0) return extra;
+  return { ...diag.data, ...extra };
 }
 
-function mergeDiagnosticData(
-  base: WorkspaceDiagnostic["data"],
-  next: Record<string, unknown> | null,
-): WorkspaceDiagnostic["data"] {
-  if (!base && !next) return undefined;
-  if (!next || Object.keys(next).length === 0) return base;
-  return { ...(base ?? {}), ...next };
-}
-
-function sortDiagnostics(diagnostics: readonly WorkspaceDiagnostic[]): WorkspaceDiagnostic[] {
-  if (diagnostics.length < 2) return diagnostics.slice();
-  return diagnostics
-    .map((diag, index) => ({ diag, index }))
-    .sort((a, b) => {
-      const spanA = a.diag.span;
-      const spanB = b.diag.span;
-      if (spanA && spanB) {
-        const startDelta = spanA.start - spanB.start;
-        if (startDelta !== 0) return startDelta;
-        const endDelta = spanA.end - spanB.end;
-        if (endDelta !== 0) return endDelta;
-      } else if (spanA && !spanB) {
-        return -1;
-      } else if (!spanA && spanB) {
-        return 1;
-      }
-      const codeDelta = String(a.diag.code ?? "").localeCompare(String(b.diag.code ?? ""));
-      if (codeDelta !== 0) return codeDelta;
-      const messageDelta = String(a.diag.message ?? "").localeCompare(String(b.diag.message ?? ""));
-      if (messageDelta !== 0) return messageDelta;
-      return a.index - b.index;
-    })
-    .map((entry) => entry.diag);
-}
-
-function gapCodeForKind(kind: string): string {
-  switch (kind) {
-    case "conditional-registration":
-    case "loop-variable":
-      return "aurelia/gap/unknown-registration";
-    default:
-      return "aurelia/gap/partial-eval";
+function filterRoutedDiagnosticsByUri(
+  routed: WorkspaceDiagnostics,
+  uri: DocumentUri,
+): WorkspaceDiagnostics {
+  const canonical = canonicalDocumentUri(uri).uri;
+  const bySurface = new Map<DiagnosticSurface, WorkspaceDiagnostic[]>();
+  for (const [surface, entries] of routed.bySurface.entries()) {
+    const filtered = filterDiagnosticsByUri(entries, canonical);
+    if (filtered.length > 0) {
+      bySurface.set(surface, filtered);
+    }
   }
+  const suppressed = filterDiagnosticsByUri(routed.suppressed, canonical);
+  return { bySurface, suppressed };
+}
+
+function filterDiagnosticsByUri(
+  diagnostics: readonly WorkspaceDiagnostic[],
+  uri: DocumentUri,
+): WorkspaceDiagnostic[] {
+  const canonical = canonicalDocumentUri(uri).uri;
+  return diagnostics.filter((diag) => {
+    if (diag.uri) {
+      return canonicalDocumentUri(diag.uri).uri === canonical;
+    }
+    if (diag.span?.file) {
+      return canonicalDocumentUri(diag.span.file).uri === canonical;
+    }
+    return !diag.span;
+  });
 }
 

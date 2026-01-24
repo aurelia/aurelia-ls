@@ -16,6 +16,7 @@ export const CustomCapabilityKeys = {
   mapping: "mapping",
   queryAtPosition: "queryAtPosition",
   ssr: "ssr",
+  diagnostics: "diagnostics",
   dumpState: "dumpState",
 } as const;
 

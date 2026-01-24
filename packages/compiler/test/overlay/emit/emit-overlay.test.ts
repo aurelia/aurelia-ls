@@ -1,4 +1,5 @@
 import { runVectorTests, getDirname, lowerOpts } from "../../_helpers/vector-runner.js";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
 
@@ -22,12 +23,14 @@ interface EmitDiff {
   extraTextIncludes: string[];
 }
 
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
+
 runVectorTests<EmitExpect, EmitIntent, EmitDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Emit Overlay (60)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
+    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
     const scope = bindScopes(linked);
     const plan = planOverlay(linked, scope, { isJs: false, vm: mockVm() });
     const emit = emitOverlay(plan, { isJs: false });

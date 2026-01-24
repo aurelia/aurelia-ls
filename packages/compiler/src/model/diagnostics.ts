@@ -13,6 +13,7 @@ export type DiagnosticSeverity = "error" | "warning" | "info";
 export type DiagnosticSource =
   | "lower"
   | "resolve-host"
+  | "resolution"
   | "bind"
   | "typecheck"
   | "overlay-plan"
@@ -25,12 +26,16 @@ export interface DiagnosticRelated {
 }
 
 /** Unified diagnostic envelope for compiler/LSP phases. */
-export interface CompilerDiagnostic<TCode extends string = string> {
+export interface CompilerDiagnostic<
+  TCode extends string = string,
+  TData extends Record<string, unknown> = Record<string, unknown>,
+> {
   code: TCode;
   message: string;
   source: DiagnosticSource;
-  severity: DiagnosticSeverity;
+  severity?: DiagnosticSeverity;
   span?: SourceSpan | null;
-  related?: DiagnosticRelated[];
+  related?: readonly DiagnosticRelated[];
+  data?: Readonly<TData>;
   origin?: Origin | null;
 }

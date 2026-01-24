@@ -5,7 +5,6 @@ import * as ts from "typescript";
 
 import {
   analyzePackage,
-  applyResolutionPolicy,
   buildApiSurfaceSnapshot,
   buildSemanticSnapshot,
   buildSemanticsArtifacts,
@@ -47,6 +46,7 @@ import {
   type CustomElementDef,
   type CustomAttributeDef,
   type TemplateControllerDef,
+  type ModuleResolver,
 } from "@aurelia-ls/compiler";
 
 import {
@@ -158,11 +158,12 @@ export async function runIntegrationScenario(
   memoryTracker.mark("start");
 
   const { program, fileSystem, fileMap } = createProgramFromScenario(resolvedScenario);
+  const moduleResolver = createModuleResolver(program, fileMap);
   memoryTracker.mark("program");
 
   const resolutionStart = performance.now();
   const baseResolution = resolve(program, buildResolutionConfig(resolvedScenario, fileSystem), options.logger);
-  const resolution = applyResolutionPolicy(baseResolution, resolvedScenario.resolution.policy);
+  const resolution = baseResolution;
   timings.resolutionMs = performance.now() - resolutionStart;
   memoryTracker.mark("resolution");
 
@@ -180,7 +181,7 @@ export async function runIntegrationScenario(
   memoryTracker.mark("merge");
 
   const compileStart = performance.now();
-  const compile = compileTargets(resolvedScenario, resolution, augmented, fileMap, {
+  const compile = compileTargets(resolvedScenario, resolution, augmented, moduleResolver, fileMap, {
     computeUsage: !!resolvedScenario.expect?.registrationPlan,
   });
   timings.compileMs = performance.now() - compileStart;
@@ -265,6 +266,36 @@ function createProgramFromScenario(
     ? createNodeFileSystem({ root: dirname(scenario.source.tsconfigPath) })
     : undefined;
   return { program, fileSystem };
+}
+
+function createModuleResolver(
+  program: ts.Program,
+  fileMap?: Record<string, string>,
+): ModuleResolver {
+  const compilerOptions = program.getCompilerOptions();
+  const mem = fileMap ? new Map(Object.entries(fileMap)) : null;
+  const base = ts.sys;
+
+  const host: ts.ModuleResolutionHost = {
+    fileExists: (fileName) => {
+      const key = normalizePath(fileName);
+      return (mem?.has(key) ?? false) || base.fileExists(fileName);
+    },
+    readFile: (fileName) => {
+      const key = normalizePath(fileName);
+      return mem?.get(key) ?? base.readFile(fileName);
+    },
+    directoryExists: base.directoryExists?.bind(base),
+    realpath: base.realpath?.bind(base),
+    getCurrentDirectory: () => base.getCurrentDirectory ? base.getCurrentDirectory() : process.cwd(),
+    getDirectories: base.getDirectories?.bind(base),
+  };
+
+  return (specifier: string, containingFile: string) => {
+    const resolved = ts.resolveModuleName(specifier, containingFile, compilerOptions, host).resolvedModule;
+    if (!resolved?.resolvedFileName) return null;
+    return normalizePath(resolved.resolvedFileName);
+  };
 }
 
 function buildResolutionConfig(
@@ -430,6 +461,7 @@ function compileTargets(
     catalog: ResourceCatalog;
     syntax: TemplateSyntaxRegistry;
   },
+  moduleResolver: ModuleResolver,
   fileMap?: Record<string, string>,
   options: { computeUsage?: boolean } = {},
 ): Record<string, CompileRunResult> {
@@ -461,6 +493,7 @@ function compileTargets(
         resourceGraph: merged.resourceGraph,
         resourceScope: scopeId,
         localImports,
+        moduleResolver,
       });
       compileResult.usage = analysis.usage;
       if (target.overlay) {
@@ -478,6 +511,7 @@ function compileTargets(
         resourceGraph: merged.resourceGraph,
         resourceScope: scopeId,
         localImports,
+        moduleResolver,
       });
     }
 

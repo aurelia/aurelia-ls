@@ -148,6 +148,17 @@ function normalizeCodeActions(input: unknown): Array<{ title: string; kind?: str
   }));
 }
 
+type DiagnosticsPipelineHost = {
+  debugDiagnosticsPipeline: (uri: DocumentUri) => { normalization: { issues: readonly unknown[] } };
+};
+
+function expectNoNormalizationIssues(workspace: DiagnosticsPipelineHost, uri: DocumentUri): void {
+  const issues = workspace.debugDiagnosticsPipeline(uri).normalization.issues;
+  if (issues.length > 0) {
+    throw new Error(`Normalization issues detected:\n${JSON.stringify(issues, null, 2)}`);
+  }
+}
+
 function encodeTokens(tokens: readonly WorkspaceToken[], text: string): number[] {
   const raw: Array<{ line: number; char: number; length: number; type: number; modifiers: number }> = [];
   for (const token of tokens) {
@@ -333,6 +344,8 @@ describe("adapter contract (workspace-contract)", () => {
   });
 
   it("mirrors diagnostics output", () => {
+    expectNoNormalizationIssues(harness.workspace, appUri);
+    expectNoNormalizationIssues(harness.workspace, tableUri);
     const expectedApp = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
     const expectedTable = mapWorkspaceDiagnostics(tableUri, harness.workspace.diagnostics(tableUri), lookupText);
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(normalizeDiagnostics(expectedApp));
@@ -565,6 +578,10 @@ describe("adapter contract (template control scenarios)", () => {
   });
 
   it("mirrors diagnostics output", () => {
+    expectNoNormalizationIssues(harness.workspace, controllersUri);
+    expectNoNormalizationIssues(harness.workspace, projectionUri);
+    expectNoNormalizationIssues(harness.workspace, deepUri);
+    expectNoNormalizationIssues(harness.workspace, localsUri);
     const expectedControllers = mapWorkspaceDiagnostics(controllersUri, harness.workspace.diagnostics(controllersUri), lookupText);
     const expectedProjection = mapWorkspaceDiagnostics(projectionUri, harness.workspace.diagnostics(projectionUri), lookupText);
     const expectedDeep = mapWorkspaceDiagnostics(deepUri, harness.workspace.diagnostics(deepUri), lookupText);
@@ -688,7 +705,6 @@ describe("adapter contract (binding shorthand syntax)", () => {
     });
     const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
     expect(actualTokens).toEqual(expectedTokens);
-
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
@@ -800,6 +816,7 @@ describe("adapter contract (template local scopes)", () => {
     const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
     expect(actualTokens).toEqual(expectedTokens);
 
+    expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
@@ -911,6 +928,7 @@ describe("adapter contract (portal chain)", () => {
     const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
     expect(actualTokens).toEqual(expectedTokens);
 
+    expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
@@ -1022,6 +1040,7 @@ describe("adapter contract (portal deep nesting)", () => {
     const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
     expect(actualTokens).toEqual(expectedTokens);
 
+    expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
@@ -1133,6 +1152,7 @@ describe("adapter contract (let edge cases)", () => {
     const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
     expect(actualTokens).toEqual(expectedTokens);
 
+    expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),

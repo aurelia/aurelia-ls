@@ -24,6 +24,7 @@ import {
   type NestedTemplateHtmlNode,
   type CompileTrace,
   type LocalImportDef,
+  type ModuleResolver,
 } from "@aurelia-ls/compiler";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./instruction-translator.js";
@@ -43,6 +44,8 @@ export interface AotCompileOptions {
   name?: string;
   /** Custom semantics (defaults to DEFAULT_SEMANTICS) */
   semantics?: Semantics;
+  /** Module resolver for template meta imports. */
+  moduleResolver?: ModuleResolver;
   /** Resource graph for project-specific components */
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
@@ -121,6 +124,7 @@ export function compileWithAot(
 ): AotCompileResult {
   const trace = options.trace ?? NOOP_TRACE;
   const semantics = options.semantics ?? DEFAULT_SEMANTICS;
+  const moduleResolver = options.moduleResolver ?? ((_specifier: string, _containingFile: string) => null);
 
   return trace.span("ssr.compileWithAot", () => {
     // 1. Run SSR-agnostic AOT compilation (analysis + synthesis)
@@ -130,6 +134,7 @@ export function compileWithAot(
       templatePath: options.templatePath,
       name: options.name,
       semantics,
+      moduleResolver,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
       localImports: options.localImports,
@@ -179,6 +184,8 @@ export interface CompileAndRenderAotOptions {
   templatePath?: string;
   /** Custom semantics (defaults to DEFAULT_SEMANTICS) */
   semantics?: Semantics;
+  /** Module resolver for template meta imports. */
+  moduleResolver?: ModuleResolver;
   /** Resource graph for project-specific components */
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
@@ -273,6 +280,7 @@ export async function compileAndRenderAot(
       name: componentName,
       templatePath: options.templatePath,
       semantics: options.semantics,
+      moduleResolver: options.moduleResolver,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
       trace,

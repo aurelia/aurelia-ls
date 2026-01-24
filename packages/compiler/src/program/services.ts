@@ -1,5 +1,5 @@
 // Model imports (via barrel)
-import type { NormalizedPath, SourceFileId, SourceSpan, Position, TextRange } from "../model/index.js";
+import type { NormalizedPath, SourceFileId, SourceSpan, Position, TextRange, Origin } from "../model/index.js";
 import {
   offsetAtPosition,
   positionAtOffset,
@@ -15,8 +15,6 @@ import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from
 // Pipeline imports (via barrel)
 import { stableHash } from "../pipeline/index.js";
 
-// Analysis imports (via barrel)
-import type { TypecheckDiagnostic } from "../analysis/index.js";
 
 // Language imports (via barrel)
 import {
@@ -128,10 +126,12 @@ export interface TemplateLanguageDiagnostic {
   code: string | number;
   message: string;
   source: LanguageDiagnosticSource;
-  severity: DiagnosticSeverity;
+  severity?: DiagnosticSeverity;
   location: DocumentSpan | null;
   related?: readonly DiagnosticRelatedInfo[];
   tags?: readonly string[];
+  data?: Readonly<Record<string, unknown>>;
+  origin?: Origin | null;
 }
 
 export interface TemplateLanguageDiagnostics {
@@ -1531,6 +1531,7 @@ function mapCompilerDiagnostic(
     message: rel.message,
     location: rel.span ? { uri: templateUri, span: resolveSourceSpan(rel.span, templateFile) } : null,
   }));
+  const code = String(diag.code);
 
   if (isTypecheckMismatch(diag)) {
     const vmDisplayName = context?.vmDisplayName ?? "Component";
@@ -1546,39 +1547,66 @@ function mapCompilerDiagnostic(
       hit,
       context?.typeNames ?? EMPTY_TYPE_NAMES,
     );
-    const expected = diag.expected ?? null;
-    const actual = quickInfoType ?? diag.actual ?? null;
+    const expected = getDataString(diag.data, "expected");
+    const actualFromData = getDataString(diag.data, "actual");
+    const actual = quickInfoType ?? actualFromData;
 
     if (quickInfoType && expected && typeTextMatches(expected, quickInfoType)) {
       return null;
     }
 
     const subject = hit?.memberPath ? `${vmDisplayName}.${hit.memberPath}` : vmDisplayName;
+    const data = withTypeMismatchData(diag.data ?? {}, expected, actual);
     return {
-      code: diag.code,
+      code,
       message: hit?.memberPath
         ? `Type mismatch on ${subject}: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`
         : `Type mismatch: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`,
       source: diag.source,
       severity: diag.severity,
       location,
+      origin: diag.origin ?? null,
       ...(related.length ? { related } : {}),
+      ...(data && Object.keys(data).length > 0 ? { data } : {}),
     };
   }
 
+  const data = diag.data ?? null;
   return {
-    code: diag.code,
+    code,
     message: diag.message,
     source: diag.source,
     severity: diag.severity,
     location,
+    origin: diag.origin ?? null,
     ...(related.length ? { related } : {}),
+    ...(data && Object.keys(data).length > 0 ? { data } : {}),
   };
 }
 
-function isTypecheckMismatch(diag: CompilerDiagnostic): diag is TypecheckDiagnostic {
-  // AU1301 = error, AU1302 = warning, AU1303 = info (all are type mismatches)
-  return (diag.code === "AU1301" || diag.code === "AU1302" || diag.code === "AU1303") && diag.source === "typecheck";
+function isTypecheckMismatch(diag: CompilerDiagnostic): boolean {
+  return diag.code === "aurelia/expr-type-mismatch" && diag.source === "typecheck";
+}
+
+function getDataString(
+  data: Readonly<Record<string, unknown>> | undefined,
+  key: string,
+): string | null {
+  if (!data) return null;
+  const value = data[key];
+  return typeof value === "string" ? value : null;
+}
+
+function withTypeMismatchData(
+  data: Readonly<Record<string, unknown>>,
+  expected: string | null,
+  actual: string | null,
+): Readonly<Record<string, unknown>> {
+  if (!expected && !actual) return data;
+  const next = { ...data };
+  if (expected) next.expected = expected;
+  if (actual) next.actual = actual;
+  return next;
 }
 
 function lookupQuickInfoType(

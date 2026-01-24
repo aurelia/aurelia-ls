@@ -10,6 +10,7 @@ import {
   deriveTemplatePaths,
 } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 const overlayFixtures = [
   { name: "kitchen-sink", dir: new URL("../../../../fixtures/overlays/kitchen-sink/", import.meta.url), vmType: "any" },
@@ -82,5 +83,6 @@ function createProgram(vmType = "RootVm") {
     semantics: DEFAULT_SEMANTICS,
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
+    moduleResolver: noopModuleResolver,
   });
 }

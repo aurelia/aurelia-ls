@@ -5,6 +5,8 @@ import type {
   FeatureUsageSet,
   NodeId,
   ProvenanceIndex,
+  ResolvedDiagnostic,
+  RoutedDiagnostics,
   RegistrationPlan,
   ResourceCatalog,
   ResourceGraph,
@@ -87,19 +89,8 @@ export interface WorkspaceToken {
   readonly span: SourceSpan;
 }
 
-// Mirrors compiler DiagnosticSeverity; keep in sync without introducing an LSP dependency.
-export type WorkspaceDiagnosticSeverity = "error" | "warning" | "info";
-
-export interface WorkspaceDiagnostic {
-  readonly code: string;
-  readonly message: string;
-  readonly severity: WorkspaceDiagnosticSeverity;
-  readonly span?: SourceSpan;
-  // Diagnostic data follows the taxonomy (e.g., aurCode, recovery, confidence).
-  readonly data?: Readonly<Record<string, unknown>>;
-  // Source should be stable (e.g., "aurelia" or "typescript").
-  readonly source?: string;
-}
+export type WorkspaceDiagnostic = ResolvedDiagnostic;
+export type WorkspaceDiagnostics = RoutedDiagnostics;
 
 export interface SemanticQuery {
   // Query results must be stable and ordered deterministically for identical snapshots.
@@ -108,7 +99,7 @@ export interface SemanticQuery {
   definition(pos: SourcePosition): readonly WorkspaceLocation[];
   references(pos: SourcePosition): readonly WorkspaceLocation[];
   completions(pos: SourcePosition): readonly WorkspaceCompletionItem[];
-  diagnostics(): readonly WorkspaceDiagnostic[];
+  diagnostics(): WorkspaceDiagnostics;
   semanticTokens(): readonly WorkspaceToken[];
 }
 
@@ -176,7 +167,7 @@ export interface SemanticWorkspace {
   update(uri: DocumentUri, text: string, version?: number): void;
   close(uri: DocumentUri): void;
   snapshot(): WorkspaceSnapshot;
-  diagnostics(uri: DocumentUri): readonly WorkspaceDiagnostic[];
+  diagnostics(uri: DocumentUri): WorkspaceDiagnostics;
   query(uri: DocumentUri): SemanticQuery;
   refactor(): RefactorEngine;
 }

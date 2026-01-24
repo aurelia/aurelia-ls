@@ -34,7 +34,7 @@
     }
   },
   {
-    "name": "LET-03 duplicate <let> in same frame → AU1202",
+    "name": "LET-03 duplicate <let> in same frame → aurelia/invalid-binding-pattern",
     "markup": "<template><let a.bind=\"x\"></let><let a.bind=\"y\"></let></template>",
     "expect": {
       "frames": [
@@ -48,7 +48,7 @@
         { "kind": "expr", "code": "y", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1202" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
@@ -116,7 +116,7 @@
     }
   },
   {
-    "name": "LET-07 if reuses scope: duplicate <let> in if does NOT trigger AU1202 (no locals declared)",
+    "name": "LET-07 if reuses scope: duplicate <let> in if does NOT trigger aurelia/invalid-binding-pattern (no locals declared)",
     "markup": "<template><div if.bind=\"cond\"><let a.bind=\"x\"></let><let a.bind=\"y\"></let></div></template>",
     "expect": {
       "frames": [
@@ -232,3 +232,4 @@
     }
   }
 ]
+

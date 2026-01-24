@@ -108,7 +108,7 @@
     }
   },
   {
-    "name": "R-C-13 unknown property inside value-less controller still yields AU1104 (nested)",
+    "name": "R-C-13 unknown property inside value-less controller still yields aurelia/unknown-bindable (nested)",
     "markup": "<div if foo.bind=\"x\"></div>",
     "expect": {
       "items": [
@@ -116,12 +116,12 @@
         { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-C-14 unknown property on nested controller host produces AU1104 (controller present)",
+    "name": "R-C-14 unknown property on nested controller host produces aurelia/unknown-bindable (controller present)",
     "markup": "<div with.bind=\"ctx\" foo.bind=\"x\"></div>",
     "expect": {
       "items": [
@@ -129,19 +129,19 @@
         { "kind": "prop", "to": "foo", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-C-15 repeat tail options (key + unknown) -> AU1106",
+    "name": "R-C-15 repeat tail options (key + unknown) -> aurelia/invalid-command-usage",
     "markup": "<div repeat.for=\"item of items; key.bind: key; bogus.bind: nope\"></div>",
     "expect": {
       "items": [
         { "kind": "iterator", "res": "repeat", "to": "items" }
       ],
       "diags": [
-        { "code": "AU1106" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
@@ -206,3 +206,4 @@
     }
   }
 ]
+

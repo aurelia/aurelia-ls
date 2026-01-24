@@ -18,7 +18,9 @@ import type { TypeRef } from "../../language/registry.js";
 import { buildExprSpanIndex, exprIdsOf, indexExprTable } from "../../shared/expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
-import { buildDiagnostic } from "../../shared/diagnostics.js";
+import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
+import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
 import { exprIdMapGet, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { buildScopeLookup } from "../shared/scope-lookup.js";
 import { isStub } from "../../shared/diagnosed.js";
@@ -36,13 +38,16 @@ import { debug } from "../../shared/debug.js";
 export type { TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./config.js";
 export { resolveTypecheckConfig, DEFAULT_TYPECHECK_CONFIG, TYPECHECK_PRESETS, checkTypeCompatibility } from "./config.js";
 
-/** Diagnostic codes for typecheck phase */
-export type TypecheckDiagCode = "AU1301" | "AU1302" | "AU1303";
+const typecheckDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, TypecheckDiagCode>(
+  diagnosticsCatalog,
+  { source: "typecheck" },
+);
 
-export type TypecheckDiagnostic = CompilerDiagnostic<TypecheckDiagCode> & {
+/** Diagnostic codes for typecheck phase (catalog-derived). */
+export type TypecheckDiagCode = DiagnosticCodeForStage<"typecheck">;
+
+export type TypecheckDiagnostic = CompilerDiagnostic<TypecheckDiagCode, DiagnosticDataFor<TypecheckDiagCode>> & {
   exprId?: ExprId;
-  expected?: string;
-  actual?: string;
   severity: TypecheckSeverity;
 };
 
@@ -208,22 +213,21 @@ function collectDiagnostics(
     });
 
     const span = exprIdMapGet(spans, id) ?? null;
-    const code = severityToCode(result.severity);
     const message = result.reason ?? `Type mismatch: expected ${expectedInfo.type}, got ${actual}`;
 
-    const diag = buildDiagnostic({
-      code,
+    const diag = typecheckDiagnosticEmitter.emit("aurelia/expr-type-mismatch", {
       message,
       span,
-      source: "typecheck",
       severity: result.severity,
+      data: {
+        expected: expectedInfo.type,
+        actual,
+      },
     });
 
     diags.push({
       ...diag,
       exprId: id,
-      expected: expectedInfo.type,
-      actual,
       severity: result.severity,
     });
   }
@@ -231,18 +235,6 @@ function collectDiagnostics(
   return diags;
 }
 
-/**
- * Map severity to diagnostic code.
- * AU1301 = error, AU1302 = warning, AU1303 = info
- */
-function severityToCode(severity: TypecheckSeverity): TypecheckDiagCode {
-  switch (severity) {
-    case "error": return "AU1301";
-    case "warning": return "AU1302";
-    case "info": return "AU1303";
-    default: return "AU1301";
-  }
-}
 
 function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTypeInfo>): void {
   switch (ins.kind) {

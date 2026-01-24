@@ -24,7 +24,7 @@ import {
   type LocalImportDef,
   type TemplateSyntaxRegistry,
 } from "./language/index.js";
-import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "./shared/index.js";
+import { NOOP_TRACE, CompilerAttributes, type CompileTrace, type ModuleResolver } from "./shared/index.js";
 import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";
 
 // =============================================================================
@@ -38,6 +38,8 @@ export interface CompileAotOptions {
   name?: string;
   /** Semantics (built-ins + project-specific resources) */
   semantics: Semantics;
+  /** Module resolver for template meta imports. */
+  moduleResolver: ModuleResolver;
   /** Precomputed catalog for lowering (scope-specific if provided) */
   catalog?: ResourceCatalog;
   /** Precomputed syntax registry for parsing/emitting */
@@ -180,7 +182,12 @@ export function compileAot(
         }
       : undefined;
 
-    const linked = resolveHost(ir, semWithCatalog, { ...resolveOpts, trace });
+    const linked = resolveHost(ir, semWithCatalog, {
+      ...resolveOpts,
+      moduleResolver: options.moduleResolver,
+      templateFilePath: templatePath,
+      trace,
+    });
     const scoped = bindScopes(linked, { trace });
     trace.event("compiler.aot.analysis.done");
 

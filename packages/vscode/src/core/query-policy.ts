@@ -4,6 +4,7 @@ export type QueryPolicyName =
   | "overlay"
   | "mapping"
   | "ssr"
+  | "diagnostics"
   | "queryAtPosition"
   | "dumpState"
   | "capabilities";
@@ -14,6 +15,7 @@ export const QueryPolicies: Record<QueryPolicyName, QueryOptions> = {
   overlay: { dedupe: true, ttlMs: 0, timeoutMs: 1500, reportErrors: false },
   mapping: { dedupe: true, ttlMs: 0, timeoutMs: 1500, reportErrors: false },
   ssr: { dedupe: true, ttlMs: 0, timeoutMs: 2500, reportErrors: false },
+  diagnostics: { dedupe: true, ttlMs: 0, timeoutMs: 1500, reportErrors: false },
   queryAtPosition: { dedupe: true, ttlMs: 0, timeoutMs: 400, reportErrors: false },
   dumpState: { dedupe: false, ttlMs: 0, timeoutMs: 2500, reportErrors: false },
   capabilities: { dedupe: true, ttlMs: 5000, timeoutMs: 1000, reportErrors: false },

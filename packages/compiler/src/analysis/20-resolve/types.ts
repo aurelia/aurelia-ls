@@ -28,50 +28,18 @@ import type {
   ControllerConfig,
 } from "../../language/registry.js";
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
+import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
 
 /* ===========================
  * Diagnostics (Resolve-Host)
  * =========================== */
 
 /**
- * Resolve-host diagnostic codes.
- *
- * Code ranges:
- * - AU01xx: Expression-level resource errors (matches runtime AUR01xx)
- * - AU08xx: Template structure errors (matches runtime AUR08xx)
- * - AU11xx: Host semantics / linker errors (compiler-specific)
- *
- * See docs/errors.md for the full runtime error inventory.
+ * Resolve-host diagnostic codes (canonical catalog).
  */
-export type SemDiagCode =
-  // ─── Expression Resource Errors (AU01xx) ───────────────────────────────────
-  // These match runtime error codes for consistency.
-  | "AU0101" // Binding behavior not found
-  | "AU0102" // Duplicate binding behavior (same behavior applied twice in expression)
-  | "AU0103" // Value converter not found
-  | "AU0106" // Assignment to $host is not allowed
+export type SemDiagCode = DiagnosticCodeForStage<"resolve">;
 
-  // ─── Binding Behavior Usage Errors (AU99xx) ───────────────────────────────
-  | "AU9996" // Conflicting rate-limit behaviors (throttle + debounce on same binding)
-
-  // ─── Template Structure Errors (AU08xx) ────────────────────────────────────
-  // Branch validation: sibling and parent relationships
-  | "AU0810" // [else] without preceding [if]
-  | "AU0813" // [then]/[catch]/[pending] without parent [promise]
-  | "AU0815" // [case]/[default-case] without parent [switch]
-  | "AU0816" // Multiple [default-case] in same switch
-
-  // ─── Host Semantics Errors (AU11xx) ────────────────────────────────────────
-  | "AU1101" // Unknown controller
-  | "AU1102" // Unknown custom element (root cause for cascade suppression)
-  | "AU1103" // Unknown event
-  | "AU1104" // Property target not found on host
-  | "AU1105" // Repeat missing iterator binding (reserved)
-  | "AU1106" // Repeat tail option not recognized/wrong syntax
-  | "AU1107" // Custom element exists but is not registered in this scope
-  | "AU1108"; // Custom attribute exists but is not registered in this scope
-
-export type SemDiagnostic = CompilerDiagnostic<SemDiagCode>;
+export type SemDiagnostic = CompilerDiagnostic<SemDiagCode, DiagnosticDataFor<SemDiagCode>>;
 
 /* ===========================
  * Linked module / template / row
@@ -344,7 +312,7 @@ export type ControllerBranch =
  * - `element.nativeProp`  → native DOM property (from Semantics.dom).
  * - `controller.prop`     → controller value (e.g., `{ value }` on with/if/promise/switch/portal).
  * - `attribute`           → attribute‑only target (e.g., `data-*`, `aria-*`); do not map to a prop.
- * - `unknown`             → unresolved (kept to avoid dropping info; diagnostics carry AU1104).
+ * - `unknown`             → unresolved (kept to avoid dropping info; diagnostics carry aurelia/unknown-bindable).
  */
 export type TargetSem =
   | { kind: "element.bindable"; element: ElementResRef; bindable: Bindable }

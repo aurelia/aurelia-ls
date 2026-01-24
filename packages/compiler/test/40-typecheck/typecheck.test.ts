@@ -1,5 +1,5 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr, type TestVector, type CompilerContext } from "../_helpers/vector-runner.js";
-import { diffByKey } from "../_helpers/test-utils.js";
+import { diffByKey, noopModuleResolver } from "../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes, typecheck } from "@aurelia-ls/compiler";
 
@@ -50,7 +50,10 @@ runVectorTests<TypecheckExpect, TypecheckIntent, TypecheckDiff>({
   suiteName: "Typecheck (40)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
+    const linked = resolveHost(ir, ctx.sem, {
+      moduleResolver: noopModuleResolver,
+      templateFilePath: "mem.html",
+    });
     const scope = bindScopes(linked);
     const tc = typecheck({
       linked,
@@ -85,8 +88,7 @@ interface TypecheckResult {
   diags?: Array<{
     code: string;
     exprId?: string;
-    expected?: string;
-    actual?: string;
+    data?: Readonly<Record<string, unknown>>;
   }>;
 }
 
@@ -102,8 +104,8 @@ function reduceTypecheckIntent({ ir, tc }: ReduceInput): TypecheckIntent {
   const diags: DiagEntry[] = (tc.diags ?? []).map((d) => ({
     code: d.code,
     expr: d.exprId ? (codeIndex.get(d.exprId) ?? `(expr:${d.exprId})`) : undefined,
-    expected: d.expected,
-    actual: d.actual,
+    expected: getDataString(d.data, "expected"),
+    actual: getDataString(d.data, "actual"),
   }));
   return { expected, inferred, diags };
 }
@@ -115,6 +117,15 @@ function mapEntries(mapLike: Map<string, string> | undefined, codeIndex: Map<str
     out.push({ code: codeIndex.get(id) ?? `(expr:${id})`, type });
   }
   return out;
+}
+
+function getDataString(
+  data: Readonly<Record<string, unknown>> | undefined,
+  key: string,
+): string | undefined {
+  if (!data) return undefined;
+  const value = data[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 // --- Intent Comparison ---

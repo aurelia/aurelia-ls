@@ -517,14 +517,14 @@
     }
   },
   {
-    "name": "LB-58 unknown binding command emits AU0705",
+    "name": "LB-58 unknown binding command emits aurelia/unknown-command",
     "markup": "<div foo.unknowncommand=\"bar\"></div>",
     "expect": {
       "expressions": [
         { "kind": "propCommand", "command": "bind", "code": "bar" }
       ],
       "diags": [
-        { "code": "AU0705" }
+        { "code": "aurelia/unknown-command" }
       ]
     }
   },
@@ -536,7 +536,7 @@
         { "kind": "propCommand", "command": "bind", "code": "bar" }
       ],
       "diags": [
-        { "code": "AU0705" }
+        { "code": "aurelia/unknown-command" }
       ]
     }
   }

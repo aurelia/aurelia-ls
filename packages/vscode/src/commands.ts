@@ -4,7 +4,13 @@ import type { QueryClient } from "./core/query-client.js";
 import { QueryPolicies } from "./core/query-policy.js";
 import { type VirtualDocProvider } from "./virtual-docs.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-import type { MappingEntry, OverlayBuildArtifactShape, OverlayResponse } from "./types.js";
+import type {
+  DiagnosticsSnapshotItem,
+  DiagnosticsSnapshotResponse,
+  MappingEntry,
+  OverlayBuildArtifactShape,
+  OverlayResponse,
+} from "./types.js";
 
 function activeEditor(vscode: VscodeApi): TextEditor | null {
   return vscode.window.activeTextEditor ?? null;
@@ -32,6 +38,151 @@ function formatCalls(calls: NonNullable<OverlayBuildArtifactShape["calls"]>): st
   return calls
     .map((call, i) => `${i + 1}. expr=${call.exprId} overlay=[${call.overlayStart},${call.overlayEnd}) html=${spanLabel(call.htmlSpan)}`)
     .join("\n");
+}
+
+type SeverityCounts = { total: number; error: number; warning: number; info: number; unknown: number };
+
+function countSeverities(items: readonly DiagnosticsSnapshotItem[]): SeverityCounts {
+  return items.reduce(
+    (acc, diag) => {
+      acc.total += 1;
+      if (diag.severity === "error" || diag.severity === "warning" || diag.severity === "info") {
+        acc[diag.severity] += 1;
+      } else {
+        acc.unknown += 1;
+      }
+      return acc;
+    },
+    { total: 0, error: 0, warning: 0, info: 0, unknown: 0 },
+  );
+}
+
+function formatDiagSpan(span: DiagnosticsSnapshotItem["span"]): string {
+  if (!span) return "[-,-)";
+  const file = span.file ? `${span.file} ` : "";
+  return `${file}[${span.start},${span.end})`;
+}
+
+function formatDiagData(data: DiagnosticsSnapshotItem["data"]): string | null {
+  if (!data || Object.keys(data).length === 0) return null;
+  try {
+    return JSON.stringify(data, null, 2);
+  } catch {
+    return String(data);
+  }
+}
+
+function formatDiagIssues(issues: DiagnosticsSnapshotItem["issues"]): string | null {
+  if (!issues || issues.length === 0) return null;
+  try {
+    return JSON.stringify(issues, null, 2);
+  } catch {
+    return String(issues);
+  }
+}
+
+function formatDiagRelated(related: DiagnosticsSnapshotItem["related"]): string | null {
+  if (!related || related.length === 0) return null;
+  try {
+    return JSON.stringify(related, null, 2);
+  } catch {
+    return String(related);
+  }
+}
+
+function formatDiagnosticBlock(
+  diag: DiagnosticsSnapshotItem,
+  index: number,
+  fallbackUri: string,
+  heading: string,
+): string {
+  const data = formatDiagData(diag.data);
+  const related = formatDiagRelated(diag.related);
+  const issues = formatDiagIssues(diag.issues);
+  const lines = [
+    `${heading} ${index}. ${diag.code}`,
+    `- severity: ${diag.severity ?? "<unspecified>"}`,
+    `- message: ${diag.message}`,
+    `- impact: ${diag.impact ?? "<unspecified>"}`,
+    `- actionability: ${diag.actionability ?? "<unspecified>"}`,
+    `- category: ${diag.category ?? "<unspecified>"}`,
+    `- status: ${diag.status ?? "<unspecified>"}`,
+    `- stage: ${diag.stage ?? "<unspecified>"}`,
+    `- source: ${diag.source ?? "aurelia"}`,
+    `- uri: ${diag.uri ?? fallbackUri}`,
+    `- span: ${formatDiagSpan(diag.span)}`,
+  ];
+
+  if (diag.surfaces?.length) {
+    lines.push(`- surfaces: ${diag.surfaces.join(", ")}`);
+  }
+  if (diag.suppressed) {
+    lines.push(`- suppressed: true`);
+  }
+  if (diag.suppressionReason) {
+    lines.push(`- suppression reason: ${diag.suppressionReason}`);
+  }
+  if (data) {
+    lines.push(`- data:`, "", "```json", data, "```");
+  } else {
+    lines.push(`- data: <none>`);
+  }
+  if (related) {
+    lines.push(`- related:`, "", "```json", related, "```");
+  } else {
+    lines.push(`- related: <none>`);
+  }
+  if (issues) {
+    lines.push(`- issues:`, "", "```json", issues, "```");
+  } else {
+    lines.push(`- issues: <none>`);
+  }
+  return lines.join("\n");
+}
+
+function formatDiagnosticsSnapshot(snapshot: DiagnosticsSnapshotResponse, fallbackUri: string): string {
+  const uri = snapshot.uri ?? fallbackUri;
+  const diagnostics = snapshot.diagnostics ?? { bySurface: {}, suppressed: [] };
+  const surfaceEntries = Object.entries(diagnostics.bySurface ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const suppressed = diagnostics.suppressed ?? [];
+  const totalCounts = countSeverities(surfaceEntries.flatMap(([, items]) => items));
+
+  const header = [
+    `URI: ${uri}`,
+    `Fingerprint: ${snapshot.fingerprint ?? "<unknown>"}`,
+    `Counts: total=${totalCounts.total} error=${totalCounts.error} warning=${totalCounts.warning} info=${totalCounts.info} unknown=${totalCounts.unknown}`,
+    `Suppressed: ${suppressed.length}`,
+  ].join("\n");
+
+  if (!surfaceEntries.length && suppressed.length === 0) {
+    return `# Diagnostics Snapshot\n\n${header}\n\nNo diagnostics reported.`;
+  }
+
+  const blocks: string[] = [];
+  for (const [surface, items] of surfaceEntries) {
+    if (items.length === 0) continue;
+    const counts = countSeverities(items);
+    const headerLines = [
+      `## Surface: ${surface}`,
+      `Counts: total=${counts.total} error=${counts.error} warning=${counts.warning} info=${counts.info} unknown=${counts.unknown}`,
+    ];
+    const itemsBlock = items.map((diag, index) => formatDiagnosticBlock(diag, index + 1, uri, "###")).join("\n\n");
+    blocks.push(`${headerLines.join("\n")}\n\n${itemsBlock}`);
+  }
+
+  if (suppressed.length) {
+    const counts = countSeverities(suppressed);
+    const suppressedHeader = [
+      `## Suppressed`,
+      `Counts: total=${counts.total} error=${counts.error} warning=${counts.warning} info=${counts.info} unknown=${counts.unknown}`,
+    ].join("\n");
+    const suppressedBlocks = suppressed
+      .map((diag, index) => formatDiagnosticBlock(diag, index + 1, uri, "###"))
+      .join("\n\n");
+    blocks.push(`${suppressedHeader}\n\n${suppressedBlocks}`);
+  }
+
+  return `# Diagnostics Snapshot\n\n${header}\n\n${blocks.join("\n\n")}`;
 }
 
 export function registerCommands(
@@ -161,6 +312,30 @@ export function registerCommands(
         const manifestDoc = await vscode.workspace.openTextDocument({ language: "json", content: ssr.manifest.text });
         await vscode.window.showTextDocument(manifestDoc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
         logger.info("showSsrPreview.opened", { html: ssr.html.path, manifest: ssr.manifest.path });
+      });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("aurelia.showDiagnosticsSnapshot", () => {
+      void run("showDiagnosticsSnapshot", async () => {
+        const editor = activeEditor(vscode);
+        if (!editor) {
+          vscode.window.showInformationMessage("No active editor");
+          return;
+        }
+        const uri = editor.document.uri.toString();
+        logger.info("showDiagnosticsSnapshot.request", { uri });
+        const snapshot = await queries.getDiagnostics(uri, QueryPolicies.diagnostics);
+        if (!snapshot) {
+          vscode.window.showInformationMessage("No diagnostics snapshot available for this document");
+          return;
+        }
+        const doc = await vscode.workspace.openTextDocument({
+          language: "markdown",
+          content: formatDiagnosticsSnapshot(snapshot, uri),
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
       });
     }),
   );

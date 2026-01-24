@@ -1,0 +1,134 @@
+import {
+  defineDiagnostic,
+  type DiagnosticDataBase,
+  type DiagnosticResourceKind,
+} from "../types.js";
+
+export type UnknownResourceData = DiagnosticDataBase & {
+  resourceKind: DiagnosticResourceKind;
+  name?: string;
+};
+
+export type UnknownCommandData = DiagnosticDataBase & {
+  command?: string;
+};
+
+export const resourceResolutionDiagnostics = {
+  "aurelia/unknown-element": defineDiagnostic<UnknownResourceData>({
+    category: "resource-resolution",
+    status: "canonical",
+    defaultSeverity: "error",
+    impact: "degraded",
+    actionability: "guided",
+    span: "span",
+    stages: ["resolve", "bind"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "high",
+    aurCodeHints: ["AUR0752", "AUR0760"],
+    description: "Unknown custom element.",
+    data: {
+      required: ["resourceKind"],
+      optional: ["name", "aurCode"],
+    },
+  }),
+  "aurelia/unknown-attribute": defineDiagnostic<UnknownResourceData>({
+    category: "resource-resolution",
+    status: "canonical",
+    defaultSeverity: "error",
+    impact: "degraded",
+    actionability: "guided",
+    span: "span",
+    stages: ["resolve", "bind"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "high",
+    aurCodeHints: ["AUR0753", "AUR0759"],
+    description: "Unknown custom attribute.",
+    data: {
+      required: ["resourceKind"],
+      optional: ["name", "aurCode"],
+    },
+  }),
+  "aurelia/unknown-controller": defineDiagnostic<UnknownResourceData>({
+    category: "resource-resolution",
+    status: "canonical",
+    defaultSeverity: "error",
+    impact: "degraded",
+    actionability: "guided",
+    span: "span",
+    stages: ["resolve", "bind"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "high",
+    aurCode: "AUR0754",
+    description: "Unknown template controller.",
+    data: {
+      required: ["resourceKind"],
+      optional: ["name", "aurCode"],
+    },
+  }),
+  "aurelia/unknown-converter": defineDiagnostic<UnknownResourceData>({
+    category: "resource-resolution",
+    status: "canonical",
+    defaultSeverity: "error",
+    impact: "degraded",
+    actionability: "guided",
+    span: "span",
+    stages: ["resolve", "bind"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "high",
+    aurCode: "AUR0103",
+    description: "Unknown value converter.",
+    data: {
+      required: ["resourceKind"],
+      optional: ["name", "aurCode"],
+    },
+  }),
+  "aurelia/unknown-behavior": defineDiagnostic<UnknownResourceData>({
+    category: "resource-resolution",
+    status: "canonical",
+    defaultSeverity: "error",
+    impact: "degraded",
+    actionability: "guided",
+    span: "span",
+    stages: ["resolve", "bind"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "high",
+    aurCode: "AUR0101",
+    description: "Unknown binding behavior.",
+    data: {
+      required: ["resourceKind"],
+      optional: ["name", "aurCode"],
+    },
+  }),
+  "aurelia/unknown-command": defineDiagnostic<UnknownCommandData>({
+    category: "resource-resolution",
+    status: "canonical",
+    defaultSeverity: "error",
+    impact: "degraded",
+    actionability: "manual",
+    span: "span",
+    stages: ["lower", "resolve"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "high",
+    aurCode: "AUR0713",
+    description: "Unknown binding command.",
+    data: {
+      optional: ["command", "aurCode"],
+    },
+  }),
+  "aurelia/unknown-event": defineDiagnostic<UnknownResourceData>({
+    category: "resource-resolution",
+    status: "canonical",
+    defaultSeverity: "error",
+    impact: "degraded",
+    actionability: "manual",
+    span: "span",
+    stages: ["resolve", "bind"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "high",
+    description: "Unknown event binding target.",
+    data: {
+      required: ["resourceKind"],
+      optional: ["name"],
+    },
+  }),
+} as const;

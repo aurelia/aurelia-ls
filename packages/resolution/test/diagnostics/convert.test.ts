@@ -3,9 +3,6 @@ import {
   orphansToDiagnostics,
   unresolvedToDiagnostics,
   unresolvedRefsToDiagnostics,
-  RES0001_ORPHAN_ELEMENT,
-  RES0010_UNANALYZABLE_FUNCTION_CALL,
-  RES0021_NOT_A_RESOURCE,
 } from "@aurelia-ls/resolution";
 import type { OrphanResource, UnresolvedRegistration, UnresolvedResourceInfo } from "@aurelia-ls/resolution";
 import { toSourceFileId, type CustomElementDef, type NormalizedPath, type SourceSpan, type Sourced } from "@aurelia-ls/compiler";
@@ -53,11 +50,13 @@ describe("Diagnostic Conversion Functions", () => {
       const diagnostics = orphansToDiagnostics(orphans);
 
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].code).toBe(RES0001_ORPHAN_ELEMENT);
+      expect(diagnostics[0].code).toBe("aurelia/resolution/orphan-element");
       expect(diagnostics[0].severity).toBe("warning");
       expect(diagnostics[0].message).toContain("my-element");
       expect(diagnostics[0].message).toContain("MyElement");
-      expect(diagnostics[0].source).toBe("/app/src/my-element.ts");
+      expect(diagnostics[0].source).toBe("resolution");
+      expect(diagnostics[0].uri).toBe("/app/src/my-element.ts");
+      expect(diagnostics[0].data?.resourceKind).toBe("custom-element");
     });
 
     it("filters out orphans from external packages", () => {
@@ -97,10 +96,12 @@ describe("Diagnostic Conversion Functions", () => {
       const diagnostics = unresolvedToDiagnostics(unresolved);
 
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].code).toBe(RES0010_UNANALYZABLE_FUNCTION_CALL);
+      expect(diagnostics[0].code).toBe("aurelia/resolution/unanalyzable-function-call");
       expect(diagnostics[0].severity).toBe("info");
       expect(diagnostics[0].message).toContain("getPlugins");
-      expect(diagnostics[0].source).toBe("/app/src/main.ts");
+      expect(diagnostics[0].source).toBe("resolution");
+      expect(diagnostics[0].uri).toBe("/app/src/main.ts");
+      expect(diagnostics[0].data?.patternKind).toBe("function-call");
     });
 
     it("filters out unresolved patterns from external packages", () => {
@@ -133,16 +134,18 @@ describe("Diagnostic Conversion Functions", () => {
           name: "NotAResource",
           reason: "Identifier 'NotAResource' is not a known Aurelia resource",
           file: "/app/src/my-component.ts" as NormalizedPath,
+          span: mockSpan("/app/src/my-component.ts" as NormalizedPath),
         },
       ];
 
       const diagnostics = unresolvedRefsToDiagnostics(refs);
 
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].code).toBe(RES0021_NOT_A_RESOURCE);
+      expect(diagnostics[0].code).toBe("aurelia/resolution/not-a-resource");
       expect(diagnostics[0].severity).toBe("warning");
       expect(diagnostics[0].message).toBe("Identifier 'NotAResource' is not a known Aurelia resource");
-      expect(diagnostics[0].source).toBe("/app/src/my-component.ts");
+      expect(diagnostics[0].source).toBe("resolution");
+      expect(diagnostics[0].uri).toBe("/app/src/my-component.ts");
     });
 
     it("filters out unresolved refs from external packages", () => {
@@ -151,11 +154,13 @@ describe("Diagnostic Conversion Functions", () => {
           name: "InternalThing",
           reason: "Identifier 'InternalThing' is not a known Aurelia resource",
           file: "/node_modules/@aurelia/runtime-html/dist/something.ts" as NormalizedPath,
+          span: mockSpan("/node_modules/@aurelia/runtime-html/dist/something.ts" as NormalizedPath),
         },
         {
           name: "UserThing",
           reason: "Identifier 'UserThing' is not a known Aurelia resource",
           file: "/app/src/my-component.ts" as NormalizedPath,
+          span: mockSpan("/app/src/my-component.ts" as NormalizedPath),
         },
       ];
 
@@ -171,6 +176,7 @@ describe("Diagnostic Conversion Functions", () => {
           name: "RuntimeInternal",
           reason: "Not a resource",
           file: "/projects/aurelia-ls/aurelia/packages/runtime/src/internal.ts" as NormalizedPath,
+          span: mockSpan("/projects/aurelia-ls/aurelia/packages/runtime/src/internal.ts" as NormalizedPath),
         },
       ];
 
@@ -191,11 +197,13 @@ describe("Diagnostic Conversion Functions", () => {
           name: "HelperA",
           reason: "Identifier 'HelperA' is not a known Aurelia resource",
           file: "/app/src/a.ts" as NormalizedPath,
+          span: mockSpan("/app/src/a.ts" as NormalizedPath),
         },
         {
           name: "HelperB",
           reason: "Identifier 'HelperB' is not a known Aurelia resource",
           file: "/app/src/b.ts" as NormalizedPath,
+          span: mockSpan("/app/src/b.ts" as NormalizedPath),
         },
       ];
 

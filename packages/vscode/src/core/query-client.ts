@@ -1,4 +1,11 @@
-import type { CapabilitiesResponse, MappingResponse, OverlayResponse, SsrResponse, TemplateInfoResponse } from "../types.js";
+import type {
+  CapabilitiesResponse,
+  DiagnosticsSnapshotResponse,
+  MappingResponse,
+  OverlayResponse,
+  SsrResponse,
+  TemplateInfoResponse,
+} from "../types.js";
 import type { DebugChannel, ErrorReporter, ObservabilityService, TraceService } from "./observability.js";
 import type { LspFacade } from "./lsp-facade.js";
 
@@ -146,6 +153,10 @@ export class QueryClient {
 
   getSsr(uri: string, options?: QueryOptions): Promise<SsrResponse | null> {
     return this.query(["ssr", uri], () => this.#lsp.getSsr(uri), { ...options, name: "ssr" });
+  }
+
+  getDiagnostics(uri: string, options?: QueryOptions): Promise<DiagnosticsSnapshotResponse | null> {
+    return this.query(["diagnostics", uri], () => this.#lsp.getDiagnostics(uri), { ...options, name: "diagnostics" });
   }
 
   queryAtPosition(

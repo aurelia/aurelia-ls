@@ -5,10 +5,16 @@
  * to user-facing ResolutionDiagnostic instances with actionable messages.
  */
 
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { CompilerDiagnostic, DocumentUri, NormalizedPath, RawDiagnostic, SourceSpan } from "@aurelia-ls/compiler";
+import {
+  asDocumentUri,
+  createDiagnosticEmitter,
+  diagnosticsByCategory,
+  diagnosticsByCategoryFuture,
+  type DiagnosticsCatalog,
+} from "@aurelia-ls/compiler";
 import type { OrphanResource, UnresolvedRegistration, UnresolvedPattern } from "../registration/types.js";
 import type { ResolutionDiagnostic } from "../resolve.js";
-import { getOrphanCode, getUnanalyzableCode } from "./codes.js";
 import { unwrapSourced } from "../semantics/sourced.js";
 
 // =============================================================================
@@ -54,14 +60,21 @@ function orphanToDiagnostic(orphan: OrphanResource): ResolutionDiagnostic {
   const kindLabel = getKindLabel(resource.kind);
   const name = unwrapSourced(resource.name) ?? "<unknown>";
   const className = unwrapSourced(resource.className) ?? "<unknown>";
+  const code = getOrphanDiagnosticCode(resource.kind);
+  const uri = toUri(resource.file ?? orphan.definitionSpan.file);
 
-  return {
-    code: getOrphanCode(resource.kind),
+  const diag = toRawDiagnostic(RESOLUTION_EMITTER.emit(code, {
     message: `${kindLabel} '${name}' (class ${className}) is defined but never registered. ` +
       `Add it to Aurelia.register() or a component's dependencies array.`,
-    source: resource.file,
+    span: orphan.definitionSpan,
     severity: "warning",
-  };
+    data: {
+      resourceKind: resource.kind,
+      ...(resource.file ? { file: resource.file } : {}),
+      ...(name !== "<unknown>" ? { name } : {}),
+    },
+  }));
+  return withUri(diag, uri);
 }
 
 /**
@@ -100,13 +113,19 @@ export function unresolvedToDiagnostics(unresolved: readonly UnresolvedRegistrat
 
 function unresolvedToDiagnostic(registration: UnresolvedRegistration): ResolutionDiagnostic {
   const { pattern, file, reason } = registration;
+  const code = getUnanalyzableDiagnosticCode(pattern.kind);
+  const uri = toUri(file);
 
-  return {
-    code: getUnanalyzableCode(pattern.kind),
+  const diag = toRawDiagnostic(RESOLUTION_EMITTER.emit(code, {
     message: formatUnresolvedMessage(pattern, reason),
-    source: file,
+    span: registration.span,
     severity: "info",
-  };
+    data: {
+      patternKind: pattern.kind,
+      ...(patternDetail(pattern) ? { detail: patternDetail(pattern)! } : {}),
+    },
+  }));
+  return withUri(diag, uri);
 }
 
 /**
@@ -154,6 +173,7 @@ export interface UnresolvedResourceInfo {
   readonly name: string;
   readonly reason: string;
   readonly file: NormalizedPath;
+  readonly span: SourceSpan;
 }
 
 /**
@@ -172,10 +192,87 @@ export function unresolvedRefsToDiagnostics(refs: readonly UnresolvedResourceInf
 }
 
 function refToDiagnostic(ref: UnresolvedResourceInfo): ResolutionDiagnostic {
-  return {
-    code: "RES0021", // NOT_A_RESOURCE
+  const uri = toUri(ref.file);
+  const diag = toRawDiagnostic(RESOLUTION_EMITTER.emit("aurelia/resolution/not-a-resource", {
     message: ref.reason,
-    source: ref.file,
+    span: ref.span,
     severity: "warning",
-  };
+    data: {
+      name: ref.name,
+      reason: ref.reason,
+    },
+  }));
+  return withUri(diag, uri);
+}
+
+const RESOLUTION_CATALOG = {
+  ...diagnosticsByCategoryFuture.resolution,
+  ...diagnosticsByCategory.gaps,
+  ...diagnosticsByCategory.policy,
+} as const satisfies DiagnosticsCatalog;
+
+const RESOLUTION_EMITTER = createDiagnosticEmitter(RESOLUTION_CATALOG, { source: "resolution" });
+
+type ResolutionCode = keyof typeof RESOLUTION_CATALOG & string;
+
+function withUri(diag: RawDiagnostic, uri?: DocumentUri): ResolutionDiagnostic {
+  return uri ? { ...diag, uri } : diag;
+}
+
+function toRawDiagnostic(diag: CompilerDiagnostic): RawDiagnostic {
+  const { span, ...rest } = diag;
+  return span ? { ...rest, span } : { ...rest };
+}
+
+function toUri(file: NormalizedPath | SourceSpan["file"] | undefined): DocumentUri | undefined {
+  if (!file) return undefined;
+  return asDocumentUri(String(file));
+}
+
+function getOrphanDiagnosticCode(kind: OrphanResource["resource"]["kind"]): ResolutionCode {
+  switch (kind) {
+    case "custom-element":
+      return "aurelia/resolution/orphan-element";
+    case "custom-attribute":
+    case "template-controller":
+      return "aurelia/resolution/orphan-attribute";
+    case "value-converter":
+      return "aurelia/resolution/orphan-value-converter";
+    case "binding-behavior":
+      return "aurelia/resolution/orphan-binding-behavior";
+  }
+}
+
+function getUnanalyzableDiagnosticCode(kind: UnresolvedPattern["kind"]): ResolutionCode {
+  switch (kind) {
+    case "function-call":
+      return "aurelia/resolution/unanalyzable-function-call";
+    case "variable-reference":
+      return "aurelia/resolution/unanalyzable-variable";
+    case "conditional":
+      return "aurelia/resolution/unanalyzable-conditional";
+    case "spread-variable":
+      return "aurelia/resolution/unanalyzable-spread";
+    case "property-access":
+      return "aurelia/resolution/unanalyzable-property-access";
+    case "other":
+      return "aurelia/resolution/unanalyzable-other";
+  }
+}
+
+function patternDetail(pattern: UnresolvedPattern): string | null {
+  switch (pattern.kind) {
+    case "function-call":
+      return pattern.functionName;
+    case "variable-reference":
+      return pattern.variableName;
+    case "spread-variable":
+      return pattern.variableName;
+    case "property-access":
+      return pattern.expression;
+    case "other":
+      return pattern.description;
+    default:
+      return null;
+  }
 }

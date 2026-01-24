@@ -15,10 +15,14 @@ import {
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
+  asDocumentUri,
+  createDiagnosticEmitter,
+  diagnosticsByCategory,
   normalizePathForId,
   prepareSemantics,
   type CatalogConfidence,
   type CatalogGap,
+  type CompilerDiagnostic,
   type ResourceCollections,
   type ResourceScopeId,
   type NormalizedPath,
@@ -26,7 +30,6 @@ import {
 } from "@aurelia-ls/compiler";
 import {
   analyzePackages,
-  applyResolutionPolicy,
   buildSemanticsArtifacts,
   hashObject,
   resolve,
@@ -38,7 +41,6 @@ import {
   type DefineMap,
   type AnalysisGap,
   type ConventionConfig,
-  type ExperimentalPolicy,
 } from "@aurelia-ls/resolution";
 import { buildPackageRootMap, detectMonorepo, isAureliaPackage } from "@aurelia-ls/resolution/npm";
 import type { ResolutionContext, ThirdPartyOptions, ThirdPartyPolicy } from "./types.js";
@@ -54,12 +56,12 @@ interface Logger {
 }
 
 const ANALYSIS_SCHEMA_VERSION = 1;
+const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "resolution" });
 
 export interface ResolutionContextOptions {
   trace?: CompileTrace;
   defines?: DefineMap;
   thirdParty?: ThirdPartyOptions;
-  policy?: ExperimentalPolicy;
   conventions?: ConventionConfig;
   packagePath?: string;
   packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
@@ -186,10 +188,7 @@ export async function createResolutionContext(
       policy: options?.thirdParty?.policy,
     })
     : result;
-  const finalResult = applyResolutionPolicy(nextResult, options?.policy);
-  if (options?.policy) {
-    logPolicyDiagnostics(logger, finalResult.diagnostics);
-  }
+  const finalResult = nextResult;
 
   // Log resolution results
   const globalCount = finalResult.registration.sites.filter(s => s.scope.kind === "global").length;
@@ -640,15 +639,21 @@ function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
 }
 
 function analysisGapToDiagnostic(gap: AnalysisGap): ResolutionResult["diagnostics"][number] {
-  const diagnostic: ResolutionResult["diagnostics"][number] = {
-    code: gap.why.kind === "cache-corrupt" ? "cache:corrupt" : `gap:${gap.why.kind}`,
+  const code = mapGapKindToCode(gap.why.kind);
+  const uri = gap.where?.file
+    ? asDocumentUri(normalizePathForId(gap.where.file))
+    : undefined;
+  const diagnostic = toRawDiagnostic(GAP_EMITTER.emit(code, {
     message: `${gap.what}: ${gap.suggestion}`,
-    severity: "warning",
-  };
-  if (gap.where?.file) {
-    diagnostic.source = normalizePathForId(gap.where.file);
-  }
-  return diagnostic;
+    severity: code === "aurelia/gap/cache-corrupt" ? "warning" : "info",
+    data: { gapKind: gap.why.kind },
+  }));
+  return uri ? { ...diagnostic, uri } : diagnostic;
+}
+
+function toRawDiagnostic(diag: CompilerDiagnostic): ResolutionResult["diagnostics"][number] {
+  const { span, ...rest } = diag;
+  return span ? { ...rest, span } : { ...rest };
 }
 
 function mergeCatalogConfidence(
@@ -665,21 +670,43 @@ function mergeCatalogConfidence(
   return base === "partial" ? base : "partial";
 }
 
-function logPolicyDiagnostics(
-  logger: Logger,
-  diagnostics: readonly ResolutionResult["diagnostics"][number][],
-): void {
-  for (const diag of diagnostics) {
-    if (!diag.code.startsWith("policy:")) continue;
-    if (diag.severity === "error") {
-      logger.error(`[aurelia-ssr] ${diag.message}`);
-    } else if (diag.severity === "warning") {
-      logger.warn(`[aurelia-ssr] ${diag.message}`);
-    } else {
-      logger.info(`[aurelia-ssr] ${diag.message}`);
-    }
-  }
+function mapGapKindToCode(kind: string): "aurelia/gap/partial-eval" | "aurelia/gap/unknown-registration" | "aurelia/gap/cache-corrupt" {
+  if (kind === "cache-corrupt") return "aurelia/gap/cache-corrupt";
+  if (UNKNOWN_REGISTRATION_GAP_KINDS.has(kind)) return "aurelia/gap/unknown-registration";
+  if (PARTIAL_EVAL_GAP_KINDS.has(kind)) return "aurelia/gap/partial-eval";
+  return "aurelia/gap/partial-eval";
 }
+
+const UNKNOWN_REGISTRATION_GAP_KINDS = new Set([
+  "dynamic-value",
+  "function-return",
+  "computed-property",
+  "spread-unknown",
+  "unsupported-pattern",
+  "conditional-registration",
+  "loop-variable",
+  "invalid-resource-name",
+]);
+
+const PARTIAL_EVAL_GAP_KINDS = new Set([
+  "package-not-found",
+  "invalid-package-json",
+  "missing-package-field",
+  "entry-point-not-found",
+  "no-entry-points",
+  "complex-exports",
+  "workspace-no-source-dir",
+  "workspace-entry-not-found",
+  "unresolved-import",
+  "circular-import",
+  "external-package",
+  "legacy-decorators",
+  "no-source",
+  "minified-code",
+  "unsupported-format",
+  "analysis-failed",
+  "parse-error",
+]);
 
 function catalogConfidenceFromAnalysisGaps(gaps: AnalysisGap[]): CatalogConfidence | undefined {
   const catalogGaps = gaps.filter((gap) => gap.why.kind !== "cache-corrupt");

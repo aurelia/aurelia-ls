@@ -429,6 +429,7 @@ function compileTemplate(markup, options = {}) {
   const templatePath = options.templatePath ?? "template.html";
   const name = options.name ?? "template";
   const semantics = options.semantics ?? DEFAULT_SEMANTICS;
+  const moduleResolver = options.moduleResolver ?? ((_specifier: string, _containingFile: string) => null);
 
   const exprParser = getExpressionParser();
 
@@ -440,9 +441,11 @@ function compileTemplate(markup, options = {}) {
     catalog: semantics.catalog,
   });
 
-  const resolveOpts = options.resourceGraph
-    ? { graph: options.resourceGraph, scope: options.resourceScope ?? null }
-    : undefined;
+  const resolveOpts = {
+    ...(options.resourceGraph ? { graph: options.resourceGraph, scope: options.resourceScope ?? null } : {}),
+    moduleResolver,
+    templateFilePath: templatePath,
+  };
 
   const linked = resolveHost(ir, semantics, resolveOpts);
   const scoped = bindScopes(linked);

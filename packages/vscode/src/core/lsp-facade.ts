@@ -3,6 +3,7 @@ import type { ClientLogger } from "../log.js";
 import type { DebugChannel, ObservabilityService, TraceService } from "./observability.js";
 import type {
   CapabilitiesResponse,
+  DiagnosticsSnapshotResponse,
   MappingResponse,
   OverlayReadyPayload,
   OverlayResponse,
@@ -67,6 +68,10 @@ export class LspFacade {
 
   async getSsr(uri: string): Promise<SsrResponse | null> {
     return this.sendRequest<SsrResponse | null>("aurelia/getSsr", { uri });
+  }
+
+  async getDiagnostics(uri: string): Promise<DiagnosticsSnapshotResponse | null> {
+    return this.sendRequest<DiagnosticsSnapshotResponse | null>("aurelia/getDiagnostics", { uri });
   }
 
   async queryAtPosition(uri: string, position: { line: number; character: number }): Promise<TemplateInfoResponse | null> {

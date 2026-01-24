@@ -44,7 +44,7 @@
     }
   },
   {
-    "name": "R-SW-04 switch > if > case surfaces AU0815 (case blocked by if)",
+    "name": "R-SW-04 switch > if > case surfaces aurelia/invalid-command-usage (case blocked by if)",
     "comment": "Template controllers create scope boundaries that block case visibility to switch",
     "markup": "<div switch.bind=\"status\"><template if.bind=\"show\"><template case=\"a\">A</template></template></div>",
     "expect": {
@@ -55,12 +55,12 @@
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": [
-        { "code": "AU0815" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
   {
-    "name": "R-SW-05 switch > repeat > case surfaces AU0815 (case blocked by repeat)",
+    "name": "R-SW-05 switch > repeat > case surfaces aurelia/invalid-command-usage (case blocked by repeat)",
     "comment": "Template controllers create scope boundaries that block case visibility to switch",
     "markup": "<div switch.bind=\"status\"><template repeat.for=\"s of statuses\"><template case.bind=\"s\">Match</template></template></div>",
     "expect": {
@@ -71,7 +71,7 @@
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": [
-        { "code": "AU0815" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
@@ -163,3 +163,4 @@
     }
   }
 ]
+

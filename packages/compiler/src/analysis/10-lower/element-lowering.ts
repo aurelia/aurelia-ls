@@ -248,9 +248,10 @@ export function lowerElementAttributes(
         const knownCommands = Object.keys(catalog.bindingCommands);
         const suggestion = formatSuggestion(s.command, knownCommands);
         table.addDiag(
-          "AU0705",
+          "aurelia/unknown-command",
           `Unknown binding command '${s.command}'.${suggestion}`,
-          loc
+          loc,
+          { command: s.command },
         );
         // Fall through to treat as property binding for graceful degradation
       }

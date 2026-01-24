@@ -1,35 +1,35 @@
 [
   {
-    "name": "R-D-02 repeat with unknown tail option surfaces AU1106",
+    "name": "R-D-02 repeat with unknown tail option surfaces aurelia/invalid-command-usage",
     "markup": "<ul repeat.for=\"item of items; bogus: true\"></ul>",
     "expect": {
       "items": [
         { "kind": "iterator", "res": "repeat", "to": "items" }
       ],
       "diags": [
-        { "code": "AU1106" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
   {
-    "name": "R-D-10 [else] without preceding [if] surfaces AU0810",
+    "name": "R-D-10 [else] without preceding [if] surfaces aurelia/invalid-command-usage",
     "markup": "<div else>orphan else</div>",
     "expect": {
       "items": [],
       "diags": [
-        { "code": "AU0810" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
   {
-    "name": "R-D-11 [else] after non-if sibling surfaces AU0810",
+    "name": "R-D-11 [else] after non-if sibling surfaces aurelia/invalid-command-usage",
     "markup": "<div repeat.for=\"i of items\">loop</div><div else>wrong parent</div>",
     "expect": {
       "items": [
         { "kind": "iterator", "res": "repeat", "to": "items" }
       ],
       "diags": [
-        { "code": "AU0810" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
@@ -58,7 +58,7 @@
     }
   },
   {
-    "name": "R-D-14 [case] without parent [switch] surfaces AU0815",
+    "name": "R-D-14 [case] without parent [switch] surfaces aurelia/invalid-command-usage",
     "markup": "<template case.bind=\"x\">orphan case</template>",
     "expect": {
       "items": [
@@ -66,19 +66,19 @@
         { "kind": "branch", "res": "case", "branch": "case" }
       ],
       "diags": [
-        { "code": "AU0815" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
   {
-    "name": "R-D-15 [default-case] without parent [switch] surfaces AU0815",
+    "name": "R-D-15 [default-case] without parent [switch] surfaces aurelia/invalid-command-usage",
     "markup": "<template default-case>orphan default</template>",
     "expect": {
       "items": [
         { "kind": "branch", "res": "default-case", "branch": "default" }
       ],
       "diags": [
-        { "code": "AU0815" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
@@ -96,7 +96,7 @@
     }
   },
   {
-    "name": "R-D-17 multiple [default-case] in same switch surfaces AU0816",
+    "name": "R-D-17 multiple [default-case] in same switch surfaces aurelia/invalid-command-usage",
     "markup": "<div switch.bind=\"x\"><template default-case>one</template><template default-case>two</template></div>",
     "expect": {
       "items": [
@@ -105,43 +105,43 @@
         { "kind": "branch", "res": "default-case", "branch": "default" }
       ],
       "diags": [
-        { "code": "AU0816" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   },
   {
-    "name": "R-D-20 unknown binding behavior surfaces AU0101",
+    "name": "R-D-20 unknown binding behavior surfaces aurelia/unknown-behavior",
     "markup": "<div textcontent.bind=\"value & unknownBehavior\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0101" }
+        { "code": "aurelia/unknown-behavior" }
       ]
     }
   },
   {
-    "name": "R-D-21 duplicate binding behavior surfaces AU0102",
+    "name": "R-D-21 duplicate binding behavior surfaces aurelia/invalid-binding-pattern",
     "markup": "<div textcontent.bind=\"value & debounce & debounce\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0102" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "R-D-22 unknown value converter surfaces AU0103",
+    "name": "R-D-22 unknown value converter surfaces aurelia/unknown-converter",
     "markup": "<div textcontent.bind=\"value | unknownConverter\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0103" }
+        { "code": "aurelia/unknown-converter" }
       ]
     }
   },
@@ -176,26 +176,26 @@
     }
   },
   {
-    "name": "R-D-26 conflicting rate-limiters (debounce + throttle) surfaces AU9996",
+    "name": "R-D-26 conflicting rate-limiters (debounce + throttle) surfaces aurelia/invalid-binding-pattern",
     "markup": "<div textcontent.bind=\"value & debounce & throttle\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU9996" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "R-D-27 conflicting rate-limiters (throttle + debounce) surfaces AU9996",
+    "name": "R-D-27 conflicting rate-limiters (throttle + debounce) surfaces aurelia/invalid-binding-pattern",
     "markup": "<div textcontent.bind=\"value & throttle & debounce\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU9996" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
@@ -220,26 +220,26 @@
     }
   },
   {
-    "name": "R-D-30 assignment to $host surfaces AU0106",
+    "name": "R-D-30 assignment to $host surfaces aurelia/invalid-binding-pattern",
     "markup": "<div au-slot textcontent.bind=\"$host = newValue\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0106" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
   {
-    "name": "R-D-31 assignment to $host.prop surfaces AU0106",
+    "name": "R-D-31 assignment to $host.prop surfaces aurelia/invalid-binding-pattern",
     "markup": "<div au-slot textcontent.bind=\"$host.value = newValue\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0106" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
@@ -254,17 +254,17 @@
     }
   },
   {
-    "name": "R-D-40 unknown custom element surfaces AU1102",
+    "name": "R-D-40 unknown custom element surfaces aurelia/unknown-element",
     "markup": "<my-widget></my-widget>",
     "expect": {
       "items": [],
       "diags": [
-        { "code": "AU1102" }
+        { "code": "aurelia/unknown-element" }
       ]
     }
   },
   {
-    "name": "R-D-41 unknown custom element with multiple props -> AU1102 only (AU1104 suppressed)",
+    "name": "R-D-41 unknown custom element with multiple props -> aurelia/unknown-element only (aurelia/unknown-bindable suppressed)",
     "comment": "Root cause is unknown element; property errors are cascading and suppressed",
     "markup": "<my-widget foo.bind=\"a\" bar.bind=\"b\" baz.bind=\"c\"></my-widget>",
     "expect": {
@@ -274,25 +274,25 @@
         { "kind": "prop", "to": "baz", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1102" }
+        { "code": "aurelia/unknown-element" }
       ]
     }
   },
   {
-    "name": "R-D-42 native element (no dash) with unknown prop still surfaces AU1104",
-    "comment": "Native elements don't trigger AU1102 since they're not custom elements",
+    "name": "R-D-42 native element (no dash) with unknown prop still surfaces aurelia/unknown-bindable",
+    "comment": "Native elements don't trigger aurelia/unknown-element since they're not custom elements",
     "markup": "<div unknownprop.bind=\"x\"></div>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "unknownprop", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-D-43 registered custom element has no AU1102",
+    "name": "R-D-43 registered custom element has no aurelia/unknown-element",
     "semOverrides": {
       "resources": {
         "elements": {
@@ -315,7 +315,7 @@
     }
   },
   {
-    "name": "R-D-44 registered custom element with unknown prop surfaces AU1104",
+    "name": "R-D-44 registered custom element with unknown prop surfaces aurelia/unknown-bindable",
     "comment": "Known element but unknown bindable property (HTML lowercases attr names)",
     "semOverrides": {
       "resources": {
@@ -336,7 +336,7 @@
         { "kind": "prop", "to": "unknownprop", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -348,8 +348,8 @@
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0101" },
-        { "code": "AU0101" }
+        { "code": "aurelia/unknown-behavior" },
+        { "code": "aurelia/unknown-behavior" }
       ]
     }
   },
@@ -361,8 +361,8 @@
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0103" },
-        { "code": "AU0103" }
+        { "code": "aurelia/unknown-converter" },
+        { "code": "aurelia/unknown-converter" }
       ]
     }
   },
@@ -374,8 +374,8 @@
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU0103" },
-        { "code": "AU0101" }
+        { "code": "aurelia/unknown-converter" },
+        { "code": "aurelia/unknown-behavior" }
       ]
     }
   },
@@ -396,7 +396,7 @@
     }
   },
   {
-    "name": "R-D-49 custom attribute with unknown prop surfaces AU1104",
+    "name": "R-D-49 custom attribute with unknown prop surfaces aurelia/unknown-bindable",
     "comment": "HTML lowercases attribute names",
     "semOverrides": {
       "resources": {
@@ -420,20 +420,21 @@
         { "kind": "prop", "to": "unknownattr", "target": "unknown", "effectiveMode": "toView" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
   {
-    "name": "R-D-50 multiple tail options with one unknown surfaces AU1106 once",
+    "name": "R-D-50 multiple tail options with one unknown surfaces aurelia/invalid-command-usage once",
     "markup": "<ul repeat.for=\"item of items; key.bind: item.id; unknownOpt: foo\"></ul>",
     "expect": {
       "items": [
         { "kind": "iterator", "res": "repeat", "to": "items" }
       ],
       "diags": [
-        { "code": "AU1106" }
+        { "code": "aurelia/invalid-command-usage" }
       ]
     }
   }
 ]
+

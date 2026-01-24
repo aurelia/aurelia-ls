@@ -2,6 +2,7 @@ import { test, describe, expect } from "vitest";
 
 import { runVectorTests, getDirname, lowerOpts } from "../_helpers/vector-runner.js";
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 import {
   getExpressionParser,
@@ -19,6 +20,7 @@ import { resolveControllerSem } from "../../src/analysis/20-resolve/resolution-h
 import { isStub } from "../../src/shared/diagnosed.js";
 
 const dirname = getDirname(import.meta.url);
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
 
 // --- Types ---
 
@@ -65,7 +67,7 @@ runVectorTests<ResolveExpect, ResolveIntent, ResolveDiff>({
   suiteName: "Resolve (20)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
+    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
     return reduceLinkedIntent(linked);
   },
   compare: compareResolveIntent,
@@ -136,7 +138,7 @@ describe("Resolve (20) - Resource Graph", () => {
       },
     );
 
-    const linked = resolveHost(ir, sem, { graph, scope: "child" });
+    const linked = resolveHost(ir, sem, { ...RESOLVE_OPTS, graph, scope: "child" });
     const intent = reduceLinkedIntent(linked);
 
     const propTargets = intent.items
@@ -150,7 +152,7 @@ describe("Resolve (20) - Resource Graph", () => {
       { to: "foo", target: "bindable" }, // root scope
     ]);
 
-    expect(intent.diags, "Unknown host/prop from parent scope should surface AU1104").toContain("AU1104");
+    expect(intent.diags, "Unknown host/prop from parent scope should surface aurelia/unknown-bindable").toContain("aurelia/unknown-bindable");
   });
 
   test("resource graph: local overrides root when names conflict", () => {
@@ -202,7 +204,7 @@ describe("Resolve (20) - Resource Graph", () => {
       catalog: sem.catalog,
     });
 
-    const linked = resolveHost(ir, sem, { graph, scope: "feature" });
+    const linked = resolveHost(ir, sem, { ...RESOLVE_OPTS, graph, scope: "feature" });
     const intent = reduceLinkedIntent(linked);
 
     const propTargets = intent.items
@@ -210,24 +212,24 @@ describe("Resolve (20) - Resource Graph", () => {
       .map((p) => ({ to: p.to, target: p.target }))
       .sort((a, b) => a.to.localeCompare(b.to));
 
-    // local bindable wins; root bindable absent -> AU1104
+    // local bindable wins; root bindable absent -> aurelia/unknown-bindable
     expect(propTargets).toEqual([
       { to: "fromLocal", target: "bindable" },
       { to: "fromRoot", target: "unknown" },
     ]);
-    expect(intent.diags, "Root bindable should be hidden by local override").toContain("AU1104");
+    expect(intent.diags, "Root bindable should be hidden by local override").toContain("aurelia/unknown-bindable");
   });
 });
 
 describe("Resolve (20) - Controller Diagnostics", () => {
-  test("resolveControllerSem returns AU1101 for unknown controller", () => {
+  test("resolveControllerSem returns aurelia/unknown-controller for unknown controller", () => {
     const lookup = createSemanticsLookup(DEFAULT);
     const result = resolveControllerSem(lookup, "unknown-tc", null);
 
     // Should have diagnostic
     expect(result.diagnostics.length > 0).toBe(true);
     expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.code).toBe("AU1101");
+    expect(result.diagnostics[0]?.code).toBe("aurelia/unknown-controller");
     expect(result.diagnostics[0]?.message).toContain("unknown-tc");
 
     // Should return stub config
@@ -541,7 +543,7 @@ describe("Resolve (20) - Local Imports", () => {
       catalog: DEFAULT.catalog,
     });
 
-    const linked = resolveHost(ir, DEFAULT, { localImports });
+    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports });
     const intent = reduceLinkedIntent(linked);
 
     // Bindable "foo" should resolve as bindable (proves element was recognized)
@@ -551,8 +553,8 @@ describe("Resolve (20) - Local Imports", () => {
       expect.objectContaining({ to: "foo", target: "bindable" })
     );
 
-    // No AU1104 diagnostic for unknown element/property
-    expect(intent.diags).not.toContain("AU1104");
+    // No aurelia/unknown-bindable diagnostic for unknown element/property
+    expect(intent.diags).not.toContain("aurelia/unknown-bindable");
   });
 
   test("localImports: element with alias resolves by alias", () => {
@@ -574,7 +576,7 @@ describe("Resolve (20) - Local Imports", () => {
       catalog: DEFAULT.catalog,
     });
 
-    const linked = resolveHost(ir, DEFAULT, { localImports });
+    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports });
     const intent = reduceLinkedIntent(linked);
 
     // Bindable "bar" should resolve as bindable (proves element was recognized via alias)
@@ -584,8 +586,8 @@ describe("Resolve (20) - Local Imports", () => {
       expect.objectContaining({ to: "bar", target: "bindable" })
     );
 
-    // No AU1104 diagnostic
-    expect(intent.diags).not.toContain("AU1104");
+    // No aurelia/unknown-bindable diagnostic
+    expect(intent.diags).not.toContain("aurelia/unknown-bindable");
   });
 
   test("localImports: does not override existing global registration", () => {
@@ -619,7 +621,7 @@ describe("Resolve (20) - Local Imports", () => {
       catalog: sem.catalog,
     });
 
-    const linked = resolveHost(ir, sem, { localImports });
+    const linked = resolveHost(ir, sem, { ...RESOLVE_OPTS, localImports });
     const intent = reduceLinkedIntent(linked);
 
     // Global registration should win, so globalProp resolves as bindable
@@ -647,7 +649,7 @@ describe("Resolve (20) - Local Imports", () => {
       }
     );
 
-    const linked = resolveHost(ir, DEFAULT, { localImports });
+    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports });
     const intent = reduceLinkedIntent(linked);
 
     // Both bindables should resolve as bindable (proves both elements were recognized)
@@ -660,11 +662,11 @@ describe("Resolve (20) - Local Imports", () => {
       expect.objectContaining({ to: "year", target: "bindable" })
     );
 
-    // No AU1104 diagnostics
-    expect(intent.diags).not.toContain("AU1104");
+    // No aurelia/unknown-bindable diagnostics
+    expect(intent.diags).not.toContain("aurelia/unknown-bindable");
   });
 
-  test("localImports: unknown element without import produces AU1102", () => {
+  test("localImports: unknown element without import produces aurelia/unknown-element", () => {
     // No local imports - unknown element should produce diagnostic
     const ir = lowerDocument(`<unknown-widget prop.bind="x"></unknown-widget>`, {
       attrParser: DEFAULT_SYNTAX,
@@ -674,7 +676,7 @@ describe("Resolve (20) - Local Imports", () => {
       catalog: DEFAULT.catalog,
     });
 
-    const linked = resolveHost(ir, DEFAULT, { localImports: [] });
+    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports: [] });
     const intent = reduceLinkedIntent(linked);
 
     // Property should resolve as "unknown" (element not recognized)
@@ -684,7 +686,8 @@ describe("Resolve (20) - Local Imports", () => {
       expect.objectContaining({ to: "prop", target: "unknown" })
     );
 
-    // Should have AU1102 diagnostic for unknown element
-    expect(intent.diags).toContain("AU1102");
+    // Should have aurelia/unknown-element diagnostic for unknown element
+    expect(intent.diags).toContain("aurelia/unknown-element");
   });
 });
+

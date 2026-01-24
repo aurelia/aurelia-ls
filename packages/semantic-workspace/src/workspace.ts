@@ -41,7 +41,7 @@ import {
   type SemanticWorkspace,
   type WorkspaceCodeAction,
   type WorkspaceCompletionItem,
-  type WorkspaceDiagnostic,
+  type WorkspaceDiagnostics,
   type WorkspaceEdit,
   type WorkspaceLocation,
   type WorkspaceRefactorResult,
@@ -63,7 +63,7 @@ export interface SemanticWorkspaceKernelOptions {
   readonly lookupText?: (uri: DocumentUri) => string | null;
 }
 
-const EMPTY_DIAGNOSTICS: readonly WorkspaceDiagnostic[] = [];
+const EMPTY_DIAGNOSTICS: WorkspaceDiagnostics = { bySurface: new Map(), suppressed: [] };
 const EMPTY_ACTIONS: readonly WorkspaceCodeAction[] = [];
 const EMPTY_TOKENS: readonly WorkspaceToken[] = [];
 const EMPTY_LOCATIONS: readonly WorkspaceLocation[] = [];
@@ -163,14 +163,8 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     };
   }
 
-  diagnostics(uri: DocumentUri): readonly WorkspaceDiagnostic[] {
-    try {
-      const canonical = canonicalDocumentUri(uri);
-      const diags = this.languageService.getDiagnostics(canonical.uri);
-      return mapDiagnostics(diags.all);
-    } catch {
-      return EMPTY_DIAGNOSTICS;
-    }
+  diagnostics(_uri: DocumentUri): WorkspaceDiagnostics {
+    return EMPTY_DIAGNOSTICS;
   }
 
   query(uri: DocumentUri): SemanticQuery {
@@ -446,20 +440,6 @@ function normalizeOptions(
     fingerprint: options.fingerprint,
     lookupText: options.lookupText ?? lookupText,
   };
-}
-
-function mapDiagnostics(diags: readonly { code: string | number; message: string; severity: "error" | "warning" | "info"; source: string; location: { span: SourceSpan } | null }[]): WorkspaceDiagnostic[] {
-  const results: WorkspaceDiagnostic[] = [];
-  for (const diag of diags) {
-    results.push({
-      code: String(diag.code),
-      message: diag.message,
-      severity: diag.severity,
-      source: diag.source,
-      span: diag.location?.span,
-    });
-  }
-  return results;
 }
 
 function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceCompletionItem[] {

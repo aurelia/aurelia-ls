@@ -1,5 +1,5 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../../_helpers/vector-runner.js";
-import { diffByKey } from "../../_helpers/test-utils.js";
+import { diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 
 import { lowerDocument, resolveHost, bindScopes, planOverlay } from "@aurelia-ls/compiler";
 
@@ -34,12 +34,14 @@ interface PlanDiff {
   extraLambdas: string[];
 }
 
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
+
 runVectorTests<PlanExpect, PlanIntent, PlanDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Plan Overlay (50)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
+    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
     const scope = bindScopes(linked);
     const vm = createVmReflection(v.rootVmType ?? "RootVm", v.syntheticPrefix ?? "__AU_TTC_");
     const pl = planOverlay(linked, scope, { isJs: false, vm });

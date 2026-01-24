@@ -1,3 +1,14 @@
+import type {
+  DiagnosticActionability,
+  DiagnosticCategory,
+  DiagnosticImpact,
+  DiagnosticSeverity,
+  DiagnosticStage,
+  DiagnosticStatus,
+  DiagnosticSurface,
+  SourceSpan,
+} from "@aurelia-ls/compiler";
+
 export type OverlayReadyPayload = {
   uri?: string;
   overlayPath?: string;
@@ -5,6 +16,53 @@ export type OverlayReadyPayload = {
   overlayLen?: number;
   diags?: number;
   meta?: unknown;
+};
+
+export type DiagnosticsSpan = SourceSpan;
+
+export type DiagnosticsSnapshotIssue = {
+  kind: string;
+  message: string;
+  code?: string;
+  rawCode?: string;
+  field?: string;
+};
+
+export type DiagnosticsSnapshotRelated = {
+  code?: string;
+  message: string;
+  span?: DiagnosticsSpan;
+};
+
+export type DiagnosticsSnapshotItem = {
+  code: string;
+  message: string;
+  severity?: DiagnosticSeverity;
+  impact?: DiagnosticImpact;
+  actionability?: DiagnosticActionability;
+  category?: DiagnosticCategory;
+  status?: DiagnosticStatus;
+  stage?: DiagnosticStage;
+  source?: string;
+  uri?: string;
+  span?: DiagnosticsSpan;
+  data?: Readonly<Record<string, unknown>>;
+  related?: readonly DiagnosticsSnapshotRelated[];
+  surfaces?: readonly DiagnosticSurface[];
+  suppressed?: boolean;
+  suppressionReason?: string;
+  issues?: readonly DiagnosticsSnapshotIssue[];
+};
+
+export type DiagnosticsSnapshotBundle = {
+  bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
+  suppressed: readonly DiagnosticsSnapshotItem[];
+};
+
+export type DiagnosticsSnapshotResponse = {
+  uri?: string;
+  fingerprint?: string;
+  diagnostics: DiagnosticsSnapshotBundle;
 };
 
 export interface MappingSpan {
@@ -127,6 +185,7 @@ export interface CapabilitiesResponse {
     mapping?: boolean;
     queryAtPosition?: boolean;
     ssr?: boolean;
+    diagnostics?: boolean;
     dumpState?: boolean;
   };
   notifications?: {

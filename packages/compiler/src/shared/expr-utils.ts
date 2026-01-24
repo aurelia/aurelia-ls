@@ -290,7 +290,7 @@ export function isInterpolation(x: BindingSourceIR): x is InterpIR {
  * Expression Resource Extraction
  * ============================================================================
  * Walk expression AST to extract binding behavior and value converter names.
- * Used by 20-resolve for AU0101/AU0102/AU0103 diagnostics.
+ * Used by 20-resolve for unknown resource + invalid binding pattern diagnostics.
  */
 
 export interface ExprResourceRef {
@@ -320,7 +320,7 @@ export function extractExprResources(table: readonly ExprTableEntry[]): ExprReso
 
 /**
  * Extract all assignments to `$host` from an expression table.
- * Used by 20-resolve for AU0106 diagnostics.
+ * Used by 20-resolve for invalid binding pattern diagnostics.
  *
  * Detects patterns like:
  * - `$host = x`

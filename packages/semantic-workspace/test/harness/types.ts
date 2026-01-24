@@ -7,7 +7,8 @@ import type {
   VmReflection,
 } from "@aurelia-ls/compiler";
 import type { ResolutionConfig, ResolutionResult, Logger as ResolutionLogger } from "@aurelia-ls/resolution";
-import type { SemanticWorkspaceEngine, RefactorOverrides } from "@aurelia-ls/semantic-workspace";
+import type { SemanticWorkspaceEngine } from "../../src/engine.js";
+import type { RefactorOverrides } from "../../src/style-profile.js";
 import type { FixtureDescriptor, FixtureId } from "../fixtures/types.js";
 
 export type TemplateOpenMode = "none" | "external" | "all";

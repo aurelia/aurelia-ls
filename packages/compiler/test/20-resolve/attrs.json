@@ -61,7 +61,7 @@
         { "kind": "attr", "attr": "inputmode", "to": "inputMode", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -73,7 +73,7 @@
         { "kind": "attr", "attr": "contenteditable", "to": "contentEditable", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -103,7 +103,7 @@
         { "kind": "attr", "attr": "title", "to": "title", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -115,7 +115,7 @@
         { "kind": "attr", "attr": "minlength", "to": "minLength", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -136,7 +136,7 @@
         { "kind": "attr", "attr": "foo-bar", "to": "fooBar", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -165,7 +165,7 @@
         { "kind": "attr", "attr": "x-map", "to": "xMapPerTag", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -191,7 +191,7 @@
         { "kind": "attr", "attr": "y-map", "to": "yMapDom", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -223,14 +223,14 @@
     }
   },
   {
-    "name": "R-A-20 title interpolation on <span> -> unknown target + AU1104",
+    "name": "R-A-20 title interpolation on <span> -> unknown target + aurelia/unknown-attribute",
     "markup": "<span title=\"a ${b}\"></span>",
     "expect": {
       "items": [
         { "kind": "attr", "attr": "title", "to": "title", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -260,7 +260,7 @@
         { "kind": "attr", "attr": "maxlength", "to": "maxLength", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -292,19 +292,19 @@
         { "kind": "attr", "attr": "usemap", "to": "useMap", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
   {
-    "name": "R-A-26 attribute interpolation on unknown attr -> AU1104",
+    "name": "R-A-26 attribute interpolation on unknown attr -> aurelia/unknown-attribute",
     "markup": "<div foo=\"a ${b}\"></div>",
     "expect": {
       "items": [
         { "kind": "attr", "attr": "foo", "to": "foo", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -327,12 +327,12 @@
         { "kind": "attr", "attr": "for", "to": "htmlFor", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
   {
-    "name": "R-A-28 attribute interpolation normalized by perTag to a missing prop -> AU1104",
+    "name": "R-A-28 attribute interpolation normalized by perTag to a missing prop -> aurelia/unknown-attribute",
     "semOverrides": {
       "naming": {
         "perTag": {
@@ -355,7 +355,7 @@
         { "kind": "attr", "attr": "z-map", "to": "zMapped", "target": "unknown" }
       ],
       "diags": [
-        { "code": "AU1104" }
+        { "code": "aurelia/unknown-attribute" }
       ]
     }
   },
@@ -410,3 +410,4 @@
     }
   }
 ]
+

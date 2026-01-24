@@ -37,7 +37,7 @@ function compileLet(
 
     // <let> supports property binding commands (bind, one-time, to-view, two-way, from-view)
     // but NOT event commands (trigger, capture) or ref commands
-    // Runtime throws AU0704 for unsupported commands
+    // Runtime throws AUR0704 for unsupported commands
     const cmdConfig = s.command ? catalog.bindingCommands[s.command] : null;
     if (cmdConfig?.kind === "property") {
       const loc = attrLoc(el, a.name);
@@ -71,16 +71,17 @@ function compileLet(
     }
 
     // Any other command (e.g., .trigger, .capture) is invalid for <let>
-    // Emit AU0704: Invalid <let> command
+    // Emit aurelia/invalid-command-usage: Invalid <let> command
     const loc = attrLoc(el, a.name);
     const validCommands = Object.entries(catalog.bindingCommands)
       .filter(([, cfg]) => cfg.kind === "property")
       .map(([name]) => name)
       .join(", ");
     table.addDiag(
-      "AU0704",
+      "aurelia/invalid-command-usage",
       `Invalid command '.${s.command}' on <let>. Valid commands: ${validCommands}.`,
-      loc
+      loc,
+      { aurCode: "AUR0704" },
     );
   }
   return { instructions: out, toBindingContext };

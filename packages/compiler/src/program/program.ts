@@ -29,7 +29,7 @@ import {
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
 
 // Shared imports (via barrel)
-import { debug, type VmReflection } from "../shared/index.js";
+import { debug, type VmReflection, type ModuleResolver } from "../shared/index.js";
 
 // Pipeline imports (via barrel)
 import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../pipeline/index.js";
@@ -53,6 +53,7 @@ export interface TemplateProgramOptions {
   readonly resourceGraph?: ResourceGraph;
   readonly resourceScope?: ResourceScopeId | null;
   readonly localImports?: readonly LocalImportDef[];
+  readonly moduleResolver: ModuleResolver;
   readonly attrParser?: AttributeParser;
   readonly exprParser?: IExpressionParser;
   readonly cache?: CacheOptions;
@@ -694,6 +695,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
       resourceScope?: ResourceScopeId | null;
       attrParser?: AttributeParser;
       exprParser?: IExpressionParser;
+      moduleResolver: ModuleResolver;
       overlayBaseName?: string;
       cache?: CacheOptions;
       fingerprints?: FingerprintHints;
@@ -703,6 +705,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
       isJs: this.options.isJs,
       vm: this.options.vm,
       semantics: this.options.semantics,
+      moduleResolver: this.options.moduleResolver,
     };
 
     if (this.options.catalog !== undefined) opts.catalog = this.options.catalog;
@@ -764,6 +767,7 @@ function computeProgramOptionsFingerprint(options: ProgramOptions, hints: Finger
   const catalogHint = hints.catalog
     ?? (options.catalog ? stableHash(options.catalog) : stableHash(prepareSemantics(sem).catalog));
   const syntaxHint = hints.syntax ?? (options.syntax ? stableHash(options.syntax) : null);
+  const moduleResolverHint = hints.moduleResolver ?? "custom";
   const fingerprint: Record<string, FingerprintHints[keyof FingerprintHints]> = {
     isJs: options.isJs,
     overlayBaseName: options.overlayBaseName ?? null,
@@ -776,6 +780,7 @@ function computeProgramOptionsFingerprint(options: ProgramOptions, hints: Finger
     vm: hints.vm ?? fingerprintVm(options.vm),
     overlay: overlayHint,
     analyze: hints.analyze ?? null,
+    moduleResolver: moduleResolverHint,
     extra: extractExtraFingerprintHints(hints),
   };
   return stableHash(fingerprint);
@@ -790,6 +795,7 @@ function normalizeFingerprintHints(options: ProgramOptions): FingerprintHints {
   if (base.attrParser === undefined) base.attrParser = options.attrParser ? "custom" : "default";
   if (base.exprParser === undefined) base.exprParser = options.exprParser ? "custom" : "default";
   if (base.vm === undefined) base.vm = fingerprintVm(options.vm);
+  if (base.moduleResolver === undefined) base.moduleResolver = "custom";
   if (base.overlay === undefined) {
     const syntheticPrefix = options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_";
     base.overlay = { isJs: options.isJs, syntheticPrefix };
@@ -827,7 +833,8 @@ function extractExtraFingerprintHints(hints: FingerprintHints): Record<string, F
       key === "semantics" ||
       key === "vm" ||
       key === "overlay" ||
-      key === "analyze"
+      key === "analyze" ||
+      key === "moduleResolver"
     ) {
       continue;
     }
@@ -1002,6 +1009,10 @@ function isGlobalOptionChange(
   const currentAnalyze = stableHash(currentHints.analyze ?? null);
   const nextAnalyze = stableHash(nextHints.analyze ?? null);
   if (currentAnalyze !== nextAnalyze) return true;
+
+  const currentModuleResolver = stableHash(currentHints.moduleResolver ?? null);
+  const nextModuleResolver = stableHash(nextHints.moduleResolver ?? null);
+  if (currentModuleResolver !== nextModuleResolver) return true;
 
   return false;
 }
