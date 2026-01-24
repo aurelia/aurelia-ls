@@ -3,13 +3,17 @@
 // This package discovers Aurelia resources in a project and builds a ResourceGraph
 // that the AOT compiler uses for template compilation.
 //
-// Architecture (unified value model):
-// - File Discovery (Layer 0): File enumeration, sibling detection
-// - Extraction (Layer 1): AST -> FileFacts (classes, imports, exports, registrations)
-// - Partial Evaluation (Layer 2): FileFacts -> resolved FileFacts + gaps
-// - Pattern Matching (Layer 3): FileFacts -> ResourceDef[]
-// - Registration (Layer 4): ResourceDef[] + FileFacts -> RegistrationAnalysis
-// - Scope (Layer 5): RegistrationAnalysis -> ResourceGraph
+// Architecture (resolution stage map):
+// - Pre-stage 0: File discovery (enumeration, sibling detection)
+// - 21-extract: AST -> FileFacts (classes, imports, exports, registrations)
+// - 22-export-bind: FileFacts -> ExportBindingMap
+// - 23-partial-eval: FileFacts -> resolved FileFacts + gaps
+// - 24-patterns: FileFacts -> ResourceDef[] + gaps
+// - 25-semantics: ResourceDef[] -> Semantics + Catalog + Syntax
+// - 26-registration: ResourceDef[] + FileFacts -> RegistrationAnalysis
+// - 27-graph: RegistrationAnalysis -> ResourceGraph
+// - 28-snapshots: Semantics + ResourceGraph -> snapshots
+// - 29-templates: RegistrationAnalysis + ResourceGraph -> templates
 //
 // Key types:
 // - FileFacts: Unified extraction output
@@ -49,7 +53,9 @@ export type {
 } from "@aurelia-ls/compiler";
 
 // === Main entry point ===
-export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic, type TemplateInfo, type InlineTemplateInfo } from "./resolve.js";
+export { resolve, type ResolutionConfig, type ResolutionResult, type ResolutionDiagnostic } from "./resolve.js";
+export type { TemplateInfo, InlineTemplateInfo } from "./templates/types.js";
+export { RESOLUTION_STAGES, RESOLUTION_STAGE_ORDER, type ResolutionStageKey, type ResolutionStageOutputs, type PatternMatchOutput } from "./pipeline/index.js";
 export { buildSemanticsArtifacts, type SemanticsArtifacts } from "./semantics/build.js";
 
 // === Snapshots ===

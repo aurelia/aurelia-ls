@@ -7,8 +7,8 @@ import type {
   RawDiagnostic,
   NormalizedPath,
   ResourceCatalog,
-  ResourceGraph,
   ResourceDef,
+  ResourceGraph,
   ResourceScopeId,
   SemanticSnapshot,
   Semantics,
@@ -40,9 +40,11 @@ import { buildResourceGraph } from "./scope/builder.js";
 import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
 import { buildSemanticsArtifacts } from "./semantics/build.js";
 import { stripSourcedNodes } from "./semantics/strip.js";
-import { unwrapSourced } from "./semantics/sourced.js";
+import { discoverTemplates } from "./templates/index.js";
+import type { InlineTemplateInfo, TemplateInfo } from "./templates/types.js";
 import { buildApiSurfaceSnapshot, buildSemanticSnapshot } from "./snapshots/index.js";
-import { dirname, resolve as resolvePath, basename } from "node:path";
+
+export type { InlineTemplateInfo, TemplateInfo } from "./templates/types.js";
 
 /**
  * Configuration for resolution.
@@ -79,7 +81,7 @@ export interface ResolutionConfig {
    * File system context for sibling detection.
    *
    * When provided, enables the sibling-file convention:
-   * `foo.ts` + `foo.html` as adjacent files → custom element "foo"
+   * `foo.ts` + `foo.html` as adjacent files -> custom element "foo"
    */
   fileSystem?: FileSystemContext;
   /**
@@ -116,7 +118,7 @@ export interface ResolutionResult {
   resources: readonly ResourceDef[];
   /** Registration analysis results */
   registration: RegistrationAnalysis;
-  /** External template files (convention-based: foo.ts → foo.html) */
+  /** External template files (convention-based: foo.ts -> foo.html) */
   templates: readonly TemplateInfo[];
   /** Inline templates (string literals in decorators/static $au) */
   inlineTemplates: readonly InlineTemplateInfo[];
@@ -124,38 +126,6 @@ export interface ResolutionResult {
   diagnostics: readonly ResolutionDiagnostic[];
   /** Extracted facts with partial evaluation applied */
   facts: Map<NormalizedPath, FileFacts>;
-}
-
-/**
- * External template file mapping (convention-based discovery).
- */
-export interface TemplateInfo {
-  /** Path to the .html template file */
-  templatePath: NormalizedPath;
-  /** Path to the .ts component file */
-  componentPath: NormalizedPath;
-  /** Scope ID for compilation ("root" or "local:...") */
-  scopeId: ResourceScopeId;
-  /** Component class name */
-  className: string;
-  /** Resource name (kebab-case) */
-  resourceName: string;
-}
-
-/**
- * Inline template info (template content embedded in .ts file).
- */
-export interface InlineTemplateInfo {
-  /** The inline template content (HTML string) */
-  content: string;
-  /** Path to the .ts component file containing the inline template */
-  componentPath: NormalizedPath;
-  /** Scope ID for compilation ("root" or "local:...") */
-  scopeId: ResourceScopeId;
-  /** Component class name */
-  className: string;
-  /** Resource name (kebab-case) */
-  resourceName: string;
 }
 
 /**
@@ -168,16 +138,16 @@ const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source
 /**
  * Main entry point: run the full resolution pipeline.
  *
- * Pipeline:
- * 1. Extraction (Layer 1): AST -> FileFacts (with import resolution)
- * 2. Export Binding (Layer 1.5): FileFacts -> ExportBindingMap
- * 3. Partial Evaluation (Layer 2): FileFacts -> resolved FileFacts + gaps
- * 4. Pattern Matching (Layer 3): FileFacts -> ResourceDef[]
- * 5. Semantics (Layer 4): ResourceDef[] -> Semantics + Catalog + Syntax
- * 6. Registration Analysis (Layer 5): ResourceDef[] + FileFacts -> RegistrationAnalysis
- * 7. Scope Construction (Layer 6): RegistrationAnalysis -> ResourceGraph
- * 8. Snapshot Export (Layer 7): Semantics + ResourceGraph -> snapshots
- * 9. Template Discovery (Layer 8): RegistrationAnalysis + ResourceGraph -> templates
+ * Pipeline (stage map):
+ * 21-extract: AST -> FileFacts (with import resolution)
+ * 22-export-bind: FileFacts -> ExportBindingMap
+ * 23-partial-eval: FileFacts -> resolved FileFacts + gaps
+ * 24-patterns: FileFacts -> ResourceDef[] + gaps
+ * 25-semantics: ResourceDef[] -> Semantics + Catalog + Syntax
+ * 26-registration: ResourceDef[] + FileFacts -> RegistrationAnalysis
+ * 27-graph: RegistrationAnalysis -> ResourceGraph
+ * 28-snapshots: Semantics + ResourceGraph -> snapshots
+ * 29-templates: RegistrationAnalysis + ResourceGraph -> templates
  */
 export function resolve(
   program: ts.Program,
@@ -195,7 +165,7 @@ export function resolve(
 
     debug.resolution("start", { sourceFileCount, hasFileSystem: !!config?.fileSystem });
 
-    // Layer 1: Extraction
+    // Stage 21-extract: Extraction
     log.info("[resolution] extracting facts...");
     trace.event("resolution.extraction.start");
     const rawFacts = extractAllFileFacts(program, {
@@ -206,7 +176,7 @@ export function resolve(
     trace.event("resolution.extraction.done", { factCount: rawFacts.size });
     debug.resolution("extraction.complete", { factCount: rawFacts.size });
 
-    // Layer 1.5: Export Binding Resolution
+    // Stage 22-export-bind: Export Binding Resolution
     log.info("[resolution] building export bindings...");
     trace.event("resolution.binding.start");
     const exportBindings = buildExportBindingMap(rawFacts);
@@ -217,7 +187,7 @@ export function resolve(
       fileCount: exportBindings.size,
     });
 
-    // Layer 2: Partial Evaluation
+    // Stage 23-partial-eval: Partial Evaluation
     log.info("[resolution] partially evaluating values...");
     trace.event("resolution.partialEvaluation.start");
     const evaluation = evaluateFileFacts(rawFacts, exportBindings, {
@@ -236,7 +206,7 @@ export function resolve(
 
     const facts = evaluation.facts;
 
-    // Layer 3: Pattern Matching
+    // Stage 24-patterns: Pattern Matching
     log.info("[resolution] matching patterns...");
     trace.event("resolution.patternMatching.start");
     const allResources: ResourceDef[] = [];
@@ -269,7 +239,7 @@ export function resolve(
     const catalogGaps = analysisGaps.map(analysisGapToCatalogGap);
     const catalogConfidence = catalogConfidenceFromGaps(analysisGaps);
 
-    // Layer 4: Semantics + Catalog + Syntax
+    // Stage 25-semantics: Semantics + Catalog + Syntax
     log.info("[resolution] building semantics artifacts...");
     trace.event("resolution.semantics.start");
     const { semantics, catalog, syntax } = buildSemanticsArtifacts(allResources, config?.baseSemantics, {
@@ -280,7 +250,7 @@ export function resolve(
       resourceCount: allResources.length,
     });
 
-    // Layer 5: Registration Analysis
+    // Stage 26-registration: Registration Analysis
     log.info("[resolution] analyzing registration...");
     trace.event("resolution.registration.start");
     const analyzer = createRegistrationAnalyzer();
@@ -296,7 +266,7 @@ export function resolve(
       unresolvedCount: registration.unresolved.length,
     });
 
-    // Layer 6: Scope Construction
+    // Stage 27-graph: Scope Construction
     log.info("[resolution] building resource graph...");
     trace.event("resolution.scope.start");
     const resourceGraph = buildResourceGraph(registration, config?.baseSemantics, config?.defaultScope);
@@ -311,7 +281,7 @@ export function resolve(
       orphanCount: registration.orphans.length,
     });
 
-    // Layer 7: Snapshot Export
+    // Stage 28-snapshots: Snapshot Export
     log.info("[resolution] building snapshots...");
     trace.event("resolution.snapshots.start");
     const snapshotIdOptions = {
@@ -329,7 +299,7 @@ export function resolve(
       apiSymbolCount: apiSurfaceSnapshot.symbols.length,
     });
 
-    // Layer 8: Template Discovery
+    // Stage 29-templates: Template Discovery
     log.info("[resolution] discovering templates...");
     trace.event("resolution.templates.start");
     const { templates, inlineTemplates } = discoverTemplates(registration, program, resourceGraph);
@@ -500,156 +470,6 @@ const nullLogger: Logger = {
   error: () => {},
 };
 
-interface DiscoveredTemplates {
-  templates: TemplateInfo[];
-  inlineTemplates: InlineTemplateInfo[];
-}
-
-/**
- * Discover templates for element resources.
- *
- * For each element:
- * - If it has an inline template (string literal), add to inlineTemplates
- * - Otherwise, apply convention (foo.ts → foo.html) and add to templates
- *
- * Processes both registered resources (sites) and orphaned resources (declared
- * but never registered). Orphans like the root `my-app` component still need
- * their templates discovered.
- */
-function discoverTemplates(
-  registration: RegistrationAnalysis,
-  program: ts.Program,
-  resourceGraph: ResourceGraph,
-): DiscoveredTemplates {
-  const templates: TemplateInfo[] = [];
-  const inlineTemplates: InlineTemplateInfo[] = [];
-  const sourceFiles = new Set(program.getSourceFiles().map((sf) => normalizePathForId(sf.fileName)));
-  const processedResources = new Set<ResourceDef>();
-
-  // Process registered resources (from registration sites)
-  for (const site of registration.sites) {
-    // Only process resolved resources
-    if (site.resourceRef.kind !== "resolved") continue;
-
-    const resource = site.resourceRef.resource;
-
-    // Avoid duplicates (a resource may have multiple registration sites)
-    if (processedResources.has(resource)) continue;
-    processedResources.add(resource);
-
-    // Only elements have templates
-    if (resource.kind !== "custom-element") continue;
-    if (!resource.file) continue;
-
-    const componentPath = resource.file;
-    const scopeId = scopeIdForResource(resource, registration, resourceGraph, componentPath);
-    const className = unwrapSourced(resource.className) ?? "unknown";
-    const resourceName = unwrapSourced(resource.name) ?? "unknown";
-    const inlineTemplate = unwrapSourced(resource.inlineTemplate);
-
-    // Check for inline template first
-    if (inlineTemplate !== undefined) {
-      inlineTemplates.push({
-        content: inlineTemplate,
-        componentPath,
-        scopeId,
-        className,
-        resourceName,
-      });
-      continue;
-    }
-
-    // No inline template - try convention-based discovery
-    const templatePath = resolveTemplatePath(componentPath, sourceFiles);
-
-    if (!templatePath) continue;
-
-    templates.push({
-      templatePath,
-      componentPath,
-      scopeId,
-      className,
-      resourceName,
-    });
-  }
-
-  // Process orphaned resources (declared but never registered)
-  // Orphans like `my-app` are valid elements that need template discovery.
-  // They go to root scope since they have no explicit registration.
-  for (const orphan of registration.orphans) {
-    const resource = orphan.resource;
-
-    // Avoid duplicates (shouldn't happen, but defensive)
-    if (processedResources.has(resource)) continue;
-    processedResources.add(resource);
-
-    // Only elements have templates
-    if (resource.kind !== "custom-element") continue;
-    if (!resource.file) continue;
-
-    const componentPath = resource.file;
-    const scopeId = scopeIdForComponent(componentPath, resourceGraph);
-    const className = unwrapSourced(resource.className) ?? "unknown";
-    const resourceName = unwrapSourced(resource.name) ?? "unknown";
-    const inlineTemplate = unwrapSourced(resource.inlineTemplate);
-
-    // Check for inline template first
-    if (inlineTemplate !== undefined) {
-      inlineTemplates.push({
-        content: inlineTemplate,
-        componentPath,
-        scopeId,
-        className,
-        resourceName,
-      });
-      continue;
-    }
-
-    // No inline template - try convention-based discovery
-    const templatePath = resolveTemplatePath(componentPath, sourceFiles);
-
-    if (!templatePath) continue;
-
-    templates.push({
-      templatePath,
-      componentPath,
-      scopeId,
-      className,
-      resourceName,
-    });
-  }
-
-  return { templates, inlineTemplates };
-}
-
-/**
- * Resolve the template path for a component using convention.
- *
- * Convention: foo.ts → foo.html (same directory).
- *
- * This is called only when there's no inline template. For external templates,
- * developers use:
- *   import template from './foo.html';
- *   @customElement({ template })
- *
- * Since we can't resolve identifier references statically, we use convention.
- */
-function resolveTemplatePath(
-  componentPath: NormalizedPath,
-  _knownFiles: Set<NormalizedPath>,
-): NormalizedPath | null {
-  // Convention: foo.ts → foo.html, foo.js → foo.html
-  const dir = dirname(componentPath);
-  const base = basename(componentPath);
-  const htmlName = base.replace(/\.(ts|js|tsx|jsx)$/, ".html");
-
-  if (htmlName === base) {
-    // No extension match, can't apply convention
-    return null;
-  }
-
-  return normalizePathForId(resolvePath(dir, htmlName));
-}
 
 function mapGapKindToCode(kind: string): "aurelia/gap/partial-eval" | "aurelia/gap/unknown-registration" | "aurelia/gap/cache-corrupt" {
   if (kind === "cache-corrupt") return "aurelia/gap/cache-corrupt";
@@ -689,38 +509,6 @@ const PARTIAL_EVAL_GAP_KINDS = new Set([
   "parse-error",
 ]);
 
-function scopeIdForComponent(
-  componentPath: NormalizedPath,
-  resourceGraph: ResourceGraph,
-): ResourceScopeId {
-  const localScopeId = `local:${componentPath}` as ResourceScopeId;
-  if (localScopeId in resourceGraph.scopes) return localScopeId;
-  return resourceGraph.root;
-}
-
-function scopeIdForResource(
-  resource: ResourceDef,
-  registration: RegistrationAnalysis,
-  resourceGraph: ResourceGraph,
-  componentPath: NormalizedPath,
-): ResourceScopeId {
-  const componentScope = scopeIdForComponent(componentPath, resourceGraph);
-  if (componentScope !== resourceGraph.root) return componentScope;
-
-  const localOwners: NormalizedPath[] = [];
-  for (const site of registration.sites) {
-    if (site.resourceRef.kind !== "resolved") continue;
-    if (site.resourceRef.resource !== resource) continue;
-    if (site.scope.kind !== "local") continue;
-    localOwners.push(site.scope.owner);
-  }
-  if (localOwners.length > 0) {
-    const owner = [...localOwners].sort()[0]!;
-    const localScopeId = `local:${owner}` as ResourceScopeId;
-    if (localScopeId in resourceGraph.scopes) return localScopeId;
-  }
-  return componentScope;
-}
 
 /**
  * Compute the scope ID for a resource based on its registration site.
