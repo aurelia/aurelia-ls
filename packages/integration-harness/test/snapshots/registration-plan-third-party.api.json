@@ -25,7 +25,7 @@
       "id": "sym:73a7fd916097b7c10c734669b55bde14167c50dc20686bed5c08ee260ad57305",
       "kind": "custom-attribute",
       "name": "highlight",
-      "source": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts"
+      "source": "packages/compiler/test/20-resolve/npm/fixtures/multi-class/src/index.ts"
     },
     {
       "bindables": [
@@ -98,7 +98,7 @@
       "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",
       "kind": "custom-element",
       "name": "user-card",
-      "source": "packages/resolution/test/npm/fixtures/multi-class/src/index.ts"
+      "source": "packages/compiler/test/20-resolve/npm/fixtures/multi-class/src/index.ts"
     },
     {
       "bindables": [

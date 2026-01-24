@@ -4,12 +4,21 @@
     "rootDir": "src",
     "outDir": "out"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
-    { "path": "../compiler" },
-    { "path": "../resolution" },
-    { "path": "../transform" },
-    { "path": "../ssr" },
-    { "path": "../ssg" }
+    {
+      "path": "../compiler"
+    },
+    {
+      "path": "../transform"
+    },
+    {
+      "path": "../ssr"
+    },
+    {
+      "path": "../ssg"
+    }
   ]
 }

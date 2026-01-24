@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/resolution": "workspace:*",
     "@aurelia-ls/transform": "workspace:*",
     "@aurelia-ls/ssr": "workspace:*",
     "@aurelia-ls/ssg": "workspace:*",

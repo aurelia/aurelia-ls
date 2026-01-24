@@ -1,5 +1,5 @@
 import path from "node:path";
-import { canonicalPath } from "@aurelia-ls/resolution";
+import { canonicalPath } from "@aurelia-ls/compiler";
 import type { DiagnosticSurface } from "@aurelia-ls/compiler";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { SemanticWorkspaceEngine } from "../src/engine.js";

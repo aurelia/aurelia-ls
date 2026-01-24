@@ -13,7 +13,7 @@ import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolve } from "@aurelia-ls/resolution";
+import { resolve } from "@aurelia-ls/compiler";
 import {
   buildTemplateSyntaxRegistry,
   compileTemplate,
@@ -25,7 +25,7 @@ import {
 import { collectSemanticTokens } from "../../src/semantic-tokens.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPLICIT_APP = path.resolve(__dirname, "../../../resolution/test/apps/explicit-app");
+const EXPLICIT_APP = path.resolve(__dirname, "../../../compiler/test/20-resolve/apps/explicit-app");
 
 function createVmReflection() {
   return {

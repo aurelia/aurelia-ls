@@ -2,7 +2,6 @@
   "files": [],
   "references": [
     { "path": "packages/compiler" },
-    { "path": "packages/resolution" },
     { "path": "packages/transform" },
     { "path": "packages/ssr" },
     { "path": "packages/ssg" },

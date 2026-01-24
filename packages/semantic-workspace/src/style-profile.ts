@@ -4,7 +4,7 @@ import {
   canonicalElementName,
   canonicalSimpleName,
   toKebabCase,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 
 export type RenameStyle = "preserve" | "attribute" | "property";
 export type BindableDeclarationKind =

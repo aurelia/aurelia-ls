@@ -66,8 +66,6 @@
     "test:ssr:cov": "pnpm -w build && pnpm -w test:vitest:cov -- packages/ssr",
     "test:ssg": "pnpm -w build && pnpm -w test:vitest -- packages/ssg",
     "test:ssg:cov": "pnpm -w build && pnpm -w test:vitest:cov -- packages/ssg",
-    "test:resolution": "pnpm -w build && pnpm -w test:vitest -- packages/resolution",
-    "test:resolution:cov": "pnpm -w build && pnpm -w test:vitest:cov -- packages/resolution",
     "test:transform": "pnpm -w build && pnpm -w test:vitest -- packages/transform",
     "test:transform:cov": "pnpm -w build && pnpm -w test:vitest:cov -- packages/transform",
     "test:language-server": "pnpm -w build && pnpm -w test:vitest -- packages/language-server",
@@ -80,7 +78,7 @@
     "test:playground": "pnpm -w build && pnpm -w test:vitest -- --config playground/vitest.config.ts",
     "test:playground:watch": "pnpm -w build && vitest --config playground/vitest.config.ts",
     "dump:overlay": "pnpm -w build && node scripts/dump-overlays.mjs",
-    "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test packages/resolution/test/routes/vectors packages/resolution/test/integration/expected packages/resolution/test/apps/explicit-app/expected-graph.json packages/resolution/test/apps/routed-app/expected.json packages/integration-harness/test/snapshots"
+    "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test packages/compiler/test/20-resolve/routes/vectors packages/compiler/test/20-resolve/integration/expected packages/compiler/test/20-resolve/apps/explicit-app/expected-graph.json packages/compiler/test/20-resolve/apps/routed-app/expected.json packages/integration-harness/test/snapshots"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

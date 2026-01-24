@@ -38,8 +38,8 @@ import {
   type DecoratorApplication,
   type FileFacts,
   type ObjectValue,
-} from "@aurelia-ls/resolution";
-import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
+import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler";
 import type { ResourceDefinitionIndex } from "./definition.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
 import type {

@@ -25,7 +25,7 @@ import {
   type DocumentUri,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
-import type { ResolutionResult } from "@aurelia-ls/resolution";
+import type { ResolutionResult } from "@aurelia-ls/compiler";
 import type { WorkspaceLocation } from "./types.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
 

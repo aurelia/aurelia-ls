@@ -33,7 +33,7 @@ import {
 } from "@aurelia-ls/transform";
 import { compileWithAot, isSSRHandler, type SSRHandler } from "@aurelia-ls/ssr";
 import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
-import { mergeDefines, ssrDefines, type TemplateInfo, type RouteTree } from "@aurelia-ls/resolution";
+import { mergeDefines, ssrDefines, type TemplateInfo, type RouteTree } from "@aurelia-ls/compiler";
 import { createSSRMiddleware } from "./middleware.js";
 import { createResolutionContext, discoverRoutes } from "./resolution.js";
 import { componentCache } from "./loader.js";

@@ -39,7 +39,7 @@ export function resolveExternalPackagePath(id: string): string {
   const root = resolveRepoRoot();
   if (id.startsWith("@test/")) {
     const name = id.slice("@test/".length);
-    return join(root, "packages", "resolution", "test", "npm", "fixtures", name);
+    return join(root, "packages", "compiler", "test", "20-resolve", "npm", "fixtures", name);
   }
   if (id === "aurelia" || id.startsWith("@aurelia/")) {
     const name = id === "aurelia" ? "aurelia" : id.slice("@aurelia/".length);

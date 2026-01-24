@@ -17,7 +17,7 @@ import {
   type ResolutionResult,
   type ResourceDef,
   type Logger,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import type { TypeScriptProject } from "./project.js";
 
 export interface AureliaProjectIndexOptions {

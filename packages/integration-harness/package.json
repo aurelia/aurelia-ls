@@ -16,8 +16,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/resolution": "workspace:*"
+    "@aurelia-ls/compiler": "workspace:*"
   },
   "devDependencies": {
     "@aurelia/kernel": "file:../../aurelia/packages/kernel",

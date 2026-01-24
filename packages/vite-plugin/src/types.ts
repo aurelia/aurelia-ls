@@ -10,7 +10,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/resolution";
+import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -40,7 +40,7 @@ export type {
   DirectoryConvention,
   DirectoryScope,
   DirectoryMatch,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 
 
 // Local imports for internal use
@@ -49,7 +49,7 @@ import type {
   DirectoryConventionConfig,
   TemplatePairingConfig,
   StylesheetPairingConfig,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 
 /**
  * Re-export SSG types from ssg package.
@@ -544,7 +544,7 @@ export interface ThirdPartyOptions {
 }
 
 // NOTE: Convention types (ConventionConfig, DirectoryConventionConfig, etc.)
-// are now defined in @aurelia-ls/resolution and re-exported above.
+// are now defined in @aurelia-ls/compiler and re-exported above.
 // This ensures a single source of truth for convention configuration.
 
 // ============================================================================

@@ -44,7 +44,7 @@ import {
   type ResolutionConfig,
   type ResolutionResult,
   type TemplateInfo,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import type { ModuleResolver, TypeScriptServices } from "@aurelia-ls/compiler";
 import {
   createTypeScriptEnvironment,

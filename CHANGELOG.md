@@ -1,6 +1,6 @@
 # Changelog
 
-Core packages changelog for `@aurelia-ls/*` (compiler, resolution, transform, build, language-server).
+Core packages changelog for `@aurelia-ls/*` (compiler, transform, build, language-server).
 
 For VS Code extension changelog, see [`packages/vscode/CHANGELOG.md`](packages/vscode/CHANGELOG.md).
 
@@ -76,7 +76,7 @@ Expression parser with full Aurelia syntax support:
 - Arrow functions, optional chaining, nullish coalescing
 - All binary/unary operators
 
-### @aurelia-ls/resolution
+### Resolution (merged into @aurelia-ls/compiler)
 
 Resource discovery and dependency analysis:
 
@@ -145,6 +145,6 @@ Compiler diagnostics implemented:
 
 ## Versioning Policy
 
-Core packages (`@aurelia-ls/compiler`, `@aurelia-ls/resolution`, `@aurelia-ls/transform`, `@aurelia-ls/build`, `@aurelia-ls/language-server`) share a unified version number. They are tightly coupled and changes typically cascade across packages.
+Core packages (`@aurelia-ls/compiler`, `@aurelia-ls/transform`, `@aurelia-ls/build`, `@aurelia-ls/language-server`) share a unified version number. They are tightly coupled and changes typically cascade across packages.
 
 The VS Code extension (`aurelia-2`) has an independent version and release cycle. See its [changelog](packages/vscode/CHANGELOG.md) for extension-specific changes.

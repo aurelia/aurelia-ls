@@ -6,8 +6,8 @@ import {
   type DocumentUri,
   type ResourceScopeId,
 } from "@aurelia-ls/compiler";
-import { createNodeFileSystem, type ResolutionConfig, type ResolutionResult, type Logger as ResolutionLogger } from "@aurelia-ls/resolution";
-import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/resolution/npm";
+import { createNodeFileSystem, type ResolutionConfig, type ResolutionResult, type Logger as ResolutionLogger } from "@aurelia-ls/compiler";
+import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/compiler";
 import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../../src/engine.js";
 import { inlineTemplatePath } from "../../src/templates.js";
 import { getFixture, resolveFixtureRoot } from "../fixtures/index.js";

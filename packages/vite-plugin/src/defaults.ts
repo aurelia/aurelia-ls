@@ -43,11 +43,11 @@ import type {
   DirectoryConventionConfig,
   TemplatePairingConfig,
   StylesheetPairingConfig,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import {
   DEFAULT_CONVENTION_CONFIG,
   DEFAULT_SUFFIXES,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";

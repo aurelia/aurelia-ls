@@ -37,7 +37,6 @@ export default defineConfig({
       "@aurelia/expression-parser": resolve(aureliaRoot, "expression-parser"),
       "@aurelia/template-compiler": resolve(aureliaRoot, "template-compiler"),
       "@aurelia-ls/compiler": resolve(repoRoot, "packages/compiler/src/index.ts"),
-      "@aurelia-ls/resolution": resolve(repoRoot, "packages/resolution/src/index.ts"),
       "@aurelia-ls/ssr": resolve(repoRoot, "packages/ssr/src/index.ts"),
       "@aurelia-ls/transform": resolve(repoRoot, "packages/transform/src/index.ts"),
       "aurelia2-table": resolve(

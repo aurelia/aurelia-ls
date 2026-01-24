@@ -13,7 +13,7 @@ import {
   RESOURCE_DECORATOR_NAMES,
   toKebabCase,
   stripResourceSuffix,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import type {
   ClassInfo,
   DecoratorInfo,

@@ -41,8 +41,8 @@ import {
   type DefineMap,
   type AnalysisGap,
   type ConventionConfig,
-} from "@aurelia-ls/resolution";
-import { buildPackageRootMap, detectMonorepo, isAureliaPackage } from "@aurelia-ls/resolution/npm";
+} from "@aurelia-ls/compiler";
+import { buildPackageRootMap, detectMonorepo, isAureliaPackage } from "@aurelia-ls/compiler";
 import type { ResolutionContext, ThirdPartyOptions, ThirdPartyPolicy } from "./types.js";
 import { buildThirdPartyResources, hasThirdPartyResources, mergeResourceCollections, mergeScopeResources } from "./third-party.js";
 

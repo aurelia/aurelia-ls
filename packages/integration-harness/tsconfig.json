@@ -4,9 +4,12 @@
     "rootDir": "src",
     "outDir": "out"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
-    { "path": "../compiler" },
-    { "path": "../resolution" }
+    {
+      "path": "../compiler"
+    }
   ]
 }

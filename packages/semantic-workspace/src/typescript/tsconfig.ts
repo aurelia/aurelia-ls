@@ -1,7 +1,7 @@
 import path from "node:path";
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { Logger } from "@aurelia-ls/resolution";
+import type { Logger } from "@aurelia-ls/compiler";
 import type { PathUtils } from "./paths.js";
 
 export const DEFAULT_COMPILER_OPTIONS: ts.CompilerOptions = {

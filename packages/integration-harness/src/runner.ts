@@ -19,7 +19,7 @@ import {
   type ResolutionDiagnostic,
   type ResolutionResult,
   type UsageByScope,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import {
   compileAot,
   compileTemplate,
