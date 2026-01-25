@@ -22,7 +22,7 @@ import {
   normalizePathForId,
   materializeSemanticsForScope,
   lowerDocument,
-  resolveHost,
+  resolveHost, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
@@ -444,14 +444,15 @@ function compileTemplate(markup, options = {}) {
     diagnostics: diagnostics.forSource("lower"),
   });
 
-  const resolveOpts = {
-    ...(options.resourceGraph ? { graph: options.resourceGraph, scope: options.resourceScope ?? null } : {}),
+  const snapshot = buildSemanticsSnapshot(semantics, {
+    resourceGraph: options.resourceGraph ?? null,
+    resourceScope: options.resourceScope ?? null,
+  });
+  const linked = resolveHost(ir, snapshot, {
     moduleResolver,
     templateFilePath: templatePath,
     diagnostics: diagnostics.forSource("resolve-host"),
-  };
-
-  const linked = resolveHost(ir, semantics, resolveOpts);
+  });
   const scoped = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
 
   const plan = planAot(linked, scoped, {
@@ -833,3 +834,5 @@ describe("Stress Test: AOT Compiler Kitchen Sink", () => {
     });
   });
 });
+
+

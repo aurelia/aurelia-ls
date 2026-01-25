@@ -7,7 +7,7 @@
 import { describe, test, expect } from "vitest";
 import {
   lowerDocument,
-  resolveHost,
+  resolveHost, buildSemanticsSnapshot,
   bindScopes,
   typecheck,
   getExpressionParser,
@@ -343,7 +343,7 @@ describe("cascade suppression", () => {
     const markup = '<div nonexistent.bind="42"></div>';
 
     const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
+    const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
     const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
@@ -373,7 +373,7 @@ describe("cascade suppression", () => {
     const markup = '<input disabled.bind="\'yes\'">';
 
     const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
+    const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
     const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
@@ -418,7 +418,7 @@ describe("style binding syntax", () => {
   test("width.style produces stylePropertyBinding with target.kind=style", () => {
     const diagnostics = new DiagnosticsRuntime();
     const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
+    const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
     const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
 
     expect(ins?.kind).toBe("stylePropertyBinding");
@@ -428,7 +428,7 @@ describe("style binding syntax", () => {
   test("width.style expects type string (style.property context)", () => {
     const diagnostics = new DiagnosticsRuntime();
     const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
+    const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
     const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
@@ -453,3 +453,5 @@ describe("style binding syntax", () => {
     expect(ins?.type).toBe("propertyBinding");
   });
 });
+
+

@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, createCompilerContext } from "../../_helpers/vector-runner.js";
 import { diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes, planAot } from "@aurelia-ls/compiler";
+import { lowerDocument, resolveHost, buildSemanticsSnapshot, bindScopes, planAot } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -95,7 +95,7 @@ runVectorTests<AotPlanExpect, AotPlanIntent, AotPlanDiff>({
   suiteName: "AOT Plan (aot:plan)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, {
+    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
       ...RESOLVE_OPTS,
       diagnostics: ctx.diagnostics.forSource("resolve-host"),
     });
@@ -424,3 +424,5 @@ function exprKey(e: ExpressionIntent): string {
 function scopeKey(s: ScopeIntent): string {
   return `${s.frameId}:${s.kind}:parent=${s.parentFrameId}:locals=${s.locals.join(",")}:oc=${s.overrideContext.join(",")}`;
 }
+
+

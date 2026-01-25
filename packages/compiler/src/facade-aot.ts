@@ -14,9 +14,7 @@ import { lowerDocument, resolveHost, bindScopes } from "./analysis/index.js";
 import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser } from "./parsing/index.js";
 import {
-  buildTemplateSyntaxRegistry,
-  materializeSemanticsForScope,
-  prepareSemantics,
+  buildSemanticsSnapshot,
   type ResourceCatalog,
   type Semantics,
   type ResourceGraph,
@@ -143,19 +141,16 @@ export function compileAot(
     const templatePath = options.templatePath ?? "template.html";
     const name = options.name ?? "template";
     const baseSemantics = options.semantics;
-    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
-    const semantics = options.resourceGraph || options.resourceScope !== undefined || hasLocalImports
-      ? materializeSemanticsForScope(
-          baseSemantics,
-          options.resourceGraph ?? null,
-          options.resourceScope ?? null,
-          options.localImports,
-        )
-      : prepareSemantics(baseSemantics);
-    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
-    const catalog = useCatalogOverride ? options.catalog! : semantics.catalog;
-    const semWithCatalog = useCatalogOverride ? { ...semantics, catalog } : semantics;
-    const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
+    const snapshot = buildSemanticsSnapshot(baseSemantics, {
+      resourceGraph: options.resourceGraph ?? null,
+      resourceScope: options.resourceScope ?? null,
+      localImports: options.localImports,
+      catalog: options.catalog,
+      syntax: options.syntax,
+    });
+    const semantics = snapshot.semantics;
+    const catalog = snapshot.catalog;
+    const syntax = snapshot.syntax;
     const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
 
     trace.setAttributes({
@@ -178,17 +173,7 @@ export function compileAot(
       trace,
     });
 
-    // Build resolve options for resource graph and local imports
-    const resolveOpts = options.resourceGraph || options.localImports || options.resourceScope !== undefined
-      ? {
-          ...(options.resourceGraph ? { graph: options.resourceGraph } : {}),
-          ...(options.resourceScope !== undefined ? { scope: options.resourceScope ?? null } : {}),
-          ...(options.localImports ? { localImports: options.localImports } : {}),
-        }
-      : undefined;
-
-    const linked = resolveHost(ir, semWithCatalog, {
-      ...resolveOpts,
+    const linked = resolveHost(ir, snapshot, {
       moduleResolver: options.moduleResolver,
       templateFilePath: templatePath,
       diagnostics: diagnostics.forSource("resolve-host"),

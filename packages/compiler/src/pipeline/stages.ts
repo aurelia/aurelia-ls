@@ -5,8 +5,7 @@ import { resolveSourceFile } from "../model/index.js";
 
 // Language imports (via barrel)
 import {
-  buildTemplateSyntaxRegistry,
-  materializeSemanticsForScope,
+  buildSemanticsSnapshot,
   type LocalImportDef,
   type ResourceCatalog,
   type ResourceGraph,
@@ -112,21 +111,13 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
 
   const resolveSemanticsInputs = (options: PipelineOptions) => {
     const base = assertOption(options.semantics, "semantics");
-    const graph = options.resourceGraph ?? base.resourceGraph ?? null;
-    const scopeId = options.resourceScope ?? base.defaultScope ?? null;
-    const sem = materializeSemanticsForScope(base, graph, scopeId, options.localImports);
-    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
-    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
-    const catalog = useCatalogOverride ? options.catalog! : sem.catalog;
-    const semWithCatalog = useCatalogOverride ? { ...sem, catalog } : sem;
-    const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
-    return {
-      sem: semWithCatalog,
-      resources: sem.resources,
-      catalog,
-      syntax,
-      scopeId: scopeId ?? null,
-    };
+    return buildSemanticsSnapshot(base, {
+      resourceGraph: options.resourceGraph ?? base.resourceGraph ?? null,
+      resourceScope: options.resourceScope ?? base.defaultScope ?? null,
+      localImports: options.localImports,
+      catalog: options.catalog,
+      syntax: options.syntax,
+    });
   };
 
   const scopeFingerprint = (options: PipelineOptions) => {
@@ -177,10 +168,10 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     version: "3",
     deps: ["10-lower"],
     fingerprint(ctx) {
-      const { sem } = resolveSemanticsInputs(ctx.options);
+      const { semantics } = resolveSemanticsInputs(ctx.options);
       const moduleResolverFingerprint = ctx.options.fingerprints?.moduleResolver ?? "custom";
       return {
-        sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(sem),
+        sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(semantics),
         resourceGraph: scopeFingerprint(ctx.options),
         localImports: ctx.options.localImports ? stableHash(ctx.options.localImports) : null,
         moduleResolver: moduleResolverFingerprint,
@@ -190,16 +181,12 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       const scoped = resolveSemanticsInputs(ctx.options);
       const ir = ctx.require("10-lower");
       const resolveOpts = {
-        resources: scoped.resources,
-        scope: scoped.scopeId,
-        ...(ctx.options.resourceGraph !== undefined ? { graph: ctx.options.resourceGraph } : {}),
-        ...(ctx.options.localImports ? { localImports: ctx.options.localImports } : {}),
         moduleResolver: ctx.options.moduleResolver,
         templateFilePath: ctx.options.templateFilePath,
         diagnostics: ctx.diag,
         trace: ctx.options.trace,
       };
-      return resolveHost(ir, scoped.sem, resolveOpts);
+      return resolveHost(ir, scoped, resolveOpts);
     },
   });
 

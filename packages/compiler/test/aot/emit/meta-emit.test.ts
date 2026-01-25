@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import {
   lowerDocument,
-  resolveHost,
+  resolveHost, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
@@ -31,7 +31,7 @@ function compileTemplate(markup: string) {
     catalog: DEFAULT_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+  const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
     diagnostics: diagnostics.forSource("resolve-host"),
@@ -226,3 +226,5 @@ describe("Meta Element Emission", () => {
     });
   });
 });
+
+

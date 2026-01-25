@@ -9,7 +9,7 @@ import {
   DEFAULT_SYNTAX,
   lowerDocument,
   DEFAULT_SEMANTICS as DEFAULT,
-  resolveHost,
+  resolveHost, buildSemanticsSnapshot,
   materializeResourcesForScope,
   createSemanticsLookup,
   prepareSemantics,
@@ -68,7 +68,7 @@ runVectorTests<ResolveExpect, ResolveIntent, ResolveDiff>({
   suiteName: "Resolve (20)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, {
+    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
       ...RESOLVE_OPTS,
       diagnostics: ctx.diagnostics.forSource("resolve-host"),
     });
@@ -144,10 +144,12 @@ describe("Resolve (20) - Resource Graph", () => {
       },
     );
 
-    const linked = resolveHost(ir, sem, {
+    const snapshot = buildSemanticsSnapshot(sem, {
+      resourceGraph: graph,
+      resourceScope: "child",
+    });
+    const linked = resolveHost(ir, snapshot, {
       ...RESOLVE_OPTS,
-      graph,
-      scope: "child",
       diagnostics: diagnostics.forSource("resolve-host"),
     });
     const intent = reduceLinkedIntent(linked, diagnostics.all);
@@ -217,10 +219,12 @@ describe("Resolve (20) - Resource Graph", () => {
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, sem, {
+    const snapshot = buildSemanticsSnapshot(sem, {
+      resourceGraph: graph,
+      resourceScope: "feature",
+    });
+    const linked = resolveHost(ir, snapshot, {
       ...RESOLVE_OPTS,
-      graph,
-      scope: "feature",
       diagnostics: diagnostics.forSource("resolve-host"),
     });
     const intent = reduceLinkedIntent(linked, diagnostics.all);
@@ -570,9 +574,9 @@ describe("Resolve (20) - Local Imports", () => {
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, DEFAULT, {
+    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports });
+    const linked = resolveHost(ir, snapshot, {
       ...RESOLVE_OPTS,
-      localImports,
       diagnostics: diagnostics.forSource("resolve-host"),
     });
     const intent = reduceLinkedIntent(linked, diagnostics.all);
@@ -609,9 +613,9 @@ describe("Resolve (20) - Local Imports", () => {
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, DEFAULT, {
+    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports });
+    const linked = resolveHost(ir, snapshot, {
       ...RESOLVE_OPTS,
-      localImports,
       diagnostics: diagnostics.forSource("resolve-host"),
     });
     const intent = reduceLinkedIntent(linked, diagnostics.all);
@@ -660,9 +664,9 @@ describe("Resolve (20) - Local Imports", () => {
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, sem, {
+    const snapshot = buildSemanticsSnapshot(sem, { localImports });
+    const linked = resolveHost(ir, snapshot, {
       ...RESOLVE_OPTS,
-      localImports,
       diagnostics: diagnostics.forSource("resolve-host"),
     });
     const intent = reduceLinkedIntent(linked, diagnostics.all);
@@ -694,9 +698,9 @@ describe("Resolve (20) - Local Imports", () => {
       }
     );
 
-    const linked = resolveHost(ir, DEFAULT, {
+    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports });
+    const linked = resolveHost(ir, snapshot, {
       ...RESOLVE_OPTS,
-      localImports,
       diagnostics: diagnostics.forSource("resolve-host"),
     });
     const intent = reduceLinkedIntent(linked, diagnostics.all);
@@ -727,9 +731,9 @@ describe("Resolve (20) - Local Imports", () => {
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, DEFAULT, {
+    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports: [] });
+    const linked = resolveHost(ir, snapshot, {
       ...RESOLVE_OPTS,
-      localImports: [],
       diagnostics: diagnostics.forSource("resolve-host"),
     });
     const intent = reduceLinkedIntent(linked, diagnostics.all);
@@ -745,4 +749,6 @@ describe("Resolve (20) - Local Imports", () => {
     expect(intent.diags).toContain("aurelia/unknown-element");
   });
 });
+
+
 

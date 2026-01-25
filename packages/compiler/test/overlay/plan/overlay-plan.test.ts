@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../../_helpers/vector-runner.js";
 import { diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes, planOverlay } from "@aurelia-ls/compiler";
+import { lowerDocument, resolveHost, buildSemanticsSnapshot, bindScopes, planOverlay } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -41,7 +41,7 @@ runVectorTests<PlanExpect, PlanIntent, PlanDiff>({
   suiteName: "Plan Overlay (50)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, {
+    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
       ...RESOLVE_OPTS,
       diagnostics: ctx.diagnostics.forSource("resolve-host"),
     });
@@ -178,3 +178,5 @@ function comparePlanIntent(actual: PlanIntent, expected: PlanExpect): PlanDiff {
     diffByKey(actual.lambdas, expected.lambdas, (l: LambdaEntry) => `${l.frame ?? ""}|${l.lambda ?? ""}|${l.expr ?? ""}`);
   return { missingFrames, extraFrames, missingLambdas, extraLambdas };
 }
+
+

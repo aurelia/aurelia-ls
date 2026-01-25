@@ -27,7 +27,7 @@ import {
   DefaultTemplateProgram,
   DefaultTemplateBuildService,
   lowerDocument,
-  resolveHost,
+  resolveHost, buildSemanticsSnapshot,
   bindScopes,
   typecheck,
   planAot,
@@ -119,7 +119,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
       expect(lowerDiags.length).toBe(0);
 
       // Stage 2: Resolve
-      const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+      const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -176,7 +176,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      resolveHost(ir, DEFAULT_SEMANTICS, {
+      resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -209,7 +209,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      resolveHost(ir, DEFAULT_SEMANTICS, {
+      resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -275,7 +275,7 @@ describe("Trace Integration: AOT Synthesis", () => {
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+      const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -338,7 +338,7 @@ describe("Trace Integration: Overlay Synthesis", () => {
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+      const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -904,7 +904,7 @@ describe("Trace Integration: Multiple Template Compilation", () => {
             diagnostics: diagnostics.forSource("lower"),
           });
 
-          resolveHost(ir, DEFAULT_SEMANTICS, {
+          resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
             moduleResolver: noopModuleResolver,
             templateFilePath: file,
             trace,
@@ -954,3 +954,5 @@ describe("Trace Integration: Exporter Lifecycle", () => {
     expect(collector.spans.length).toBe(0);
   });
 });
+
+

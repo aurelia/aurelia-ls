@@ -13,7 +13,7 @@
 import { test, describe, expect } from "vitest";
 import {
   lowerDocument,
-  resolveHost,
+  resolveHost, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
@@ -59,7 +59,7 @@ function compileTemplate(markup: string): CompileResult {
     catalog: DEFAULT_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+  const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
     diagnostics: diagnostics.forSource("resolve-host"),
@@ -333,3 +333,5 @@ describe("Debug Output Inspection", () => {
     expect(hydrateElements.length).toBe(1);
   });
 });
+
+

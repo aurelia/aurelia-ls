@@ -18,7 +18,7 @@ import { deepMergeSemantics } from "../../_helpers/semantics-merge.js";
 
 import {
   lowerDocument,
-  resolveHost,
+  resolveHost, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
@@ -140,7 +140,7 @@ function runPipeline(markup: string, ctx: CompilerContext): unknown {
     catalog: ctx.sem.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, ctx.sem, {
+  const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
     diagnostics: diagnostics.forSource("resolve-host"),
@@ -551,3 +551,5 @@ describe("AOT Emit (aot:emit)", () => {
     });
   }
 });
+
+

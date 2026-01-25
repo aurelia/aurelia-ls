@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts } from "../../_helpers/vector-runner.js";
 import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
+import { lowerDocument, resolveHost, buildSemanticsSnapshot, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -30,7 +30,7 @@ runVectorTests<EmitExpect, EmitIntent, EmitDiff>({
   suiteName: "Emit Overlay (60)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, {
+    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
       ...RESOLVE_OPTS,
       diagnostics: ctx.diagnostics.forSource("resolve-host"),
     });
@@ -102,3 +102,5 @@ function compareEmitIntent(actual: EmitIntent, expected: EmitExpect): EmitDiff {
 
   return { missingMapping, extraMapping, missingTextIncludes, extraTextIncludes };
 }
+
+

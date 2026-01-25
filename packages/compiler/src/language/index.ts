@@ -11,3 +11,6 @@ export * from "./resource-graph.js";
 
 // Resource catalog helpers
 export * from "./catalog.js";
+
+// Semantics snapshots (project-level seam)
+export * from "./snapshot.js";

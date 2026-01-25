@@ -42,6 +42,7 @@ export {
   buildResourceGraphFromSemantics,
   materializeResourcesForScope,
   materializeSemanticsForScope,
+  buildSemanticsSnapshot,
   buildTemplateSyntaxRegistry,
 } from "./language/index.js";
 export type {
@@ -60,6 +61,8 @@ export type {
   ResourceCatalog,
   CatalogGap,
   CatalogConfidence,
+  SemanticsSnapshot,
+  SemanticsSnapshotOptions,
   TemplateSyntaxRegistry,
   TemplateSyntaxMatcher,
   TemplateSyntaxEmitter,

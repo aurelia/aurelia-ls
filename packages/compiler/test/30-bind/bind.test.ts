@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../_helpers/vector-runner.js";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes } from "@aurelia-ls/compiler";
+import { lowerDocument, resolveHost, buildSemanticsSnapshot, bindScopes } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -61,7 +61,7 @@ runVectorTests<BindExpect, BindIntent, BindDiff>({
   suiteName: "Bind (30)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, {
+    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
       ...RESOLVE_OPTS,
       diagnostics: ctx.diagnostics.forSource("resolve-host"),
     });
@@ -253,3 +253,5 @@ export function compareBindIntent(actual: BindIntent, expected: BindExpect): Bin
 
   return { missingFrames, extraFrames, missingLocals, extraLocals, missingExprs, extraExprs, missingDiags, extraDiags };
 }
+
+

@@ -38,9 +38,8 @@ import type {
   SourceSpan,
 } from "../../model/ir.js";
 
-import { getControllerConfig, type SemanticsLookupOptions, type LocalImportDef } from "../../language/registry.js";
-import type { Semantics } from "../../language/registry.js";
-import type { ResourceCollections, ResourceGraph, ResourceScopeId } from "../../language/resource-graph.js";
+import { getControllerConfig, type SemanticsLookupOptions } from "../../language/registry.js";
+import type { ResourceGraph } from "../../language/resource-graph.js";
 import type { ModuleResolver } from "../../shared/module-resolver.js";
 
 import type {
@@ -94,6 +93,7 @@ import {
 import { extractExprResources, extractHostAssignments } from "../../shared/expr-utils.js";
 import { CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { createResolveContext, createResolveServices, type ResolveContext, type ResolveDiagnosticEmitter } from "./resolve-context.js";
+import type { SemanticsSnapshot } from "../../language/snapshot.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
@@ -142,16 +142,6 @@ type ResolverContext = ResolveContext;
  * ============================================================================ */
 
 export interface ResolveHostOptions {
-  resources?: ResourceCollections;
-  graph?: ResourceGraph | null;
-  scope?: ResourceScopeId | null;
-  /**
-   * Local imports from template `<import>` elements.
-   *
-   * These are resolved as local element definitions for this template,
-   * allowing resolution of elements imported via `<import from="./foo">`.
-   */
-  localImports?: readonly LocalImportDef[];
   /** Module resolver for validating template meta imports. */
   moduleResolver: ModuleResolver;
   /** Template file path for module resolution. */
@@ -161,7 +151,7 @@ export interface ResolveHostOptions {
   trace?: CompileTrace;
 }
 
-export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptions): LinkedSemanticsModule {
+export function resolveHost(ir: IrModule, snapshot: SemanticsSnapshot, opts: ResolveHostOptions): LinkedSemanticsModule {
   if (!opts.moduleResolver) {
     throw new Error("resolveHost requires a moduleResolver; missing resolver is a wiring error.");
   }
@@ -181,10 +171,10 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptio
       "resolve.exprCount": ir.exprTable?.length ?? 0,
     });
 
-    const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
-    const ctxGraph = opts && opts.graph !== undefined ? opts.graph : (sem.resourceGraph ?? null);
+    const lookupOpts: SemanticsLookupOptions | undefined = buildLookupOpts(snapshot);
+    const ctxGraph = snapshot.resourceGraph ?? snapshot.semantics.resourceGraph ?? null;
     const ctx: ResolverContext = createResolveContext(
-      sem,
+      snapshot.semantics,
       services,
       lookupOpts,
       ctxGraph,
@@ -246,12 +236,11 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptio
  * Template / Row linking
  * ============================================================================ */
 
-function buildLookupOpts(opts: ResolveHostOptions): SemanticsLookupOptions {
+function buildLookupOpts(snapshot: SemanticsSnapshot): SemanticsLookupOptions {
   return {
-    ...(opts.resources ? { resources: opts.resources } : {}),
-    ...(opts.graph !== undefined ? { graph: opts.graph } : {}),
-    ...(opts.scope !== undefined ? { scope: opts.scope ?? null } : {}),
-    ...(opts.localImports ? { localImports: opts.localImports } : {}),
+    ...(snapshot.semantics.resources ? { resources: snapshot.semantics.resources } : {}),
+    ...(snapshot.resourceGraph !== undefined ? { graph: snapshot.resourceGraph } : {}),
+    ...(snapshot.scopeId !== undefined ? { scope: snapshot.scopeId ?? null } : {}),
   };
 }
 
