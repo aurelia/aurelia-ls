@@ -6,7 +6,6 @@ import type {
   ControllerName,
   ResourceCatalog,
 } from "../../language/registry.js";
-import { debug } from "../../shared/debug.js";
 import { formatSuggestion } from "../../shared/suggestions.js";
 import {
   BUILTIN_CONTROLLER_CONFIGS,
@@ -21,8 +20,7 @@ import type {
   InstructionIR,
   SetPropertyIR,
 } from "../../model/ir.js";
-import type { ExprTable, P5Element, P5Loc } from "./lower-shared.js";
-import type { ProjectionMap } from "./lower-shared.js";
+import type { ExprTable, P5Element, P5Loc, ProjectionMap } from "./lower-shared.js";
 import {
   attrLoc,
   attrValueLoc,
@@ -35,6 +33,7 @@ import {
   toSpan,
 } from "./lower-shared.js";
 import { resolveAttrDef, resolveElementDef } from "./resource-utils.js";
+import type { LowerContext } from "./lower-context.js";
 
 function isPromiseBranchAttr(
   parsed: ReturnType<AttributeParser["parse"]>,
@@ -167,11 +166,11 @@ export interface ElementLoweringResult {
 
 export function lowerElementAttributes(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
-  catalog: ResourceCatalog,
+  lowerCtx: LowerContext,
   projectionMap?: ProjectionMap,
 ): ElementLoweringResult {
+  const { attrParser, table, catalog, services } = lowerCtx;
+  const dbg = services.debug;
   const attrs = el.attrs ?? [];
   const authoredTag = el.nodeName.toLowerCase();
   const asElement = findAttr(el, "as-element");
@@ -179,7 +178,7 @@ export function lowerElementAttributes(
   const elementDef = resolveElementDef(effectiveTag, catalog);
   const containerless = !!elementDef?.containerless || !!findAttr(el, "containerless");
 
-  debug.lower("element.start", {
+  dbg.lower("element.start", {
     tag: authoredTag,
     effectiveTag: effectiveTag !== authoredTag ? effectiveTag : undefined,
     isCustomElement: !!elementDef,
@@ -258,7 +257,7 @@ export function lowerElementAttributes(
       if (cmdConfig) {
         switch (cmdConfig.kind) {
           case "listener":
-            debug.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
+            dbg.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
             tail.push({
               type: "listenerBinding",
               to: s.target,
@@ -345,14 +344,14 @@ export function lowerElementAttributes(
 
     const bindable = elementDef?.bindables[camelCase(s.target)];
     if (bindable) {
-      debug.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
+      dbg.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
       lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command, s.mode);
       continue;
     }
 
     const attrDef = resolveAttrDef(s.target, catalog);
     if (attrDef && !attrDef.isTemplateController) {
-      debug.lower("attr.customAttribute", { attr: a.name, customAttr: attrDef.name });
+      dbg.lower("attr.customAttribute", { attr: a.name, customAttr: attrDef.name });
       // Check for multi-binding syntax: attr="prop1: val; prop2.bind: expr"
       // Multi-binding requires: no noMultiBindings flag, no command on the attr, and colon before interpolation
       const isMultiBinding =
@@ -385,7 +384,7 @@ export function lowerElementAttributes(
     }
 
     if (s.command) {
-      debug.lower("attr.binding", { attr: a.name, target: s.target, command: s.command });
+      dbg.lower("attr.binding", { attr: a.name, target: s.target, command: s.command });
       tail.push({
         type: "propertyBinding",
         to: camelCase(s.target),
@@ -397,7 +396,7 @@ export function lowerElementAttributes(
     }
 
     if (raw.includes("${")) {
-      debug.lower("attr.interpolation", { attr: a.name, value: raw });
+      dbg.lower("attr.interpolation", { attr: a.name, value: raw });
       tail.push({
         type: "attributeBinding",
         attr: a.name,

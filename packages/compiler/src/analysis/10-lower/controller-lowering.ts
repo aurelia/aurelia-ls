@@ -1,7 +1,6 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { BindingCommandConfig, ControllerConfig, ResourceCatalog } from "../../language/registry.js";
-import { debug } from "../../shared/debug.js";
+import type { BindingCommandConfig, ControllerConfig } from "../../language/registry.js";
 import type {
   BindingMode,
   ControllerBindableIR,
@@ -30,6 +29,7 @@ import {
   templateOfTemplateContent,
 } from "./template-builders.js";
 import type { TemplateBuildContext } from "./template-builders.js";
+import type { LowerContext, LowerServices } from "./lower-context.js";
 
 // -----------------------------------------------------------------------------
 // Trigger kind helpers
@@ -227,20 +227,19 @@ function buildValueProps(
 
 export function collectControllers(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
   host: TemplateHostRef,
 ): HydrateTemplateControllerIR[] {
+  const { attrParser, table, catalog, services } = lowerCtx;
   const candidates: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; config: ControllerConfig }[] = [];
   for (const a of el.attrs ?? []) {
     const s = attrParser.parse(a.name, a.value ?? "");
     const config = resolveControllerAttr(s, catalog);
     if (config) {
-      debug.lower("controller.candidate", {
+      services.debug.lower("controller.candidate", {
         element: el.nodeName,
         attr: a.name,
         value: a.value,
@@ -252,7 +251,7 @@ export function collectControllers(
   }
   if (!candidates.length) return [];
 
-  debug.lower("controller.collect", {
+  services.debug.lower("controller.collect", {
     element: el.nodeName,
     count: candidates.length,
     controllers: candidates.map(c => c.config.name),
@@ -261,7 +260,7 @@ export function collectControllers(
   const rightmost = candidates[candidates.length - 1];
   if (!rightmost) return [];
 
-  let current = buildRightmostController(el, rightmost, attrParser, table, nestedTemplates, catalog, collectRows, ctx, host);
+  let current = buildRightmostController(el, rightmost, lowerCtx, nestedTemplates, collectRows, ctx, host);
 
   for (let i = candidates.length - 2; i >= 0; i--) {
     const candidate = candidates[i];
@@ -270,7 +269,7 @@ export function collectControllers(
     const loc = attrLoc(el, a.name);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
     const raw = a.value ?? "";
-    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, catalog.bindingCommands);
+    const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, catalog.bindingCommands, services);
 
     const branch = buildPromiseBranchInfo(config, raw) ?? buildSwitchBranchInfo(config, proto.props);
 
@@ -310,13 +309,14 @@ function buildControllerPrototype(
   loc: P5Loc,
   valueLoc: P5Loc,
   config: ControllerConfig,
-  bindingCommands: Record<string, BindingCommandConfig>
+  bindingCommands: Record<string, BindingCommandConfig>,
+  services: LowerServices,
 ): ControllerPrototype {
   const raw = a.value ?? "";
   const name = config.name;
   const trigger = config.trigger;
 
-  debug.lower("controller.prototype", {
+  services.debug.lower("controller.prototype", {
     name,
     trigger: trigger.kind,
     raw,
@@ -350,14 +350,13 @@ function buildControllerPrototype(
 function buildRightmostController(
   el: P5Element,
   rightmost: { a: Token.Attribute; s: ReturnType<AttributeParser["parse"]>; config: ControllerConfig },
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
   host: TemplateHostRef,
 ): HydrateTemplateControllerIR[] {
+  const { attrParser, table, catalog } = lowerCtx;
   const { a, s, config } = rightmost;
   const loc = attrLoc(el, a.name);
   const valueLoc = attrValueLoc(el, a.name, table.sourceText);
@@ -370,16 +369,14 @@ function buildRightmostController(
 
   // Promise needs special handling for branch injection
   if (hasPromiseBranches(config)) {
-    return buildPromiseController(el, props as PropertyBindingIR[], locSpan, attrParser, table, nestedTemplates, catalog, collectRows, ctx, host);
+    return buildPromiseController(el, props as PropertyBindingIR[], locSpan, lowerCtx, nestedTemplates, collectRows, ctx, host);
   }
 
   // All other controllers just need the template definition
   const def = templateOfElementChildren(
     el,
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
-    catalog,
     collectRows,
     ctx,
     { kind: "controller", host, controller: name },
@@ -443,25 +440,21 @@ function buildPromiseController(
   el: P5Element,
   props: PropertyBindingIR[],
   locSpan: SourceSpan | null,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
   host: TemplateHostRef,
 ): HydrateTemplateControllerIR[] {
   const { def, idMap } = templateOfElementChildrenWithMap(
     el,
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
-    catalog,
     collectRows,
     ctx,
     { kind: "controller", host, controller: "promise" },
   );
-  injectPromiseBranchesIntoDef(el, def, idMap, attrParser, table, nestedTemplates, catalog, props[0]!, collectRows, ctx);
+  injectPromiseBranchesIntoDef(el, def, idMap, lowerCtx, nestedTemplates, props[0]!, collectRows, ctx);
   return [createHydrateInstruction("promise", def, props, locSpan)];
 }
 
@@ -511,14 +504,13 @@ function injectPromiseBranchesIntoDef(
   el: P5Element,
   def: TemplateIR,
   idMap: WeakMap<P5Node, NodeId>,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
   valueProp: PropertyBindingIR,
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
 ): void {
+  const { attrParser, table, catalog } = lowerCtx;
   const kids =
     el.nodeName.toLowerCase() === "template"
       ? (el as P5Template).content.childNodes ?? []
@@ -553,10 +545,10 @@ function injectPromiseBranchesIntoDef(
     };
 
     const branchDef = preservedInstructions.length > 0
-      ? templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin)
+      ? templateOfElementChildren(kid as P5Element, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin)
       : (branch.isTemplate
-          ? templateOfTemplateContent(kid as P5Template, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin)
-          : templateOfElementChildren(kid as P5Element, attrParser, table, nestedTemplates, catalog, collectRows, ctx, branchOrigin));
+          ? templateOfTemplateContent(kid as P5Template, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin)
+          : templateOfElementChildren(kid as P5Element, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin));
 
     branchDef.origin = branchOrigin;
 

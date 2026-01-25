@@ -8,10 +8,11 @@ import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
 import { ExprTable, DomIdAllocator, type P5Node, type LowerDiagnosticEmitter } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
-import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
 import { applyProjectionOrigins, buildProjectionIndex, type TemplateBuildContext } from "./template-builders.js";
 import { TemplateIdAllocator } from "../../model/identity.js";
+import { createLowerServices, type LowerContext } from "./lower-context.js";
 
 export interface BuildIrOptions {
   file?: string;
@@ -25,7 +26,8 @@ export interface BuildIrOptions {
 }
 
 export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
-  const trace = opts.trace ?? NOOP_TRACE;
+  const { services, diagCount } = createLowerServices(opts);
+  const trace = services.trace;
 
   return trace.span("lower.document", () => {
     trace.setAttributes({
@@ -41,19 +43,17 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const catalog = opts.catalog;
     const source = resolveSourceFile(opts.file ?? opts.name ?? "");
     const ids = new DomIdAllocator();
-    let diagCount = 0;
-    const emitter: LowerDiagnosticEmitter = {
-      emit: (code, input) => {
-        const diag = opts.diagnostics.emit(code, input);
-        diagCount += 1;
-        return diag;
-      },
-    };
-    const table = new ExprTable(opts.exprParser, source, html, emitter);
+    const table = new ExprTable(opts.exprParser, source, html, services.diagnostics);
     const nestedTemplates: TemplateIR[] = [];
     const templateIds = new TemplateIdAllocator();
     const rootTemplateId = templateIds.allocate();
     const rootCtx: TemplateBuildContext = { templateId: rootTemplateId, templateIds };
+    const lowerCtx: LowerContext = {
+      services,
+      attrParser: opts.attrParser,
+      catalog,
+      table,
+    };
 
     // Extract meta elements (<import>, <bindable>, etc.) before DOM building
     trace.event("lower.meta.start");
@@ -65,10 +65,8 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
 
     const projectionIndex = buildProjectionIndex(
       p5,
-      opts.attrParser,
-      table,
+      lowerCtx,
       nestedTemplates,
-      catalog,
       collectRows,
       rootCtx,
       skipTags,
@@ -83,7 +81,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, rootCtx, skipTags, projectionIndex.map);
+    collectRows(p5, ids, lowerCtx, nestedTemplates, rows, rootCtx, skipTags, projectionIndex.map);
     trace.event("lower.rows.complete");
 
     applyProjectionOrigins(projectionIndex.entries, domIdMap, rootTemplateId);
@@ -117,7 +115,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
       "lower.templateCount": result.templates.length,
       "lower.metaImports": templateMeta.imports.length,
       "lower.metaBindables": templateMeta.bindables.length,
-      [CompilerAttributes.DIAG_COUNT]: diagCount,
+      [CompilerAttributes.DIAG_COUNT]: diagCount(),
     });
 
     return result;

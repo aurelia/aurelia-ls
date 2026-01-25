@@ -1,15 +1,16 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ResourceCatalog } from "../../language/registry.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
-import type { ExprTable, P5Element } from "./lower-shared.js";
+import type { P5Element } from "./lower-shared.js";
 import { attrLoc, attrValueLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
+import type { LowerContext } from "./lower-context.js";
+import type { ExprTable } from "./lower-shared.js";
 
 export function lowerLetElement(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
-  catalog: ResourceCatalog
+  lowerCtx: LowerContext,
 ): HydrateLetElementIR {
+  const { attrParser, table, catalog } = lowerCtx;
   const { instructions, toBindingContext } = compileLet(el, attrParser, table, catalog);
   return {
     type: "hydrateLetElement",
