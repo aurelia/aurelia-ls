@@ -77,7 +77,7 @@ function compileLet(
       .filter(([, cfg]) => cfg.kind === "property")
       .map(([name]) => name)
       .join(", ");
-    table.addDiag(
+    table.reportDiagnostic(
       "aurelia/invalid-command-usage",
       `Invalid command '.${s.command}' on <let>. Valid commands: ${validCommands}.`,
       loc,

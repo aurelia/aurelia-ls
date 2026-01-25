@@ -41,8 +41,11 @@ runVectorTests<PlanExpect, PlanIntent, PlanDiff>({
   suiteName: "Plan Overlay (50)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
-    const scope = bindScopes(linked);
+    const linked = resolveHost(ir, ctx.sem, {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+    });
+    const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const vm = createVmReflection(v.rootVmType ?? "RootVm", v.syntheticPrefix ?? "__AU_TTC_");
     const pl = planOverlay(linked, scope, { isJs: false, vm });
     return reducePlanIntent({ ir, scope, pl });

@@ -15,29 +15,15 @@ import type {
   IteratorAuxSpec,
   ElementResRef,
   NodeSem,
-  SemDiagnostic,
   SemDiagCode,
   TargetSem,
 } from "./types.js";
 import { camelCase } from "./name-normalizer.js";
-import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
-import { diagnosticsCatalog, type DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
+import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
 import { type Diagnosed, pure, diag, withStub } from "../../shared/diagnosed.js";
 
-export const resolveDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, SemDiagCode>(
-  diagnosticsCatalog,
-  { source: "resolve-host" },
-);
-
-export function pushDiag<Code extends SemDiagCode>(
-  diags: SemDiagnostic[],
-  code: Code,
-  message: string,
-  span?: SourceSpan | null,
-  data?: DiagnosticDataFor<Code>,
-): void {
-  diags.push(resolveDiagnosticEmitter.emit(code, { message, span, data }));
-}
+export type ResolveDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, SemDiagCode>;
 
 export function resolvePropertyTarget(
   host: NodeSem,
@@ -101,6 +87,7 @@ export function resolveControllerSem(
   lookup: SemanticsLookup,
   res: string,
   span: SourceSpan | null | undefined,
+  emitter: ResolveDiagnosticEmitter,
 ): Diagnosed<ControllerSem> {
   // 1. Check built-in controller configs
   const builtinConfig = getControllerConfig(res);
@@ -123,7 +110,7 @@ export function resolveControllerSem(
 
   // 3. Unknown controller - return stub + diagnostic
   debug.resolve("controller.unknown", { name: res });
-  const diagnostic = resolveDiagnosticEmitter.emit("aurelia/unknown-controller", {
+  const diagnostic = emitter.emit("aurelia/unknown-controller", {
     message: `Unknown template controller '${res}'.`,
     span,
     data: {

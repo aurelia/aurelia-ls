@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { resolve } from "@aurelia-ls/compiler";
+import { resolve, DiagnosticsRuntime } from "@aurelia-ls/compiler";
 import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 
@@ -14,7 +14,8 @@ describe("Full Pipeline: explicit-app", () => {
 
   beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
-    result = resolve(program);
+    const diagnostics = new DiagnosticsRuntime();
+    result = resolve(program, { diagnostics: diagnostics.forSource("resolution") });
   });
 
   it("runs the complete resolution pipeline", () => {

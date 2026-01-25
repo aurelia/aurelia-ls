@@ -247,7 +247,7 @@ export function lowerElementAttributes(
         // Unknown binding command - emit diagnostic with suggestion
         const knownCommands = Object.keys(catalog.bindingCommands);
         const suggestion = formatSuggestion(s.command, knownCommands);
-        table.addDiag(
+        table.reportDiagnostic(
           "aurelia/unknown-command",
           `Unknown binding command '${s.command}'.${suggestion}`,
           loc,

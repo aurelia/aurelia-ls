@@ -4,6 +4,8 @@ import type {
   CatalogGap,
   ApiSurfaceSnapshot,
   CompilerDiagnostic,
+  DiagnosticsCatalog,
+  DiagnosticEmitter,
   RawDiagnostic,
   NormalizedPath,
   ResourceCatalog,
@@ -18,8 +20,6 @@ import type {
 } from './compiler.js';
 import {
   asDocumentUri,
-  createDiagnosticEmitter,
-  diagnosticsByCategory,
   normalizePathForId,
   NOOP_TRACE,
   debug,
@@ -96,6 +96,8 @@ export interface ResolutionConfig {
    * @default ['.css', '.scss']
    */
   styleExtensions?: readonly string[];
+  /** Diagnostics emitter (required). */
+  diagnostics: ResolutionDiagnosticEmitter;
 }
 
 /**
@@ -133,7 +135,7 @@ export interface ResolutionResult {
  */
 export type ResolutionDiagnostic = RawDiagnostic;
 
-const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "resolution" });
+export type ResolutionDiagnosticEmitter = DiagnosticEmitter<DiagnosticsCatalog>;
 
 /**
  * Main entry point: run the full resolution pipeline.
@@ -154,6 +156,10 @@ export function resolve(
   config?: ResolutionConfig,
   logger?: Logger,
 ): ResolutionResult {
+  const diagEmitter = config?.diagnostics;
+  if (!diagEmitter) {
+    throw new Error("resolution.resolve requires diagnostics emitter; missing emitter is a wiring error.");
+  }
   const trace = config?.trace ?? NOOP_TRACE;
   const log = logger ?? nullLogger;
 
@@ -330,10 +336,10 @@ export function resolve(
 
     // Merge all diagnostics: matcher gaps + orphans + unresolved patterns + unresolved refs
     const allDiagnostics: ResolutionDiagnostic[] = [
-      ...analysisGaps.map(gapToDiagnostic),
-      ...orphansToDiagnostics(registration.orphans),
-      ...unresolvedToDiagnostics(registration.unresolved),
-      ...unresolvedRefsToDiagnostics(unresolvedRefs),
+      ...analysisGaps.map((gap) => gapToDiagnostic(gap, diagEmitter)),
+      ...orphansToDiagnostics(registration.orphans, diagEmitter),
+      ...unresolvedToDiagnostics(registration.unresolved, diagEmitter),
+      ...unresolvedRefsToDiagnostics(unresolvedRefs, diagEmitter),
     ];
 
     trace.setAttributes({
@@ -380,12 +386,12 @@ export function resolve(
  * The uri field is only included when gap has location information.
  * The file path is normalized since GapLocation.file is a plain string.
  */
-function gapToDiagnostic(gap: AnalysisGap): ResolutionDiagnostic {
+function gapToDiagnostic(gap: AnalysisGap, emitter: ResolutionDiagnosticEmitter): ResolutionDiagnostic {
   const code = mapGapKindToCode(gap.why.kind);
   const uri = gap.where?.file
     ? asDocumentUri(normalizePathForId(gap.where.file))
     : undefined;
-  const diagnostic = toRawDiagnostic(GAP_EMITTER.emit(code, {
+  const diagnostic = toRawDiagnostic(emitter.emit(code, {
     message: `${gap.what}: ${gap.suggestion}`,
     severity: code === "aurelia/gap/cache-corrupt" ? "warning" : "info",
     data: { gapKind: gap.why.kind },

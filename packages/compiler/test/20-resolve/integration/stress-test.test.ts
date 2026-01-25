@@ -28,6 +28,7 @@ import {
   emitAotCode,
   DEFAULT_SYNTAX,
   getExpressionParser,
+  DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   BINDING_MODE,
 } from "@aurelia-ls/compiler";
@@ -432,6 +433,7 @@ function compileTemplate(markup, options = {}) {
   const moduleResolver = options.moduleResolver ?? ((_specifier: string, _containingFile: string) => null);
 
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
 
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
@@ -439,16 +441,18 @@ function compileTemplate(markup, options = {}) {
     file: templatePath,
     name,
     catalog: semantics.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
 
   const resolveOpts = {
     ...(options.resourceGraph ? { graph: options.resourceGraph, scope: options.resourceScope ?? null } : {}),
     moduleResolver,
     templateFilePath: templatePath,
+    diagnostics: diagnostics.forSource("resolve-host"),
   };
 
   const linked = resolveHost(ir, semantics, resolveOpts);
-  const scoped = bindScopes(linked);
+  const scoped = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
 
   const plan = planAot(linked, scoped, {
     templateFilePath: templatePath,
@@ -594,7 +598,8 @@ describe("Stress Test: AOT Compiler Kitchen Sink", () => {
 
   beforeAll(() => {
     program = createProgramFromApp(STRESS_APP);
-    resolutionResult = resolve(program);
+    const diagnostics = new DiagnosticsRuntime();
+    resolutionResult = resolve(program, { diagnostics: diagnostics.forSource("resolution") });
 
     // Ensure expected directory exists
     if (!fs.existsSync(EXPECTED_DIR)) {

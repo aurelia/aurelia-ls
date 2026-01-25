@@ -75,8 +75,10 @@ type LowerExpect = Partial<LowerIntent>;
 runVectorTests<LowerExpect, LowerIntent, LowerDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Lower (10)",
-  execute: (v: TestVector, ctx: CompilerContext) =>
-    reduceIrToLowerIntent(lowerDocument(v.markup, lowerOpts(ctx))),
+  execute: (v: TestVector, ctx: CompilerContext) => {
+    const ir = lowerDocument(v.markup, lowerOpts(ctx));
+    return reduceIrToLowerIntent(ir, ctx.diagnostics.all);
+  },
   compare: compareLowerIntent,
   categories: ["expressions", "controllers", "lets", "elements", "attributes", "diags"],
 });
@@ -332,15 +334,15 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
 
 interface IrDiag {
   code: string;
-  message: string;
+  message?: string;
+  source?: string;
 }
 
 interface IrModule {
   templates?: TemplateIr[];
-  diags?: IrDiag[];
 }
 
-function reduceIrToLowerIntent(irModule: IrModule): LowerIntent {
+function reduceIrToLowerIntent(irModule: IrModule, diagnostics: readonly IrDiag[]): LowerIntent {
   const out: LowerIntent = {
     expressions: [],
     controllers: [],
@@ -352,7 +354,8 @@ function reduceIrToLowerIntent(irModule: IrModule): LowerIntent {
   const root = irModule.templates?.[0];
   if (root) reduceTemplate(root, out);
   // Reduce diagnostics
-  for (const d of irModule.diags ?? []) {
+  for (const d of diagnostics) {
+    if (d.source !== "lower") continue;
     out.diags.push({ code: d.code });
   }
   return out;

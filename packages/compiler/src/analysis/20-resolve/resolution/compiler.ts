@@ -75,7 +75,7 @@ export {
   diagnosticsByCategory,
   diagnosticsByCategoryFuture,
 } from "../../../diagnostics/index.js";
-export type { DiagnosticsCatalog, RawDiagnostic } from "../../../diagnostics/index.js";
+export type { DiagnosticsCatalog, DiagnosticEmitter, RawDiagnostic } from "../../../diagnostics/index.js";
 
 // === Analysis (meta extraction) ===
 export { extractTemplateMeta } from "../../10-lower/meta-extraction.js";

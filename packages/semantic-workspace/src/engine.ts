@@ -78,12 +78,14 @@ import {
   type TemplateIndex,
 } from "./template-edit-engine.js";
 
+type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
+
 export interface SemanticWorkspaceEngineOptions {
   readonly logger: Logger;
   readonly workspaceRoot?: string | null;
   readonly tsconfigPath?: string | null;
   readonly configFileName?: string;
-  readonly resolution?: ResolutionConfig;
+  readonly resolution?: ResolutionConfigBase;
   readonly typescript?: TypeScriptServices | false;
   readonly vm?: VmReflection;
   readonly lookupText?: (uri: DocumentUri) => string | null;
@@ -129,7 +131,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
     const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
     this.#workspaceRoot = workspaceRoot;
-    const resolution: ResolutionConfig = {
+    const resolution: ResolutionConfigBase = {
       ...(options.resolution ?? {}),
       packagePath: options.resolution?.packagePath ?? workspaceRoot,
       fileSystem: options.resolution?.fileSystem ?? createNodeFileSystem({ root: workspaceRoot }),

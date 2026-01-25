@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler";
 import { resolve, type ResolutionResult } from "../../../src/analysis/20-resolve/resolution/resolve.js";
 import type { FileSystemContext } from "../../../src/analysis/20-resolve/resolution/project/context.js";
 
@@ -134,6 +135,14 @@ function createProgram(): ts.Program {
 }
 
 describe("Template Import Registration", () => {
+  const resolveWithDiagnostics = (
+    program: Parameters<typeof resolve>[0],
+    config?: Omit<NonNullable<Parameters<typeof resolve>[1]>, "diagnostics">,
+  ) => {
+    const diagnostics = new DiagnosticsRuntime();
+    return resolve(program, { ...config, diagnostics: diagnostics.forSource("resolution") });
+  };
+
   let program: ts.Program;
   let fileSystem: FileSystemContext;
   let result: ResolutionResult;
@@ -141,7 +150,7 @@ describe("Template Import Registration", () => {
   beforeAll(() => {
     program = createProgram();
     fileSystem = createMockFileSystem();
-    result = resolve(program, { fileSystem });
+    result = resolveWithDiagnostics(program, { fileSystem });
   });
 
   it("creates registration sites from template imports in sibling HTML", () => {
@@ -259,7 +268,7 @@ describe("Template Import - Edge Cases", () => {
       caseSensitive: true,
     };
 
-    const result = resolve(program, { fileSystem: fs });
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
 
     // Component without sibling template should produce no template-import sites
     const templateImportSites = result.registration.sites.filter(
@@ -306,7 +315,7 @@ describe("Template Import - Edge Cases", () => {
       caseSensitive: true,
     };
 
-    const result = resolve(program, { fileSystem: fs });
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
 
     // Template without <import> elements should produce no template-import sites
     const templateImportSites = result.registration.sites.filter(

@@ -19,13 +19,15 @@ export type PackageRootsOption =
   | ReadonlyMap<string, string>
   | Readonly<Record<string, string>>;
 
+type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
+
 export interface WorkspaceHarnessOptions {
   readonly fixtureId?: FixtureId;
   readonly fixture?: FixtureDescriptor;
   readonly rootOverride?: string;
   readonly tsconfigPath?: string;
   readonly packageRoots?: PackageRootsOption;
-  readonly resolution?: Partial<ResolutionConfig>;
+  readonly resolution?: Partial<ResolutionConfigBase>;
   readonly openTemplates?: TemplateOpenMode;
   readonly logger?: ResolutionLogger;
   readonly workspace?: {

@@ -154,6 +154,4 @@ export interface ScopeTemplate {
 export interface ScopeModule {
   version: "aurelia-scope@1";
   templates: ScopeTemplate[];
-  /** Flat diagnostics related to scoping (not type analysis). */
-  diags: ScopeDiagnostic[];
 }

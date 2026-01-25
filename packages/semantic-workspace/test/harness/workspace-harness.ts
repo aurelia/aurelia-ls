@@ -20,6 +20,8 @@ const SILENT_LOGGER: ResolutionLogger = {
   error: () => {},
 };
 
+type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
+
 const cachedPackageRoots = new Map<string, ReadonlyMap<string, string>>();
 const cachedPackageRootsByPath = new Map<string, string>();
 
@@ -39,7 +41,7 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
 
   const logger = options.logger ?? SILENT_LOGGER;
   const inlineTextByUri = new Map<DocumentUri, string>();
-  const resolutionConfig: ResolutionConfig = {
+  const resolutionConfig: ResolutionConfigBase = {
     packagePath: root,
     packageRoots,
     fileSystem: options.resolution?.fileSystem ?? createNodeFileSystem({ root }),

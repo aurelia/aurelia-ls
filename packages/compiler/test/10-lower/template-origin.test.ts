@@ -5,6 +5,7 @@ import {
   DEFAULT_SEMANTICS,
   DEFAULT_SYNTAX,
   getExpressionParser,
+  DiagnosticsRuntime,
   toSourceFileId,
   type DOMNode,
   type NodeId,
@@ -12,12 +13,14 @@ import {
 } from "@aurelia-ls/compiler";
 
 function lower(html: string) {
+  const diagnostics = new DiagnosticsRuntime();
   return lowerDocument(html, {
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
     catalog: DEFAULT_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
 }
 

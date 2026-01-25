@@ -8,13 +8,12 @@
 import type { CompilerDiagnostic, DocumentUri, NormalizedPath, RawDiagnostic, SourceSpan } from '../compiler.js';
 import {
   asDocumentUri,
-  createDiagnosticEmitter,
   diagnosticsByCategory,
   diagnosticsByCategoryFuture,
   type DiagnosticsCatalog,
 } from '../compiler.js';
 import type { OrphanResource, UnresolvedRegistration, UnresolvedPattern } from "../26-registration/types.js";
-import type { ResolutionDiagnostic } from "../resolve.js";
+import type { ResolutionDiagnostic, ResolutionDiagnosticEmitter } from "../resolve.js";
 import { unwrapSourced } from "../25-semantics/sourced.js";
 
 // =============================================================================
@@ -49,13 +48,16 @@ function isExternalPackage(source: NormalizedPath): boolean {
  * **Note**: Orphans from external packages (@aurelia/*, node_modules) are filtered
  * out as users don't control those resources.
  */
-export function orphansToDiagnostics(orphans: readonly OrphanResource[]): ResolutionDiagnostic[] {
+export function orphansToDiagnostics(
+  orphans: readonly OrphanResource[],
+  emitter: ResolutionDiagnosticEmitter,
+): ResolutionDiagnostic[] {
   return orphans
     .filter(o => !o.resource.file || !isExternalPackage(o.resource.file))
-    .map(orphanToDiagnostic);
+    .map((orphan) => orphanToDiagnostic(orphan, emitter));
 }
 
-function orphanToDiagnostic(orphan: OrphanResource): ResolutionDiagnostic {
+function orphanToDiagnostic(orphan: OrphanResource, emitter: ResolutionDiagnosticEmitter): ResolutionDiagnostic {
   const { resource } = orphan;
   const kindLabel = getKindLabel(resource.kind);
   const name = unwrapSourced(resource.name) ?? "<unknown>";
@@ -63,7 +65,7 @@ function orphanToDiagnostic(orphan: OrphanResource): ResolutionDiagnostic {
   const code = getOrphanDiagnosticCode(resource.kind);
   const uri = toUri(resource.file ?? orphan.definitionSpan.file);
 
-  const diag = toRawDiagnostic(RESOLUTION_EMITTER.emit(code, {
+  const diag = toRawDiagnostic(emitter.emit(code, {
     message: `${kindLabel} '${name}' (class ${className}) is defined but never registered. ` +
       `Add it to Aurelia.register() or a component's dependencies array.`,
     span: orphan.definitionSpan,
@@ -105,18 +107,24 @@ function getKindLabel(kind: "custom-element" | "custom-attribute" | "template-co
  * **Note**: Unresolved patterns from external packages (@aurelia/*, node_modules)
  * are filtered out as users don't control those registrations.
  */
-export function unresolvedToDiagnostics(unresolved: readonly UnresolvedRegistration[]): ResolutionDiagnostic[] {
+export function unresolvedToDiagnostics(
+  unresolved: readonly UnresolvedRegistration[],
+  emitter: ResolutionDiagnosticEmitter,
+): ResolutionDiagnostic[] {
   return unresolved
     .filter(u => !isExternalPackage(u.file))
-    .map(unresolvedToDiagnostic);
+    .map((entry) => unresolvedToDiagnostic(entry, emitter));
 }
 
-function unresolvedToDiagnostic(registration: UnresolvedRegistration): ResolutionDiagnostic {
+function unresolvedToDiagnostic(
+  registration: UnresolvedRegistration,
+  emitter: ResolutionDiagnosticEmitter,
+): ResolutionDiagnostic {
   const { pattern, file, reason } = registration;
   const code = getUnanalyzableDiagnosticCode(pattern.kind);
   const uri = toUri(file);
 
-  const diag = toRawDiagnostic(RESOLUTION_EMITTER.emit(code, {
+  const diag = toRawDiagnostic(emitter.emit(code, {
     message: formatUnresolvedMessage(pattern, reason),
     span: registration.span,
     severity: "info",
@@ -185,15 +193,18 @@ export interface UnresolvedResourceInfo {
  * **Note**: Unresolved refs from external packages (@aurelia/*, node_modules)
  * are filtered out as users don't control those registrations.
  */
-export function unresolvedRefsToDiagnostics(refs: readonly UnresolvedResourceInfo[]): ResolutionDiagnostic[] {
+export function unresolvedRefsToDiagnostics(
+  refs: readonly UnresolvedResourceInfo[],
+  emitter: ResolutionDiagnosticEmitter,
+): ResolutionDiagnostic[] {
   return refs
     .filter(r => !isExternalPackage(r.file))
-    .map(refToDiagnostic);
+    .map((entry) => refToDiagnostic(entry, emitter));
 }
 
-function refToDiagnostic(ref: UnresolvedResourceInfo): ResolutionDiagnostic {
+function refToDiagnostic(ref: UnresolvedResourceInfo, emitter: ResolutionDiagnosticEmitter): ResolutionDiagnostic {
   const uri = toUri(ref.file);
-  const diag = toRawDiagnostic(RESOLUTION_EMITTER.emit("aurelia/resolution/not-a-resource", {
+  const diag = toRawDiagnostic(emitter.emit("aurelia/resolution/not-a-resource", {
     message: ref.reason,
     span: ref.span,
     severity: "warning",
@@ -210,8 +221,6 @@ const RESOLUTION_CATALOG = {
   ...diagnosticsByCategory.gaps,
   ...diagnosticsByCategory.policy,
 } as const satisfies DiagnosticsCatalog;
-
-const RESOLUTION_EMITTER = createDiagnosticEmitter(RESOLUTION_CATALOG, { source: "resolution" });
 
 type ResolutionCode = keyof typeof RESOLUTION_CATALOG & string;
 

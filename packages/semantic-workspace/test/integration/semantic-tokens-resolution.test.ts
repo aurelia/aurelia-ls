@@ -13,7 +13,7 @@ import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolve } from "@aurelia-ls/compiler";
+import { resolve, DiagnosticsRuntime } from "@aurelia-ls/compiler";
 import {
   buildTemplateSyntaxRegistry,
   compileTemplate,
@@ -119,7 +119,8 @@ describe("Semantic Tokens + Resolution Integration", () => {
 
   beforeAll(() => {
     program = createProgramFromApp(EXPLICIT_APP);
-    resolutionResult = resolve(program);
+    const diagnostics = new DiagnosticsRuntime();
+    resolutionResult = resolve(program, { diagnostics: diagnostics.forSource("resolution") });
 
     // Get semantics for root scope (with discovered elements merged)
     rootSemantics = materializeSemanticsForScope(

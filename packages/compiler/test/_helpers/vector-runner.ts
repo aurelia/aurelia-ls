@@ -30,6 +30,7 @@ import {
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS as SEM_DEFAULT,
   prepareSemantics,
+  DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
 
 /**
@@ -51,6 +52,7 @@ export interface CompilerContext {
   sem: typeof SEM_DEFAULT;
   exprParser: ReturnType<typeof getExpressionParser>;
   attrParser: typeof DEFAULT_SYNTAX;
+  diagnostics: DiagnosticsRuntime;
 }
 
 /**
@@ -105,6 +107,7 @@ export function createCompilerContext(vector: TestVector): CompilerContext {
     sem,
     exprParser: getExpressionParser(),
     attrParser: DEFAULT_SYNTAX,
+    diagnostics: new DiagnosticsRuntime(),
   };
 }
 
@@ -118,6 +121,7 @@ export function lowerOpts(ctx: CompilerContext) {
     file: "mem.html",
     name: "mem",
     catalog: ctx.sem.catalog,
+    diagnostics: ctx.diagnostics.forSource("lower"),
   };
 }
 

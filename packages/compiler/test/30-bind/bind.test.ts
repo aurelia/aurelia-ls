@@ -61,9 +61,12 @@ runVectorTests<BindExpect, BindIntent, BindDiff>({
   suiteName: "Bind (30)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
-    const scope = bindScopes(linked);
-    return reduceScopeToBindIntent({ ir, linked, scope });
+    const linked = resolveHost(ir, ctx.sem, {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+    });
+    const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
+    return reduceScopeToBindIntent({ ir, linked, scope, diagnostics: ctx.diagnostics.all });
   },
   compare: compareBindIntent,
   categories: ["frames", "locals", "exprs", "diags"],
@@ -95,7 +98,6 @@ interface ScopeTemplate {
 
 interface ScopeModule {
   templates?: ScopeTemplate[];
-  diags?: Array<{ code: string }>;
 }
 
 interface IrExprEntry {
@@ -112,6 +114,7 @@ interface ReduceInput {
   ir: IrDocument;
   linked: unknown;
   scope: ScopeModule;
+  diagnostics: readonly { code: string; source?: string }[];
 }
 
 /**
@@ -128,7 +131,7 @@ interface ReduceInput {
  *     globally per overlay appearance order (not per kind)
  * - "forOfHeader" uses exprTable.expressionType === "IsIterator"
  */
-export function reduceScopeToBindIntent({ ir, linked, scope }: ReduceInput): BindIntent {
+export function reduceScopeToBindIntent({ ir, linked, scope, diagnostics }: ReduceInput): BindIntent {
   const out: BindIntent = { frames: [], locals: [], exprs: [], diags: [] };
   const st = scope?.templates?.[0];
   if (!st) return out;
@@ -172,7 +175,8 @@ export function reduceScopeToBindIntent({ ir, linked, scope }: ReduceInput): Bin
   }
 
   // diags
-  for (const d of scope.diags ?? []) {
+  for (const d of diagnostics ?? []) {
+    if (d.source !== "bind") continue;
     out.diags.push({ code: d.code });
   }
 

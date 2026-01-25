@@ -3,6 +3,7 @@ import {
   prepareSemantics,
   stableHash,
   stableHashSemantics,
+  DiagnosticsRuntime,
   type ResourceCatalog,
   type ResourceGraph,
   type ResourceScopeId,
@@ -23,8 +24,10 @@ import type { TypeScriptProject } from "./project.js";
 export interface AureliaProjectIndexOptions {
   readonly ts: TypeScriptProject;
   readonly logger: Logger;
-  readonly resolution?: ResolutionConfig;
+  readonly resolution?: ResolutionConfigBase;
 }
+
+type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
 
 interface IndexSnapshot {
   readonly resolution: ResolutionResult;
@@ -49,7 +52,7 @@ export class AureliaProjectIndex {
   #logger: Logger;
   #baseSemantics: SemanticsWithCaches;
   #defaultScope: ResourceScopeId | null;
-  #resolutionConfig: ResolutionConfig;
+  #resolutionConfig: ResolutionConfigBase;
 
   #resolution: ResolutionResult;
   #semantics: SemanticsWithCaches;
@@ -118,7 +121,12 @@ export class AureliaProjectIndex {
 
   #computeSnapshot(): IndexSnapshot {
     const program = this.#ts.getProgram();
-    const result = resolve(program, this.#resolutionConfig, this.#logger);
+    const diagnostics = new DiagnosticsRuntime();
+    const result = resolve(
+      program,
+      { ...this.#resolutionConfig, diagnostics: diagnostics.forSource("resolution") },
+      this.#logger,
+    );
 
     const semantics: SemanticsWithCaches = {
       ...result.semantics,

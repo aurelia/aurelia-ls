@@ -64,7 +64,6 @@ import type {
   LinkedHydrateElement,
   LinkedHydrateAttribute,
   LinkedElementBindable,
-  SemDiagnostic,
   LinkedHydrateLetElement,
   LinkedSetProperty,
   TargetSem,
@@ -72,7 +71,6 @@ import type {
 } from "./types.js";
 import { normalizeAttrToProp, normalizePropLikeName } from "./name-normalizer.js";
 import {
-  pushDiag,
   resolveAttrBindable,
   resolveAttrResRef,
   resolveAttrTarget,
@@ -83,8 +81,9 @@ import {
   resolveElementResRef,
   resolvePropertyTarget,
   resolveIteratorAuxSpec,
-  resolveDiagnosticEmitter,
+  type ResolveDiagnosticEmitter,
 } from "./resolution-helpers.js";
+import { reportDiagnostic } from "../../diagnostics/report.js";
 import { resolveNodeSem } from "./node-semantics.js";
 import {
   type Diagnosed,
@@ -138,7 +137,7 @@ function isUnknownCustomElement(host: NodeSem, graph?: ResourceGraph | null): bo
 
 interface ResolverContext {
   readonly lookup: SemanticsLookup;
-  readonly diags: SemDiagnostic[];
+  readonly diag: ResolveDiagnosticEmitter;
   readonly graph?: ResourceGraph | null;
 }
 
@@ -161,6 +160,7 @@ export interface ResolveHostOptions {
   moduleResolver: ModuleResolver;
   /** Template file path for module resolution. */
   templateFilePath: string;
+  diagnostics: ResolveDiagnosticEmitter;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
@@ -181,12 +181,21 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptio
       "resolve.exprCount": ir.exprTable?.length ?? 0,
     });
 
-    const diags: SemDiagnostic[] = [];
+    let diagCount = 0;
+    let diagErrorCount = 0;
+    const countedEmitter: ResolveDiagnosticEmitter = {
+      emit: (code, input) => {
+        const diag = opts.diagnostics.emit(code, input);
+        diagCount += 1;
+        if (diag.severity === "error") diagErrorCount += 1;
+        return diag;
+      },
+    };
     const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
     const ctxGraph = opts && opts.graph !== undefined ? opts.graph : (sem.resourceGraph ?? null);
     const ctx: ResolverContext = {
       lookup: createSemanticsLookup(sem, lookupOpts),
-      diags,
+      diag: countedEmitter,
       graph: ctxGraph,
     };
 
@@ -228,15 +237,14 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptio
     // Record output metrics
       trace.setAttributes({
         [CompilerAttributes.INSTR_COUNT]: instrCount,
-        [CompilerAttributes.DIAG_COUNT]: diags.length,
-        [CompilerAttributes.DIAG_ERROR_COUNT]: diags.filter(d => d.severity === "error").length,
+        [CompilerAttributes.DIAG_COUNT]: diagCount,
+        [CompilerAttributes.DIAG_ERROR_COUNT]: diagErrorCount,
       });
 
     return {
       version: "aurelia-linked@1",
       templates,
       exprTable: ir.exprTable ?? [], // passthrough for Analysis/tooling
-      diags,
     };
   });
 }
@@ -293,13 +301,10 @@ function validateTemplateMeta(
     const specifier = imp.from.value;
     const resolvedPath = moduleResolver(specifier, templateFilePath);
     if (!resolvedPath) {
-      pushDiag(
-        ctx.diags,
-        "aurelia/unresolved-import",
-        `Cannot resolve module '${specifier}'`,
-        imp.from.loc,
-        { specifier },
-      );
+      reportDiagnostic(ctx.diag, "aurelia/unresolved-import", `Cannot resolve module '${specifier}'`, {
+        span: imp.from.loc,
+        data: { specifier },
+      });
     }
   }
 
@@ -308,13 +313,10 @@ function validateTemplateMeta(
     for (const name of alias.names) {
       const key = name.value.toLowerCase();
       if (aliasSeen.has(key)) {
-        pushDiag(
-          ctx.diags,
-          "aurelia/alias-conflict",
-          `Alias '${name.value}' is already declared.`,
-          name.loc,
-          { name: name.value },
-        );
+        reportDiagnostic(ctx.diag, "aurelia/alias-conflict", `Alias '${name.value}' is already declared.`, {
+          span: name.loc,
+          data: { name: name.value },
+        });
       } else {
         aliasSeen.set(key, name.loc);
       }
@@ -325,13 +327,10 @@ function validateTemplateMeta(
   for (const bindable of meta.bindables) {
     const key = bindable.name.value.toLowerCase();
     if (bindableSeen.has(key)) {
-      pushDiag(
-        ctx.diags,
-        "aurelia/bindable-decl-conflict",
-        `Bindable '${bindable.name.value}' is already declared.`,
-        bindable.name.loc,
-        { name: bindable.name.value },
-      );
+      reportDiagnostic(ctx.diag, "aurelia/bindable-decl-conflict", `Bindable '${bindable.name.value}' is already declared.`, {
+        span: bindable.name.loc,
+        data: { name: bindable.name.value },
+      });
     } else {
       bindableSeen.set(key, bindable.name.loc);
     }
@@ -357,13 +356,10 @@ function validateExpressionResources(
   // Check for $host assignments (invalid binding pattern)
   const hostAssignments = extractHostAssignments(exprTable);
   for (const ref of hostAssignments) {
-    pushDiag(
-      ctx.diags,
-      "aurelia/invalid-binding-pattern",
-      "Assignment to $host is not allowed.",
-      ref.span,
-      { aurCode: "AUR0106" },
-    );
+    reportDiagnostic(ctx.diag, "aurelia/invalid-binding-pattern", "Assignment to $host is not allowed.", {
+      span: ref.span,
+      data: { aurCode: "AUR0106" },
+    });
   }
 
   const refs = extractExprResources(exprTable);
@@ -389,26 +385,20 @@ function validateExpressionResources(
       if (ref.kind === "bindingBehavior") {
         // Check for duplicate
           if (seenBehaviors.has(ref.name)) {
-            pushDiag(
-              ctx.diags,
-              "aurelia/invalid-binding-pattern",
-              `Binding behavior '${ref.name}' applied more than once in the same expression.`,
-              ref.span,
-              { aurCode: "AUR0102" },
-            );
+            reportDiagnostic(ctx.diag, "aurelia/invalid-binding-pattern", `Binding behavior '${ref.name}' applied more than once in the same expression.`, {
+              span: ref.span,
+              data: { aurCode: "AUR0102" },
+            });
           } else {
             seenBehaviors.add(ref.name);
           }
 
           // Check if registered
           if (!ctx.lookup.sem.resources.bindingBehaviors[ref.name]) {
-            pushDiag(
-              ctx.diags,
-              "aurelia/unknown-behavior",
-              `Binding behavior '${ref.name}' not found.`,
-              ref.span,
-              { resourceKind: "binding-behavior", name: ref.name },
-            );
+            reportDiagnostic(ctx.diag, "aurelia/unknown-behavior", `Binding behavior '${ref.name}' not found.`, {
+              span: ref.span,
+              data: { resourceKind: "binding-behavior", name: ref.name },
+            });
           }
 
         // Track unique rate-limiters for conflict detection
@@ -418,13 +408,10 @@ function validateExpressionResources(
       } else {
         // valueConverter
         if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
-          pushDiag(
-            ctx.diags,
-            "aurelia/unknown-converter",
-            `Value converter '${ref.name}' not found.`,
-            ref.span,
-            { resourceKind: "value-converter", name: ref.name },
-          );
+          reportDiagnostic(ctx.diag, "aurelia/unknown-converter", `Value converter '${ref.name}' not found.`, {
+            span: ref.span,
+            data: { resourceKind: "value-converter", name: ref.name },
+          });
         }
       }
     }
@@ -436,13 +423,10 @@ function validateExpressionResources(
       // Report on the second rate-limiter (the conflict)
       const entries = [...seenRateLimiters.entries()];
       const conflicting = entries[1]!;
-      pushDiag(
-        ctx.diags,
-        "aurelia/invalid-binding-pattern",
-        `Conflicting rate-limit behaviors: ${names} cannot be used together on the same binding.`,
-        conflicting[1],
-        { aurCode: "AUR9996" },
-      );
+      reportDiagnostic(ctx.diag, "aurelia/invalid-binding-pattern", `Conflicting rate-limit behaviors: ${names} cannot be used together on the same binding.`, {
+        span: conflicting[1],
+        data: { aurCode: "AUR9996" },
+      });
     }
   }
 }
@@ -481,14 +465,20 @@ function validateBranchControllers(
               if (!prevRowControllers.includes(config.linksTo)) {
                 const aurCode = config.linksTo === "if" ? "AUR0810" : "AUR0815";
                 const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
-                pushDiag(ctx.diags, "aurelia/invalid-command-usage", msg, ins.loc, { aurCode });
+                reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+                  span: ins.loc,
+                  data: { aurCode },
+                });
               }
             } else if (relationship === "child") {
               // Child relationship: must be inside parent controller's def
               if (parentController !== config.linksTo) {
                 const aurCode = config.linksTo === "promise" ? "AUR0813" : "AUR0815";
                 const msg = `[${ins.res}] without parent [${config.linksTo}]`;
-                pushDiag(ctx.diags, "aurelia/invalid-command-usage", msg, ins.loc, { aurCode });
+                reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+                  span: ins.loc,
+                  data: { aurCode },
+                });
               }
             }
         }
@@ -544,14 +534,20 @@ function validateNestedIrRows(
             if (!prevRowControllers.includes(config.linksTo)) {
               const aurCode = config.linksTo === "if" ? "AUR0810" : "AUR0815";
               const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
-              pushDiag(ctx.diags, "aurelia/invalid-command-usage", msg, ins.loc, { aurCode });
+              reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+                span: ins.loc,
+                data: { aurCode },
+              });
             }
           } else if (relationship === "child") {
             // Child relationship: must be inside parent controller's def
             if (parentController !== config.linksTo) {
               const aurCode = config.linksTo === "promise" ? "AUR0813" : "AUR0815";
               const msg = `[${ins.res}] without parent [${config.linksTo}]`;
-              pushDiag(ctx.diags, "aurelia/invalid-command-usage", msg, ins.loc, { aurCode });
+              reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+                span: ins.loc,
+                data: { aurCode },
+              });
             }
           }
         }
@@ -564,13 +560,10 @@ function validateNestedIrRows(
           markerCounts.set(ins.res, count);
           if (count === 2) {
             // Emit diagnostic on the second occurrence
-            pushDiag(
-              ctx.diags,
-              "aurelia/invalid-command-usage",
-              `Multiple [${ins.res}] in same [${parentController}]`,
-              ins.loc,
-              { aurCode: "AUR0816" },
-            );
+            reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", `Multiple [${ins.res}] in same [${parentController}]`, {
+              span: ins.loc,
+              data: { aurCode: "AUR0816" },
+            });
           }
           // For 3+, we don't emit more diagnostics (one per parent is enough)
         }
@@ -617,9 +610,9 @@ function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
         const message = existsInGraph
           ? `Custom element '<${nodeSem.tag}>' is not registered in this scope.`
           : `Unknown custom element '<${nodeSem.tag}>'.`;
-        pushDiag(ctx.diags, "aurelia/unknown-element", message, n.loc, {
-          resourceKind: "custom-element",
-          name: nodeSem.tag,
+        reportDiagnostic(ctx.diag, "aurelia/unknown-element", message, {
+          span: n.loc,
+          data: { resourceKind: "custom-element", name: nodeSem.tag },
         });
       }
   }
@@ -640,8 +633,7 @@ function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
  * Helper to extract value from Diagnosed<T> and merge diagnostics into context.
  * This bridges Elm-style internal functions with the imperative boundary.
  */
-function merge<T>(diagnosed: Diagnosed<T>, ctx: ResolverContext): T {
-  ctx.diags.push(...diagnosed.diagnostics as SemDiagnostic[]);
+function merge<T>(diagnosed: Diagnosed<T>, _ctx: ResolverContext): T {
   return diagnosed.value;
 }
 
@@ -713,7 +705,7 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
           ? { ownerKind: "element" as const, ownerName: host.custom?.def.name ?? host.tag }
           : {}),
       };
-      const d = resolveDiagnosticEmitter.emit("aurelia/unknown-bindable", {
+      const d = ctx.diag.emit("aurelia/unknown-bindable", {
         message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
         span: ins.loc,
         data: { bindable },
@@ -754,7 +746,7 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
     if (isUnknownCustomElement(host, ctx.graph)) {
       return pure(linked);
     }
-    const d = resolveDiagnosticEmitter.emit("aurelia/unknown-attribute", {
+    const d = ctx.diag.emit("aurelia/unknown-attribute", {
       message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
       span: ins.loc,
       data: {
@@ -790,7 +782,7 @@ function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: Resolve
     loc: ins.loc ?? null,
   };
   if (eventType.kind === "unknown") {
-    const d = resolveDiagnosticEmitter.emit("aurelia/unknown-event", {
+    const d = ctx.diag.emit("aurelia/unknown-event", {
       message: `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`,
       span: ins.loc,
       data: {
@@ -859,7 +851,7 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
         ? { ownerKind: "element" as const, ownerName: host.custom?.def.name ?? host.tag }
         : {}),
     };
-    const d = resolveDiagnosticEmitter.emit("aurelia/unknown-bindable", {
+    const d = ctx.diag.emit("aurelia/unknown-bindable", {
       message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
       span: ins.loc,
       data: { bindable },
@@ -886,13 +878,10 @@ function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: Resol
   const res = resolveAttrResRef(ins.res, ctx.lookup);
   if (!res) {
     const name = ins.alias ?? ins.res;
-    pushDiag(
-      ctx.diags,
-      "aurelia/unknown-attribute",
-      `Custom attribute '${name}' is not registered in this scope.`,
-      ins.loc,
-      { resourceKind: "custom-attribute", name },
-    );
+    reportDiagnostic(ctx.diag, "aurelia/unknown-attribute", `Custom attribute '${name}' is not registered in this scope.`, {
+      span: ins.loc,
+      data: { resourceKind: "custom-attribute", name },
+    });
   }
   const props = ins.props.map((p) => linkAttributeBindable(p, res));
   return {
@@ -986,7 +975,7 @@ function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Diag
       const authoredMode: BindingMode = p.command === "bind" ? "toView" : "default";
         const spec = resolveIteratorAuxSpec(ctx.lookup, p.to, authoredMode);
         if (!spec) {
-          acc.push(resolveDiagnosticEmitter.emit("aurelia/invalid-command-usage", {
+          acc.push(ctx.diag.emit("aurelia/invalid-command-usage", {
             message: `Unknown repeat option '${p.to}'.`,
             span: p.loc,
           }));
@@ -1023,7 +1012,7 @@ function linkHydrateTemplateController(
   ctx: ResolverContext,
 ): LinkedHydrateTemplateController {
   // Resolve controller semantics (returns Diagnosed)
-  const ctrlSem = merge(resolveControllerSem(ctx.lookup, ins.res, ins.loc), ctx);
+  const ctrlSem = merge(resolveControllerSem(ctx.lookup, ins.res, ins.loc, ctx.diag), ctx);
 
   // Map controller props
   const props = ins.props.map((p) => {
@@ -1137,3 +1126,4 @@ function linkHydrateLetElement(ins: HydrateLetElementIR): LinkedHydrateLetElemen
 /* ============================================================================
  * Target / Controller resolution
  * ============================================================================ */
+

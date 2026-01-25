@@ -18,6 +18,7 @@ import {
   asDocumentUri,
   createDiagnosticEmitter,
   diagnosticsByCategory,
+  DiagnosticsRuntime,
   normalizePathForId,
   prepareSemantics,
   type CatalogConfidence,
@@ -155,6 +156,7 @@ export async function createResolutionContext(
     styleExtensions: options?.styleExtensions,
   });
 
+  const diagnostics = new DiagnosticsRuntime();
   const result = resolve(program, {
     baseSemantics: DEFAULT_SEMANTICS,
     trace,
@@ -166,6 +168,7 @@ export async function createResolutionContext(
     templateExtensions: options?.templateExtensions,
     styleExtensions: options?.styleExtensions,
     partialEvaluation: options?.partialEvaluation,
+    diagnostics: diagnostics.forSource("resolution"),
   }, resolutionLogger);
 
   const thirdPartyResources = await resolveThirdPartyResources(

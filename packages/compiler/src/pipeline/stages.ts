@@ -166,6 +166,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         attrParser,
         exprParser,
         catalog,
+        diagnostics: ctx.diag,
         trace: options.trace,
       });
     },
@@ -195,6 +196,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         ...(ctx.options.localImports ? { localImports: ctx.options.localImports } : {}),
         moduleResolver: ctx.options.moduleResolver,
         templateFilePath: ctx.options.templateFilePath,
+        diagnostics: ctx.diag,
         trace: ctx.options.trace,
       };
       return resolveHost(ir, scoped.sem, resolveOpts);
@@ -210,7 +212,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     },
     run(ctx) {
       const linked = ctx.require("20-resolve");
-      return bindScopes(linked, { trace: ctx.options.trace });
+      return bindScopes(linked, { trace: ctx.options.trace, diagnostics: ctx.diag });
     },
   });
 
@@ -231,7 +233,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       const vm = assertOption(ctx.options.vm, "vm");
       // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
-      return typecheck({ linked, scope, ir, rootVmType: rootVm, trace: ctx.options.trace });
+      return typecheck({ linked, scope, ir, rootVmType: rootVm, diagnostics: ctx.diag, trace: ctx.options.trace });
     },
   });
 

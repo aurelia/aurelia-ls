@@ -15,24 +15,28 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
+  DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
 import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 // Run full pipeline: markup → SerializedDefinition
 function compileTemplate(markup: string) {
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
     exprParser,
     file: "test.html",
     name: "test",
     catalog: DEFAULT_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
   const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("resolve-host"),
   });
-  const scope = bindScopes(linked);
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });
   return result.definition;

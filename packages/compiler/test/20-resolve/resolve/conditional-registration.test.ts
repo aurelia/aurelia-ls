@@ -1,9 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { normalizePathForId } from "@aurelia-ls/compiler";
-import { resolve, ssrDefines } from "@aurelia-ls/compiler";
+import { resolve, ssrDefines, DiagnosticsRuntime } from "@aurelia-ls/compiler";
 import { createProgramFromMemory } from "../_helpers/index.js";
 
 describe("Full Pipeline: conditional registration guards", () => {
+  type ResolveConfig = NonNullable<Parameters<typeof resolve>[1]>;
+  const resolveWithDiagnostics = (
+    program: Parameters<typeof resolve>[0],
+    config?: Omit<ResolveConfig, "diagnostics">,
+  ) => {
+    const diagnostics = new DiagnosticsRuntime();
+    return resolve(program, { ...config, diagnostics: diagnostics.forSource("resolution") });
+  };
+
   it("activates plugins when the guard resolves to true", () => {
     const { program } = createProgramFromMemory({
       "/src/main.ts": `
@@ -16,7 +25,7 @@ describe("Full Pipeline: conditional registration guards", () => {
       `,
     });
 
-    const result = resolve(program);
+    const result = resolveWithDiagnostics(program);
     expect(
       result.registration.activatedPlugins.some(
         (plugin) => plugin.exportName === "RouterConfiguration"
@@ -41,7 +50,7 @@ describe("Full Pipeline: conditional registration guards", () => {
       `,
     });
 
-    const result = resolve(program);
+    const result = resolveWithDiagnostics(program);
 
     expect(
       result.registration.activatedPlugins.some(
@@ -82,7 +91,7 @@ describe("Full Pipeline: conditional registration guards", () => {
       `,
     });
 
-    const result = resolve(program);
+    const result = resolveWithDiagnostics(program);
     const unresolved = result.diagnostics.find(
       (d) => d.code === "aurelia/gap/partial-eval" && d.data?.gapKind === "unresolved-import"
     );
@@ -114,7 +123,7 @@ describe("Full Pipeline: conditional registration guards", () => {
       `,
     });
 
-    const result = resolve(program);
+    const result = resolveWithDiagnostics(program);
 
     expect(
       result.registration.activatedPlugins.some(
@@ -142,7 +151,7 @@ describe("Full Pipeline: conditional registration guards", () => {
       `,
     });
 
-    const result = resolve(program);
+    const result = resolveWithDiagnostics(program);
 
     expect(
       result.registration.activatedPlugins.some(
@@ -163,7 +172,7 @@ describe("Full Pipeline: conditional registration guards", () => {
       `,
     });
 
-    const result = resolve(program, {
+    const result = resolveWithDiagnostics(program, {
       defines: ssrDefines(),
     });
 

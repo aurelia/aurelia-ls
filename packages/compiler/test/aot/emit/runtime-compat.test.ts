@@ -22,6 +22,7 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
+  DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   type SerializedDefinition,
   type SerializedInstruction,
@@ -48,6 +49,7 @@ interface CompileResult {
 
 function compileTemplate(markup: string): CompileResult {
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
 
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
@@ -55,12 +57,14 @@ function compileTemplate(markup: string): CompileResult {
     file: "test.html",
     name: "test",
     catalog: DEFAULT_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
   const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("resolve-host"),
   });
-  const scope = bindScopes(linked);
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
 
   // Emit both instructions AND template HTML (both are needed for runtime)

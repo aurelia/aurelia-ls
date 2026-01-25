@@ -26,6 +26,7 @@ import {
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS as SEM_DEFAULT,
   prepareSemantics,
+  DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   BINDING_MODE,
 } from "@aurelia-ls/compiler";
@@ -130,18 +131,21 @@ function createCompilerContext(vector: TestVector): CompilerContext {
 
 // Run full pipeline: markup → emit
 function runPipeline(markup: string, ctx: CompilerContext): unknown {
+  const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: ctx.attrParser,
     exprParser: ctx.exprParser,
     file: "test.html",
     name: "test",
     catalog: ctx.sem.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
   const linked = resolveHost(ir, ctx.sem, {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("resolve-host"),
   });
-  const scope = bindScopes(linked);
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });
   return result;

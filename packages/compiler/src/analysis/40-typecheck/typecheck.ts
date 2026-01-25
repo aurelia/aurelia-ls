@@ -20,7 +20,7 @@ import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js"
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
 import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
-import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
+import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
 import { exprIdMapGet, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { buildScopeLookup } from "../shared/scope-lookup.js";
 import { isStub } from "../../shared/diagnosed.js";
@@ -38,16 +38,12 @@ import { debug } from "../../shared/debug.js";
 export type { TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./config.js";
 export { resolveTypecheckConfig, DEFAULT_TYPECHECK_CONFIG, TYPECHECK_PRESETS, checkTypeCompatibility } from "./config.js";
 
-const typecheckDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, TypecheckDiagCode>(
-  diagnosticsCatalog,
-  { source: "typecheck" },
-);
+type TypecheckDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, TypecheckDiagCode>;
 
 /** Diagnostic codes for typecheck phase (catalog-derived). */
 export type TypecheckDiagCode = DiagnosticCodeForStage<"typecheck">;
 
 export type TypecheckDiagnostic = CompilerDiagnostic<TypecheckDiagCode, DiagnosticDataFor<TypecheckDiagCode>> & {
-  exprId?: ExprId;
   severity: TypecheckSeverity;
 };
 
@@ -55,7 +51,6 @@ export interface TypecheckModule {
   version: "aurelia-typecheck@1";
   inferredByExpr: ExprIdMap<string>;
   expectedByExpr: ExprIdMap<string>;
-  diags: TypecheckDiagnostic[];
   /** The resolved config used for this typecheck run */
   config: TypecheckConfig;
 }
@@ -65,6 +60,7 @@ export interface TypecheckOptions {
   scope: ScopeModule;
   ir: IrModule;
   rootVmType: string;
+  diagnostics: TypecheckDiagnosticEmitter;
   /** Optional typecheck configuration. Uses lenient defaults if not provided. */
   config?: Partial<TypecheckConfig>;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
@@ -92,7 +88,6 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
         version: "aurelia-typecheck@1",
         inferredByExpr: new Map(),
         expectedByExpr: new Map(),
-        diags: [],
         config,
       };
     }
@@ -114,7 +109,7 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
     // Build span index and collect diagnostics
     trace.event("typecheck.diagnostics.start");
     const exprSpanIndex = buildExprSpanIndex(opts.ir);
-    const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config);
+    const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config, opts.diagnostics);
     trace.event("typecheck.diagnostics.complete", { count: diags.length });
 
     // Extract just the types for the module output (without context)
@@ -132,7 +127,7 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
       [CompilerAttributes.DIAG_WARNING_COUNT]: diags.filter(d => d.severity === "warning").length,
     });
 
-    return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags, config };
+    return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, config };
   });
 }
 
@@ -187,6 +182,7 @@ function collectDiagnostics(
   inferred: ReadonlyExprIdMap<string>,
   spans: ReadonlyExprIdMap<SourceSpan>,
   config: TypecheckConfig,
+  emitter: TypecheckDiagnosticEmitter,
 ): TypecheckDiagnostic[] {
   const diags: TypecheckDiagnostic[] = [];
 
@@ -215,7 +211,7 @@ function collectDiagnostics(
     const span = exprIdMapGet(spans, id) ?? null;
     const message = result.reason ?? `Type mismatch: expected ${expectedInfo.type}, got ${actual}`;
 
-    const diag = typecheckDiagnosticEmitter.emit("aurelia/expr-type-mismatch", {
+    const diag = emitter.emit("aurelia/expr-type-mismatch", {
       message,
       span,
       severity: result.severity,
@@ -227,7 +223,6 @@ function collectDiagnostics(
 
     diags.push({
       ...diag,
-      exprId: id,
       severity: result.severity,
     });
   }

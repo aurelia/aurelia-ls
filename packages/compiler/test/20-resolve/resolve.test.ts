@@ -13,6 +13,7 @@ import {
   materializeResourcesForScope,
   createSemanticsLookup,
   prepareSemantics,
+  DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
 
 // Internal import for direct unit testing of resolveControllerSem
@@ -67,8 +68,11 @@ runVectorTests<ResolveExpect, ResolveIntent, ResolveDiff>({
   suiteName: "Resolve (20)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
-    return reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, ctx.sem, {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+    });
+    return reduceLinkedIntent(linked, ctx.diagnostics.all);
   },
   compare: compareResolveIntent,
   categories: ["items", "diags"],
@@ -78,6 +82,7 @@ runVectorTests<ResolveExpect, ResolveIntent, ResolveDiff>({
 
 describe("Resolve (20) - Resource Graph", () => {
   test("resource graph: local scope overlays root but not parent scopes", () => {
+    const diagnostics = new DiagnosticsRuntime();
     const baseSem = deepMergeSemantics(DEFAULT, {
       resources: {
         elements: {},
@@ -135,11 +140,17 @@ describe("Resolve (20) - Resource Graph", () => {
         file: "mem.html",
         name: "mem",
         catalog: sem.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       },
     );
 
-    const linked = resolveHost(ir, sem, { ...RESOLVE_OPTS, graph, scope: "child" });
-    const intent = reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, sem, {
+      ...RESOLVE_OPTS,
+      graph,
+      scope: "child",
+      diagnostics: diagnostics.forSource("resolve-host"),
+    });
+    const intent = reduceLinkedIntent(linked, diagnostics.all);
 
     const propTargets = intent.items
       .filter((i) => i.kind === "prop")
@@ -156,6 +167,7 @@ describe("Resolve (20) - Resource Graph", () => {
   });
 
   test("resource graph: local overrides root when names conflict", () => {
+    const diagnostics = new DiagnosticsRuntime();
     const baseSem = deepMergeSemantics(DEFAULT, {
       resources: {
         elements: {},
@@ -202,10 +214,16 @@ describe("Resolve (20) - Resource Graph", () => {
       file: "mem.html",
       name: "mem",
       catalog: sem.catalog,
+      diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, sem, { ...RESOLVE_OPTS, graph, scope: "feature" });
-    const intent = reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, sem, {
+      ...RESOLVE_OPTS,
+      graph,
+      scope: "feature",
+      diagnostics: diagnostics.forSource("resolve-host"),
+    });
+    const intent = reduceLinkedIntent(linked, diagnostics.all);
 
     const propTargets = intent.items
       .filter((i) => i.kind === "prop")
@@ -224,7 +242,8 @@ describe("Resolve (20) - Resource Graph", () => {
 describe("Resolve (20) - Controller Diagnostics", () => {
   test("resolveControllerSem returns aurelia/unknown-controller for unknown controller", () => {
     const lookup = createSemanticsLookup(DEFAULT);
-    const result = resolveControllerSem(lookup, "unknown-tc", null);
+    const diagnostics = new DiagnosticsRuntime();
+    const result = resolveControllerSem(lookup, "unknown-tc", null, diagnostics.forSource("resolve-host"));
 
     // Should have diagnostic
     expect(result.diagnostics.length > 0).toBe(true);
@@ -239,7 +258,8 @@ describe("Resolve (20) - Controller Diagnostics", () => {
 
   test("resolveControllerSem returns success for built-in controller", () => {
     const lookup = createSemanticsLookup(DEFAULT);
-    const result = resolveControllerSem(lookup, "if", null);
+    const diagnostics = new DiagnosticsRuntime();
+    const result = resolveControllerSem(lookup, "if", null, diagnostics.forSource("resolve-host"));
 
     // Should not have diagnostic
     expect(result.diagnostics.length).toBe(0);
@@ -266,7 +286,8 @@ describe("Resolve (20) - Controller Diagnostics", () => {
     });
 
     const lookup = createSemanticsLookup(customSem);
-    const result = resolveControllerSem(lookup, "my-tc", null);
+    const diagnostics = new DiagnosticsRuntime();
+    const result = resolveControllerSem(lookup, "my-tc", null, diagnostics.forSource("resolve-host"));
 
     // Should not have diagnostic
     expect(result.diagnostics.length).toBe(0);
@@ -282,7 +303,6 @@ describe("Resolve (20) - Controller Diagnostics", () => {
 
 interface LinkedModule {
   templates?: LinkedTemplate[];
-  diags?: Array<{ code: string }>;
 }
 
 interface LinkedTemplate {
@@ -306,9 +326,14 @@ interface LinkedInstruction {
   def?: LinkedTemplate;
 }
 
-function reduceLinkedIntent(linked: LinkedModule): ResolveIntent {
+interface CompilerDiag {
+  code: string;
+  source?: string;
+}
+
+function reduceLinkedIntent(linked: LinkedModule, diagnostics: readonly CompilerDiag[]): ResolveIntent {
   const items: ResolveItem[] = [];
-  const diags = (linked.diags ?? []).map((d) => d.code);
+  const diags = diagnostics.filter((d) => d.source === "resolve-host").map((d) => d.code);
 
   const visited = new Set<LinkedTemplate>();
   const visit = (template: LinkedTemplate): void => {
@@ -526,6 +551,7 @@ function compareResolveIntent(actual: ResolveIntent, expected: ResolveExpect): R
 
 describe("Resolve (20) - Local Imports", () => {
   test("localImports: element from template import resolves correctly", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // Simulate: <import from="./my-widget">
     // Template: <my-widget foo.bind="x"></my-widget>
     const localImports = [
@@ -541,10 +567,15 @@ describe("Resolve (20) - Local Imports", () => {
       file: "mem.html",
       name: "mem",
       catalog: DEFAULT.catalog,
+      diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports });
-    const intent = reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, DEFAULT, {
+      ...RESOLVE_OPTS,
+      localImports,
+      diagnostics: diagnostics.forSource("resolve-host"),
+    });
+    const intent = reduceLinkedIntent(linked, diagnostics.all);
 
     // Bindable "foo" should resolve as bindable (proves element was recognized)
     const propItems = intent.items.filter((i) => i.kind === "prop");
@@ -558,6 +589,7 @@ describe("Resolve (20) - Local Imports", () => {
   });
 
   test("localImports: element with alias resolves by alias", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // Simulate: <import from="./long-component-name" as="short">
     // Template: <short bar.bind="y"></short>
     const localImports = [
@@ -574,10 +606,15 @@ describe("Resolve (20) - Local Imports", () => {
       file: "mem.html",
       name: "mem",
       catalog: DEFAULT.catalog,
+      diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports });
-    const intent = reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, DEFAULT, {
+      ...RESOLVE_OPTS,
+      localImports,
+      diagnostics: diagnostics.forSource("resolve-host"),
+    });
+    const intent = reduceLinkedIntent(linked, diagnostics.all);
 
     // Bindable "bar" should resolve as bindable (proves element was recognized via alias)
     const propItems = intent.items.filter((i) => i.kind === "prop");
@@ -591,6 +628,7 @@ describe("Resolve (20) - Local Imports", () => {
   });
 
   test("localImports: does not override existing global registration", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // Setup semantics with global "au-compose" element
     const baseSem = deepMergeSemantics(DEFAULT, {
       resources: {
@@ -619,10 +657,15 @@ describe("Resolve (20) - Local Imports", () => {
       file: "mem.html",
       name: "mem",
       catalog: sem.catalog,
+      diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, sem, { ...RESOLVE_OPTS, localImports });
-    const intent = reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, sem, {
+      ...RESOLVE_OPTS,
+      localImports,
+      diagnostics: diagnostics.forSource("resolve-host"),
+    });
+    const intent = reduceLinkedIntent(linked, diagnostics.all);
 
     // Global registration should win, so globalProp resolves as bindable
     const propItems = intent.items.filter((i) => i.kind === "prop");
@@ -632,6 +675,7 @@ describe("Resolve (20) - Local Imports", () => {
   });
 
   test("localImports: multiple imports resolve correctly", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // Simulate: <import from="./nav-bar"> <import from="./footer">
     const localImports = [
       { name: "nav-bar", bindables: { items: { name: "items" } } },
@@ -646,11 +690,16 @@ describe("Resolve (20) - Local Imports", () => {
         file: "mem.html",
         name: "mem",
         catalog: DEFAULT.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       }
     );
 
-    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports });
-    const intent = reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, DEFAULT, {
+      ...RESOLVE_OPTS,
+      localImports,
+      diagnostics: diagnostics.forSource("resolve-host"),
+    });
+    const intent = reduceLinkedIntent(linked, diagnostics.all);
 
     // Both bindables should resolve as bindable (proves both elements were recognized)
     const propItems = intent.items.filter((i) => i.kind === "prop");
@@ -667,6 +716,7 @@ describe("Resolve (20) - Local Imports", () => {
   });
 
   test("localImports: unknown element without import produces aurelia/unknown-element", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // No local imports - unknown element should produce diagnostic
     const ir = lowerDocument(`<unknown-widget prop.bind="x"></unknown-widget>`, {
       attrParser: DEFAULT_SYNTAX,
@@ -674,10 +724,15 @@ describe("Resolve (20) - Local Imports", () => {
       file: "mem.html",
       name: "mem",
       catalog: DEFAULT.catalog,
+      diagnostics: diagnostics.forSource("lower"),
     });
 
-    const linked = resolveHost(ir, DEFAULT, { ...RESOLVE_OPTS, localImports: [] });
-    const intent = reduceLinkedIntent(linked);
+    const linked = resolveHost(ir, DEFAULT, {
+      ...RESOLVE_OPTS,
+      localImports: [],
+      diagnostics: diagnostics.forSource("resolve-host"),
+    });
+    const intent = reduceLinkedIntent(linked, diagnostics.all);
 
     // Property should resolve as "unknown" (element not recognized)
     const propItems = intent.items.filter((i) => i.kind === "prop");

@@ -135,7 +135,7 @@ export function compileTemplate(
     query: overlayArtifacts.query,
     exprTable: overlayArtifacts.exprTable,
     exprSpans: overlayArtifacts.exprSpans,
-    diagnostics: buildDiagnostics(ir, linked, scope, typecheck),
+    diagnostics: buildDiagnostics(session.diagnostics.all),
     meta: collectStageMeta(session, [
       "10-lower",
       "20-resolve",
@@ -153,24 +153,14 @@ export function compileTemplate(
  * ------------------------ */
 
 function buildDiagnostics(
-  ir: StageOutputs["10-lower"],
-  linked: StageOutputs["20-resolve"],
-  scope: StageOutputs["30-bind"],
-  typecheck: StageOutputs["40-typecheck"],
+  diagnostics: readonly CompilerDiagnostic[],
 ): TemplateDiagnostics {
-  const flat = [
-    ...(ir?.diags ?? []),
-    ...(linked?.diags ?? []),
-    ...(scope?.diags ?? []),
-    ...(typecheck?.diags ?? []),
-  ];
-
   const bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>> = {};
-  for (const d of flat) {
+  for (const d of diagnostics) {
     if (!bySource[d.source]) bySource[d.source] = [];
     bySource[d.source]!.push(d);
   }
-  return { all: flat, bySource };
+  return { all: [...diagnostics], bySource };
 }
 
 function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMetaSnapshot {

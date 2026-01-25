@@ -42,15 +42,16 @@ import type {
 } from "../20-resolve/types.js";
 
 import type {
-  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagnostic, ScopeDiagCode, OverlayBase, FrameOrigin,
+  ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagCode, OverlayBase, FrameOrigin,
 } from "../../model/symbols.js";
 
 import type { ControllerConfig } from "../../language/registry.js";
 
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";
-import { diagnosticsCatalog, type DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
-import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
+import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
+import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
+import { reportDiagnostic } from "../../diagnostics/report.js";
 import { exprIdsOf, collectBindingNames, findBadInPattern } from "../../shared/expr-utils.js";
 import { normalizeSpanMaybe } from "../../model/span.js";
 import type { Origin, Provenance } from "../../model/origin.js";
@@ -60,10 +61,7 @@ import { debug } from "../../shared/debug.js";
 
 function assertUnreachable(_x: never): never { throw new Error("unreachable"); }
 
-const bindDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, ScopeDiagCode>(
-  diagnosticsCatalog,
-  { source: "bind" },
-);
+type BindDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, ScopeDiagCode>;
 
 /* =============================================================================
  * Options
@@ -72,6 +70,7 @@ const bindDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog,
 export interface BindScopesOptions {
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
+  diagnostics: BindDiagnosticEmitter;
 }
 
 /* =============================================================================
@@ -80,6 +79,10 @@ export interface BindScopesOptions {
 
 export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptions): ScopeModule {
   const trace = opts?.trace ?? NOOP_TRACE;
+  const diagEmitter = opts?.diagnostics;
+  if (!diagEmitter) {
+    throw new Error("bindScopes requires diagnostics emitter; missing emitter is a wiring error.");
+  }
 
   return trace.span("bind.scopes", () => {
     trace.setAttributes({
@@ -88,7 +91,14 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
       "bind.exprCount": linked.exprTable?.length ?? 0,
     });
 
-    const diags: ScopeDiagnostic[] = [];
+    let diagCount = 0;
+    const emitter: BindDiagnosticEmitter = {
+      emit: (code, input) => {
+        const diag = diagEmitter.emit(code, input);
+        diagCount += 1;
+        return diag;
+      },
+    };
     const templates: ScopeTemplate[] = [];
 
     // Index ForOf entries once
@@ -113,7 +123,7 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
     trace.event("bind.buildScopes.start");
     const roots: LinkedTemplate[] = linked.templates.length > 0 ? [linked.templates[0]!] : [];
     for (const t of roots) {
-      templates.push(buildTemplateScopes(t, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs));
+      templates.push(buildTemplateScopes(t, emitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs));
     }
     trace.event("bind.buildScopes.complete");
 
@@ -134,10 +144,10 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
       "bind.frameCount": frameCount,
       "bind.symbolCount": symbolCount,
       "bind.exprMappingCount": exprMappingCount,
-      [CompilerAttributes.DIAG_COUNT]: diags.length,
+      [CompilerAttributes.DIAG_COUNT]: diagCount,
     });
 
-    return { version: "aurelia-scope@1", templates, diags };
+    return { version: "aurelia-scope@1", templates };
   });
 }
 
@@ -147,7 +157,7 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
 
 function buildTemplateScopes(
   t: LinkedTemplate,
-  diags: ScopeDiagnostic[],
+  diagEmitter: BindDiagnosticEmitter,
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
   exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
@@ -170,7 +180,7 @@ function buildTemplateScopes(
   });
 
   // Walk rows at the root template
-  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs, /*allowLets*/ true);
+  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diagEmitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs, /*allowLets*/ true);
 
   return { name: t.name!, frames, root: rootId, exprToFrame };
 }
@@ -181,14 +191,14 @@ function walkRows(
   frames: ScopeFrame[],
   frameIds: FrameIdAllocator,
   exprToFrame: ExprIdMap<FrameId>,
-  diags: ScopeDiagnostic[],
+  diagEmitter: BindDiagnosticEmitter,
   domToLinked: WeakMap<TemplateNode, LinkedTemplate>,
   forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
   exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
   reportedBadExprs: Set<ExprId>,
   allowLets: boolean,
 ): void {
-  const badCtx: BadExprContext = { exprIndex, reported: reportedBadExprs, diags };
+  const badCtx: BadExprContext = { exprIndex, reported: reportedBadExprs, emitter: diagEmitter };
   for (const r of rows) {
     for (const ins of r.instructions) {
       switch (ins.kind) {
@@ -229,7 +239,7 @@ function walkRows(
         case "hydrateLetElement":
           // Only materialize <let> names into the env when the current traversal context allows it.
           // Reuse-scoped nested templates (if/switch/portal) should not leak their <let> names to the whole frame.
-          materializeLetSymbols(ins, currentFrame, frames, exprToFrame, diags, badCtx, /*publishEnv*/ allowLets);
+          materializeLetSymbols(ins, currentFrame, frames, exprToFrame, diagEmitter, badCtx, /*publishEnv*/ allowLets);
           break;
 
         // ---- Standalone iteratorBinding should not appear (repeat packs it as a prop) ----
@@ -287,7 +297,7 @@ function walkRows(
 
           populateControllerFrame(
             ins, config, controllerName, nextFrame, frames, frameIds,
-            forOfIndex, diags
+            forOfIndex, diagEmitter
           );
 
           // 4) Recurse into nested template view using the chosen frame
@@ -297,7 +307,7 @@ function walkRows(
             // - overlay scope (repeat/with/promise): their <let> belong to that overlay frame
             // - reuse scope (if/switch/portal): their <let> must not leak to the whole frame
             const childAllowsLets = ins.controller.config.scope === "overlay";
-            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diags, domToLinked, forOfIndex, exprIndex, reportedBadExprs, childAllowsLets);
+            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diagEmitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs, childAllowsLets);
           }
           break;
         }
@@ -313,7 +323,7 @@ function walkRows(
                   frames,
                   frameIds,
                   exprToFrame,
-                  diags,
+                  diagEmitter,
                   domToLinked,
                   forOfIndex,
                   exprIndex,
@@ -388,7 +398,7 @@ function populateControllerFrame(
   frames: ScopeFrame[],
   _frameIds: FrameIdAllocator,
   forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
-  diags: ScopeDiagnostic[],
+  diagEmitter: BindDiagnosticEmitter,
 ): void {
   // === Stub Propagation ===
   // If the controller config is a stub (from aurelia/unknown-controller in resolve),
@@ -421,12 +431,16 @@ function populateControllerFrame(
     const forOfAst = forOfIndex.get(forOfAstId);
     if (!forOfAst) return;
     if (forOfAst.$kind === "BadExpression") {
-      addDiag(diags, "aurelia/invalid-binding-pattern", forOfAst.message ?? "Invalid or unsupported iterator header.", forOfAst.span);
+      reportDiagnostic(diagEmitter, "aurelia/invalid-binding-pattern", forOfAst.message ?? "Invalid or unsupported iterator header.", {
+        span: forOfAst.span,
+      });
       return;
     }
     const badPattern = findBadInPattern(forOfAst.declaration);
     if (badPattern) {
-      addDiag(diags, "aurelia/invalid-binding-pattern", badPattern.message ?? "Invalid or unsupported iterator header.", badPattern.span);
+      reportDiagnostic(diagEmitter, "aurelia/invalid-binding-pattern", badPattern.message ?? "Invalid or unsupported iterator header.", {
+        span: badPattern.span,
+      });
       return;
     }
 
@@ -436,12 +450,12 @@ function populateControllerFrame(
       targetFrame,
       frames,
       names.map(n => ({ kind: "iteratorLocal" as const, name: n, span: iter.forOf.loc ?? null })),
-      diags,
+      diagEmitter,
     );
 
     // Add contextuals from config ($index, $first, etc.)
     for (const c of config.injects?.contextuals ?? []) {
-      addUniqueSymbols(targetFrame, frames, [{ kind: "contextual", name: c, span: iter.forOf.loc ?? null }], diags);
+      addUniqueSymbols(targetFrame, frames, [{ kind: "contextual", name: c, span: iter.forOf.loc ?? null }], diagEmitter);
     }
     return;
   }
@@ -473,7 +487,7 @@ function populateControllerFrame(
         name: aliasName,
         aliasKind: branchKind,
         span,
-      }], diags);
+      }], diagEmitter);
     }
     return;
   }
@@ -562,13 +576,20 @@ function setFrameOrigin(targetFrame: FrameId, frames: ScopeFrame[], origin: Fram
   frames[targetFrame] = nextFrame;
 }
 
-function addUniqueSymbols(targetFrame: FrameId, frames: ScopeFrame[], symbols: ScopeSymbol[], diags: ScopeDiagnostic[]): void {
+function addUniqueSymbols(
+  targetFrame: FrameId,
+  frames: ScopeFrame[],
+  symbols: ScopeSymbol[],
+  diagEmitter: BindDiagnosticEmitter,
+): void {
   if (symbols.length === 0) return;
   const f = frames[targetFrame]!;
   const existing = new Set(f.symbols.map(s => s.name));
   for (const s of symbols) {
     if (existing.has(s.name)) {
-      addDiag(diags, "aurelia/invalid-binding-pattern", `Duplicate local '${s.name}' in the same scope.`, s.span ?? null);
+      reportDiagnostic(diagEmitter, "aurelia/invalid-binding-pattern", `Duplicate local '${s.name}' in the same scope.`, {
+        span: s.span ?? null,
+      });
       continue;
     }
     f.symbols.push(s);
@@ -585,7 +606,7 @@ function materializeLetSymbols(
   currentFrame: FrameId,
   frames: ScopeFrame[],
   exprToFrame: ExprIdMap<FrameId>,
-  diags: ScopeDiagnostic[],
+  diagEmitter: BindDiagnosticEmitter,
   badCtx: BadExprContext,
   publishEnv: boolean,
 ): void {
@@ -614,7 +635,7 @@ function materializeLetSymbols(
       name: lb.to,
       span: normalizeSpanMaybe(lb.loc ?? null),
     }));
-    addUniqueSymbols(currentFrame, frames, symbols, diags);
+    addUniqueSymbols(currentFrame, frames, symbols, diagEmitter);
   }
 }
 
@@ -668,7 +689,7 @@ function isInterpolation(src: BindingSourceIR): src is Extract<BindingSourceIR, 
 type BadExprContext = {
   exprIndex: ReadonlyExprIdMap<ExprTableEntry>;
   reported: Set<ExprId>;
-  diags: ScopeDiagnostic[];
+  emitter: BindDiagnosticEmitter;
 };
 
 function reportBadExpression(ref: ExprRef, ctx: BadExprContext): void {
@@ -684,7 +705,11 @@ function reportBadExpression(ref: ExprRef, ctx: BadExprContext): void {
   const message = bad.message ?? "Invalid or unsupported expression.";
   const parseOrigin = unwrapOrigin(bad.origin ?? null);
   const bindOrigin = preferOrigin(parseOrigin, provenanceFromSpan("bind", span ?? ref.loc ?? null, "invalid expression surfaced during bind").origin ?? null);
-  addDiag(ctx.diags, "aurelia/expr-parse-error", message, span ?? ref.loc ?? null, bindOrigin, { recovery: true });
+  reportDiagnostic(ctx.emitter, "aurelia/expr-parse-error", message, {
+    span: span ?? ref.loc ?? null,
+    origin: bindOrigin,
+    data: { recovery: true },
+  });
 }
 
 /* =============================================================================
@@ -712,20 +737,4 @@ function badExpressionSpan(ast: BadExpression, ref: ExprRef): SourceSpan | null 
 function unwrapOrigin(source: Origin | Provenance | null): Origin | null {
   if (!source) return null;
   return (source as Origin).kind ? (source as Origin) : (source as Provenance).origin ?? null;
-}
-
-function addDiag<Code extends ScopeDiagCode>(
-  diags: ScopeDiagnostic[],
-  code: Code,
-  message: string,
-  span?: SourceSpan | null,
-  origin?: Origin | null,
-  data?: DiagnosticDataFor<Code>,
-): void {
-  diags.push(bindDiagnosticEmitter.emit(code, {
-    message,
-    span,
-    origin: origin ?? null,
-    data,
-  }));
 }

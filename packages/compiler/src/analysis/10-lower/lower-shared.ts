@@ -8,17 +8,19 @@ import type {
   InterpIR,
   TemplateIR,
   IrDiagCode,
-  IrDiagnostic,
   SourceSpan,
 } from "../../model/ir.js";
 import { diagnosticsCatalog, type DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
-import { createDiagnosticEmitter } from "../../diagnostics/emitter.js";
+import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
+import { reportDiagnostic } from "../../diagnostics/report.js";
 import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/expression-parser.js";
 import { extractInterpolationSegments } from "../../parsing/expression-parser.js";
 import { deterministicStringId } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";
 export { DomIdAllocator } from "../../model/identity.js";
+
+export type LowerDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, IrDiagCode>;
 
 export type P5Node = DefaultTreeAdapterMap["childNode"];
 export type P5Element = DefaultTreeAdapterMap["element"];
@@ -47,26 +49,28 @@ export function isComment(n: P5Node): n is DefaultTreeAdapterMap["commentNode"] 
 
 export class ExprTable {
   public entries: ExprTableEntry[] = [];
-  public diags: IrDiagnostic[] = [];
   private readonly seen = new Map<string, ExprId>();
+  private readonly emitter: LowerDiagnosticEmitter;
 
   public constructor(
     private readonly parser: IExpressionParser,
     public readonly source: SourceFile,
     public readonly sourceText: string,
-  ) {}
+    emitter: LowerDiagnosticEmitter,
+  ) {
+    this.emitter = emitter;
+  }
 
-  public addDiag<Code extends IrDiagCode>(
+  public reportDiagnostic<Code extends IrDiagCode>(
     code: Code,
     message: string,
     loc: P5Loc | null,
     data?: DiagnosticDataFor<Code>,
   ): void {
-    this.diags.push(lowerDiagnosticEmitter.emit(code, {
-      message,
+    reportDiagnostic(this.emitter, code, message, {
       span: toSpan(loc, this.source),
       data,
-    }));
+    });
   }
 
   public add(code: string, loc: P5Loc | null, expressionType: ExpressionType): ExprRef {
@@ -87,11 +91,6 @@ export class ExprTable {
     return { id, code, loc: toSpan(loc, this.source) };
   }
 }
-
-const lowerDiagnosticEmitter = createDiagnosticEmitter<typeof diagnosticsCatalog, IrDiagCode>(
-  diagnosticsCatalog,
-  { source: "lower" },
-);
 
 /**
  * Get the binding mode for a command.

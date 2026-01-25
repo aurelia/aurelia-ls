@@ -95,8 +95,11 @@ runVectorTests<AotPlanExpect, AotPlanIntent, AotPlanDiff>({
   suiteName: "AOT Plan (aot:plan)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
-    const scope = bindScopes(linked);
+    const linked = resolveHost(ir, ctx.sem, {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+    });
+    const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const plan = planAot(linked, scope, { templateFilePath: "test.html" });
     return reducePlanIntent(plan);
   },

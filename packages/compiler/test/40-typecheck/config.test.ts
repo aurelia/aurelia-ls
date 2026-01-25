@@ -13,6 +13,7 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
+  DiagnosticsRuntime,
   checkTypeCompatibility,
   resolveTypecheckConfig,
   DEFAULT_TYPECHECK_CONFIG,
@@ -336,18 +337,20 @@ describe("cascade suppression", () => {
   };
 
   test("no type diagnostic when target.kind === 'unknown' (resolve failed)", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // Bind to a property that doesn't exist on the element
     // This will produce a resolve error (aurelia/unknown-bindable) but should NOT produce a type error
     const markup = '<div nonexistent.bind="42"></div>';
 
-    const ir = lowerDocument(markup, opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
-    const scope = bindScopes(linked);
+    const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
+    const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
       scope,
       ir,
       rootVmType: "RootVm",
+      diagnostics: diagnostics.forSource("typecheck"),
       config: { preset: "standard" },
     });
 
@@ -357,24 +360,27 @@ describe("cascade suppression", () => {
     expect((ins as { target?: { kind?: string } })?.target?.kind).toBe("unknown");
 
     // No type diagnostics should be produced (cascade suppression)
-    expect(tc.diags).toHaveLength(0);
+    const tcDiags = diagnostics.all.filter((d) => d.source === "typecheck");
+    expect(tcDiags).toHaveLength(0);
 
     // The expression should NOT be in expectedByExpr (skipped due to unknown target)
     expect(tc.expectedByExpr.size).toBe(0);
   });
 
   test("type diagnostic still produced for valid targets", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // Bind a string to a boolean property - should produce type error
     const markup = '<input disabled.bind="\'yes\'">';
 
-    const ir = lowerDocument(markup, opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
-    const scope = bindScopes(linked);
+    const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
+    const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
       scope,
       ir,
       rootVmType: "RootVm",
+      diagnostics: diagnostics.forSource("typecheck"),
       config: { preset: "standard" },
     });
 
@@ -383,9 +389,10 @@ describe("cascade suppression", () => {
     expect((ins as { target?: { kind?: string } })?.target?.kind).not.toBe("unknown");
 
     // Should produce a type mismatch diagnostic
-    expect(tc.diags.length).toBeGreaterThan(0);
-    expect(tc.diags[0]?.code).toBe("aurelia/expr-type-mismatch");
-    expect(tc.diags[0]?.severity).toBe("error");
+    const tcDiags = diagnostics.all.filter((d) => d.source === "typecheck");
+    expect(tcDiags.length).toBeGreaterThan(0);
+    expect(tcDiags[0]?.code).toBe("aurelia/expr-type-mismatch");
+    expect(tcDiags[0]?.severity).toBe("error");
   });
 });
 
@@ -409,8 +416,9 @@ describe("style binding syntax", () => {
   };
 
   test("width.style produces stylePropertyBinding with target.kind=style", () => {
-    const ir = lowerDocument('<div width.style="100"></div>', opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
+    const diagnostics = new DiagnosticsRuntime();
+    const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
     const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
 
     expect(ins?.kind).toBe("stylePropertyBinding");
@@ -418,10 +426,18 @@ describe("style binding syntax", () => {
   });
 
   test("width.style expects type string (style.property context)", () => {
-    const ir = lowerDocument('<div width.style="100"></div>', opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS, RESOLVE_OPTS);
-    const scope = bindScopes(linked);
-    const tc = typecheck({ linked, scope, ir, rootVmType: "RootVm", config: { preset: "standard" } });
+    const diagnostics = new DiagnosticsRuntime();
+    const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = resolveHost(ir, DEFAULT_SEMANTICS, { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("resolve-host") });
+    const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
+    const tc = typecheck({
+      linked,
+      scope,
+      ir,
+      rootVmType: "RootVm",
+      diagnostics: diagnostics.forSource("typecheck"),
+      config: { preset: "standard" },
+    });
 
     const expectedTypes = [...(tc.expectedByExpr?.values() ?? [])];
     expect(expectedTypes).toContain("string");
@@ -429,7 +445,8 @@ describe("style binding syntax", () => {
 
   test("style.width.bind is INVALID - produces propertyBinding not stylePropertyBinding", () => {
     // Documents that style.width.bind does NOT work as expected
-    const ir = lowerDocument('<div style.width.bind="100"></div>', opts);
+    const diagnostics = new DiagnosticsRuntime();
+    const ir = lowerDocument('<div style.width.bind="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
     const ins = ir.templates?.[0]?.rows?.[0]?.instructions?.[0];
 
     // Parses as: target="style.width", command="bind" → propertyBinding

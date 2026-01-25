@@ -6,7 +6,7 @@ import type { ResourceCatalog } from "../../language/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
-import { ExprTable, DomIdAllocator, type P5Node } from "./lower-shared.js";
+import { ExprTable, DomIdAllocator, type P5Node, type LowerDiagnosticEmitter } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
@@ -19,6 +19,7 @@ export interface BuildIrOptions {
   attrParser: AttributeParser;
   exprParser: IExpressionParser;
   catalog: ResourceCatalog;
+  diagnostics: LowerDiagnosticEmitter;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
@@ -40,7 +41,15 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const catalog = opts.catalog;
     const source = resolveSourceFile(opts.file ?? opts.name ?? "");
     const ids = new DomIdAllocator();
-    const table = new ExprTable(opts.exprParser, source, html);
+    let diagCount = 0;
+    const emitter: LowerDiagnosticEmitter = {
+      emit: (code, input) => {
+        const diag = opts.diagnostics.emit(code, input);
+        diagCount += 1;
+        return diag;
+      },
+    };
+    const table = new ExprTable(opts.exprParser, source, html, emitter);
     const nestedTemplates: TemplateIR[] = [];
     const templateIds = new TemplateIdAllocator();
     const rootTemplateId = templateIds.allocate();
@@ -100,11 +109,6 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
         : undefined,
     };
 
-    // Include diagnostics if any were collected
-    if (table.diags.length > 0) {
-      result.diags = table.diags;
-    }
-
     // Record output metrics
     trace.setAttributes({
       [CompilerAttributes.NODE_COUNT]: countNodes(domRoot),
@@ -113,7 +117,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
       "lower.templateCount": result.templates.length,
       "lower.metaImports": templateMeta.imports.length,
       "lower.metaBindables": templateMeta.bindables.length,
-      [CompilerAttributes.DIAG_COUNT]: result.diags?.length ?? 0,
+      [CompilerAttributes.DIAG_COUNT]: diagCount,
     });
 
     return result;

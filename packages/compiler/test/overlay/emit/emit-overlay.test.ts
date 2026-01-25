@@ -30,8 +30,11 @@ runVectorTests<EmitExpect, EmitIntent, EmitDiff>({
   suiteName: "Emit Overlay (60)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem, RESOLVE_OPTS);
-    const scope = bindScopes(linked);
+    const linked = resolveHost(ir, ctx.sem, {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+    });
+    const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const plan = planOverlay(linked, scope, { isJs: false, vm: mockVm() });
     const emit = emitOverlay(plan, { isJs: false });
     return reduceEmitIntent(emit, v.expect);

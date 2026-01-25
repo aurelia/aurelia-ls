@@ -5,6 +5,7 @@ import {
   DEFAULT_SEMANTICS,
   DEFAULT_SYNTAX,
   getExpressionParser,
+  DiagnosticsRuntime,
   toSourceFileId,
   prepareSemantics,
   type CustomElementDef,
@@ -16,22 +17,26 @@ import {
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
 
 function lower(html: string) {
+  const diagnostics = new DiagnosticsRuntime();
   return lowerDocument(html, {
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
     catalog: DEFAULT_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
 }
 
 function lowerWithSemantics(html: string, sem: typeof DEFAULT_SEMANTICS) {
+  const diagnostics = new DiagnosticsRuntime();
   return lowerDocument(html, {
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
     catalog: sem.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
 }
 

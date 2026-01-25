@@ -25,6 +25,7 @@ import {
   type TemplateSyntaxRegistry,
 } from "./language/index.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace, type ModuleResolver } from "./shared/index.js";
+import { DiagnosticsRuntime } from "./diagnostics/runtime.js";
 import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";
 
 // =============================================================================
@@ -72,6 +73,8 @@ export interface CompileAotOptions {
   deduplicateExpressions?: boolean;
   /** Optional trace for instrumentation */
   trace?: CompileTrace;
+  /** Optional diagnostics runtime (defaults to a new instance per call). */
+  diagnostics?: DiagnosticsRuntime;
 }
 
 export interface CompileAotResult {
@@ -136,6 +139,7 @@ export function compileAot(
   const trace = options.trace ?? NOOP_TRACE;
 
   return trace.span("compiler.compileAot", () => {
+    const diagnostics = options.diagnostics ?? new DiagnosticsRuntime();
     const templatePath = options.templatePath ?? "template.html";
     const name = options.name ?? "template";
     const baseSemantics = options.semantics;
@@ -170,6 +174,7 @@ export function compileAot(
       file: templatePath,
       name,
       catalog,
+      diagnostics: diagnostics.forSource("lower"),
       trace,
     });
 
@@ -186,9 +191,10 @@ export function compileAot(
       ...resolveOpts,
       moduleResolver: options.moduleResolver,
       templateFilePath: templatePath,
+      diagnostics: diagnostics.forSource("resolve-host"),
       trace,
     });
-    const scoped = bindScopes(linked, { trace });
+    const scoped = bindScopes(linked, { trace, diagnostics: diagnostics.forSource("bind") });
     trace.event("compiler.aot.analysis.done");
 
     // 2. Build AOT plan

@@ -413,8 +413,6 @@ export interface IrModule {
   templates: TemplateIR[];
   /** Optional shared sidecar for dev/LSP; can be stripped for shipping. */
   exprTable?: ExprTableEntry[];
-  /** Optional diagnostics from lowering phase. */
-  diags?: IrDiagnostic[];
   name?: string;
   meta?: Record<string, unknown>;
 }

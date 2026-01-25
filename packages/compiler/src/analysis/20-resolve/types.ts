@@ -49,7 +49,6 @@ export interface LinkedSemanticsModule {
   version: "aurelia-linked@1";
   templates: LinkedTemplate[];
   exprTable?: ExprTableEntry[];
-  diags: SemDiagnostic[];
 }
 
 export interface LinkedTemplate {

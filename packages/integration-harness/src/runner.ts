@@ -10,6 +10,7 @@ import {
   buildSemanticsArtifacts,
   createMockFileSystem,
   createNodeFileSystem,
+  DiagnosticsRuntime,
   resolve,
   buildRegistrationPlan,
   type AnalysisResult,
@@ -162,7 +163,12 @@ export async function runIntegrationScenario(
   memoryTracker.mark("program");
 
   const resolutionStart = performance.now();
-  const baseResolution = resolve(program, buildResolutionConfig(resolvedScenario, fileSystem), options.logger);
+  const diagnostics = new DiagnosticsRuntime();
+  const baseResolution = resolve(
+    program,
+    { ...buildResolutionConfig(resolvedScenario, fileSystem), diagnostics: diagnostics.forSource("resolution") },
+    options.logger,
+  );
   const resolution = baseResolution;
   timings.resolutionMs = performance.now() - resolutionStart;
   memoryTracker.mark("resolution");
@@ -301,7 +307,7 @@ function createModuleResolver(
 function buildResolutionConfig(
   scenario: NormalizedScenario,
   fileSystem?: FileSystemContext,
-): ResolutionConfig {
+): Omit<ResolutionConfig, "diagnostics"> {
   return {
     conventions: scenario.resolution.conventions,
     defines: scenario.resolution.defines,
