@@ -38,7 +38,7 @@ import type {
   SourceSpan,
 } from "../../model/ir.js";
 
-import { createSemanticsLookup, getControllerConfig, type SemanticsLookup, type SemanticsLookupOptions, type LocalImportDef } from "../../language/registry.js";
+import { getControllerConfig, type SemanticsLookupOptions, type LocalImportDef } from "../../language/registry.js";
 import type { Semantics } from "../../language/registry.js";
 import type { ResourceCollections, ResourceGraph, ResourceScopeId } from "../../language/resource-graph.js";
 import type { ModuleResolver } from "../../shared/module-resolver.js";
@@ -81,7 +81,6 @@ import {
   resolveElementResRef,
   resolvePropertyTarget,
   resolveIteratorAuxSpec,
-  type ResolveDiagnosticEmitter,
 } from "./resolution-helpers.js";
 import { reportDiagnostic } from "../../diagnostics/report.js";
 import { resolveNodeSem } from "./node-semantics.js";
@@ -93,7 +92,8 @@ import {
   DiagnosticAccumulator,
 } from "../../shared/diagnosed.js";
 import { extractExprResources, extractHostAssignments } from "../../shared/expr-utils.js";
-import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { createResolveContext, createResolveServices, type ResolveContext, type ResolveDiagnosticEmitter } from "./resolve-context.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
@@ -135,11 +135,7 @@ function isUnknownCustomElement(host: NodeSem, graph?: ResourceGraph | null): bo
   return !elementExistsInGraph(host.tag, graph);
 }
 
-interface ResolverContext {
-  readonly lookup: SemanticsLookup;
-  readonly diag: ResolveDiagnosticEmitter;
-  readonly graph?: ResourceGraph | null;
-}
+type ResolverContext = ResolveContext;
 
 /* ============================================================================
  * Public API
@@ -172,7 +168,11 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptio
   if (!opts.templateFilePath) {
     throw new Error("resolveHost requires templateFilePath for module resolution.");
   }
-  const trace = opts.trace ?? NOOP_TRACE;
+  const { services, diagCount, diagErrorCount } = createResolveServices({
+    diagnostics: opts.diagnostics,
+    trace: opts.trace,
+  });
+  const trace = services.trace;
 
   return trace.span("resolve.host", () => {
     trace.setAttributes({
@@ -181,27 +181,20 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptio
       "resolve.exprCount": ir.exprTable?.length ?? 0,
     });
 
-    let diagCount = 0;
-    let diagErrorCount = 0;
-    const countedEmitter: ResolveDiagnosticEmitter = {
-      emit: (code, input) => {
-        const diag = opts.diagnostics.emit(code, input);
-        diagCount += 1;
-        if (diag.severity === "error") diagErrorCount += 1;
-        return diag;
-      },
-    };
     const lookupOpts: SemanticsLookupOptions | undefined = opts ? buildLookupOpts(opts) : undefined;
     const ctxGraph = opts && opts.graph !== undefined ? opts.graph : (sem.resourceGraph ?? null);
-    const ctx: ResolverContext = {
-      lookup: createSemanticsLookup(sem, lookupOpts),
-      diag: countedEmitter,
-      graph: ctxGraph,
-    };
+    const ctx: ResolverContext = createResolveContext(
+      sem,
+      services,
+      lookupOpts,
+      ctxGraph,
+      opts.moduleResolver,
+      opts.templateFilePath,
+    );
 
     for (const template of ir.templates) {
       if (template.templateMeta) {
-        validateTemplateMeta(template, ctx, opts);
+        validateTemplateMeta(template, ctx);
       }
     }
 
@@ -235,11 +228,11 @@ export function resolveHost(ir: IrModule, sem: Semantics, opts: ResolveHostOptio
     }
 
     // Record output metrics
-      trace.setAttributes({
-        [CompilerAttributes.INSTR_COUNT]: instrCount,
-        [CompilerAttributes.DIAG_COUNT]: diagCount,
-        [CompilerAttributes.DIAG_ERROR_COUNT]: diagErrorCount,
-      });
+    trace.setAttributes({
+      [CompilerAttributes.INSTR_COUNT]: instrCount,
+      [CompilerAttributes.DIAG_COUNT]: diagCount(),
+      [CompilerAttributes.DIAG_ERROR_COUNT]: diagErrorCount(),
+    });
 
     return {
       version: "aurelia-linked@1",
@@ -290,18 +283,17 @@ function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
 function validateTemplateMeta(
   template: TemplateIR,
   ctx: ResolverContext,
-  opts: ResolveHostOptions,
 ): void {
   const meta = template.templateMeta;
   if (!meta) return;
 
-  const templateFilePath = opts.templateFilePath;
-  const moduleResolver = opts.moduleResolver;
+  const templateFilePath = ctx.templateFilePath;
+  const moduleResolver = ctx.moduleResolver;
   for (const imp of meta.imports) {
     const specifier = imp.from.value;
     const resolvedPath = moduleResolver(specifier, templateFilePath);
     if (!resolvedPath) {
-      reportDiagnostic(ctx.diag, "aurelia/unresolved-import", `Cannot resolve module '${specifier}'`, {
+      reportDiagnostic(ctx.services.diagnostics, "aurelia/unresolved-import", `Cannot resolve module '${specifier}'`, {
         span: imp.from.loc,
         data: { specifier },
       });
@@ -313,7 +305,7 @@ function validateTemplateMeta(
     for (const name of alias.names) {
       const key = name.value.toLowerCase();
       if (aliasSeen.has(key)) {
-        reportDiagnostic(ctx.diag, "aurelia/alias-conflict", `Alias '${name.value}' is already declared.`, {
+        reportDiagnostic(ctx.services.diagnostics, "aurelia/alias-conflict", `Alias '${name.value}' is already declared.`, {
           span: name.loc,
           data: { name: name.value },
         });
@@ -327,7 +319,7 @@ function validateTemplateMeta(
   for (const bindable of meta.bindables) {
     const key = bindable.name.value.toLowerCase();
     if (bindableSeen.has(key)) {
-      reportDiagnostic(ctx.diag, "aurelia/bindable-decl-conflict", `Bindable '${bindable.name.value}' is already declared.`, {
+      reportDiagnostic(ctx.services.diagnostics, "aurelia/bindable-decl-conflict", `Bindable '${bindable.name.value}' is already declared.`, {
         span: bindable.name.loc,
         data: { name: bindable.name.value },
       });
@@ -356,7 +348,7 @@ function validateExpressionResources(
   // Check for $host assignments (invalid binding pattern)
   const hostAssignments = extractHostAssignments(exprTable);
   for (const ref of hostAssignments) {
-    reportDiagnostic(ctx.diag, "aurelia/invalid-binding-pattern", "Assignment to $host is not allowed.", {
+    reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-binding-pattern", "Assignment to $host is not allowed.", {
       span: ref.span,
       data: { aurCode: "AUR0106" },
     });
@@ -385,7 +377,7 @@ function validateExpressionResources(
       if (ref.kind === "bindingBehavior") {
         // Check for duplicate
           if (seenBehaviors.has(ref.name)) {
-            reportDiagnostic(ctx.diag, "aurelia/invalid-binding-pattern", `Binding behavior '${ref.name}' applied more than once in the same expression.`, {
+            reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-binding-pattern", `Binding behavior '${ref.name}' applied more than once in the same expression.`, {
               span: ref.span,
               data: { aurCode: "AUR0102" },
             });
@@ -395,7 +387,7 @@ function validateExpressionResources(
 
           // Check if registered
           if (!ctx.lookup.sem.resources.bindingBehaviors[ref.name]) {
-            reportDiagnostic(ctx.diag, "aurelia/unknown-behavior", `Binding behavior '${ref.name}' not found.`, {
+            reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-behavior", `Binding behavior '${ref.name}' not found.`, {
               span: ref.span,
               data: { resourceKind: "binding-behavior", name: ref.name },
             });
@@ -408,7 +400,7 @@ function validateExpressionResources(
       } else {
         // valueConverter
         if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
-          reportDiagnostic(ctx.diag, "aurelia/unknown-converter", `Value converter '${ref.name}' not found.`, {
+          reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-converter", `Value converter '${ref.name}' not found.`, {
             span: ref.span,
             data: { resourceKind: "value-converter", name: ref.name },
           });
@@ -423,7 +415,7 @@ function validateExpressionResources(
       // Report on the second rate-limiter (the conflict)
       const entries = [...seenRateLimiters.entries()];
       const conflicting = entries[1]!;
-      reportDiagnostic(ctx.diag, "aurelia/invalid-binding-pattern", `Conflicting rate-limit behaviors: ${names} cannot be used together on the same binding.`, {
+      reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-binding-pattern", `Conflicting rate-limit behaviors: ${names} cannot be used together on the same binding.`, {
         span: conflicting[1],
         data: { aurCode: "AUR9996" },
       });
@@ -465,7 +457,7 @@ function validateBranchControllers(
               if (!prevRowControllers.includes(config.linksTo)) {
                 const aurCode = config.linksTo === "if" ? "AUR0810" : "AUR0815";
                 const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
-                reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+                reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-command-usage", msg, {
                   span: ins.loc,
                   data: { aurCode },
                 });
@@ -475,7 +467,7 @@ function validateBranchControllers(
               if (parentController !== config.linksTo) {
                 const aurCode = config.linksTo === "promise" ? "AUR0813" : "AUR0815";
                 const msg = `[${ins.res}] without parent [${config.linksTo}]`;
-                reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+                reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-command-usage", msg, {
                   span: ins.loc,
                   data: { aurCode },
                 });
@@ -534,7 +526,7 @@ function validateNestedIrRows(
             if (!prevRowControllers.includes(config.linksTo)) {
               const aurCode = config.linksTo === "if" ? "AUR0810" : "AUR0815";
               const msg = `[${ins.res}] without preceding [${config.linksTo}]`;
-              reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+              reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-command-usage", msg, {
                 span: ins.loc,
                 data: { aurCode },
               });
@@ -544,7 +536,7 @@ function validateNestedIrRows(
             if (parentController !== config.linksTo) {
               const aurCode = config.linksTo === "promise" ? "AUR0813" : "AUR0815";
               const msg = `[${ins.res}] without parent [${config.linksTo}]`;
-              reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", msg, {
+              reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-command-usage", msg, {
                 span: ins.loc,
                 data: { aurCode },
               });
@@ -560,7 +552,7 @@ function validateNestedIrRows(
           markerCounts.set(ins.res, count);
           if (count === 2) {
             // Emit diagnostic on the second occurrence
-            reportDiagnostic(ctx.diag, "aurelia/invalid-command-usage", `Multiple [${ins.res}] in same [${parentController}]`, {
+            reportDiagnostic(ctx.services.diagnostics, "aurelia/invalid-command-usage", `Multiple [${ins.res}] in same [${parentController}]`, {
               span: ins.loc,
               data: { aurCode: "AUR0816" },
             });
@@ -610,7 +602,7 @@ function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
         const message = existsInGraph
           ? `Custom element '<${nodeSem.tag}>' is not registered in this scope.`
           : `Unknown custom element '<${nodeSem.tag}>'.`;
-        reportDiagnostic(ctx.diag, "aurelia/unknown-element", message, {
+        reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-element", message, {
           span: n.loc,
           data: { resourceKind: "custom-element", name: nodeSem.tag },
         });
@@ -682,7 +674,7 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
 function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedPropertyBinding> {
   // Normalize against naming/perTag/DOM overrides before resolving targets.
   const to = normalizePropLikeName(host, ins.to, ctx.lookup);
-  const { target, effectiveMode } = resolvePropertyTarget(host, to, ins.mode, ctx.lookup);
+  const { target, effectiveMode } = resolvePropertyTarget(ctx, host, to, ins.mode);
   const linked: LinkedPropertyBinding = {
     kind: "propertyBinding",
     to,
@@ -705,7 +697,7 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
           ? { ownerKind: "element" as const, ownerName: host.custom?.def.name ?? host.tag }
           : {}),
       };
-      const d = ctx.diag.emit("aurelia/unknown-bindable", {
+      const d = ctx.services.diagnostics.emit("aurelia/unknown-bindable", {
         message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
         span: ins.loc,
         data: { bindable },
@@ -746,7 +738,7 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
     if (isUnknownCustomElement(host, ctx.graph)) {
       return pure(linked);
     }
-    const d = ctx.diag.emit("aurelia/unknown-attribute", {
+    const d = ctx.services.diagnostics.emit("aurelia/unknown-attribute", {
       message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
       span: ins.loc,
       data: {
@@ -782,7 +774,7 @@ function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: Resolve
     loc: ins.loc ?? null,
   };
   if (eventType.kind === "unknown") {
-    const d = ctx.diag.emit("aurelia/unknown-event", {
+    const d = ctx.services.diagnostics.emit("aurelia/unknown-event", {
       message: `Unknown event '${ins.to}'${tag ? ` on <${tag}>` : ""}.`,
       span: ins.loc,
       data: {
@@ -837,7 +829,7 @@ function linkSetStyleAttribute(ins: SetStyleAttributeIR): LinkedSetStyleAttribut
 
 function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext): Diagnosed<LinkedSetProperty> {
   const to = normalizePropLikeName(host, ins.to, ctx.lookup);
-  const { target } = resolvePropertyTarget(host, to, "default", ctx.lookup);
+  const { target } = resolvePropertyTarget(ctx, host, to, "default");
   const linked: LinkedSetProperty = { kind: "setProperty", to, value: ins.value, target, loc: ins.loc ?? null };
   if (target.kind === "unknown") {
     // Stub propagation: suppress unknown-target diagnostics for unknown custom elements.
@@ -851,7 +843,7 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
         ? { ownerKind: "element" as const, ownerName: host.custom?.def.name ?? host.tag }
         : {}),
     };
-    const d = ctx.diag.emit("aurelia/unknown-bindable", {
+    const d = ctx.services.diagnostics.emit("aurelia/unknown-bindable", {
       message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
       span: ins.loc,
       data: { bindable },
@@ -862,7 +854,7 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
 }
 
 function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateElement {
-  const res = resolveElementResRef(ins.res, ctx.lookup);
+  const res = resolveElementResRef(ctx, ins.res);
   const props = ins.props.map((p) => linkElementBindable(p, host, ctx));
   return {
     kind: "hydrateElement",
@@ -875,10 +867,10 @@ function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverC
 }
 
 function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: ResolverContext): LinkedHydrateAttribute {
-  const res = resolveAttrResRef(ins.res, ctx.lookup);
+  const res = resolveAttrResRef(ctx, ins.res);
   if (!res) {
     const name = ins.alias ?? ins.res;
-    reportDiagnostic(ctx.diag, "aurelia/unknown-attribute", `Custom attribute '${name}' is not registered in this scope.`, {
+    reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-attribute", `Custom attribute '${name}' is not registered in this scope.`, {
       span: ins.loc,
       data: { resourceKind: "custom-attribute", name },
     });
@@ -973,9 +965,9 @@ function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Diag
   if (ins.props?.length) {
     for (const p of ins.props) {
       const authoredMode: BindingMode = p.command === "bind" ? "toView" : "default";
-        const spec = resolveIteratorAuxSpec(ctx.lookup, p.to, authoredMode);
+        const spec = resolveIteratorAuxSpec(ctx, p.to, authoredMode);
         if (!spec) {
-          acc.push(ctx.diag.emit("aurelia/invalid-command-usage", {
+          acc.push(ctx.services.diagnostics.emit("aurelia/invalid-command-usage", {
             message: `Unknown repeat option '${p.to}'.`,
             span: p.loc,
           }));
@@ -1012,7 +1004,7 @@ function linkHydrateTemplateController(
   ctx: ResolverContext,
 ): LinkedHydrateTemplateController {
   // Resolve controller semantics (returns Diagnosed)
-  const ctrlSem = merge(resolveControllerSem(ctx.lookup, ins.res, ins.loc, ctx.diag), ctx);
+  const ctrlSem = merge(resolveControllerSem(ctx, ins.res, ins.loc), ctx);
 
   // Map controller props
   const props = ins.props.map((p) => {
@@ -1026,7 +1018,7 @@ function linkHydrateTemplateController(
         controller: ctrlSem,
         bindable: resolveControllerBindable(ctrlSem, to),
       };
-      const effectiveMode = resolveEffectiveMode(p.mode, target, host, ctx.lookup, to);
+      const effectiveMode = resolveEffectiveMode(ctx, p.mode, target, host, to);
       const linked: LinkedPropertyBinding = {
         kind: "propertyBinding",
         to,

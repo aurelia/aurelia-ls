@@ -1,43 +1,38 @@
 import type { SourceSpan } from "../../model/ir.js";
 import type { BindingMode, HydrateAttributeIR, HydrateElementIR } from "../../model/ir.js";
 import type { Bindable } from "../../language/registry.js";
-import type { SemanticsLookup } from "../../language/registry.js";
 import { toTypeRefOptional } from "../../language/convert.js";
 import {
   getControllerConfig,
   STUB_CONTROLLER_CONFIG,
   createCustomControllerConfig,
 } from "../../language/registry.js";
-import { debug } from "../../shared/debug.js";
 import type {
   AttrResRef,
   ControllerSem,
   IteratorAuxSpec,
   ElementResRef,
   NodeSem,
-  SemDiagCode,
   TargetSem,
 } from "./types.js";
 import { camelCase } from "./name-normalizer.js";
-import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
-import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
 import { type Diagnosed, pure, diag, withStub } from "../../shared/diagnosed.js";
-
-export type ResolveDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, SemDiagCode>;
+import type { ResolveContext } from "./resolve-context.js";
 
 export function resolvePropertyTarget(
+  ctx: ResolveContext,
   host: NodeSem,
   to: string,
   mode: BindingMode,
-  lookup: SemanticsLookup,
 ): { target: TargetSem; effectiveMode: BindingMode } {
+  const lookup = ctx.lookup;
   // 1) Custom element bindable (component prop)
   if (host.kind === "element" && host.custom) {
     const bindable = host.custom.def.bindables[to];
     if (bindable) {
-      debug.resolve("target.bindable", { to, element: host.custom.def.name, bindable: bindable.name });
+      ctx.services.debug.resolve("target.bindable", { to, element: host.custom.def.name, bindable: bindable.name });
       const target: TargetSem = { kind: "element.bindable", element: host.custom, bindable };
-      const effectiveMode = resolveEffectiveMode(mode, target, host, lookup, to);
+      const effectiveMode = resolveEffectiveMode(ctx, mode, target, host, to);
       return { target, effectiveMode };
     }
   }
@@ -45,16 +40,16 @@ export function resolvePropertyTarget(
   if (host.kind === "element" && host.native) {
     const domProp = host.native.def.props[to];
     if (domProp) {
-      debug.resolve("target.nativeProp", { to, tag: host.tag });
+      ctx.services.debug.resolve("target.nativeProp", { to, tag: host.tag });
       const target: TargetSem = { kind: "element.nativeProp", element: host.native, prop: domProp };
-      const effectiveMode = resolveEffectiveMode(mode, target, host, lookup, to);
+      const effectiveMode = resolveEffectiveMode(ctx, mode, target, host, to);
       return { target, effectiveMode };
     }
   }
   // 3) Unknown target
-  debug.resolve("target.unknown", { to, hostKind: host.kind, tag: host.kind === "element" ? host.tag : undefined });
+  ctx.services.debug.resolve("target.unknown", { to, hostKind: host.kind, tag: host.kind === "element" ? host.tag : undefined });
   const target: TargetSem = { kind: "unknown", reason: host.kind === "element" ? "no-prop" : "no-element" };
-  const effectiveMode = resolveEffectiveMode(mode, target, host, lookup, to);
+  const effectiveMode = resolveEffectiveMode(ctx, mode, target, host, to);
   return { target, effectiveMode };
 }
 
@@ -84,22 +79,23 @@ export function resolveAttrTarget(host: NodeSem, to: string): TargetSem {
  * The stub config is marked with isStub() to enable cascade suppression.
  */
 export function resolveControllerSem(
-  lookup: SemanticsLookup,
+  ctx: ResolveContext,
   res: string,
   span: SourceSpan | null | undefined,
-  emitter: ResolveDiagnosticEmitter,
 ): Diagnosed<ControllerSem> {
+  const lookup = ctx.lookup;
+  const emitter = ctx.services.diagnostics;
   // 1. Check built-in controller configs
   const builtinConfig = getControllerConfig(res);
   if (builtinConfig) {
-    debug.resolve("controller.builtin", { name: res, trigger: builtinConfig.trigger.kind });
+    ctx.services.debug.resolve("controller.builtin", { name: res, trigger: builtinConfig.trigger.kind });
     return pure({ res, config: builtinConfig });
   }
 
   // 2. Check custom TCs in attributes (discovered via @templateController decorator)
   const customAttr = lookup.attribute(res);
   if (customAttr?.isTemplateController) {
-    debug.resolve("controller.custom", { name: res, primary: customAttr.primary });
+    ctx.services.debug.resolve("controller.custom", { name: res, primary: customAttr.primary });
     const customConfig = createCustomControllerConfig(
       customAttr.name,
       customAttr.primary,
@@ -109,7 +105,7 @@ export function resolveControllerSem(
   }
 
   // 3. Unknown controller - return stub + diagnostic
-  debug.resolve("controller.unknown", { name: res });
+  ctx.services.debug.resolve("controller.unknown", { name: res });
   const diagnostic = emitter.emit("aurelia/unknown-controller", {
     message: `Unknown template controller '${res}'.`,
     span,
@@ -143,15 +139,15 @@ export function resolveControllerBindable(ctrl: ControllerSem, prop: string): Bi
  * Conditional two-way cases (e.g., contenteditable) are deferred to Typecheck.
  */
 export function resolveEffectiveMode(
+  ctx: ResolveContext,
   mode: BindingMode,
   target: TargetSem,
   host: NodeSem,
-  lookup: SemanticsLookup,
   propName?: string,
 ): BindingMode {
   if (mode !== "default") return mode;
 
-  const sem = lookup.sem;
+  const sem = ctx.lookup.sem;
   const bindableMode = (value: BindingMode | undefined): BindingMode => {
     if (!value || value === "default") return "toView";
     return value;
@@ -192,17 +188,17 @@ export function resolveEffectiveMode(
   }
 }
 
-export function resolveElementResRef(res: HydrateElementIR["res"], lookup: SemanticsLookup): ElementResRef | null {
+export function resolveElementResRef(ctx: ResolveContext, res: HydrateElementIR["res"]): ElementResRef | null {
   if (!res) return null;
   const name = typeof res === "string" ? res.toLowerCase() : res;
-  const resolved = typeof name === "string" ? lookup.element(name) : null;
+  const resolved = typeof name === "string" ? ctx.lookup.element(name) : null;
   return resolved ? { def: resolved } : null;
 }
 
-export function resolveAttrResRef(res: HydrateAttributeIR["res"], lookup: SemanticsLookup): AttrResRef | null {
+export function resolveAttrResRef(ctx: ResolveContext, res: HydrateAttributeIR["res"]): AttrResRef | null {
   if (!res) return null;
   const name = typeof res === "string" ? res.toLowerCase() : res;
-  const resolved = typeof name === "string" ? lookup.attribute(name) : null;
+  const resolved = typeof name === "string" ? ctx.lookup.attribute(name) : null;
   return resolved ? { def: resolved } : null;
 }
 
@@ -219,11 +215,11 @@ export function resolveBindableMode(mode: BindingMode, bindable: Bindable | null
 }
 
 export function resolveIteratorAuxSpec(
-  lookup: SemanticsLookup,
+  ctx: ResolveContext,
   name: string,
   authoredMode: BindingMode,
 ): IteratorAuxSpec | null {
-  const repeatConfig = lookup.sem.resources.controllers["repeat"];
+  const repeatConfig = ctx.lookup.sem.resources.controllers["repeat"];
   const tailSpec = repeatConfig?.tailProps?.[name];
   if (!tailSpec) return null;
   const accepts = tailSpec.accepts ?? ["bind", null];
