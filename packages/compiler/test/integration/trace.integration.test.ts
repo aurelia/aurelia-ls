@@ -36,6 +36,7 @@ import {
 
   // Support
   DEFAULT_SEMANTICS,
+  buildProjectSnapshot,
   getExpressionParser,
   DEFAULT_SYNTAX,
   DiagnosticsRuntime,
@@ -80,7 +81,7 @@ function createProgram(trace?: CompileTrace) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
     moduleResolver: noopModuleResolver,
     trace,
   });

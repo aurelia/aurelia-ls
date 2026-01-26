@@ -8,7 +8,27 @@ import type {
   TemplateSyntaxRegistry,
 } from "./types.js";
 import { materializeSemanticsForScope } from "./resource-graph.js";
-import { buildTemplateSyntaxRegistry } from "./registry.js";
+import { buildTemplateSyntaxRegistry, prepareSemantics } from "./registry.js";
+
+export interface TemplateContext {
+  readonly scopeId?: ResourceScopeId | null;
+  readonly localImports?: readonly LocalImportDef[];
+}
+
+export interface ProjectSnapshot {
+  readonly semantics: SemanticsWithCaches;
+  readonly catalog: ResourceCatalog;
+  readonly syntax: TemplateSyntaxRegistry;
+  readonly resourceGraph: ResourceGraph | null;
+  readonly defaultScope: ResourceScopeId | null;
+}
+
+export interface ProjectSnapshotOptions {
+  readonly catalog?: ResourceCatalog;
+  readonly syntax?: TemplateSyntaxRegistry;
+  readonly resourceGraph?: ResourceGraph | null;
+  readonly defaultScope?: ResourceScopeId | null;
+}
 
 export interface SemanticsSnapshot {
   readonly semantics: SemanticsWithCaches;
@@ -26,18 +46,41 @@ export interface SemanticsSnapshotOptions {
   readonly syntax?: TemplateSyntaxRegistry;
 }
 
-export function buildSemanticsSnapshot(
+export function buildProjectSnapshot(
   base: Semantics,
-  options: SemanticsSnapshotOptions = {},
-): SemanticsSnapshot {
-  const graph = options.resourceGraph ?? base.resourceGraph ?? null;
-  const scopeId = options.resourceScope ?? base.defaultScope ?? graph?.root ?? null;
-  const sem = materializeSemanticsForScope(base, graph, scopeId, options.localImports);
-  const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
-  const useCatalogOverride = !!(options.catalog && !hasLocalImports);
-  const catalog = useCatalogOverride ? options.catalog! : sem.catalog;
-  const semantics = useCatalogOverride ? { ...sem, catalog } : sem;
+  options: ProjectSnapshotOptions = {},
+): ProjectSnapshot {
+  const prepared = prepareSemantics(base, options.catalog ? { catalog: options.catalog } : undefined);
+  const graph = options.resourceGraph ?? prepared.resourceGraph ?? null;
+  const defaultScope = options.defaultScope ?? prepared.defaultScope ?? graph?.root ?? null;
+  const catalog = options.catalog ?? prepared.catalog;
+  const semantics = {
+    ...prepared,
+    catalog,
+    resourceGraph: graph ?? undefined,
+    defaultScope: defaultScope ?? undefined,
+  };
   const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semantics);
+  return {
+    semantics,
+    catalog,
+    syntax,
+    resourceGraph: graph,
+    defaultScope,
+  };
+}
+
+export function buildSemanticsSnapshotFromProject(
+  project: ProjectSnapshot,
+  context: TemplateContext = {},
+): SemanticsSnapshot {
+  const graph = project.resourceGraph ?? null;
+  const scopeId = context.scopeId ?? project.defaultScope ?? graph?.root ?? null;
+  const sem = materializeSemanticsForScope(project.semantics, graph, scopeId, context.localImports);
+  const hasLocalImports = !!(context.localImports && context.localImports.length > 0);
+  const catalog = hasLocalImports ? sem.catalog : project.catalog;
+  const semantics = hasLocalImports ? sem : { ...sem, catalog };
+  const syntax = project.syntax;
   return {
     semantics,
     catalog,
@@ -45,4 +88,21 @@ export function buildSemanticsSnapshot(
     scopeId: scopeId ?? null,
     resourceGraph: graph,
   };
+}
+
+export function buildSemanticsSnapshot(
+  base: Semantics,
+  options: SemanticsSnapshotOptions = {},
+): SemanticsSnapshot {
+  const project = buildProjectSnapshot(base, {
+    catalog: options.catalog,
+    syntax: options.syntax,
+    resourceGraph: options.resourceGraph,
+    ...(options.resourceScope !== undefined ? { defaultScope: options.resourceScope } : {}),
+  });
+  const context: TemplateContext = {
+    ...(options.resourceScope !== undefined ? { scopeId: options.resourceScope } : {}),
+    ...(options.localImports ? { localImports: options.localImports } : {}),
+  };
+  return buildSemanticsSnapshotFromProject(project, context);
 }

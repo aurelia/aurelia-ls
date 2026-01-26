@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, buildProjectSnapshot } from "@aurelia-ls/compiler";
 import {
   PipelineEngine,
   type StageDefinition,
@@ -55,7 +55,7 @@ function baseOptions(overrides: Partial<Parameters<PipelineEngine["run"]>[1]> = 
   return {
     html: "<div></div>",
     templateFilePath: "/app.html",
-    semantics: DEFAULT_SEMANTICS,
+    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
     ...overrides,
   };
 }

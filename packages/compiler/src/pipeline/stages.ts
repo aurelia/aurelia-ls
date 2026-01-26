@@ -5,13 +5,9 @@ import { resolveSourceFile } from "../model/index.js";
 
 // Language imports (via barrel)
 import {
-  buildSemanticsSnapshot,
-  type LocalImportDef,
-  type ResourceCatalog,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type Semantics,
-  type TemplateSyntaxRegistry,
+  buildSemanticsSnapshotFromProject,
+  type ProjectSnapshot,
+  type TemplateContext,
 } from "../language/index.js";
 
 // Parsing imports (via barrel)
@@ -38,12 +34,8 @@ import { stableHash, stableHashSemantics } from "./hash.js";
 export interface CoreCompileOptions {
   html: string;
   templateFilePath: string;
-  semantics: Semantics;
-  catalog?: ResourceCatalog;
-  syntax?: TemplateSyntaxRegistry;
-  resourceGraph?: ResourceGraph;
-  resourceScope?: ResourceScopeId | null;
-  localImports?: readonly LocalImportDef[];
+  project: ProjectSnapshot;
+  templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   vm: VmReflection;
@@ -75,14 +67,10 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
-    semantics: opts.semantics,
+    project: opts.project,
     moduleResolver: opts.moduleResolver,
   };
-  if (opts.catalog) pipelineOpts.catalog = opts.catalog;
-  if (opts.syntax) pipelineOpts.syntax = opts.syntax;
-  if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
-  if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
-  if (opts.localImports) pipelineOpts.localImports = opts.localImports;
+  if (opts.templateContext) pipelineOpts.templateContext = opts.templateContext;
   if (opts.cache) pipelineOpts.cache = opts.cache;
   if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
@@ -109,21 +97,17 @@ function assertOption<T>(value: T | undefined, name: string): T {
 export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   const definitions: StageDefinition<StageKey>[] = [];
 
-  const resolveSemanticsInputs = (options: PipelineOptions) => {
-    const base = assertOption(options.semantics, "semantics");
-    return buildSemanticsSnapshot(base, {
-      resourceGraph: options.resourceGraph ?? base.resourceGraph ?? null,
-      resourceScope: options.resourceScope ?? base.defaultScope ?? null,
-      localImports: options.localImports,
-      catalog: options.catalog,
-      syntax: options.syntax,
-    });
+  const resolveProject = (options: PipelineOptions) => assertOption(options.project, "project");
+  const resolveTemplateSnapshot = (options: PipelineOptions) => {
+    const project = resolveProject(options);
+    return buildSemanticsSnapshotFromProject(project, options.templateContext);
   };
 
   const scopeFingerprint = (options: PipelineOptions) => {
-    const graph = options.resourceGraph ?? options.semantics.resourceGraph ?? null;
+    const project = resolveProject(options);
+    const graph = project.resourceGraph ?? null;
     if (!graph) return null;
-    const scope = options.resourceScope ?? options.semantics.defaultScope ?? graph.root ?? null;
+    const scope = options.templateContext?.scopeId ?? project.defaultScope ?? graph.root ?? null;
     return { graph: stableHash(graph), scope };
   };
 
@@ -133,15 +117,15 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     deps: [],
     fingerprint(ctx) {
       const options = ctx.options;
-      const { catalog, syntax } = resolveSemanticsInputs(options);
+      const project = resolveProject(options);
       const source = resolveSourceFile(options.templateFilePath);
       const attrParserFingerprint = options.fingerprints?.attrParser
         ?? options.fingerprints?.syntax
-        ?? (options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
+        ?? (options.attrParser ? "custom" : stableHash(project.syntax.attributePatterns));
       return {
         html: stableHash(options.html),
         file: source.hashKey,
-        catalog: options.fingerprints?.catalog ?? stableHash(catalog),
+        catalog: options.fingerprints?.catalog ?? stableHash(project.catalog),
         attrParser: attrParserFingerprint,
         exprParser: options.fingerprints?.exprParser ?? (options.exprParser ? "custom" : "default"),
       };
@@ -149,14 +133,14 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     run(ctx) {
       const options = ctx.options;
       const exprParser = options.exprParser ?? getExpressionParser();
-      const { catalog, syntax } = resolveSemanticsInputs(options);
-      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
+      const project = resolveProject(options);
+      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(project.syntax);
       return lowerDocument(options.html, {
         file: options.templateFilePath,
         name: path.basename(options.templateFilePath),
         attrParser,
         exprParser,
-        catalog,
+        catalog: project.catalog,
         diagnostics: ctx.diag,
         trace: options.trace,
       });
@@ -168,17 +152,17 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     version: "3",
     deps: ["10-lower"],
     fingerprint(ctx) {
-      const { semantics } = resolveSemanticsInputs(ctx.options);
+      const { semantics } = resolveTemplateSnapshot(ctx.options);
       const moduleResolverFingerprint = ctx.options.fingerprints?.moduleResolver ?? "custom";
       return {
         sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(semantics),
         resourceGraph: scopeFingerprint(ctx.options),
-        localImports: ctx.options.localImports ? stableHash(ctx.options.localImports) : null,
+        localImports: ctx.options.templateContext?.localImports ? stableHash(ctx.options.templateContext.localImports) : null,
         moduleResolver: moduleResolverFingerprint,
       };
     },
     run(ctx) {
-      const scoped = resolveSemanticsInputs(ctx.options);
+      const scoped = resolveTemplateSnapshot(ctx.options);
       const ir = ctx.require("10-lower");
       const resolveOpts = {
         moduleResolver: ctx.options.moduleResolver,
@@ -229,14 +213,14 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     version: "1",
     deps: ["20-resolve"],
     fingerprint(ctx) {
-      const { syntax } = resolveSemanticsInputs(ctx.options);
+      const { syntax } = resolveTemplateSnapshot(ctx.options);
       const attrParserFingerprint = ctx.options.fingerprints?.attrParser
         ?? ctx.options.fingerprints?.syntax
         ?? (ctx.options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
       return { attrParser: attrParserFingerprint };
     },
     run(ctx) {
-      const scoped = resolveSemanticsInputs(ctx.options);
+      const scoped = resolveTemplateSnapshot(ctx.options);
       const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(scoped.syntax);
       const linked = ctx.require("20-resolve");
       return collectFeatureUsage(linked, { syntax: scoped.syntax, attrParser });
@@ -313,7 +297,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     run(ctx) {
       const linked = ctx.require("20-resolve");
       const scope = ctx.require("30-bind");
-      const { syntax } = resolveSemanticsInputs(ctx.options);
+      const { syntax } = resolveTemplateSnapshot(ctx.options);
       const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(syntax);
       const aotOpts: AotPlanOptions = {
         templateFilePath: ctx.options.templateFilePath,

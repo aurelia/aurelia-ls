@@ -6,12 +6,10 @@ import {
   InMemoryProvenanceIndex,
   InMemorySourceStore,
   buildResourceGraphFromSemantics,
-  buildTemplateSyntaxRegistry,
   canonicalDocumentUri,
   debug,
   offsetAtPosition,
   rangeToSpan,
-  prepareSemantics,
   spanToRange,
   stableHash,
   stableHashSemantics,
@@ -124,14 +122,10 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
   }
 
   snapshot(): WorkspaceSnapshot {
-    const prepared = prepareSemantics(this.#programOptions.semantics, {
-      catalog: this.#programOptions.catalog,
-    });
-    const catalog = this.#programOptions.catalog ?? prepared.catalog;
-    const syntax = this.#programOptions.syntax ?? buildTemplateSyntaxRegistry(prepared);
-    const resourceGraph = this.#programOptions.resourceGraph
-      ?? this.#programOptions.semantics.resourceGraph
-      ?? buildResourceGraphFromSemantics(prepared);
+    const project = this.#programOptions.project;
+    const catalog = project.catalog;
+    const syntax = project.syntax;
+    const resourceGraph = project.resourceGraph ?? buildResourceGraphFromSemantics(project.semantics);
 
     const docs = Array.from(this.sources.all())
       .map((doc) => ({
@@ -155,7 +149,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
         configHash: this.#configHash,
         docCount: docs.length,
       },
-      semantics: this.#programOptions.semantics,
+      semantics: project.semantics,
       catalog,
       syntax,
       resourceGraph,
@@ -318,10 +312,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       let detail = null;
       try {
         const compilation = this.program.getCompilation(uri);
-        const syntax = this.program.options.syntax
-          ?? buildTemplateSyntaxRegistry(prepareSemantics(this.program.options.semantics, {
-            ...(this.program.options.catalog ? { catalog: this.program.options.catalog } : {}),
-          }));
+        const syntax = this.program.options.project.syntax;
         detail = collectTemplateHover({
           compilation,
           text,
@@ -519,11 +510,14 @@ function spanFromRange(
 
 function computeConfigHash(options: WorkspaceProgramOptions): string {
   return stableHash({
-    semantics: stableHashSemantics(options.semantics),
-    catalog: options.catalog ? stableHash(options.catalog) : null,
-    syntax: options.syntax ? stableHash(options.syntax) : null,
-    resourceGraph: options.resourceGraph ? stableHash(options.resourceGraph) : null,
-    resourceScope: options.resourceScope ?? null,
+    project: {
+      semantics: stableHashSemantics(options.project.semantics),
+      catalog: stableHash(options.project.catalog),
+      syntax: stableHash(options.project.syntax),
+      resourceGraph: options.project.resourceGraph ? stableHash(options.project.resourceGraph) : null,
+      defaultScope: options.project.defaultScope ?? null,
+    },
+    templateContext: options.templateContext ? "custom" : null,
     isJs: options.isJs,
     overlayBaseName: options.overlayBaseName ?? null,
   });

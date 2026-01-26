@@ -8,6 +8,7 @@ import {
   DefaultTemplateProgram,
   canonicalDocumentUri,
   deriveTemplatePaths,
+  buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } from "@aurelia-ls/compiler";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
@@ -80,7 +81,7 @@ function createProgram(vmType = "RootVm") {
       getSyntheticPrefix: () => "__AU_TTC_",
     },
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
     moduleResolver: noopModuleResolver,

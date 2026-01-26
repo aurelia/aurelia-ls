@@ -12,8 +12,11 @@ import type {
   ResourceGraph,
   ResourceScopeId,
   Semantics,
+  ProjectSnapshot,
+  TemplateContext,
   TemplateSyntaxRegistry,
 } from "./language/index.js";
+import { buildProjectSnapshot } from "./language/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
@@ -38,12 +41,17 @@ export interface CompileOptions {
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  semantics: Semantics;
+  /** Optional precomputed project snapshot (preferred). */
+  project?: ProjectSnapshot;
+  /** Base semantics (used when project snapshot is not provided). */
+  semantics?: Semantics;
   catalog?: ResourceCatalog;
   syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
   localImports?: readonly LocalImportDef[];
+  /** Optional per-template context override. */
+  templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   moduleResolver: ModuleResolver;
@@ -80,12 +88,34 @@ export interface TemplateCompilation {
   meta: StageMetaSnapshot;
 }
 
+function resolveProjectSnapshot(opts: CompileOptions): ProjectSnapshot {
+  if (opts.project) return opts.project;
+  if (!opts.semantics) {
+    throw new Error("compileTemplate requires either 'project' or 'semantics'.");
+  }
+  return buildProjectSnapshot(opts.semantics, {
+    catalog: opts.catalog,
+    syntax: opts.syntax,
+    resourceGraph: opts.resourceGraph,
+    ...(opts.resourceScope !== undefined ? { defaultScope: opts.resourceScope } : {}),
+  });
+}
+
+function resolveTemplateContext(opts: CompileOptions): TemplateContext | undefined {
+  if (opts.templateContext) return opts.templateContext;
+  if (opts.resourceScope === undefined && !opts.localImports) return undefined;
+  return {
+    ...(opts.resourceScope !== undefined ? { scopeId: opts.resourceScope ?? null } : {}),
+    ...(opts.localImports ? { localImports: opts.localImports } : {}),
+  };
+}
+
 function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): PipelineOptions {
   const base: PipelineOptions = {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
-    semantics: opts.semantics,
+    project: resolveProjectSnapshot(opts),
     moduleResolver: opts.moduleResolver,
     overlay: {
       isJs: opts.isJs,
@@ -93,11 +123,8 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
   };
-  if (opts.catalog) base.catalog = opts.catalog;
-  if (opts.syntax) base.syntax = opts.syntax;
-  if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
-  if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
-  if (opts.localImports) base.localImports = opts.localImports;
+  const templateContext = resolveTemplateContext(opts);
+  if (templateContext) base.templateContext = templateContext;
   if (opts.cache) base.cache = opts.cache;
   if (opts.fingerprints) base.fingerprints = opts.fingerprints;
   if (opts.attrParser) base.attrParser = opts.attrParser;

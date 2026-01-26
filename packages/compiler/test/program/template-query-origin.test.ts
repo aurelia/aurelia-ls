@@ -3,6 +3,7 @@ import { test, expect } from "vitest";
 import {
   DEFAULT_SEMANTICS,
   DefaultTemplateProgram,
+  buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
 
@@ -17,7 +18,7 @@ function createProgram() {
       },
     },
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
     moduleResolver: noopModuleResolver,
   });
 }

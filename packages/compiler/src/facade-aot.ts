@@ -14,7 +14,8 @@ import { lowerDocument, resolveHost, bindScopes } from "./analysis/index.js";
 import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser } from "./parsing/index.js";
 import {
-  buildSemanticsSnapshot,
+  buildProjectSnapshot,
+  buildSemanticsSnapshotFromProject,
   type ResourceCatalog,
   type Semantics,
   type ResourceGraph,
@@ -141,12 +142,15 @@ export function compileAot(
     const templatePath = options.templatePath ?? "template.html";
     const name = options.name ?? "template";
     const baseSemantics = options.semantics;
-    const snapshot = buildSemanticsSnapshot(baseSemantics, {
+    const project = buildProjectSnapshot(baseSemantics, {
       resourceGraph: options.resourceGraph ?? null,
-      resourceScope: options.resourceScope ?? null,
-      localImports: options.localImports,
+      ...(options.resourceScope !== undefined ? { defaultScope: options.resourceScope } : {}),
       catalog: options.catalog,
       syntax: options.syntax,
+    });
+    const snapshot = buildSemanticsSnapshotFromProject(project, {
+      ...(options.resourceScope !== undefined ? { scopeId: options.resourceScope } : {}),
+      ...(options.localImports ? { localImports: options.localImports } : {}),
     });
     const semantics = snapshot.semantics;
     const catalog = snapshot.catalog;

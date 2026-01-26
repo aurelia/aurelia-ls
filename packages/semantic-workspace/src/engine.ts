@@ -465,27 +465,24 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #programOptions(vm: VmReflection, isJs: boolean, overlayBaseName?: string) {
-    const semantics = this.#projectIndex.currentSemantics();
-    const catalog = this.#projectIndex.currentCatalog();
-    const syntax = this.#projectIndex.currentSyntax();
-    const resourceGraph = this.#projectIndex.currentResourceGraph();
-    const defaultScope = semantics.defaultScope ?? resourceGraph.root ?? null;
-    const resourceScope = this.#resourceScope ?? defaultScope;
+    const project = this.#projectIndex.currentProjectSnapshot();
+    const defaultScope = project.defaultScope ?? project.resourceGraph?.root ?? null;
     const moduleResolver: ModuleResolver = (specifier, containingFile) => {
       const canonical = canonicalDocumentUri(containingFile);
       const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri) ?? canonical.path;
       return resolveModuleSpecifier(specifier, componentPath, this.#env.tsService.compilerOptions());
     };
+    const templateContext = (uri: DocumentUri) => {
+      const scope = this.#resourceScope ?? this.#templateIndex.templateToScope.get(uri) ?? defaultScope;
+      return { scopeId: scope ?? null };
+    };
     return {
       vm,
       isJs,
-      semantics,
-      catalog,
-      syntax,
-      resourceGraph,
+      project,
       moduleResolver,
+      templateContext,
       ...(overlayBaseName !== undefined ? { overlayBaseName } : {}),
-      ...(resourceScope !== null ? { resourceScope } : {}),
     };
   }
 

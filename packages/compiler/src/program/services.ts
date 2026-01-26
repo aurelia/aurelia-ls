@@ -18,9 +18,7 @@ import { stableHash } from "../pipeline/index.js";
 
 // Language imports (via barrel)
 import {
-  buildTemplateSyntaxRegistry,
-  materializeResourcesForScope,
-  prepareSemantics,
+  buildSemanticsSnapshotFromProject,
   type AttrRes,
   type Bindable,
   type ElementRes,
@@ -478,7 +476,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     offset: number,
     compilation: TemplateCompilation | null,
   ): CompletionItem[] {
-    const { sem, resources, syntax } = resolveCompletionContext(this.program);
+    const { sem, resources, syntax } = resolveCompletionContext(this.program, snapshot.uri);
     const attrParser = createAttributeParserFromRegistry(syntax);
 
     const exprInfo = query.exprAt(offset);
@@ -905,34 +903,11 @@ type TagContext =
 
 function resolveCompletionContext(
   program: TemplateProgram,
+  uri: DocumentUri,
 ): { sem: SemanticsWithCaches; resources: ResourceCollections; syntax: TemplateSyntaxRegistry } {
-  const base = prepareSemantics(program.options.semantics, {
-    catalog: program.options.catalog,
-  });
-  const graph = program.options.resourceGraph ?? base.resourceGraph ?? null;
-  const scope = program.options.resourceScope ?? base.defaultScope ?? null;
-  const { resources } = materializeResourcesForScope(base, graph, scope);
-  const catalogResources = program.options.catalog?.resources;
-  const mergedResources = catalogResources ? mergeResourceCollections(resources, catalogResources) : resources;
-  const sem = prepareSemantics(
-    { ...base, resourceGraph: graph ?? undefined, defaultScope: scope ?? undefined },
-    { resources: mergedResources },
-  );
-  const syntax = program.options.syntax ?? buildTemplateSyntaxRegistry(sem);
-  return { sem, resources: mergedResources, syntax };
-}
-
-function mergeResourceCollections(
-  base: ResourceCollections,
-  extra: ResourceCollections,
-): ResourceCollections {
-  return {
-    elements: { ...extra.elements, ...base.elements },
-    attributes: { ...extra.attributes, ...base.attributes },
-    controllers: { ...extra.controllers, ...base.controllers },
-    valueConverters: { ...extra.valueConverters, ...base.valueConverters },
-    bindingBehaviors: { ...extra.bindingBehaviors, ...base.bindingBehaviors },
-  };
+  const context = program.options.templateContext?.(uri) ?? {};
+  const snapshot = buildSemanticsSnapshotFromProject(program.options.project, context);
+  return { sem: snapshot.semantics, resources: snapshot.semantics.resources, syntax: snapshot.syntax };
 }
 
 function collectExpressionCompletions(

@@ -12,17 +12,10 @@ import type { NormalizedPath } from "../model/index.js";
 
 // Language imports (via barrel)
 import {
-  prepareSemantics,
-  buildTemplateSyntaxRegistry,
-  materializeSemanticsForScope,
-  type ResourceCatalog,
-  type ResourceCollections,
-  type ResourceGraph,
+  buildSemanticsSnapshotFromProject,
+  type ProjectSnapshot,
+  type TemplateContext,
   type ResourceScopeId,
-  type LocalImportDef,
-  type Semantics,
-  type SemanticsWithCaches,
-  type TemplateSyntaxRegistry,
 } from "../language/index.js";
 
 // Parsing imports (via barrel)
@@ -44,15 +37,14 @@ import { InMemorySourceStore, type SourceStore } from "./sources.js";
 import { InMemoryProvenanceIndex, type ProvenanceIndex } from "./provenance.js";
 import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
 
+export type TemplateContextResolver = (uri: DocumentUri) => TemplateContext | null | undefined;
+
 export interface TemplateProgramOptions {
   readonly vm: VmReflection;
   readonly isJs: boolean;
-  readonly semantics: Semantics;
-  readonly catalog?: ResourceCatalog;
-  readonly syntax?: TemplateSyntaxRegistry;
-  readonly resourceGraph?: ResourceGraph;
-  readonly resourceScope?: ResourceScopeId | null;
-  readonly localImports?: readonly LocalImportDef[];
+  readonly project: ProjectSnapshot;
+  /** Optional per-template context resolver (scope/local imports). */
+  readonly templateContext?: TemplateContextResolver;
   readonly moduleResolver: ModuleResolver;
   readonly attrParser?: AttributeParser;
   readonly exprParser?: IExpressionParser;
@@ -72,6 +64,7 @@ interface CachedCompilation {
   readonly version: number;
   readonly contentHash: string;
   readonly optionsFingerprint: string;
+  readonly contextFingerprint: string;
   readonly scopeId: ResourceScopeId | null;
 }
 
@@ -80,6 +73,7 @@ interface CoreStageCacheEntry {
   readonly version: number;
   readonly contentHash: string;
   readonly optionsFingerprint: string;
+  readonly contextFingerprint: string;
   readonly scopeId: ResourceScopeId | null;
 }
 
@@ -299,16 +293,18 @@ export class DefaultTemplateProgram implements TemplateProgram {
     const snap = this.snapshot(canonical.uri);
     const startedAt = nowMs();
     const contentHash = hashSnapshotContent(snap);
-    const scopeId = resolveScopeId(this.options);
+    const context = resolveTemplateContext(this.options, canonical.uri);
+    const contextFingerprint = fingerprintTemplateContext(context);
+    const scopeId = context.scopeId ?? null;
     const cached = this.compilationCache.get(canonical.uri);
     if (
       cached &&
-      cached.scopeId === scopeId &&
+      cached.contextFingerprint === contextFingerprint &&
       cached.optionsFingerprint === this.optionsFingerprint &&
       cached.contentHash === contentHash
     ) {
       if (!this.dependencyIndex.has(canonical.uri)) {
-        this.dependencyIndex.set(canonical.uri, buildDependencyRecord(cached.compilation, this.options));
+        this.dependencyIndex.set(canonical.uri, buildDependencyRecord(canonical.uri, cached.compilation, this.options));
       }
       if (cached.version !== snap.version) {
         this.compilationCache.set(canonical.uri, { ...cached, version: snap.version });
@@ -326,9 +322,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
       return cached.compilation;
     }
     if (cached) {
-      if (cached.scopeId !== scopeId) {
-        debug.workspace("program.cache.scope-miss", {
+      if (cached.contextFingerprint !== contextFingerprint) {
+        debug.workspace("program.cache.context-miss", {
           uri: canonical.uri,
+          cachedContext: cached.contextFingerprint,
+          currentContext: contextFingerprint,
           cachedScope: cached.scopeId ?? null,
           currentScope: scopeId ?? null,
         });
@@ -370,6 +368,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
       version: snap.version,
       contentHash,
       optionsFingerprint: this.optionsFingerprint,
+      contextFingerprint,
       scopeId,
     });
 
@@ -380,9 +379,10 @@ export class DefaultTemplateProgram implements TemplateProgram {
       version: snap.version,
       contentHash,
       optionsFingerprint: this.optionsFingerprint,
+      contextFingerprint,
       scopeId,
     });
-    this.dependencyIndex.set(canonical.uri, buildDependencyRecord(compilation, this.options));
+    this.dependencyIndex.set(canonical.uri, buildDependencyRecord(canonical.uri, compilation, this.options));
     this.recordAccess(canonical.uri, "overlay", {
       programCacheHit: false,
       stageMeta: compilation.meta,
@@ -514,8 +514,9 @@ export class DefaultTemplateProgram implements TemplateProgram {
     const retained: DocumentUri[] = [];
 
     for (const [uri, cached] of Array.from(this.compilationCache.entries())) {
-      const record = this.dependencyIndex.get(uri) ?? buildDependencyRecord(cached.compilation, this.options);
-      const nextDepsFingerprint = computeDependencyFingerprint(record.deps, nextOptions);
+      const record = this.dependencyIndex.get(uri) ?? buildDependencyRecord(uri, cached.compilation, this.options);
+      const nextContext = resolveTemplateContext(nextOptions, uri);
+      const nextDepsFingerprint = computeDependencyFingerprint(record.deps, nextOptions, nextContext);
       if (nextDepsFingerprint !== record.fingerprint) {
         debug.workspace("program.invalidate.deps", {
           uri,
@@ -560,7 +561,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
   ): Partial<Record<StageKey, StageOutputs[StageKey]>> | null {
     const cached = this.coreCache.get(uri);
     if (!cached) return null;
-    if (cached.scopeId !== resolveScopeId(this.options)) return null;
+    const contextFingerprint = fingerprintTemplateContext(resolveTemplateContext(this.options, uri));
+    if (cached.contextFingerprint !== contextFingerprint) return null;
     if (cached.optionsFingerprint !== this.optionsFingerprint) return null;
     if (cached.contentHash !== contentHash) return null;
     return {
@@ -683,16 +685,14 @@ export class DefaultTemplateProgram implements TemplateProgram {
   }
 
   private buildCompileOptions(snap: DocumentSnapshot, templatePath: NormalizedPath) {
+    const templateContext = resolveTemplateContext(this.options, snap.uri);
     const opts: {
       html: string;
       templateFilePath: string;
       isJs: boolean;
       vm: VmReflection;
-      semantics: Semantics;
-      catalog?: ResourceCatalog;
-      syntax?: TemplateSyntaxRegistry;
-      resourceGraph?: ResourceGraph;
-      resourceScope?: ResourceScopeId | null;
+      project: ProjectSnapshot;
+      templateContext?: TemplateContext;
       attrParser?: AttributeParser;
       exprParser?: IExpressionParser;
       moduleResolver: ModuleResolver;
@@ -704,14 +704,10 @@ export class DefaultTemplateProgram implements TemplateProgram {
       templateFilePath: templatePath,
       isJs: this.options.isJs,
       vm: this.options.vm,
-      semantics: this.options.semantics,
+      project: this.options.project,
       moduleResolver: this.options.moduleResolver,
     };
-
-    if (this.options.catalog !== undefined) opts.catalog = this.options.catalog;
-    if (this.options.syntax !== undefined) opts.syntax = this.options.syntax;
-    if (this.options.resourceGraph !== undefined) opts.resourceGraph = this.options.resourceGraph;
-    if (this.options.resourceScope !== undefined) opts.resourceScope = this.options.resourceScope ?? null;
+    if (templateContext) opts.templateContext = templateContext;
     if (this.options.attrParser !== undefined) opts.attrParser = this.options.attrParser;
     if (this.options.exprParser !== undefined) opts.exprParser = this.options.exprParser;
     if (this.options.overlayBaseName !== undefined) opts.overlayBaseName = this.options.overlayBaseName;
@@ -762,19 +758,21 @@ function hashSnapshotContent(snap: DocumentSnapshot): string {
 }
 
 function computeProgramOptionsFingerprint(options: ProgramOptions, hints: FingerprintHints): string {
-  const sem = options.semantics;
+  const project = options.project;
+  const sem = project.semantics;
   const overlayHint = hints.overlay ?? { isJs: options.isJs, syntheticPrefix: options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_" };
-  const catalogHint = hints.catalog
-    ?? (options.catalog ? stableHash(options.catalog) : stableHash(prepareSemantics(sem).catalog));
-  const syntaxHint = hints.syntax ?? (options.syntax ? stableHash(options.syntax) : null);
+  const catalogHint = hints.catalog ?? stableHash(project.catalog);
+  const syntaxHint = hints.syntax ?? stableHash(project.syntax);
   const moduleResolverHint = hints.moduleResolver ?? "custom";
+  const graphHint = project.resourceGraph ? stableHash(project.resourceGraph) : null;
   const fingerprint: Record<string, FingerprintHints[keyof FingerprintHints]> = {
     isJs: options.isJs,
     overlayBaseName: options.overlayBaseName ?? null,
     semantics: hints.semantics ?? stableHashSemantics(sem),
     catalog: catalogHint,
     syntax: syntaxHint,
-    resourceGraph: fingerprintResourceGraph(options, sem),
+    resourceGraph: graphHint,
+    defaultScope: project.defaultScope ?? null,
     attrParser: hints.attrParser ?? (options.attrParser ? "custom" : "default"),
     exprParser: hints.exprParser ?? (options.exprParser ? "custom" : "default"),
     vm: hints.vm ?? fingerprintVm(options.vm),
@@ -788,10 +786,10 @@ function computeProgramOptionsFingerprint(options: ProgramOptions, hints: Finger
 
 function normalizeFingerprintHints(options: ProgramOptions): FingerprintHints {
   const base: FingerprintHints = { ...(options.fingerprints ?? {}) };
-  const sem = options.semantics;
+  const sem = options.project.semantics;
   if (base.semantics === undefined) base.semantics = stableHashSemantics(sem);
-  if (base.catalog === undefined && options.catalog) base.catalog = stableHash(options.catalog);
-  if (base.syntax === undefined && options.syntax) base.syntax = stableHash(options.syntax);
+  if (base.catalog === undefined) base.catalog = stableHash(options.project.catalog);
+  if (base.syntax === undefined) base.syntax = stableHash(options.project.syntax);
   if (base.attrParser === undefined) base.attrParser = options.attrParser ? "custom" : "default";
   if (base.exprParser === undefined) base.exprParser = options.exprParser ? "custom" : "default";
   if (base.vm === undefined) base.vm = fingerprintVm(options.vm);
@@ -801,16 +799,6 @@ function normalizeFingerprintHints(options: ProgramOptions): FingerprintHints {
     base.overlay = { isJs: options.isJs, syntheticPrefix };
   }
   return base;
-}
-
-function fingerprintResourceGraph(
-  options: ProgramOptions,
-  sem: Semantics,
-): { readonly graph: string; readonly scope: ResourceScopeId | null } | null {
-  const graph = options.resourceGraph ?? sem.resourceGraph ?? null;
-  if (!graph) return null;
-  const scope = options.resourceScope ?? sem.defaultScope ?? graph.root ?? null;
-  return { graph: stableHash(graph), scope };
 }
 
 function fingerprintVm(vm: VmReflection): string {
@@ -845,20 +833,23 @@ function extractExtraFingerprintHints(hints: FingerprintHints): Record<string, F
 }
 
 function buildDependencyRecord(
+  uri: DocumentUri,
   compilation: TemplateCompilation,
   options: ResolvedProgramOptions,
 ): TemplateDependencyRecord {
-  const deps = collectTemplateDependencies(compilation, options);
-  const fingerprint = computeDependencyFingerprint(deps, options);
+  const context = resolveTemplateContext(options, uri);
+  const deps = collectTemplateDependencies(compilation, options, context);
+  const fingerprint = computeDependencyFingerprint(deps, options, context);
   return { deps, fingerprint };
 }
 
 function collectTemplateDependencies(
   compilation: TemplateCompilation,
   options: ResolvedProgramOptions,
+  context: TemplateContext,
 ): TemplateDependencySet {
   const usage = compilation.usage;
-  const scopeId = resolveScopeId(options);
+  const scopeId = context.scopeId ?? null;
   return {
     scopeId,
     vm: fingerprintVm(options.vm),
@@ -893,16 +884,18 @@ function normalizeNames(names: readonly string[]): string[] {
 function computeDependencyFingerprint(
   deps: TemplateDependencySet,
   options: ResolvedProgramOptions,
+  context: TemplateContext,
 ): string {
-  const scoped = resolveSemanticsInputs(options, deps.scopeId);
-  const resources = scoped.resources;
+  const scoped = buildSemanticsSnapshotFromProject(options.project, context);
+  const resources = scoped.semantics.resources;
   const syntax = scoped.syntax;
   const global = {
-    dom: stableHash(scoped.sem.dom),
-    events: stableHash(scoped.sem.events),
-    naming: stableHash(scoped.sem.naming),
-    twoWayDefaults: stableHash(scoped.sem.twoWayDefaults),
+    dom: stableHash(scoped.semantics.dom),
+    events: stableHash(scoped.semantics.events),
+    naming: stableHash(scoped.semantics.naming),
+    twoWayDefaults: stableHash(scoped.semantics.twoWayDefaults),
   };
+  const localImportsFingerprint = context.localImports ? stableHash(context.localImports) : null;
 
   const resourceFingerprints = [
     ...deps.elements.map((name) => ({
@@ -945,6 +938,7 @@ function computeDependencyFingerprint(
 
     return stableHash({
       scopeId: deps.scopeId ?? null,
+      localImports: localImportsFingerprint,
       vm: deps.vm,
       global,
       resources: resourceFingerprints,
@@ -957,28 +951,23 @@ function fingerprintResource(value: unknown): string {
   return value ? stableHash(value) : "missing";
 }
 
-function resolveScopeId(options: ResolvedProgramOptions): ResourceScopeId | null {
-  const graph = options.resourceGraph ?? options.semantics.resourceGraph ?? null;
-  if (options.resourceScope !== undefined) {
-    return options.resourceScope ?? null;
-  }
-  return options.semantics.defaultScope ?? graph?.root ?? null;
+function resolveTemplateContext(options: ResolvedProgramOptions, uri: DocumentUri): TemplateContext {
+  const provided = options.templateContext?.(uri) ?? null;
+  const graph = options.project.resourceGraph ?? null;
+  const defaultScope = options.project.defaultScope ?? graph?.root ?? null;
+  const scopeId = provided && provided.scopeId !== undefined ? provided.scopeId : defaultScope;
+  const localImports = provided?.localImports;
+  return {
+    ...(scopeId !== undefined ? { scopeId } : {}),
+    ...(localImports ? { localImports } : {}),
+  };
 }
 
-function resolveSemanticsInputs(
-  options: ResolvedProgramOptions,
-  scopeOverride: ResourceScopeId | null,
-): { sem: SemanticsWithCaches; resources: ResourceCollections; syntax: TemplateSyntaxRegistry } {
-  const base = options.semantics;
-  const graph = options.resourceGraph ?? base.resourceGraph ?? null;
-  const scopeId = scopeOverride ?? resolveScopeId(options);
-  const sem = materializeSemanticsForScope(base, graph, scopeId, options.localImports);
-  const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
-  const useCatalogOverride = !!(options.catalog && !hasLocalImports);
-  const catalog = useCatalogOverride ? options.catalog! : sem.catalog;
-  const semWithCatalog = useCatalogOverride ? { ...sem, catalog } : sem;
-  const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
-  return { sem: semWithCatalog, resources: sem.resources, syntax };
+function fingerprintTemplateContext(context: TemplateContext): string {
+  return stableHash({
+    scopeId: context.scopeId ?? null,
+    localImports: context.localImports ? stableHash(context.localImports) : null,
+  });
 }
 
 function isGlobalOptionChange(
@@ -989,10 +978,6 @@ function isGlobalOptionChange(
 ): boolean {
   if (current.isJs !== next.isJs) return true;
   if ((current.overlayBaseName ?? null) !== (next.overlayBaseName ?? null)) return true;
-
-  const currentImports = current.localImports ? stableHash(current.localImports) : null;
-  const nextImports = next.localImports ? stableHash(next.localImports) : null;
-  if (currentImports !== nextImports) return true;
 
   const currentAttr = stableHash(currentHints.attrParser ?? null);
   const nextAttr = stableHash(nextHints.attrParser ?? null);

@@ -8,6 +8,7 @@ import {
   type ResourceGraph,
   type ResourceScopeId,
   type SemanticsWithCaches,
+  type ProjectSnapshot,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
 import {
@@ -113,6 +114,16 @@ export class AureliaProjectIndex {
 
   currentSemantics(): SemanticsWithCaches {
     return this.#semantics;
+  }
+
+  currentProjectSnapshot(): ProjectSnapshot {
+    return {
+      semantics: this.#semantics,
+      catalog: this.#catalog,
+      syntax: this.#syntax,
+      resourceGraph: this.#resourceGraph,
+      defaultScope: this.#semantics.defaultScope ?? this.#resourceGraph.root ?? null,
+    };
   }
 
   currentFingerprint(): string {

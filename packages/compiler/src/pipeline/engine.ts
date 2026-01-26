@@ -5,12 +5,8 @@ import type { DiagnosticSource } from "../model/diagnostics.js";
 // Language imports (via barrel)
 import type {
   FeatureUsageSet,
-  LocalImportDef,
-  ResourceCatalog,
-  ResourceGraph,
-  ResourceScopeId,
-  Semantics,
-  TemplateSyntaxRegistry,
+  ProjectSnapshot,
+  TemplateContext,
 } from "../language/index.js";
 
 // Parsing imports (via barrel)
@@ -80,12 +76,8 @@ export interface PipelineOptions {
   templateFilePath: string;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
-  semantics: Semantics;
-  catalog?: ResourceCatalog;
-  syntax?: TemplateSyntaxRegistry;
-  resourceGraph?: ResourceGraph;
-  resourceScope?: ResourceScopeId | null;
-  localImports?: readonly LocalImportDef[];
+  project: ProjectSnapshot;
+  templateContext?: TemplateContext;
   moduleResolver: ModuleResolver;
   vm?: VmReflection;
   /** Pipeline-wide cache knobs. */

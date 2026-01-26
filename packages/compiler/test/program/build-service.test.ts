@@ -7,6 +7,7 @@ import {
   DefaultTemplateProgram,
   canonicalDocumentUri,
   deriveTemplatePaths,
+  buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
 
@@ -117,7 +118,7 @@ function createProgram(opts = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
     moduleResolver: noopModuleResolver,
     ...opts,
   });
