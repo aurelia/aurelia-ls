@@ -10,7 +10,7 @@
  * - Fed to the SSR package's instruction translator for server rendering
  */
 
-import { lowerDocument, resolveHost, bindScopes } from "./analysis/index.js";
+import { lowerDocument, linkTemplateSemantics, bindScopes } from "./analysis/index.js";
 import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser } from "./parsing/index.js";
 import {
@@ -96,7 +96,7 @@ export interface CompileAotResult {
  *
  * This runs the full compilation pipeline:
  * 1. Parse and lower (10-lower)
- * 2. Resolve semantics (20-resolve)
+ * 2. Resolve semantics (20-link)
  * 3. Bind scopes (30-bind)
  * 4. Build AOT plan
  * 5. Emit serialized instructions and template HTML
@@ -177,10 +177,10 @@ export function compileAot(
       trace,
     });
 
-    const linked = resolveHost(ir, snapshot, {
+    const linked = linkTemplateSemantics(ir, snapshot, {
       moduleResolver: options.moduleResolver,
       templateFilePath: templatePath,
-      diagnostics: diagnostics.forSource("resolve-host"),
+      diagnostics: diagnostics.forSource("link"),
       trace,
     });
     const scoped = bindScopes(linked, { trace, diagnostics: diagnostics.forSource("bind") });

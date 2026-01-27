@@ -42,7 +42,7 @@ export const fixtures: readonly FixtureDescriptor[] = [
     title: "explicit-app",
     description: "Decorator and static-au declarations with external templates.",
     origin: "resolution-app",
-    root: { kind: "repo", path: "packages/compiler/test/20-resolve/apps/explicit-app" },
+    root: { kind: "repo", path: "packages/compiler/test/20-link/apps/explicit-app" },
     scenarios: ["S1", "S6"],
     suites: ["workspace", "lsp-adapter", "integration-harness"],
     coverage: {
@@ -62,7 +62,7 @@ export const fixtures: readonly FixtureDescriptor[] = [
     title: "convention-app",
     description: "Convention-driven element discovery with template-import convention.",
     origin: "resolution-app",
-    root: { kind: "repo", path: "packages/compiler/test/20-resolve/apps/convention-app" },
+    root: { kind: "repo", path: "packages/compiler/test/20-link/apps/convention-app" },
     scenarios: ["S1", "S6"],
     suites: ["workspace", "lsp-adapter", "integration-harness"],
     coverage: {
@@ -82,7 +82,7 @@ export const fixtures: readonly FixtureDescriptor[] = [
     title: "sibling-app",
     description: "Sibling templates with local scope usage.",
     origin: "resolution-app",
-    root: { kind: "repo", path: "packages/compiler/test/20-resolve/apps/sibling-app" },
+    root: { kind: "repo", path: "packages/compiler/test/20-link/apps/sibling-app" },
     scenarios: ["S1", "S5", "S6"],
     suites: ["workspace", "lsp-adapter", "integration-harness"],
     coverage: {
@@ -464,7 +464,7 @@ export const fixtures: readonly FixtureDescriptor[] = [
     title: "determinism-explicit-app",
     description: "Determinism run against explicit-app under varied roots.",
     origin: "resolution-app",
-    root: { kind: "repo", path: "packages/compiler/test/20-resolve/apps/explicit-app" },
+    root: { kind: "repo", path: "packages/compiler/test/20-link/apps/explicit-app" },
     scenarios: ["S6"],
     suites: ["workspace"],
     coverage: {

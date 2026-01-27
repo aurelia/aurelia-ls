@@ -8,14 +8,14 @@ describe("diagnostic utilities", () => {
     const diag = buildDiagnostic({
       code: "E_TEST",
       message: "Boom",
-      source: "resolve-host",
+      source: "link",
       span: { start: 9, end: 2 },
     });
 
     expect(diag.severity).toBeUndefined();
     expect(diag.span).toEqual({ start: 2, end: 9 });
     expect(diag.origin?.kind).toBe("authored");
-    expect(diag.origin?.trace?.[0]?.by).toBe("resolve-host");
+    expect(diag.origin?.trace?.[0]?.by).toBe("link");
     expect(diag.origin?.span).toEqual({ start: 2, end: 9 });
   });
 
@@ -46,7 +46,7 @@ describe("diagnostic utilities", () => {
     const fallback = buildDiagnostic({
       code: "E_FALL",
       message: "Fallback",
-      source: "resolve-host",
+      source: "link",
       span: { start: 8, end: 3 },
       origin: { kind: "synthetic", span: null },
     });

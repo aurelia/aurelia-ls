@@ -17,7 +17,7 @@ import { createAttributeParserFromRegistry, getExpressionParser, type AttributeP
 import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 
 // Analysis imports (via barrel)
-import { lowerDocument, resolveHost, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
+import { lowerDocument, linkTemplateSemantics, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
 import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
@@ -46,7 +46,7 @@ export interface CoreCompileOptions {
 
 export interface CorePipelineResult {
   ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-resolve"];
+  linked: StageOutputs["20-link"];
   scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
 }
@@ -78,7 +78,7 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
   const session = engine.createSession(pipelineOpts);
   return {
     ir: session.run("10-lower"),
-    linked: session.run("20-resolve"),
+    linked: session.run("20-link"),
     scope: session.run("30-bind"),
     typecheck: session.run("40-typecheck"),
   };
@@ -148,7 +148,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   });
 
   definitions.push({
-    key: "20-resolve",
+    key: "20-link",
     version: "3",
     deps: ["10-lower"],
     fingerprint(ctx) {
@@ -170,19 +170,19 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
         diagnostics: ctx.diag,
         trace: ctx.options.trace,
       };
-      return resolveHost(ir, scoped, resolveOpts);
+      return linkTemplateSemantics(ir, scoped, resolveOpts);
     },
   });
 
   definitions.push({
     key: "30-bind",
     version: "1",
-    deps: ["20-resolve"],
+    deps: ["20-link"],
     fingerprint() {
       return "scope@1";
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       return bindScopes(linked, { trace: ctx.options.trace, diagnostics: ctx.diag });
     },
   });
@@ -190,7 +190,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "40-typecheck",
     version: "1",
-    deps: ["10-lower", "20-resolve", "30-bind"],
+    deps: ["10-lower", "20-link", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
@@ -198,7 +198,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       return { vm: vmToken, root: rootVm };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       const scope = ctx.require("30-bind");
       const ir = ctx.require("10-lower");
       const vm = assertOption(ctx.options.vm, "vm");
@@ -211,7 +211,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "50-usage",
     version: "1",
-    deps: ["20-resolve"],
+    deps: ["20-link"],
     fingerprint(ctx) {
       const { syntax } = resolveTemplateSnapshot(ctx.options);
       const attrParserFingerprint = ctx.options.fingerprints?.attrParser
@@ -222,7 +222,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     run(ctx) {
       const scoped = resolveTemplateSnapshot(ctx.options);
       const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(scoped.syntax);
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       return collectFeatureUsage(linked, { syntax: scoped.syntax, attrParser });
     },
   });
@@ -230,7 +230,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "overlay:plan",
     version: "1",
-    deps: ["20-resolve", "30-bind"],
+    deps: ["20-link", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const overlayOpts = ctx.options.overlay ?? { isJs: false };
@@ -244,7 +244,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       const scope = ctx.require("30-bind");
       const vm = assertOption(ctx.options.vm, "vm");
       const overlayOpts: SynthesisOptions = {
@@ -287,7 +287,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "aot:plan",
     version: "1",
-    deps: ["20-resolve", "30-bind"],
+    deps: ["20-link", "30-bind"],
     fingerprint(ctx) {
       const aotOpts = ctx.options.aot ?? {};
       return {
@@ -295,7 +295,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       const scope = ctx.require("30-bind");
       const { syntax } = resolveTemplateSnapshot(ctx.options);
       const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(syntax);
@@ -315,12 +315,12 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
 /**
  * Shape used by tests/clients that only need the pure pipeline (up to typecheck).
  */
-export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-resolve" | "30-bind" | "40-typecheck"> {
+export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-link" | "30-bind" | "40-typecheck"> {
   const engine = new PipelineEngine(createDefaultStageDefinitions());
   const session = engine.createSession(options);
   return {
     "10-lower": session.run("10-lower"),
-    "20-resolve": session.run("20-resolve"),
+    "20-link": session.run("20-link"),
     "30-bind": session.run("30-bind"),
     "40-typecheck": session.run("40-typecheck"),
   };

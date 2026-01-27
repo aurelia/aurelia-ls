@@ -2265,7 +2265,7 @@
           "capture": false,
           "className": "InlineOnly",
           "containerless": false,
-          "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts",
+          "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts",
           "kind": "element",
           "name": "inline-only",
           "processContent": false
@@ -2276,7 +2276,7 @@
           "capture": false,
           "className": "MyApp",
           "containerless": false,
-          "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts",
+          "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts",
           "kind": "element",
           "name": "my-app",
           "processContent": false
@@ -2287,7 +2287,7 @@
           "capture": false,
           "className": "NavBar",
           "containerless": false,
-          "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts",
+          "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts",
           "kind": "element",
           "name": "nav-bar",
           "processContent": false
@@ -2318,7 +2318,7 @@
           "capture": false,
           "className": "UserCard",
           "containerless": false,
-          "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts",
+          "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts",
           "kind": "element",
           "name": "user-card",
           "processContent": false
@@ -4443,7 +4443,7 @@
               "capture": false,
               "className": "InlineOnly",
               "containerless": false,
-              "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts",
+              "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts",
               "kind": "element",
               "name": "inline-only",
               "processContent": false
@@ -4454,7 +4454,7 @@
               "capture": false,
               "className": "MyApp",
               "containerless": false,
-              "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts",
+              "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts",
               "kind": "element",
               "name": "my-app",
               "processContent": false
@@ -4465,7 +4465,7 @@
               "capture": false,
               "className": "NavBar",
               "containerless": false,
-              "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts",
+              "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts",
               "kind": "element",
               "name": "nav-bar",
               "processContent": false
@@ -4496,7 +4496,7 @@
               "capture": false,
               "className": "UserCard",
               "containerless": false,
-              "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts",
+              "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts",
               "kind": "element",
               "name": "user-card",
               "processContent": false
@@ -5290,146 +5290,146 @@
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 380, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 242 },
+          "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 380, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 242 },
+          "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 380, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 242 },
+          "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
           "value": "InlineOnly"
         },
         "containerless": {
-          "location": { "end": 380, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 242 },
+          "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts",
+        "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts",
         "inlineTemplate": {
-          "location": { "end": 380, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 242 },
+          "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
           "value": "<div>Inline template</div>"
         },
         "kind": "custom-element",
         "name": {
-          "location": { "end": 281, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 268 },
+          "location": { "end": 281, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 268 },
           "origin": "source",
           "value": "inline-only"
         },
         "processContent": {
-          "location": { "end": 380, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 242 },
+          "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 380, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts", "pos": 242 },
+          "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source"
         }
       },
       "id": "sym:b29a5180c72e80e6d162c8da61af2893f50cdb16822aabd2b4e0ac5c1a153b7b",
       "kind": "custom-element",
       "name": "inline-only",
-      "source": "packages/compiler/test/20-resolve/apps/sibling-app/src/inline-only.ts"
+      "source": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts"
     },
     {
       "data": {
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 263, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts", "pos": 200 },
+          "location": { "end": 263, "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 263, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts", "pos": 200 },
+          "location": { "end": 263, "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 263, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts", "pos": 200 },
+          "location": { "end": 263, "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
           "value": "MyApp"
         },
         "containerless": {
-          "location": { "end": 263, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts", "pos": 200 },
+          "location": { "end": 263, "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts",
+        "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 263, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts", "pos": 200 },
+          "location": { "end": 263, "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
           "value": "my-app"
         },
         "processContent": {
-          "location": { "end": 263, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts", "pos": 200 },
+          "location": { "end": 263, "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 263, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts", "pos": 200 },
+          "location": { "end": 263, "file": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source"
         }
       },
       "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549",
       "kind": "custom-element",
       "name": "my-app",
-      "source": "packages/compiler/test/20-resolve/apps/sibling-app/src/my-app.ts"
+      "source": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts"
     },
     {
       "data": {
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 224, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
+          "location": { "end": 224, "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 224, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
+          "location": { "end": 224, "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 224, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
+          "location": { "end": 224, "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
           "value": "NavBar"
         },
         "containerless": {
-          "location": { "end": 224, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
+          "location": { "end": 224, "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts",
+        "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 224, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
+          "location": { "end": 224, "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
           "value": "nav-bar"
         },
         "processContent": {
-          "location": { "end": 224, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
+          "location": { "end": 224, "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 224, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
+          "location": { "end": 224, "file": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source"
         }
       },
       "id": "sym:7ca0275eb8c38075f354435769d61872e3e383f9cc82eeecfd67612bad23a740",
       "kind": "custom-element",
       "name": "nav-bar",
-      "source": "packages/compiler/test/20-resolve/apps/sibling-app/src/nav-bar.ts"
+      "source": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts"
     },
     {
       "data": {
@@ -5437,126 +5437,126 @@
         "bindables": {
           "age": {
             "attribute": {
-              "location": { "end": 314, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 288 },
+              "location": { "end": 314, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
               "value": "age"
             },
             "mode": {
-              "location": { "end": 314, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 288 },
+              "location": { "end": 314, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 314, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 288 },
+              "location": { "end": 314, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 314, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 288 },
+              "location": { "end": 314, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
               "value": "age"
             },
             "type": {
-              "location": { "end": 314, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 288 },
+              "location": { "end": 314, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
               "value": "number"
             }
           },
           "name": {
             "attribute": {
-              "location": { "end": 284, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 256 },
+              "location": { "end": 284, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
               "value": "name"
             },
             "mode": {
-              "location": { "end": 284, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 256 },
+              "location": { "end": 284, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 284, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 256 },
+              "location": { "end": 284, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 284, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 256 },
+              "location": { "end": 284, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
               "value": "name"
             },
             "type": {
-              "location": { "end": 284, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 256 },
+              "location": { "end": 284, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
               "value": "string"
             }
           },
           "selected": {
             "attribute": {
-              "location": { "end": 374, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 318 },
+              "location": { "end": 374, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
               "value": "selected"
             },
             "mode": {
-              "location": { "end": 374, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 318 },
+              "location": { "end": 374, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
               "value": "twoWay"
             },
             "primary": {
-              "location": { "end": 374, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 318 },
+              "location": { "end": 374, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 374, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 318 },
+              "location": { "end": 374, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
               "value": "selected"
             },
             "type": {
-              "location": { "end": 374, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 318 },
+              "location": { "end": 374, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
               "value": "boolean"
             }
           }
         },
         "boundary": {
-          "location": { "end": 453, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 229 },
+          "location": { "end": 453, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 453, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 229 },
+          "location": { "end": 453, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 453, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 229 },
+          "location": { "end": 453, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
           "value": "UserCard"
         },
         "containerless": {
-          "location": { "end": 453, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 229 },
+          "location": { "end": 453, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts",
+        "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 453, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 229 },
+          "location": { "end": 453, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
           "value": "user-card"
         },
         "processContent": {
-          "location": { "end": 453, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 229 },
+          "location": { "end": 453, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 453, "file": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts", "pos": 229 },
+          "location": { "end": 453, "file": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source"
         }
       },
       "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",
       "kind": "custom-element",
       "name": "user-card",
-      "source": "packages/compiler/test/20-resolve/apps/sibling-app/src/user-card.ts"
+      "source": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts"
     },
     {
       "data": {

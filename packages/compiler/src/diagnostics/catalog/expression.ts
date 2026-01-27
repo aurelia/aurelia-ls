@@ -40,7 +40,7 @@ export const expressionDiagnostics = {
     impact: "degraded",
     actionability: "guided",
     span: "span",
-    stages: ["resolve"],
+    stages: ["link"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
     description: "Expression references an unknown symbol.",

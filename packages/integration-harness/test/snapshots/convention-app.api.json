@@ -90,8 +90,8 @@
       "kind": "custom-element",
       "name": "au-viewport"
     },
-    { "id": "sym:153c1c2c5bb90f1a5108477f13ef37487bce20947a2bcc06319616c6948728c6", "kind": "custom-element", "name": "cortex-devices", "source": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts" },
-    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts" },
+    { "id": "sym:153c1c2c5bb90f1a5108477f13ef37487bce20947a2bcc06319616c6948728c6", "kind": "custom-element", "name": "cortex-devices", "source": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts" },
+    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts" },
     {
       "bindables": [
         { "attribute": "age", "name": "age" },
@@ -101,7 +101,7 @@
       "id": "sym:03a8bc3cd7d8b8f044de957fbe67ce7c116d1425d1e1a3cc6734f2a36151417c",
       "kind": "custom-element",
       "name": "user-profile",
-      "source": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts"
+      "source": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts"
     },
     {
       "bindables": [
@@ -211,7 +211,7 @@
       "name": "with",
       "source": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts"
     },
-    { "id": "sym:c2b06dbdaa60560f089a05c195ed003f388823aa7ac2f83584fff2bb6067cf61", "kind": "value-converter", "name": "dateformat", "source": "packages/compiler/test/20-resolve/apps/convention-app/src/date-format.ts" },
+    { "id": "sym:c2b06dbdaa60560f089a05c195ed003f388823aa7ac2f83584fff2bb6067cf61", "kind": "value-converter", "name": "dateformat", "source": "packages/compiler/test/20-link/apps/convention-app/src/date-format.ts" },
     { "id": "sym:5a331384e1bf194d875314915ad92fa54276df9145d7f7df24d2a0946d44922a", "kind": "value-converter", "name": "sanitize", "source": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts" }
   ],
   "version": "aurelia-api-snapshot@1"

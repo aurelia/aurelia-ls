@@ -12,7 +12,7 @@ export type DiagnosticSeverity = "error" | "warning" | "info";
 
 export type DiagnosticSource =
   | "lower"
-  | "resolve-host"
+  | "link"
   | "resolution"
   | "bind"
   | "typecheck"

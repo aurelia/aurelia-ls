@@ -23,7 +23,7 @@ function mkDiag(code = "E_TEST"): CompilerDiagnostic {
   return {
     code,
     message: "test",
-    source: "resolve-host",
+    source: "link",
     severity: "error",
   };
 }

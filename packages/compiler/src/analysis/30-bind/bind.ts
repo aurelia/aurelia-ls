@@ -1,6 +1,6 @@
 /* =============================================================================
  * PHASE 30 — BIND (Scope Graph)
- * LinkedSemantics -> ScopeModule (pure, deterministic)
+ * LinkModule -> ScopeModule (pure, deterministic)
  * - Map each expression occurrence to the frame where it is evaluated
  * - Introduce frames for overlay controllers (repeat/with/promise)
  * - Materialize locals: <let>, iterator declaration, contextuals, aliases
@@ -36,10 +36,10 @@ import type {
 } from "../../model/ir.js";
 
 import type {
-  LinkedSemanticsModule, LinkedTemplate, LinkedRow,
+  LinkModule, LinkedTemplate, LinkedRow,
   LinkedHydrateTemplateController, LinkedIteratorBinding, LinkedHydrateLetElement, LinkedElementBindable,
   LinkedPropertyBinding,
-} from "../20-resolve/types.js";
+} from "../20-link/types.js";
 
 import type {
   ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagCode, OverlayBase, FrameOrigin,
@@ -77,7 +77,7 @@ export interface BindScopesOptions {
  * Public API
  * ============================================================================= */
 
-export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptions): ScopeModule {
+export function bindScopes(linked: LinkModule, opts?: BindScopesOptions): ScopeModule {
   const trace = opts?.trace ?? NOOP_TRACE;
   const diagEmitter = opts?.diagnostics;
   if (!diagEmitter) {
@@ -114,7 +114,7 @@ export function bindScopes(linked: LinkedSemanticsModule, opts?: BindScopesOptio
     trace.event("bind.indexExprs.complete", { exprCount: exprIndex.size, forOfCount: forOfIndex.size });
     const reportedBadExprs = new Set<ExprId>();
 
-    // Map raw TemplateIR roots → LinkedTemplate (identity preserved by resolve-host)
+    // Map raw TemplateIR roots → LinkedTemplate (identity preserved by link)
     const domToLinked = new WeakMap<TemplateNode, LinkedTemplate>();
     for (const t of linked.templates) domToLinked.set(t.dom, t);
 

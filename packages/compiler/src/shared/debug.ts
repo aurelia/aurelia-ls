@@ -10,15 +10,15 @@
  *
  * Enable via environment variable:
  * ```bash
- * AURELIA_DEBUG=resolve npm test     # Just resolution
+ * AURELIA_DEBUG=link npm test        # Just template linking
  * AURELIA_DEBUG=lower,bind npm test  # Multiple channels
  * AURELIA_DEBUG=* npm test           # Everything
  * ```
  *
  * In code (always present, zero-cost when disabled):
  * ```typescript
- * debug.resolve('attribute.candidates', { name, candidates });
- * debug.resolve('attribute.selected', { selected, reason });
+ * debug.link('attribute.candidates', { name, candidates });
+ * debug.link('attribute.selected', { selected, reason });
  * ```
  *
  * ## Design Principles
@@ -210,7 +210,7 @@ export function refreshDebugChannels(): void {
   enabledChannels = parseDebugEnv();
   // Recreate all channels
   debug.lower = createChannel("lower");
-  debug.resolve = createChannel("resolve");
+  debug.link = createChannel("link");
   debug.bind = createChannel("bind");
   debug.typecheck = createChannel("typecheck");
   debug.aot = createChannel("aot");
@@ -248,7 +248,7 @@ export function isDebugEnabled(channel?: string): boolean {
  * ```typescript
  * import { debug } from './debug.js';
  *
- * debug.resolve('lookup', { name: 'if', candidates: [...] });
+ * debug.link('lookup', { name: 'if', candidates: [...] });
  * debug.bind('scope.create', { parentId, symbols: [...] });
  * ```
  */
@@ -256,8 +256,8 @@ export const debug = {
   /** Template lowering (HTML → IR) */
   lower: createChannel("lower"),
 
-  /** Semantic resolution (linking to Aurelia semantics) */
-  resolve: createChannel("resolve"),
+  /** Template linking (attaching Aurelia semantics to IR) */
+  link: createChannel("link"),
 
   /** Scope and binding analysis */
   bind: createChannel("bind"),

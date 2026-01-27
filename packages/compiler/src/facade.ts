@@ -73,7 +73,7 @@ export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
 export interface TemplateCompilation {
   ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-resolve"];
+  linked: StageOutputs["20-link"];
   scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
   usage: FeatureUsageSet;
@@ -144,7 +144,7 @@ export function compileTemplate(
   const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
 
   const ir = session.run("10-lower");
-  const linked = session.run("20-resolve");
+  const linked = session.run("20-link");
   const scope = session.run("30-bind");
   const typecheck = session.run("40-typecheck");
   const usage = session.run("50-usage");
@@ -165,7 +165,7 @@ export function compileTemplate(
     diagnostics: buildDiagnostics(session.diagnostics.all),
     meta: collectStageMeta(session, [
       "10-lower",
-      "20-resolve",
+      "20-link",
       "30-bind",
       "40-typecheck",
       "50-usage",

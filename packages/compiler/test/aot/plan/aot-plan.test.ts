@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, createCompilerContext } from "../../_helpers/vector-runner.js";
 import { diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, buildSemanticsSnapshot, bindScopes, planAot } from "@aurelia-ls/compiler";
+import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, planAot } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -95,9 +95,9 @@ runVectorTests<AotPlanExpect, AotPlanIntent, AotPlanDiff>({
   suiteName: "AOT Plan (aot:plan)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
       ...RESOLVE_OPTS,
-      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+      diagnostics: ctx.diagnostics.forSource("link"),
     });
     const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const plan = planAot(linked, scope, { templateFilePath: "test.html" });

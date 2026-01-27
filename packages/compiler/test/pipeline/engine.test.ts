@@ -36,15 +36,15 @@ function createStages(
     },
   };
 
-  const resolve: StageDefinition<"20-resolve"> = {
-    key: "20-resolve",
+  const resolve: StageDefinition<"20-link"> = {
+    key: "20-link",
     version,
     deps: ["10-lower"],
     fingerprint: (ctx) => ({ lower: ctx.require("10-lower") }),
     run: (ctx) => {
       runs.resolve += 1;
       if (capture) capture.depMeta = ctx.meta("10-lower");
-      return { kind: "resolve" } as unknown as StageOutputs["20-resolve"];
+      return { kind: "resolve" } as unknown as StageOutputs["20-link"];
     },
   };
 
@@ -66,12 +66,12 @@ describe("pipeline engine", () => {
     const engine = new PipelineEngine(createStages(runs));
     const session = engine.createSession(baseOptions());
 
-    session.run("20-resolve");
-    session.run("20-resolve");
+    session.run("20-link");
+    session.run("20-link");
 
     expect(runs.lower).toBe(1);
     expect(runs.resolve).toBe(1);
-    expect(session.meta("20-resolve")?.source).toBe("run");
+    expect(session.meta("20-link")?.source).toBe("run");
   });
 
   test("uses seeded artifacts and exposes dep metadata", () => {
@@ -81,7 +81,7 @@ describe("pipeline engine", () => {
     const seedOutput = { kind: "lower", html: "seed" } as unknown as StageOutputs["10-lower"];
 
     const session = engine.createSession(baseOptions(), { "10-lower": seedOutput });
-    session.run("20-resolve");
+    session.run("20-link");
 
     expect(runs.lower).toBe(0);
     expect(runs.resolve).toBe(1);
@@ -95,11 +95,11 @@ describe("pipeline engine", () => {
       const engine = new PipelineEngine(createStages(runs));
       const options = baseOptions({ cache: { enabled: true, persist: true, dir } });
 
-      engine.createSession(options).run("20-resolve");
+      engine.createSession(options).run("20-link");
       expect(runs.lower).toBe(1);
       expect(runs.resolve).toBe(1);
 
-      engine.createSession(options).run("20-resolve");
+      engine.createSession(options).run("20-link");
       expect(runs.lower).toBe(1);
       expect(runs.resolve).toBe(1);
     });
@@ -111,14 +111,14 @@ describe("pipeline engine", () => {
       const options = baseOptions({ cache: { enabled: true, persist: true, dir } });
 
       const engineV1 = new PipelineEngine(createStages(runs, undefined, "1"));
-      engineV1.createSession(options).run("20-resolve");
+      engineV1.createSession(options).run("20-link");
       expect(runs.resolve).toBe(1);
 
       const engineV2 = new PipelineEngine(createStages(runs, undefined, "2"));
       const sessionV2 = engineV2.createSession(options);
-      sessionV2.run("20-resolve");
+      sessionV2.run("20-link");
       expect(runs.resolve).toBe(2);
-      expect(sessionV2.meta("20-resolve")?.source).toBe("run");
+      expect(sessionV2.meta("20-link")?.source).toBe("run");
     });
   });
 
@@ -128,7 +128,7 @@ describe("pipeline engine", () => {
       const engine = new PipelineEngine(createStages(runs));
       const options = baseOptions({ cache: { enabled: false, persist: true, dir } });
 
-      engine.createSession(options).run("20-resolve");
+      engine.createSession(options).run("20-link");
       expect(fs.readdirSync(dir).length).toBe(0);
     });
   });
@@ -138,12 +138,12 @@ describe("pipeline engine", () => {
     const engine = new PipelineEngine(createStages(runs));
 
     const sessionA = engine.createSession(baseOptions({ html: "<div>a</div>" }));
-    sessionA.run("20-resolve");
-    const keyA = sessionA.meta("20-resolve")?.cacheKey;
+    sessionA.run("20-link");
+    const keyA = sessionA.meta("20-link")?.cacheKey;
 
     const sessionB = engine.createSession(baseOptions({ html: "<div>b</div>" }));
-    sessionB.run("20-resolve");
-    const keyB = sessionB.meta("20-resolve")?.cacheKey;
+    sessionB.run("20-link");
+    const keyB = sessionB.meta("20-link")?.cacheKey;
 
     expect(keyA).toBeDefined();
     expect(keyB).toBeDefined();

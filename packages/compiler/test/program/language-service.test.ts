@@ -67,7 +67,7 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   });
 
   const diags = service.getDiagnostics(uri);
-  const compilerDiag = diags.compiler.find((d) => d.source === "resolve-host");
+  const compilerDiag = diags.compiler.find((d) => d.source === "link");
   expect(compilerDiag, "compiler diagnostics should be preserved").toBeTruthy();
   expect(compilerDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
 
@@ -1075,7 +1075,7 @@ describe("typecheck diagnostics integration", () => {
 
     const diags = service.getDiagnostics(uri);
     // Should have resolve diagnostic (aurelia/invalid-binding-pattern) but no typecheck diagnostic
-    const resolveDiag = diags.compiler.find((d) => d.source === "resolve-host");
+    const resolveDiag = diags.compiler.find((d) => d.source === "link");
     expect(resolveDiag, "resolve should emit diagnostic for unknown property").toBeTruthy();
 
     const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
@@ -1273,7 +1273,7 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly ONE error from resolve phase
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should have ZERO errors from typecheck (cascade suppressed)
@@ -1291,7 +1291,7 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Each unknown property should produce exactly one resolve error
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
       expect(resolveErrors.length).toBe(2);
 
       // No typecheck cascades
@@ -1312,7 +1312,7 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have resolve error for 'unknown'
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should ALSO have typecheck warning for disabled (string → boolean mismatch)
@@ -1337,7 +1337,7 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Resolve error for unknown
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Typecheck error for disabled on SIBLING element
@@ -1363,7 +1363,7 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have resolve error for inner unknown
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should have typecheck error for outer disabled (not suppressed by inner stub)
@@ -1386,7 +1386,7 @@ describe("Elm-style error propagation", () => {
 
       // Should have exactly one resolve error for 'unknown'
       const resolveErrors = diags.compiler.filter((d) =>
-        d.source === "resolve-host" && d.message?.includes("unknown")
+        d.source === "link" && d.message?.includes("unknown")
       );
       expect(resolveErrors.length, "should have one error for unknown property").toBe(1);
 
@@ -1431,7 +1431,7 @@ describe("Elm-style error propagation", () => {
       expect(typecheckErrors.length, "only invalid binding produces error").toBe(1);
 
       // No resolve errors (both properties are valid targets)
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
       expect(resolveErrors.length).toBe(0);
     });
   });
@@ -1444,7 +1444,7 @@ describe("Elm-style error propagation", () => {
       program.upsertTemplate(uri, markup);
 
       const diags = service.getDiagnostics(uri);
-      const error = diags.compiler.find((d) => d.source === "resolve-host");
+      const error = diags.compiler.find((d) => d.source === "link");
 
       expect(error).toBeTruthy();
       // Error message should mention what couldn't be found
@@ -1459,7 +1459,7 @@ describe("Elm-style error propagation", () => {
       program.upsertTemplate(uri, markup);
 
       const diags = service.getDiagnostics(uri);
-      const error = diags.compiler.find((d) => d.source === "resolve-host");
+      const error = diags.compiler.find((d) => d.source === "link");
 
       expect(error?.location).toBeTruthy();
       // Span should be within the binding, not at element start
@@ -1539,7 +1539,7 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly one resolve error at the leaf
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
       expect(resolveErrors.length).toBe(1);
 
       // No cascades from any level

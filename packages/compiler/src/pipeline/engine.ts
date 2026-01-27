@@ -20,7 +20,7 @@ import type { VmReflection, SynthesisOptions, CompileTrace, ModuleResolver } fro
 import { NOOP_TRACE, CompilerAttributes } from "../shared/index.js";
 
 // Analysis imports (via barrel)
-import type { LinkedSemanticsModule, TypecheckModule } from "../analysis/index.js";
+import type { LinkModule, TypecheckModule } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
 import type { OverlayPlanModule, OverlayEmitResult, AotPlanModule } from "../synthesis/index.js";
@@ -36,7 +36,7 @@ export type { ModuleResolver } from "../shared/index.js";
  */
 export type StageKey =
   | "10-lower"
-  | "20-resolve"
+  | "20-link"
   | "30-bind"
   | "40-typecheck"
   | "50-usage"
@@ -49,7 +49,7 @@ export type StageKey =
  */
 export interface StageOutputs {
   "10-lower": IrModule;
-  "20-resolve": LinkedSemanticsModule;
+  "20-link": LinkModule;
   "30-bind": ScopeModule;
   "40-typecheck": TypecheckModule;
   "50-usage": FeatureUsageSet;
@@ -218,7 +218,7 @@ export interface StageArtifactMeta {
 
 const STAGE_DIAGNOSTIC_SOURCE: Partial<Record<StageKey, DiagnosticSource>> = {
   "10-lower": "lower",
-  "20-resolve": "resolve-host",
+  "20-link": "link",
   "30-bind": "bind",
   "40-typecheck": "typecheck",
   "overlay:plan": "overlay-plan",

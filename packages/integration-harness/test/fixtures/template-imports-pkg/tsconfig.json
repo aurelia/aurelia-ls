@@ -15,11 +15,11 @@
       "aurelia": ["aurelia/packages/aurelia/src"],
       "@aurelia/kernel": ["aurelia/packages/kernel/src"],
       "@aurelia/runtime-html": ["aurelia/packages/runtime-html/src"],
-      "@test/multi-class": ["packages/compiler/test/20-resolve/npm/fixtures/multi-class/src/index.ts"]
+      "@test/multi-class": ["packages/compiler/test/20-link/npm/fixtures/multi-class/src/index.ts"]
     }
   },
   "include": [
     "src/**/*.ts",
-    "../../../../../packages/compiler/test/20-resolve/npm/fixtures/multi-class/src/**/*.ts"
+    "../../../../../packages/compiler/test/20-link/npm/fixtures/multi-class/src/**/*.ts"
   ]
 }

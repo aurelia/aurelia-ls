@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr, type TestVector, type CompilerContext } from "../_helpers/vector-runner.js";
 import { diffByKey, noopModuleResolver } from "../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, buildSemanticsSnapshot, bindScopes, typecheck, buildExprSpanIndex } from "@aurelia-ls/compiler";
+import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, typecheck, buildExprSpanIndex } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -50,10 +50,10 @@ runVectorTests<TypecheckExpect, TypecheckIntent, TypecheckDiff>({
   suiteName: "Typecheck (40)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
       moduleResolver: noopModuleResolver,
       templateFilePath: "mem.html",
-      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+      diagnostics: ctx.diagnostics.forSource("link"),
     });
     const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const tc = typecheck({

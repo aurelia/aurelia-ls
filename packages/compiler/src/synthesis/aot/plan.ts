@@ -1,7 +1,7 @@
 /* =============================================================================
  * AOT PLAN - Transform analysis output to AotPlanModule
  * -----------------------------------------------------------------------------
- * Consumes: LinkedSemanticsModule (20-resolve), ScopeModule (30-bind)
+ * Consumes: LinkModule (20-link), ScopeModule (30-bind)
  * Produces: AotPlanModule (abstract instruction graph)
  *
  * Key responsibilities:
@@ -30,7 +30,7 @@ import type { ScopeModule, ScopeTemplate, ScopeFrame, ScopeSymbol } from "../../
 import type { ReadonlyExprIdMap } from "../../model/identity.js";
 
 import type {
-  LinkedSemanticsModule,
+  LinkModule,
   LinkedTemplate,
   LinkedInstruction,
   LinkedPropertyBinding,
@@ -94,7 +94,7 @@ import type {
  * Build an AotPlanModule from linked semantics and scope analysis.
  */
 export function planAot(
-  linked: LinkedSemanticsModule,
+  linked: LinkModule,
   scope: ScopeModule,
   options: AotPlanOptions,
 ): AotPlanModule {
@@ -170,7 +170,7 @@ export function planAot(
  * ============================================================================= */
 
 class PlanningContext {
-  readonly linked: LinkedSemanticsModule;
+  readonly linked: LinkModule;
   readonly scope: ScopeModule;
   readonly options: AotPlanOptions;
   readonly syntax: TemplateSyntaxRegistry;
@@ -195,7 +195,7 @@ class PlanningContext {
   private targetCounterStack: number[] = [0];
 
   constructor(
-    linked: LinkedSemanticsModule,
+    linked: LinkModule,
     scope: ScopeModule,
     options: AotPlanOptions,
   ) {

@@ -6,8 +6,8 @@ import type {
   LinkedHydrateAttribute,
   LinkedHydrateElement,
   LinkedHydrateTemplateController,
-  LinkedSemanticsModule,
-} from "../20-resolve/types.js";
+  LinkModule,
+} from "../20-link/types.js";
 import { extractExprResources } from "../../shared/expr-utils.js";
 
 const DYNAMIC_COMPOSE_PROPS = new Set(["component", "template", "model"]);
@@ -17,7 +17,7 @@ export interface FeatureUsageOptions {
   readonly attrParser?: AttributeParser;
 }
 
-export function collectFeatureUsage(linked: LinkedSemanticsModule, options: FeatureUsageOptions): FeatureUsageSet {
+export function collectFeatureUsage(linked: LinkModule, options: FeatureUsageOptions): FeatureUsageSet {
   const attrParser = options.attrParser ?? createAttributeParserFromRegistry(options.syntax);
   const elements = new Set<string>();
   const attributes = new Set<string>();

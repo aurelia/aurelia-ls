@@ -97,7 +97,7 @@ export interface AotCompileResult {
  *
  * This runs the full compilation pipeline:
  * 1. Parse and lower (10-lower)
- * 2. Resolve semantics (20-resolve)
+ * 2. Resolve semantics (20-link)
  * 3. Bind scopes (30-bind)
  * 4. Build AOT plan
  * 5. Emit instructions and template HTML

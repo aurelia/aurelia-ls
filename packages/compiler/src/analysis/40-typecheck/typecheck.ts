@@ -10,10 +10,10 @@ import type {
 import type { ScopeModule, FrameId } from "../../model/symbols.js";
 import type {
   LinkedInstruction,
-  LinkedSemanticsModule,
+  LinkModule,
   TargetSem,
   LinkedElementBindable,
-} from "../20-resolve/types.js";
+} from "../20-link/types.js";
 import type { TypeRef } from "../../language/registry.js";
 import { buildExprSpanIndex, exprIdsOf, indexExprTable } from "../../shared/expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
@@ -56,7 +56,7 @@ export interface TypecheckModule {
 }
 
 export interface TypecheckOptions {
-  linked: LinkedSemanticsModule;
+  linked: LinkModule;
   scope: ScopeModule;
   ir: IrModule;
   rootVmType: string;
@@ -137,7 +137,7 @@ interface ExpectedTypeInfo {
   context: BindingContext;
 }
 
-function collectExpectedTypes(linked: LinkedSemanticsModule): ExprIdMap<ExpectedTypeInfo> {
+function collectExpectedTypes(linked: LinkModule): ExprIdMap<ExpectedTypeInfo> {
   const expectedByExpr: ExprIdMap<ExpectedTypeInfo> = new Map();
   for (const t of linked.templates ?? []) {
     for (const row of t.rows ?? []) {

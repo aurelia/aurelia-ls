@@ -227,7 +227,7 @@ export type {
 // === Analysis ===
 export {
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics,
   bindScopes,
   typecheck,
   collectFeatureUsage,
@@ -243,8 +243,8 @@ export {
 } from "./analysis/index.js";
 export type { BuildIrOptions, FeatureUsageOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {
-  // Linked semantics (for semantic tokens, etc.)
-  LinkedSemanticsModule,
+  // Link module (for semantic tokens, etc.)
+  LinkModule,
   LinkedTemplate,
   LinkedRow,
   NodeSem,
@@ -255,7 +255,7 @@ export type {
 } from "./analysis/index.js";
 
 // === Resolution (Code-driven semantics) ===
-export * from "./analysis/20-resolve/resolution/index.js";
+export * from "./analysis/20-link/resolution/index.js";
 
 // === Shared Infrastructure ===
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./shared/index.js";

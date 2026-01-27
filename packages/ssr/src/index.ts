@@ -96,7 +96,7 @@ export {
   type CompileAotOptions,
   type CompileAotResult,
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics,
   bindScopes,
   planAot,
   emitAotCode,

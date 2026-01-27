@@ -2265,7 +2265,7 @@
           "capture": false,
           "className": "CortexDevices",
           "containerless": false,
-          "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts",
+          "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts",
           "kind": "element",
           "name": "cortex-devices",
           "processContent": false
@@ -2276,7 +2276,7 @@
           "capture": false,
           "className": "MyApp",
           "containerless": false,
-          "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts",
+          "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts",
           "kind": "element",
           "name": "my-app",
           "processContent": false
@@ -2306,7 +2306,7 @@
           "capture": false,
           "className": "UserProfile",
           "containerless": false,
-          "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts",
+          "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts",
           "kind": "element",
           "name": "user-profile",
           "processContent": false
@@ -2315,7 +2315,7 @@
       "valueConverters": {
         "dateformat": {
           "className": "DateFormatValueConverter",
-          "file": "packages/compiler/test/20-resolve/apps/convention-app/src/date-format.ts",
+          "file": "packages/compiler/test/20-link/apps/convention-app/src/date-format.ts",
           "in": { "kind": "unknown" },
           "name": "dateformat",
           "out": { "kind": "unknown" }
@@ -4438,7 +4438,7 @@
               "capture": false,
               "className": "CortexDevices",
               "containerless": false,
-              "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts",
+              "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts",
               "kind": "element",
               "name": "cortex-devices",
               "processContent": false
@@ -4449,7 +4449,7 @@
               "capture": false,
               "className": "MyApp",
               "containerless": false,
-              "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts",
+              "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts",
               "kind": "element",
               "name": "my-app",
               "processContent": false
@@ -4479,7 +4479,7 @@
               "capture": false,
               "className": "UserProfile",
               "containerless": false,
-              "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts",
+              "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts",
               "kind": "element",
               "name": "user-profile",
               "processContent": false
@@ -4488,7 +4488,7 @@
           "valueConverters": {
             "dateformat": {
               "className": "DateFormatValueConverter",
-              "file": "packages/compiler/test/20-resolve/apps/convention-app/src/date-format.ts",
+              "file": "packages/compiler/test/20-link/apps/convention-app/src/date-format.ts",
               "in": { "kind": "unknown" },
               "name": "dateformat",
               "out": { "kind": "unknown" }
@@ -5280,94 +5280,94 @@
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 549, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
+          "location": { "end": 549, "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 549, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
+          "location": { "end": 549, "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 549, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
+          "location": { "end": 549, "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
           "origin": "source",
           "value": "CortexDevices"
         },
         "containerless": {
-          "location": { "end": 549, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
+          "location": { "end": 549, "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts",
+        "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 549, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
+          "location": { "end": 549, "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
           "origin": "source",
           "value": "cortex-devices"
         },
         "processContent": {
-          "location": { "end": 549, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
+          "location": { "end": 549, "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 549, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
+          "location": { "end": 549, "file": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts", "pos": 417 },
           "origin": "source"
         }
       },
       "id": "sym:153c1c2c5bb90f1a5108477f13ef37487bce20947a2bcc06319616c6948728c6",
       "kind": "custom-element",
       "name": "cortex-devices",
-      "source": "packages/compiler/test/20-resolve/apps/convention-app/src/cortex-devices.ts"
+      "source": "packages/compiler/test/20-link/apps/convention-app/src/cortex-devices.ts"
     },
     {
       "data": {
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 210, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts", "pos": 117 },
+          "location": { "end": 210, "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts", "pos": 117 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 210, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts", "pos": 117 },
+          "location": { "end": 210, "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts", "pos": 117 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 210, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts", "pos": 117 },
+          "location": { "end": 210, "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts", "pos": 117 },
           "origin": "source",
           "value": "MyApp"
         },
         "containerless": {
-          "location": { "end": 210, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts", "pos": 117 },
+          "location": { "end": 210, "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts", "pos": 117 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts",
+        "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 210, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts", "pos": 117 },
+          "location": { "end": 210, "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts", "pos": 117 },
           "origin": "source",
           "value": "my-app"
         },
         "processContent": {
-          "location": { "end": 210, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts", "pos": 117 },
+          "location": { "end": 210, "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts", "pos": 117 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 210, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts", "pos": 117 },
+          "location": { "end": 210, "file": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts", "pos": 117 },
           "origin": "source"
         }
       },
       "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549",
       "kind": "custom-element",
       "name": "my-app",
-      "source": "packages/compiler/test/20-resolve/apps/convention-app/src/my-app.ts"
+      "source": "packages/compiler/test/20-link/apps/convention-app/src/my-app.ts"
     },
     {
       "data": {
@@ -5375,125 +5375,125 @@
         "bindables": {
           "age": {
             "attribute": {
-              "location": { "end": 424, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 398 },
+              "location": { "end": 424, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 398 },
               "origin": "source",
               "value": "age"
             },
             "mode": {
-              "location": { "end": 424, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 398 },
+              "location": { "end": 424, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 398 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 424, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 398 },
+              "location": { "end": 424, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 398 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 424, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 398 },
+              "location": { "end": 424, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 398 },
               "origin": "source",
               "value": "age"
             },
             "type": {
-              "location": { "end": 424, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 398 },
+              "location": { "end": 424, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 398 },
               "origin": "source",
               "value": "number"
             }
           },
           "bio": {
             "attribute": {
-              "location": { "end": 394, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 367 },
+              "location": { "end": 394, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 367 },
               "origin": "source",
               "value": "bio"
             },
             "mode": {
-              "location": { "end": 394, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 367 },
+              "location": { "end": 394, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 367 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 394, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 367 },
+              "location": { "end": 394, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 367 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 394, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 367 },
+              "location": { "end": 394, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 367 },
               "origin": "source",
               "value": "bio"
             },
             "type": {
-              "location": { "end": 394, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 367 },
+              "location": { "end": 394, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 367 },
               "origin": "source",
               "value": "string"
             }
           },
           "name": {
             "attribute": {
-              "location": { "end": 363, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 335 },
+              "location": { "end": 363, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 335 },
               "origin": "source",
               "value": "name"
             },
             "mode": {
-              "location": { "end": 363, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 335 },
+              "location": { "end": 363, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 335 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 363, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 335 },
+              "location": { "end": 363, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 335 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 363, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 335 },
+              "location": { "end": 363, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 335 },
               "origin": "source",
               "value": "name"
             },
             "type": {
-              "location": { "end": 363, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 335 },
+              "location": { "end": 363, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 335 },
               "origin": "source",
               "value": "string"
             }
           }
         },
         "boundary": {
-          "location": { "end": 427, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 305 },
+          "location": { "end": 427, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 305 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 427, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 305 },
+          "location": { "end": 427, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 305 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 427, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 305 },
+          "location": { "end": 427, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 305 },
           "origin": "source",
           "value": "UserProfile"
         },
         "containerless": {
-          "location": { "end": 427, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 305 },
+          "location": { "end": 427, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 305 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts",
+        "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 427, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 305 },
+          "location": { "end": 427, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 305 },
           "origin": "source",
           "value": "user-profile"
         },
         "processContent": {
-          "location": { "end": 427, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 305 },
+          "location": { "end": 427, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 305 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 427, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts", "pos": 305 },
+          "location": { "end": 427, "file": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts", "pos": 305 },
           "origin": "source"
         }
       },
       "id": "sym:03a8bc3cd7d8b8f044de957fbe67ce7c116d1425d1e1a3cc6734f2a36151417c",
       "kind": "custom-element",
       "name": "user-profile",
-      "source": "packages/compiler/test/20-resolve/apps/convention-app/src/user-profile.ts"
+      "source": "packages/compiler/test/20-link/apps/convention-app/src/user-profile.ts"
     },
     {
       "data": {
@@ -6257,14 +6257,14 @@
     {
       "data": {
         "className": {
-          "location": { "end": 445, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/date-format.ts", "pos": 194 },
+          "location": { "end": 445, "file": "packages/compiler/test/20-link/apps/convention-app/src/date-format.ts", "pos": 194 },
           "origin": "source",
           "value": "DateFormatValueConverter"
         },
-        "file": "packages/compiler/test/20-resolve/apps/convention-app/src/date-format.ts",
+        "file": "packages/compiler/test/20-link/apps/convention-app/src/date-format.ts",
         "kind": "value-converter",
         "name": {
-          "location": { "end": 445, "file": "packages/compiler/test/20-resolve/apps/convention-app/src/date-format.ts", "pos": 194 },
+          "location": { "end": 445, "file": "packages/compiler/test/20-link/apps/convention-app/src/date-format.ts", "pos": 194 },
           "origin": "source",
           "value": "dateformat"
         }
@@ -6272,7 +6272,7 @@
       "id": "sym:c2b06dbdaa60560f089a05c195ed003f388823aa7ac2f83584fff2bb6067cf61",
       "kind": "value-converter",
       "name": "dateformat",
-      "source": "packages/compiler/test/20-resolve/apps/convention-app/src/date-format.ts"
+      "source": "packages/compiler/test/20-link/apps/convention-app/src/date-format.ts"
     },
     {
       "data": {

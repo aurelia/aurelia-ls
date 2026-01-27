@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts } from "../../_helpers/vector-runner.js";
 import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, buildSemanticsSnapshot, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
+import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -30,9 +30,9 @@ runVectorTests<EmitExpect, EmitIntent, EmitDiff>({
   suiteName: "Emit Overlay (60)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, buildSemanticsSnapshot(ctx.sem), {
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
       ...RESOLVE_OPTS,
-      diagnostics: ctx.diagnostics.forSource("resolve-host"),
+      diagnostics: ctx.diagnostics.forSource("link"),
     });
     const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const plan = planOverlay(linked, scope, { isJs: false, vm: mockVm() });

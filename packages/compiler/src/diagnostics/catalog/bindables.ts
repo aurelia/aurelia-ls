@@ -61,11 +61,11 @@ export const bindableDiagnostics = {
     impact: "degraded",
     actionability: "guided",
     span: "span",
-    stages: ["resolve", "bind"],
+    stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
     aurCode: "AUR0707",
-    description: "Attribute does not resolve to a known bindable.",
+    description: "Attribute does not link to a known bindable.",
     data: {
       optional: ["bindable", "aurCode"],
     },

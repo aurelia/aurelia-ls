@@ -10,7 +10,7 @@ export type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
 /** Stage tags where the diagnostic was produced to support routing and suppression. */
 export type DiagnosticStage =
   | "lower"
-  | "resolve"
+  | "link"
   | "resolution"
   | "bind"
   | "typecheck"

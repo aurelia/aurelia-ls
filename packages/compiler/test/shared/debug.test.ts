@@ -66,7 +66,7 @@ describe("debug channel activation", () => {
     setDebugEnv(undefined);
     expect(isDebugEnabled()).toBe(false);
     expect(isDebugEnabled("lower")).toBe(false);
-    expect(isDebugEnabled("resolve")).toBe(false);
+    expect(isDebugEnabled("link")).toBe(false);
   });
 
   test("channels are disabled when AURELIA_DEBUG=0", () => {
@@ -82,14 +82,14 @@ describe("debug channel activation", () => {
   test("single channel can be enabled", () => {
     setDebugEnv("lower");
     expect(isDebugEnabled("lower")).toBe(true);
-    expect(isDebugEnabled("resolve")).toBe(false);
+    expect(isDebugEnabled("link")).toBe(false);
     expect(isDebugEnabled("bind")).toBe(false);
   });
 
   test("multiple channels can be enabled", () => {
-    setDebugEnv("lower,resolve,bind");
+    setDebugEnv("lower,link,bind");
     expect(isDebugEnabled("lower")).toBe(true);
-    expect(isDebugEnabled("resolve")).toBe(true);
+    expect(isDebugEnabled("link")).toBe(true);
     expect(isDebugEnabled("bind")).toBe(true);
     expect(isDebugEnabled("typecheck")).toBe(false);
   });
@@ -97,7 +97,7 @@ describe("debug channel activation", () => {
   test("wildcard enables all channels", () => {
     setDebugEnv("*");
     expect(isDebugEnabled("lower")).toBe(true);
-    expect(isDebugEnabled("resolve")).toBe(true);
+    expect(isDebugEnabled("link")).toBe(true);
     expect(isDebugEnabled("bind")).toBe(true);
     expect(isDebugEnabled("typecheck")).toBe(true);
     expect(isDebugEnabled("aot")).toBe(true);
@@ -109,26 +109,26 @@ describe("debug channel activation", () => {
   test("AURELIA_DEBUG=1 enables all channels", () => {
     setDebugEnv("1");
     expect(isDebugEnabled("lower")).toBe(true);
-    expect(isDebugEnabled("resolve")).toBe(true);
+    expect(isDebugEnabled("link")).toBe(true);
   });
 
   test("AURELIA_DEBUG=true enables all channels", () => {
     setDebugEnv("true");
     expect(isDebugEnabled("lower")).toBe(true);
-    expect(isDebugEnabled("resolve")).toBe(true);
+    expect(isDebugEnabled("link")).toBe(true);
   });
 
   test("channel names are case-insensitive", () => {
-    setDebugEnv("LOWER,Resolve,BIND");
+    setDebugEnv("LOWER,Link,BIND");
     expect(isDebugEnabled("lower")).toBe(true);
-    expect(isDebugEnabled("resolve")).toBe(true);
+    expect(isDebugEnabled("link")).toBe(true);
     expect(isDebugEnabled("bind")).toBe(true);
   });
 
   test("whitespace in channel list is trimmed", () => {
-    setDebugEnv("  lower , resolve  , bind  ");
+    setDebugEnv("  lower , link  , bind");
     expect(isDebugEnabled("lower")).toBe(true);
-    expect(isDebugEnabled("resolve")).toBe(true);
+    expect(isDebugEnabled("link")).toBe(true);
     expect(isDebugEnabled("bind")).toBe(true);
   });
 });
@@ -154,7 +154,7 @@ describe("zero-cost when disabled", () => {
     const { messages, restore } = captureOutput();
 
     debug.lower("test.point", { data: "value" });
-    debug.resolve("test.point", { data: "value" });
+    debug.link("test.point", { data: "value" });
 
     expect(messages).toHaveLength(0);
     restore();
@@ -176,7 +176,7 @@ describe("zero-cost when disabled", () => {
     const { messages, restore } = captureOutput();
 
     debug.lower("point1");
-    debug.resolve("point2"); // disabled
+    debug.link("point2"); // disabled
     debug.bind("point3");
     debug.typecheck("point4"); // disabled
 
@@ -431,10 +431,10 @@ describe("all debug channels", () => {
     restore();
   });
 
-  test("resolve channel outputs correctly", () => {
+  test("link channel outputs correctly", () => {
     const { messages, restore } = captureOutput();
-    debug.resolve("target.bindable", { to: "value" });
-    expect(messages[0]).toContain("[resolve.target.bindable]");
+    debug.link("target.bindable", { to: "value" });
+    expect(messages[0]).toContain("[link.target.bindable]");
     restore();
   });
 

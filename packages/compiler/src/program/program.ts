@@ -78,7 +78,7 @@ interface CachedCompilation {
 }
 
 interface CoreStageCacheEntry {
-  readonly stages: Pick<StageOutputs, "10-lower" | "20-resolve" | "30-bind" | "40-typecheck">;
+  readonly stages: Pick<StageOutputs, "10-lower" | "20-link" | "30-bind" | "40-typecheck">;
   readonly version: number;
   readonly contentHash: string;
   readonly optionsFingerprint: string;
@@ -88,7 +88,7 @@ interface CoreStageCacheEntry {
 
 const STAGE_ORDER: readonly StageKey[] = [
   "10-lower",
-  "20-resolve",
+  "20-link",
   "30-bind",
   "40-typecheck",
   "50-usage",
@@ -96,7 +96,7 @@ const STAGE_ORDER: readonly StageKey[] = [
   "overlay:emit",
 ] as const;
 
-const CORE_STAGE_KEYS: readonly StageKey[] = ["10-lower", "20-resolve", "30-bind", "40-typecheck"];
+const CORE_STAGE_KEYS: readonly StageKey[] = ["10-lower", "20-link", "30-bind", "40-typecheck"];
 
 interface CacheAccessEntry {
   readonly programCacheHit: boolean;
@@ -370,7 +370,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     this.coreCache.set(canonical.uri, {
       stages: {
         "10-lower": compilation.ir,
-        "20-resolve": compilation.linked,
+        "20-link": compilation.linked,
         "30-bind": compilation.scope,
         "40-typecheck": compilation.typecheck,
       },
@@ -576,7 +576,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     if (cached.contentHash !== contentHash) return null;
     return {
       "10-lower": cached.stages["10-lower"],
-      "20-resolve": cached.stages["20-resolve"],
+      "20-link": cached.stages["20-link"],
       "30-bind": cached.stages["30-bind"],
       "40-typecheck": cached.stages["40-typecheck"],
     };

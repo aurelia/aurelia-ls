@@ -22,7 +22,7 @@ import type { ReadonlyExprIdMap } from "../../model/identity.js";
 import type { ExprId, IsBindingBehavior, ExprTableEntry } from "../../model/ir.js";
 
 // Analysis imports (via barrel)
-import type { LinkedSemanticsModule } from "../../analysis/index.js";
+import type { LinkModule } from "../../analysis/index.js";
 import { buildFrameAnalysis, wrap, type FrameTypingHints, type Env } from "../../analysis/index.js";
 
 // Shared imports
@@ -37,7 +37,7 @@ function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 /* Public API                                                                             */
 /* ===================================================================================== */
 
-export function plan(linked: LinkedSemanticsModule, scope: ScopeModule, opts: SynthesisOptions): OverlayPlanModule {
+export function plan(linked: LinkModule, scope: ScopeModule, opts: SynthesisOptions): OverlayPlanModule {
   const trace = opts.trace ?? NOOP_TRACE;
 
   return trace.span("overlay.plan", () => {

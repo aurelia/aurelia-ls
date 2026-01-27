@@ -5,7 +5,7 @@ import type {
   LinkedElementBindable,
   LinkedPropertyBinding,
   LinkedRow,
-  LinkedSemanticsModule,
+  LinkModule,
   LinkedStylePropertyBinding,
   NodeSem,
   TargetSem,
@@ -61,7 +61,7 @@ export interface TemplateQueryFacade {
 
 export function buildTemplateQuery(
   irModule: IrModule | undefined,
-  linked: LinkedSemanticsModule,
+  linked: LinkModule,
   mapping: TemplateMappingArtifact,
   typecheck: TypecheckModule,
 ): TemplateQueryFacade {
@@ -167,7 +167,7 @@ function rowKey(templateIndex: number, id: NodeId): string {
   return `${templateIndex}:${idKey(id)}`;
 }
 
-function indexRowsAll(linked: LinkedSemanticsModule): Map<string, LinkedRow> {
+function indexRowsAll(linked: LinkModule): Map<string, LinkedRow> {
   const map = new Map<string, LinkedRow>();
   linked.templates?.forEach((t, ti) => {
     for (const row of t.rows ?? []) map.set(rowKey(ti, row.target), row);
@@ -177,7 +177,7 @@ function indexRowsAll(linked: LinkedSemanticsModule): Map<string, LinkedRow> {
 
 type ControllerIndex = { kind: TemplateControllerInfo["kind"]; span: SourceSpan | null };
 
-function indexControllers(linked: LinkedSemanticsModule): ControllerIndex[] {
+function indexControllers(linked: LinkModule): ControllerIndex[] {
   const out: ControllerIndex[] = [];
   for (const t of linked.templates ?? []) {
     for (const row of t.rows ?? []) {

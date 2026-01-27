@@ -1,14 +1,14 @@
 {
   "symbols": [
     { "id": "sym:6c3d08f80976044bea423de0dc25ff48e143432497fcb0eab37aabc4e87f6d4c", "kind": "binding-behavior", "name": "attr", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts" },
-    { "id": "sym:27a1ca5b9591fe73571676cb5b9de6b4a7bc528d14428dd4965544121996b5b2", "kind": "binding-behavior", "name": "debounce", "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/binding-behaviors/debounce.ts" },
+    { "id": "sym:27a1ca5b9591fe73571676cb5b9de6b4a7bc528d14428dd4965544121996b5b2", "kind": "binding-behavior", "name": "debounce", "source": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/debounce.ts" },
     { "id": "sym:3743c2a2c4272b28530c528ca79a85b3904d6e0a1916f3a6fa95214176194dce", "kind": "binding-behavior", "name": "fromView" },
     { "id": "sym:de6493a91910f48d85682954e9eee0de01b7da9342af055369af368abb71b077", "kind": "binding-behavior", "name": "fromview", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts" },
     { "id": "sym:07b86e4d397b03adfac781fc7d9d31de22cac391d475b378130f87e1f5f9b840", "kind": "binding-behavior", "name": "oneTime" },
     { "id": "sym:b6b32a538fd513861acc555ca0c9b0ccd8d66163d8f691b48d1b12c030c6f4c0", "kind": "binding-behavior", "name": "onetime", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts" },
     { "id": "sym:9c8a00f7f1063e7eab07405fe4506a301c581f1a95a64411e203c45708a09116", "kind": "binding-behavior", "name": "self", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts" },
     { "id": "sym:33f93446ab33468d17a77b143b2226209ee3788fc25ba74889743db2286e3750", "kind": "binding-behavior", "name": "signal", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts" },
-    { "id": "sym:49c40bb778e872d6e397c5d581b414667dd017a47ab2332be38e46d3a907175f", "kind": "binding-behavior", "name": "throttle", "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/binding-behaviors/throttle.ts" },
+    { "id": "sym:49c40bb778e872d6e397c5d581b414667dd017a47ab2332be38e46d3a907175f", "kind": "binding-behavior", "name": "throttle", "source": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/throttle.ts" },
     { "id": "sym:474b44c55fa7519f95eb6153807557c2ff2f5496dcd7e8398c2e6a3677e28d9c", "kind": "binding-behavior", "name": "toView" },
     { "id": "sym:aaef51fb84995cb97b1aef1749cbecdcd1bf9b52f3976686bb605eeab0368c4b", "kind": "binding-behavior", "name": "toview", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts" },
     { "id": "sym:3fe8afab67220e522132b10561ed1ad9af956ed9b6d9b882434e5306244cb9da", "kind": "binding-behavior", "name": "twoWay" },
@@ -32,7 +32,7 @@
       "id": "sym:73a7fd916097b7c10c734669b55bde14167c50dc20686bed5c08ee260ad57305",
       "kind": "custom-attribute",
       "name": "highlight",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/attributes/highlight.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts"
     },
     {
       "bindables": [
@@ -71,7 +71,7 @@
       "id": "sym:3b0a25d25f28a5683757fa813c90341f530bc265268523c3a0feee2b24efd1ac",
       "kind": "custom-attribute",
       "name": "tooltip",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/attributes/tooltip.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts"
     },
     {
       "bindables": [
@@ -119,7 +119,7 @@
       "id": "sym:2f7f499b5693cbcb5119b0737de7a95388b4d611efdf1cdec2ecba5ff9850cc3",
       "kind": "custom-element",
       "name": "data-grid",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/components/data-grid.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts"
     },
     {
       "aliases": [ "action-button", "btn" ],
@@ -131,10 +131,10 @@
       "id": "sym:212433c7f217146a8711e39fe07d35ba236661b46108ef579b020b6cd0f29bbb",
       "kind": "custom-element",
       "name": "fancy-button",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/static-au/fancy-button.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts"
     },
-    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/my-app.ts" },
-    { "id": "sym:7ca0275eb8c38075f354435769d61872e3e383f9cc82eeecfd67612bad23a740", "kind": "custom-element", "name": "nav-bar", "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/components/nav-bar.ts" },
+    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts" },
+    { "id": "sym:7ca0275eb8c38075f354435769d61872e3e383f9cc82eeecfd67612bad23a740", "kind": "custom-element", "name": "nav-bar", "source": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts" },
     {
       "bindables": [
         { "attribute": "amount", "name": "amount" },
@@ -143,7 +143,7 @@
       "id": "sym:6100afccc3b7484b738ae9032e8accdb89d755dd52b6ba10e0aa6c4c2d1519e7",
       "kind": "custom-element",
       "name": "price-tag",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/widgets/price-tag.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts"
     },
     {
       "bindables": [
@@ -155,7 +155,7 @@
       "id": "sym:57a9c4d3b0b122b7b4bc529deec5f84d787b18614aba2a546d2190d68f90fb96",
       "kind": "custom-element",
       "name": "product-card",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/widgets/product-card.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts"
     },
     {
       "bindables": [
@@ -165,7 +165,7 @@
       "id": "sym:5f22c6ca4c7f34b2109bd9e56122d1eca95811779ef7bf0e856c43417d5b6ee7",
       "kind": "custom-element",
       "name": "stock-badge",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/widgets/stock-badge.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts"
     },
     {
       "bindables": [
@@ -176,7 +176,7 @@
       "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",
       "kind": "custom-element",
       "name": "user-card",
-      "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/components/user-card.ts"
+      "source": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts"
     },
     {
       "bindables": [
@@ -286,8 +286,8 @@
       "name": "with",
       "source": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts"
     },
-    { "id": "sym:019d5054f5824197b15cf22949e010114cc909267dd91816a94e7288dd957d1d", "kind": "value-converter", "name": "currency", "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/value-converters/currency.ts" },
-    { "id": "sym:b838fc57e220af75c0ab13eba6b62a7084d02a54612e854a7aaf17a093d168a8", "kind": "value-converter", "name": "date", "source": "packages/compiler/test/20-resolve/apps/explicit-app/src/value-converters/date-format.ts" },
+    { "id": "sym:019d5054f5824197b15cf22949e010114cc909267dd91816a94e7288dd957d1d", "kind": "value-converter", "name": "currency", "source": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/currency.ts" },
+    { "id": "sym:b838fc57e220af75c0ab13eba6b62a7084d02a54612e854a7aaf17a093d168a8", "kind": "value-converter", "name": "date", "source": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/date-format.ts" },
     { "id": "sym:5a331384e1bf194d875314915ad92fa54276df9145d7f7df24d2a0946d44922a", "kind": "value-converter", "name": "sanitize", "source": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts" }
   ],
   "version": "aurelia-api-snapshot@1"

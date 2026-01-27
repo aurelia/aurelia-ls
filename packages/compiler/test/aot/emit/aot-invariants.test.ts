@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 
 import {
   lowerDocument,
-  resolveHost, buildSemanticsSnapshot,
+  linkTemplateSemantics, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
@@ -68,10 +68,10 @@ function compileDefinitionTree(markup: string): DefinitionTree {
     catalog: DEFAULT_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
-    diagnostics: diagnostics.forSource("resolve-host"),
+    diagnostics: diagnostics.forSource("link"),
   });
   const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
