@@ -18,6 +18,7 @@ import {
 
 // Internal import for direct unit testing of resolveControllerSem
 import { resolveControllerSem } from "../../src/analysis/20-resolve/resolution-helpers.js";
+import { createResolveContext, createResolveServices } from "../../src/analysis/20-resolve/resolve-context.js";
 import { isStub } from "../../src/shared/diagnosed.js";
 
 const dirname = getDirname(import.meta.url);
@@ -245,9 +246,10 @@ describe("Resolve (20) - Resource Graph", () => {
 
 describe("Resolve (20) - Controller Diagnostics", () => {
   test("resolveControllerSem returns aurelia/unknown-controller for unknown controller", () => {
-    const lookup = createSemanticsLookup(DEFAULT);
     const diagnostics = new DiagnosticsRuntime();
-    const result = resolveControllerSem(lookup, "unknown-tc", null, diagnostics.forSource("resolve-host"));
+    const { services } = createResolveServices({ diagnostics: diagnostics.forSource("resolve-host") });
+    const ctx = createResolveContext(DEFAULT, services, undefined, null, noopModuleResolver, "mem.html");
+    const result = resolveControllerSem(ctx, "unknown-tc", null);
 
     // Should have diagnostic
     expect(result.diagnostics.length > 0).toBe(true);
@@ -261,9 +263,10 @@ describe("Resolve (20) - Controller Diagnostics", () => {
   });
 
   test("resolveControllerSem returns success for built-in controller", () => {
-    const lookup = createSemanticsLookup(DEFAULT);
     const diagnostics = new DiagnosticsRuntime();
-    const result = resolveControllerSem(lookup, "if", null, diagnostics.forSource("resolve-host"));
+    const { services } = createResolveServices({ diagnostics: diagnostics.forSource("resolve-host") });
+    const ctx = createResolveContext(DEFAULT, services, undefined, null, noopModuleResolver, "mem.html");
+    const result = resolveControllerSem(ctx, "if", null);
 
     // Should not have diagnostic
     expect(result.diagnostics.length).toBe(0);
@@ -289,9 +292,10 @@ describe("Resolve (20) - Controller Diagnostics", () => {
       },
     });
 
-    const lookup = createSemanticsLookup(customSem);
     const diagnostics = new DiagnosticsRuntime();
-    const result = resolveControllerSem(lookup, "my-tc", null, diagnostics.forSource("resolve-host"));
+    const { services } = createResolveServices({ diagnostics: diagnostics.forSource("resolve-host") });
+    const ctx = createResolveContext(customSem, services, undefined, null, noopModuleResolver, "mem.html");
+    const result = resolveControllerSem(ctx, "my-tc", null);
 
     // Should not have diagnostic
     expect(result.diagnostics.length).toBe(0);

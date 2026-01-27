@@ -17,6 +17,15 @@ import {
   type TemplateContext,
   type ResourceScopeId,
 } from "../language/index.js";
+import {
+  fingerprintAttrRes,
+  fingerprintAttributePatternConfig,
+  fingerprintBindingBehaviorSig,
+  fingerprintBindingCommandConfig,
+  fingerprintElementRes,
+  fingerprintTemplateControllerUsage,
+  fingerprintValueConverterSig,
+} from "../fingerprint/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
@@ -901,39 +910,42 @@ function computeDependencyFingerprint(
     ...deps.elements.map((name) => ({
       kind: "element",
       name,
-      fingerprint: fingerprintResource(resources.elements[name]),
+      fingerprint: fingerprintElementRes(resources.elements[name]),
     })),
     ...deps.attributes.map((name) => ({
       kind: "attribute",
       name,
-      fingerprint: fingerprintResource(resources.attributes[name]),
+      fingerprint: fingerprintAttrRes(resources.attributes[name]),
     })),
     ...deps.controllers.map((name) => ({
       kind: "controller",
       name,
-      fingerprint: fingerprintResource(resources.controllers[name]),
+      fingerprint: fingerprintTemplateControllerUsage(
+        resources.controllers[name],
+        resources.attributes[name],
+      ),
     })),
     ...deps.valueConverters.map((name) => ({
       kind: "value-converter",
       name,
-      fingerprint: fingerprintResource(resources.valueConverters[name]),
+      fingerprint: fingerprintValueConverterSig(resources.valueConverters[name]),
     })),
     ...deps.bindingBehaviors.map((name) => ({
       kind: "binding-behavior",
       name,
-      fingerprint: fingerprintResource(resources.bindingBehaviors[name]),
+      fingerprint: fingerprintBindingBehaviorSig(resources.bindingBehaviors[name]),
     })),
   ];
 
   const commandFingerprints = deps.commands.map((name) => ({
     name,
-    fingerprint: fingerprintResource(syntax.bindingCommands[name]),
+    fingerprint: fingerprintBindingCommandConfig(syntax.bindingCommands[name]),
   }));
 
   const patternMap = new Map(syntax.attributePatterns.map((p) => [p.pattern, p]));
   const patternFingerprints = deps.patterns.map((pattern) => ({
     pattern,
-    fingerprint: fingerprintResource(patternMap.get(pattern)),
+    fingerprint: fingerprintAttributePatternConfig(patternMap.get(pattern)),
   }));
 
     return stableHash({
@@ -945,10 +957,6 @@ function computeDependencyFingerprint(
       commands: commandFingerprints,
       patterns: patternFingerprints,
   });
-}
-
-function fingerprintResource(value: unknown): string {
-  return value ? stableHash(value) : "missing";
 }
 
 function resolveTemplateContext(options: ResolvedProgramOptions, uri: DocumentUri): TemplateContext {

@@ -3,7 +3,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 import { createSemanticWorkspaceKernel } from "../src/workspace.js";
-import type { DocumentUri, ResourceGraph, ResourceScopeId, TemplateProgramCacheStats } from "@aurelia-ls/compiler";
+import {
+  buildProjectSnapshot,
+  type DocumentUri,
+  type ResourceGraph,
+  type ResourceScopeId,
+  type TemplateProgramCacheStats,
+} from "@aurelia-ls/compiler";
 
 type Kernel = ReturnType<typeof createSemanticWorkspaceKernel>;
 
@@ -106,16 +112,18 @@ describe("workspace incremental churn (incremental-churn)", () => {
 
   function createKernel(scopeId: ResourceScopeId | null): Kernel {
     // Keep a fixed resource scope so cache assertions are not affected by template scope switching.
+    const project = buildProjectSnapshot(harness.resolution.semantics, {
+      catalog: harness.resolution.catalog,
+      syntax: harness.resolution.syntax,
+      resourceGraph: harness.resolution.resourceGraph,
+    });
     return createSemanticWorkspaceKernel({
       program: {
         vm: VM,
         isJs: false,
-        semantics: harness.resolution.semantics,
-        catalog: harness.resolution.catalog,
-        syntax: harness.resolution.syntax,
-        resourceGraph: harness.resolution.resourceGraph,
+        project,
         moduleResolver: NOOP_MODULE_RESOLVER,
-        ...(scopeId !== null ? { resourceScope: scopeId } : {}),
+        ...(scopeId !== null ? { templateContext: () => ({ scopeId }) } : {}),
       },
     });
   }
@@ -175,14 +183,16 @@ describe("workspace incremental churn (incremental-churn)", () => {
     const betaAfterContent = getDocStats(kernel, betaUri);
 
     const configBefore = kernel.snapshot().meta.configHash;
+    const project = buildProjectSnapshot(harness.resolution.semantics, {
+      catalog: harness.resolution.catalog,
+      syntax: harness.resolution.syntax,
+      resourceGraph: harness.resolution.resourceGraph,
+    });
     const updated = kernel.reconfigure({
       program: {
         vm: VM,
         isJs: false,
-        semantics: harness.resolution.semantics,
-        catalog: harness.resolution.catalog,
-        syntax: harness.resolution.syntax,
-        resourceGraph: harness.resolution.resourceGraph,
+        project,
         overlayBaseName: "__churn__",
         moduleResolver: NOOP_MODULE_RESOLVER,
       },

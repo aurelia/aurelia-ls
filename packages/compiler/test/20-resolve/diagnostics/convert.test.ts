@@ -5,7 +5,7 @@ import {
   unresolvedRefsToDiagnostics,
 } from "@aurelia-ls/compiler";
 import type { OrphanResource, UnresolvedRegistration, UnresolvedResourceInfo } from "@aurelia-ls/compiler";
-import { toSourceFileId, type CustomElementDef, type NormalizedPath, type SourceSpan, type Sourced } from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime, toSourceFileId, type CustomElementDef, type NormalizedPath, type SourceSpan, type Sourced } from "@aurelia-ls/compiler";
 
 // Helper to create a mock source span
 function mockSpan(file: NormalizedPath): SourceSpan {
@@ -47,7 +47,8 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = orphansToDiagnostics(orphans);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = orphansToDiagnostics(orphans, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].code).toBe("aurelia/resolution/orphan-element");
@@ -75,7 +76,8 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = orphansToDiagnostics(orphans);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = orphansToDiagnostics(orphans, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].message).toContain("user-element");
@@ -93,7 +95,8 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = unresolvedToDiagnostics(unresolved);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = unresolvedToDiagnostics(unresolved, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].code).toBe("aurelia/resolution/unanalyzable-function-call");
@@ -120,7 +123,8 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = unresolvedToDiagnostics(unresolved);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = unresolvedToDiagnostics(unresolved, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].message).toContain("userSetup");
@@ -138,7 +142,8 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = unresolvedRefsToDiagnostics(refs);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].code).toBe("aurelia/resolution/not-a-resource");
@@ -164,7 +169,8 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = unresolvedRefsToDiagnostics(refs);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].message).toContain("UserThing");
@@ -180,13 +186,15 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = unresolvedRefsToDiagnostics(refs);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(0);
     });
 
     it("handles empty refs array", () => {
-      const diagnostics = unresolvedRefsToDiagnostics([]);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = unresolvedRefsToDiagnostics([], runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(0);
     });
@@ -207,7 +215,8 @@ describe("Diagnostic Conversion Functions", () => {
         },
       ];
 
-      const diagnostics = unresolvedRefsToDiagnostics(refs);
+      const runtime = new DiagnosticsRuntime();
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
 
       expect(diagnostics).toHaveLength(2);
       expect(diagnostics[0].message).toContain("HelperA");

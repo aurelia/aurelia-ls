@@ -500,14 +500,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #applyTemplateScope(uri: DocumentUri): void {
-    const scope = this.#templateIndex.templateToScope.get(uri);
-    if (!scope || scope === this.#resourceScope) return;
-    debug.workspace("scope.update", {
-      uri,
-      from: this.#resourceScope ?? "default",
-      to: scope,
-    });
-    this.setResourceScope(scope);
+    if (this.#resourceScope !== null) {
+      return;
+    }
+    void uri;
   }
 
   #metaHover(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceHover | null {

@@ -134,15 +134,15 @@ function createProgram(): ts.Program {
   return ts.createProgram(tsFiles, compilerOptions, host);
 }
 
-describe("Template Import Registration", () => {
-  const resolveWithDiagnostics = (
-    program: Parameters<typeof resolve>[0],
-    config?: Omit<NonNullable<Parameters<typeof resolve>[1]>, "diagnostics">,
-  ) => {
-    const diagnostics = new DiagnosticsRuntime();
-    return resolve(program, { ...config, diagnostics: diagnostics.forSource("resolution") });
-  };
+const resolveWithDiagnostics = (
+  program: Parameters<typeof resolve>[0],
+  config?: Omit<NonNullable<Parameters<typeof resolve>[1]>, "diagnostics">,
+) => {
+  const diagnostics = new DiagnosticsRuntime();
+  return resolve(program, { ...config, diagnostics: diagnostics.forSource("resolution") });
+};
 
+describe("Template Import Registration", () => {
   let program: ts.Program;
   let fileSystem: FileSystemContext;
   let result: ResolutionResult;
