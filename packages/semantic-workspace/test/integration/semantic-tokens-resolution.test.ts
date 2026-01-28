@@ -17,10 +17,10 @@ import { discoverProjectSemantics, DiagnosticsRuntime } from "@aurelia-ls/compil
 import {
   buildTemplateSyntaxRegistry,
   compileTemplate,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   materializeSemanticsForScope,
   type NodeSem,
-  type SemanticsWithCaches,
+  type MaterializedSemantics,
 } from "@aurelia-ls/compiler";
 import { collectSemanticTokens } from "../../src/semantic-tokens.js";
 
@@ -57,7 +57,7 @@ function createProgramFromApp(appPath: string): ts.Program {
 
 function compileTemplateForSemanticTokens(
   markup: string,
-  semantics: SemanticsWithCaches,
+  semantics: MaterializedSemantics,
   options?: { templatePath?: string },
 ) {
   const templatePath = options?.templatePath ?? "template.html";
@@ -101,7 +101,7 @@ function sliceToken(text: string, token: { span: { start: number; end: number } 
   return text.slice(token.span.start, token.span.end);
 }
 
-function elementTokens(markup: string, semantics: SemanticsWithCaches) {
+function elementTokens(markup: string, semantics: MaterializedSemantics) {
   const compilation = compileTemplateForSemanticTokens(markup, semantics);
   const syntax = buildTemplateSyntaxRegistry(semantics);
   return collectSemanticTokens(markup, compilation, syntax)
@@ -115,7 +115,7 @@ function elementTokens(markup: string, semantics: SemanticsWithCaches) {
 describe("Semantic Tokens + Resolution Integration", () => {
   let program: ts.Program;
   let resolutionResult: ReturnType<typeof discoverProjectSemantics>;
-  let rootSemantics: SemanticsWithCaches;
+  let rootSemantics: MaterializedSemantics;
 
   beforeAll(() => {
     program = createProgramFromApp(EXPLICIT_APP);
@@ -124,7 +124,7 @@ describe("Semantic Tokens + Resolution Integration", () => {
 
     // Get semantics for root scope (with discovered elements merged)
     rootSemantics = materializeSemanticsForScope(
-      DEFAULT_SEMANTICS,
+      BUILTIN_SEMANTICS,
       resolutionResult.resourceGraph,
       resolutionResult.resourceGraph.root,
     );

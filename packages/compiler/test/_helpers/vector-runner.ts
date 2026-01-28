@@ -28,8 +28,8 @@ import { deepMergeSemantics } from "./semantics-merge.js";
 import {
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS as SEM_DEFAULT,
-  prepareSemantics,
+  BUILTIN_SEMANTICS as SEM_DEFAULT,
+  prepareProjectSemantics,
   DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
 
@@ -101,7 +101,7 @@ export function createCompilerContext(vector: TestVector): CompilerContext {
   const baseSem = vector.semOverrides
     ? deepMergeSemantics(SEM_DEFAULT, vector.semOverrides)
     : SEM_DEFAULT;
-  const sem = prepareSemantics(baseSem);
+  const sem = prepareProjectSemantics(baseSem);
 
   return {
     sem,

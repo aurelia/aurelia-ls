@@ -1,13 +1,13 @@
 import {
-  DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  prepareProjectSemantics,
   stableHash,
   stableHashSemantics,
   DiagnosticsRuntime,
   type ResourceCatalog,
   type ResourceGraph,
   type ResourceScopeId,
-  type SemanticsWithCaches,
+  type MaterializedSemantics,
   type ProjectSnapshot,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
@@ -32,7 +32,7 @@ type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
 
 interface IndexSnapshot {
   readonly resolution: ResolutionResult;
-  readonly semantics: SemanticsWithCaches;
+  readonly semantics: MaterializedSemantics;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
   readonly resourceGraph: ResourceGraph;
@@ -51,12 +51,12 @@ interface IndexSnapshot {
 export class AureliaProjectIndex {
   #ts: TypeScriptProject;
   #logger: Logger;
-  #baseSemantics: SemanticsWithCaches;
+  #baseSemantics: MaterializedSemantics;
   #defaultScope: ResourceScopeId | null;
   #resolutionConfig: ResolutionConfigBase;
 
   #resolution: ResolutionResult;
-  #semantics: SemanticsWithCaches;
+  #semantics: MaterializedSemantics;
   #catalog: ResourceCatalog;
   #syntax: TemplateSyntaxRegistry;
   #resourceGraph: ResourceGraph;
@@ -66,7 +66,7 @@ export class AureliaProjectIndex {
     this.#ts = options.ts;
     this.#logger = options.logger;
     const resolutionConfig = options.resolution ?? {};
-    this.#baseSemantics = prepareSemantics(resolutionConfig.baseSemantics ?? DEFAULT_SEMANTICS);
+    this.#baseSemantics = prepareProjectSemantics(resolutionConfig.baseSemantics ?? BUILTIN_SEMANTICS);
     this.#defaultScope = resolutionConfig.defaultScope ?? null;
     this.#resolutionConfig = {
       ...resolutionConfig,
@@ -112,7 +112,7 @@ export class AureliaProjectIndex {
     return this.#syntax;
   }
 
-  currentSemantics(): SemanticsWithCaches {
+  currentSemantics(): MaterializedSemantics {
     return this.#semantics;
   }
 
@@ -139,7 +139,7 @@ export class AureliaProjectIndex {
       this.#logger,
     );
 
-    const semantics: SemanticsWithCaches = {
+    const semantics: MaterializedSemantics = {
       ...result.semantics,
       resourceGraph: result.resourceGraph,
       defaultScope: this.#defaultScope ?? result.semantics.defaultScope ?? null,

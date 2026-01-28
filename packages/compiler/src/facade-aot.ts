@@ -17,7 +17,7 @@ import {
   buildProjectSnapshot,
   buildSemanticsSnapshotFromProject,
   type ResourceCatalog,
-  type Semantics,
+  type ProjectSemantics,
   type ResourceGraph,
   type ResourceScopeId,
   type LocalImportDef,
@@ -37,7 +37,7 @@ export interface CompileAotOptions {
   /** Component name (kebab-case, e.g., "my-app") */
   name?: string;
   /** Semantics (built-ins + project-specific resources) */
-  semantics: Semantics;
+  semantics: ProjectSemantics;
   /** Module resolver for template meta imports. */
   moduleResolver: ModuleResolver;
   /** Precomputed catalog for lowering (scope-specific if provided) */

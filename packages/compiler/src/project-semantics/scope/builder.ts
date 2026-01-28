@@ -1,7 +1,7 @@
 import {
   buildResourceGraphFromSemantics,
-  DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  prepareProjectSemantics,
   type Bindable,
   type BindableDef,
   type ControllerConfig,
@@ -14,7 +14,7 @@ import {
   type ResourceGraph,
   type ResourceScope,
   type ResourceScopeId,
-  type Semantics,
+  type ProjectSemantics,
   type ElementRes,
   type AttrRes,
   type TemplateControllerDef,
@@ -50,7 +50,7 @@ type MutablePartialResourceCollections = {
  * - Global scope: resources registered globally (Aurelia.register, container.register)
  * - Local scopes: resources registered locally (static dependencies, decorator deps)
  *
- * Plugin resources (those with `package` field in DEFAULT_SEMANTICS) are only included
+ * Plugin resources (those with `package` field in BUILTIN_SEMANTICS) are only included
  * when the corresponding plugin is activated via registration.activatedPlugins.
  *
  * Note: A resource can have multiple registration sites (both global AND local).
@@ -58,10 +58,10 @@ type MutablePartialResourceCollections = {
  */
 export function buildResourceGraph(
   registration: RegistrationAnalysis,
-  baseSemantics?: Semantics,
+  baseSemantics?: ProjectSemantics,
   defaultScope?: ResourceScopeId | null,
 ): ResourceGraph {
-  const semantics = prepareSemantics(baseSemantics ?? DEFAULT_SEMANTICS);
+  const semantics = prepareProjectSemantics(baseSemantics ?? BUILTIN_SEMANTICS);
 
   // Build set of activated packages from plugins
   const activatedPackages = new Set<string>();
@@ -155,7 +155,7 @@ function createEmptyCollections(): MutableResourceCollections {
   return {
     elements: {},
     attributes: {},
-    controllers: { ...DEFAULT_SEMANTICS.resources.controllers },
+    controllers: { ...BUILTIN_SEMANTICS.resources.controllers },
     valueConverters: {},
     bindingBehaviors: {},
   };

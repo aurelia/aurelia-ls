@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 
 import {
   lowerDocument,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DEFAULT_SYNTAX,
   getExpressionParser,
   DiagnosticsRuntime,
   toSourceFileId,
-  prepareSemantics,
+  prepareProjectSemantics,
   type CustomElementDef,
   type DOMNode,
   type NodeId,
@@ -23,12 +23,12 @@ function lower(html: string) {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
 }
 
-function lowerWithSemantics(html: string, sem: typeof DEFAULT_SEMANTICS) {
+function lowerWithSemantics(html: string, sem: typeof BUILTIN_SEMANTICS) {
   const diagnostics = new DiagnosticsRuntime();
   return lowerDocument(html, {
     attrParser: DEFAULT_SYNTAX,
@@ -61,7 +61,7 @@ function createElementDef(name: string, shadow: boolean): CustomElementDef {
 }
 
 function createSemanticsWithElements(elements: CustomElementDef[]) {
-  const { resources, bindingCommands, attributePatterns, catalog, ...base } = DEFAULT_SEMANTICS;
+  const { resources, bindingCommands, attributePatterns, catalog, ...base } = BUILTIN_SEMANTICS;
   void resources;
   void bindingCommands;
   void attributePatterns;
@@ -76,7 +76,7 @@ function createSemanticsWithElements(elements: CustomElementDef[]) {
   }
   const patch = { elements: elementMap };
   const merged = deepMergeSemantics(base, patch);
-  return prepareSemantics(merged);
+  return prepareProjectSemantics(merged);
 }
 
 function createShadowHostSemantics() {

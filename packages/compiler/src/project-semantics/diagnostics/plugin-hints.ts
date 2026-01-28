@@ -7,8 +7,8 @@
  * Example: "Unknown element 'au-viewport'. Requires @aurelia/router — register RouterConfiguration."
  */
 
-import type { Semantics, ElementRes, AttrRes } from '../compiler.js';
-import { DEFAULT_SEMANTICS, prepareSemantics } from '../compiler.js';
+import type { ProjectSemantics, ElementRes, AttrRes } from '../compiler.js';
+import { BUILTIN_SEMANTICS, prepareProjectSemantics } from '../compiler.js';
 import { getManifestByPackage } from "../plugins/manifests.js";
 import type { PluginManifest } from "../plugins/types.js";
 
@@ -46,7 +46,7 @@ export type PluginHintResult =
  * to generate a helpful error message.
  *
  * @param elementName - Kebab-case element name (e.g., "au-viewport")
- * @param semantics - Optional semantics to search (defaults to DEFAULT_SEMANTICS)
+ * @param semantics - Optional semantics to search (defaults to BUILTIN_SEMANTICS)
  * @returns Plugin hint if the element is from a known plugin package
  *
  * @example
@@ -61,9 +61,9 @@ export type PluginHintResult =
  */
 export function lookupElementPluginHint(
   elementName: string,
-  semantics: Semantics = DEFAULT_SEMANTICS,
+  semantics: ProjectSemantics = BUILTIN_SEMANTICS,
 ): PluginHintResult {
-  const element = prepareSemantics(semantics).resources.elements[elementName];
+  const element = prepareProjectSemantics(semantics).resources.elements[elementName];
   return resourceToHint(element);
 }
 
@@ -74,14 +74,14 @@ export function lookupElementPluginHint(
  * to generate a helpful error message.
  *
  * @param attrName - Kebab-case attribute name (e.g., "load", "href")
- * @param semantics - Optional semantics to search (defaults to DEFAULT_SEMANTICS)
+ * @param semantics - Optional semantics to search (defaults to BUILTIN_SEMANTICS)
  * @returns Plugin hint if the attribute is from a known plugin package
  */
 export function lookupAttributePluginHint(
   attrName: string,
-  semantics: Semantics = DEFAULT_SEMANTICS,
+  semantics: ProjectSemantics = BUILTIN_SEMANTICS,
 ): PluginHintResult {
-  const attr = prepareSemantics(semantics).resources.attributes[attrName];
+  const attr = prepareProjectSemantics(semantics).resources.attributes[attrName];
   return resourceToHint(attr);
 }
 

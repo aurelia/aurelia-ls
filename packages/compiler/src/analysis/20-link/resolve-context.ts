@@ -1,5 +1,5 @@
 import { createSemanticsLookup, type SemanticsLookup, type SemanticsLookupOptions } from "../../schema/registry.js";
-import type { Semantics } from "../../schema/registry.js";
+import type { ProjectSemantics } from "../../schema/registry.js";
 import type { ResourceGraph } from "../../schema/resource-graph.js";
 import type { ModuleResolver } from "../../shared/module-resolver.js";
 import { NOOP_TRACE, type CompileTrace } from "../../shared/trace.js";
@@ -52,7 +52,7 @@ export function createResolveServices(opts: {
 }
 
 export function createResolveContext(
-  sem: Semantics,
+  sem: ProjectSemantics,
   services: ResolveServices,
   lookupOpts: SemanticsLookupOptions | undefined,
   graph: ResourceGraph | null | undefined,

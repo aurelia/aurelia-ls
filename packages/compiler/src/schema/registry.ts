@@ -24,10 +24,10 @@ import type {
   EventSchema,
   Naming,
   TwoWayDefaults,
-  Semantics,
+  ProjectSemantics,
   SemanticsLookup,
   SemanticsLookupOptions,
-  SemanticsWithCaches,
+  MaterializedSemantics,
   TypeRef,
 } from "./types.js";
 import {
@@ -635,10 +635,10 @@ export function createCustomControllerConfig(
   };
 }
 
-export function prepareSemantics(
-  sem: Semantics,
-  overrides?: Partial<Pick<SemanticsWithCaches, "resources" | "bindingCommands" | "attributePatterns" | "catalog">>,
-): SemanticsWithCaches {
+export function prepareProjectSemantics(
+  sem: ProjectSemantics,
+  overrides?: Partial<Pick<MaterializedSemantics, "resources" | "bindingCommands" | "attributePatterns" | "catalog">>,
+): MaterializedSemantics {
   const resources = normalizeResourceCollections(
     overrides?.resources ?? sem.resources ?? buildResourceCollectionsFromSemantics(sem),
   );
@@ -659,8 +659,8 @@ function normalizeEventType(value: TypeRef | string | undefined): TypeRef {
   return typeof value === "string" ? toTypeRef(value) : value;
 }
 
-export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOptions): SemanticsLookup {
-  const base = prepareSemantics(sem);
+export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLookupOptions): SemanticsLookup {
+  const base = prepareProjectSemantics(sem);
   const graph = opts?.graph ?? base.resourceGraph ?? null;
   const scope = opts?.scope ?? base.defaultScope ?? null;
 
@@ -676,7 +676,7 @@ export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOpti
   }
 
   const semWithCaches = resources
-    ? prepareSemantics(
+    ? prepareProjectSemantics(
         { ...base, resourceGraph: graph ?? undefined, defaultScope: scope ?? undefined },
         { resources },
       )
@@ -730,7 +730,7 @@ export function createSemanticsLookup(sem: Semantics, opts?: SemanticsLookupOpti
   };
 }
 
-export function buildTemplateSyntaxRegistry(sem: SemanticsWithCaches): TemplateSyntaxRegistry {
+export function buildTemplateSyntaxRegistry(sem: MaterializedSemantics): TemplateSyntaxRegistry {
   return {
     bindingCommands: sem.bindingCommands,
     attributePatterns: sem.attributePatterns,
@@ -740,21 +740,21 @@ export function buildTemplateSyntaxRegistry(sem: SemanticsWithCaches): TemplateS
 
 export function getBindingCommandConfig(
   name: string,
-  sem: Semantics,
+  sem: ProjectSemantics,
 ): BindingCommandConfig | null {
-  return prepareSemantics(sem).bindingCommands[name] ?? null;
+  return prepareProjectSemantics(sem).bindingCommands[name] ?? null;
 }
 
 export function isPropertyBindingCommand(
   name: string,
-  sem: Semantics,
+  sem: ProjectSemantics,
 ): boolean {
   return getBindingCommandConfig(name, sem)?.kind === "property";
 }
 
 export function getCommandMode(
   name: string,
-  sem: Semantics,
+  sem: ProjectSemantics,
 ): BindingMode | null {
   return getBindingCommandConfig(name, sem)?.mode ?? null;
 }
@@ -770,10 +770,10 @@ function findByAlias<T extends { aliases?: readonly string[] }>(
 }
 
 // ============================================================================
-// Default Semantics
+// Builtin Semantics
 // ============================================================================
 
-const DEFAULT_RAW_SEMANTICS: Semantics = {
+const BUILTIN_RAW_SEMANTICS: ProjectSemantics = {
   controllers: BUILTIN_CONTROLLERS,
   elements: BUILTIN_ELEMENTS,
   attributes: BUILTIN_ATTRIBUTES,
@@ -787,7 +787,7 @@ const DEFAULT_RAW_SEMANTICS: Semantics = {
   twoWayDefaults: TWO_WAY_DEFAULTS,
 };
 
-const DEFAULT_RESOURCES: ResourceCollections = {
+const BUILTIN_RESOURCES: ResourceCollections = {
   elements: Object.fromEntries(
     Object.entries(BUILTIN_ELEMENTS).map(([key, def]) => [key, toElementRes(def)]),
   ),
@@ -803,15 +803,15 @@ const DEFAULT_RESOURCES: ResourceCollections = {
   ),
 };
 
-export const DEFAULT_SEMANTICS: SemanticsWithCaches = {
-  ...DEFAULT_RAW_SEMANTICS,
-  resources: DEFAULT_RESOURCES,
+export const BUILTIN_SEMANTICS: MaterializedSemantics = {
+  ...BUILTIN_RAW_SEMANTICS,
+  resources: BUILTIN_RESOURCES,
   bindingCommands: BUILTIN_BINDING_COMMANDS,
   attributePatterns: BUILTIN_ATTRIBUTE_PATTERNS,
-  catalog: buildResourceCatalog(DEFAULT_RESOURCES, BUILTIN_BINDING_COMMANDS, BUILTIN_ATTRIBUTE_PATTERNS),
+  catalog: buildResourceCatalog(BUILTIN_RESOURCES, BUILTIN_BINDING_COMMANDS, BUILTIN_ATTRIBUTE_PATTERNS),
 };
 
-export { DEFAULT_SEMANTICS as DEFAULT };
+export { BUILTIN_SEMANTICS as DEFAULT };
 
 export type {
   AttrRes,
@@ -854,10 +854,10 @@ export type {
   ResourceScope,
   ResourceScopeId,
   ScopedResources,
-  Semantics,
+  ProjectSemantics,
   SemanticsLookup,
   SemanticsLookupOptions,
-  SemanticsWithCaches,
+  MaterializedSemantics,
   SourceLocation,
   Sourced,
   Configured,

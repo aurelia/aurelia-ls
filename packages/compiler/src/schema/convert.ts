@@ -14,7 +14,7 @@ import type {
   CustomElementDef,
   ElementRes,
   ResourceCollections,
-  Semantics,
+  ProjectSemantics,
   Sourced,
   TemplateControllerDef,
   TypeRef,
@@ -240,7 +240,7 @@ export function normalizeResourceCollections(resources?: Partial<ResourceCollect
   };
 }
 
-export function buildResourceCollectionsFromSemantics(sem: Semantics): ResourceCollections {
+export function buildResourceCollectionsFromSemantics(sem: ProjectSemantics): ResourceCollections {
   const elements = Object.fromEntries(
     Object.entries(sem.elements).map(([key, def]) => [key, toElementRes(def)]),
   );
@@ -273,12 +273,12 @@ export function buildResourceCollectionsFromSemantics(sem: Semantics): ResourceC
   };
 }
 
-export function buildBindingCommandConfigs(sem: Semantics): Record<string, BindingCommandConfig> {
+export function buildBindingCommandConfigs(sem: ProjectSemantics): Record<string, BindingCommandConfig> {
   return Object.fromEntries(
     Object.entries(sem.commands).map(([key, def]) => [key, toBindingCommandConfig(def)]),
   );
 }
 
-export function buildAttributePatternConfigs(sem: Semantics): AttributePatternConfig[] {
+export function buildAttributePatternConfigs(sem: ProjectSemantics): AttributePatternConfig[] {
   return sem.patterns.map((def) => toAttributePatternConfig(def));
 }

@@ -6,30 +6,30 @@ import type {
   CustomElementDef,
   ResourceCatalog,
   ResourceDef,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
   TemplateControllerDef,
   TemplateSyntaxRegistry,
   ValueConverterDef,
 } from '../compiler.js';
-import { DEFAULT_SEMANTICS, buildResourceCatalog, prepareSemantics } from '../compiler.js';
+import { BUILTIN_SEMANTICS, buildResourceCatalog, prepareProjectSemantics } from '../compiler.js';
 import { unwrapSourced } from "./sourced.js";
 
 export interface SemanticsArtifacts {
-  readonly semantics: SemanticsWithCaches;
+  readonly semantics: MaterializedSemantics;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
 }
 
 export function buildSemanticsArtifacts(
   resources: readonly ResourceDef[],
-  baseSemantics?: Semantics,
+  baseSemantics?: ProjectSemantics,
   opts?: {
     readonly gaps?: readonly CatalogGap[];
     readonly confidence?: CatalogConfidence;
   },
 ): SemanticsArtifacts {
-  const base = baseSemantics ?? DEFAULT_SEMANTICS;
+  const base = baseSemantics ?? BUILTIN_SEMANTICS;
   const stripped = stripSemanticsCaches(base);
 
   const elements: Record<string, CustomElementDef> = {};
@@ -60,7 +60,7 @@ export function buildSemanticsArtifacts(
     }
   }
 
-  const sem: Semantics = {
+  const sem: ProjectSemantics = {
     ...stripped,
     elements: { ...base.elements, ...elements },
     attributes: { ...base.attributes, ...attributes },
@@ -75,11 +75,11 @@ export function buildSemanticsArtifacts(
     twoWayDefaults: base.twoWayDefaults,
   };
 
-  const prepared = prepareSemantics(sem);
+  const prepared = prepareProjectSemantics(sem);
   const catalog = opts
     ? buildResourceCatalog(prepared.resources, prepared.bindingCommands, prepared.attributePatterns, opts)
     : prepared.catalog;
-  const withCatalog: SemanticsWithCaches = opts ? { ...prepared, catalog } : prepared;
+  const withCatalog: MaterializedSemantics = opts ? { ...prepared, catalog } : prepared;
 
   const syntax: TemplateSyntaxRegistry = {
     bindingCommands: withCatalog.bindingCommands,
@@ -94,14 +94,14 @@ export function buildSemanticsArtifacts(
   };
 }
 
-function stripSemanticsCaches(base: Semantics): Semantics {
+function stripSemanticsCaches(base: ProjectSemantics): ProjectSemantics {
   const {
     resources,
     bindingCommands,
     attributePatterns,
     catalog,
     ...rest
-  } = base as SemanticsWithCaches;
+  } = base as MaterializedSemantics;
   void resources;
   void bindingCommands;
   void attributePatterns;

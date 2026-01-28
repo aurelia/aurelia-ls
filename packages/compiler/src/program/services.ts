@@ -23,7 +23,7 @@ import {
   type Bindable,
   type ElementRes,
   type ResourceCollections,
-  type SemanticsWithCaches,
+  type MaterializedSemantics,
   type TemplateSyntaxRegistry,
   type TypeRef,
 } from "../schema/index.js";
@@ -904,7 +904,7 @@ type TagContext =
 function resolveCompletionContext(
   program: TemplateProgram,
   uri: DocumentUri,
-): { sem: SemanticsWithCaches; resources: ResourceCollections; syntax: TemplateSyntaxRegistry } {
+): { sem: MaterializedSemantics; resources: ResourceCollections; syntax: TemplateSyntaxRegistry } {
   const context = program.options.templateContext?.(uri) ?? {};
   const snapshot = buildSemanticsSnapshotFromProject(program.options.project, context);
   return { sem: snapshot.semantics, resources: snapshot.semantics.resources, syntax: snapshot.syntax };
@@ -937,7 +937,7 @@ function collectTagNameCompletions(
   text: string,
   context: Extract<TagContext, { kind: "tag-name" }>,
   resources: ResourceCollections,
-  sem: SemanticsWithCaches,
+  sem: MaterializedSemantics,
 ): CompletionItem[] {
   const range = rangeFromOffsets(text, context.nameStart, context.nameEnd);
   const prefix = context.prefix.toLowerCase();
@@ -970,7 +970,7 @@ function collectAttributeNameCompletions(
   text: string,
   context: Extract<TagContext, { kind: "attr-name" }>,
   resources: ResourceCollections,
-  sem: SemanticsWithCaches,
+  sem: MaterializedSemantics,
   syntax: TemplateSyntaxRegistry,
   attrParser: AttributeParser,
 ): CompletionItem[] {

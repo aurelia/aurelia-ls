@@ -50,7 +50,7 @@ import type {
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
 import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
 import { debug } from "../../shared/debug.js";
-import { DEFAULT_SEMANTICS, buildTemplateSyntaxRegistry, type TemplateSyntaxRegistry } from "../../schema/registry.js";
+import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry, type TemplateSyntaxRegistry } from "../../schema/registry.js";
 import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../../parsing/index.js";
 
 import type {
@@ -202,7 +202,7 @@ class PlanningContext {
     this.linked = linked;
     this.scope = scope;
     this.options = options;
-    this.syntax = options.syntax ?? buildTemplateSyntaxRegistry(DEFAULT_SEMANTICS);
+    this.syntax = options.syntax ?? buildTemplateSyntaxRegistry(BUILTIN_SEMANTICS);
     this.attrParser = options.attrParser ?? createAttributeParserFromRegistry(this.syntax);
     this.exprIndex = indexExprTable(linked.exprTable);
 

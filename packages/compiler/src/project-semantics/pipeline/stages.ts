@@ -4,7 +4,7 @@ import type {
   ResourceCatalog,
   ResourceDef,
   ResourceGraph,
-  Semantics,
+  ProjectSemantics,
   SemanticSnapshot,
   TemplateSyntaxRegistry,
 } from '../compiler.js';
@@ -56,7 +56,7 @@ export interface DiscoveryStageOutputs {
   evaluate: PartialEvaluationResult;
   recognize: PatternMatchOutput;
   assemble: {
-    semantics: Semantics;
+    semantics: ProjectSemantics;
     catalog: ResourceCatalog;
     syntax: TemplateSyntaxRegistry;
   };

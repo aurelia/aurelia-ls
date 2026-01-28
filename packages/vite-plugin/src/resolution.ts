@@ -11,7 +11,7 @@ import { dirname, join, resolve as resolvePath } from "node:path";
 import { createRequire } from "node:module";
 import ts from "typescript";
 import {
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
@@ -20,7 +20,7 @@ import {
   diagnosticsByCategory,
   DiagnosticsRuntime,
   normalizePathForId,
-  prepareSemantics,
+  prepareProjectSemantics,
   type CatalogConfidence,
   type CatalogGap,
   type CompilerDiagnostic,
@@ -158,7 +158,7 @@ export async function createResolutionContext(
 
   const diagnostics = new DiagnosticsRuntime();
   const result = discoverProjectSemantics(program, {
-    baseSemantics: DEFAULT_SEMANTICS,
+    baseSemantics: BUILTIN_SEMANTICS,
     trace,
     fileSystem,
     defines,
@@ -330,7 +330,7 @@ async function analyzeThirdPartyPackages(
     return { resources: null, gaps, confidence: catalogConfidenceFromAnalysisGaps(gaps) };
   }
 
-  const artifacts = buildSemanticsArtifacts(resourceDefs, DEFAULT_SEMANTICS);
+  const artifacts = buildSemanticsArtifacts(resourceDefs, BUILTIN_SEMANTICS);
   return {
     resources: artifacts.semantics.resources,
     gaps,
@@ -511,7 +511,7 @@ function applyThirdPartyResources(
   const policy = opts?.policy ?? "root-scope";
 
   const buildSemanticsWithResources = () => {
-    const sem = prepareSemantics(
+    const sem = prepareProjectSemantics(
       { ...result.semantics },
       { resources: mergedResources },
     );

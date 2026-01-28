@@ -5,7 +5,7 @@ import type {
   ResourceGraph,
   SemanticSnapshot,
   SemanticSymbolSnapshot,
-  SemanticsWithCaches,
+  MaterializedSemantics,
 } from '../compiler.js';
 import { collectSnapshotResources, type SnapshotIdOptions, type SnapshotResource } from "./shared.js";
 
@@ -19,7 +19,7 @@ export interface SemanticSnapshotOptions extends SnapshotIdOptions {
 }
 
 export function buildSemanticSnapshot(
-  sem: SemanticsWithCaches,
+  sem: MaterializedSemantics,
   options?: SemanticSnapshotOptions,
 ): SemanticSnapshot {
   const resources = collectSnapshotResources(sem, options);

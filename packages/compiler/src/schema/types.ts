@@ -347,7 +347,7 @@ export interface ScopedResources {
 // Semantics Container
 // ============================================================================
 
-export interface Semantics {
+export interface ProjectSemantics {
   readonly resourceGraph?: ResourceGraph | null;
   readonly defaultScope?: ResourceScopeId | null;
   readonly controllers: Readonly<Record<string, TemplateControllerDef>>;
@@ -420,7 +420,7 @@ export interface TemplateSyntaxRegistry {
   readonly emitters?: readonly TemplateSyntaxEmitter[];
 }
 
-export type SemanticsWithCaches = Semantics & {
+export type MaterializedSemantics = ProjectSemantics & {
   readonly resources: ResourceCollections;
   readonly bindingCommands: Readonly<Record<string, BindingCommandConfig>>;
   readonly attributePatterns: readonly AttributePatternConfig[];
@@ -442,7 +442,7 @@ export interface SemanticsLookupOptions {
 }
 
 export interface SemanticsLookup {
-  readonly sem: SemanticsWithCaches;
+  readonly sem: MaterializedSemantics;
   readonly resources: ResourceCollections;
   readonly catalog: ResourceCatalog;
   element(name: string): ElementRes | null;

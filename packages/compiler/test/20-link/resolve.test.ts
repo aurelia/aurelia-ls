@@ -8,11 +8,11 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   lowerDocument,
-  DEFAULT_SEMANTICS as DEFAULT,
+  BUILTIN_SEMANTICS as DEFAULT,
   linkTemplateSemantics, buildSemanticsSnapshot,
   materializeResourcesForScope,
   createSemanticsLookup,
-  prepareSemantics,
+  prepareProjectSemantics,
   DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
 
@@ -128,7 +128,7 @@ describe("Resolve (20) - Resource Graph", () => {
     };
 
     const scoped = materializeResourcesForScope(baseSem, graph, "child");
-    const sem = prepareSemantics(
+    const sem = prepareProjectSemantics(
       { ...baseSem, resourceGraph: graph, defaultScope: "child" },
       { resources: scoped.resources },
     );
@@ -206,7 +206,7 @@ describe("Resolve (20) - Resource Graph", () => {
     };
 
     const scoped = materializeResourcesForScope(baseSem, graph, "feature");
-    const sem = prepareSemantics(
+    const sem = prepareProjectSemantics(
       { ...baseSem, resourceGraph: graph, defaultScope: "feature" },
       { resources: scoped.resources },
     );
@@ -658,7 +658,7 @@ describe("Resolve (20) - Local Imports", () => {
       },
     ];
 
-    const sem = prepareSemantics(baseSem);
+    const sem = prepareProjectSemantics(baseSem);
     const ir = lowerDocument(`<au-compose global-prop.bind="x"></au-compose>`, {
       attrParser: DEFAULT_SYNTAX,
       exprParser: getExpressionParser(),

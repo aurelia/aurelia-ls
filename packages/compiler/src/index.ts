@@ -35,8 +35,9 @@ export type { AttrCommandSpan, AttrPartSpan, AttributeNameAnalysis, ExpressionPa
 
 // === Language / Semantics ===
 export {
-  DEFAULT as DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  DEFAULT as DEFAULT_SEMANTICS, // Legacy alias
+  prepareProjectSemantics,
   createSemanticsLookup,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
@@ -51,8 +52,8 @@ export type {
   SourceLocation,
   Configured,
   Sourced,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
   ResourceGraph,
   ResourceScope,
   ResourceScopeId,

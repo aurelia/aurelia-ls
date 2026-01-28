@@ -1,4 +1,4 @@
-import type { ResourceDef, SemanticsWithCaches, SymbolId } from '../compiler.js';
+import type { ResourceDef, MaterializedSemantics, SymbolId } from '../compiler.js';
 import { normalizePathForId, stableHash } from '../compiler.js';
 import { unwrapSourced } from "../assemble/sourced.js";
 
@@ -16,7 +16,7 @@ export interface SnapshotResource {
 }
 
 export function collectSnapshotResources(
-  sem: SemanticsWithCaches,
+  sem: MaterializedSemantics,
   options?: SnapshotIdOptions,
 ): SnapshotResource[] {
   const defs: ResourceDef[] = [];

@@ -11,7 +11,7 @@ import type {
   ResourceCatalog,
   ResourceGraph,
   ResourceScopeId,
-  Semantics,
+  ProjectSemantics,
   ProjectSnapshot,
   TemplateContext,
   TemplateSyntaxRegistry,
@@ -44,7 +44,7 @@ export interface CompileOptions {
   /** Optional precomputed project snapshot (preferred). */
   project?: ProjectSnapshot;
   /** Base semantics (used when project snapshot is not provided). */
-  semantics?: Semantics;
+  semantics?: ProjectSemantics;
   catalog?: ResourceCatalog;
   syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;

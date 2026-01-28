@@ -103,12 +103,13 @@ export {
   emitTemplate,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
+  DEFAULT_SEMANTICS, // Legacy alias
   type AotPlanModule,
   type AotCodeResult,
   type SerializedDefinition,
   type TemplateEmitResult,
-  type Semantics,
+  type ProjectSemantics,
   type ResourceGraph,
   type ResourceScopeId,
 } from "@aurelia-ls/compiler";

@@ -3,8 +3,8 @@
 
 // === Language / Semantics ===
 export {
-  DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  prepareProjectSemantics,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
 } from "../schema/index.js";
@@ -35,8 +35,8 @@ export type {
   ResourceScopeId,
   SemanticSnapshot,
   SemanticSymbolSnapshot,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
   SymbolId,
   SourceLocation,
   Sourced,

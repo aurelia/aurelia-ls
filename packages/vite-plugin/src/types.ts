@@ -9,7 +9,7 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
+import type { ResourceGraph, ResourceScopeId, MaterializedSemantics, CompileTrace } from "@aurelia-ls/compiler";
 import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
@@ -1094,7 +1094,7 @@ export interface ResolutionContext {
   /** Resource graph for compilation */
   resourceGraph: ResourceGraph;
   /** Merged semantics with discovered resources */
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   /** Template info for looking up component scope */
   templates: Map<string, TemplateInfo>;
   /** Lookup scope for a template path */

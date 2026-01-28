@@ -6,8 +6,8 @@ import type {
   ResourceScope,
   ResourceScopeId,
   ScopedResources,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
 } from "./types.js";
 import {
   buildAttributePatternConfigs,
@@ -29,7 +29,7 @@ export type { ResourceCollections, ResourceGraph, ResourceScope, ResourceScopeId
  *   are only included when the corresponding plugin is activated).
  */
 export function materializeResourcesForScope(
-  sem: Semantics,
+  sem: ProjectSemantics,
   graph?: ResourceGraph | null,
   scope?: ResourceScopeId | null,
   localImports?: readonly LocalImportDef[],
@@ -66,7 +66,7 @@ function partialToFull(partial: Partial<ResourceCollections>): ResourceCollectio
 /**
  * Extract resource collections from semantics.
  */
-function extractResources(sem: Semantics): ResourceCollections {
+function extractResources(sem: ProjectSemantics): ResourceCollections {
   if (sem.resources) return normalizeResourceCollections(sem.resources);
   return buildResourceCollectionsFromSemantics(sem);
 }
@@ -75,16 +75,16 @@ function extractResources(sem: Semantics): ResourceCollections {
  * Create semantics with resources materialized for a specific scope.
  *
  * This is the primary integration point between the resolution pipeline and
- * the AOT compiler. It takes base semantics (typically DEFAULT_SEMANTICS),
+ * the AOT compiler. It takes base semantics (typically BUILTIN_SEMANTICS),
  * a ResourceGraph from resolution, and an optional scope, then produces
- * complete Semantics with properly merged resources.
+ * complete MaterializedSemantics with properly merged resources.
  */
 export function materializeSemanticsForScope(
-  baseSem: Semantics,
+  baseSem: ProjectSemantics,
   graph?: ResourceGraph | null,
   scope?: ResourceScopeId | null,
   localImports?: readonly LocalImportDef[],
-): SemanticsWithCaches {
+): MaterializedSemantics {
   const { resources } = materializeResourcesForScope(baseSem, graph, scope, localImports);
   const bindingCommands = baseSem.bindingCommands ?? buildBindingCommandConfigs(baseSem);
   const attributePatterns = baseSem.attributePatterns ?? buildAttributePatternConfigs(baseSem);
@@ -111,7 +111,7 @@ export function materializeSemanticsForScope(
  * Useful for callers that want to standardize on a graph shape even when they
  * do not yet have project-driven scopes.
  */
-export function buildResourceGraphFromSemantics(sem: Semantics): ResourceGraph {
+export function buildResourceGraphFromSemantics(sem: ProjectSemantics): ResourceGraph {
   const root = "root" as ResourceScopeId;
   return {
     version: "aurelia-resource-graph@1",

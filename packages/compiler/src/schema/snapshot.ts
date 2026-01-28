@@ -3,12 +3,12 @@ import type {
   ResourceCatalog,
   ResourceGraph,
   ResourceScopeId,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
   TemplateSyntaxRegistry,
 } from "./types.js";
 import { materializeSemanticsForScope } from "./resource-graph.js";
-import { buildTemplateSyntaxRegistry, prepareSemantics } from "./registry.js";
+import { buildTemplateSyntaxRegistry, prepareProjectSemantics } from "./registry.js";
 
 export interface TemplateContext {
   readonly scopeId?: ResourceScopeId | null;
@@ -16,7 +16,7 @@ export interface TemplateContext {
 }
 
 export interface ProjectSnapshot {
-  readonly semantics: SemanticsWithCaches;
+  readonly semantics: MaterializedSemantics;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
   readonly resourceGraph: ResourceGraph | null;
@@ -31,7 +31,7 @@ export interface ProjectSnapshotOptions {
 }
 
 export interface SemanticsSnapshot {
-  readonly semantics: SemanticsWithCaches;
+  readonly semantics: MaterializedSemantics;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
   readonly scopeId: ResourceScopeId | null;
@@ -47,10 +47,10 @@ export interface SemanticsSnapshotOptions {
 }
 
 export function buildProjectSnapshot(
-  base: Semantics,
+  base: ProjectSemantics,
   options: ProjectSnapshotOptions = {},
 ): ProjectSnapshot {
-  const prepared = prepareSemantics(base, options.catalog ? { catalog: options.catalog } : undefined);
+  const prepared = prepareProjectSemantics(base, options.catalog ? { catalog: options.catalog } : undefined);
   const graph = options.resourceGraph ?? prepared.resourceGraph ?? null;
   const defaultScope = options.defaultScope ?? prepared.defaultScope ?? graph?.root ?? null;
   const catalog = options.catalog ?? prepared.catalog;
@@ -91,7 +91,7 @@ export function buildSemanticsSnapshotFromProject(
 }
 
 export function buildSemanticsSnapshot(
-  base: Semantics,
+  base: ProjectSemantics,
   options: SemanticsSnapshotOptions = {},
 ): SemanticsSnapshot {
   const project = buildProjectSnapshot(base, {

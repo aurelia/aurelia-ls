@@ -3,8 +3,8 @@ import path from "node:path";
 
 import {
   compileAot,
-  DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  prepareProjectSemantics,
   buildTemplateSyntaxRegistry,
   createAttributeParserFromRegistry,
   materializeSemanticsForScope,
@@ -30,9 +30,9 @@ function hasSpan(value: unknown): boolean {
 
 describe("compileAot facade", () => {
   test("strips spans by default and respects catalog overrides", () => {
-    const sem = prepareSemantics(DEFAULT_SEMANTICS);
+    const sem = prepareProjectSemantics(BUILTIN_SEMANTICS);
     const result = compileAot("<div>${msg}</div>", {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       catalog: sem.catalog,
       moduleResolver: NOOP_MODULE_RESOLVER,
     });
@@ -49,7 +49,7 @@ describe("compileAot facade", () => {
   test("retains spans when stripSpans is false", () => {
     const templatePath = "/app/template.html";
     const result = compileAot("<div>${msg}</div>", {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       templatePath,
       stripSpans: false,
       moduleResolver: NOOP_MODULE_RESOLVER,
@@ -66,12 +66,12 @@ describe("compileAot facade", () => {
   test("deduplicates expressions when enabled", () => {
     const markup = "<div>${msg}</div><div>${msg}</div>";
     const deduped = compileAot(markup, {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       deduplicateExpressions: true,
       moduleResolver: NOOP_MODULE_RESOLVER,
     });
     const noDedup = compileAot(markup, {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       deduplicateExpressions: false,
       moduleResolver: NOOP_MODULE_RESOLVER,
     });
@@ -85,7 +85,7 @@ describe("compileAot facade", () => {
       { name: "foo-bar", bindables: { value: { name: "value", mode: "toView" } } },
     ];
     const scopedSemantics = materializeSemanticsForScope(
-      DEFAULT_SEMANTICS,
+      BUILTIN_SEMANTICS,
       null,
       null,
       localImports
@@ -94,7 +94,7 @@ describe("compileAot facade", () => {
     const attrParser = createAttributeParserFromRegistry(syntax);
 
     const result = compileAot("<foo-bar value.bind=\"msg\"></foo-bar>", {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       localImports,
       syntax,
       attrParser,

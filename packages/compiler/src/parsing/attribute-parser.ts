@@ -1,7 +1,7 @@
 import type { BindingMode } from "../model/ir.js";
 import type { TextSpan } from "../model/index.js";
 import type { AttributePatternConfig, TemplateSyntaxRegistry } from "../schema/registry.js";
-import { BUILTIN_ATTRIBUTE_PATTERNS, buildTemplateSyntaxRegistry, DEFAULT_SEMANTICS } from "../schema/registry.js";
+import { BUILTIN_ATTRIBUTE_PATTERNS, buildTemplateSyntaxRegistry, BUILTIN_SEMANTICS } from "../schema/registry.js";
 
 /** Result of parsing an attribute name. */
 export class AttrSyntax {
@@ -300,7 +300,7 @@ export function createDefaultSyntax(): AttributeParser {
 }
 
 export const DEFAULT_SYNTAX = createAttributeParserFromRegistry(
-  buildTemplateSyntaxRegistry(DEFAULT_SEMANTICS),
+  buildTemplateSyntaxRegistry(BUILTIN_SEMANTICS),
 );
 
 /** Factory producing a parser preloaded from a TemplateSyntaxRegistry. */

@@ -3,7 +3,7 @@ import type {
   ApiSurfaceSnapshot,
   ApiSurfaceSymbol,
   ResourceDef,
-  SemanticsWithCaches,
+  MaterializedSemantics,
   SymbolId,
 } from '../compiler.js';
 import { unwrapSourced } from "../assemble/sourced.js";
@@ -12,7 +12,7 @@ import { collectSnapshotResources, type SnapshotIdOptions, type SnapshotResource
 const API_SURFACE_SNAPSHOT_VERSION = "aurelia-api-snapshot@1";
 
 export function buildApiSurfaceSnapshot(
-  sem: SemanticsWithCaches,
+  sem: MaterializedSemantics,
   options?: SnapshotIdOptions,
 ): ApiSurfaceSnapshot {
   const resources = collectSnapshotResources(sem, options);

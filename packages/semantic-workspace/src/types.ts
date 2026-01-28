@@ -11,7 +11,7 @@ import type {
   ResourceCatalog,
   ResourceGraph,
   SemanticSnapshot,
-  Semantics,
+  ProjectSemantics,
   SourceSpan,
   SymbolId,
   TemplateSyntaxRegistry,
@@ -35,7 +35,7 @@ export interface WorkspaceSnapshot {
   // Snapshot fields are immutable views; do not mutate in adapters.
   readonly meta: WorkspaceSnapshotMeta;
   // These artifacts must be coherent as a set (same inputs + stages).
-  readonly semantics: Semantics;
+  readonly semantics: ProjectSemantics;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
   readonly resourceGraph: ResourceGraph;

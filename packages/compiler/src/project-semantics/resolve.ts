@@ -13,8 +13,8 @@ import type {
   ResourceGraph,
   ResourceScopeId,
   SemanticSnapshot,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
   TemplateSyntaxRegistry,
   CompileTrace,
 } from './compiler.js';
@@ -53,7 +53,7 @@ export interface ResolutionConfig {
   /** Convention configuration for inference */
   conventions?: ConventionConfig;
   /** Base semantics to build upon */
-  baseSemantics?: Semantics;
+  baseSemantics?: ProjectSemantics;
   /** Default scope for resources */
   defaultScope?: ResourceScopeId | null;
   /** Optional trace for instrumentation */
@@ -105,7 +105,7 @@ export interface ResolutionConfig {
  */
 export interface ResolutionResult {
   /** Full semantics with provenance */
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   /** Minimal catalog for lowering */
   catalog: ResourceCatalog;
   /** Syntax registry for parsing and emitting */

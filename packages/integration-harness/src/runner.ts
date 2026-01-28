@@ -26,7 +26,7 @@ import {
   compileTemplate,
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
-  prepareSemantics,
+  prepareProjectSemantics,
   type ApiSurfaceSnapshot,
   type AotCodeResult,
   type CompileAotResult,
@@ -36,7 +36,7 @@ import {
   type ResourceDef,
   type ResourceGraph,
   type ResourceScopeId,
-  type SemanticsWithCaches,
+  type MaterializedSemantics,
   type TemplateCompilation,
   type TemplateSyntaxRegistry,
   type BindableDef,
@@ -98,7 +98,7 @@ export interface IntegrationRun {
   program?: ts.Program;
   fileSystem?: FileSystemContext;
   resolution: ResolutionResult;
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   resourceGraph: ResourceGraph;
   catalog: ResourceCatalog;
   syntax: TemplateSyntaxRegistry;
@@ -411,7 +411,7 @@ function applyExternalResources(
   external: readonly ResourceDef[],
   policy: ExternalResourcePolicy,
 ): {
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   resourceGraph: ResourceGraph;
   catalog: ResourceCatalog;
   syntax: TemplateSyntaxRegistry;
@@ -462,7 +462,7 @@ function compileTargets(
   scenario: NormalizedScenario,
   resolution: ResolutionResult,
   merged: {
-    semantics: SemanticsWithCaches;
+    semantics: MaterializedSemantics;
     resourceGraph: ResourceGraph;
     catalog: ResourceCatalog;
     syntax: TemplateSyntaxRegistry;
@@ -591,7 +591,7 @@ function resolveScopeId(
 
 function buildSnapshots(
   merged: {
-    semantics: SemanticsWithCaches;
+    semantics: MaterializedSemantics;
     resourceGraph: ResourceGraph;
     catalog: ResourceCatalog;
   },
@@ -659,14 +659,14 @@ function mergeUsageList(base: readonly string[], next: readonly string[]): strin
 
 function applyExplicitResources(
   merged: {
-    semantics: SemanticsWithCaches;
+    semantics: MaterializedSemantics;
     resourceGraph: ResourceGraph;
     catalog: ResourceCatalog;
     syntax: TemplateSyntaxRegistry;
   },
   explicit: Partial<ResourceCollections> | undefined,
 ): {
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   resourceGraph: ResourceGraph;
   catalog: ResourceCatalog;
   syntax: TemplateSyntaxRegistry;
@@ -692,7 +692,7 @@ function applyExplicitResources(
     },
   };
 
-  const semantics = prepareSemantics(
+  const semantics = prepareProjectSemantics(
     { ...merged.semantics, resourceGraph: nextGraph },
     { resources: mergedResources },
   );
