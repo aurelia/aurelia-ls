@@ -343,7 +343,10 @@ function applyInstructionHover(
   }
 
   if (!attrName) return;
-  if (instruction.kind === "setAttribute" || instruction.kind === "attributeBinding") {
+  // Show "Attribute" line only for attributeBinding (Aurelia-resolved bindings).
+  // setAttribute is a static passthrough with no Aurelia semantics — surfacing
+  // it in hover adds no information beyond what the user can already see.
+  if (instruction.kind === "attributeBinding") {
     ctx.addLine("Attribute", attrName);
   }
 }

@@ -145,6 +145,14 @@ describe("workspace hover (workspace-contract)", () => {
     expect(hover).toBeNull();
   });
 
+  it("returns null for static attributes on native elements", () => {
+    const query = harness.workspace.query(appUri);
+    // Hover the static 'type' in '<input type="text" ...>'
+    const pos = findPosition(appText, 'type="text"', 1);
+    const hover = query.hover(pos);
+    expect(hover).toBeNull();
+  });
+
   it("returns null for whitespace between elements", () => {
     const query = harness.workspace.query(appUri);
     // Position in the whitespace/text node between </let> and <header>
