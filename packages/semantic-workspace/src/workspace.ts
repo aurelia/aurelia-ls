@@ -327,7 +327,11 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       }
 
       const baseSpan = base ? spanFromRange(uri, base.range, this.lookupText.bind(this)) : null;
-      const contents = mergeHoverContents(detail?.lines ?? [], base?.contents ?? null);
+      // When collectTemplateHover produced lines, it supersedes the base
+      // language service content (which emits raw debug-style strings like
+      // "node: element").  Only fall back to base when no detail is available.
+      const baseContents = detail?.lines.length ? null : (base?.contents ?? null);
+      const contents = mergeHoverContents(detail?.lines ?? [], baseContents);
       if (!contents) return null;
 
       const span = detail?.span ?? baseSpan ?? null;

@@ -76,8 +76,20 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "copy-to-clipboard.bind", 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Custom Attribute");
-    expect(hover?.contents ?? "").toContain("copy-to-clipboard");
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("Custom Attribute");
+    expect(contents).toContain("copy-to-clipboard");
+
+    // Span must cover the attribute, not the entire host element
+    const attrStart = appText.indexOf("copy-to-clipboard.bind");
+    const elementStart = appText.lastIndexOf("<button", attrStart);
+    expect(hover?.location?.span).toBeDefined();
+    expect(hover!.location!.span!.start).toBeGreaterThanOrEqual(attrStart);
+    expect(hover!.location!.span!.start).not.toBe(elementStart);
+
+    // No raw debug strings like "node: element" in user-facing hover
+    expect(contents).not.toMatch(/^node:/m);
   });
 
   it("hovers binding commands", () => {

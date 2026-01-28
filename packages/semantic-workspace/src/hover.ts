@@ -140,7 +140,8 @@ export function collectTemplateHover(options: {
   if (instructionHits.length) {
     const [primary] = instructionHits;
     if (primary) {
-      span = span ?? primary.loc;
+      // Instruction span is more specific than node span — prefer it.
+      span = primary.loc;
     }
     for (const hit of instructionHits) {
       applyInstructionHover(hit.instruction, hit.loc, hit.attrName ?? null, {
