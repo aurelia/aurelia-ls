@@ -25,7 +25,7 @@ import {
 import { collectSemanticTokens } from "../../src/semantic-tokens.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPLICIT_APP = path.resolve(__dirname, "../../../compiler/test/20-link/apps/explicit-app");
+const EXPLICIT_APP = path.resolve(__dirname, "../../../compiler/test/project-semantics/apps/explicit-app");
 
 function createVmReflection() {
   return {

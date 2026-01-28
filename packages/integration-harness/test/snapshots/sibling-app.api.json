@@ -90,9 +90,9 @@
       "kind": "custom-element",
       "name": "au-viewport"
     },
-    { "id": "sym:b29a5180c72e80e6d162c8da61af2893f50cdb16822aabd2b4e0ac5c1a153b7b", "kind": "custom-element", "name": "inline-only", "source": "packages/compiler/test/20-link/apps/sibling-app/src/inline-only.ts" },
-    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/compiler/test/20-link/apps/sibling-app/src/my-app.ts" },
-    { "id": "sym:7ca0275eb8c38075f354435769d61872e3e383f9cc82eeecfd67612bad23a740", "kind": "custom-element", "name": "nav-bar", "source": "packages/compiler/test/20-link/apps/sibling-app/src/nav-bar.ts" },
+    { "id": "sym:b29a5180c72e80e6d162c8da61af2893f50cdb16822aabd2b4e0ac5c1a153b7b", "kind": "custom-element", "name": "inline-only", "source": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts" },
+    { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts" },
+    { "id": "sym:7ca0275eb8c38075f354435769d61872e3e383f9cc82eeecfd67612bad23a740", "kind": "custom-element", "name": "nav-bar", "source": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts" },
     {
       "bindables": [
         { "attribute": "age", "name": "age" },
@@ -102,7 +102,7 @@
       "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",
       "kind": "custom-element",
       "name": "user-card",
-      "source": "packages/compiler/test/20-link/apps/sibling-app/src/user-card.ts"
+      "source": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts"
     },
     {
       "bindables": [

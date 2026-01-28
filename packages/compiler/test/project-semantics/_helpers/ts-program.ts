@@ -54,17 +54,17 @@ export function createProgramFromApp(appPath: string): ts.Program {
 export function getTestAppPath(appName: string, importMetaUrl: string): string {
   const callerDir = path.dirname(fileURLToPath(importMetaUrl));
   // Navigate from any test subdirectory to apps/
-  // Current layout: test/20-link/{category}/*.test.ts
-  // Apps live at: test/20-link/apps/{appName}
+  // Current layout: test/project-semantics/{category}/*.test.ts
+  // Apps live at: test/project-semantics/apps/{appName}
   //
-  // Fallback: if 20-link isn't present (older layout), resolve under test/apps.
+  // Fallback: if project-semantics isn't present (older layout), resolve under test/apps.
 
   let testRoot = callerDir;
-  while (!testRoot.endsWith("20-link") && path.dirname(testRoot) !== testRoot) {
+  while (!testRoot.endsWith("project-semantics") && path.dirname(testRoot) !== testRoot) {
     testRoot = path.dirname(testRoot);
   }
 
-  if (testRoot.endsWith("20-link")) {
+  if (testRoot.endsWith("project-semantics")) {
     return path.resolve(testRoot, "apps", appName);
   }
 

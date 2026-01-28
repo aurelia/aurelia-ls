@@ -1805,28 +1805,28 @@
       { "kind": "unresolved-import", "message": "import \"Metadata\" from \"@aurelia/metadata\": Module \"aurelia/packages/metadata/dist/types/index.d.ts\" does not export \"Metadata\"", "resource": "aurelia/packages/kernel/src/utilities.ts" },
       {
         "kind": "unresolved-import",
-        "message": "import \"default\" from \"./data-grid.html\": Cannot resolve module \"./data-grid.html\" from packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts",
-        "resource": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts"
+        "message": "import \"default\" from \"./data-grid.html\": Cannot resolve module \"./data-grid.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts",
+        "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts"
       },
       {
         "kind": "unresolved-import",
-        "message": "import \"default\" from \"./nav-bar.html\": Cannot resolve module \"./nav-bar.html\" from packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts",
-        "resource": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts"
+        "message": "import \"default\" from \"./nav-bar.html\": Cannot resolve module \"./nav-bar.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts",
+        "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts"
       },
       {
         "kind": "unresolved-import",
-        "message": "import \"default\" from \"./user-card.html\": Cannot resolve module \"./user-card.html\" from packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts",
-        "resource": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts"
+        "message": "import \"default\" from \"./user-card.html\": Cannot resolve module \"./user-card.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts",
+        "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts"
       },
       {
         "kind": "unresolved-import",
-        "message": "import \"default\" from \"./my-app.html\": Cannot resolve module \"./my-app.html\" from packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts",
-        "resource": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts"
+        "message": "import \"default\" from \"./my-app.html\": Cannot resolve module \"./my-app.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts",
+        "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts"
       },
       {
         "kind": "unresolved-import",
-        "message": "import \"default\" from \"./product-card.html\": Cannot resolve module \"./product-card.html\" from packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts",
-        "resource": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts"
+        "message": "import \"default\" from \"./product-card.html\": Cannot resolve module \"./product-card.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts",
+        "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts"
       },
       {
         "kind": "unsupported-pattern",
@@ -1936,7 +1936,7 @@
             "intensity": { "attribute": "intensity", "name": "intensity", "primary": false }
           },
           "className": "HighlightCustomAttribute",
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts",
           "kind": "attribute",
           "name": "highlight",
           "noMultiBindings": false,
@@ -2100,7 +2100,7 @@
             }
           },
           "className": "TooltipCustomAttribute",
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts",
           "kind": "attribute",
           "name": "tooltip",
           "noMultiBindings": false,
@@ -2120,14 +2120,14 @@
       },
       "bindingBehaviors": {
         "attr": { "className": "AttrBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "name": "attr" },
-        "debounce": { "className": "DebounceBindingBehavior", "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/debounce.ts", "name": "debounce" },
+        "debounce": { "className": "DebounceBindingBehavior", "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/debounce.ts", "name": "debounce" },
         "fromview": { "className": "FromViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "fromview" },
         "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
         "onetime": { "className": "OneTimeBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "onetime" },
         "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
         "self": { "className": "SelfBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "name": "self" },
         "signal": { "className": "SignalBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "name": "signal" },
-        "throttle": { "className": "ThrottleBindingBehavior", "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/throttle.ts", "name": "throttle" },
+        "throttle": { "className": "ThrottleBindingBehavior", "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/throttle.ts", "name": "throttle" },
         "toview": { "className": "ToViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "toview" },
         "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
         "twoway": { "className": "TwoWayBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "twoway" },
@@ -2342,7 +2342,7 @@
           "capture": false,
           "className": "DataGrid",
           "containerless": true,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts",
           "kind": "element",
           "name": "data-grid",
           "processContent": false
@@ -2358,7 +2358,7 @@
           "capture": false,
           "className": "FancyButton",
           "containerless": false,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts",
           "kind": "element",
           "name": "fancy-button",
           "processContent": false
@@ -2369,7 +2369,7 @@
           "capture": false,
           "className": "MyApp",
           "containerless": false,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts",
           "kind": "element",
           "name": "my-app",
           "processContent": false
@@ -2380,7 +2380,7 @@
           "capture": false,
           "className": "NavBar",
           "containerless": false,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts",
           "kind": "element",
           "name": "nav-bar",
           "processContent": false
@@ -2404,7 +2404,7 @@
           "capture": false,
           "className": "PriceTag",
           "containerless": false,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts",
           "kind": "element",
           "name": "price-tag",
           "processContent": false
@@ -2440,7 +2440,7 @@
           "capture": false,
           "className": "ProductCard",
           "containerless": false,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts",
           "kind": "element",
           "name": "product-card",
           "processContent": false
@@ -2454,7 +2454,7 @@
           "capture": false,
           "className": "StockBadge",
           "containerless": false,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts",
           "kind": "element",
           "name": "stock-badge",
           "processContent": false
@@ -2485,7 +2485,7 @@
           "capture": false,
           "className": "UserCard",
           "containerless": true,
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts",
           "kind": "element",
           "name": "user-card",
           "processContent": false
@@ -2494,14 +2494,14 @@
       "valueConverters": {
         "currency": {
           "className": "CurrencyValueConverter",
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/currency.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/currency.ts",
           "in": { "kind": "unknown" },
           "name": "currency",
           "out": { "kind": "unknown" }
         },
         "date": {
           "className": "DateFormatValueConverter",
-          "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/date-format.ts",
+          "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/date-format.ts",
           "in": { "kind": "unknown" },
           "name": "date",
           "out": { "kind": "unknown" }
@@ -4227,28 +4227,28 @@
     { "kind": "unresolved-import", "message": "import \"Metadata\" from \"@aurelia/metadata\": Module \"aurelia/packages/metadata/dist/types/index.d.ts\" does not export \"Metadata\"", "resource": "aurelia/packages/kernel/src/utilities.ts" },
     {
       "kind": "unresolved-import",
-      "message": "import \"default\" from \"./data-grid.html\": Cannot resolve module \"./data-grid.html\" from packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts",
-      "resource": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts"
+      "message": "import \"default\" from \"./data-grid.html\": Cannot resolve module \"./data-grid.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts",
+      "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts"
     },
     {
       "kind": "unresolved-import",
-      "message": "import \"default\" from \"./nav-bar.html\": Cannot resolve module \"./nav-bar.html\" from packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts",
-      "resource": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts"
+      "message": "import \"default\" from \"./nav-bar.html\": Cannot resolve module \"./nav-bar.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts",
+      "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts"
     },
     {
       "kind": "unresolved-import",
-      "message": "import \"default\" from \"./user-card.html\": Cannot resolve module \"./user-card.html\" from packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts",
-      "resource": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts"
+      "message": "import \"default\" from \"./user-card.html\": Cannot resolve module \"./user-card.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts",
+      "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts"
     },
     {
       "kind": "unresolved-import",
-      "message": "import \"default\" from \"./my-app.html\": Cannot resolve module \"./my-app.html\" from packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts",
-      "resource": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts"
+      "message": "import \"default\" from \"./my-app.html\": Cannot resolve module \"./my-app.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts",
+      "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts"
     },
     {
       "kind": "unresolved-import",
-      "message": "import \"default\" from \"./product-card.html\": Cannot resolve module \"./product-card.html\" from packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts",
-      "resource": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts"
+      "message": "import \"default\" from \"./product-card.html\": Cannot resolve module \"./product-card.html\" from packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts",
+      "resource": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts"
     },
     {
       "kind": "unsupported-pattern",
@@ -4288,8 +4288,8 @@
   "graph": {
     "root": "root",
     "scopes": {
-      "local:packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts": {
-        "id": "local:packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts",
+      "local:packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts": {
+        "id": "local:packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts",
         "label": "ProductCard",
         "parent": "root",
         "resources": {
@@ -4491,7 +4491,7 @@
               "capture": false,
               "className": "PriceTag",
               "containerless": false,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts",
               "kind": "element",
               "name": "price-tag",
               "processContent": false
@@ -4505,7 +4505,7 @@
               "capture": false,
               "className": "StockBadge",
               "containerless": false,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts",
               "kind": "element",
               "name": "stock-badge",
               "processContent": false
@@ -4557,7 +4557,7 @@
                 "intensity": { "attribute": "intensity", "name": "intensity", "primary": false }
               },
               "className": "HighlightCustomAttribute",
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts",
               "kind": "attribute",
               "name": "highlight",
               "noMultiBindings": false,
@@ -4671,7 +4671,7 @@
                 }
               },
               "className": "TooltipCustomAttribute",
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts",
               "kind": "attribute",
               "name": "tooltip",
               "noMultiBindings": false,
@@ -4691,14 +4691,14 @@
           },
           "bindingBehaviors": {
             "attr": { "className": "AttrBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "name": "attr" },
-            "debounce": { "className": "DebounceBindingBehavior", "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/debounce.ts", "name": "debounce" },
+            "debounce": { "className": "DebounceBindingBehavior", "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/debounce.ts", "name": "debounce" },
             "fromview": { "className": "FromViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "fromview" },
             "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
             "onetime": { "className": "OneTimeBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "onetime" },
             "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
             "self": { "className": "SelfBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "name": "self" },
             "signal": { "className": "SignalBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "name": "signal" },
-            "throttle": { "className": "ThrottleBindingBehavior", "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/throttle.ts", "name": "throttle" },
+            "throttle": { "className": "ThrottleBindingBehavior", "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/throttle.ts", "name": "throttle" },
             "toview": { "className": "ToViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "toview" },
             "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
             "twoway": { "className": "TwoWayBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "twoway" },
@@ -4927,7 +4927,7 @@
               "capture": false,
               "className": "DataGrid",
               "containerless": true,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts",
               "kind": "element",
               "name": "data-grid",
               "processContent": false
@@ -4943,7 +4943,7 @@
               "capture": false,
               "className": "FancyButton",
               "containerless": false,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts",
               "kind": "element",
               "name": "fancy-button",
               "processContent": false
@@ -4954,7 +4954,7 @@
               "capture": false,
               "className": "MyApp",
               "containerless": false,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts",
               "kind": "element",
               "name": "my-app",
               "processContent": false
@@ -4965,7 +4965,7 @@
               "capture": false,
               "className": "NavBar",
               "containerless": false,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts",
               "kind": "element",
               "name": "nav-bar",
               "processContent": false
@@ -5001,7 +5001,7 @@
               "capture": false,
               "className": "ProductCard",
               "containerless": false,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts",
               "kind": "element",
               "name": "product-card",
               "processContent": false
@@ -5032,7 +5032,7 @@
               "capture": false,
               "className": "UserCard",
               "containerless": true,
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts",
               "kind": "element",
               "name": "user-card",
               "processContent": false
@@ -5041,14 +5041,14 @@
           "valueConverters": {
             "currency": {
               "className": "CurrencyValueConverter",
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/currency.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/currency.ts",
               "in": { "kind": "unknown" },
               "name": "currency",
               "out": { "kind": "unknown" }
             },
             "date": {
               "className": "DateFormatValueConverter",
-              "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/date-format.ts",
+              "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/date-format.ts",
               "in": { "kind": "unknown" },
               "name": "date",
               "out": { "kind": "unknown" }
@@ -5090,14 +5090,14 @@
     {
       "data": {
         "className": {
-          "location": { "end": 622, "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/debounce.ts", "pos": 222 },
+          "location": { "end": 622, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/debounce.ts", "pos": 222 },
           "origin": "source",
           "value": "DebounceBindingBehavior"
         },
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/debounce.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/debounce.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 249, "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/debounce.ts", "pos": 239 },
+          "location": { "end": 249, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/debounce.ts", "pos": 239 },
           "origin": "source",
           "value": "debounce"
         }
@@ -5105,7 +5105,7 @@
       "id": "sym:27a1ca5b9591fe73571676cb5b9de6b4a7bc528d14428dd4965544121996b5b2",
       "kind": "binding-behavior",
       "name": "debounce",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/debounce.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/debounce.ts"
     },
     {
       "data": {
@@ -5210,14 +5210,14 @@
     {
       "data": {
         "className": {
-          "location": { "end": 561, "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/throttle.ts", "pos": 222 },
+          "location": { "end": 561, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/throttle.ts", "pos": 222 },
           "origin": "source",
           "value": "ThrottleBindingBehavior"
         },
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/throttle.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/throttle.ts",
         "kind": "binding-behavior",
         "name": {
-          "location": { "end": 249, "file": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/throttle.ts", "pos": 239 },
+          "location": { "end": 249, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/throttle.ts", "pos": 239 },
           "origin": "source",
           "value": "throttle"
         }
@@ -5225,7 +5225,7 @@
       "id": "sym:49c40bb778e872d6e397c5d581b414667dd017a47ab2332be38e46d3a907175f",
       "kind": "binding-behavior",
       "name": "throttle",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/binding-behaviors/throttle.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/binding-behaviors/throttle.ts"
     },
     {
       "data": {
@@ -5377,66 +5377,66 @@
         "bindables": {
           "color": {
             "attribute": {
-              "location": { "end": 337, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
               "origin": "source",
               "value": "color"
             },
             "mode": {
-              "location": { "end": 337, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 337, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
               "origin": "source",
               "value": true
             },
             "property": {
-              "location": { "end": 337, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
               "origin": "source",
               "value": "color"
             }
           },
           "intensity": {
             "attribute": {
-              "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
               "origin": "source",
               "value": "intensity"
             },
             "mode": {
-              "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 380, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
               "origin": "source",
               "value": "intensity"
             }
           }
         },
         "className": {
-          "location": { "end": 881, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
+          "location": { "end": 881, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
           "origin": "source",
           "value": "HighlightCustomAttribute"
         },
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 299, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 288 },
+          "location": { "end": 299, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 288 },
           "origin": "source",
           "value": "highlight"
         },
         "noMultiBindings": {
-          "location": { "end": 881, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
+          "location": { "end": 881, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
           "origin": "source",
           "value": false
         },
         "primary": {
-          "location": { "end": 881, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
+          "location": { "end": 881, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
           "origin": "source",
           "value": "color"
         }
@@ -5444,7 +5444,7 @@
       "id": "sym:73a7fd916097b7c10c734669b55bde14167c50dc20686bed5c08ee260ad57305",
       "kind": "custom-attribute",
       "name": "highlight",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/highlight.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts"
     },
     {
       "data": {
@@ -5583,50 +5583,50 @@
         "bindables": {
           "text": {
             "attribute": {
-              "location": { "end": 285, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
+              "location": { "end": 285, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
               "origin": "source",
               "value": "text"
             },
             "mode": {
-              "location": { "end": 285, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
+              "location": { "end": 285, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 285, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
+              "location": { "end": 285, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
               "origin": "source",
               "value": true
             },
             "property": {
-              "location": { "end": 285, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
+              "location": { "end": 285, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
               "origin": "source",
               "value": "text"
             },
             "type": {
-              "location": { "end": 285, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
+              "location": { "end": 285, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
               "origin": "source",
               "value": "string"
             }
           }
         },
         "className": {
-          "location": { "end": 501, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+          "location": { "end": 501, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
           "origin": "source",
           "value": "TooltipCustomAttribute"
         },
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 213, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 204 },
+          "location": { "end": 213, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 204 },
           "origin": "source",
           "value": "tooltip"
         },
         "noMultiBindings": {
-          "location": { "end": 501, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+          "location": { "end": 501, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
           "origin": "source",
           "value": false
         },
         "primary": {
-          "location": { "end": 501, "file": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+          "location": { "end": 501, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
           "origin": "source",
           "value": "text"
         }
@@ -5634,7 +5634,7 @@
       "id": "sym:3b0a25d25f28a5683757fa813c90341f530bc265268523c3a0feee2b24efd1ac",
       "kind": "custom-attribute",
       "name": "tooltip",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/attributes/tooltip.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts"
     },
     {
       "data": {
@@ -5973,12 +5973,12 @@
       "data": {
         "aliases": [
           {
-            "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+            "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
             "origin": "source",
             "value": "grid"
           },
           {
-            "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+            "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
             "origin": "source",
             "value": "table-view"
           }
@@ -5986,122 +5986,122 @@
         "bindables": {
           "columns": {
             "attribute": {
-              "location": { "end": 455, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
+              "location": { "end": 455, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
               "origin": "source",
               "value": "columns"
             },
             "mode": {
-              "location": { "end": 455, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
+              "location": { "end": 455, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
               "origin": "source",
               "value": "toView"
             },
             "primary": {
-              "location": { "end": 455, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
+              "location": { "end": 455, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 455, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
+              "location": { "end": 455, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 446 },
               "origin": "source",
               "value": "columns"
             }
           },
           "items": {
             "attribute": {
-              "location": { "end": 431, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
+              "location": { "end": 431, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
               "origin": "source",
               "value": "items"
             },
             "mode": {
-              "location": { "end": 431, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
+              "location": { "end": 431, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 431, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
+              "location": { "end": 431, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 431, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
+              "location": { "end": 431, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 424 },
               "origin": "source",
               "value": "items"
             }
           },
           "pageSize": {
             "attribute": {
-              "location": { "end": 528, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 517 },
+              "location": { "end": 528, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 517 },
               "origin": "source",
               "value": "page-size"
             },
             "mode": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 494 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 494 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 494 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 494 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 494 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 494 },
               "origin": "source",
               "value": "pageSize"
             }
           }
         },
         "boundary": {
-          "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+          "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+          "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+          "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
           "origin": "source",
           "value": "DataGrid"
         },
         "containerless": {
-          "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+          "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
           "origin": "source",
           "value": true
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 352, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 341 },
+          "location": { "end": 352, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 341 },
           "origin": "source",
           "value": "data-grid"
         },
         "processContent": {
-          "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+          "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 672, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
+          "location": { "end": 672, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts", "pos": 315 },
           "origin": "source"
         }
       },
       "id": "sym:2f7f499b5693cbcb5119b0737de7a95388b4d611efdf1cdec2ecba5ff9850cc3",
       "kind": "custom-element",
       "name": "data-grid",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/components/data-grid.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/data-grid.ts"
     },
     {
       "data": {
         "aliases": [
           {
-            "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+            "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
             "origin": "source",
             "value": "action-button"
           },
           {
-            "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+            "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
             "origin": "source",
             "value": "btn"
           }
@@ -6109,210 +6109,210 @@
         "bindables": {
           "disabled": {
             "attribute": {
-              "location": { "end": 650, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
+              "location": { "end": 650, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
               "origin": "source",
               "value": "disabled"
             },
             "mode": {
-              "location": { "end": 650, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
+              "location": { "end": 650, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
               "origin": "source",
               "value": "oneTime"
             },
             "primary": {
-              "location": { "end": 650, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
+              "location": { "end": 650, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 650, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
+              "location": { "end": 650, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 640 },
               "origin": "source",
               "value": "disabled"
             }
           },
           "label": {
             "attribute": {
-              "location": { "end": 623, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
+              "location": { "end": 623, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
               "origin": "source",
               "value": "label"
             },
             "mode": {
-              "location": { "end": 623, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
+              "location": { "end": 623, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 623, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
+              "location": { "end": 623, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 623, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
+              "location": { "end": 623, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 616 },
               "origin": "source",
               "value": "label"
             }
           },
           "variant": {
             "attribute": {
-              "location": { "end": 723, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
+              "location": { "end": 723, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
               "origin": "source",
               "value": "variant"
             },
             "mode": {
-              "location": { "end": 723, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
+              "location": { "end": 723, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 723, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
+              "location": { "end": 723, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 723, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
+              "location": { "end": 723, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 714 },
               "origin": "source",
               "value": "variant"
             }
           }
         },
         "boundary": {
-          "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
           "origin": "source",
           "value": "FancyButton"
         },
         "containerless": {
-          "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts",
         "inlineTemplate": {
-          "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
           "origin": "source",
           "value": "<template>\n      <button class=\"fancy ${variant}\" disabled.bind=\"disabled\">\n        ${label}\n      </button>\n    </template>"
         },
         "kind": "custom-element",
         "name": {
-          "location": { "end": 440, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 426 },
+          "location": { "end": 440, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 426 },
           "origin": "source",
           "value": "fancy-button"
         },
         "processContent": {
-          "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 1047, "file": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
+          "location": { "end": 1047, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts", "pos": 332 },
           "origin": "source"
         }
       },
       "id": "sym:212433c7f217146a8711e39fe07d35ba236661b46108ef579b020b6cd0f29bbb",
       "kind": "custom-element",
       "name": "fancy-button",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/static-au/fancy-button.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/static-au/fancy-button.ts"
     },
     {
       "data": {
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 297, "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts", "pos": 179 },
+          "location": { "end": 297, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts", "pos": 179 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 297, "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts", "pos": 179 },
+          "location": { "end": 297, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts", "pos": 179 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 297, "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts", "pos": 179 },
+          "location": { "end": 297, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts", "pos": 179 },
           "origin": "source",
           "value": "MyApp"
         },
         "containerless": {
-          "location": { "end": 297, "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts", "pos": 179 },
+          "location": { "end": 297, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts", "pos": 179 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 213, "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts", "pos": 205 },
+          "location": { "end": 213, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts", "pos": 205 },
           "origin": "source",
           "value": "my-app"
         },
         "processContent": {
-          "location": { "end": 297, "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts", "pos": 179 },
+          "location": { "end": 297, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts", "pos": 179 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 297, "file": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts", "pos": 179 },
+          "location": { "end": 297, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts", "pos": 179 },
           "origin": "source"
         }
       },
       "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549",
       "kind": "custom-element",
       "name": "my-app",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/my-app.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/my-app.ts"
     },
     {
       "data": {
         "aliases": [],
         "bindables": {},
         "boundary": {
-          "location": { "end": 298, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
+          "location": { "end": 298, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 298, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
+          "location": { "end": 298, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 298, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
+          "location": { "end": 298, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
           "origin": "source",
           "value": "NavBar"
         },
         "containerless": {
-          "location": { "end": 298, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
+          "location": { "end": 298, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 213, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts", "pos": 204 },
+          "location": { "end": 213, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts", "pos": 204 },
           "origin": "source",
           "value": "nav-bar"
         },
         "processContent": {
-          "location": { "end": 298, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
+          "location": { "end": 298, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 298, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
+          "location": { "end": 298, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts", "pos": 178 },
           "origin": "source"
         }
       },
       "id": "sym:7ca0275eb8c38075f354435769d61872e3e383f9cc82eeecfd67612bad23a740",
       "kind": "custom-element",
       "name": "nav-bar",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/components/nav-bar.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/nav-bar.ts"
     },
     {
       "data": {
@@ -6320,104 +6320,104 @@
         "bindables": {
           "amount": {
             "attribute": {
-              "location": { "end": 491, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
+              "location": { "end": 491, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
               "origin": "source",
               "value": "amount"
             },
             "mode": {
-              "location": { "end": 491, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
+              "location": { "end": 491, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 491, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
+              "location": { "end": 491, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 491, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
+              "location": { "end": 491, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
               "origin": "source",
               "value": "amount"
             },
             "type": {
-              "location": { "end": 491, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
+              "location": { "end": 491, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 462 },
               "origin": "source",
               "value": "number"
             }
           },
           "currency": {
             "attribute": {
-              "location": { "end": 530, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
+              "location": { "end": 530, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
               "origin": "source",
               "value": "currency"
             },
             "mode": {
-              "location": { "end": 530, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
+              "location": { "end": 530, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 530, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
+              "location": { "end": 530, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 530, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
+              "location": { "end": 530, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
               "origin": "source",
               "value": "currency"
             },
             "type": {
-              "location": { "end": 530, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
+              "location": { "end": 530, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 495 },
               "origin": "source",
               "value": "string"
             }
           }
         },
         "boundary": {
-          "location": { "end": 701, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 701, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 701, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 701, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 701, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 701, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
           "origin": "source",
           "value": "PriceTag"
         },
         "containerless": {
-          "location": { "end": 701, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 701, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts",
         "inlineTemplate": {
-          "location": { "end": 701, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 701, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
           "origin": "source",
           "value": "<template><span class=\"price\">${formatted}</span></template>"
         },
         "kind": "custom-element",
         "name": {
-          "location": { "end": 350, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 339 },
+          "location": { "end": 350, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 339 },
           "origin": "source",
           "value": "price-tag"
         },
         "processContent": {
-          "location": { "end": 701, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 701, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 701, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
+          "location": { "end": 701, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts", "pos": 313 },
           "origin": "source"
         }
       },
       "id": "sym:6100afccc3b7484b738ae9032e8accdb89d755dd52b6ba10e0aa6c4c2d1519e7",
       "kind": "custom-element",
       "name": "price-tag",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/price-tag.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/price-tag.ts"
     },
     {
       "data": {
@@ -6425,151 +6425,151 @@
         "bindables": {
           "inStock": {
             "attribute": {
-              "location": { "end": 803, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
+              "location": { "end": 803, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
               "origin": "source",
               "value": "in-stock"
             },
             "mode": {
-              "location": { "end": 803, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
+              "location": { "end": 803, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 803, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
+              "location": { "end": 803, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 803, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
+              "location": { "end": 803, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
               "origin": "source",
               "value": "inStock"
             },
             "type": {
-              "location": { "end": 803, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
+              "location": { "end": 803, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 769 },
               "origin": "source",
               "value": "boolean"
             }
           },
           "name": {
             "attribute": {
-              "location": { "end": 729, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
+              "location": { "end": 729, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
               "origin": "source",
               "value": "name"
             },
             "mode": {
-              "location": { "end": 729, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
+              "location": { "end": 729, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 729, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
+              "location": { "end": 729, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 729, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
+              "location": { "end": 729, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
               "origin": "source",
               "value": "name"
             },
             "type": {
-              "location": { "end": 729, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
+              "location": { "end": 729, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 687 },
               "origin": "source",
               "value": "string"
             }
           },
           "price": {
             "attribute": {
-              "location": { "end": 765, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
+              "location": { "end": 765, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
               "origin": "source",
               "value": "price"
             },
             "mode": {
-              "location": { "end": 765, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
+              "location": { "end": 765, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 765, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
+              "location": { "end": 765, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 765, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
+              "location": { "end": 765, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
               "origin": "source",
               "value": "price"
             },
             "type": {
-              "location": { "end": 765, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
+              "location": { "end": 765, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 733 },
               "origin": "source",
               "value": "number"
             }
           },
           "stockCount": {
             "attribute": {
-              "location": { "end": 841, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
+              "location": { "end": 841, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
               "origin": "source",
               "value": "stock-count"
             },
             "mode": {
-              "location": { "end": 841, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
+              "location": { "end": 841, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 841, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
+              "location": { "end": 841, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 841, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
+              "location": { "end": 841, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
               "origin": "source",
               "value": "stockCount"
             },
             "type": {
-              "location": { "end": 841, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
+              "location": { "end": 841, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 807 },
               "origin": "source",
               "value": "number"
             }
           }
         },
         "boundary": {
-          "location": { "end": 844, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
+          "location": { "end": 844, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 844, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
+          "location": { "end": 844, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 844, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
+          "location": { "end": 844, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
           "origin": "source",
           "value": "ProductCard"
         },
         "containerless": {
-          "location": { "end": 844, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
+          "location": { "end": 844, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 505, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 491 },
+          "location": { "end": 505, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 491 },
           "origin": "source",
           "value": "product-card"
         },
         "processContent": {
-          "location": { "end": 844, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
+          "location": { "end": 844, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 844, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
+          "location": { "end": 844, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts", "pos": 465 },
           "origin": "source"
         }
       },
       "id": "sym:57a9c4d3b0b122b7b4bc529deec5f84d787b18614aba2a546d2190d68f90fb96",
       "kind": "custom-element",
       "name": "product-card",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/product-card.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/product-card.ts"
     },
     {
       "data": {
@@ -6577,94 +6577,94 @@
         "bindables": {
           "count": {
             "attribute": {
-              "location": { "end": 554, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
+              "location": { "end": 554, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
               "origin": "source",
               "value": "count"
             },
             "mode": {
-              "location": { "end": 554, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
+              "location": { "end": 554, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 554, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
+              "location": { "end": 554, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 554, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
+              "location": { "end": 554, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 547 },
               "origin": "source",
               "value": "count"
             }
           },
           "inStock": {
             "attribute": {
-              "location": { "end": 530, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 520 },
+              "location": { "end": 530, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 520 },
               "origin": "source",
               "value": "in-stock"
             },
             "mode": {
-              "location": { "end": 507, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 498 },
+              "location": { "end": 507, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 498 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 507, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 498 },
+              "location": { "end": 507, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 498 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 507, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 498 },
+              "location": { "end": 507, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 498 },
               "origin": "source",
               "value": "inStock"
             }
           }
         },
         "boundary": {
-          "location": { "end": 801, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 801, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 801, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 801, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 801, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 801, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
           "origin": "source",
           "value": "StockBadge"
         },
         "containerless": {
-          "location": { "end": 801, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 801, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
           "origin": "source",
           "value": false
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts",
         "inlineTemplate": {
-          "location": { "end": 801, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 801, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
           "origin": "source",
           "value": "<template>\n    <span class=\"badge ${statusClass}\">\n      ${inStock ? 'In Stock (' + count + ')' : 'Out of Stock'}\n    </span>\n  </template>"
         },
         "kind": "custom-element",
         "name": {
-          "location": { "end": 305, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 292 },
+          "location": { "end": 305, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 292 },
           "origin": "source",
           "value": "stock-badge"
         },
         "processContent": {
-          "location": { "end": 801, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 801, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 801, "file": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
+          "location": { "end": 801, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts", "pos": 266 },
           "origin": "source"
         }
       },
       "id": "sym:5f22c6ca4c7f34b2109bd9e56122d1eca95811779ef7bf0e856c43417d5b6ee7",
       "kind": "custom-element",
       "name": "stock-badge",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/widgets/stock-badge.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/widgets/stock-badge.ts"
     },
     {
       "data": {
@@ -6672,126 +6672,126 @@
         "bindables": {
           "avatar": {
             "attribute": {
-              "location": { "end": 578, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
+              "location": { "end": 578, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
               "origin": "source",
               "value": "avatar"
             },
             "mode": {
-              "location": { "end": 578, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
+              "location": { "end": 578, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 578, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
+              "location": { "end": 578, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 578, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
+              "location": { "end": 578, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
               "origin": "source",
               "value": "avatar"
             },
             "type": {
-              "location": { "end": 578, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
+              "location": { "end": 578, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 548 },
               "origin": "source",
               "value": "string"
             }
           },
           "name": {
             "attribute": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
               "origin": "source",
               "value": "name"
             },
             "mode": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
               "origin": "source"
             },
             "primary": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
               "origin": "source",
               "value": "name"
             },
             "type": {
-              "location": { "end": 504, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
+              "location": { "end": 504, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 476 },
               "origin": "source",
               "value": "string"
             }
           },
           "selected": {
             "attribute": {
-              "location": { "end": 673, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
+              "location": { "end": 673, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
               "origin": "source",
               "value": "selected"
             },
             "mode": {
-              "location": { "end": 673, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
+              "location": { "end": 673, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
               "origin": "source",
               "value": "twoWay"
             },
             "primary": {
-              "location": { "end": 673, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
+              "location": { "end": 673, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
               "origin": "source",
               "value": false
             },
             "property": {
-              "location": { "end": 673, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
+              "location": { "end": 673, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
               "origin": "source",
               "value": "selected"
             },
             "type": {
-              "location": { "end": 673, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
+              "location": { "end": 673, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 611 },
               "origin": "source",
               "value": "boolean"
             }
           }
         },
         "boundary": {
-          "location": { "end": 676, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
+          "location": { "end": 676, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
           "origin": "source",
           "value": true
         },
         "capture": {
-          "location": { "end": 676, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
+          "location": { "end": 676, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
           "origin": "source",
           "value": false
         },
         "className": {
-          "location": { "end": 676, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
+          "location": { "end": 676, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
           "origin": "source",
           "value": "UserCard"
         },
         "containerless": {
-          "location": { "end": 676, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
+          "location": { "end": 676, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
           "origin": "source",
           "value": true
         },
         "dependencies": [],
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 364, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 353 },
+          "location": { "end": 364, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 353 },
           "origin": "source",
           "value": "user-card"
         },
         "processContent": {
-          "location": { "end": 676, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
+          "location": { "end": 676, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
           "origin": "source",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 676, "file": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
+          "location": { "end": 676, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts", "pos": 327 },
           "origin": "source"
         }
       },
       "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",
       "kind": "custom-element",
       "name": "user-card",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/components/user-card.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/components/user-card.ts"
     },
     {
       "data": {
@@ -7555,14 +7555,14 @@
     {
       "data": {
         "className": {
-          "location": { "end": 725, "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/currency.ts", "pos": 127 },
+          "location": { "end": 725, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/currency.ts", "pos": 127 },
           "origin": "source",
           "value": "CurrencyValueConverter"
         },
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/currency.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/currency.ts",
         "kind": "value-converter",
         "name": {
-          "location": { "end": 243, "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/currency.ts", "pos": 233 },
+          "location": { "end": 243, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/currency.ts", "pos": 233 },
           "origin": "source",
           "value": "currency"
         }
@@ -7570,19 +7570,19 @@
       "id": "sym:019d5054f5824197b15cf22949e010114cc909267dd91816a94e7288dd957d1d",
       "kind": "value-converter",
       "name": "currency",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/currency.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/currency.ts"
     },
     {
       "data": {
         "className": {
-          "location": { "end": 898, "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/date-format.ts", "pos": 167 },
+          "location": { "end": 898, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/date-format.ts", "pos": 167 },
           "origin": "source",
           "value": "DateFormatValueConverter"
         },
-        "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/date-format.ts",
+        "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/date-format.ts",
         "kind": "value-converter",
         "name": {
-          "location": { "end": 189, "file": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/date-format.ts", "pos": 183 },
+          "location": { "end": 189, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/date-format.ts", "pos": 183 },
           "origin": "source",
           "value": "date"
         }
@@ -7590,7 +7590,7 @@
       "id": "sym:b838fc57e220af75c0ab13eba6b62a7084d02a54612e854a7aaf17a093d168a8",
       "kind": "value-converter",
       "name": "date",
-      "source": "packages/compiler/test/20-link/apps/explicit-app/src/value-converters/date-format.ts"
+      "source": "packages/compiler/test/project-semantics/apps/explicit-app/src/value-converters/date-format.ts"
     },
     {
       "data": {
