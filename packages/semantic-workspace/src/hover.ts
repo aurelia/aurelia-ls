@@ -93,8 +93,6 @@ export function collectTemplateHover(options: {
 
   const node = compilation.query.nodeAt(offset);
   if (node) {
-    nodeId = node.id;
-    span = span ?? node.span;
     const row = findRow(compilation.linked.templates, node.templateIndex, node.id);
     if (debugEnabled) {
       debug.workspace("hover.node", {
@@ -108,16 +106,17 @@ export function collectTemplateHover(options: {
         native: row?.node.kind === "element" ? row.node.native?.def.tag : null,
       });
     }
+    // Only produce hover content for custom elements. Native element hovers
+    // (e.g. "HTML Element: div") add no value — MDN documentation for native
+    // elements should come from vscode-html-languageservice integration, not
+    // from the Aurelia hover layer.
     if (row?.node.kind === "element") {
       const tag = row.node.tag;
-      if (row.node.custom?.def) {
-        addLine("Custom Element", row.node.custom.def.name);
-      } else if (row.node.native?.def) {
-        addLine("HTML Element", tag);
-      } else if (looksLikeCustomElementTag(tag)) {
-        addLine("Custom Element", tag);
-      } else {
-        addLine("HTML Element", tag);
+      const isCustom = !!row.node.custom?.def || looksLikeCustomElementTag(tag);
+      if (isCustom) {
+        nodeId = node.id;
+        span = span ?? node.span;
+        addLine("Custom Element", row.node.custom?.def?.name ?? tag);
       }
     }
   } else if (debugEnabled) {

@@ -136,6 +136,15 @@ describe("workspace hover (workspace-contract)", () => {
     expect(again?.location?.exprId).toBe(hover?.location?.exprId);
   });
 
+  it("returns null for native HTML elements", () => {
+    const query = harness.workspace.query(appUri);
+    // Hover the opening <div in '<div class="toolbar">'
+    const pos = findPosition(appText, '<div class="toolbar">', 1);
+    const hover = query.hover(pos);
+    // Native elements should not produce Aurelia hover content
+    expect(hover).toBeNull();
+  });
+
   it("returns null for whitespace between elements", () => {
     const query = harness.workspace.query(appUri);
     // Position in the whitespace/text node between </let> and <header>
