@@ -1,5 +1,5 @@
-import type { AnalyzedResource } from "../../../src/analysis/20-link/resolution/npm/types.js";
-import { unwrapSourced } from "../../../src/analysis/20-link/resolution/25-semantics/sourced.js";
+import type { AnalyzedResource } from "../../../src/project-semantics/npm/types.js";
+import { unwrapSourced } from "../../../src/project-semantics/assemble/sourced.js";
 
 export type BindableView = {
   name: string;

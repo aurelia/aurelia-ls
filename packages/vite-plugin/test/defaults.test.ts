@@ -57,8 +57,8 @@ describe("defaults normalization", () => {
   });
 
   it("normalizes debug channels from environment", () => {
-    vi.stubEnv("AURELIA_DEBUG", "lower,resolve,unknown");
-    expect(normalizeDebugChannels(undefined)).toEqual(["lower", "resolve"]);
+    vi.stubEnv("AURELIA_DEBUG", "lower,link,unknown");
+    expect(normalizeDebugChannels(undefined)).toEqual(["lower", "link"]);
   });
 
   it("normalizes options with resolved package roots and useDev default", () => {

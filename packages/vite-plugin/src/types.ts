@@ -612,14 +612,16 @@ export interface CompilerOptions {
  */
 export type DebugChannel =
   | "lower"      // 10-lower: element/attr classification
-  | "resolve"    // 20-link: binding resolution
+  | "link"       // 20-link: binding resolution
   | "bind"       // 30-bind: scope frame creation
   | "typecheck"  // 40-typecheck: type inference
   | "aot"        // AOT synthesis
   | "overlay"    // LSP overlay synthesis
   | "ssr"        // SSR rendering
   | "transform"  // Transform edits
-  | "resolution"; // Resource discovery
+  | "project"    // Project semantics (resource discovery)
+  | "workspace"  // Semantic workspace (editor/LSP)
+  | "vite";      // Vite plugin lifecycle
 
 /**
  * Trace output destination.

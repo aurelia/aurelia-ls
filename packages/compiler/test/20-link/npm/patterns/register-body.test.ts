@@ -6,16 +6,16 @@
 
 import { describe, it, expect } from 'vitest';
 import type { NormalizedPath } from '@aurelia-ls/compiler';
-import type { AnalyzedResource } from '../../../../src/analysis/20-link/resolution/npm/types.js';
-import { explicitEvidence } from '../../../../src/analysis/20-link/resolution/npm/evidence.js';
-import { buildCustomAttributeDef, buildCustomElementDef } from '../../../../src/analysis/20-link/resolution/25-semantics/resource-def.js';
-import { unwrapSourced } from '../../../../src/analysis/20-link/resolution/25-semantics/sourced.js';
+import type { AnalyzedResource } from '../../../../src/project-semantics/npm/types.js';
+import { explicitEvidence } from '../../../../src/project-semantics/npm/evidence.js';
+import { buildCustomAttributeDef, buildCustomElementDef } from '../../../../src/project-semantics/assemble/resource-def.js';
+import { unwrapSourced } from '../../../../src/project-semantics/assemble/sourced.js';
 import {
   extractRegisterBodyResources,
   isContainerRegisterCall,
   isRegistrationPattern,
   type RegisterBodyContext,
-} from '../../../../src/analysis/20-link/resolution/npm/patterns/register-body.js';
+} from '../../../../src/project-semantics/npm/patterns/register-body.js';
 import {
   method,
   exprStmt,
@@ -37,8 +37,8 @@ import {
   unknown,
   type MethodValue,
   type ClassValue,
-} from '../../../../src/analysis/20-link/resolution/23-partial-eval/value/types.js';
-import { gap } from '../../../../src/analysis/20-link/resolution/23-partial-eval/types.js';
+} from '../../../../src/project-semantics/evaluate/value/types.js';
+import { gap } from '../../../../src/project-semantics/evaluate/types.js';
 
 // =============================================================================
 // Test Helpers

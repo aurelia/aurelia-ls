@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { analyzePackages } from "../../../src/analysis/20-link/resolution/npm/index.js";
+import { analyzePackages } from "../../../src/project-semantics/npm/index.js";
 import { resourceName } from "./resource-helpers.js";
 
 type TempPackage = {

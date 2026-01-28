@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';
-import type { AnalysisResult, PackageAnalysis } from '../../../src/analysis/20-link/resolution/npm/index.js';
+import type { AnalysisResult, PackageAnalysis } from '../../../src/project-semantics/npm/index.js';
 import { analyzePackageCached as analyzePackage } from '../_helpers/npm-analysis-cache.js';
 import {
   resourceBindables,
@@ -71,7 +71,7 @@ describe('npm extraction', () => {
     });
 
     it('detects package as Aurelia-related', async () => {
-      const { isAureliaPackage } = await import('../../../src/analysis/20-link/resolution/npm/index.js');
+      const { isAureliaPackage } = await import('../../../src/project-semantics/npm/index.js');
       const result = await isAureliaPackage(fixturePath);
       expect(result).toBe(true);
     });

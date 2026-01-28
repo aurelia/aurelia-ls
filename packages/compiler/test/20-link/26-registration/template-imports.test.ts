@@ -9,8 +9,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { DiagnosticsRuntime } from "@aurelia-ls/compiler";
-import { resolve, type ResolutionResult } from "../../../src/analysis/20-link/resolution/resolve.js";
-import type { FileSystemContext } from "../../../src/analysis/20-link/resolution/project/context.js";
+import { discoverProjectSemantics, type ResolutionResult } from "../../../src/project-semantics/resolve.js";
+import type { FileSystemContext } from "../../../src/project-semantics/project/context.js";
 
 // Test app with template imports
 const TEST_FILES: Record<string, string> = {
@@ -135,11 +135,11 @@ function createProgram(): ts.Program {
 }
 
 const resolveWithDiagnostics = (
-  program: Parameters<typeof resolve>[0],
-  config?: Omit<NonNullable<Parameters<typeof resolve>[1]>, "diagnostics">,
+  program: Parameters<typeof discoverProjectSemantics>[0],
+  config?: Omit<NonNullable<Parameters<typeof discoverProjectSemantics>[1]>, "diagnostics">,
 ) => {
   const diagnostics = new DiagnosticsRuntime();
-  return resolve(program, { ...config, diagnostics: diagnostics.forSource("resolution") });
+  return discoverProjectSemantics(program, { ...config, diagnostics: diagnostics.forSource("project") });
 };
 
 describe("Template Import Registration", () => {

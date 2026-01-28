@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { extractTemplateImports } from "../../../src/analysis/20-link/resolution/21-extract/template-imports.js";
+import { extractTemplateImports } from "../../../src/project-semantics/extract/template-imports.js";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { FileSystemContext } from "../../../src/analysis/20-link/resolution/project/context.js";
+import type { FileSystemContext } from "../../../src/project-semantics/project/context.js";
 
 // Mock file system
 function createMockFs(files: Record<string, string>): FileSystemContext {

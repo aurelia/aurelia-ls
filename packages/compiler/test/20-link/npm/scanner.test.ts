@@ -11,7 +11,7 @@ import {
   isAureliaPackage,
   getSourceEntryPoint,
   type PackageInfo,
-} from '../../../src/analysis/20-link/resolution/npm/index.js';
+} from '../../../src/project-semantics/npm/index.js';
 
 const FIXTURES = resolve(import.meta.dirname, 'fixtures');
 const AURELIA2_PLUGINS = resolve(import.meta.dirname, '../../../../../aurelia2-plugins/packages');

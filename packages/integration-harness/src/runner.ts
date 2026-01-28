@@ -11,7 +11,7 @@ import {
   createMockFileSystem,
   createNodeFileSystem,
   DiagnosticsRuntime,
-  resolve,
+  discoverProjectSemantics,
   buildRegistrationPlan,
   type AnalysisResult,
   type FileSystemContext,
@@ -164,9 +164,9 @@ export async function runIntegrationScenario(
 
   const resolutionStart = performance.now();
   const diagnostics = new DiagnosticsRuntime();
-  const baseResolution = resolve(
+  const baseResolution = discoverProjectSemantics(
     program,
-    { ...buildResolutionConfig(resolvedScenario, fileSystem), diagnostics: diagnostics.forSource("resolution") },
+    { ...buildResolutionConfig(resolvedScenario, fileSystem), diagnostics: diagnostics.forSource("project") },
     options.logger,
   );
   const resolution = baseResolution;

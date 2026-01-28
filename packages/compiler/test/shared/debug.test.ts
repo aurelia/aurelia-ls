@@ -480,10 +480,10 @@ describe("all debug channels", () => {
     restore();
   });
 
-  test("resolution channel outputs correctly", () => {
+  test("project channel outputs correctly", () => {
     const { messages, restore } = captureOutput();
-    debug.resolution("start", { sourceFileCount: 10 });
-    expect(messages[0]).toContain("[resolution.start]");
+    debug.project("start", { sourceFileCount: 10 });
+    expect(messages[0]).toContain("[project.start]");
     restore();
   });
 });

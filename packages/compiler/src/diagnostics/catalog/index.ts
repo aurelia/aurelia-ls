@@ -11,7 +11,7 @@ import { hmrDiagnostics } from "./hmr.js";
 import { legacyDiagnostics } from "./legacy.js";
 import { metaImportDiagnostics } from "./meta-imports.js";
 import { policyDiagnostics } from "./policy.js";
-import { resolutionDiagnostics } from "./resolution.js";
+import { projectDiagnostics } from "./project.js";
 import { resourceResolutionDiagnostics } from "./resource-resolution.js";
 import { ssrDiagnostics } from "./ssr.js";
 import { ssrRuntimeDiagnostics } from "./ssr-runtime.js";
@@ -41,7 +41,7 @@ export const diagnosticsFuture = {
   ...ssrRuntimeDiagnostics,
   ...ssgDiagnostics,
   ...hmrDiagnostics,
-  ...resolutionDiagnostics,
+  ...projectDiagnostics,
   ...legacyDiagnostics,
 } as const satisfies DiagnosticsCatalogStrict;
 
@@ -68,7 +68,7 @@ export const diagnosticsByCategoryFuture = {
   toolchain: toolchainDiagnostics,
   ssg: ssgDiagnostics,
   hmr: hmrDiagnostics,
-  resolution: resolutionDiagnostics,
+  project: projectDiagnostics,
   legacy: legacyDiagnostics,
 } as const;
 

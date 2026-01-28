@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import type { CatalogGap, ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS, normalizePathForId, stableHash } from "@aurelia-ls/compiler";
 import { buildSemanticSnapshot, buildSemanticsArtifacts } from "@aurelia-ls/compiler";
-import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../src/analysis/20-link/resolution/25-semantics/resource-def.js";
-import { buildPackageRootMap, detectMonorepo } from "../../../src/analysis/20-link/resolution/npm/index.js";
+import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../src/project-semantics/assemble/resource-def.js";
+import { buildPackageRootMap, detectMonorepo } from "../../../src/project-semantics/npm/index.js";
 
 function baseSemantics(): Semantics {
   return {

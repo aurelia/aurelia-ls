@@ -223,7 +223,7 @@ function mergeData(
 const SOURCE_STAGE_MAP: Record<string, DiagnosticStage> = {
   lower: "lower",
   link: "link",
-  resolution: "resolution",
+  project: "project",
   bind: "bind",
   typecheck: "typecheck",
   "overlay-plan": "overlay-plan",

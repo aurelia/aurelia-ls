@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { NormalizedPath } from '@aurelia-ls/compiler';
-import { gap } from '../../../../src/analysis/20-link/resolution/23-partial-eval/types.js';
+import { gap } from '../../../../src/project-semantics/evaluate/types.js';
 import {
   // Value constructors
   literal,
@@ -40,7 +40,7 @@ import {
   type AnalyzableValue,
   type ObjectValue,
   type MethodValue,
-} from '../../../../src/analysis/20-link/resolution/23-partial-eval/value/index.js';
+} from '../../../../src/project-semantics/evaluate/value/index.js';
 
 describe('Value Model Types', () => {
   // ===========================================================================

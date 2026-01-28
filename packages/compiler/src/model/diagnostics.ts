@@ -13,7 +13,7 @@ export type DiagnosticSeverity = "error" | "warning" | "info";
 export type DiagnosticSource =
   | "lower"
   | "link"
-  | "resolution"
+  | "project"
   | "bind"
   | "typecheck"
   | "overlay-plan"

@@ -15,7 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolve } from "@aurelia-ls/compiler";
+import { discoverProjectSemantics } from "@aurelia-ls/compiler";
 import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 import {
   DEFAULT_SEMANTICS,
@@ -600,7 +600,7 @@ describe("Stress Test: AOT Compiler Kitchen Sink", () => {
   beforeAll(() => {
     program = createProgramFromApp(STRESS_APP);
     const diagnostics = new DiagnosticsRuntime();
-    resolutionResult = resolve(program, { diagnostics: diagnostics.forSource("resolution") });
+    resolutionResult = discoverProjectSemantics(program, { diagnostics: diagnostics.forSource("project") });
 
     // Ensure expected directory exists
     if (!fs.existsSync(EXPECTED_DIR)) {

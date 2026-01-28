@@ -32,7 +32,7 @@ export function buildPolicyDiagnostics(
       entries.push({
         code: "aurelia/policy/gaps",
         message: `Policy: ${gapCount} catalog gap(s) reported.`,
-        source: "resolution",
+        source: "project",
         data: { gapCount },
       });
     }
@@ -44,7 +44,7 @@ export function buildPolicyDiagnostics(
       entries.push({
         code: "aurelia/policy/confidence",
         message: `Policy: catalog confidence '${actual}' below '${policy.confidence.min}'.`,
-        source: "resolution",
+        source: "project",
         data: { min: policy.confidence.min, actual },
       });
     }

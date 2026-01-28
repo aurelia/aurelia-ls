@@ -219,14 +219,16 @@ export const DEFAULT_TRACE_OPTIONS: ResolvedTraceOptions = {
  */
 export const ALL_DEBUG_CHANNELS: readonly DebugChannel[] = [
   "lower",
-  "resolve",
+  "link",
   "bind",
   "typecheck",
   "aot",
   "overlay",
   "ssr",
   "transform",
-  "resolution",
+  "project",
+  "workspace",
+  "vite",
 ];
 
 /**

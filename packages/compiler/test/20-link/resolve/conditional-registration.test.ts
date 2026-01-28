@@ -1,16 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { normalizePathForId } from "@aurelia-ls/compiler";
-import { resolve, ssrDefines, DiagnosticsRuntime } from "@aurelia-ls/compiler";
+import { discoverProjectSemantics, ssrDefines, DiagnosticsRuntime } from "@aurelia-ls/compiler";
 import { createProgramFromMemory } from "../_helpers/index.js";
 
 describe("Full Pipeline: conditional registration guards", () => {
-  type ResolveConfig = NonNullable<Parameters<typeof resolve>[1]>;
+  type ResolveConfig = NonNullable<Parameters<typeof discoverProjectSemantics>[1]>;
   const resolveWithDiagnostics = (
-    program: Parameters<typeof resolve>[0],
+    program: Parameters<typeof discoverProjectSemantics>[0],
     config?: Omit<ResolveConfig, "diagnostics">,
   ) => {
     const diagnostics = new DiagnosticsRuntime();
-    return resolve(program, { ...config, diagnostics: diagnostics.forSource("resolution") });
+    return discoverProjectSemantics(program, { ...config, diagnostics: diagnostics.forSource("project") });
   };
 
   it("activates plugins when the guard resolves to true", () => {
@@ -63,7 +63,7 @@ describe("Full Pipeline: conditional registration guards", () => {
     );
     expect(conditional).toBeTruthy();
     const expectedSource = normalizePathForId("/src/main.ts");
-    expect(conditional?.source).toBe("resolution");
+    expect(conditional?.source).toBe("project");
     expect(conditional?.uri).toBe(expectedSource);
     expect(result.catalog.confidence).toBe("partial");
     expect(result.semanticSnapshot.confidence).toBe("partial");
@@ -97,7 +97,7 @@ describe("Full Pipeline: conditional registration guards", () => {
     );
     expect(unresolved).toBeTruthy();
     const expectedSource = normalizePathForId("/src/main.ts");
-    expect(unresolved?.source).toBe("resolution");
+    expect(unresolved?.source).toBe("project");
     expect(unresolved?.uri).toBe(expectedSource);
     expect(result.catalog.confidence).toBe("conservative");
     expect(result.semanticSnapshot.confidence).toBe("conservative");

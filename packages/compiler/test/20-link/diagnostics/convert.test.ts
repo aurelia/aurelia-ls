@@ -48,14 +48,14 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = orphansToDiagnostics(orphans, runtime.forSource("resolution"));
+      const diagnostics = orphansToDiagnostics(orphans, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].code).toBe("aurelia/resolution/orphan-element");
+      expect(diagnostics[0].code).toBe("aurelia/project/orphan-element");
       expect(diagnostics[0].severity).toBe("warning");
       expect(diagnostics[0].message).toContain("my-element");
       expect(diagnostics[0].message).toContain("MyElement");
-      expect(diagnostics[0].source).toBe("resolution");
+      expect(diagnostics[0].source).toBe("project");
       expect(diagnostics[0].uri).toBe("/app/src/my-element.ts");
       expect(diagnostics[0].data?.resourceKind).toBe("custom-element");
     });
@@ -77,7 +77,7 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = orphansToDiagnostics(orphans, runtime.forSource("resolution"));
+      const diagnostics = orphansToDiagnostics(orphans, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].message).toContain("user-element");
@@ -96,13 +96,13 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = unresolvedToDiagnostics(unresolved, runtime.forSource("resolution"));
+      const diagnostics = unresolvedToDiagnostics(unresolved, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].code).toBe("aurelia/resolution/unanalyzable-function-call");
+      expect(diagnostics[0].code).toBe("aurelia/project/unanalyzable-function-call");
       expect(diagnostics[0].severity).toBe("info");
       expect(diagnostics[0].message).toContain("getPlugins");
-      expect(diagnostics[0].source).toBe("resolution");
+      expect(diagnostics[0].source).toBe("project");
       expect(diagnostics[0].uri).toBe("/app/src/main.ts");
       expect(diagnostics[0].data?.patternKind).toBe("function-call");
     });
@@ -124,7 +124,7 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = unresolvedToDiagnostics(unresolved, runtime.forSource("resolution"));
+      const diagnostics = unresolvedToDiagnostics(unresolved, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].message).toContain("userSetup");
@@ -143,13 +143,13 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].code).toBe("aurelia/resolution/not-a-resource");
+      expect(diagnostics[0].code).toBe("aurelia/project/not-a-resource");
       expect(diagnostics[0].severity).toBe("warning");
       expect(diagnostics[0].message).toBe("Identifier 'NotAResource' is not a known Aurelia resource");
-      expect(diagnostics[0].source).toBe("resolution");
+      expect(diagnostics[0].source).toBe("project");
       expect(diagnostics[0].uri).toBe("/app/src/my-component.ts");
     });
 
@@ -170,7 +170,7 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0].message).toContain("UserThing");
@@ -187,14 +187,14 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(0);
     });
 
     it("handles empty refs array", () => {
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = unresolvedRefsToDiagnostics([], runtime.forSource("resolution"));
+      const diagnostics = unresolvedRefsToDiagnostics([], runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(0);
     });
@@ -216,7 +216,7 @@ describe("Diagnostic Conversion Functions", () => {
       ];
 
       const runtime = new DiagnosticsRuntime();
-      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("resolution"));
+      const diagnostics = unresolvedRefsToDiagnostics(refs, runtime.forSource("project"));
 
       expect(diagnostics).toHaveLength(2);
       expect(diagnostics[0].message).toContain("HelperA");

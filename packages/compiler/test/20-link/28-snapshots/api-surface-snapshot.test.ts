@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import type { Semantics } from "@aurelia-ls/compiler";
 import { DEFAULT_SEMANTICS, normalizePathForId } from "@aurelia-ls/compiler";
 import { buildApiSurfaceSnapshot, buildSemanticSnapshot, buildSemanticsArtifacts } from "@aurelia-ls/compiler";
-import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../src/analysis/20-link/resolution/25-semantics/resource-def.js";
+import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../src/project-semantics/assemble/resource-def.js";
 
 function baseSemantics(): Semantics {
   return {

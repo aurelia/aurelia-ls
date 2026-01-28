@@ -254,8 +254,8 @@ export type {
   LinkedHydrateTemplateController,
 } from "./analysis/index.js";
 
-// === Resolution (Code-driven semantics) ===
-export * from "./analysis/20-link/resolution/index.js";
+// === Project Semantics (Code-driven resource discovery) ===
+export * from "./project-semantics/index.js";
 
 // === Shared Infrastructure ===
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./shared/index.js";

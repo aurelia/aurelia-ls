@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { AnalyzableValue, LexicalScope } from "../../../src/analysis/20-link/resolution/23-partial-eval/value/types.js";
-import type { ExportBindingMap } from "../../../src/analysis/20-link/resolution/22-export-bind/types.js";
-import { evaluateFileFacts } from "../../../src/analysis/20-link/resolution/23-partial-eval/index.js";
-import { emptyFileFacts } from "../../../src/analysis/20-link/resolution/21-extract/file-facts.js";
+import type { AnalyzableValue, LexicalScope } from "../../../src/project-semantics/evaluate/value/types.js";
+import type { ExportBindingMap } from "../../../src/project-semantics/exports/types.js";
+import { evaluateFileFacts } from "../../../src/project-semantics/evaluate/index.js";
+import { emptyFileFacts } from "../../../src/project-semantics/extract/file-facts.js";
 
 function createScope(path: NormalizedPath): LexicalScope {
   return {

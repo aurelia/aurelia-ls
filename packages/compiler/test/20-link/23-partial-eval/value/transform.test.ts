@@ -14,7 +14,7 @@ import {
   getPropertyKeySpan,
   type AnalyzableValue,
   type StatementValue,
-} from '../../../../src/analysis/20-link/resolution/23-partial-eval/value/index.js';
+} from '../../../../src/project-semantics/evaluate/value/index.js';
 
 // =============================================================================
 // Test Helpers

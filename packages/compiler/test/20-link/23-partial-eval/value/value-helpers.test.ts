@@ -15,8 +15,8 @@ import {
   buildSimpleContext,
   resolveToBoolean,
   resolveToString,
-} from "../../../../src/analysis/20-link/resolution/23-partial-eval/value-helpers.js";
-import { canonicalPath } from "../../../../src/analysis/20-link/resolution/util/naming.js";
+} from "../../../../src/project-semantics/evaluate/value-helpers.js";
+import { canonicalPath } from "../../../../src/project-semantics/util/naming.js";
 
 const FILE = "/src/main.ts" as NormalizedPath;
 

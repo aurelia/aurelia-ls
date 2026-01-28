@@ -218,7 +218,7 @@ export function refreshDebugChannels(): void {
   debug.workspace = createChannel("workspace");
   debug.ssr = createChannel("ssr");
   debug.transform = createChannel("transform");
-  debug.resolution = createChannel("resolution");
+  debug.project = createChannel("project");
   debug.vite = createChannel("vite");
   for (const name of extraChannels.keys()) {
     extraChannels.set(name, createChannel(name));
@@ -280,8 +280,8 @@ export const debug = {
   /** Source transform (TS manipulation) */
   transform: createChannel("transform"),
 
-  /** Resource discovery (project-level resolution) */
-  resolution: createChannel("resolution"),
+  /** Project semantics (project-level resource discovery and analysis) */
+  project: createChannel("project"),
 
   /** Vite plugin lifecycle (server config, middleware, build) */
   vite: createChannel("vite"),

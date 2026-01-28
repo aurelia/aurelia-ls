@@ -14,7 +14,7 @@ import {
 import {
   hashObject,
   normalizeCompilerOptions,
-  resolve,
+  discoverProjectSemantics,
   type ResolutionConfig,
   type ResolutionResult,
   type ResourceDef,
@@ -133,9 +133,9 @@ export class AureliaProjectIndex {
   #computeSnapshot(): IndexSnapshot {
     const program = this.#ts.getProgram();
     const diagnostics = new DiagnosticsRuntime();
-    const result = resolve(
+    const result = discoverProjectSemantics(
       program,
-      { ...this.#resolutionConfig, diagnostics: diagnostics.forSource("resolution") },
+      { ...this.#resolutionConfig, diagnostics: diagnostics.forSource("project") },
       this.#logger,
     );
 

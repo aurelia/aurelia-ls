@@ -32,9 +32,9 @@ import {
   resolveImportsCrossFile,
   resolveImport,
   fullyResolve,
-} from '../../../../src/analysis/20-link/resolution/23-partial-eval/value/index.js';
-import type { FileFacts, ImportDeclaration } from '../../../../src/analysis/20-link/resolution/21-extract/file-facts.js';
-import type { ResolvedExport } from '../../../../src/analysis/20-link/resolution/22-export-bind/types.js';
+} from '../../../../src/project-semantics/evaluate/value/index.js';
+import type { FileFacts, ImportDeclaration } from '../../../../src/project-semantics/extract/file-facts.js';
+import type { ResolvedExport } from '../../../../src/project-semantics/exports/types.js';
 
 // =============================================================================
 // Test Helpers

@@ -33,7 +33,7 @@ import {
   analyzePackages,
   buildSemanticsArtifacts,
   hashObject,
-  resolve,
+  discoverProjectSemantics,
   buildRouteTree,
   createNodeFileSystem,
   type ResolutionResult,
@@ -57,7 +57,7 @@ interface Logger {
 }
 
 const ANALYSIS_SCHEMA_VERSION = 1;
-const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "resolution" });
+const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "project" });
 
 export interface ResolutionContextOptions {
   trace?: CompileTrace;
@@ -157,7 +157,7 @@ export async function createResolutionContext(
   });
 
   const diagnostics = new DiagnosticsRuntime();
-  const result = resolve(program, {
+  const result = discoverProjectSemantics(program, {
     baseSemantics: DEFAULT_SEMANTICS,
     trace,
     fileSystem,
@@ -168,7 +168,7 @@ export async function createResolutionContext(
     templateExtensions: options?.templateExtensions,
     styleExtensions: options?.styleExtensions,
     partialEvaluation: options?.partialEvaluation,
-    diagnostics: diagnostics.forSource("resolution"),
+    diagnostics: diagnostics.forSource("project"),
   }, resolutionLogger);
 
   const thirdPartyResources = await resolveThirdPartyResources(

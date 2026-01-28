@@ -10,8 +10,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import type { InspectionResult } from '../../../src/analysis/20-link/resolution/npm/index.js';
-import { detectMonorepo } from '../../../src/analysis/20-link/resolution/npm/index.js';
+import type { InspectionResult } from '../../../src/project-semantics/npm/index.js';
+import { detectMonorepo } from '../../../src/project-semantics/npm/index.js';
 import { inspectCached as inspect } from '../_helpers/npm-analysis-cache.js';
 
 // Path to aurelia submodule

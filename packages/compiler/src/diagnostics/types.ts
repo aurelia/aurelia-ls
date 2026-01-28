@@ -11,7 +11,7 @@ export type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
 export type DiagnosticStage =
   | "lower"
   | "link"
-  | "resolution"
+  | "project"
   | "bind"
   | "typecheck"
   | "overlay-plan"
@@ -65,7 +65,7 @@ export type DiagnosticCategory =
   | "ssr"
   | "ssg"
   | "hmr"
-  | "resolution"
+  | "project"
   | "legacy";
 
 export type DiagnosticDataBase = {

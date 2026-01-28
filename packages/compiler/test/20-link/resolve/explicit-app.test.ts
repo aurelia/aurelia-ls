@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { resolve, DiagnosticsRuntime } from "@aurelia-ls/compiler";
+import { discoverProjectSemantics, DiagnosticsRuntime } from "@aurelia-ls/compiler";
 import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
 import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 
@@ -10,12 +10,12 @@ function resourceName(resource: { name: { value?: string } }): string {
 }
 
 describe("Full Pipeline: explicit-app", () => {
-  let result: ReturnType<typeof resolve>;
+  let result: ReturnType<typeof discoverProjectSemantics>;
 
   beforeAll(() => {
     const program = createProgramFromApp(EXPLICIT_APP);
     const diagnostics = new DiagnosticsRuntime();
-    result = resolve(program, { diagnostics: diagnostics.forSource("resolution") });
+    result = discoverProjectSemantics(program, { diagnostics: diagnostics.forSource("project") });
   });
 
   it("runs the complete resolution pipeline", () => {
@@ -60,11 +60,11 @@ describe("Full Pipeline: explicit-app", () => {
     const appDiagnostics = result.diagnostics.filter(d =>
       d.uri?.includes("/explicit-app/src/")
     );
-    const orphanDiagnostics = appDiagnostics.filter(d => d.code.startsWith("aurelia/resolution/orphan-"));
+    const orphanDiagnostics = appDiagnostics.filter(d => d.code.startsWith("aurelia/project/orphan-"));
     expect(orphanDiagnostics.length, "Should have 2 app orphan diagnostics").toBe(2);
 
     const orphanNames = orphanDiagnostics
-      .filter(d => d.code === "aurelia/resolution/orphan-element")
+      .filter(d => d.code === "aurelia/project/orphan-element")
       .map(d => d.message.match(/element '([^']+)'/)?.[1])
       .sort();
     expect(orphanNames).toEqual(["my-app", "product-card"]);
