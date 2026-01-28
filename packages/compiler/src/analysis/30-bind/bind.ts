@@ -45,7 +45,7 @@ import type {
   ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagCode, OverlayBase, FrameOrigin,
 } from "../../model/symbols.js";
 
-import type { ControllerConfig } from "../../language/registry.js";
+import type { ControllerConfig } from "../../schema/registry.js";
 
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";

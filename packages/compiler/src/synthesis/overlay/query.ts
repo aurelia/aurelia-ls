@@ -12,7 +12,7 @@ import type {
 } from "../../analysis/index.js";
 
 // Language imports
-import type { TypeRef } from "../../language/registry.js";
+import type { TypeRef } from "../../schema/registry.js";
 
 // Model imports
 import type { BindingMode, DOMNode, ExprId, IrModule, NodeId, SourceSpan, TemplateIR, TemplateId } from "../../model/ir.js";

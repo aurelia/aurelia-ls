@@ -2,7 +2,7 @@ import { parseFragment } from "parse5";
 
 import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode, NodeId } from "../../model/ir.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../schema/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";

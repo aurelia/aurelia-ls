@@ -7,7 +7,7 @@ export {
   prepareSemantics,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
-} from "../language/index.js";
+} from "../schema/index.js";
 export type {
   ApiSurfaceBindable,
   ApiSurfaceSnapshot,
@@ -45,7 +45,7 @@ export type {
   TypeRef,
   ValueConverterDef,
   ValueConverterSig,
-} from "../language/index.js";
+} from "../schema/index.js";
 
 // === Model / Identity ===
 export {

@@ -1,6 +1,6 @@
-import { createSemanticsLookup, type SemanticsLookup, type SemanticsLookupOptions } from "../../language/registry.js";
-import type { Semantics } from "../../language/registry.js";
-import type { ResourceGraph } from "../../language/resource-graph.js";
+import { createSemanticsLookup, type SemanticsLookup, type SemanticsLookupOptions } from "../../schema/registry.js";
+import type { Semantics } from "../../schema/registry.js";
+import type { ResourceGraph } from "../../schema/resource-graph.js";
 import type { ModuleResolver } from "../../shared/module-resolver.js";
 import { NOOP_TRACE, type CompileTrace } from "../../shared/trace.js";
 import { debug } from "../../shared/debug.js";

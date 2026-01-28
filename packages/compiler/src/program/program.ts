@@ -16,7 +16,7 @@ import {
   type ProjectSnapshot,
   type TemplateContext,
   type ResourceScopeId,
-} from "../language/index.js";
+} from "../schema/index.js";
 import {
   fingerprintAttrRes,
   fingerprintAttributePatternConfig,

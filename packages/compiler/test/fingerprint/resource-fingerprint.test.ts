@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import type { Bindable, BindingCommandConfig, ElementRes } from "../../src/language/types.js";
+import type { Bindable, BindingCommandConfig, ElementRes } from "../../src/schema/types.js";
 import type { NormalizedPath } from "../../src/model/index.js";
 import {
   fingerprintBindingCommandConfig,

@@ -1,6 +1,6 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { BindingCommandConfig, ControllerConfig } from "../../language/registry.js";
+import type { BindingCommandConfig, ControllerConfig } from "../../schema/registry.js";
 import type {
   BindingMode,
   ControllerBindableIR,

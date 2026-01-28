@@ -6,7 +6,7 @@ import type {
   ControllerConfig,
   ElementRes,
   ValueConverterSig,
-} from "../language/index.js";
+} from "../schema/index.js";
 import { stableHash } from "../pipeline/index.js";
 
 // Usage-level fingerprints for template invalidation.

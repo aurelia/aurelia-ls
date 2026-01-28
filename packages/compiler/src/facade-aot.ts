@@ -22,7 +22,7 @@ import {
   type ResourceScopeId,
   type LocalImportDef,
   type TemplateSyntaxRegistry,
-} from "./language/index.js";
+} from "./schema/index.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace, type ModuleResolver } from "./shared/index.js";
 import { DiagnosticsRuntime } from "./diagnostics/runtime.js";
 import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";

@@ -7,7 +7,7 @@ import type {
   FeatureUsageSet,
   ProjectSnapshot,
   TemplateContext,
-} from "../language/index.js";
+} from "../schema/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";

@@ -8,7 +8,7 @@ import {
   buildSemanticsSnapshotFromProject,
   type ProjectSnapshot,
   type TemplateContext,
-} from "../language/index.js";
+} from "../schema/index.js";
 
 // Parsing imports (via barrel)
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";

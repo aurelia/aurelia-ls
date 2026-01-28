@@ -26,7 +26,7 @@ import {
   type SemanticsWithCaches,
   type TemplateSyntaxRegistry,
   type TypeRef,
-} from "../language/index.js";
+} from "../schema/index.js";
 
 // Parsing imports (via barrel)
 import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../parsing/index.js";

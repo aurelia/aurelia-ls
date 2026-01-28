@@ -14,7 +14,7 @@ import type {
   TargetSem,
   LinkedElementBindable,
 } from "../20-link/types.js";
-import type { TypeRef } from "../../language/registry.js";
+import type { TypeRef } from "../../schema/registry.js";
 import { buildExprSpanIndex, exprIdsOf, indexExprTable } from "../../shared/expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";

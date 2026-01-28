@@ -40,7 +40,7 @@ export type DiagnosticConfidence =
   | "low" // Weak evidence; likely heuristic.
   | "manual"; // Human judgment required to validate.
 /** Diagnostics inherit catalog confidence from registry semantics when needed. */
-export type CatalogConfidence = import("../language/types.js").CatalogConfidence;
+export type CatalogConfidence = import("../schema/types.js").CatalogConfidence;
 /** Some diagnostics require a span, others can be project-scoped. */
 export type DiagnosticSpanRequirement =
   | "span" // Must point to a source location to be actionable.

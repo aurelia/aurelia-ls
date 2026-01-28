@@ -5,12 +5,12 @@ import type {
   ControllerConfig,
   ControllerName,
   ResourceCatalog,
-} from "../../language/registry.js";
+} from "../../schema/registry.js";
 import { formatSuggestion } from "../../shared/suggestions.js";
 import {
   BUILTIN_CONTROLLER_CONFIGS,
   createCustomControllerConfig,
-} from "../../language/registry.js";
+} from "../../schema/registry.js";
 import type {
   AttributeBindableIR,
   BindingMode,

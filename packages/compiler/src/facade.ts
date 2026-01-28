@@ -15,8 +15,8 @@ import type {
   ProjectSnapshot,
   TemplateContext,
   TemplateSyntaxRegistry,
-} from "./language/index.js";
-import { buildProjectSnapshot } from "./language/index.js";
+} from "./schema/index.js";
+import { buildProjectSnapshot } from "./schema/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";

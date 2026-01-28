@@ -1,5 +1,5 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../schema/registry.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
 import type { P5Element } from "./lower-shared.js";
 import { attrLoc, attrValueLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";

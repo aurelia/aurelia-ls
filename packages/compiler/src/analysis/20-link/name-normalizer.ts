@@ -1,5 +1,5 @@
 import type { NodeSem } from "./types.js";
-import type { SemanticsLookup } from "../../language/types.js";
+import type { SemanticsLookup } from "../../schema/types.js";
 
 /**
  * Attr → prop normalization for interpolation on attributes.

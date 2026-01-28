@@ -1,5 +1,5 @@
 import type { DOMNode } from "../../model/ir.js";
-import type { SemanticsLookup } from "../../language/registry.js";
+import type { SemanticsLookup } from "../../schema/registry.js";
 import type { DomElementRef, ElementResRef, NodeSem } from "./types.js";
 
 export function resolveNodeSem(n: DOMNode | undefined, lookup: SemanticsLookup): NodeSem {

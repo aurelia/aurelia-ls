@@ -1,12 +1,12 @@
 import type { SourceSpan } from "../../model/ir.js";
 import type { BindingMode, HydrateAttributeIR, HydrateElementIR } from "../../model/ir.js";
-import type { Bindable } from "../../language/registry.js";
-import { toTypeRefOptional } from "../../language/convert.js";
+import type { Bindable } from "../../schema/registry.js";
+import { toTypeRefOptional } from "../../schema/convert.js";
 import {
   getControllerConfig,
   STUB_CONTROLLER_CONFIG,
   createCustomControllerConfig,
-} from "../../language/registry.js";
+} from "../../schema/registry.js";
 import type {
   AttrResRef,
   ControllerSem,

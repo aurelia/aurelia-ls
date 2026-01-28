@@ -1,7 +1,7 @@
 import { debug } from "../../shared/debug.js";
 import { NOOP_TRACE, type CompileTrace } from "../../shared/trace.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../schema/registry.js";
 import type { LowerDiagnosticEmitter, ExprTable } from "./lower-shared.js";
 
 export type LowerDebug = Pick<typeof debug, "lower">;

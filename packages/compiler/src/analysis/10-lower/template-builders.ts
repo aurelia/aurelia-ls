@@ -1,5 +1,5 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../schema/registry.js";
 import type {
   HydrateTemplateControllerIR,
   InstructionRow,

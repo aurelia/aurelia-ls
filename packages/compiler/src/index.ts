@@ -46,7 +46,7 @@ export {
   buildSemanticsSnapshot,
   buildSemanticsSnapshotFromProject,
   buildTemplateSyntaxRegistry,
-} from "./language/index.js";
+} from "./schema/index.js";
 export type {
   SourceLocation,
   Configured,
@@ -98,7 +98,7 @@ export type {
   BindableDef,
   ResourceKey,
   SymbolId,
-} from "./language/index.js";
+} from "./schema/index.js";
 
 // Resource definitions (for resolution package and external tooling)
 export type {
@@ -126,7 +126,7 @@ export type {
   // Attribute pattern configuration
   AttributePatternConfig,
   PatternInterpret,
-} from "./language/index.js";
+} from "./schema/index.js";
 
 // Binding command configuration (values)
 export {
@@ -136,7 +136,7 @@ export {
   getCommandMode,
   // Attribute pattern configuration (values)
   BUILTIN_ATTRIBUTE_PATTERNS,
-} from "./language/index.js";
+} from "./schema/index.js";
 
 // === Synthesis (Overlay) ===
 export {

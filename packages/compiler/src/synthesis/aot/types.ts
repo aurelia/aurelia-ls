@@ -27,7 +27,7 @@ import type {
   AnyBindingExpression,
   TemplateMetaIR,
 } from "../../model/index.js";
-import type { ControllerConfig } from "../../language/registry.js";
+import type { ControllerConfig } from "../../schema/registry.js";
 import type { RuntimeAnyBindingExpression } from "./runtime-ast.js";
 
 /* =============================================================================
@@ -830,7 +830,7 @@ export interface AotMappingEntry {
  * PLANNING OPTIONS
  * ============================================================================= */
 
-import type { TemplateSyntaxRegistry } from "../../language/index.js";
+import type { TemplateSyntaxRegistry } from "../../schema/index.js";
 import type { AttributeParser } from "../../parsing/index.js";
 import type { CompileTrace } from "../../shared/index.js";
 

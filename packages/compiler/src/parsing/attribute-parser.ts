@@ -1,7 +1,7 @@
 import type { BindingMode } from "../model/ir.js";
 import type { TextSpan } from "../model/index.js";
-import type { AttributePatternConfig, TemplateSyntaxRegistry } from "../language/registry.js";
-import { BUILTIN_ATTRIBUTE_PATTERNS, buildTemplateSyntaxRegistry, DEFAULT_SEMANTICS } from "../language/registry.js";
+import type { AttributePatternConfig, TemplateSyntaxRegistry } from "../schema/registry.js";
+import { BUILTIN_ATTRIBUTE_PATTERNS, buildTemplateSyntaxRegistry, DEFAULT_SEMANTICS } from "../schema/registry.js";
 
 /** Result of parsing an attribute name. */
 export class AttrSyntax {

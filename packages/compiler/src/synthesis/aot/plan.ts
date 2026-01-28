@@ -50,7 +50,7 @@ import type {
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
 import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
 import { debug } from "../../shared/debug.js";
-import { DEFAULT_SEMANTICS, buildTemplateSyntaxRegistry, type TemplateSyntaxRegistry } from "../../language/registry.js";
+import { DEFAULT_SEMANTICS, buildTemplateSyntaxRegistry, type TemplateSyntaxRegistry } from "../../schema/registry.js";
 import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../../parsing/index.js";
 
 import type {

@@ -38,8 +38,8 @@ import type {
   SourceSpan,
 } from "../../model/ir.js";
 
-import { getControllerConfig, type SemanticsLookupOptions } from "../../language/registry.js";
-import type { ResourceGraph } from "../../language/resource-graph.js";
+import { getControllerConfig, type SemanticsLookupOptions } from "../../schema/registry.js";
+import type { ResourceGraph } from "../../schema/resource-graph.js";
 import type { ModuleResolver } from "../../shared/module-resolver.js";
 
 import type {
@@ -93,7 +93,7 @@ import {
 import { extractExprResources, extractHostAssignments } from "../../shared/expr-utils.js";
 import { CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { createResolveContext, createResolveServices, type ResolveContext, type ResolveDiagnosticEmitter } from "./resolve-context.js";
-import type { SemanticsSnapshot } from "../../language/snapshot.js";
+import type { SemanticsSnapshot } from "../../schema/snapshot.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");

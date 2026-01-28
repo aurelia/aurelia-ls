@@ -26,7 +26,7 @@ import type {
   Bindable,
   TypeRef,
   ControllerConfig,
-} from "../../language/registry.js";
+} from "../../schema/registry.js";
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
 import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
 

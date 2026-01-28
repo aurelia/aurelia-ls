@@ -1,5 +1,5 @@
 import type { DOMNode } from "../../model/ir.js";
-import type { FeatureUsageFlags, FeatureUsageSet, TemplateSyntaxRegistry } from "../../language/types.js";
+import type { FeatureUsageFlags, FeatureUsageSet, TemplateSyntaxRegistry } from "../../schema/types.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import { createAttributeParserFromRegistry } from "../../parsing/attribute-parser.js";
 import type {
