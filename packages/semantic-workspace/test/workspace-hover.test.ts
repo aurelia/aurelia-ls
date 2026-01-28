@@ -57,6 +57,10 @@ describe("workspace hover (workspace-contract)", () => {
     const hover = query.hover(pos);
     expect(hover?.contents ?? "").toContain("Custom Element");
     expect(hover?.contents ?? "").toContain("summary-panel");
+    // Enriched: source file and bindable list
+    expect(hover?.contents ?? "").toContain("Defined in");
+    expect(hover?.contents ?? "").toContain("Bindables");
+    expect(hover?.contents ?? "").toContain("stats");
     expect(typeof hover?.location?.nodeId).toBe("string");
 
     const again = query.hover(pos);
@@ -67,9 +71,10 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "stats.bind", 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Bindable");
-    expect(hover?.contents ?? "").toContain("stats");
-    expect(hover?.contents ?? "").toContain("component");
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("Bindable");
+    expect(contents).toContain("stats");
+    expect(contents).toContain("component");
   });
 
   it("hovers custom attributes", () => {
@@ -80,6 +85,9 @@ describe("workspace hover (workspace-contract)", () => {
     const contents = hover?.contents ?? "";
     expect(contents).toContain("Custom Attribute");
     expect(contents).toContain("copy-to-clipboard");
+    // Enriched: bindable list
+    expect(contents).toContain("Bindables");
+    expect(contents).toContain("value");
 
     // Span must cover the attribute, not the entire host element
     const attrStart = appText.indexOf("copy-to-clipboard.bind");
@@ -104,8 +112,12 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "if.bind", 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Template Controller");
-    expect(hover?.contents ?? "").toContain("if");
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("Template Controller");
+    expect(contents).toContain("if");
+    // Enriched: bindable list from controller config
+    expect(contents).toContain("Bindables");
+    expect(contents).toContain("value");
   });
 
   it("hovers value converters", () => {

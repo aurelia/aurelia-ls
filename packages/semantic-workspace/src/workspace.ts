@@ -318,6 +318,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
           text,
           offset,
           syntax,
+          semantics: this.program.options.project.semantics,
         });
       } catch (error) {
         debug.workspace("hover.collect.error", {

@@ -4,15 +4,22 @@ import {
   debug,
   isDebugEnabled,
   type AttributeParser,
+  type AttrRes,
+  type Bindable,
+  type BindingMode,
   type DOMNode,
+  type ElementRes,
   type ExprId,
   type LinkedInstruction,
   type LinkedRow,
+  type MaterializedSemantics,
   type NodeId,
   type SourceSpan,
   type TemplateCompilation,
   type TemplateIR,
   type TemplateSyntaxRegistry,
+  type TypeRef,
+  type ValueConverterSig,
   spanContainsOffset,
   spanLength,
 } from "@aurelia-ls/compiler";
@@ -31,6 +38,7 @@ export function collectTemplateHover(options: {
   offset: number;
   syntax?: TemplateSyntaxRegistry | null;
   attrParser?: AttributeParser;
+  semantics?: MaterializedSemantics | null;
 }): TemplateHoverDetails | null {
   const { compilation, text, offset } = options;
   const syntax = options.syntax ?? null;
@@ -116,7 +124,11 @@ export function collectTemplateHover(options: {
       if (isCustom) {
         nodeId = node.id;
         span = span ?? node.span;
-        addLine("Custom Element", row.node.custom?.def?.name ?? tag);
+        const def = row.node.custom?.def;
+        addLine("Custom Element", def?.name ?? tag);
+        if (def) {
+          appendResourceDetails(def, addLine);
+        }
       }
     }
   } else if (debugEnabled) {
@@ -167,6 +179,10 @@ export function collectTemplateHover(options: {
   if (converterHit) {
     exprId = exprId ?? converterHit.exprId;
     addLine("Value Converter", converterHit.name);
+    const vcSig = options.semantics?.resources.valueConverters[converterHit.name] ?? null;
+    if (vcSig) {
+      appendConverterDetails(vcSig, addLine);
+    }
   }
 
   const behaviorHit = findBindingBehaviorAtOffset(compilation.exprTable, offset);
@@ -176,6 +192,11 @@ export function collectTemplateHover(options: {
   if (behaviorHit) {
     exprId = exprId ?? behaviorHit.exprId;
     addLine("Binding Behavior", behaviorHit.name);
+    const bbSig = options.semantics?.resources.bindingBehaviors[behaviorHit.name] ?? null;
+    if (bbSig) {
+      const loc = formatSourceLocation(bbSig.file, bbSig.package);
+      if (loc) addLine("Defined in", loc);
+    }
   }
 
   if (lines.length === 0) {
@@ -299,6 +320,10 @@ function applyInstructionHover(
       const resolvedName = instruction.res?.def.name ?? null;
       if (resolvedName) {
         ctx.addLine("Custom Attribute", resolvedName);
+        const attrDef = instruction.res?.def;
+        if (attrDef) {
+          appendResourceDetails(attrDef, ctx.addLine);
+        }
         break;
       }
       const fallbackName = attributeTargetName(attrName, analysis);
@@ -313,7 +338,7 @@ function applyInstructionHover(
     }
     case "propertyBinding":
     case "attributeBinding": {
-      const target = instruction.target as { kind?: string; reason?: string } | null | undefined;
+      const target = instruction.target as { kind?: string; reason?: string; bindable?: Bindable } | null | undefined;
       let line = describeBindableTarget(target, instruction.to);
       if (!line && target?.kind === "unknown") {
         line = describeBindableFallback(instruction.to, ctx.hostTag, ctx.hostKind);
@@ -327,14 +352,25 @@ function applyInstructionHover(
         }
       }
       if (line) ctx.addLine("Bindable", line);
+      const bindable = target?.bindable ?? null;
+      if (bindable) {
+        appendBindableDetails(bindable, ctx.addLine);
+      }
       break;
     }
     case "listenerBinding":
       ctx.addLine("Event", instruction.to);
       break;
-    case "hydrateTemplateController":
+    case "hydrateTemplateController": {
       ctx.addLine("Template Controller", instruction.res);
+      const controllerInst = instruction as { controller?: { config?: { props?: Record<string, Bindable> } } };
+      const tcProps = controllerInst.controller?.config?.props;
+      if (tcProps) {
+        const bindableList = formatBindableList(tcProps);
+        if (bindableList) ctx.addLine("Bindables", bindableList);
+      }
       break;
+    }
     case "translationBinding":
       ctx.addLine("Translation", "t");
       break;
@@ -691,4 +727,69 @@ function chooseExpressionLabel(primary: string | null | undefined, secondary: st
 
 function looksLikeCustomElementTag(tag: string): boolean {
   return tag.includes("-");
+}
+
+// ── Hover enrichment helpers ───────────────────────────────────────────
+
+function formatSourceLocation(file?: string | null, pkg?: string | null): string | null {
+  if (pkg) return pkg;
+  if (file) return file;
+  return null;
+}
+
+function formatBindableList(bindables: Readonly<Record<string, Bindable>>): string | null {
+  const entries = Object.values(bindables);
+  if (entries.length === 0) return null;
+  const names = entries.map((b) => {
+    let name = b.name;
+    if (b.primary) name += " (primary)";
+    return name;
+  });
+  return names.join(", ");
+}
+
+function formatBindingMode(mode?: BindingMode | null): string | null {
+  if (!mode || mode === "default") return null;
+  return mode;
+}
+
+function formatTypeRef(type?: TypeRef | null): string | null {
+  if (!type) return null;
+  if (type.kind === "ts") return type.name;
+  if (type.kind === "any" || type.kind === "unknown") return null;
+  return null;
+}
+
+function appendResourceDetails(
+  def: ElementRes | AttrRes,
+  addLine: (label: string, value: string) => void,
+): void {
+  const loc = formatSourceLocation(def.file, def.package);
+  if (loc) addLine("Defined in", loc);
+  const bindableList = formatBindableList(def.bindables);
+  if (bindableList) addLine("Bindables", bindableList);
+}
+
+function appendBindableDetails(
+  bindable: Bindable,
+  addLine: (label: string, value: string) => void,
+): void {
+  const mode = formatBindingMode(bindable.mode);
+  if (mode) addLine("Mode", mode);
+  const type = formatTypeRef(bindable.type);
+  if (type) addLine("Type", type);
+  if (bindable.doc) addLine("Description", bindable.doc);
+}
+
+function appendConverterDetails(
+  sig: ValueConverterSig,
+  addLine: (label: string, value: string) => void,
+): void {
+  const loc = formatSourceLocation(sig.file, sig.package);
+  if (loc) addLine("Defined in", loc);
+  const inType = formatTypeRef(sig.in);
+  const outType = formatTypeRef(sig.out);
+  if (inType && outType) {
+    addLine("Signature", `toView(${inType}): ${outType}`);
+  }
 }
