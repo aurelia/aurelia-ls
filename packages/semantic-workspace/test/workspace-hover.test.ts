@@ -136,6 +136,17 @@ describe("workspace hover (workspace-contract)", () => {
     expect(again?.location?.exprId).toBe(hover?.location?.exprId);
   });
 
+  it("returns null for whitespace between elements", () => {
+    const query = harness.workspace.query(appUri);
+    // Position in the whitespace/text node between </let> and <header>
+    const letEnd = appText.indexOf("</let>") + "</let>".length;
+    const headerStart = appText.indexOf("<header");
+    const midpoint = Math.floor((letEnd + headerStart) / 2);
+    const pos = positionAt(appText, midpoint);
+    const hover = query.hover(pos);
+    expect(hover).toBeNull();
+  });
+
   it("hovers import meta elements", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "<import", 1);

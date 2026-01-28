@@ -339,8 +339,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (offset == null) return null;
 
     const expr = query.exprAt(offset);
-    const node = query.nodeAt(offset);
-    const controller = query.controllerAt(offset);
 
     const contents: string[] = [];
     if (expr) {
@@ -348,11 +346,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       const member = expr.memberPath ? `${expr.memberPath}` : "expression";
       contents.push(type ? `${member}: ${type}` : member);
     }
-    if (node) {
-      const host = node.hostKind !== "none" ? ` (${node.hostKind})` : "";
-      contents.push(`node: ${node.kind}${host}`);
-    }
-    if (controller) contents.push(`controller: ${controller.kind}`);
 
     const tsHover = this.collectTypeScriptHover(canonical, snapshot, offset);
     if (tsHover) contents.push(tsHover.text);
@@ -362,8 +355,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const span =
       tsHover?.span ??
       expr?.span ??
-      node?.span ??
-      controller?.span ??
       resolveSourceSpan({ start: offset, end: offset }, snapshot.uri);
 
     return {
