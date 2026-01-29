@@ -55,14 +55,20 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "<summary-panel", 1);
     const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    // Signature block: (custom element) summary-panel
-    expect(contents).toContain("(custom element)");
-    expect(contents).toContain("summary-panel");
+    // Signature line: fenced code block with kind and name
+    expect(contents).toMatch(/```ts\s*\n\(custom element\) summary-panel/);
     // Metadata: source location and bindable list
     expect(contents).toContain("Bindables");
     expect(contents).toContain("`stats`");
+    // Span covers the element tag name
+    expect(hover?.location?.span).toBeDefined();
+    const tagStart = appText.indexOf("<summary-panel");
+    expect(hover!.location!.span!.start).toBe(tagStart);
+    // Stable node id
     expect(typeof hover?.location?.nodeId).toBe("string");
+    expect(hover!.location!.nodeId!.length).toBeGreaterThan(0);
 
     const again = query.hover(pos);
     expect(again?.location?.nodeId).toBe(hover?.location?.nodeId);
@@ -72,11 +78,16 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "stats.bind", 1);
     const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    // Signature block: (bindable) stats or (property) stats
-    expect(contents).toMatch(/\(bindable\)|\(property\)/);
-    expect(contents).toContain("stats");
+    // Signature line: fenced block with kind and attribute name
+    expect(contents).toMatch(/```ts\s*\n\(bindable\) stats/);
+    // Metadata: component association
     expect(contents).toContain("component");
+    // Span covers the attribute region
+    expect(hover?.location?.span).toBeDefined();
+    const attrStart = appText.indexOf("stats.bind");
+    expect(hover!.location!.span!.start).toBeLessThanOrEqual(attrStart);
   });
 
   it("hovers custom attributes", () => {
@@ -107,51 +118,76 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "click.trigger", "click.".length + 1);
     const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    expect(contents).toContain("(binding command)");
-    expect(contents).toContain("trigger");
+    // Signature line: kind and command name in fenced block
+    expect(contents).toMatch(/```ts\s*\n\(binding command\) trigger/);
+    // Span covers the command portion of the attribute
+    expect(hover?.location?.span).toBeDefined();
   });
 
   it("hovers template controllers", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "if.bind", 1);
     const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    // Signature: (template controller) if
-    expect(contents).toContain("(template controller)");
-    expect(contents).toContain("if");
+    // Signature line: kind and controller name in fenced block
+    expect(contents).toMatch(/```ts\s*\n\(template controller\) if/);
     // Metadata: bindable list from controller config
     expect(contents).toContain("Bindables");
     expect(contents).toContain("`value`");
+    // Span covers the attribute
+    expect(hover?.location?.span).toBeDefined();
   });
 
   it("hovers value converters", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "titlecase", 1);
     const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    expect(contents).toContain("(value converter)");
-    expect(contents).toContain("titlecase");
+    // Signature line: kind and converter name in fenced block
+    expect(contents).toMatch(/```ts\s*\n\(value converter\) titlecase/);
+    // Span covers the converter name
+    expect(hover?.location?.span).toBeDefined();
+    const vcStart = appText.indexOf("titlecase");
+    expect(hover!.location!.span!.start).toBeLessThanOrEqual(vcStart);
+    expect(hover!.location!.span!.end).toBeGreaterThanOrEqual(vcStart + "titlecase".length);
   });
 
   it("hovers binding behaviors", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "debounce", 1);
     const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    expect(contents).toContain("(binding behavior)");
-    expect(contents).toContain("debounce");
+    // Signature line: kind and behavior name in fenced block
+    expect(contents).toMatch(/```ts\s*\n\(binding behavior\) debounce/);
+    // Span covers the behavior name
+    expect(hover?.location?.span).toBeDefined();
   });
 
   it("hovers expressions with stable expr ids", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "activeDevice.name", "activeDevice.".length + 1);
     const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    // Signature: (expression) activeDevice.name  — inside fenced code block
-    expect(contents).toContain("(expression)");
-    expect(contents).toContain("activeDevice.name");
+    // Signature line: kind and full member expression in fenced block
+    expect(contents).toMatch(/```ts\s*\n\(expression\) activeDevice\.name/);
+    // Must NOT show generic fallback or duplicate type info
+    expect(contents).not.toMatch(/\(expression\) expression/);
+    expect(contents).not.toMatch(/\(expression\) activeDevice\.name:/);
+    // Span narrows to the member being hovered (name), not the full expression
+    expect(hover?.location?.span).toBeDefined();
+    const exprStart = appText.indexOf("activeDevice.name");
+    const nameStart = exprStart + "activeDevice.".length;
+    expect(hover!.location!.span!.start).toBeGreaterThanOrEqual(nameStart);
+    expect(hover!.location!.span!.end).toBeLessThanOrEqual(nameStart + "name".length);
+    // Stable expr id
     expect(typeof hover?.location?.exprId).toBe("string");
+    expect(hover!.location!.exprId!.length).toBeGreaterThan(0);
 
     const again = query.hover(pos);
     expect(again?.location?.exprId).toBe(hover?.location?.exprId);
@@ -223,15 +259,16 @@ describe("workspace hover (workspace-contract)", () => {
     const hover = query.hover(pos);
     expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    // Signature: template controller
-    expect(contents).toContain("(template controller)");
-    expect(contents).toContain("repeat");
+    // Signature line: kind and controller name in fenced block
+    expect(contents).toMatch(/```ts\s*\n\(template controller\) repeat/);
     // Iteration declaration shown in metadata
     expect(contents).toContain("kind of deviceTypes");
     // Contextual locals from controller config
     expect(contents).toContain("`$index`");
     expect(contents).toContain("`$first`");
     expect(contents).toContain("`$last`");
+    // Span covers the attribute
+    expect(hover?.location?.span).toBeDefined();
   });
 
   it("hovers translation bindings with key, namespace, and target", () => {
@@ -241,13 +278,15 @@ describe("workspace hover (workspace-contract)", () => {
     const hover = query.hover(pos);
     expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    // Signature: the full key
-    expect(contents).toContain("(translation)");
+    // Signature line: kind and full key in fenced block
+    expect(contents).toMatch(/```ts\s*\n\(translation\)/);
     expect(contents).toContain("filters.searchDevices");
     // Structured metadata: namespace, key, and bracket target
     expect(contents).toContain("`filters`");
     expect(contents).toContain("`searchDevices`");
     expect(contents).toContain("`placeholder`");
+    // Span covers the translation attribute
+    expect(hover?.location?.span).toBeDefined();
   });
 });
 
@@ -302,29 +341,43 @@ describe("workspace hover formatting (workspace-contract table-panel)", () => {
     expect(contents).not.toContain("(bindable) displayData");
   });
 
-  it("hovers expressions inside multi-binding values with correct labels", () => {
+  it("hovers first expression in multi-binding with correct label and tight span", () => {
     const query = harness.workspace.query(tableUri);
     // Hover on "items" in "data.bind: items; display-data.bind: displayItems; ..."
     const itemsPos = findPosition(tableText, "data.bind: items;", "data.bind: ".length + 1);
-    const itemsHover = query.hover(itemsPos);
-    expect(itemsHover).not.toBeNull();
-    const itemsContents = itemsHover?.contents ?? "";
-    expect(itemsContents).toContain("(expression)");
-    expect(itemsContents).toContain("items");
-    // Must show the specific expression label, not the generic fallback
-    expect(itemsContents).not.toMatch(/\(expression\) expression/);
+    const hover = query.hover(itemsPos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    // Signature line: exact expression label in fenced block, not generic fallback
+    expect(contents).toMatch(/```ts\s*\n\(expression\) items/);
+    expect(contents).not.toMatch(/\(expression\) expression/);
+    // Span must be tight to the expression value, not the entire attribute
+    expect(hover?.location?.span).toBeDefined();
+    const attrValueStart = tableText.indexOf('"data.bind: items;') + 1;
+    const itemsStart = attrValueStart + "data.bind: ".length;
+    expect(hover!.location!.span!.start).toBeGreaterThanOrEqual(itemsStart);
+    expect(hover!.location!.span!.end).toBeLessThanOrEqual(itemsStart + "items".length);
+    // Expr id must be present
+    expect(typeof hover?.location?.exprId).toBe("string");
   });
 
-  it("hovers second expression in multi-binding with correct label", () => {
+  it("hovers second expression in multi-binding with correct label and tight span", () => {
     const query = harness.workspace.query(tableUri);
     // Hover on "displayItems" in "display-data.bind: displayItems;"
     const pos = findPosition(tableText, "display-data.bind: displayItems;", "display-data.bind: ".length + 1);
     const hover = query.hover(pos);
     expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    expect(contents).toContain("(expression)");
-    expect(contents).toContain("displayItems");
+    // Signature line: exact expression label in fenced block, not generic fallback
+    expect(contents).toMatch(/```ts\s*\n\(expression\) displayItems/);
     expect(contents).not.toMatch(/\(expression\) expression/);
+    // Span must be tight to the expression value, not the entire attribute
+    expect(hover?.location?.span).toBeDefined();
+    const displayItemsStart = tableText.indexOf("display-data.bind: displayItems;") + "display-data.bind: ".length;
+    expect(hover!.location!.span!.start).toBeGreaterThanOrEqual(displayItemsStart);
+    expect(hover!.location!.span!.end).toBeLessThanOrEqual(displayItemsStart + "displayItems".length);
+    // Expr id must be present
+    expect(typeof hover?.location?.exprId).toBe("string");
   });
 
   it("shows source file path for local resources (not node_modules)", () => {

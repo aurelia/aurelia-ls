@@ -189,7 +189,7 @@ export function collectTemplateHover(options: {
   if (instructionHits.length) {
     const [primary] = instructionHits;
     if (primary) {
-      span = primary.loc;
+      span = span ?? primary.loc;
     }
     for (const hit of instructionHits) {
       const instrCards = buildInstructionCards(hit.instruction, hit.attrName ?? null, {
