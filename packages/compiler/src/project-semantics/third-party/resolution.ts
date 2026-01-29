@@ -301,8 +301,9 @@ async function analyzeThirdPartyPackages(
 
     for (const result of results.values()) {
       gaps.push(...result.gaps);
+      const packageName = result.value.packageName;
       for (const res of result.value.resources) {
-        resourceDefs.push(res.resource);
+        resourceDefs.push(packageName ? { ...res.resource, package: packageName } : res.resource);
       }
     }
   }

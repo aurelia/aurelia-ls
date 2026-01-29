@@ -620,29 +620,8 @@ function findRow(
 
 function formatSourceLocation(file?: string | null, pkg?: string | null): string | null {
   if (pkg) return pkg;
-  if (file) {
-    // Extract package name from node_modules paths instead of showing raw file paths
-    const packageName = extractPackageFromNodeModules(file);
-    if (packageName) return packageName;
-    return file;
-  }
+  if (file) return file;
   return null;
-}
-
-function extractPackageFromNodeModules(filePath: string): string | null {
-  const normalized = filePath.replace(/\\/g, "/");
-  const marker = "/node_modules/";
-  const idx = normalized.lastIndexOf(marker);
-  if (idx < 0) return null;
-  const rest = normalized.slice(idx + marker.length);
-  // Handle scoped packages: @scope/name/...
-  if (rest.startsWith("@")) {
-    const parts = rest.split("/");
-    if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
-  }
-  // Unscoped: name/...
-  const slash = rest.indexOf("/");
-  return slash > 0 ? rest.slice(0, slash) : rest;
 }
 
 function formatBindableListRich(bindables: Readonly<Record<string, Bindable>>): string | null {

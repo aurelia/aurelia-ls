@@ -302,6 +302,31 @@ describe("workspace hover formatting (workspace-contract table-panel)", () => {
     expect(contents).not.toContain("(bindable) displayData");
   });
 
+  it("hovers expressions inside multi-binding values with correct labels", () => {
+    const query = harness.workspace.query(tableUri);
+    // Hover on "items" in "data.bind: items; display-data.bind: displayItems; ..."
+    const itemsPos = findPosition(tableText, "data.bind: items;", "data.bind: ".length + 1);
+    const itemsHover = query.hover(itemsPos);
+    expect(itemsHover).not.toBeNull();
+    const itemsContents = itemsHover?.contents ?? "";
+    expect(itemsContents).toContain("(expression)");
+    expect(itemsContents).toContain("items");
+    // Must show the specific expression label, not the generic fallback
+    expect(itemsContents).not.toMatch(/\(expression\) expression/);
+  });
+
+  it("hovers second expression in multi-binding with correct label", () => {
+    const query = harness.workspace.query(tableUri);
+    // Hover on "displayItems" in "display-data.bind: displayItems;"
+    const pos = findPosition(tableText, "display-data.bind: displayItems;", "display-data.bind: ".length + 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(expression)");
+    expect(contents).toContain("displayItems");
+    expect(contents).not.toMatch(/\(expression\) expression/);
+  });
+
   it("shows source file path for local resources (not node_modules)", () => {
     const query = harness.workspace.query(tableUri);
     const pos = findPosition(tableText, "aurelia-table=", 1);

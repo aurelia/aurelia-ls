@@ -72,6 +72,23 @@ function hasInlineBindings(value: string): boolean {
 }
 
 /**
+ * Computes a sub-span within a multi-binding attribute value for a single binding expression.
+ * Trims leading/trailing whitespace from the slice to produce a tight span.
+ */
+function subValueLoc(valueLoc: P5Loc, raw: string, rawStart: number, rawEnd: number): P5Loc {
+  if (!valueLoc || valueLoc.startOffset == null) return valueLoc;
+  const slice = raw.slice(rawStart, rawEnd);
+  const trimLeft = slice.length - slice.trimStart().length;
+  const trimRight = slice.length - slice.trimEnd().length;
+  const base = valueLoc.startOffset;
+  return {
+    ...valueLoc,
+    startOffset: base + rawStart + trimLeft,
+    endOffset: base + rawEnd - trimRight,
+  } as typeof valueLoc;
+}
+
+/**
  * Parses multi-binding syntax: "prop1: value1; prop2.bind: expr; prop3: ${interp}"
  * Returns an array of AttributeBindableIR instructions (narrower type for custom attrs).
  */
@@ -125,7 +142,7 @@ function parseMultiBindings(
           props.push({
             type: "propertyBinding",
             to,
-            from: toBindingSource(valuePart, valueLoc, table, "IsProperty"),
+            from: toBindingSource(valuePart, subValueLoc(valueLoc, raw, valueStart, i), table, "IsProperty"),
             mode: toMode(parsed.command, parsed.mode, bindingCommands),
             loc: toSpan(loc, table.source),
           });
@@ -135,7 +152,7 @@ function parseMultiBindings(
             type: "attributeBinding",
             attr: propPart,
             to,
-            from: toInterpIR(valuePart, valueLoc, table),
+            from: toInterpIR(valuePart, subValueLoc(valueLoc, raw, valueStart, i), table),
             loc: toSpan(loc, table.source),
           });
         } else if (valuePart.length > 0) {
