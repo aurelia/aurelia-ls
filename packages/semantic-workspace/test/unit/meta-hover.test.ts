@@ -77,10 +77,10 @@ describe("semantic workspace meta hover", () => {
       expect(importHover?.contents).toContain("<import>");
 
       const bindableHover = query.hover(findPosition(markup, "title", 1));
-      expect(bindableHover?.contents).toContain("Bindable");
+      expect(bindableHover?.contents).toContain("(bindable)");
 
       const modeHover = query.hover(findPosition(markup, "two-way", 1));
-      expect(modeHover?.contents).toContain("Binding Mode");
+      expect(modeHover?.contents).toContain("(binding mode)");
 
       const def = query.definition(findPosition(markup, "./nav-bar", 1));
       expect(def[0]?.uri).toContain("nav-bar.ts");

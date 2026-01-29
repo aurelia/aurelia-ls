@@ -15,10 +15,13 @@ import {
   hashObject,
   normalizeCompilerOptions,
   discoverProjectSemantics,
+  applyThirdPartyResources,
+  hasThirdPartyResources,
   type ResolutionConfig,
   type ResolutionResult,
   type ResourceDef,
   type Logger,
+  type ThirdPartyResolutionResult,
 } from "@aurelia-ls/compiler";
 import type { TypeScriptProject } from "./project.js";
 
@@ -128,6 +131,38 @@ export class AureliaProjectIndex {
 
   currentFingerprint(): string {
     return this.#fingerprint;
+  }
+
+  /**
+   * Merge third-party npm resources into the current snapshot.
+   *
+   * Called after async npm analysis completes. Applies resources to
+   * the current resolution result and updates all derived artifacts.
+   *
+   * @returns true if the overlay changed the snapshot
+   */
+  applyThirdPartyOverlay(thirdParty: ThirdPartyResolutionResult): boolean {
+    const hasResources = hasThirdPartyResources(thirdParty.resources);
+    const hasGaps = thirdParty.gaps.length > 0;
+    if (!hasResources && !hasGaps) return false;
+
+    const merged = applyThirdPartyResources(this.#resolution, thirdParty.resources, {
+      gaps: thirdParty.gaps,
+      confidence: thirdParty.confidence,
+    });
+
+    this.#resolution = merged;
+    this.#semantics = {
+      ...merged.semantics,
+      resourceGraph: merged.resourceGraph,
+      defaultScope: this.#defaultScope ?? merged.semantics.defaultScope ?? null,
+    };
+    this.#catalog = merged.catalog;
+    this.#syntax = merged.syntax;
+    this.#resourceGraph = merged.resourceGraph;
+    // Fingerprint stays the same — third-party overlay is additive,
+    // we don't want to trigger a full rebuild cascade for overlays.
+    return true;
   }
 
   #computeSnapshot(): IndexSnapshot {

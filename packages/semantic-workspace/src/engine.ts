@@ -39,11 +39,14 @@ import {
 } from "@aurelia-ls/compiler";
 import {
   createNodeFileSystem,
+  resolveThirdPartyResources,
+  hasThirdPartyResources,
   type InlineTemplateInfo,
   type Logger,
   type ResolutionConfig,
   type ResolutionResult,
   type TemplateInfo,
+  type ThirdPartyOptions,
 } from "@aurelia-ls/compiler";
 import type { ModuleResolver, TypeScriptServices } from "@aurelia-ls/compiler";
 import {
@@ -168,6 +171,50 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
     this.#ensurePrelude(workspaceRoot);
     this.#refactorProxy = new WorkspaceRefactorProxy(this, this.#kernel.refactor());
+  }
+
+  /**
+   * Asynchronously discover and merge third-party npm resources.
+   *
+   * Scans project dependencies for Aurelia packages, analyzes them,
+   * and merges their resources into the project index. Triggers a
+   * workspace refresh if new resources are found.
+   */
+  async initThirdParty(options?: ThirdPartyOptions): Promise<void> {
+    try {
+      const thirdPartyResult = await resolveThirdPartyResources(
+        options ?? { scan: true },
+        {
+          packagePath: this.#workspaceRoot,
+          logger: this.#logger,
+        },
+      );
+
+      const hasResources = hasThirdPartyResources(thirdPartyResult.resources);
+      const hasGaps = thirdPartyResult.gaps.length > 0;
+      if (!hasResources && !hasGaps) {
+        this.#logger.info("[workspace] Third-party scan: no Aurelia packages found");
+        return;
+      }
+
+      const applied = this.#projectIndex.applyThirdPartyOverlay(thirdPartyResult);
+      if (applied) {
+        this.#logger.info("[workspace] Third-party overlay applied, refreshing workspace");
+        // Rebuild derived indexes from updated project index
+        this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
+        this.#componentHashes = buildComponentHashes(this.#templateIndex);
+        this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentResolution());
+        this.#resourceReferenceIndex = null;
+        this.#kernel.reconfigure({
+          program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
+          fingerprint: this.#projectIndex.currentFingerprint(),
+          lookupText: (uri) => this.#lookupText?.(uri) ?? null,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#logger.warn(`[workspace] Third-party analysis failed: ${message}`);
+    }
   }
 
   get projectIndex(): AureliaProjectIndex {

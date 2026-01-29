@@ -3,7 +3,7 @@ import template from "./alpha.html";
 
 @customElement({
   name: "alpha-panel",
-  template,
+  template,\n  bindables: { level: {} },
 })
 export class AlphaPanel {
   message = "alpha";

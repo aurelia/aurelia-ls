@@ -355,3 +355,29 @@ export type {
   EntryPoint,
 } from "./npm/index.js";
 
+// === Third-Party Resolution ===
+// Shared logic for discovering and merging npm package resources.
+export {
+  resolveThirdPartyResources,
+  applyThirdPartyResources,
+  collectThirdPartyPackages,
+  shouldScanPackage,
+  buildAnalysisFingerprint,
+  buildThirdPartyResources,
+  hasThirdPartyResources,
+  mergeResourceCollections,
+  mergeScopeResources,
+} from "./third-party/index.js";
+export type {
+  ThirdPartyOptions,
+  ThirdPartyPolicy,
+  ThirdPartyPackageSpec,
+  ExplicitResourceConfig,
+  ExplicitElementConfig,
+  ExplicitAttributeConfig,
+  ThirdPartyResolutionResult,
+  ResolvedPackageSpec,
+  ThirdPartyLogger,
+  ThirdPartyResolutionContext,
+} from "./third-party/index.js";
+

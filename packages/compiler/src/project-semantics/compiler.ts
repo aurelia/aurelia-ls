@@ -7,6 +7,7 @@ export {
   prepareProjectSemantics,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
+  buildTemplateSyntaxRegistry,
 } from "../schema/index.js";
 export type {
   ApiSurfaceBindable,
