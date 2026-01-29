@@ -215,6 +215,24 @@ describe("workspace hover (workspace-contract)", () => {
     expect(contents).toMatch(/\(expression\) activeDevice\.name/);
   });
 
+  it("hovers repeat.for with iteration declaration and contextual locals", () => {
+    const query = harness.workspace.query(appUri);
+    // Fixture has: repeat.for="kind of deviceTypes"
+    const pos = findPosition(appText, "repeat.for", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    // Signature: template controller
+    expect(contents).toContain("(template controller)");
+    expect(contents).toContain("repeat");
+    // Iteration declaration shown in metadata
+    expect(contents).toContain("kind of deviceTypes");
+    // Contextual locals from controller config
+    expect(contents).toContain("`$index`");
+    expect(contents).toContain("`$first`");
+    expect(contents).toContain("`$last`");
+  });
+
   it("hovers translation bindings with key, namespace, and target", () => {
     const query = harness.workspace.query(appUri);
     // Fixture has: t="[placeholder]filters.searchDevices"

@@ -402,12 +402,33 @@ function buildInstructionCards(
         signature: `(template controller) ${instruction.res}`,
         meta: [],
       };
-      const controllerInst = instruction as { controller?: { config?: { props?: Record<string, Bindable> } } };
+      const controllerInst = instruction as {
+        controller?: { config?: {
+          props?: Record<string, Bindable>;
+          injects?: { contextuals?: readonly string[] };
+        } };
+        props?: readonly { kind?: string; forOf?: { code?: string }; aux?: readonly { name: string }[] }[];
+      };
+
+      // Iterator declaration (repeat.for="item of items")
+      const iteratorProp = controllerInst.props?.find((p) => p.kind === "iteratorBinding");
+      if (iteratorProp?.forOf?.code) {
+        card.meta.push(`\`${iteratorProp.forOf.code}\``);
+      }
+
+      // Config bindables (if/else value, switch.bind, etc.)
       const tcProps = controllerInst.controller?.config?.props;
       if (tcProps) {
         const bindableList = formatBindableListRich(tcProps);
         if (bindableList) card.meta.push(bindableList);
       }
+
+      // Contextual locals injected by the controller ($index, $first, etc.)
+      const contextuals = controllerInst.controller?.config?.injects?.contextuals;
+      if (contextuals?.length) {
+        card.meta.push(`**Locals:** ${contextuals.map((c) => `\`${c}\``).join(", ")}`);
+      }
+
       cards.push(card);
       break;
     }
