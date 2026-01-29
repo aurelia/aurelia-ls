@@ -205,14 +205,15 @@ describe("workspace hover (workspace-contract)", () => {
     expect(contents).toContain("---");
   });
 
-  it("renders expression types from compilation query", () => {
+  it("renders expression labels without duplicating TS types", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "activeDevice.name", "activeDevice.".length + 1);
     const hover = query.hover(pos);
     const contents = hover?.contents ?? "";
-    // The expression signature should include type info from expectedTypeOf
-    // Format: (expression) activeDevice.name: <type>
+    // Expression card shows label only — type comes from base TS hover via merge
     expect(contents).toMatch(/\(expression\) activeDevice\.name/);
+    // Must NOT contain a colon after the label (no type in expression card)
+    expect(contents).not.toMatch(/\(expression\) activeDevice\.name:/);
   });
 
   it("hovers repeat.for with iteration declaration and contextual locals", () => {

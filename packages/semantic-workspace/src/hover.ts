@@ -112,15 +112,10 @@ export function collectTemplateHover(options: {
     const exprAst = findExpressionAst(compilation.exprTable ?? [], expr.exprId);
     const pathAtOffset = exprAst ? expressionLabelAtOffset(exprAst, offset) : null;
     const label = chooseExpressionLabel(pathAtOffset, expr.memberPath) ?? "expression";
-    const expectedType = compilation.query.expectedTypeOf(expr);
 
-    const card: HoverCard = { meta: [] };
-    if (expectedType) {
-      card.signature = `(expression) ${label}: ${expectedType}`;
-    } else {
-      card.signature = `(expression) ${label}`;
-    }
-    cards.push(card);
+    // Type is provided by the base TypeScript hover (getQuickInfo) and merged
+    // in workspace.ts — we don't duplicate it here.
+    cards.push({ signature: `(expression) ${label}`, meta: [] });
   }
 
   // ── Template controllers ─────────────────────────────────────────────
