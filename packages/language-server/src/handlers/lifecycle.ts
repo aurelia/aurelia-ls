@@ -105,6 +105,14 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       stripSourcedNodes,
     },
   });
+
+  // Fire-and-forget: async npm analysis discovers third-party Aurelia packages.
+  // When complete, refresh all open documents so they pick up the new resources.
+  void ctx.workspace.initThirdParty().then(() => {
+    ctx.logger.info("[workspace] Third-party init complete, refreshing open documents");
+    void refreshAllOpenDocuments(ctx, "change");
+  });
+
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,

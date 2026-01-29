@@ -251,6 +251,67 @@ describe("workspace hover (workspace-contract)", () => {
   });
 });
 
+describe("workspace hover formatting (workspace-contract table-panel)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let tableUri: string;
+  let tableText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    tableUri = harness.openTemplate("src/views/table-panel.html");
+    const text = harness.readText(tableUri);
+    if (!text) {
+      throw new Error("Expected template text for workspace-contract table-panel.html");
+    }
+    tableText = text;
+  });
+
+  it("shows attribute names (kebab-case) in bindable list, not property names", () => {
+    const query = harness.workspace.query(tableUri);
+    // aurelia-table has displayData with attribute: "display-data"
+    const pos = findPosition(tableText, "aurelia-table=", 1);
+    const hover = query.hover(pos);
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(custom attribute)");
+    expect(contents).toContain("aurelia-table");
+    // Bindable list must show attribute name "display-data", not property name "displayData"
+    expect(contents).toContain("`display-data`");
+    expect(contents).not.toContain("`displayData`");
+  });
+
+  it("shows binding mode in kebab-case (two-way) not camelCase (twoWay)", () => {
+    const query = harness.workspace.query(tableUri);
+    const pos = findPosition(tableText, "aurelia-table=", 1);
+    const hover = query.hover(pos);
+    const contents = hover?.contents ?? "";
+    // Mode must display as "two-way", not "twoWay"
+    expect(contents).toContain("two-way");
+    expect(contents).not.toContain("twoWay");
+  });
+
+  it("shows attribute name in individual bindable card signature", () => {
+    const query = harness.workspace.query(tableUri);
+    // Hover on "display-data.bind" should show attribute name in bindable card
+    const pos = findPosition(tableText, "display-data.bind", 1);
+    const hover = query.hover(pos);
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(bindable) display-data");
+    expect(contents).not.toContain("(bindable) displayData");
+  });
+
+  it("shows source file path for local resources (not node_modules)", () => {
+    const query = harness.workspace.query(tableUri);
+    const pos = findPosition(tableText, "aurelia-table=", 1);
+    const hover = query.hover(pos);
+    const contents = hover?.contents ?? "";
+    // Local resource should show file path, not a package name
+    expect(contents).toContain("aurelia-table.ts");
+  });
+});
+
 describe("workspace hover (meta elements)", () => {
   it("hovers bindable meta elements", async () => {
     const metaHarness = await createWorkspaceHarness({

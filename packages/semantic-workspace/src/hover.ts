@@ -480,8 +480,9 @@ function buildBindableCard(description: BindableDescription, bindable: Bindable 
       card.meta.push(`*${description.context}*`);
     }
   } else {
-    // Aurelia bindable
-    const sigParts = [`(bindable) ${description.name}`];
+    // Aurelia bindable — prefer the HTML attribute name (kebab-case) over property name
+    const displayName = bindable?.attribute ?? description.name;
+    const sigParts = [`(bindable) ${displayName}`];
     if (bindable?.type) {
       const typeStr = formatTypeRef(bindable.type);
       if (typeStr) sigParts[0] += `: ${typeStr}`;
@@ -619,17 +620,38 @@ function findRow(
 
 function formatSourceLocation(file?: string | null, pkg?: string | null): string | null {
   if (pkg) return pkg;
-  if (file) return file;
+  if (file) {
+    // Extract package name from node_modules paths instead of showing raw file paths
+    const packageName = extractPackageFromNodeModules(file);
+    if (packageName) return packageName;
+    return file;
+  }
   return null;
+}
+
+function extractPackageFromNodeModules(filePath: string): string | null {
+  const normalized = filePath.replace(/\\/g, "/");
+  const marker = "/node_modules/";
+  const idx = normalized.lastIndexOf(marker);
+  if (idx < 0) return null;
+  const rest = normalized.slice(idx + marker.length);
+  // Handle scoped packages: @scope/name/...
+  if (rest.startsWith("@")) {
+    const parts = rest.split("/");
+    if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+  }
+  // Unscoped: name/...
+  const slash = rest.indexOf("/");
+  return slash > 0 ? rest.slice(0, slash) : rest;
 }
 
 function formatBindableListRich(bindables: Readonly<Record<string, Bindable>>): string | null {
   const entries = Object.values(bindables);
   if (entries.length === 0) return null;
   const parts = entries.map((b) => {
-    let part = `\`${b.name}\``;
+    let part = `\`${b.attribute ?? b.name}\``;
     if (b.primary) part += " *(primary)*";
-    if (b.mode && b.mode !== "default") part += ` *(${b.mode})*`;
+    if (b.mode && b.mode !== "default") part += ` *(${formatBindingModeDisplay(b.mode)})*`;
     return part;
   });
   return `**Bindables:** ${parts.join(", ")}`;
@@ -637,7 +659,18 @@ function formatBindableListRich(bindables: Readonly<Record<string, Bindable>>): 
 
 function formatBindingMode(mode?: BindingMode | null): string | null {
   if (!mode || mode === "default") return null;
-  return mode;
+  return formatBindingModeDisplay(mode);
+}
+
+const BINDING_MODE_DISPLAY: Record<string, string> = {
+  oneTime: "one-time",
+  toView: "to-view",
+  fromView: "from-view",
+  twoWay: "two-way",
+};
+
+function formatBindingModeDisplay(mode: string): string {
+  return BINDING_MODE_DISPLAY[mode] ?? mode;
 }
 
 function formatTypeRef(type?: TypeRef | null): string | null {
