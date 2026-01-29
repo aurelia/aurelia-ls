@@ -15,6 +15,7 @@ import type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPat
 import type { Origin, Provenance } from "./origin.js";
 import type { SourceSpan, TextSpan } from "./span.js";
 import type { CompilerDiagnostic } from "./diagnostics.js";
+import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../diagnostics/catalog/index.js";
 
 export type { ExprId, Namespace, NodeId, TemplateId, SourceFileId, NormalizedPath, UriString } from "./identity.js";
 export type { SourceSpan, TextSpan } from "./span.js";
@@ -41,6 +42,12 @@ export interface Attr {
   value: string | null; // null for boolean attrs
   // NOTE: For HTML, authoring case is preserved here; normalization happens later.
   caseSensitive?: boolean;
+  /** Full attribute span (name + optional value). */
+  loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
+  /** Attribute value-only span (inside quotes). */
+  valueLoc?: SourceSpan | null;
 }
 
 export interface ElementNode extends BaseNode {
@@ -49,6 +56,12 @@ export interface ElementNode extends BaseNode {
   attrs: Attr[];         // static attrs only
   children: DOMNode[];
   selfClosed?: boolean;
+  /** Tag name span for the opening tag. */
+  tagLoc?: SourceSpan | null;
+  /** Tag name span for the closing tag, if present. */
+  closeTagLoc?: SourceSpan | null;
+  /** End of opening tag (`>`). */
+  openTagEnd?: SourceSpan | null;
 }
 
 // NOTE: Each TemplateIR has a synthetic fragment root (this node) with id '0'.
@@ -56,6 +69,12 @@ export interface TemplateNode extends BaseNode {
   kind: 'template';
   attrs: Attr[];
   children: DOMNode[];
+  /** Tag name span for the opening tag (always "template" when present). */
+  tagLoc?: SourceSpan | null;
+  /** Tag name span for the closing tag, if present. */
+  closeTagLoc?: SourceSpan | null;
+  /** End of opening tag (`>`). */
+  openTagEnd?: SourceSpan | null;
 }
 
 export interface TextNode extends BaseNode {
@@ -378,14 +397,11 @@ export interface InstructionRow {
 /**
  * IR-level diagnostic codes (lowering phase).
  *
- * Code ranges:
- * - AU07xx: Template compilation errors (matches runtime template-compiler)
+ * Canonical diagnostics surface for template lowering.
  */
-export type IrDiagCode =
-  | "AU0704"  // Invalid <let> command (must be property-kind command from config)
-  | "AU0705"; // Unknown binding command
+export type IrDiagCode = DiagnosticCodeForStage<"lower">;
 
-export type IrDiagnostic = CompilerDiagnostic<IrDiagCode>;
+export type IrDiagnostic = CompilerDiagnostic<IrDiagCode, DiagnosticDataFor<IrDiagCode>>;
 
 /* ===========================
  * Module container
@@ -397,15 +413,27 @@ export interface IrModule {
   templates: TemplateIR[];
   /** Optional shared sidecar for dev/LSP; can be stripped for shipping. */
   exprTable?: ExprTableEntry[];
-  /** Optional diagnostics from lowering phase. */
-  diags?: IrDiagnostic[];
   name?: string;
   meta?: Record<string, unknown>;
 }
 
+export interface TemplateHostRef {
+  templateId: TemplateId;
+  nodeId: NodeId;
+}
+
+export type TemplateOrigin =
+  | { kind: "root"; file: SourceFileId }
+  | { kind: "controller"; host: TemplateHostRef; controller: TemplateControllerRes }
+  | { kind: "branch"; host: TemplateHostRef; branch: ControllerBranchInfo["kind"] }
+  | { kind: "projection"; host: TemplateHostRef; slot: string | null }
+  | { kind: "synthetic"; reason: string; host?: TemplateHostRef };
+
 // NOTE: Nested TemplateIR instances appear under controllers; their NodeIds start at '0' independently.
 /** Each template has a synthetic fragment root (<template>-like) as `dom`. */
 export interface TemplateIR {
+  /** Stable identifier for this template within the module. */
+  id: TemplateId;
   dom: TemplateNode; // root with children = top-level nodes
   rows: InstructionRow[];
   name?: string;
@@ -418,6 +446,8 @@ export interface TemplateIR {
    * - Refactoring
    */
   templateMeta?: TemplateMetaIR;
+  /** Provenance for nested templates (e.g., template controllers). */
+  origin: TemplateOrigin;
 }
 
 /* ===========================
@@ -483,11 +513,17 @@ export type AnyBindingExpression =
 
 /* ---- AST nodes ---- */
 
+export interface Identifier {
+  $kind: 'Identifier';
+  span: SourceSpan;
+  name: string;
+}
+
 export interface BindingBehaviorExpression {
   $kind: 'BindingBehavior';
   span: SourceSpan;
   expression: IsBindingBehavior;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
 }
 
@@ -495,7 +531,7 @@ export interface ValueConverterExpression {
   $kind: 'ValueConverter';
   span: SourceSpan;
   expression: IsValueConverter;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
 }
 
@@ -518,7 +554,7 @@ export interface ConditionalExpression {
 export interface AccessGlobalExpression {
   $kind: 'AccessGlobal';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
 }
 
 export interface AccessThisExpression {
@@ -535,7 +571,7 @@ export interface AccessBoundaryExpression {
 export interface AccessScopeExpression {
   $kind: 'AccessScope';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
   ancestor: number;
 }
 
@@ -543,7 +579,7 @@ export interface AccessMemberExpression {
   $kind: 'AccessMember';
   span: SourceSpan;
   object: IsLeftHandSide;
-  name: string;
+  name: Identifier;
   optional: boolean;
 }
 
@@ -571,7 +607,7 @@ export interface NewExpression {
 export interface CallScopeExpression {
   $kind: 'CallScope';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
   ancestor: number;
   optional: boolean;
@@ -581,7 +617,7 @@ export interface CallMemberExpression {
   $kind: 'CallMember';
   span: SourceSpan;
   object: IsLeftHandSide;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
   optionalMember: boolean;
   optionalCall: boolean;
@@ -598,7 +634,7 @@ export interface CallFunctionExpression {
 export interface CallGlobalExpression {
   $kind: 'CallGlobal';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
   args: IsAssign[];
 }
 
@@ -655,7 +691,7 @@ export interface TaggedTemplateExpression {
 export interface BindingIdentifier {
   $kind: 'BindingIdentifier';
   span: SourceSpan;
-  name: string;
+  name: Identifier;
 }
 
 // Kept in expr table for precise scoping of repeat; IR also carries a lighter ForOfIR.
@@ -791,6 +827,8 @@ export type ExprTableEntry =
 export interface Located<T> {
   value: T;
   loc: SourceSpan;
+  /** Attribute name span for attribute-backed values. */
+  nameLoc?: SourceSpan | null;
 }
 
 /**
@@ -827,6 +865,8 @@ export interface ImportMetaIR extends MetaElementBase {
   namedAliases: Array<{
     /** The export name (X in X.as="Y") */
     exportName: Located<string>;
+    /** The ".as" span inside the attribute name. */
+    asLoc?: SourceSpan | null;
     /** The alias (Y in X.as="Y") */
     alias: Located<string>;
   }>;

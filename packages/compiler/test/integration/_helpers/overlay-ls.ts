@@ -161,6 +161,7 @@ export async function compileFromEntry({
     DefaultTemplateBuildService,
     canonicalDocumentUri,
     DEFAULT_SEMANTICS,
+    buildProjectSnapshot,
   } = await import(compilerIndexUrl.href);
 
   const vm = {
@@ -168,6 +169,7 @@ export async function compileFromEntry({
     getRootVmTypeExpr: () => className,
     getSyntheticPrefix: () => "__AU_TTC_",
   };
+  const moduleResolver = (_specifier: string, _containingFile: string) => null;
 
   const program = new DefaultTemplateProgram({
     vm,
@@ -175,7 +177,8 @@ export async function compileFromEntry({
     exprParser,
     attrParser,
     overlayBaseName,
-    semantics: DEFAULT_SEMANTICS,
+    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
+    moduleResolver,
   });
   const uri = canonicalDocumentUri(`C:/mem/${markupFile}`).uri;
   program.upsertTemplate(uri, html);

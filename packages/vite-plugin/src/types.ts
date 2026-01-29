@@ -9,8 +9,8 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap, ExperimentalPolicy } from "@aurelia-ls/resolution";
+import type { ResourceGraph, ResourceScopeId, MaterializedSemantics, CompileTrace } from "@aurelia-ls/compiler";
+import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -40,9 +40,8 @@ export type {
   DirectoryConvention,
   DirectoryScope,
   DirectoryMatch,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 
-export type { ExperimentalPolicy };
 
 // Local imports for internal use
 import type {
@@ -50,7 +49,7 @@ import type {
   DirectoryConventionConfig,
   TemplatePairingConfig,
   StylesheetPairingConfig,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 
 /**
  * Re-export SSG types from ssg package.
@@ -431,10 +430,6 @@ export interface ExplicitAttributeConfig {
  * ResourceGraph from scratch based on the new semantics. Use when third-party
  * resources must introduce scope structure changes (rare).
  *
- * **Not to be confused with `ExperimentalPolicy`** (top-level `policy` option),
- * which controls gap/confidence diagnostic behavior. This is a separate concern
- * specific to third-party resource merging.
- *
  * @default "root-scope"
  */
 export type ThirdPartyPolicy = "root-scope" | "rebuild-graph" | "semantics";
@@ -549,7 +544,7 @@ export interface ThirdPartyOptions {
 }
 
 // NOTE: Convention types (ConventionConfig, DirectoryConventionConfig, etc.)
-// are now defined in @aurelia-ls/resolution and re-exported above.
+// are now defined in @aurelia-ls/compiler and re-exported above.
 // This ensures a single source of truth for convention configuration.
 
 // ============================================================================
@@ -617,14 +612,16 @@ export interface CompilerOptions {
  */
 export type DebugChannel =
   | "lower"      // 10-lower: element/attr classification
-  | "resolve"    // 20-resolve: binding resolution
+  | "link"       // 20-link: binding resolution
   | "bind"       // 30-bind: scope frame creation
   | "typecheck"  // 40-typecheck: type inference
   | "aot"        // AOT synthesis
   | "overlay"    // LSP overlay synthesis
   | "ssr"        // SSR rendering
   | "transform"  // Transform edits
-  | "resolution"; // Resource discovery
+  | "project"    // Project semantics (resource discovery)
+  | "workspace"  // Semantic workspace (editor/LSP)
+  | "vite";      // Vite plugin lifecycle
 
 /**
  * Trace output destination.
@@ -989,27 +986,7 @@ export interface AureliaPluginOptions {
    */
   debug?: DebugOptions;
 
-  /**
-   * Experimental policy for gap/confidence diagnostic control.
-   *
-   * - `gaps`: Promote `gap:*` diagnostics to a configured severity (info/warning/error)
-   * - `confidence.min`: Emit diagnostic when catalog confidence falls below threshold
-   *
-   * Behavior is diagnostic-only — resources are never skipped or excluded.
-   *
-   * **Not to be confused with `thirdParty.policy`**, which controls merge strategy.
-   *
-   * @example
-   * ```ts
-   * policy: {
-   *   gaps: "error",                  // Treat gaps as errors
-   *   confidence: { min: "high" },    // Warn if confidence < high
-   * }
-   * ```
-   *
-   * @experimental
-   */
-  policy?: ExperimentalPolicy;
+ 
 
   // ---------------------------------------------------------------------------
   // Advanced
@@ -1117,7 +1094,7 @@ export interface ResolutionContext {
   /** Resource graph for compilation */
   resourceGraph: ResourceGraph;
   /** Merged semantics with discovered resources */
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   /** Template info for looking up component scope */
   templates: Map<string, TemplateInfo>;
   /** Lookup scope for a template path */
@@ -1225,8 +1202,6 @@ export interface ResolvedAureliaOptions {
   /** Resolved debug options */
   debug: ResolvedDebugOptions;
 
-  /** Experimental policy (gap/confidence consumption) */
-  policy?: ExperimentalPolicy;
 
   /** Experimental options (as-is, no expansion) */
   experimental: ExperimentalOptions;

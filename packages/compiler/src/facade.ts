@@ -11,15 +11,18 @@ import type {
   ResourceCatalog,
   ResourceGraph,
   ResourceScopeId,
-  Semantics,
+  ProjectSemantics,
+  ProjectSnapshot,
+  TemplateContext,
   TemplateSyntaxRegistry,
-} from "./language/index.js";
+} from "./schema/index.js";
+import { buildProjectSnapshot } from "./schema/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
 
 // Shared imports (via barrel)
-import type { VmReflection, CompilerDiagnostic } from "./shared/index.js";
+import type { VmReflection, CompilerDiagnostic, ModuleResolver } from "./shared/index.js";
 
 // Pipeline imports (via barrel)
 import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints, StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/index.js";
@@ -38,14 +41,20 @@ export interface CompileOptions {
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  semantics: Semantics;
+  /** Optional precomputed project snapshot (preferred). */
+  project?: ProjectSnapshot;
+  /** Base semantics (used when project snapshot is not provided). */
+  semantics?: ProjectSemantics;
   catalog?: ResourceCatalog;
   syntax?: TemplateSyntaxRegistry;
   resourceGraph?: ResourceGraph;
   resourceScope?: ResourceScopeId | null;
   localImports?: readonly LocalImportDef[];
+  /** Optional per-template context override. */
+  templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
+  moduleResolver: ModuleResolver;
   overlayBaseName?: string;
   cache?: CacheOptions;
   fingerprints?: FingerprintHints;
@@ -64,7 +73,7 @@ export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
 export interface TemplateCompilation {
   ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-resolve"];
+  linked: StageOutputs["20-link"];
   scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
   usage: FeatureUsageSet;
@@ -79,23 +88,43 @@ export interface TemplateCompilation {
   meta: StageMetaSnapshot;
 }
 
+function resolveProjectSnapshot(opts: CompileOptions): ProjectSnapshot {
+  if (opts.project) return opts.project;
+  if (!opts.semantics) {
+    throw new Error("compileTemplate requires either 'project' or 'semantics'.");
+  }
+  return buildProjectSnapshot(opts.semantics, {
+    catalog: opts.catalog,
+    syntax: opts.syntax,
+    resourceGraph: opts.resourceGraph,
+    ...(opts.resourceScope !== undefined ? { defaultScope: opts.resourceScope } : {}),
+  });
+}
+
+function resolveTemplateContext(opts: CompileOptions): TemplateContext | undefined {
+  if (opts.templateContext) return opts.templateContext;
+  if (opts.resourceScope === undefined && !opts.localImports) return undefined;
+  return {
+    ...(opts.resourceScope !== undefined ? { scopeId: opts.resourceScope ?? null } : {}),
+    ...(opts.localImports ? { localImports: opts.localImports } : {}),
+  };
+}
+
 function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): PipelineOptions {
   const base: PipelineOptions = {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
-    semantics: opts.semantics,
+    project: resolveProjectSnapshot(opts),
+    moduleResolver: opts.moduleResolver,
     overlay: {
       isJs: opts.isJs,
       filename: overlayBaseName,
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
   };
-  if (opts.catalog) base.catalog = opts.catalog;
-  if (opts.syntax) base.syntax = opts.syntax;
-  if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
-  if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
-  if (opts.localImports) base.localImports = opts.localImports;
+  const templateContext = resolveTemplateContext(opts);
+  if (templateContext) base.templateContext = templateContext;
   if (opts.cache) base.cache = opts.cache;
   if (opts.fingerprints) base.fingerprints = opts.fingerprints;
   if (opts.attrParser) base.attrParser = opts.attrParser;
@@ -115,7 +144,7 @@ export function compileTemplate(
   const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
 
   const ir = session.run("10-lower");
-  const linked = session.run("20-resolve");
+  const linked = session.run("20-link");
   const scope = session.run("30-bind");
   const typecheck = session.run("40-typecheck");
   const usage = session.run("50-usage");
@@ -133,10 +162,10 @@ export function compileTemplate(
     query: overlayArtifacts.query,
     exprTable: overlayArtifacts.exprTable,
     exprSpans: overlayArtifacts.exprSpans,
-    diagnostics: buildDiagnostics(linked, scope, typecheck),
+    diagnostics: buildDiagnostics(session.diagnostics.all),
     meta: collectStageMeta(session, [
       "10-lower",
-      "20-resolve",
+      "20-link",
       "30-bind",
       "40-typecheck",
       "50-usage",
@@ -151,22 +180,14 @@ export function compileTemplate(
  * ------------------------ */
 
 function buildDiagnostics(
-  linked: StageOutputs["20-resolve"],
-  scope: StageOutputs["30-bind"],
-  typecheck: StageOutputs["40-typecheck"],
+  diagnostics: readonly CompilerDiagnostic[],
 ): TemplateDiagnostics {
-  const flat = [
-    ...(linked?.diags ?? []),
-    ...(scope?.diags ?? []),
-    ...(typecheck?.diags ?? []),
-  ];
-
   const bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>> = {};
-  for (const d of flat) {
+  for (const d of diagnostics) {
     if (!bySource[d.source]) bySource[d.source] = [];
     bySource[d.source]!.push(d);
   }
-  return { all: flat, bySource };
+  return { all: [...diagnostics], bySource };
 }
 
 function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMetaSnapshot {

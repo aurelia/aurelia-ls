@@ -9,7 +9,7 @@
  */
 
 import ts from "typescript";
-import { RESOURCE_DECORATOR_NAMES } from "@aurelia-ls/resolution";
+import { RESOURCE_DECORATOR_NAMES } from "@aurelia-ls/compiler";
 import type {
   ClassInfo,
   DecoratorInfo,

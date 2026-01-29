@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 
 import {
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
@@ -11,11 +11,13 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   DEFAULT_SEMANTICS,
+  DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   type SerializedDefinition,
   type SerializedHydrateTemplateController,
   type NestedTemplateHtmlNode,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 type DefinitionTree = {
   definition: SerializedDefinition;
@@ -57,15 +59,21 @@ describe("AOT Emit Invariants", () => {
 
 function compileDefinitionTree(markup: string): DefinitionTree {
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
     exprParser,
     file: "test.html",
     name: "test",
     catalog: DEFAULT_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-  const scope = bindScopes(linked);
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("link"),
+  });
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const code = emitAotCode(plan, { name: "test" });
   const template = emitTemplate(plan);
@@ -131,3 +139,5 @@ function collectControllers(definition: SerializedDefinition): SerializedHydrate
   }
   return controllers;
 }
+
+

@@ -58,8 +58,7 @@ The demo shows server-rendered HTML with client hydration. View source to see th
 
 | Package | Purpose |
 |---------|---------|
-| `@aurelia-ls/compiler` | Template analysis and AOT code generation |
-| `@aurelia-ls/resolution` | Resource discovery from TypeScript sources |
+| `@aurelia-ls/compiler` | Template analysis, resolution, and AOT code generation |
 | `@aurelia-ls/transform` | Injects compiled artifacts into source files |
 | `@aurelia-ls/vite-plugin` | Vite integration for dev server and builds |
 | `@aurelia-ls/ssr` | Server-side rendering core |

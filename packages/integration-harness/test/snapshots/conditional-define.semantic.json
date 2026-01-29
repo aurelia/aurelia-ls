@@ -379,7 +379,7 @@
         "catch": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "catch",
@@ -513,7 +513,7 @@
         "then": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "then",
@@ -753,7 +753,7 @@
             "catch": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "error", "prop": "value" }
+                "alias": { "defaultName": "catch", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "catch",
@@ -887,7 +887,7 @@
             "then": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "data", "prop": "value" }
+                "alias": { "defaultName": "then", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "then",
@@ -1405,7 +1405,7 @@
         "file": "/src/entry.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
+          "location": { "end": 169, "file": "/src/entry.ts", "pos": 157 },
           "origin": "source",
           "value": "guarded-el"
         },
@@ -1469,7 +1469,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "catch",
@@ -1716,7 +1716,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "then",

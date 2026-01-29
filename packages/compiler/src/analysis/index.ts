@@ -9,11 +9,11 @@ export { lowerDocument, type BuildIrOptions } from "./10-lower/lower.js";
 // Meta element extraction (for resolution package)
 export { extractMeta, extractTemplateMeta, stripMetaFromHtml } from "./10-lower/meta-extraction.js";
 
-// Stage 20: Resolve (IR -> LinkedSemantics)
-export { resolveHost, type ResolveHostOptions } from "./20-resolve/resolve.js";
+// Stage 20: Link (IR -> LinkModule)
+export { linkTemplateSemantics, type LinkOptions } from "./20-link/resolve.js";
 export type {
   // Module/template structure
-  LinkedSemanticsModule,
+  LinkModule,
   LinkedTemplate,
   LinkedRow,
   // Node semantics
@@ -50,7 +50,7 @@ export type {
   // Diagnostics
   SemDiagCode,
   SemDiagnostic,
-} from "./20-resolve/types.js";
+} from "./20-link/types.js";
 
 // Stage 30: Bind (LinkedSemantics -> ScopeModule)
 export { bindScopes, type BindScopesOptions } from "./30-bind/bind.js";

@@ -30,6 +30,6 @@
         "id": "expr_0000"
       }
     ],
-    "template": "<!--au--><div outclick.call=\"handle($event)\"></div>"
+    "template": "<!--au--><div></div>"
   }
 }

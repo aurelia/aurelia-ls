@@ -1,0 +1,12 @@
+<template>
+  <let total.bind="items.length"></let>
+  <h3>${header} (${total})</h3>
+  <div repeat.for="item of items">
+    <let label.bind="item.name"></let>
+    <span>${label}</span>
+    <span if.bind="item.active">${$index}</span>
+    <div with.bind="item.details">
+      <span>${info} (${score})</span>
+    </div>
+  </div>
+</template>

@@ -17,10 +17,12 @@
   },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/resolution": "workspace:*",
-    "typescript": "^5.5.4",
+    "@aurelia-ls/semantic-workspace": "workspace:*",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.11",
     "vscode-uri": "^3.0.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5.5.4"
   }
 }

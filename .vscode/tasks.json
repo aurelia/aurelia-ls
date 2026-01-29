@@ -6,6 +6,17 @@
       "type": "npm",
       "script": "build",
       "problemMatcher": "$tsc"
+    },
+    {
+      "label": "bundle:vscode",
+      "type": "shell",
+      "command": "pnpm -C packages/vscode bundle",
+      "problemMatcher": []
+    },
+    {
+      "label": "build:vscode-extension",
+      "dependsOn": ["build:tsc", "bundle:vscode"],
+      "dependsOrder": "sequence"
     }
   ]
 }

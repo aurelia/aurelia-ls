@@ -10,6 +10,10 @@ import type {
   BindingPattern,
   Interpolation,
   ForOfStatement,
+  AttributeBindableIR,
+  ControllerBindableIR,
+  ElementBindableIR,
+  IteratorBindingIR,
 } from "../model/ir.js";
 import type { SourceFile } from "../model/source.js";
 import { absoluteSpan, fallbackSpan, resolveSourceSpan, resolveSourceSpanMaybe } from "../model/source.js";
@@ -35,6 +39,20 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
       recordExprSpan(ref.id, ref.loc);
     }
   };
+  const visitBindable = (bindable: ElementBindableIR | AttributeBindableIR | ControllerBindableIR | IteratorBindingIR) => {
+    switch (bindable.type) {
+      case "propertyBinding":
+      case "attributeBinding":
+      case "stylePropertyBinding":
+        visitSource(bindable.from);
+        break;
+      case "multiAttr":
+        if (bindable.from) visitSource(bindable.from);
+        break;
+      default:
+        break;
+    }
+  };
 
   for (const t of ir.templates) {
     for (const row of t.rows ?? []) {
@@ -50,14 +68,12 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
           case "refBinding":
             recordExprSpan(ins.from.id, ins.from?.loc);
             break;
+          case "hydrateElement":
+          case "hydrateAttribute":
+            for (const p of ins.props ?? []) visitBindable(p);
+            break;
           case "hydrateTemplateController":
-            for (const p of ins.props ?? []) {
-              if (p.type === "iteratorBinding") {
-                continue;
-              } else if (p.type === "propertyBinding") {
-                visitSource(p.from);
-              }
-            }
+            for (const p of ins.props ?? []) visitBindable(p);
             if (ins.branch?.kind === "case") {
               recordExprSpan(ins.branch.expr.id, ins.branch.expr.loc);
             }
@@ -180,12 +196,9 @@ export function collectExprMemberSegments(
     switch (node.$kind) {
       case "AccessScope": {
         const pathBase = node.ancestor === 0 ? "" : `$parent^${node.ancestor}.`;
-        if (node.name) {
-          const path = `${pathBase}${node.name}`;
-          acc.push({ path, span: toHtmlSpan(node.span, base) });
-          return path;
-        }
-        return pathBase ? pathBase.slice(0, -1) : undefined;
+        const path = `${pathBase}${node.name.name}`;
+        acc.push({ path, span: toHtmlSpan(node.name.span, base) });
+        return path;
       }
       case "AccessThis": {
         const path = node.ancestor === 0 ? "$this" : `$parent^${node.ancestor}`;
@@ -194,8 +207,8 @@ export function collectExprMemberSegments(
       }
       case "AccessMember": {
         const parentPath = walk(node.object, base, acc, inheritedPath);
-        const path = parentPath ? `${parentPath}.${node.name}` : undefined;
-        if (path) acc.push({ path, span: toHtmlSpan(node.span, base) });
+        const path = parentPath ? `${parentPath}.${node.name.name}` : undefined;
+        if (path) acc.push({ path, span: toHtmlSpan(node.name.span, base) });
         return path;
       }
       case "AccessKeyed": {
@@ -209,9 +222,17 @@ export function collectExprMemberSegments(
         }
         return parentPath;
       }
+      case "BindingBehavior":
+        walk(node.expression, base, acc, inheritedPath);
+        for (const arg of node.args ?? []) walk(arg, base, acc, undefined);
+        return inheritedPath;
+      case "ValueConverter":
+        walk(node.expression, base, acc, inheritedPath);
+        for (const arg of node.args ?? []) walk(arg, base, acc, undefined);
+        return inheritedPath;
       case "CallScope":
         for (const a of node.args ?? []) walk(a, base, acc, undefined);
-        return walk({ $kind: "AccessScope", name: node.name, ancestor: node.ancestor, span: node.span }, base, acc, inheritedPath);
+        return walk({ $kind: "AccessScope", name: node.name, ancestor: node.ancestor, span: node.name.span }, base, acc, inheritedPath);
       case "CallMember":
         for (const a of node.args ?? []) walk(a, base, acc, undefined);
         return walk(node.object, base, acc, inheritedPath);
@@ -269,7 +290,7 @@ export function isInterpolation(x: BindingSourceIR): x is InterpIR {
  * Expression Resource Extraction
  * ============================================================================
  * Walk expression AST to extract binding behavior and value converter names.
- * Used by 20-resolve for AU0101/AU0102/AU0103 diagnostics.
+ * Used by 20-link for unknown resource + invalid binding pattern diagnostics.
  */
 
 export interface ExprResourceRef {
@@ -299,7 +320,7 @@ export function extractExprResources(table: readonly ExprTableEntry[]): ExprReso
 
 /**
  * Extract all assignments to `$host` from an expression table.
- * Used by 20-resolve for AU0106 diagnostics.
+ * Used by 20-link for invalid binding pattern diagnostics.
  *
  * Detects patterns like:
  * - `$host = x`
@@ -324,11 +345,11 @@ function walkAst(node: AstNode | undefined, refs: ExprResourceRef[], exprId: Exp
 
   // Collect binding behavior / value converter at current node
   if (kind === "BindingBehavior") {
-    const n = node as { name: string; span: SourceSpan };
-    refs.push({ kind: "bindingBehavior", name: n.name, span: n.span, exprId });
+    const n = node as { name: { name: string; span: SourceSpan } };
+    refs.push({ kind: "bindingBehavior", name: n.name.name, span: n.name.span, exprId });
   } else if (kind === "ValueConverter") {
-    const n = node as { name: string; span: SourceSpan };
-    refs.push({ kind: "valueConverter", name: n.name, span: n.span, exprId });
+    const n = node as { name: { name: string; span: SourceSpan } };
+    refs.push({ kind: "valueConverter", name: n.name.name, span: n.name.span, exprId });
   }
 
   // Recurse into children using the unified walker
@@ -368,8 +389,8 @@ function isHostTarget(node: AstNode | undefined): boolean {
 
   // AccessScope with name "$host" (in case parser represents it this way)
   if (kind === "AccessScope") {
-    const n = node as { name: string };
-    return n.name === "$host";
+    const n = node as { name: { name: string } };
+    return n.name.name === "$host";
   }
 
   // Property/key access on $host (e.g., $host.prop or $host[key])
@@ -397,7 +418,7 @@ function firstFileFromSpans(spans: ReadonlyExprIdMap<SourceSpan>): SourceFileId 
  * Usage:
  *   function myWalker(node: IsBindingBehavior, acc: MyAcc): void {
  *     // Process current node
- *     if (node.$kind === "BindingBehavior") acc.bbs.push(node.name);
+ *     if (node.$kind === "BindingBehavior") acc.bbs.push(node.name.name);
  *     // Recurse into children
  *     forEachExprChild(node, child => myWalker(child, acc));
  *   }
@@ -658,8 +679,8 @@ export function collectBindingNames(pattern: BindingPattern | undefined): string
   const names: string[] = [];
   walkPatternTree(pattern, p => {
     if ((p as { $kind?: string }).$kind === "BindingIdentifier") {
-      const name = (p as { name?: string }).name;
-      if (name) names.push(name);
+      const name = (p as { name?: { name: string } }).name;
+      if (name) names.push(name.name);
     }
   });
   return names;

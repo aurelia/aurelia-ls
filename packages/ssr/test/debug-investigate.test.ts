@@ -10,6 +10,8 @@ import { compileAndRenderAot, compileWithAot } from "@aurelia-ls/ssr";
 import { createComponent } from "./_helpers/test-utils.js";
 import { compileTemplate, DEFAULT_SEMANTICS, type VmReflection } from "@aurelia-ls/compiler";
 
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
+
 describe("INVESTIGATION: Checkbox vs Radio binding behavior", () => {
   it("checkbox checked.bind - what actually happens?", async () => {
     const TestApp = createComponent(
@@ -131,6 +133,7 @@ describe("INVESTIGATION: Switch/case compilation", () => {
       isJs: false,
       vm,
       semantics: DEFAULT_SEMANTICS,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     const ir = result.ir;

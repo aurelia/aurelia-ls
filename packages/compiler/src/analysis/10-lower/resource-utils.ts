@@ -1,4 +1,4 @@
-import type { AttrRes, ElementRes, ResourceCatalog } from "../../language/registry.js";
+import type { AttrRes, ElementRes, ResourceCatalog } from "../../schema/registry.js";
 
 export function resolveElementDef(tag: string, catalog: ResourceCatalog): ElementRes | null {
   const normalized = tag.toLowerCase();

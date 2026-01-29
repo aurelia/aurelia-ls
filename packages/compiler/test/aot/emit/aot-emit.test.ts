@@ -13,19 +13,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createFailureRecorder, fmtList, diffByKey } from "../../_helpers/test-utils.js";
+import { createFailureRecorder, fmtList, diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 import { deepMergeSemantics } from "../../_helpers/semantics-merge.js";
 
 import {
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS as SEM_DEFAULT,
-  prepareSemantics,
+  BUILTIN_SEMANTICS as SEM_DEFAULT,
+  prepareProjectSemantics,
+  DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   BINDING_MODE,
 } from "@aurelia-ls/compiler";
@@ -119,7 +120,7 @@ function createCompilerContext(vector: TestVector): CompilerContext {
   const baseSem = vector.semOverrides
     ? deepMergeSemantics(SEM_DEFAULT, vector.semOverrides)
     : SEM_DEFAULT;
-  const sem = prepareSemantics(baseSem);
+  const sem = prepareProjectSemantics(baseSem);
 
   return {
     sem,
@@ -130,15 +131,21 @@ function createCompilerContext(vector: TestVector): CompilerContext {
 
 // Run full pipeline: markup → emit
 function runPipeline(markup: string, ctx: CompilerContext): unknown {
+  const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: ctx.attrParser,
     exprParser: ctx.exprParser,
     file: "test.html",
     name: "test",
     catalog: ctx.sem.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, ctx.sem);
-  const scope = bindScopes(linked);
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("link"),
+  });
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });
   return result;
@@ -544,3 +551,5 @@ describe("AOT Emit (aot:emit)", () => {
     });
   }
 });
+
+
