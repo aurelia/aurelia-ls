@@ -1106,21 +1106,28 @@ function getImportHover(meta: TemplateMeta, offset: number): MetaHoverResult | n
     if (imp.tagLoc && isWithinSpan(offset, imp.tagLoc)) {
       const kind = imp.kind === "require" ? "require" : "import";
       return {
-        contents: `**<${kind}>** - Import Aurelia resources from a module`,
+        contents: metaCard(`(<${kind}>) ${imp.from.value}`, "Import Aurelia resources from a module"),
         span: imp.tagLoc,
       };
     }
     if (isWithinSpan(offset, imp.from.loc)) {
-      const hasAlias = imp.defaultAlias || (imp.namedAliases && imp.namedAliases.length > 0);
-      const aliasInfo = hasAlias ? "\n\n*Has aliases configured*" : "";
+      const meta: string[] = [];
+      if (imp.defaultAlias) meta.push(`**Default alias:** \`${imp.defaultAlias.value}\``);
+      if (imp.namedAliases && imp.namedAliases.length > 0) {
+        const names = imp.namedAliases.map(a => `\`${a.exportName.value}\` → \`${a.alias.value}\``);
+        meta.push(`**Named aliases:** ${names.join(", ")}`);
+      }
       return {
-        contents: `**Module:** \`${imp.from.value}\`${aliasInfo}`,
+        contents: metaCard(`(module) ${imp.from.value}`, ...meta),
         span: imp.from.loc,
       };
     }
     if (imp.defaultAlias && isWithinSpan(offset, imp.defaultAlias.loc)) {
       return {
-        contents: `**Alias:** \`${imp.defaultAlias.value}\`\n\nRenames the default export from \`${imp.from.value}\``,
+        contents: metaCard(
+          `(alias) ${imp.defaultAlias.value}`,
+          `Renames the default export from \`${imp.from.value}\``,
+        ),
         span: imp.defaultAlias.loc,
       };
     }
@@ -1128,13 +1135,19 @@ function getImportHover(meta: TemplateMeta, offset: number): MetaHoverResult | n
       for (const alias of imp.namedAliases) {
         if (isWithinSpan(offset, alias.exportName.loc)) {
           return {
-            contents: `**Export:** \`${alias.exportName.value}\`\n\nAliased as \`${alias.alias.value}\``,
+            contents: metaCard(
+              `(export) ${alias.exportName.value}`,
+              `Aliased as \`${alias.alias.value}\``,
+            ),
             span: alias.exportName.loc,
           };
         }
         if (isWithinSpan(offset, alias.alias.loc)) {
           return {
-            contents: `**Alias:** \`${alias.alias.value}\`\n\nFor export \`${alias.exportName.value}\` from \`${imp.from.value}\``,
+            contents: metaCard(
+              `(alias) ${alias.alias.value}`,
+              `For export \`${alias.exportName.value}\` from \`${imp.from.value}\``,
+            ),
             span: alias.alias.loc,
           };
         }
@@ -1148,27 +1161,34 @@ function getBindableHover(meta: TemplateMeta, offset: number): MetaHoverResult |
   for (const bindable of meta.bindables) {
     if (bindable.tagLoc && isWithinSpan(offset, bindable.tagLoc)) {
       return {
-        contents: `**<bindable>** - Declare a bindable property for this component`,
+        contents: metaCard("(<bindable>)", "Declare a bindable property for this component"),
         span: bindable.tagLoc,
       };
     }
     if (isWithinSpan(offset, bindable.name.loc)) {
-      const modeInfo = bindable.mode ? `, mode: ${bindable.mode.value}` : "";
-      const attrInfo = bindable.attribute ? `, attribute: ${bindable.attribute.value}` : "";
+      const metaLines: string[] = [];
+      if (bindable.mode) metaLines.push(`**Mode:** \`${bindable.mode.value}\``);
+      if (bindable.attribute) metaLines.push(`**HTML attribute:** \`${bindable.attribute.value}\``);
       return {
-        contents: `**Bindable:** \`${bindable.name.value}\`${modeInfo}${attrInfo}`,
+        contents: metaCard(`(bindable) ${bindable.name.value}`, ...metaLines),
         span: bindable.name.loc,
       };
     }
     if (bindable.mode && isWithinSpan(offset, bindable.mode.loc)) {
       return {
-        contents: `**Binding Mode:** \`${bindable.mode.value}\`\n\nControls data flow direction for this bindable`,
+        contents: metaCard(
+          `(binding mode) ${bindable.mode.value}`,
+          "Controls data flow direction for this bindable",
+        ),
         span: bindable.mode.loc,
       };
     }
     if (bindable.attribute && isWithinSpan(offset, bindable.attribute.loc)) {
       return {
-        contents: `**HTML Attribute:** \`${bindable.attribute.value}\`\n\nThe attribute name used in templates (differs from property name \`${bindable.name.value}\`)`,
+        contents: metaCard(
+          `(html attribute) ${bindable.attribute.value}`,
+          `The attribute name used in templates (differs from property name \`${bindable.name.value}\`)`,
+        ),
         span: bindable.attribute.loc,
       };
     }
@@ -1179,31 +1199,42 @@ function getBindableHover(meta: TemplateMeta, offset: number): MetaHoverResult |
 function getOtherMetaHover(meta: TemplateMeta, offset: number): MetaHoverResult | null {
   if (meta.shadowDom && meta.shadowDom.tagLoc && isWithinSpan(offset, meta.shadowDom.tagLoc)) {
     return {
-      contents: `**<use-shadow-dom>** - Enable Shadow DOM encapsulation for this component`,
+      contents: metaCard("(<use-shadow-dom>)", "Enable Shadow DOM encapsulation for this component"),
       span: meta.shadowDom.tagLoc,
     };
   }
   if (meta.containerless && meta.containerless.tagLoc && isWithinSpan(offset, meta.containerless.tagLoc)) {
     return {
-      contents: `**<containerless>** - Render component content without the host element wrapper`,
+      contents: metaCard("(<containerless>)", "Render component content without the host element wrapper"),
       span: meta.containerless.tagLoc,
     };
   }
   if (meta.capture && meta.capture.tagLoc && isWithinSpan(offset, meta.capture.tagLoc)) {
     return {
-      contents: `**<capture>** - Capture all unrecognized attributes as bindings`,
+      contents: metaCard("(<capture>)", "Capture all unrecognized attributes as bindings"),
       span: meta.capture.tagLoc,
     };
   }
   for (const alias of meta.aliases) {
     if (alias.tagLoc && isWithinSpan(offset, alias.tagLoc)) {
       return {
-        contents: `**<alias>** - Define an alternative name for this component`,
+        contents: metaCard("(<alias>)", "Define an alternative name for this component"),
         span: alias.tagLoc,
       };
     }
   }
   return null;
+}
+
+/** Render a meta-element hover in the unified card format. */
+function metaCard(signature: string, ...metaLines: string[]): string {
+  const blocks: string[] = ["```ts\n" + signature + "\n```"];
+  const filtered = metaLines.filter(Boolean);
+  if (filtered.length) {
+    blocks.push("---");
+    blocks.push(filtered.join("\n\n"));
+  }
+  return blocks.join("\n\n");
 }
 
 function findImportAtOffset(meta: TemplateMeta, offset: number) {

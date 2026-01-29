@@ -32,6 +32,41 @@ export interface TemplateHoverDetails {
   readonly nodeId?: NodeId;
 }
 
+// ── Hover card builder ─────────────────────────────────────────────────
+//
+// A HoverCard accumulates structured sections that render to markdown
+// following the rust-analyzer / TypeScript pattern:
+//
+//   ```ts
+//   (custom element) summary-panel
+//   ```
+//   ---
+//   *@aurelia/router*
+//
+//   **Bindables:** `route` *(primary)*, `params`, `active`
+//
+// The signature block (fenced code) is the primary identity.
+// Below the separator, metadata lines provide details.
+
+interface HoverCard {
+  /** Fenced code block: e.g. `(custom element) summary-panel` */
+  signature?: string;
+  /** Metadata lines below the separator */
+  meta: string[];
+}
+
+function renderCard(card: HoverCard): string {
+  const blocks: string[] = [];
+  if (card.signature) {
+    blocks.push("```ts\n" + card.signature + "\n```");
+  }
+  if (card.meta.length) {
+    if (blocks.length) blocks.push("---");
+    blocks.push(card.meta.join("\n\n"));
+  }
+  return blocks.join("\n\n");
+}
+
 export function collectTemplateHover(options: {
   compilation: TemplateCompilation;
   text: string;
@@ -55,19 +90,13 @@ export function collectTemplateHover(options: {
       exprTableCount: compilation.exprTable.length,
     });
   }
-  const lines: string[] = [];
-  const seen = new Set<string>();
+
+  const cards: HoverCard[] = [];
   let span: SourceSpan | undefined;
   let exprId: ExprId | undefined;
   let nodeId: NodeId | undefined;
 
-  const addLine = (label: string, value: string) => {
-    const line = `**${label}:** ${value}`;
-    if (seen.has(line)) return;
-    seen.add(line);
-    lines.push(line);
-  };
-
+  // ── Expressions ──────────────────────────────────────────────────────
   const expr = compilation.query.exprAt(offset);
   if (debugEnabled) {
     debug.workspace("hover.expr", {
@@ -83,9 +112,18 @@ export function collectTemplateHover(options: {
     const exprAst = findExpressionAst(compilation.exprTable ?? [], expr.exprId);
     const pathAtOffset = exprAst ? expressionLabelAtOffset(exprAst, offset) : null;
     const label = chooseExpressionLabel(pathAtOffset, expr.memberPath) ?? "expression";
-    addLine("Expression", label);
+    const expectedType = compilation.query.expectedTypeOf(expr);
+
+    const card: HoverCard = { meta: [] };
+    if (expectedType) {
+      card.signature = `(expression) ${label}: ${expectedType}`;
+    } else {
+      card.signature = `(expression) ${label}`;
+    }
+    cards.push(card);
   }
 
+  // ── Template controllers ─────────────────────────────────────────────
   const controller = compilation.query.controllerAt(offset);
   if (debugEnabled) {
     debug.workspace("hover.controller", {
@@ -96,9 +134,15 @@ export function collectTemplateHover(options: {
   }
   if (controller) {
     span = span ?? controller.span;
-    addLine("Template Controller", controller.kind);
+    const card: HoverCard = {
+      signature: `(template controller) ${controller.kind}`,
+      meta: [],
+    };
+    // Controller bindables come from instruction enrichment below
+    cards.push(card);
   }
 
+  // ── Custom elements ──────────────────────────────────────────────────
   const node = compilation.query.nodeAt(offset);
   if (node) {
     const row = findRow(compilation.linked.templates, node.templateIndex, node.id);
@@ -114,10 +158,6 @@ export function collectTemplateHover(options: {
         native: row?.node.kind === "element" ? row.node.native?.def.tag : null,
       });
     }
-    // Only produce hover content for custom elements. Native element hovers
-    // (e.g. "HTML Element: div") add no value — MDN documentation for native
-    // elements should come from vscode-html-languageservice integration, not
-    // from the Aurelia hover layer.
     if (row?.node.kind === "element") {
       const tag = row.node.tag;
       const isCustom = !!row.node.custom?.def || looksLikeCustomElementTag(tag);
@@ -125,16 +165,22 @@ export function collectTemplateHover(options: {
         nodeId = node.id;
         span = span ?? node.span;
         const def = row.node.custom?.def;
-        addLine("Custom Element", def?.name ?? tag);
+        const name = def?.name ?? tag;
+        const card: HoverCard = {
+          signature: `(custom element) ${name}`,
+          meta: [],
+        };
         if (def) {
-          appendResourceDetails(def, addLine);
+          appendResourceMeta(def, card.meta);
         }
+        cards.push(card);
       }
     }
   } else if (debugEnabled) {
     debug.workspace("hover.node", { hit: false });
   }
 
+  // ── Instructions (attributes, bindings, events, controllers) ─────────
   const domIndex = buildDomIndex(compilation.ir.templates ?? []);
   const instructionHits = findInstructionsAtOffset(
     compilation.linked.templates,
@@ -151,79 +197,118 @@ export function collectTemplateHover(options: {
   if (instructionHits.length) {
     const [primary] = instructionHits;
     if (primary) {
-      // Instruction span is more specific than node span — prefer it.
       span = primary.loc;
     }
     for (const hit of instructionHits) {
-      applyInstructionHover(hit.instruction, hit.loc, hit.attrName ?? null, {
-        addLine,
+      const instrCards = buildInstructionCards(hit.instruction, hit.attrName ?? null, {
         syntax,
         attrParser,
         hostTag: hit.hostTag,
         hostKind: hit.hostKind,
         debugEnabled,
       });
+      cards.push(...instrCards);
     }
 
     if (primary) {
       const attrName = primary.attrName ?? null;
       const command = attrName ? commandFromAttribute(attrName, syntax, attrParser) : null;
-      if (command) addLine("Binding Command", command);
+      if (command) {
+        cards.push({ signature: `(binding command) ${command}`, meta: [] });
+      }
     }
   }
 
+  // ── Value converters ─────────────────────────────────────────────────
   const converterHit = findValueConverterAtOffset(compilation.exprTable, offset);
   if (debugEnabled) {
     debug.workspace("hover.converter", { hit: !!converterHit, name: converterHit?.name });
   }
   if (converterHit) {
     exprId = exprId ?? converterHit.exprId;
-    addLine("Value Converter", converterHit.name);
     const vcSig = options.semantics?.resources.valueConverters[converterHit.name] ?? null;
+    const card: HoverCard = {
+      signature: `(value converter) ${converterHit.name}`,
+      meta: [],
+    };
     if (vcSig) {
-      appendConverterDetails(vcSig, addLine);
+      appendConverterMeta(vcSig, card.meta);
     }
+    cards.push(card);
   }
 
+  // ── Binding behaviors ────────────────────────────────────────────────
   const behaviorHit = findBindingBehaviorAtOffset(compilation.exprTable, offset);
   if (debugEnabled) {
     debug.workspace("hover.behavior", { hit: !!behaviorHit, name: behaviorHit?.name });
   }
   if (behaviorHit) {
     exprId = exprId ?? behaviorHit.exprId;
-    addLine("Binding Behavior", behaviorHit.name);
     const bbSig = options.semantics?.resources.bindingBehaviors[behaviorHit.name] ?? null;
+    const card: HoverCard = {
+      signature: `(binding behavior) ${behaviorHit.name}`,
+      meta: [],
+    };
     if (bbSig) {
       const loc = formatSourceLocation(bbSig.file, bbSig.package);
-      if (loc) addLine("Defined in", loc);
+      if (loc) card.meta.push(`*${loc}*`);
     }
+    cards.push(card);
   }
 
-  if (lines.length === 0) {
+  if (cards.length === 0) {
     if (debugEnabled) {
       debug.workspace("hover.empty", { offset });
     }
     return null;
   }
   if (debugEnabled) {
-    debug.workspace("hover.result", { lineCount: lines.length, exprId, nodeId, span });
+    debug.workspace("hover.result", { lineCount: cards.length, exprId, nodeId, span });
   }
+
+  // Render all cards, joining with blank line
+  const lines = cards.map(renderCard);
   return { lines, span, exprId, nodeId };
 }
 
-export function mergeHoverContents(detailLines: readonly string[], base?: string | null): string | null {
+export function mergeHoverContents(
+  detailLines: readonly string[],
+  baseTypeInfo?: string | null,
+): string | null {
   const blocks: string[] = [];
   const seen = new Set<string>();
+
+  // If we have structured detail and base type info, integrate the type info
+  // into the first card (which is typically the expression card) rather than
+  // appending it as a disconnected blob.
+  if (detailLines.length > 0 && baseTypeInfo) {
+    // The base contains "member: type" or TS quickInfo — it's the type
+    // signature that should augment (not replace) our structured hover.
+    // If our first card already has a code-block signature for the same
+    // expression, the base is redundant. Otherwise, append it.
+    const first = detailLines[0]!;
+    // If the first card already has a fenced code block with type info,
+    // skip the base (it would be a duplicate member: type string).
+    const firstHasType = first.includes("```") && first.includes(":");
+    if (!firstHasType) {
+      // Wrap the base type info in a code block for visual consistency
+      blocks.push("```ts\n" + baseTypeInfo + "\n```");
+      blocks.push("---");
+    }
+  }
+
   for (const line of detailLines) {
     if (seen.has(line)) continue;
     seen.add(line);
     blocks.push(line);
   }
-  if (base) {
-    if (!seen.has(base)) blocks.push(base);
+  if (!detailLines.length && baseTypeInfo) {
+    if (!seen.has(baseTypeInfo)) blocks.push(baseTypeInfo);
   }
   return blocks.length ? blocks.join("\n\n") : null;
 }
+
+// ── Instruction card builders ──────────────────────────────────────────
 
 type InstructionHit = {
   instruction: LinkedInstruction;
@@ -234,6 +319,200 @@ type InstructionHit = {
   attrName?: string | null;
   attrNameSpan?: SourceSpan | null;
 };
+
+function buildInstructionCards(
+  instruction: LinkedInstruction,
+  attrName: string | null,
+  ctx: {
+    syntax: TemplateSyntaxRegistry | null;
+    attrParser: AttributeParser | null;
+    hostTag?: string;
+    hostKind?: "custom" | "native" | "none";
+    debugEnabled?: boolean;
+  },
+): HoverCard[] {
+  const cards: HoverCard[] = [];
+  const analysis = attrName && ctx.syntax && ctx.attrParser
+    ? analyzeAttributeName(attrName, ctx.syntax, ctx.attrParser)
+    : null;
+
+  switch (instruction.kind) {
+    case "hydrateAttribute": {
+      const resolvedName = instruction.res?.def.name ?? null;
+      if (resolvedName) {
+        const card: HoverCard = {
+          signature: `(custom attribute) ${resolvedName}`,
+          meta: [],
+        };
+        const attrDef = instruction.res?.def;
+        if (attrDef) {
+          appendResourceMeta(attrDef, card.meta);
+        }
+        cards.push(card);
+        break;
+      }
+      const fallbackName = attributeTargetName(attrName, analysis);
+      if (fallbackName && ctx.debugEnabled) {
+        debug.workspace("hover.fallback.custom-attribute", {
+          attrName,
+          fallback: fallbackName,
+        });
+      }
+      if (fallbackName) {
+        cards.push({
+          signature: `(custom attribute) ${fallbackName}`,
+          meta: [],
+        });
+      }
+      break;
+    }
+    case "propertyBinding":
+    case "attributeBinding": {
+      const target = instruction.target as { kind?: string; reason?: string; bindable?: Bindable } | null | undefined;
+      const bindableInfo = describeBindableTarget(target, instruction.to);
+      if (!bindableInfo && target?.kind === "unknown") {
+        const fallback = describeBindableFallback(instruction.to, ctx.hostTag, ctx.hostKind);
+        if (fallback && ctx.debugEnabled) {
+          debug.workspace("hover.fallback.bindable", {
+            name: instruction.to,
+            hostTag: ctx.hostTag,
+            hostKind: ctx.hostKind,
+            reason: (target as { reason?: string }).reason ?? null,
+          });
+        }
+        if (fallback) {
+          cards.push(buildBindableCard(fallback, null));
+        }
+        break;
+      }
+      if (bindableInfo) {
+        const bindable = target?.bindable ?? null;
+        cards.push(buildBindableCard(bindableInfo, bindable));
+      }
+      break;
+    }
+    case "listenerBinding":
+      cards.push({
+        signature: `(event) ${instruction.to}`,
+        meta: [],
+      });
+      break;
+    case "hydrateTemplateController": {
+      const card: HoverCard = {
+        signature: `(template controller) ${instruction.res}`,
+        meta: [],
+      };
+      const controllerInst = instruction as { controller?: { config?: { props?: Record<string, Bindable> } } };
+      const tcProps = controllerInst.controller?.config?.props;
+      if (tcProps) {
+        const bindableList = formatBindableListRich(tcProps);
+        if (bindableList) card.meta.push(bindableList);
+      }
+      cards.push(card);
+      break;
+    }
+    case "translationBinding":
+      cards.push({
+        signature: `(translation) t`,
+        meta: [],
+      });
+      break;
+    default:
+      break;
+  }
+
+  // Show "Attribute" line only for attributeBinding
+  if (attrName && instruction.kind === "attributeBinding") {
+    cards.push({
+      signature: `(attribute) ${attrName}`,
+      meta: [],
+    });
+  }
+
+  return cards;
+}
+
+function buildBindableCard(description: BindableDescription, bindable: Bindable | null): HoverCard {
+  const card: HoverCard = { meta: [] };
+
+  if (description.isNative) {
+    // Native HTML property — use different label to avoid confusion with Aurelia bindables
+    card.signature = `(property) ${description.name}`;
+    if (description.context) {
+      card.meta.push(`*${description.context}*`);
+    }
+  } else {
+    // Aurelia bindable
+    const sigParts = [`(bindable) ${description.name}`];
+    if (bindable?.type) {
+      const typeStr = formatTypeRef(bindable.type);
+      if (typeStr) sigParts[0] += `: ${typeStr}`;
+    }
+    card.signature = sigParts[0];
+    if (description.context) {
+      card.meta.push(`*${description.context}*`);
+    }
+    if (bindable) {
+      const mode = formatBindingMode(bindable.mode);
+      if (mode) card.meta.push(`**Mode:** \`${mode}\``);
+      if (bindable.doc) card.meta.push(bindable.doc);
+    }
+  }
+  return card;
+}
+
+// ── Structured bindable description ────────────────────────────────────
+
+interface BindableDescription {
+  name: string;
+  context?: string;
+  isNative: boolean;
+}
+
+function describeBindableTarget(target: { kind?: string } | null | undefined, to?: string): BindableDescription | null {
+  if (!target || typeof target !== "object" || !("kind" in target)) return null;
+  switch (target.kind) {
+    case "element.bindable": {
+      const t = target as { bindable: { name: string }; element: { def: { name: string } } };
+      return { name: t.bindable.name, context: `component: ${t.element.def.name}`, isNative: false };
+    }
+    case "element.nativeProp": {
+      const name = to ?? "unknown";
+      return { name, context: "HTML element", isNative: true };
+    }
+    case "attribute.bindable": {
+      const t = target as { bindable: { name: string }; attribute: { def: { name: string } } };
+      return { name: t.bindable.name, context: `attribute: ${t.attribute.def.name}`, isNative: false };
+    }
+    case "controller.prop": {
+      const t = target as { bindable: { name: string }; controller: { res: string } };
+      return { name: t.bindable.name, context: `controller: ${t.controller.res}`, isNative: false };
+    }
+    case "attribute": {
+      const t = target as { attr: string };
+      return { name: t.attr, context: "HTML element", isNative: true };
+    }
+    default:
+      return null;
+  }
+}
+
+function describeBindableFallback(
+  name: string,
+  hostTag?: string,
+  hostKind?: "custom" | "native" | "none",
+): BindableDescription | null {
+  if (!name) return null;
+  if (hostKind === "custom" || (hostTag && looksLikeCustomElementTag(hostTag))) {
+    return { name, context: `component: ${hostTag ?? "unknown"}`, isNative: false };
+  }
+  if (hostKind === "native") {
+    return { name, context: "HTML element", isNative: true };
+  }
+  return { name, isNative: false };
+}
+
+// ── Instruction search ─────────────────────────────────────────────────
 
 function findInstructionsAtOffset(
   templates: readonly { rows: readonly LinkedRow[] }[],
@@ -298,137 +577,64 @@ function findRow(
   return template.rows.find((row) => row.target === nodeId) ?? null;
 }
 
-function applyInstructionHover(
-  instruction: LinkedInstruction,
-  loc: SourceSpan,
-  attrName: string | null,
-  ctx: {
-    addLine: (label: string, value: string) => void;
-    syntax: TemplateSyntaxRegistry | null;
-    attrParser: AttributeParser | null;
-    hostTag?: string;
-    hostKind?: "custom" | "native" | "none";
-    debugEnabled?: boolean;
-  },
+// ── Formatting helpers ─────────────────────────────────────────────────
+
+function formatSourceLocation(file?: string | null, pkg?: string | null): string | null {
+  if (pkg) return pkg;
+  if (file) return file;
+  return null;
+}
+
+function formatBindableListRich(bindables: Readonly<Record<string, Bindable>>): string | null {
+  const entries = Object.values(bindables);
+  if (entries.length === 0) return null;
+  const parts = entries.map((b) => {
+    let part = `\`${b.name}\``;
+    if (b.primary) part += " *(primary)*";
+    if (b.mode && b.mode !== "default") part += ` *(${b.mode})*`;
+    return part;
+  });
+  return `**Bindables:** ${parts.join(", ")}`;
+}
+
+function formatBindingMode(mode?: BindingMode | null): string | null {
+  if (!mode || mode === "default") return null;
+  return mode;
+}
+
+function formatTypeRef(type?: TypeRef | null): string | null {
+  if (!type) return null;
+  if (type.kind === "ts") return type.name;
+  if (type.kind === "any" || type.kind === "unknown") return null;
+  return null;
+}
+
+function appendResourceMeta(
+  def: ElementRes | AttrRes,
+  meta: string[],
 ): void {
-  const analysis = attrName && ctx.syntax && ctx.attrParser
-    ? analyzeAttributeName(attrName, ctx.syntax, ctx.attrParser)
-    : null;
+  const loc = formatSourceLocation(def.file, def.package);
+  if (loc) meta.push(`*${loc}*`);
+  const bindableList = formatBindableListRich(def.bindables);
+  if (bindableList) meta.push(bindableList);
+  // Command link to show the generated overlay for this template
+  meta.push("[$(file-code) Show overlay](command:aurelia.showOverlay)");
+}
 
-  switch (instruction.kind) {
-    case "hydrateAttribute": {
-      const resolvedName = instruction.res?.def.name ?? null;
-      if (resolvedName) {
-        ctx.addLine("Custom Attribute", resolvedName);
-        const attrDef = instruction.res?.def;
-        if (attrDef) {
-          appendResourceDetails(attrDef, ctx.addLine);
-        }
-        break;
-      }
-      const fallbackName = attributeTargetName(attrName, analysis);
-      if (fallbackName && ctx.debugEnabled) {
-        debug.workspace("hover.fallback.custom-attribute", {
-          attrName,
-          fallback: fallbackName,
-        });
-      }
-      if (fallbackName) ctx.addLine("Custom Attribute", fallbackName);
-      break;
-    }
-    case "propertyBinding":
-    case "attributeBinding": {
-      const target = instruction.target as { kind?: string; reason?: string; bindable?: Bindable } | null | undefined;
-      let line = describeBindableTarget(target, instruction.to);
-      if (!line && target?.kind === "unknown") {
-        line = describeBindableFallback(instruction.to, ctx.hostTag, ctx.hostKind);
-        if (line && ctx.debugEnabled) {
-          debug.workspace("hover.fallback.bindable", {
-            name: instruction.to,
-            hostTag: ctx.hostTag,
-            hostKind: ctx.hostKind,
-            reason: target.reason ?? null,
-          });
-        }
-      }
-      if (line) ctx.addLine("Bindable", line);
-      const bindable = target?.bindable ?? null;
-      if (bindable) {
-        appendBindableDetails(bindable, ctx.addLine);
-      }
-      break;
-    }
-    case "listenerBinding":
-      ctx.addLine("Event", instruction.to);
-      break;
-    case "hydrateTemplateController": {
-      ctx.addLine("Template Controller", instruction.res);
-      const controllerInst = instruction as { controller?: { config?: { props?: Record<string, Bindable> } } };
-      const tcProps = controllerInst.controller?.config?.props;
-      if (tcProps) {
-        const bindableList = formatBindableList(tcProps);
-        if (bindableList) ctx.addLine("Bindables", bindableList);
-      }
-      break;
-    }
-    case "translationBinding":
-      ctx.addLine("Translation", "t");
-      break;
-    default:
-      break;
-  }
-
-  if (!attrName) return;
-  // Show "Attribute" line only for attributeBinding (Aurelia-resolved bindings).
-  // setAttribute is a static passthrough with no Aurelia semantics — surfacing
-  // it in hover adds no information beyond what the user can already see.
-  if (instruction.kind === "attributeBinding") {
-    ctx.addLine("Attribute", attrName);
+function appendConverterMeta(
+  sig: ValueConverterSig,
+  meta: string[],
+): void {
+  const loc = formatSourceLocation(sig.file, sig.package);
+  if (loc) meta.push(`*${loc}*`);
+  const inType = formatTypeRef(sig.in);
+  const outType = formatTypeRef(sig.out);
+  if (inType && outType) {
+    meta.push(`**Signature:** \`toView(${inType}): ${outType}\``);
   }
 }
 
-function describeBindableTarget(target: { kind?: string } | null | undefined, to?: string): string | null {
-  if (!target || typeof target !== "object" || !("kind" in target)) return null;
-  switch (target.kind) {
-    case "element.bindable": {
-      const t = target as { bindable: { name: string }; element: { def: { name: string } } };
-      return `${t.bindable.name} (component: ${t.element.def.name})`;
-    }
-    case "element.nativeProp": {
-      const name = to ?? "unknown";
-      return `${name} (html)`;
-    }
-    case "attribute.bindable": {
-      const t = target as { bindable: { name: string }; attribute: { def: { name: string } } };
-      return `${t.bindable.name} (attribute: ${t.attribute.def.name})`;
-    }
-    case "controller.prop": {
-      const t = target as { bindable: { name: string }; controller: { res: string } };
-      return `${t.bindable.name} (controller: ${t.controller.res})`;
-    }
-    case "attribute": {
-      const t = target as { attr: string };
-      return `${t.attr} (html)`;
-    }
-    default:
-      return null;
-  }
-}
-
-function describeBindableFallback(
-  name: string,
-  hostTag?: string,
-  hostKind?: "custom" | "native" | "none",
-): string | null {
-  if (!name) return null;
-  if (hostKind === "custom" || (hostTag && looksLikeCustomElementTag(hostTag))) {
-    return `${name} (component: ${hostTag ?? "unknown"})`;
-  }
-  if (hostKind === "native") {
-    return `${name} (html)`;
-  }
-  return name;
-}
+// ── Attribute analysis helpers ─────────────────────────────────────────
 
 function attributeTargetName(
   attrName: string | null,
@@ -455,6 +661,8 @@ function commandFromAttribute(
   if (!analysis.commandSpan) return null;
   return analysis.syntax.command ?? null;
 }
+
+// ── Expression AST helpers ─────────────────────────────────────────────
 
 type IdentifierAst = {
   $kind: "Identifier";
@@ -727,69 +935,4 @@ function chooseExpressionLabel(primary: string | null | undefined, secondary: st
 
 function looksLikeCustomElementTag(tag: string): boolean {
   return tag.includes("-");
-}
-
-// ── Hover enrichment helpers ───────────────────────────────────────────
-
-function formatSourceLocation(file?: string | null, pkg?: string | null): string | null {
-  if (pkg) return pkg;
-  if (file) return file;
-  return null;
-}
-
-function formatBindableList(bindables: Readonly<Record<string, Bindable>>): string | null {
-  const entries = Object.values(bindables);
-  if (entries.length === 0) return null;
-  const names = entries.map((b) => {
-    let name = b.name;
-    if (b.primary) name += " (primary)";
-    return name;
-  });
-  return names.join(", ");
-}
-
-function formatBindingMode(mode?: BindingMode | null): string | null {
-  if (!mode || mode === "default") return null;
-  return mode;
-}
-
-function formatTypeRef(type?: TypeRef | null): string | null {
-  if (!type) return null;
-  if (type.kind === "ts") return type.name;
-  if (type.kind === "any" || type.kind === "unknown") return null;
-  return null;
-}
-
-function appendResourceDetails(
-  def: ElementRes | AttrRes,
-  addLine: (label: string, value: string) => void,
-): void {
-  const loc = formatSourceLocation(def.file, def.package);
-  if (loc) addLine("Defined in", loc);
-  const bindableList = formatBindableList(def.bindables);
-  if (bindableList) addLine("Bindables", bindableList);
-}
-
-function appendBindableDetails(
-  bindable: Bindable,
-  addLine: (label: string, value: string) => void,
-): void {
-  const mode = formatBindingMode(bindable.mode);
-  if (mode) addLine("Mode", mode);
-  const type = formatTypeRef(bindable.type);
-  if (type) addLine("Type", type);
-  if (bindable.doc) addLine("Description", bindable.doc);
-}
-
-function appendConverterDetails(
-  sig: ValueConverterSig,
-  addLine: (label: string, value: string) => void,
-): void {
-  const loc = formatSourceLocation(sig.file, sig.package);
-  if (loc) addLine("Defined in", loc);
-  const inType = formatTypeRef(sig.in);
-  const outType = formatTypeRef(sig.out);
-  if (inType && outType) {
-    addLine("Signature", `toView(${inType}): ${outType}`);
-  }
 }

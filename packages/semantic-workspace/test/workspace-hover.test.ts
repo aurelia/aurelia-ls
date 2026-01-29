@@ -55,12 +55,13 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "<summary-panel", 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Custom Element");
-    expect(hover?.contents ?? "").toContain("summary-panel");
-    // Enriched: source file and bindable list
-    expect(hover?.contents ?? "").toContain("Defined in");
-    expect(hover?.contents ?? "").toContain("Bindables");
-    expect(hover?.contents ?? "").toContain("stats");
+    const contents = hover?.contents ?? "";
+    // Signature block: (custom element) summary-panel
+    expect(contents).toContain("(custom element)");
+    expect(contents).toContain("summary-panel");
+    // Metadata: source location and bindable list
+    expect(contents).toContain("Bindables");
+    expect(contents).toContain("`stats`");
     expect(typeof hover?.location?.nodeId).toBe("string");
 
     const again = query.hover(pos);
@@ -72,7 +73,8 @@ describe("workspace hover (workspace-contract)", () => {
     const pos = findPosition(appText, "stats.bind", 1);
     const hover = query.hover(pos);
     const contents = hover?.contents ?? "";
-    expect(contents).toContain("Bindable");
+    // Signature block: (bindable) stats or (property) stats
+    expect(contents).toMatch(/\(bindable\)|\(property\)/);
     expect(contents).toContain("stats");
     expect(contents).toContain("component");
   });
@@ -83,11 +85,12 @@ describe("workspace hover (workspace-contract)", () => {
     const hover = query.hover(pos);
     expect(hover).not.toBeNull();
     const contents = hover?.contents ?? "";
-    expect(contents).toContain("Custom Attribute");
+    // Signature: (custom attribute) copy-to-clipboard
+    expect(contents).toContain("(custom attribute)");
     expect(contents).toContain("copy-to-clipboard");
-    // Enriched: bindable list
+    // Metadata: bindable list with rich formatting
     expect(contents).toContain("Bindables");
-    expect(contents).toContain("value");
+    expect(contents).toContain("`value`");
 
     // Span must cover the attribute, not the entire host element
     const attrStart = appText.indexOf("copy-to-clipboard.bind");
@@ -104,8 +107,9 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "click.trigger", "click.".length + 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Binding Command");
-    expect(hover?.contents ?? "").toContain("trigger");
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(binding command)");
+    expect(contents).toContain("trigger");
   });
 
   it("hovers template controllers", () => {
@@ -113,35 +117,40 @@ describe("workspace hover (workspace-contract)", () => {
     const pos = findPosition(appText, "if.bind", 1);
     const hover = query.hover(pos);
     const contents = hover?.contents ?? "";
-    expect(contents).toContain("Template Controller");
+    // Signature: (template controller) if
+    expect(contents).toContain("(template controller)");
     expect(contents).toContain("if");
-    // Enriched: bindable list from controller config
+    // Metadata: bindable list from controller config
     expect(contents).toContain("Bindables");
-    expect(contents).toContain("value");
+    expect(contents).toContain("`value`");
   });
 
   it("hovers value converters", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "titlecase", 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Value Converter");
-    expect(hover?.contents ?? "").toContain("titlecase");
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(value converter)");
+    expect(contents).toContain("titlecase");
   });
 
   it("hovers binding behaviors", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "debounce", 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Binding Behavior");
-    expect(hover?.contents ?? "").toContain("debounce");
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(binding behavior)");
+    expect(contents).toContain("debounce");
   });
 
   it("hovers expressions with stable expr ids", () => {
     const query = harness.workspace.query(appUri);
     const pos = findPosition(appText, "activeDevice.name", "activeDevice.".length + 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Expression");
-    expect(hover?.contents ?? "").toContain("activeDevice.name");
+    const contents = hover?.contents ?? "";
+    // Signature: (expression) activeDevice.name  — inside fenced code block
+    expect(contents).toContain("(expression)");
+    expect(contents).toContain("activeDevice.name");
     expect(typeof hover?.location?.exprId).toBe("string");
 
     const again = query.hover(pos);
@@ -182,6 +191,28 @@ describe("workspace hover (workspace-contract)", () => {
     const hover = query.hover(pos);
     expect(hover?.contents ?? "").toContain("<import>");
     expect(hover?.contents ?? "").toContain("Import Aurelia resources");
+  });
+
+  it("renders fenced code blocks for signatures", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "<summary-panel", 1);
+    const hover = query.hover(pos);
+    const contents = hover?.contents ?? "";
+    // Must use fenced code block for the signature
+    expect(contents).toContain("```ts");
+    expect(contents).toContain("```");
+    // Must use --- separator between signature and metadata
+    expect(contents).toContain("---");
+  });
+
+  it("renders expression types from compilation query", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "activeDevice.name", "activeDevice.".length + 1);
+    const hover = query.hover(pos);
+    const contents = hover?.contents ?? "";
+    // The expression signature should include type info from expectedTypeOf
+    // Format: (expression) activeDevice.name: <type>
+    expect(contents).toMatch(/\(expression\) activeDevice\.name/);
   });
 });
 

@@ -50,7 +50,7 @@ describe("workspace template control scenarios", () => {
     const query = harness.workspace.query(controllersUri);
     const pos = findPosition(controllersText, "promise.bind", 1);
     const hover = query.hover(pos);
-    expect(hover?.contents ?? "").toContain("Template Controller");
+    expect(hover?.contents ?? "").toContain("(template controller)");
     expect(hover?.contents ?? "").toContain("promise");
   });
 

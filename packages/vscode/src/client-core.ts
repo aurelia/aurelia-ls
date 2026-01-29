@@ -1,8 +1,8 @@
 import { LanguageClient, TransportKind } from "vscode-languageclient/node.js";
-import type { LanguageClientOptions, ServerOptions } from "vscode-languageclient/node.js";
+import type { LanguageClientOptions, ServerOptions, Middleware } from "vscode-languageclient/node.js";
 import { type ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-import type { ExtensionContext } from "vscode";
+import type { ExtensionContext, MarkdownString } from "vscode";
 
 async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
   try {
@@ -37,6 +37,24 @@ async function resolveServerModule(context: ExtensionContext, logger: ClientLogg
   const msg = `Cannot locate server module. Tried:\n${candidates.map((c) => `- ${c}`).join("\n")}`;
   logger.error(msg);
   throw new Error(msg);
+}
+
+function createMiddleware(vscode: VscodeApi): Middleware {
+  return {
+    provideHover: async (document, position, token, next) => {
+      const hover = await next(document, position, token);
+      if (!hover) return hover;
+      // Upgrade MarkdownString contents to enable command links and theme icons
+      hover.contents = hover.contents.map((c) => {
+        if (typeof c === "string" || !("value" in c)) return c;
+        const md = new vscode.MarkdownString(c.value) as MarkdownString;
+        md.isTrusted = true;
+        md.supportThemeIcons = true;
+        return md;
+      });
+      return hover;
+    },
+  };
 }
 
 export class AureliaLanguageClient {
@@ -86,6 +104,7 @@ export class AureliaLanguageClient {
         { scheme: "untitled", language: "html" },
       ],
       synchronize: { fileEvents },
+      middleware: createMiddleware(this.#vscode),
     };
 
     const client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
