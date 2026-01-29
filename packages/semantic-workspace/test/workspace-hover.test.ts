@@ -214,6 +214,22 @@ describe("workspace hover (workspace-contract)", () => {
     // Format: (expression) activeDevice.name: <type>
     expect(contents).toMatch(/\(expression\) activeDevice\.name/);
   });
+
+  it("hovers translation bindings with key, namespace, and target", () => {
+    const query = harness.workspace.query(appUri);
+    // Fixture has: t="[placeholder]filters.searchDevices"
+    const pos = findPosition(appText, 't="[placeholder]filters.searchDevices"', 't="'.length + 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    // Signature: the full key
+    expect(contents).toContain("(translation)");
+    expect(contents).toContain("filters.searchDevices");
+    // Structured metadata: namespace, key, and bracket target
+    expect(contents).toContain("`filters`");
+    expect(contents).toContain("`searchDevices`");
+    expect(contents).toContain("`placeholder`");
+  });
 });
 
 describe("workspace hover (meta elements)", () => {

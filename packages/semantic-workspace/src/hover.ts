@@ -411,12 +411,37 @@ function buildInstructionCards(
       cards.push(card);
       break;
     }
-    case "translationBinding":
-      cards.push({
-        signature: `(translation) t`,
-        meta: [],
-      });
+    case "translationBinding": {
+      // TODO: Load translation resource files (locales/*.json) to resolve keys
+      // to actual translated text and validate key existence. This requires a
+      // new i18n resource loader subsystem (file discovery, JSON parsing, key indexing).
+      const ti = instruction as { keyValue?: string; isExpression: boolean; to: string; from?: { source?: string } };
+      const card: HoverCard = { meta: [] };
+      if (!ti.isExpression && ti.keyValue) {
+        // Literal key: t="greeting.hello" or t="[title]tooltip.msg"
+        const { target, namespace, key } = parseTranslationKey(ti.keyValue);
+        card.signature = `(translation) ${ti.keyValue}`;
+        const details: string[] = [];
+        if (namespace) details.push(`**Namespace:** \`${namespace}\``);
+        if (key) details.push(`**Key:** \`${key}\``);
+        if (target) details.push(`**Target:** \`${target}\``);
+        card.meta.push(...details);
+      } else if (ti.isExpression) {
+        // Dynamic key: t.bind="expr"
+        const exprSource = ti.from?.source ?? null;
+        card.signature = exprSource
+          ? `(translation) t.bind = ${exprSource}`
+          : `(translation) t.bind`;
+        card.meta.push("*Dynamic key — resolved at runtime*");
+      } else {
+        card.signature = `(translation) t`;
+      }
+      if (ti.to) {
+        card.meta.push(`**Target attribute:** \`${ti.to}\``);
+      }
+      cards.push(card);
       break;
+    }
     default:
       break;
   }
@@ -935,4 +960,38 @@ function chooseExpressionLabel(primary: string | null | undefined, secondary: st
 
 function looksLikeCustomElementTag(tag: string): boolean {
   return tag.includes("-");
+}
+
+// ── Translation key parsing ─────────────────────────────────────────────
+
+/**
+ * Parse an i18n translation key into its components.
+ *
+ * Aurelia i18n keys follow: `[target]namespace.key` or `namespace.key`
+ * - Bracket prefix `[title]` sets the target attribute
+ * - Dotted path splits into namespace (first segment) and key (rest)
+ */
+function parseTranslationKey(raw: string): { target: string | null; namespace: string | null; key: string | null } {
+  let target: string | null = null;
+  let keyPath = raw;
+
+  // Extract bracket target: [title]namespace.key → target="title", keyPath="namespace.key"
+  const bracketMatch = /^\[([^\]]+)\](.*)$/.exec(keyPath);
+  if (bracketMatch) {
+    target = bracketMatch[1] ?? null;
+    keyPath = bracketMatch[2] ?? "";
+  }
+
+  // Split dotted path: "greeting.hello" → namespace="greeting", key="hello"
+  const dotIndex = keyPath.indexOf(".");
+  if (dotIndex >= 0) {
+    return {
+      target,
+      namespace: keyPath.slice(0, dotIndex),
+      key: keyPath.slice(dotIndex + 1),
+    };
+  }
+
+  // No dot: entire string is the key, no namespace
+  return { target, namespace: null, key: keyPath || null };
 }
