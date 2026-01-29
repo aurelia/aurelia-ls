@@ -128,13 +128,10 @@ export function collectTemplateHover(options: {
     });
   }
   if (controller) {
+    // Only capture span here — the full card with bindables, iterator
+    // declaration, and contextual locals is built by the instruction
+    // section below (hydrateTemplateController case).
     span = span ?? controller.span;
-    const card: HoverCard = {
-      signature: `(template controller) ${controller.kind}`,
-      meta: [],
-    };
-    // Controller bindables come from instruction enrichment below
-    cards.push(card);
   }
 
   // ── Custom elements ──────────────────────────────────────────────────
