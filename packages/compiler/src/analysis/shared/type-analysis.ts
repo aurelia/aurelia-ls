@@ -271,16 +271,16 @@ export function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   function tAccessScope(n: AccessScopeExpression): string {
     const env = ctx.resolveEnv(n.ancestor);
     if (n.name && env) {
-      const t = env.get(n.name);
+      const t = env.get(n.name.name);
       if (t) return `(${t})`;
     }
-    return n.ancestor === 0 && n.name ? indexType(ctx.rootVm, [n.name]) : "unknown";
+    return n.ancestor === 0 && n.name ? indexType(ctx.rootVm, [n.name.name]) : "unknown";
   }
 
   function tAccessMember(n: AccessMemberExpression): string {
     const base = tIsBindingBehavior(n.object as IsBindingBehavior);
     if (!base || base === "unknown") return "unknown";
-    return indexType(base, [n.name]);
+    return indexType(base, [n.name.name]);
   }
 
   function tAccessKeyed(n: AccessKeyedExpression): string {
@@ -295,14 +295,14 @@ export function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   }
 
   function tCallScope(n: CallScopeExpression): string {
-    const calleeT = tAccessScope({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: null! });
+    const calleeT = tAccessScope({ $kind: "AccessScope", name: n.name, ancestor: n.ancestor, span: n.name.span });
     return returnTypeOf(calleeT);
   }
 
   function tCallMember(n: CallMemberExpression): string {
     const base = tIsBindingBehavior(n.object as IsBindingBehavior);
     if (!base || base === "unknown") return "unknown";
-    const calleeT = indexType(base, [n.name]);
+    const calleeT = indexType(base, [n.name.name]);
     return returnTypeOf(calleeT);
   }
 
@@ -329,7 +329,7 @@ function projectPatternTypes(pattern: BindingIdentifierOrPattern, baseType: stri
       return;
     case "BindingIdentifier": {
       const name = pattern.name;
-      if (name) out.set(name, wrap(baseType));
+      if (name) out.set(name.name, wrap(baseType));
       return;
     }
     case "BindingPatternDefault":

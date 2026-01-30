@@ -110,7 +110,7 @@ function emitBindingBehavior(node: MappableExpression): EmitResult {
     case "Conditional":
       return emitConditional(node);
     case "AccessGlobal":
-      return simpleToken(node, node.name);
+      return simpleToken(node, node.name.name);
     case "AccessThis":
       return simpleToken(node, ancestorChain(node.ancestor));
     case "AccessBoundary":
@@ -167,7 +167,7 @@ function emitBindingBehavior(node: MappableExpression): EmitResult {
 function emitBindingBehaviorExpr(node: BindingBehaviorExpression): EmitResult {
   const expr = emitBindingBehavior(node.expression);
   const args = emitArgsParts(node.args);
-  const parts: (string | EmitResult)[] = ["__au_bb(", expr, ", ", JSON.stringify(node.name)];
+  const parts: (string | EmitResult)[] = ["__au_bb(", expr, ", ", JSON.stringify(node.name.name)];
   if (args.length) parts.push(", ", ...args);
   parts.push(")");
   return combine(node, parts);
@@ -176,7 +176,7 @@ function emitBindingBehaviorExpr(node: BindingBehaviorExpression): EmitResult {
 function emitValueConverter(node: ValueConverterExpression): EmitResult {
   const expr = emitBindingBehavior(node.expression);
   const args = emitArgsParts(node.args);
-  const parts: (string | EmitResult)[] = ["__au_vc(", expr, ", ", JSON.stringify(node.name)];
+  const parts: (string | EmitResult)[] = ["__au_vc(", expr, ", ", JSON.stringify(node.name.name)];
   if (args.length) parts.push(", ", ...args);
   parts.push(")");
   return combine(node, parts);
@@ -197,9 +197,9 @@ function emitConditional(node: ConditionalExpression): EmitResult {
 
 function emitAccessScope(node: AccessScopeExpression): EmitResult {
   const base = ancestorChain(node.ancestor);
-  const code = node.name ? `${base}.${node.name}` : base;
+  const code = node.name ? `${base}.${node.name.name}` : base;
   const pathBase = pathPrefix(node.ancestor);
-  const path = node.name ? (pathBase ? `${pathBase}.${node.name}` : node.name) : pathBase || undefined;
+  const path = node.name ? (pathBase ? `${pathBase}.${node.name.name}` : node.name.name) : pathBase || undefined;
   const segments: OverlayLambdaSegment[] = [];
   if (pathBase) {
     segments.push({ kind: "member", path: pathBase, span: spanFromBounds(2, base.length) });
@@ -208,7 +208,7 @@ function emitAccessScope(node: AccessScopeExpression): EmitResult {
     segments.push({
       kind: "member",
       path,
-      span: spanFromBounds(base.length + 1, base.length + 1 + node.name.length),
+      span: spanFromBounds(base.length + 1, base.length + 1 + node.name.name.length),
     });
   }
   return combine(node, [code], segments);
@@ -218,11 +218,11 @@ function emitAccessMember(node: AccessMemberExpression): EmitResult {
   const obj = emitBindingBehavior(node.object);
   const head = `${obj.code}${node.optional ? "?." : "."}`;
   const memberStart = head.length;
-  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.length);
+  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.name.length);
   const basePath = deepestPath(obj.segments);
-  const path = basePath ? `${basePath}.${node.name}` : node.name;
+  const path = basePath ? `${basePath}.${node.name.name}` : node.name.name;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [obj, head.slice(obj.code.length), node.name], segments);
+  return combine(node, [obj, head.slice(obj.code.length), node.name.name], segments);
 }
 
 function emitAccessKeyed(node: AccessKeyedExpression): EmitResult {
@@ -251,22 +251,22 @@ function emitNew(node: NewExpression): EmitResult {
 
 function emitCallScope(node: CallScopeExpression): EmitResult {
   const base = ancestorChain(node.ancestor);
-  const head = `${base}${node.optional ? "?." : "."}${node.name}`;
+  const head = `${base}${node.optional ? "?." : "."}${node.name.name}`;
   const args = emitArgsParts(node.args);
-  const path = ancestorPath(node.ancestor, node.name);
-  const memberSpan = spanFromBounds(base.length + 1, base.length + 1 + node.name.length);
+  const path = ancestorPath(node.ancestor, node.name.name);
+  const memberSpan = spanFromBounds(base.length + 1, base.length + 1 + node.name.name.length);
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
   return combine(node, [head, "(", ...args, ")"], segments);
 }
 
 function emitCallMember(node: CallMemberExpression): EmitResult {
   const obj = emitBindingBehavior(node.object);
-  const head = `${obj.code}${node.optionalMember ? "?." : "."}${node.name}${node.optionalCall ? "?." : ""}`;
+  const head = `${obj.code}${node.optionalMember ? "?." : "."}${node.name.name}${node.optionalCall ? "?." : ""}`;
   const args = emitArgsParts(node.args);
   const memberStart = obj.code.length + (node.optionalMember ? 2 : 1);
-  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.length);
+  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.name.length);
   const basePath = lastPath(obj.segments);
-  const path = basePath ? `${basePath}.${node.name}` : node.name;
+  const path = basePath ? `${basePath}.${node.name.name}` : node.name.name;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
   return combine(node, [obj, head.slice(obj.code.length), "(", ...args, ")"], segments);
 }
@@ -281,9 +281,9 @@ function emitCallFunction(node: CallFunctionExpression): EmitResult {
 
 function emitCallGlobal(node: CallGlobalExpression): EmitResult {
   const args = emitArgsParts(node.args);
-  const memberSpan = spanFromBounds(0, node.name.length);
-  const segments: OverlayLambdaSegment[] = [{ kind: "member", path: node.name, span: memberSpan }];
-  return combine(node, [node.name, "(", ...args, ")"], segments);
+  const memberSpan = spanFromBounds(0, node.name.name.length);
+  const segments: OverlayLambdaSegment[] = [{ kind: "member", path: node.name.name, span: memberSpan }];
+  return combine(node, [node.name.name, "(", ...args, ")"], segments);
 }
 
 function emitBinary(node: BinaryExpression): EmitResult {
@@ -363,7 +363,7 @@ function emitInterpolation(node: Interpolation): EmitResult {
 function emitBindingPattern(node: BindingPattern): EmitResult {
   switch (node.$kind) {
     case "BindingIdentifier":
-      return simpleToken(node, node.name);
+      return simpleToken(node, node.name.name);
     case "BindingPatternDefault": {
       const target = emitBindingPattern(node.target);
       const def = emitBindingBehavior(node.default);
@@ -403,7 +403,7 @@ function emitBindingPattern(node: BindingPattern): EmitResult {
 }
 
 function emitArrow(node: ArrowFunction): EmitResult {
-  const args = node.args.map((a) => a.name).join(", ");
+  const args = node.args.map((a) => a.name.name).join(", ");
   const body = emitBindingBehavior(node.body);
   return combine(node, [`(${args}) => `, body], body.segments);
 }

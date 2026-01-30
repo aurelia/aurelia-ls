@@ -5,13 +5,13 @@ import * as ts from "typescript";
 
 import {
   analyzePackage,
-  applyResolutionPolicy,
   buildApiSurfaceSnapshot,
   buildSemanticSnapshot,
   buildSemanticsArtifacts,
   createMockFileSystem,
   createNodeFileSystem,
-  resolve,
+  DiagnosticsRuntime,
+  discoverProjectSemantics,
   buildRegistrationPlan,
   type AnalysisResult,
   type FileSystemContext,
@@ -20,13 +20,13 @@ import {
   type ResolutionDiagnostic,
   type ResolutionResult,
   type UsageByScope,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import {
   compileAot,
   compileTemplate,
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
-  prepareSemantics,
+  prepareProjectSemantics,
   type ApiSurfaceSnapshot,
   type AotCodeResult,
   type CompileAotResult,
@@ -36,7 +36,7 @@ import {
   type ResourceDef,
   type ResourceGraph,
   type ResourceScopeId,
-  type SemanticsWithCaches,
+  type MaterializedSemantics,
   type TemplateCompilation,
   type TemplateSyntaxRegistry,
   type BindableDef,
@@ -47,6 +47,7 @@ import {
   type CustomElementDef,
   type CustomAttributeDef,
   type TemplateControllerDef,
+  type ModuleResolver,
 } from "@aurelia-ls/compiler";
 
 import {
@@ -97,7 +98,7 @@ export interface IntegrationRun {
   program?: ts.Program;
   fileSystem?: FileSystemContext;
   resolution: ResolutionResult;
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   resourceGraph: ResourceGraph;
   catalog: ResourceCatalog;
   syntax: TemplateSyntaxRegistry;
@@ -158,11 +159,17 @@ export async function runIntegrationScenario(
   memoryTracker.mark("start");
 
   const { program, fileSystem, fileMap } = createProgramFromScenario(resolvedScenario);
+  const moduleResolver = createModuleResolver(program, fileMap);
   memoryTracker.mark("program");
 
   const resolutionStart = performance.now();
-  const baseResolution = resolve(program, buildResolutionConfig(resolvedScenario, fileSystem), options.logger);
-  const resolution = applyResolutionPolicy(baseResolution, resolvedScenario.resolution.policy);
+  const diagnostics = new DiagnosticsRuntime();
+  const baseResolution = discoverProjectSemantics(
+    program,
+    { ...buildResolutionConfig(resolvedScenario, fileSystem), diagnostics: diagnostics.forSource("project") },
+    options.logger,
+  );
+  const resolution = baseResolution;
   timings.resolutionMs = performance.now() - resolutionStart;
   memoryTracker.mark("resolution");
 
@@ -180,7 +187,7 @@ export async function runIntegrationScenario(
   memoryTracker.mark("merge");
 
   const compileStart = performance.now();
-  const compile = compileTargets(resolvedScenario, resolution, augmented, fileMap, {
+  const compile = compileTargets(resolvedScenario, resolution, augmented, moduleResolver, fileMap, {
     computeUsage: !!resolvedScenario.expect?.registrationPlan,
   });
   timings.compileMs = performance.now() - compileStart;
@@ -267,10 +274,40 @@ function createProgramFromScenario(
   return { program, fileSystem };
 }
 
+function createModuleResolver(
+  program: ts.Program,
+  fileMap?: Record<string, string>,
+): ModuleResolver {
+  const compilerOptions = program.getCompilerOptions();
+  const mem = fileMap ? new Map(Object.entries(fileMap)) : null;
+  const base = ts.sys;
+
+  const host: ts.ModuleResolutionHost = {
+    fileExists: (fileName) => {
+      const key = normalizePath(fileName);
+      return (mem?.has(key) ?? false) || base.fileExists(fileName);
+    },
+    readFile: (fileName) => {
+      const key = normalizePath(fileName);
+      return mem?.get(key) ?? base.readFile(fileName);
+    },
+    directoryExists: base.directoryExists?.bind(base),
+    realpath: base.realpath?.bind(base),
+    getCurrentDirectory: () => base.getCurrentDirectory ? base.getCurrentDirectory() : process.cwd(),
+    getDirectories: base.getDirectories?.bind(base),
+  };
+
+  return (specifier: string, containingFile: string) => {
+    const resolved = ts.resolveModuleName(specifier, containingFile, compilerOptions, host).resolvedModule;
+    if (!resolved?.resolvedFileName) return null;
+    return normalizePath(resolved.resolvedFileName);
+  };
+}
+
 function buildResolutionConfig(
   scenario: NormalizedScenario,
   fileSystem?: FileSystemContext,
-): ResolutionConfig {
+): Omit<ResolutionConfig, "diagnostics"> {
   return {
     conventions: scenario.resolution.conventions,
     defines: scenario.resolution.defines,
@@ -374,7 +411,7 @@ function applyExternalResources(
   external: readonly ResourceDef[],
   policy: ExternalResourcePolicy,
 ): {
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   resourceGraph: ResourceGraph;
   catalog: ResourceCatalog;
   syntax: TemplateSyntaxRegistry;
@@ -425,11 +462,12 @@ function compileTargets(
   scenario: NormalizedScenario,
   resolution: ResolutionResult,
   merged: {
-    semantics: SemanticsWithCaches;
+    semantics: MaterializedSemantics;
     resourceGraph: ResourceGraph;
     catalog: ResourceCatalog;
     syntax: TemplateSyntaxRegistry;
   },
+  moduleResolver: ModuleResolver,
   fileMap?: Record<string, string>,
   options: { computeUsage?: boolean } = {},
 ): Record<string, CompileRunResult> {
@@ -461,6 +499,7 @@ function compileTargets(
         resourceGraph: merged.resourceGraph,
         resourceScope: scopeId,
         localImports,
+        moduleResolver,
       });
       compileResult.usage = analysis.usage;
       if (target.overlay) {
@@ -478,6 +517,7 @@ function compileTargets(
         resourceGraph: merged.resourceGraph,
         resourceScope: scopeId,
         localImports,
+        moduleResolver,
       });
     }
 
@@ -551,7 +591,7 @@ function resolveScopeId(
 
 function buildSnapshots(
   merged: {
-    semantics: SemanticsWithCaches;
+    semantics: MaterializedSemantics;
     resourceGraph: ResourceGraph;
     catalog: ResourceCatalog;
   },
@@ -619,14 +659,14 @@ function mergeUsageList(base: readonly string[], next: readonly string[]): strin
 
 function applyExplicitResources(
   merged: {
-    semantics: SemanticsWithCaches;
+    semantics: MaterializedSemantics;
     resourceGraph: ResourceGraph;
     catalog: ResourceCatalog;
     syntax: TemplateSyntaxRegistry;
   },
   explicit: Partial<ResourceCollections> | undefined,
 ): {
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
   resourceGraph: ResourceGraph;
   catalog: ResourceCatalog;
   syntax: TemplateSyntaxRegistry;
@@ -652,7 +692,7 @@ function applyExplicitResources(
     },
   };
 
-  const semantics = prepareSemantics(
+  const semantics = prepareProjectSemantics(
     { ...merged.semantics, resourceGraph: nextGraph },
     { resources: mergedResources },
   );

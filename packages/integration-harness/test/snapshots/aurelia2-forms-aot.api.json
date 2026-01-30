@@ -14,9 +14,9 @@
       "bindables": [
         { "attribute": "form", "name": "form" },
         { "attribute": "name", "name": "name", "primary": true },
-        { "attribute": "validateOn", "name": "validateOn" },
-        { "attribute": "validationModel", "name": "validationModel" },
-        { "attribute": "validationProperty", "name": "validationProperty" },
+        { "attribute": "validate-on", "name": "validateOn" },
+        { "attribute": "validation-model", "name": "validationModel" },
+        { "attribute": "validation-property", "name": "validationProperty" },
         { "attribute": "validators", "name": "validators" },
         { "attribute": "value", "mode": "twoWay", "name": "value" }
       ],
@@ -80,9 +80,9 @@
       "bindables": [
         { "attribute": "form", "mode": "twoWay", "name": "form" },
         { "attribute": "submit", "name": "submit" },
-        { "attribute": "validateOnSubmit", "name": "validateOnSubmit" },
-        { "attribute": "validationModel", "name": "validationModel" },
-        { "attribute": "validationObjectTag", "name": "validationObjectTag" }
+        { "attribute": "validate-on-submit", "name": "validateOnSubmit" },
+        { "attribute": "validation-model", "name": "validationModel" },
+        { "attribute": "validation-object-tag", "name": "validationObjectTag" }
       ],
       "id": "sym:c4c96f97f19b3410278c7daafb8e3dbdec1d89c464f5d3feaa951977a170697d",
       "kind": "custom-element",

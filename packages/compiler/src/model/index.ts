@@ -6,6 +6,9 @@ export * from "./identity.js";
 // Spans - source locations and span utilities
 export * from "./span.js";
 
+// Text - line/character conversion helpers
+export * from "./text.js";
+
 // Source files - file resolution and span helpers
 export * from "./source.js";
 

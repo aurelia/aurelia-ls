@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { ModuleResolver } from "@aurelia-ls/compiler";
+
+export const noopModuleResolver: ModuleResolver = () => null;
 
 /**
  * Generic set diff by key.

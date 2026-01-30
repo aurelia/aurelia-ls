@@ -19,8 +19,8 @@
     // Path mappings for package imports (vitest aliases equivalent)
     "paths": {
       "@aurelia-ls/compiler": ["./packages/compiler/src/index.ts"],
-      "@aurelia-ls/resolution": ["./packages/resolution/src/index.ts"],
       "@aurelia-ls/transform": ["./packages/transform/src/index.ts"],
+      "@aurelia-ls/semantic-workspace": ["./packages/semantic-workspace/src/index.ts"],
       "@aurelia-ls/ssr": ["./packages/ssr/src/index.ts"],
       "@aurelia-ls/ssg": ["./packages/ssg/src/index.ts"],
       "@aurelia-ls/vite-plugin": ["./packages/vite-plugin/src/index.ts"]

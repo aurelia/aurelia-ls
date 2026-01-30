@@ -13,6 +13,8 @@ function createVmReflection() {
   };
 }
 
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
+
 describe("FeatureUsageSet", () => {
   it("captures used resources, syntax, and flags", () => {
     const markup = `
@@ -31,6 +33,7 @@ describe("FeatureUsageSet", () => {
       isJs: false,
       vm: createVmReflection(),
       semantics: DEFAULT_SEMANTICS,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     const usage = result.usage;

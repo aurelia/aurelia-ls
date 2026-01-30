@@ -5,15 +5,10 @@ import { resolveSourceFile } from "../model/index.js";
 
 // Language imports (via barrel)
 import {
-  buildTemplateSyntaxRegistry,
-  materializeSemanticsForScope,
-  type LocalImportDef,
-  type ResourceCatalog,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type Semantics,
-  type TemplateSyntaxRegistry,
-} from "../language/index.js";
+  buildSemanticsSnapshotFromProject,
+  type ProjectSnapshot,
+  type TemplateContext,
+} from "../schema/index.js";
 
 // Parsing imports (via barrel)
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
@@ -22,14 +17,14 @@ import { createAttributeParserFromRegistry, getExpressionParser, type AttributeP
 import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 
 // Analysis imports (via barrel)
-import { lowerDocument, resolveHost, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
+import { lowerDocument, linkTemplateSemantics, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
 import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
 
 // Local imports
 import { PipelineEngine } from "./engine.js";
-import type { StageDefinition, StageKey, StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./engine.js";
+import type { StageDefinition, StageKey, StageOutputs, PipelineOptions, CacheOptions, FingerprintHints, ModuleResolver } from "./engine.js";
 import { stableHash, stableHashSemantics } from "./hash.js";
 
 /* =======================================================================================
@@ -39,22 +34,19 @@ import { stableHash, stableHashSemantics } from "./hash.js";
 export interface CoreCompileOptions {
   html: string;
   templateFilePath: string;
-  semantics: Semantics;
-  catalog?: ResourceCatalog;
-  syntax?: TemplateSyntaxRegistry;
-  resourceGraph?: ResourceGraph;
-  resourceScope?: ResourceScopeId | null;
-  localImports?: readonly LocalImportDef[];
+  project: ProjectSnapshot;
+  templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   vm: VmReflection;
+  moduleResolver: ModuleResolver;
   cache?: CacheOptions;
   fingerprints?: FingerprintHints;
 }
 
 export interface CorePipelineResult {
   ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-resolve"];
+  linked: StageOutputs["20-link"];
   scope: StageOutputs["30-bind"];
   typecheck: StageOutputs["40-typecheck"];
 }
@@ -75,13 +67,10 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
-    semantics: opts.semantics,
+    project: opts.project,
+    moduleResolver: opts.moduleResolver,
   };
-  if (opts.catalog) pipelineOpts.catalog = opts.catalog;
-  if (opts.syntax) pipelineOpts.syntax = opts.syntax;
-  if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
-  if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
-  if (opts.localImports) pipelineOpts.localImports = opts.localImports;
+  if (opts.templateContext) pipelineOpts.templateContext = opts.templateContext;
   if (opts.cache) pipelineOpts.cache = opts.cache;
   if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
   if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
@@ -89,7 +78,7 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
   const session = engine.createSession(pipelineOpts);
   return {
     ir: session.run("10-lower"),
-    linked: session.run("20-resolve"),
+    linked: session.run("20-link"),
     scope: session.run("30-bind"),
     typecheck: session.run("40-typecheck"),
   };
@@ -108,29 +97,17 @@ function assertOption<T>(value: T | undefined, name: string): T {
 export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   const definitions: StageDefinition<StageKey>[] = [];
 
-  const resolveSemanticsInputs = (options: PipelineOptions) => {
-    const base = assertOption(options.semantics, "semantics");
-    const graph = options.resourceGraph ?? base.resourceGraph ?? null;
-    const scopeId = options.resourceScope ?? base.defaultScope ?? null;
-    const sem = materializeSemanticsForScope(base, graph, scopeId, options.localImports);
-    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
-    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
-    const catalog = useCatalogOverride ? options.catalog! : sem.catalog;
-    const semWithCatalog = useCatalogOverride ? { ...sem, catalog } : sem;
-    const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
-    return {
-      sem: semWithCatalog,
-      resources: sem.resources,
-      catalog,
-      syntax,
-      scopeId: scopeId ?? null,
-    };
+  const resolveProject = (options: PipelineOptions) => assertOption(options.project, "project");
+  const resolveTemplateSnapshot = (options: PipelineOptions) => {
+    const project = resolveProject(options);
+    return buildSemanticsSnapshotFromProject(project, options.templateContext);
   };
 
   const scopeFingerprint = (options: PipelineOptions) => {
-    const graph = options.resourceGraph ?? options.semantics.resourceGraph ?? null;
+    const project = resolveProject(options);
+    const graph = project.resourceGraph ?? null;
     if (!graph) return null;
-    const scope = options.resourceScope ?? options.semantics.defaultScope ?? graph.root ?? null;
+    const scope = options.templateContext?.scopeId ?? project.defaultScope ?? graph.root ?? null;
     return { graph: stableHash(graph), scope };
   };
 
@@ -140,15 +117,15 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     deps: [],
     fingerprint(ctx) {
       const options = ctx.options;
-      const { catalog, syntax } = resolveSemanticsInputs(options);
+      const project = resolveProject(options);
       const source = resolveSourceFile(options.templateFilePath);
       const attrParserFingerprint = options.fingerprints?.attrParser
         ?? options.fingerprints?.syntax
-        ?? (options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
+        ?? (options.attrParser ? "custom" : stableHash(project.syntax.attributePatterns));
       return {
         html: stableHash(options.html),
         file: source.hashKey,
-        catalog: options.fingerprints?.catalog ?? stableHash(catalog),
+        catalog: options.fingerprints?.catalog ?? stableHash(project.catalog),
         attrParser: attrParserFingerprint,
         exprParser: options.fingerprints?.exprParser ?? (options.exprParser ? "custom" : "default"),
       };
@@ -156,62 +133,64 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     run(ctx) {
       const options = ctx.options;
       const exprParser = options.exprParser ?? getExpressionParser();
-      const { catalog, syntax } = resolveSemanticsInputs(options);
-      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
+      const project = resolveProject(options);
+      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(project.syntax);
       return lowerDocument(options.html, {
         file: options.templateFilePath,
         name: path.basename(options.templateFilePath),
         attrParser,
         exprParser,
-        catalog,
+        catalog: project.catalog,
+        diagnostics: ctx.diag,
         trace: options.trace,
       });
     },
   });
 
   definitions.push({
-    key: "20-resolve",
-    version: "2",
+    key: "20-link",
+    version: "3",
     deps: ["10-lower"],
     fingerprint(ctx) {
-      const { sem } = resolveSemanticsInputs(ctx.options);
+      const { semantics } = resolveTemplateSnapshot(ctx.options);
+      const moduleResolverFingerprint = ctx.options.fingerprints?.moduleResolver ?? "custom";
       return {
-        sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(sem),
+        sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(semantics),
         resourceGraph: scopeFingerprint(ctx.options),
-        localImports: ctx.options.localImports ? stableHash(ctx.options.localImports) : null,
+        localImports: ctx.options.templateContext?.localImports ? stableHash(ctx.options.templateContext.localImports) : null,
+        moduleResolver: moduleResolverFingerprint,
       };
     },
     run(ctx) {
-      const scoped = resolveSemanticsInputs(ctx.options);
+      const scoped = resolveTemplateSnapshot(ctx.options);
       const ir = ctx.require("10-lower");
       const resolveOpts = {
-        resources: scoped.resources,
-        scope: scoped.scopeId,
-        ...(ctx.options.resourceGraph !== undefined ? { graph: ctx.options.resourceGraph } : {}),
-        ...(ctx.options.localImports ? { localImports: ctx.options.localImports } : {}),
+        moduleResolver: ctx.options.moduleResolver,
+        templateFilePath: ctx.options.templateFilePath,
+        diagnostics: ctx.diag,
         trace: ctx.options.trace,
       };
-      return resolveHost(ir, scoped.sem, resolveOpts);
+      return linkTemplateSemantics(ir, scoped, resolveOpts);
     },
   });
 
   definitions.push({
     key: "30-bind",
     version: "1",
-    deps: ["20-resolve"],
+    deps: ["20-link"],
     fingerprint() {
       return "scope@1";
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
-      return bindScopes(linked, { trace: ctx.options.trace });
+      const linked = ctx.require("20-link");
+      return bindScopes(linked, { trace: ctx.options.trace, diagnostics: ctx.diag });
     },
   });
 
   definitions.push({
     key: "40-typecheck",
     version: "1",
-    deps: ["10-lower", "20-resolve", "30-bind"],
+    deps: ["10-lower", "20-link", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
@@ -219,31 +198,31 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       return { vm: vmToken, root: rootVm };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       const scope = ctx.require("30-bind");
       const ir = ctx.require("10-lower");
       const vm = assertOption(ctx.options.vm, "vm");
       // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
-      return typecheck({ linked, scope, ir, rootVmType: rootVm, trace: ctx.options.trace });
+      return typecheck({ linked, scope, ir, rootVmType: rootVm, diagnostics: ctx.diag, trace: ctx.options.trace });
     },
   });
 
   definitions.push({
     key: "50-usage",
     version: "1",
-    deps: ["20-resolve"],
+    deps: ["20-link"],
     fingerprint(ctx) {
-      const { syntax } = resolveSemanticsInputs(ctx.options);
+      const { syntax } = resolveTemplateSnapshot(ctx.options);
       const attrParserFingerprint = ctx.options.fingerprints?.attrParser
         ?? ctx.options.fingerprints?.syntax
         ?? (ctx.options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
       return { attrParser: attrParserFingerprint };
     },
     run(ctx) {
-      const scoped = resolveSemanticsInputs(ctx.options);
+      const scoped = resolveTemplateSnapshot(ctx.options);
       const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(scoped.syntax);
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       return collectFeatureUsage(linked, { syntax: scoped.syntax, attrParser });
     },
   });
@@ -251,7 +230,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "overlay:plan",
     version: "1",
-    deps: ["20-resolve", "30-bind"],
+    deps: ["20-link", "30-bind"],
     fingerprint(ctx) {
       const vm = assertOption(ctx.options.vm, "vm");
       const overlayOpts = ctx.options.overlay ?? { isJs: false };
@@ -265,7 +244,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       const scope = ctx.require("30-bind");
       const vm = assertOption(ctx.options.vm, "vm");
       const overlayOpts: SynthesisOptions = {
@@ -308,7 +287,7 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   definitions.push({
     key: "aot:plan",
     version: "1",
-    deps: ["20-resolve", "30-bind"],
+    deps: ["20-link", "30-bind"],
     fingerprint(ctx) {
       const aotOpts = ctx.options.aot ?? {};
       return {
@@ -316,11 +295,15 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const linked = ctx.require("20-resolve");
+      const linked = ctx.require("20-link");
       const scope = ctx.require("30-bind");
+      const { syntax } = resolveTemplateSnapshot(ctx.options);
+      const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(syntax);
       const aotOpts: AotPlanOptions = {
         templateFilePath: ctx.options.templateFilePath,
         includeLocations: ctx.options.aot?.includeLocations ?? false,
+        syntax,
+        attrParser,
       };
       return planAot(linked, scope, aotOpts);
     },
@@ -332,12 +315,12 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
 /**
  * Shape used by tests/clients that only need the pure pipeline (up to typecheck).
  */
-export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-resolve" | "30-bind" | "40-typecheck"> {
+export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-link" | "30-bind" | "40-typecheck"> {
   const engine = new PipelineEngine(createDefaultStageDefinitions());
   const session = engine.createSession(options);
   return {
     "10-lower": session.run("10-lower"),
-    "20-resolve": session.run("20-resolve"),
+    "20-link": session.run("20-link"),
     "30-bind": session.run("30-bind"),
     "40-typecheck": session.run("40-typecheck"),
   };

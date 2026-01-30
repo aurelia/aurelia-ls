@@ -394,7 +394,7 @@
         "catch": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "catch",
@@ -528,7 +528,7 @@
         "then": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "then",
@@ -772,7 +772,7 @@
             "catch": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "error", "prop": "value" }
+                "alias": { "defaultName": "catch", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "catch",
@@ -906,7 +906,7 @@
             "then": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "data", "prop": "value" }
+                "alias": { "defaultName": "then", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "then",
@@ -1253,7 +1253,7 @@
         "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 179, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 169 },
           "origin": "source",
           "value": "outclick"
         },
@@ -1489,7 +1489,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "catch",
@@ -1736,7 +1736,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "then",

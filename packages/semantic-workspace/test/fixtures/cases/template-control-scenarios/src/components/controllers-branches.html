@@ -1,0 +1,22 @@
+<template>
+  <section if.bind="isReady" with.bind="activeUser" promise.bind="task">
+    <span class="label">${displayName}</span>
+  </section>
+
+  <div class="promise-element" promise.bind="userPromise">
+    <span then.from-view="data">${data.displayName}</span>
+    <i catch.from-view="err">${err.message}</i>
+    <span pending>Loading...</span>
+  </div>
+
+  <div class="promise-mixed" promise.bind="detailPromise">
+    <template then="detail"><em>${detail.title}</em></template>
+    <span catch.from-view="issue">${issue.code}</span>
+  </div>
+
+  <div class="switch-case" switch.bind="mode">
+    <template case.bind="modePrimary" title="case ${modePrimary}">
+      <b>${modePrimary}</b>
+    </template>
+  </div>
+</template>

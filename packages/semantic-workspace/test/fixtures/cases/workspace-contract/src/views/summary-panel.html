@@ -1,0 +1,22 @@
+<template>
+  <section class="summary-panel">
+    <header>
+      <h2>${stats.title | titlecase}</h2>
+      <span class="updated">Updated ${updatedAt | shorten: 8}</span>
+      <button tooltip="Refresh summary" click.trigger="refresh()">Refresh</button>
+    </header>
+
+    <div class="stats-grid">
+      <div repeat.for="entry of stats.items">
+        <pulse-dot active.bind="entry.delta !== undefined"></pulse-dot>
+        <span>${entry.label}</span>
+        <strong>${entry.value}</strong>
+        <span if.bind="entry.delta">(+${entry.delta})</span>
+      </div>
+    </div>
+
+    <template if-not.bind="stats.items.length">
+      <div class="empty">No stats available</div>
+    </template>
+  </section>
+</template>

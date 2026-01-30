@@ -10,15 +10,17 @@ import type {
 import type { ScopeModule, FrameId } from "../../model/symbols.js";
 import type {
   LinkedInstruction,
-  LinkedSemanticsModule,
+  LinkModule,
   TargetSem,
   LinkedElementBindable,
-} from "../20-resolve/types.js";
-import type { TypeRef } from "../../language/registry.js";
+} from "../20-link/types.js";
+import type { TypeRef } from "../../schema/registry.js";
 import { buildExprSpanIndex, exprIdsOf, indexExprTable } from "../../shared/expr-utils.js";
 import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
 import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
-import { buildDiagnostic } from "../../shared/diagnostics.js";
+import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
+import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
 import { exprIdMapGet, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { buildScopeLookup } from "../shared/scope-lookup.js";
 import { isStub } from "../../shared/diagnosed.js";
@@ -36,13 +38,12 @@ import { debug } from "../../shared/debug.js";
 export type { TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./config.js";
 export { resolveTypecheckConfig, DEFAULT_TYPECHECK_CONFIG, TYPECHECK_PRESETS, checkTypeCompatibility } from "./config.js";
 
-/** Diagnostic codes for typecheck phase */
-export type TypecheckDiagCode = "AU1301" | "AU1302" | "AU1303";
+type TypecheckDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, TypecheckDiagCode>;
 
-export type TypecheckDiagnostic = CompilerDiagnostic<TypecheckDiagCode> & {
-  exprId?: ExprId;
-  expected?: string;
-  actual?: string;
+/** Diagnostic codes for typecheck phase (catalog-derived). */
+export type TypecheckDiagCode = DiagnosticCodeForStage<"typecheck">;
+
+export type TypecheckDiagnostic = CompilerDiagnostic<TypecheckDiagCode, DiagnosticDataFor<TypecheckDiagCode>> & {
   severity: TypecheckSeverity;
 };
 
@@ -50,16 +51,16 @@ export interface TypecheckModule {
   version: "aurelia-typecheck@1";
   inferredByExpr: ExprIdMap<string>;
   expectedByExpr: ExprIdMap<string>;
-  diags: TypecheckDiagnostic[];
   /** The resolved config used for this typecheck run */
   config: TypecheckConfig;
 }
 
 export interface TypecheckOptions {
-  linked: LinkedSemanticsModule;
+  linked: LinkModule;
   scope: ScopeModule;
   ir: IrModule;
   rootVmType: string;
+  diagnostics: TypecheckDiagnosticEmitter;
   /** Optional typecheck configuration. Uses lenient defaults if not provided. */
   config?: Partial<TypecheckConfig>;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
@@ -87,7 +88,6 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
         version: "aurelia-typecheck@1",
         inferredByExpr: new Map(),
         expectedByExpr: new Map(),
-        diags: [],
         config,
       };
     }
@@ -109,7 +109,7 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
     // Build span index and collect diagnostics
     trace.event("typecheck.diagnostics.start");
     const exprSpanIndex = buildExprSpanIndex(opts.ir);
-    const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config);
+    const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config, opts.diagnostics);
     trace.event("typecheck.diagnostics.complete", { count: diags.length });
 
     // Extract just the types for the module output (without context)
@@ -127,7 +127,7 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
       [CompilerAttributes.DIAG_WARNING_COUNT]: diags.filter(d => d.severity === "warning").length,
     });
 
-    return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags, config };
+    return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, config };
   });
 }
 
@@ -137,7 +137,7 @@ interface ExpectedTypeInfo {
   context: BindingContext;
 }
 
-function collectExpectedTypes(linked: LinkedSemanticsModule): ExprIdMap<ExpectedTypeInfo> {
+function collectExpectedTypes(linked: LinkModule): ExprIdMap<ExpectedTypeInfo> {
   const expectedByExpr: ExprIdMap<ExpectedTypeInfo> = new Map();
   for (const t of linked.templates ?? []) {
     for (const row of t.rows ?? []) {
@@ -182,6 +182,7 @@ function collectDiagnostics(
   inferred: ReadonlyExprIdMap<string>,
   spans: ReadonlyExprIdMap<SourceSpan>,
   config: TypecheckConfig,
+  emitter: TypecheckDiagnosticEmitter,
 ): TypecheckDiagnostic[] {
   const diags: TypecheckDiagnostic[] = [];
 
@@ -208,22 +209,20 @@ function collectDiagnostics(
     });
 
     const span = exprIdMapGet(spans, id) ?? null;
-    const code = severityToCode(result.severity);
     const message = result.reason ?? `Type mismatch: expected ${expectedInfo.type}, got ${actual}`;
 
-    const diag = buildDiagnostic({
-      code,
+    const diag = emitter.emit("aurelia/expr-type-mismatch", {
       message,
       span,
-      source: "typecheck",
       severity: result.severity,
+      data: {
+        expected: expectedInfo.type,
+        actual,
+      },
     });
 
     diags.push({
       ...diag,
-      exprId: id,
-      expected: expectedInfo.type,
-      actual,
       severity: result.severity,
     });
   }
@@ -231,18 +230,6 @@ function collectDiagnostics(
   return diags;
 }
 
-/**
- * Map severity to diagnostic code.
- * AU1301 = error, AU1302 = warning, AU1303 = info
- */
-function severityToCode(severity: TypecheckSeverity): TypecheckDiagCode {
-  switch (severity) {
-    case "error": return "AU1301";
-    case "warning": return "AU1302";
-    case "info": return "AU1303";
-    default: return "AU1301";
-  }
-}
 
 function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTypeInfo>): void {
   switch (ins.kind) {

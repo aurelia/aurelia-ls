@@ -1,0 +1,11 @@
+<template>
+  <div class="device-detail" if.bind="device">
+    <h3>${device.name}</h3>
+    <status-badge status.bind="device.status" level.bind="device.rating" is-active.bind="device.rating > 3"></status-badge>
+    <p if.bind="device.manufacturer">Maker: ${device.manufacturer}</p>
+    <div class="tags">
+      <label-chip repeat.for="tag of tags" label.bind="tag"></label-chip>
+    </div>
+    <button tooltip="Copy name" copy-to-clipboard.bind="device.name">Copy</button>
+  </div>
+</template>

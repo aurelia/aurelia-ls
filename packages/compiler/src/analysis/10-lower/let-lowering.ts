@@ -1,15 +1,16 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../schema/registry.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
-import type { ExprTable, P5Element } from "./lower-shared.js";
+import type { P5Element } from "./lower-shared.js";
 import { attrLoc, attrValueLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
+import type { LowerContext } from "./lower-context.js";
+import type { ExprTable } from "./lower-shared.js";
 
 export function lowerLetElement(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
-  catalog: ResourceCatalog
+  lowerCtx: LowerContext,
 ): HydrateLetElementIR {
+  const { attrParser, table, catalog } = lowerCtx;
   const { instructions, toBindingContext } = compileLet(el, attrParser, table, catalog);
   return {
     type: "hydrateLetElement",
@@ -37,7 +38,7 @@ function compileLet(
 
     // <let> supports property binding commands (bind, one-time, to-view, two-way, from-view)
     // but NOT event commands (trigger, capture) or ref commands
-    // Runtime throws AU0704 for unsupported commands
+    // Runtime throws AUR0704 for unsupported commands
     const cmdConfig = s.command ? catalog.bindingCommands[s.command] : null;
     if (cmdConfig?.kind === "property") {
       const loc = attrLoc(el, a.name);
@@ -71,16 +72,17 @@ function compileLet(
     }
 
     // Any other command (e.g., .trigger, .capture) is invalid for <let>
-    // Emit AU0704: Invalid <let> command
+    // Emit aurelia/invalid-command-usage: Invalid <let> command
     const loc = attrLoc(el, a.name);
     const validCommands = Object.entries(catalog.bindingCommands)
       .filter(([, cfg]) => cfg.kind === "property")
       .map(([name]) => name)
       .join(", ");
-    table.addDiag(
-      "AU0704",
+    table.reportDiagnostic(
+      "aurelia/invalid-command-usage",
       `Invalid command '.${s.command}' on <let>. Valid commands: ${validCommands}.`,
-      loc
+      loc,
+      { aurCode: "AUR0704" },
     );
   }
   return { instructions: out, toBindingContext };

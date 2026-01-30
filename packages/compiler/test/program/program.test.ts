@@ -1,6 +1,7 @@
 import { test, expect } from "vitest";
 
-import { DEFAULT_SEMANTICS, DefaultTemplateProgram } from "@aurelia-ls/compiler";
+import { DEFAULT_SEMANTICS, DefaultTemplateProgram, buildProjectSnapshot } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 test("cache stats track hits and invalidation", () => {
   const program = createProgram();
@@ -173,7 +174,8 @@ function createProgram(overrides = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
+    moduleResolver: noopModuleResolver,
     ...overrides,
   });
 }

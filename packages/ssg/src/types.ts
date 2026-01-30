@@ -4,7 +4,7 @@
  * Type definitions for the Aurelia SSG system.
  */
 
-import type { RouteTree, ParameterizedRoute } from "@aurelia-ls/resolution";
+import type { RouteTree, ParameterizedRoute } from "@aurelia-ls/compiler";
 
 /**
  * SSG configuration options.

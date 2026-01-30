@@ -379,7 +379,7 @@
         "catch": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "catch",
@@ -513,7 +513,7 @@
         "then": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "then",
@@ -764,7 +764,7 @@
             "catch": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "error", "prop": "value" }
+                "alias": { "defaultName": "catch", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "catch",
@@ -898,7 +898,7 @@
             "then": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "data", "prop": "value" }
+                "alias": { "defaultName": "then", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "then",
@@ -1279,7 +1279,7 @@
         "file": "/src/entry.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
+          "location": { "end": 127, "file": "/src/entry.ts", "pos": 117 },
           "origin": "source",
           "value": "alpha-el"
         },
@@ -1474,7 +1474,7 @@
         "file": "/src/entry.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
+          "location": { "end": 183, "file": "/src/entry.ts", "pos": 174 },
           "origin": "source",
           "value": "beta-el"
         },
@@ -1538,7 +1538,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "catch",
@@ -1785,7 +1785,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "then",
