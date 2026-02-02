@@ -117,14 +117,11 @@
     }
   },
   {
-    "name": "R-P-13 tabindex.bind -> tabIndex (unknown on <div>)",
+    "name": "R-P-13 tabindex.bind -> tabIndex (native via base)",
     "markup": "<div tabindex.bind=\"i\"></div>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "tabIndex", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "tabIndex", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -387,7 +384,7 @@
     }
   },
   {
-    "name": "R-P-41 class.bind becomes unknown when <div> DOM props are cleared",
+    "name": "R-P-41 class.bind stays native even when <div> DOM props are cleared (global HTML prop)",
     "semOverrides": {
       "dom": {
         "elements": {
@@ -402,10 +399,7 @@
     "markup": "<div class.bind=\"c\"></div>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "class", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "class", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },

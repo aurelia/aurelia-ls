@@ -96,14 +96,11 @@
     }
   },
   {
-    "name": "R-A-11 div title interpolation -> title (unknown target)",
+    "name": "R-A-11 div title interpolation -> title (native via base)",
     "markup": "<div title=\"a ${b}\"></div>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "title", "to": "title", "target": "unknown" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-attribute" }
+        { "kind": "attr", "attr": "title", "to": "title", "target": "native" }
       ]
     }
   },
@@ -223,14 +220,11 @@
     }
   },
   {
-    "name": "R-A-20 title interpolation on <span> -> unknown target + aurelia/unknown-attribute",
+    "name": "R-A-20 title interpolation on <span> -> title (native via base)",
     "markup": "<span title=\"a ${b}\"></span>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "title", "to": "title", "target": "unknown" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-attribute" }
+        { "kind": "attr", "attr": "title", "to": "title", "target": "native" }
       ]
     }
   },
@@ -356,6 +350,46 @@
       ],
       "diags": [
         { "code": "aurelia/unknown-attribute" }
+      ]
+    }
+  },
+  {
+    "name": "R-A-29a class interpolation on element not in DOM schema resolves as native",
+    "markup": "<i class=\"bi ${icon}\"></i>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
+      ]
+    }
+  },
+  {
+    "name": "R-A-29b style interpolation on element not in DOM schema resolves as native",
+    "markup": "<i style=\"color: ${clr}\"></i>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "style", "to": "style", "target": "native" }
+      ]
+    }
+  },
+  {
+    "name": "R-A-29c class interpolation on custom element resolves as native",
+    "semOverrides": {
+      "resources": {
+        "elements": {
+          "my-icon": {
+            "kind": "element",
+            "name": "my-icon",
+            "bindables": {
+              "icon": { "name": "icon" }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<my-icon class=\"bi ${icon}\"></my-icon>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
       ]
     }
   },

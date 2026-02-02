@@ -434,6 +434,30 @@ export const BUILTIN_ATTRIBUTE_PATTERNS: readonly AttributePatternConfig[] =
 
 const DOM: DomSchema = {
   ns: 'html',
+  // HTMLElement.prototype — every element inherits these.
+  base: {
+    tag: '*',
+    props: {
+      class: { type: 'string' },
+      className: { type: 'string' },
+      id: { type: 'string' },
+      style: { type: 'CSSStyleDeclaration' },
+      title: { type: 'string' },
+      hidden: { type: 'boolean' },
+      tabIndex: { type: 'number' },
+      dir: { type: 'string' },
+      lang: { type: 'string' },
+      draggable: { type: 'boolean' },
+      textContent: { type: 'string' },
+      innerHTML: { type: 'string' },
+      scrollTop: { type: 'number' },
+      scrollLeft: { type: 'number' },
+    },
+    attrToProp: {
+      tabindex: 'tabIndex',
+      contenteditable: 'contentEditable',
+    },
+  },
   elements: {
     input: {
       tag: 'input',
@@ -501,25 +525,8 @@ const DOM: DomSchema = {
       props: { rowSpan: { type: 'number' }, colSpan: { type: 'number' } },
       attrToProp: { rowspan: 'rowSpan', colspan: 'colSpan' },
     },
-    div: {
-      tag: 'div',
-      props: {
-        class: { type: 'string' },
-        className: { type: 'string' },
-        style: { type: 'CSSStyleDeclaration' },
-        textContent: { type: 'string' },
-        innerHTML: { type: 'string' },
-        scrollTop: { type: 'number' },
-        scrollLeft: { type: 'number' },
-      },
-    },
-    span: {
-      tag: 'span',
-      props: {
-        class: { type: 'string' },
-        textContent: { type: 'string' },
-      },
-    },
+    div: { tag: 'div', props: {} },
+    span: { tag: 'span', props: {} },
     form: { tag: 'form', props: {} },
     button: {
       tag: 'button',
@@ -708,7 +715,15 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
     },
     domElement(tag: string) {
       const key = tag.toLowerCase();
-      return semWithCaches.dom.elements[key] ?? null;
+      const base = semWithCaches.dom.base;
+      const perTag = semWithCaches.dom.elements[key];
+      if (!perTag) return base;
+      // Merge: per-tag props/attrToProp win over base
+      return {
+        tag: perTag.tag,
+        props: { ...base.props, ...perTag.props },
+        attrToProp: { ...base.attrToProp, ...perTag.attrToProp },
+      };
     },
     event(name: string, tag?: string): { name: string; type: TypeRef } {
       const key = name.toLowerCase();

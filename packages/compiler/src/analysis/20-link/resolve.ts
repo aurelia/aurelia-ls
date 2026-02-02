@@ -102,10 +102,13 @@ function assertUnreachable(_x: never): never {
 /**
  * Check if a NodeSem represents a truly unknown custom element.
  * Custom elements have tags containing '-' (per HTML spec).
- * When both custom and native are null for such elements, it's unknown.
+ * A hyphenated tag without a custom element registration is unknown.
  *
  * Used for stub propagation: we suppress unknown-target diagnostics for props on unknown
  * custom elements since the root cause is the missing element, not the prop.
+ *
+ * Note: host.native is always populated (DomSchema.base provides HTMLElement fallback),
+ * so we only check host.custom for determining if a custom element is missing.
  *
  * IMPORTANT: If a resource graph is provided and the element exists in ANY
  * scope of that graph, it's NOT truly unknown (just out-of-scope), so we
@@ -115,7 +118,7 @@ function isMissingCustomElement(host: NodeSem): boolean {
   if (host.kind !== "element" || !host.tag.includes("-")) {
     return false;
   }
-  return !host.custom && !host.native;
+  return !host.custom;
 }
 
 function elementExistsInGraph(tag: string, graph?: ResourceGraph | null): boolean {

@@ -291,6 +291,8 @@ export interface DomElement {
 
 export interface DomSchema {
   readonly ns: 'html';
+  /** HTMLElement.prototype — inherited by every element. */
+  readonly base: DomElement;
   readonly elements: Readonly<Record<string, DomElement>>;
 }
 

@@ -207,7 +207,7 @@ describe("Semantic Tokens + Resolution Integration", () => {
       expect(nodeSem.native, "native property populated").toBeTruthy();
     });
 
-    it("unknown element has neither custom nor native", () => {
+    it("unknown element has no custom but gets base native (HTMLElement fallback)", () => {
       const markup = `<unknown-widget foo.bind="bar"></unknown-widget>`;
       const { linked } = compileTemplateForSemanticTokens(markup, rootSemantics);
 
@@ -222,7 +222,9 @@ describe("Semantic Tokens + Resolution Integration", () => {
 
       const nodeSem = unknownRow!.node as NodeSem & { kind: "element" };
       expect(nodeSem.custom, "no custom for unknown element").toBeFalsy();
-      expect(nodeSem.native, "no native for unknown element").toBeFalsy();
+      // native is always populated (DomSchema.base provides HTMLElement fallback)
+      expect(nodeSem.native, "base native always present").toBeTruthy();
+      expect(nodeSem.native!.def.tag, "base element tag is '*'").toBe("*");
     });
 
     it("element alias recognized as custom", () => {
