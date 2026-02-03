@@ -208,7 +208,16 @@ export function collectExprMemberSegments(
       case "AccessMember": {
         const parentPath = walk(node.object, base, acc, inheritedPath);
         const path = parentPath ? `${parentPath}.${node.name.name}` : undefined;
-        if (path) acc.push({ path, span: toHtmlSpan(node.name.span, base) });
+        if (path) {
+          // Extend span to include the '.' operator by starting from object's end.
+          // Preserve the file property so toHtmlSpan recognizes this as an absolute span.
+          const objectSpan = (node.object as { span?: SourceSpan }).span;
+          const objectEnd = objectSpan?.end;
+          const memberSpan = objectEnd != null && node.name.span
+            ? { start: objectEnd, end: node.name.span.end, file: node.name.span.file }
+            : node.name.span;
+          acc.push({ path, span: toHtmlSpan(memberSpan, base) });
+        }
         return path;
       }
       case "AccessKeyed": {

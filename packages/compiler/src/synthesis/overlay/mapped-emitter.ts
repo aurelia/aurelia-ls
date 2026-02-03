@@ -216,13 +216,15 @@ function emitAccessScope(node: AccessScopeExpression): EmitResult {
 
 function emitAccessMember(node: AccessMemberExpression): EmitResult {
   const obj = emitBindingBehavior(node.object);
-  const head = `${obj.code}${node.optional ? "?." : "."}`;
-  const memberStart = head.length;
-  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.name.length);
+  const dot = node.optional ? "?." : ".";
+  const head = `${obj.code}${dot}`;
+  // Include the dot in the member segment for symmetric mapping with HTML spans
+  const memberStart = obj.code.length;
+  const memberSpan = spanFromBounds(memberStart, head.length + node.name.name.length);
   const basePath = deepestPath(obj.segments);
   const path = basePath ? `${basePath}.${node.name.name}` : node.name.name;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [obj, head.slice(obj.code.length), node.name.name], segments);
+  return combine(node, [obj, dot, node.name.name], segments);
 }
 
 function emitAccessKeyed(node: AccessKeyedExpression): EmitResult {
@@ -251,24 +253,28 @@ function emitNew(node: NewExpression): EmitResult {
 
 function emitCallScope(node: CallScopeExpression): EmitResult {
   const base = ancestorChain(node.ancestor);
-  const head = `${base}${node.optional ? "?." : "."}${node.name.name}`;
+  const dot = node.optional ? "?." : ".";
   const args = emitArgsParts(node.args);
   const path = ancestorPath(node.ancestor, node.name.name);
-  const memberSpan = spanFromBounds(base.length + 1, base.length + 1 + node.name.name.length);
+  // Include the dot in the member segment for symmetric mapping with HTML spans
+  const memberSpan = spanFromBounds(base.length, base.length + dot.length + node.name.name.length);
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [head, "(", ...args, ")"], segments);
+  return combine(node, [base, dot, node.name.name, "(", ...args, ")"], segments);
 }
 
 function emitCallMember(node: CallMemberExpression): EmitResult {
   const obj = emitBindingBehavior(node.object);
-  const head = `${obj.code}${node.optionalMember ? "?." : "."}${node.name.name}${node.optionalCall ? "?." : ""}`;
+  const dot = node.optionalMember ? "?." : ".";
+  const optCall = node.optionalCall ? "?." : "";
   const args = emitArgsParts(node.args);
-  const memberStart = obj.code.length + (node.optionalMember ? 2 : 1);
-  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.name.length);
+  // Include the dot in the member segment for symmetric mapping with HTML spans
+  const memberStart = obj.code.length;
+  const memberEnd = obj.code.length + dot.length + node.name.name.length;
+  const memberSpan = spanFromBounds(memberStart, memberEnd);
   const basePath = lastPath(obj.segments);
   const path = basePath ? `${basePath}.${node.name.name}` : node.name.name;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [obj, head.slice(obj.code.length), "(", ...args, ")"], segments);
+  return combine(node, [obj, dot, node.name.name, optCall, "(", ...args, ")"], segments);
 }
 
 function emitCallFunction(node: CallFunctionExpression): EmitResult {

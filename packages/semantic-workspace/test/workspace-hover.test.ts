@@ -179,12 +179,13 @@ describe("workspace hover (workspace-contract)", () => {
     // Must NOT show generic fallback or duplicate type info
     expect(contents).not.toMatch(/\(expression\) expression/);
     expect(contents).not.toMatch(/\(expression\) activeDevice\.name:/);
-    // Span narrows to the member being hovered (name), not the full expression
+    // Span narrows to the member access being hovered (.name), not the full expression.
+    // The span includes the dot for contiguous coverage with the parent expression.
     expect(hover?.location?.span).toBeDefined();
     const exprStart = appText.indexOf("activeDevice.name");
-    const nameStart = exprStart + "activeDevice.".length;
-    expect(hover!.location!.span!.start).toBeGreaterThanOrEqual(nameStart);
-    expect(hover!.location!.span!.end).toBeLessThanOrEqual(nameStart + "name".length);
+    const memberStart = exprStart + "activeDevice".length; // starts at the dot
+    expect(hover!.location!.span!.start).toBeGreaterThanOrEqual(memberStart);
+    expect(hover!.location!.span!.end).toBeLessThanOrEqual(memberStart + ".name".length);
     // Stable expr id
     expect(typeof hover?.location?.exprId).toBe("string");
     expect(hover!.location!.exprId!.length).toBeGreaterThan(0);
