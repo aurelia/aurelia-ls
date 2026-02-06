@@ -59,17 +59,23 @@ export function createServerContext(init: ServerContextInit): ServerContext {
 
   let workspaceRoot: string | null = null;
   let workspace: SemanticWorkspaceEngine;
+  const syncedDocumentVersions = new Map<DocumentUri, number>();
 
   function ensureProgramDocument(uri: string): TextDocument | null {
     const live = documents.get(uri);
     const canonical = canonicalDocumentUri(uri);
     if (live) {
-      workspace.update(canonical.uri, live.getText(), live.version);
+      const lastSyncedVersion = syncedDocumentVersions.get(canonical.uri);
+      if (lastSyncedVersion !== live.version) {
+        workspace.update(canonical.uri, live.getText(), live.version);
+        syncedDocumentVersions.set(canonical.uri, live.version);
+      }
       return live;
     }
 
     const snap = workspace.ensureFromFile(canonical.uri);
     if (!snap) return null;
+    syncedDocumentVersions.delete(canonical.uri);
     return TextDocument.create(uri, "html", 0, snap.text);
   }
 
@@ -87,7 +93,10 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     set workspaceRoot(v) { workspaceRoot = v; },
 
     get workspace() { return workspace; },
-    set workspace(v) { workspace = v; },
+    set workspace(v) {
+      workspace = v;
+      syncedDocumentVersions.clear();
+    },
 
     ensureProgramDocument,
     lookupText,

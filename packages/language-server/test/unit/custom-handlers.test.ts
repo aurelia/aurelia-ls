@@ -1,6 +1,6 @@
 import { test, expect, describe, vi } from "vitest";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
-import { handleGetOverlay, handleGetMapping, handleGetSsr, handleDumpState } from "../../out/handlers/custom.js";
+import { handleGetOverlay, handleGetMapping, handleGetSsr, handleDumpState } from "../../src/handlers/custom.js";
 
 function createMockLogger() {
   return {

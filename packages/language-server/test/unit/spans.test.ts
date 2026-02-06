@@ -1,6 +1,6 @@
 import { test, expect, describe } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { spanToRange, spanToRangeOrNull, diagnosticToRange } from "../../out/services/spans.js";
+import { spanToRange, spanToRangeOrNull, diagnosticToRange } from "../../src/services/spans.js";
 import type { CompilerDiagnostic } from "@aurelia-ls/compiler";
 
 function createDoc(content: string): TextDocument {

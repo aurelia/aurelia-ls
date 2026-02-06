@@ -268,6 +268,21 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void {
     const canonical = this.canonicalUri(uri);
+    const prev = this.sources.get(canonical.uri);
+    if (prev) {
+      if (version !== undefined && version < prev.version) {
+        debug.workspace("program.upsert.stale", {
+          uri: canonical.uri,
+          version,
+          prevVersion: prev.version,
+        });
+        return;
+      }
+      const unchangedVersion = version === undefined || version === prev.version;
+      if (unchangedVersion && prev.text === text) {
+        return;
+      }
+    }
     this.resetDocumentState(canonical, false);
     this.sources.set(canonical.uri, text, version);
   }

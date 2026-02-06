@@ -38,6 +38,44 @@ test("cache stats track hits and invalidation", () => {
   expect(cleared.provenance.totalEdges).toBe(0);
 });
 
+test("upsertTemplate is idempotent for identical version + text", () => {
+  const program = createProgram();
+  const uri = "/app/idempotent.html";
+  const markup = "<template>${name}</template>";
+
+  program.upsertTemplate(uri, markup, 1);
+  program.getOverlay(uri);
+  let doc = program.getCacheStats(uri).documents[0];
+  expect(doc.compilation?.programCacheHit).toBe(false);
+
+  program.upsertTemplate(uri, markup, 1);
+  doc = program.getCacheStats(uri).documents[0];
+  expect(doc.compilation).toBeDefined();
+
+  program.getOverlay(uri);
+  doc = program.getCacheStats(uri).documents[0];
+  expect(doc.version).toBe(1);
+  expect(doc.compilation?.programCacheHit).toBe(true);
+});
+
+test("upsertTemplate ignores stale explicit versions", () => {
+  const program = createProgram();
+  const uri = "/app/stale-version.html";
+
+  program.upsertTemplate(uri, "<template>${name}</template>", 3);
+  program.getOverlay(uri);
+  program.upsertTemplate(uri, "<template>${other}</template>", 2);
+
+  let doc = program.getCacheStats(uri).documents[0];
+  expect(doc.version).toBe(3);
+  expect(doc.compilation).toBeDefined();
+
+  program.getOverlay(uri);
+  doc = program.getCacheStats(uri).documents[0];
+  expect(doc.version).toBe(3);
+  expect(doc.compilation?.programCacheHit).toBe(true);
+});
+
 test("bulk builds cover all sources and overlays seed core stages", () => {
   const program = createProgram();
   const templates = [
