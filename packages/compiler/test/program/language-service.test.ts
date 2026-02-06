@@ -911,6 +911,49 @@ test("buildTemplateMapping preserves all member segments for multi-member expres
   expect(nameSeg.htmlSpan.end <= ageSeg.htmlSpan.start || ageSeg.htmlSpan.end <= nameSeg.htmlSpan.start).toBeTruthy();
 });
 
+test("buildTemplateMapping keeps dynamic keyed chains rooted on the object path", () => {
+  const program = createProgram();
+  const uri = "/app/dynamic-keyed-paths.html";
+  const markup = "<template>${x[reallyLongName].value}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const entry = compilation.mapping.entries[0];
+  const paths = (entry.segments ?? []).map((s) => s.path);
+
+  expect(paths).toContain("x");
+  expect(paths).toContain("reallyLongName");
+  expect(paths).toContain("x.value");
+  expect(paths).not.toContain("reallyLongName.value");
+  expect(paths).not.toContain('x["o.reallyLongName"]');
+
+  const valueSeg = entry.segments?.find((s) => s.path === "x.value");
+  expect(valueSeg, "x.value segment should be present").toBeTruthy();
+  expect(markup.slice(valueSeg!.htmlSpan.start, valueSeg!.htmlSpan.end)).toBe(".value");
+});
+
+test("buildTemplateMapping aligns $parent chain segments to authored spans", () => {
+  const program = createProgram();
+  const uri = "/app/parent-chain-paths.html";
+  const markup = "<template>${$parent.$parent.vm.foo}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const entry = compilation.mapping.entries[0];
+
+  const parentSeg = entry.segments?.find((s) => s.path === "$parent.$parent");
+  const vmSeg = entry.segments?.find((s) => s.path === "$parent.$parent.vm");
+  const fullSeg = entry.segments?.find((s) => s.path === "$parent.$parent.vm.foo");
+
+  expect(parentSeg, "parent chain segment should be present").toBeTruthy();
+  expect(vmSeg, "vm segment should be present").toBeTruthy();
+  expect(fullSeg, "full member segment should be present").toBeTruthy();
+
+  expect(markup.slice(parentSeg!.htmlSpan.start, parentSeg!.htmlSpan.end)).toBe("$parent.$parent");
+  expect(markup.slice(vmSeg!.htmlSpan.start, vmSeg!.htmlSpan.end)).toBe("vm");
+  expect(markup.slice(fullSeg!.htmlSpan.start, fullSeg!.htmlSpan.end)).toBe(".foo");
+});
+
 function positionAtOffset(text, offset) {
   const clamped = Math.max(0, Math.min(offset, text.length));
   let line = 0;

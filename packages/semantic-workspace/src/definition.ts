@@ -916,6 +916,17 @@ function parseLocalPath(path: string): { name: string; ancestorDepth: number; ro
     } else if (!working) {
       return null;
     }
+  } else if (working.startsWith("$parent")) {
+    let prefix = "$parent";
+    let depth = 1;
+    while (working.startsWith(`${prefix}.$parent`)) {
+      prefix += ".$parent";
+      depth += 1;
+    }
+    ancestorDepth = depth;
+    if (working === prefix) return null;
+    if (!working.startsWith(`${prefix}.`)) return null;
+    working = working.slice(prefix.length + 1);
   }
   if (working.startsWith("$this") || working.startsWith("$vm") || working.startsWith("$parent")) return null;
   const sepIndex = working.search(/[.\[]/);

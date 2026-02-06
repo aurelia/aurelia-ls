@@ -25,6 +25,7 @@ interface TestCase {
   type?: string;
   ast?: BadExpressionAst;
   expectSegments?: ExpectSegment[];
+  rejectSegments?: readonly string[];
   expectCode?: string;
 }
 
@@ -123,12 +124,31 @@ describe("Overlay mapped emitter", () => {
       name: "optional + keyed span/path",
       src: "foo?.bar?.baz[qux]",
       expectSegments: [
-        { path: "foo.bar.baz.qux" },
         { path: "foo.bar.baz" },
         { path: "foo.bar" },
         { path: "foo" },
         { path: "qux" },
       ],
+      rejectSegments: ["foo.bar.baz.qux", "foo.bar.baz[\"o.qux\"]"],
+    },
+    {
+      name: "literal keyed path carries into chained member",
+      src: "filters[0].value",
+      expectSegments: [
+        { path: "filters" },
+        { path: 'filters["0"]' },
+        { path: 'filters["0"].value' },
+      ],
+    },
+    {
+      name: "dynamic keyed chain keeps object path for member access",
+      src: "x[reallyLongName].value",
+      expectSegments: [
+        { path: "x" },
+        { path: "reallyLongName" },
+        { path: "x.value" },
+      ],
+      rejectSegments: ["reallyLongName.value"],
     },
     {
       name: "$parent hop path",
@@ -167,6 +187,11 @@ describe("Overlay mapped emitter", () => {
         const paths = emitted.segments.map((s) => s.path);
         for (const exp of c.expectSegments) {
           expect(paths.includes(exp.path), `expected path ${exp.path} in segments: ${paths.join(", ")}`).toBeTruthy();
+        }
+        if (c.rejectSegments) {
+          for (const rejected of c.rejectSegments) {
+            expect(paths.includes(rejected), `unexpected path ${rejected} in segments: ${paths.join(", ")}`).toBe(false);
+          }
         }
       }
       if (c.expectCode) {

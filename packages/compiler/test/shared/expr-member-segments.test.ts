@@ -224,23 +224,48 @@ describe("collectExprMemberSegments", () => {
   });
 
   describe("$parent and $this", () => {
-    test("$parent.foo produces single segment with hop notation", () => {
-      // $parent.foo parses as AccessMember with AccessThis ancestor=1
-      // The path notation is "$parent^1.foo" (the ^1 indicates ancestor hop)
+    test("$parent.foo produces parent-chain and member segments", () => {
+      // AccessScope ancestor paths use explicit parent chains.
       const segments = getSegments("$parent.foo", 0);
 
-      expect(segments).toHaveLength(1);
-      expect(segments[0]!.path).toBe("$parent^1.foo");
+      expect(segments.map((s) => s.path)).toEqual(["$parent", "$parent.foo"]);
+      expect(segments.find((s) => s.path === "$parent")).toEqual({
+        path: "$parent",
+        start: 0,
+        end: 7,
+        text: "$parent",
+      });
+      expect(segments.find((s) => s.path === "$parent.foo")).toEqual({
+        path: "$parent.foo",
+        start: 8,
+        end: 11,
+        text: "foo",
+      });
     });
 
-    test("nested $parent.$parent produces path with cumulative hops", () => {
-      // $parent.$parent.bar parses as nested ancestor hops
-      // The path format uses ^N to indicate total ancestor depth
+    test("nested $parent.$parent produces cumulative parent chain", () => {
       const segments = getSegments("$parent.$parent.bar", 0);
 
+      expect(segments.map((s) => s.path)).toEqual(["$parent.$parent", "$parent.$parent.bar"]);
+      expect(segments.find((s) => s.path === "$parent.$parent")).toEqual({
+        path: "$parent.$parent",
+        start: 0,
+        end: 15,
+        text: "$parent.$parent",
+      });
+      expect(segments.find((s) => s.path === "$parent.$parent.bar")).toEqual({
+        path: "$parent.$parent.bar",
+        start: 16,
+        end: 19,
+        text: "bar",
+      });
+    });
+
+    test("$parent alone keeps a single AccessThis segment", () => {
+      const segments = getSegments("$parent", 0);
       expect(segments).toHaveLength(1);
-      // The parser tracks cumulative ancestor depth
-      expect(segments[0]!.path).toBe("$parent^2.bar");
+      expect(segments[0]!.path).toBe("$parent");
+      expect(segments[0]!.text).toBe("$parent");
     });
   });
 

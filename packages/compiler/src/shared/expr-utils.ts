@@ -195,13 +195,19 @@ export function collectExprMemberSegments(
     if (!node || !node.$kind) return inheritedPath;
     switch (node.$kind) {
       case "AccessScope": {
-        const pathBase = node.ancestor === 0 ? "" : `$parent^${node.ancestor}.`;
-        const path = `${pathBase}${node.name.name}`;
+        const parentPath = parentChain(node.ancestor);
+        if (parentPath) {
+          const parentSpan = node.name.span
+            ? { start: node.span.start, end: Math.max(node.span.start, node.name.span.start - 1), file: node.span.file }
+            : node.span;
+          acc.push({ path: parentPath, span: toHtmlSpan(parentSpan, base) });
+        }
+        const path = parentPath ? `${parentPath}.${node.name.name}` : node.name.name;
         acc.push({ path, span: toHtmlSpan(node.name.span, base) });
         return path;
       }
       case "AccessThis": {
-        const path = node.ancestor === 0 ? "$this" : `$parent^${node.ancestor}`;
+        const path = node.ancestor === 0 ? "$this" : parentChain(node.ancestor);
         acc.push({ path, span: toHtmlSpan(node.span, base) });
         return path;
       }
@@ -288,6 +294,11 @@ export function collectExprMemberSegments(
     const normalizedSpan: SourceSpan = normalizeSpan({ ...span });
     if (normalizedSpan.file) return normalizedSpan;
     return absoluteSpan(normalizedSpan, normalizedBase) ?? normalizedBase;
+  }
+
+  function parentChain(ancestor: number): string {
+    if (ancestor <= 0) return "";
+    return Array.from({ length: ancestor }, () => "$parent").join(".");
   }
 }
 
