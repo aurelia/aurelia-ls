@@ -33,6 +33,14 @@ function findPosition(text: string, needle: string, delta = 0): { line: number; 
   return positionAt(text, index + delta);
 }
 
+function insertBefore(text: string, marker: string, insert: string): string {
+  const index = text.indexOf(marker);
+  if (index < 0) {
+    throw new Error(`Marker not found: ${marker}`);
+  }
+  return text.slice(0, index) + insert + text.slice(index);
+}
+
 function spanText(
   harness: Awaited<ReturnType<typeof createWorkspaceHarness>>,
   loc: { uri: string; span: { start: number; end: number } },
@@ -154,6 +162,27 @@ describe("workspace definition (workspace-contract)", () => {
 
     const attrDefs = query.definition(findPosition(appText, "class=\"app-shell\"", 1));
     expect(attrDefs).toHaveLength(0);
+  });
+
+  it("does not invent definitions for unknown dashed elements", async () => {
+    const localHarness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    const localUri = localHarness.openTemplate("src/my-app.html");
+    const localText = localHarness.readText(localUri);
+    if (!localText) {
+      throw new Error("Expected template text for workspace-contract fixtures");
+    }
+    const mutated = insertBefore(
+      localText,
+      "<summary-panel",
+      "  <unknown-widget></unknown-widget>\n",
+    );
+    localHarness.updateTemplate(localUri, mutated, 2);
+    const query = localHarness.workspace.query(localUri);
+    const defs = query.definition(findPosition(mutated, "<unknown-widget", 1));
+    expect(defs).toHaveLength(0);
   });
 
   it("resolves <import> definition targets", () => {

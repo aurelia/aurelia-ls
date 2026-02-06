@@ -2,6 +2,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 
+function insertBefore(text: string, marker: string, insert: string): string {
+  const index = text.indexOf(marker);
+  if (index < 0) {
+    throw new Error(`Marker not found: ${marker}`);
+  }
+  return text.slice(0, index) + insert + text.slice(index);
+}
+
 function computeLineStarts(text: string): number[] {
   const starts = [0];
   for (let i = 0; i < text.length; i += 1) {
@@ -207,6 +215,28 @@ describe("workspace hover (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     // Hover the static 'type' in '<input type="text" ...>'
     const pos = findPosition(appText, 'type="text"', 1);
+    const hover = query.hover(pos);
+    expect(hover).toBeNull();
+  });
+
+  it("returns null for unknown dashed elements", async () => {
+    const localHarness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    const localUri = localHarness.openTemplate("src/my-app.html");
+    const localText = localHarness.readText(localUri);
+    if (!localText) {
+      throw new Error("Expected template text for workspace-contract my-app.html");
+    }
+    const mutated = insertBefore(
+      localText,
+      "<summary-panel",
+      "  <unknown-widget></unknown-widget>\n",
+    );
+    localHarness.updateTemplate(localUri, mutated, 2);
+    const query = localHarness.workspace.query(localUri);
+    const pos = findPosition(mutated, "<unknown-widget", 1);
     const hover = query.hover(pos);
     expect(hover).toBeNull();
   });

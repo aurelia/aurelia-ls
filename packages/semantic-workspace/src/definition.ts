@@ -27,7 +27,6 @@ import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler";
 import type { WorkspaceLocation } from "./types.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findDomNode } from "./template-dom.js";
 import {
-  attributeTargetNameFromSyntax,
   collectInstructionHits,
   findBindingBehaviorAtOffset,
   findInstructionHitsAtOffset,
@@ -142,7 +141,7 @@ export function collectTemplateDefinitions(options: {
     const resolved = row.node.custom?.def ?? null;
     const entry = resolved
       ? findEntry(resources.elements, resolved.name, resolved.file ?? null)
-      : (looksLikeCustomElementTag(row.node.tag) ? findEntry(resources.elements, row.node.tag, null, preferRoots) : null);
+      : null;
     const location = entry ? resourceLocation(entry) : null;
     if (location && tagSpan) results.push(location);
   }
@@ -157,13 +156,7 @@ export function collectTemplateDefinitions(options: {
     const matchSpan = spans.target ?? nameSpan;
     if (!spanContainsOffset(matchSpan, offset)) continue;
     if (spans.command && spanContainsOffset(spans.command, offset)) continue;
-    const defs = definitionsForInstruction(hit.instruction, resources, {
-      attrName,
-      hostTag: hit.hostTag,
-      hostKind: hit.hostKind,
-      syntax,
-      preferRoots,
-    });
+    const defs = definitionsForInstruction(hit.instruction, resources, preferRoots);
     if (defs.length) results.push(...defs);
   }
 
@@ -267,9 +260,7 @@ export function collectTemplateResourceReferences(options: {
       if (!domNode || domNode.kind !== "element") continue;
       const entry = row.node.custom?.def
         ? findEntry(resources.elements, row.node.custom.def.name, row.node.custom.def.file ?? null)
-        : (looksLikeCustomElementTag(row.node.tag)
-          ? findEntry(resources.elements, row.node.tag, null, preferRoots)
-          : null);
+        : null;
       if (!entry?.symbolId) continue;
       for (const span of elementTagSpans(domNode)) {
         const loc = spanLocation(span, documentUri);
@@ -289,21 +280,14 @@ export function collectTemplateResourceReferences(options: {
         const res = hit.instruction.res?.def ?? null;
         const entry = res
           ? findEntry(resources.attributes, res.name, res.file ?? null)
-          : (() => {
-            const name = attributeTargetNameFromSyntax(hit.attrName ?? null, syntax);
-            return name ? findEntry(resources.attributes, name, null, preferRoots) : null;
-          })();
+          : null;
         if (!entry?.symbolId) break;
         const loc = spanLocation(span, documentUri);
         if (loc) results.push({ ...loc, symbolId: entry.symbolId });
         break;
       }
       case "hydrateTemplateController": {
-        const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots)
-          ?? (() => {
-            const name = attributeTargetNameFromSyntax(hit.attrName ?? null, syntax);
-            return name ? findEntry(resources.controllers, name, null, preferRoots) : null;
-          })();
+        const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots);
         if (!entry?.symbolId) break;
         const loc = spanLocation(span, documentUri);
         if (loc) results.push({ ...loc, symbolId: entry.symbolId });
@@ -314,7 +298,7 @@ export function collectTemplateResourceReferences(options: {
       case "setProperty": {
         const target = hit.instruction.target as { kind?: string } | null | undefined;
         if (!target || typeof target !== "object" || !("kind" in target)) break;
-        const symbolId = bindableSymbolIdForTarget(target, hit.instruction.to, resources, hit.hostTag, preferRoots);
+        const symbolId = bindableSymbolIdForTarget(target, hit.instruction.to, resources);
         if (!symbolId) break;
         const loc = spanLocation(span, documentUri);
         if (loc) results.push({ ...loc, symbolId });
@@ -378,31 +362,18 @@ function findElementDefinitionHit(
 function definitionsForInstruction(
   instruction: LinkedInstruction,
   resources: ResourceDefinitionIndex,
-  ctx: {
-    attrName: string;
-    hostTag?: string;
-    hostKind?: "custom" | "native" | "none";
-    syntax: AttributeSyntaxContext;
-    preferRoots: readonly string[];
-  },
+  preferRoots: readonly string[],
 ): WorkspaceLocation[] {
   switch (instruction.kind) {
     case "hydrateAttribute": {
       const res = instruction.res?.def ?? null;
-      if (res) {
-        const entry = findEntry(resources.attributes, res.name, res.file ?? null);
-        const location = entry ? resourceLocation(entry) : null;
-        return location ? [location] : [];
-      }
-      const fallback = attributeTargetNameFromSyntax(ctx.attrName, ctx.syntax);
-      if (!fallback) return [];
-      const entry = findEntry(resources.attributes, fallback, null, ctx.preferRoots);
+      if (!res) return [];
+      const entry = findEntry(resources.attributes, res.name, res.file ?? null);
       const location = entry ? resourceLocation(entry) : null;
       return location ? [location] : [];
     }
     case "hydrateTemplateController": {
-      const entry = findEntry(resources.controllers, instruction.res, null, ctx.preferRoots)
-        ?? findEntry(resources.controllers, attributeTargetNameFromSyntax(ctx.attrName, ctx.syntax) ?? "", null, ctx.preferRoots);
+      const entry = findEntry(resources.controllers, instruction.res, null, preferRoots);
       const location = entry ? resourceLocation(entry) : null;
       return location ? [location] : [];
     }
@@ -411,7 +382,7 @@ function definitionsForInstruction(
     case "setProperty": {
       const target = instruction.target as { kind?: string } | null | undefined;
       if (!target || typeof target !== "object" || !("kind" in target)) return [];
-      return bindableLocationsForTarget(target, instruction.to, resources, ctx.hostTag, ctx.preferRoots);
+      return bindableLocationsForTarget(target, instruction.to, resources);
     }
     default:
       return [];
@@ -422,10 +393,8 @@ function bindableSymbolIdForTarget(
   target: { kind?: string },
   to: string,
   resources: ResourceDefinitionIndex,
-  hostTag?: string,
-  preferRoots?: readonly string[],
 ): SymbolId | null {
-  const resolved = resolveBindableForTarget(target, to, resources, hostTag, preferRoots);
+  const resolved = resolveBindableForTarget(target, to, resources);
   if (!resolved?.entry.symbolId) return null;
   return bindableSymbolId(resolved.entry.symbolId, resolved.property);
 }
@@ -434,10 +403,8 @@ function bindableLocationsForTarget(
   target: { kind?: string },
   to: string,
   resources: ResourceDefinitionIndex,
-  hostTag?: string,
-  preferRoots?: readonly string[],
 ): WorkspaceLocation[] {
-  const resolved = resolveBindableForTarget(target, to, resources, hostTag, preferRoots);
+  const resolved = resolveBindableForTarget(target, to, resources);
   if (!resolved) return [];
   const symbolId = resolved.entry.symbolId ? bindableSymbolId(resolved.entry.symbolId, resolved.property) : undefined;
   const location = bindableLocation(resolved.entry.def, resolved.bindable, symbolId);
@@ -448,8 +415,6 @@ function resolveBindableForTarget(
   target: { kind?: string },
   to: string,
   resources: ResourceDefinitionIndex,
-  hostTag?: string,
-  preferRoots?: readonly string[],
 ): { entry: ResourceDefinitionEntry; bindable: BindableDef; property: string } | null {
   switch (target.kind) {
     case "element.bindable": {
@@ -470,13 +435,6 @@ function resolveBindableForTarget(
     case "controller.prop": {
       const t = target as { controller: { res: string } };
       const entry = findEntry(resources.controllers, t.controller.res, null);
-      if (!entry) return null;
-      const bindable = findBindableDef(entry.def, to);
-      return bindable ? { entry, bindable, property: to } : null;
-    }
-    case "unknown": {
-      if (!hostTag || !looksLikeCustomElementTag(hostTag)) return null;
-      const entry = findEntry(resources.elements, hostTag, null, preferRoots);
       if (!entry) return null;
       const bindable = findBindableDef(entry.def, to);
       return bindable ? { entry, bindable, property: to } : null;
@@ -653,10 +611,6 @@ function resolveAttributeSpans(
     }
     : null;
   return { target, command };
-}
-
-function looksLikeCustomElementTag(tag: string): boolean {
-  return tag.includes("-");
 }
 
 type ScopeSymbol = {

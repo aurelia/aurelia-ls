@@ -493,8 +493,6 @@ function spanIntersects(a: SourceSpan, b: SourceSpan): boolean {
 export function resolveBindableCandidate(
   hit: InstructionHit,
   syntax: AttributeSyntaxContext,
-  definitionIndex?: ResourceDefinitionIndex | null,
-  preferRoots: readonly string[] = [],
 ): BindableCandidate | null {
   const attrName = attributeNameFromHit(hit);
   const base = attributeTargetName(attrName, syntax);
@@ -507,19 +505,6 @@ export function resolveBindableCandidate(
       ownerKind: hit.owner.kind,
       ownerName: hit.owner.name,
       ownerFile: hit.owner.file,
-      propertyName,
-      attributeName,
-    };
-  }
-
-  if (hit.hostKind === "custom" && hit.hostTag) {
-    const entry = definitionIndex
-      ? findResourceEntry(definitionIndex.elements, hit.hostTag.toLowerCase(), null, preferRoots)
-      : null;
-    return {
-      ownerKind: "element",
-      ownerName: hit.hostTag,
-      ownerFile: entry?.def.file ?? null,
       propertyName,
       attributeName,
     };
@@ -647,7 +632,7 @@ function buildAddBindableAction(
   const hit = findInstructionHit(ctx.compilation, offset);
   if (!hit) return null;
 
-  const candidate = resolveBindableCandidate(hit, ctx.syntax, ctx.definitionIndex, [ctx.workspaceRoot]);
+  const candidate = resolveBindableCandidate(hit, ctx.syntax);
   if (!candidate || candidate.ownerKind !== "element" || !candidate.ownerFile) return null;
   const target = resolveBindableDeclarationTarget(ctx, candidate);
   if (!target) return null;

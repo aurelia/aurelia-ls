@@ -22,7 +22,6 @@ import {
 } from "@aurelia-ls/compiler";
 import { buildDomIndex } from "./template-dom.js";
 import {
-  attributeTargetNameFromAnalysis,
   collectExpressionAstChildren,
   findBindingBehaviorAtOffset,
   findInstructionHitsAtOffset,
@@ -156,20 +155,15 @@ export function collectTemplateHover(options: {
       });
     }
     if (row?.node.kind === "element") {
-      const tag = row.node.tag;
-      const isCustom = !!row.node.custom?.def || looksLikeCustomElementTag(tag);
-      if (isCustom) {
+      const def = row.node.custom?.def;
+      if (def) {
         nodeId = node.id;
         span = span ?? node.span;
-        const def = row.node.custom?.def;
-        const name = def?.name ?? tag;
         const card: HoverCard = {
-          signature: `(custom element) ${name}`,
+          signature: `(custom element) ${def.name}`,
           meta: [],
         };
-        if (def) {
-          appendResourceMeta(def, card.meta);
-        }
+        appendResourceMeta(def, card.meta);
         cards.push(card);
       }
     }
@@ -197,13 +191,7 @@ export function collectTemplateHover(options: {
       span = span ?? primary.loc;
     }
     for (const hit of instructionHits) {
-      const instrCards = buildInstructionCards(hit.instruction, hit.attrName ?? null, {
-        syntax,
-        attrParser,
-        hostTag: hit.hostTag,
-        hostKind: hit.hostKind,
-        debugEnabled,
-      });
+      const instrCards = buildInstructionCards(hit.instruction, hit.attrName ?? null);
       cards.push(...instrCards);
     }
 
@@ -222,16 +210,18 @@ export function collectTemplateHover(options: {
     debug.workspace("hover.converter", { hit: !!converterHit, name: converterHit?.name });
   }
   if (converterHit) {
-    exprId = exprId ?? converterHit.exprId;
     const vcSig = options.semantics?.resources.valueConverters[converterHit.name] ?? null;
-    const card: HoverCard = {
-      signature: `(value converter) ${converterHit.name}`,
-      meta: [],
-    };
     if (vcSig) {
+      exprId = exprId ?? converterHit.exprId;
+      const card: HoverCard = {
+        signature: `(value converter) ${converterHit.name}`,
+        meta: [],
+      };
       appendConverterMeta(vcSig, card.meta);
+      cards.push(card);
+    } else if (debugEnabled) {
+      debug.workspace("hover.unresolved.value-converter", { name: converterHit.name });
     }
-    cards.push(card);
   }
 
   // ── Binding behaviors ────────────────────────────────────────────────
@@ -240,17 +230,19 @@ export function collectTemplateHover(options: {
     debug.workspace("hover.behavior", { hit: !!behaviorHit, name: behaviorHit?.name });
   }
   if (behaviorHit) {
-    exprId = exprId ?? behaviorHit.exprId;
     const bbSig = options.semantics?.resources.bindingBehaviors[behaviorHit.name] ?? null;
-    const card: HoverCard = {
-      signature: `(binding behavior) ${behaviorHit.name}`,
-      meta: [],
-    };
     if (bbSig) {
+      exprId = exprId ?? behaviorHit.exprId;
+      const card: HoverCard = {
+        signature: `(binding behavior) ${behaviorHit.name}`,
+        meta: [],
+      };
       const loc = formatSourceLocation(bbSig.file, bbSig.package);
       if (loc) card.meta.push(`*${loc}*`);
+      cards.push(card);
+    } else if (debugEnabled) {
+      debug.workspace("hover.unresolved.binding-behavior", { name: behaviorHit.name });
     }
-    cards.push(card);
   }
 
   if (cards.length === 0) {
@@ -312,18 +304,8 @@ type InstructionHit = TemplateInstructionHit;
 function buildInstructionCards(
   instruction: LinkedInstruction,
   attrName: string | null,
-  ctx: {
-    syntax: TemplateSyntaxRegistry | null;
-    attrParser: AttributeParser | null;
-    hostTag?: string;
-    hostKind?: "custom" | "native" | "none";
-    debugEnabled?: boolean;
-  },
 ): HoverCard[] {
   const cards: HoverCard[] = [];
-  const analysis = attrName && ctx.syntax && ctx.attrParser
-    ? analyzeAttributeName(attrName, ctx.syntax, ctx.attrParser)
-    : null;
 
   switch (instruction.kind) {
     case "hydrateAttribute": {
@@ -338,20 +320,6 @@ function buildInstructionCards(
           appendResourceMeta(attrDef, card.meta);
         }
         cards.push(card);
-        break;
-      }
-      const fallbackName = attributeTargetNameFromAnalysis(attrName, analysis);
-      if (fallbackName && ctx.debugEnabled) {
-        debug.workspace("hover.fallback.custom-attribute", {
-          attrName,
-          fallback: fallbackName,
-        });
-      }
-      if (fallbackName) {
-        cards.push({
-          signature: `(custom attribute) ${fallbackName}`,
-          meta: [],
-        });
       }
       break;
     }
@@ -359,21 +327,6 @@ function buildInstructionCards(
     case "attributeBinding": {
       const target = instruction.target as { kind?: string; reason?: string; bindable?: Bindable } | null | undefined;
       const bindableInfo = describeBindableTarget(target, instruction.to);
-      if (!bindableInfo && target?.kind === "unknown") {
-        const fallback = describeBindableFallback(instruction.to, ctx.hostTag, ctx.hostKind);
-        if (fallback && ctx.debugEnabled) {
-          debug.workspace("hover.fallback.bindable", {
-            name: instruction.to,
-            hostTag: ctx.hostTag,
-            hostKind: ctx.hostKind,
-            reason: (target as { reason?: string }).reason ?? null,
-          });
-        }
-        if (fallback) {
-          cards.push(buildBindableCard(fallback, null));
-        }
-        break;
-      }
       if (bindableInfo) {
         const bindable = target?.bindable ?? null;
         cards.push(buildBindableCard(bindableInfo, bindable));
@@ -531,21 +484,6 @@ function describeBindableTarget(target: { kind?: string } | null | undefined, to
     default:
       return null;
   }
-}
-
-function describeBindableFallback(
-  name: string,
-  hostTag?: string,
-  hostKind?: "custom" | "native" | "none",
-): BindableDescription | null {
-  if (!name) return null;
-  if (hostKind === "custom" || (hostTag && looksLikeCustomElementTag(hostTag))) {
-    return { name, context: `component: ${hostTag ?? "unknown"}`, isNative: false };
-  }
-  if (hostKind === "native") {
-    return { name, context: "HTML element", isNative: true };
-  }
-  return { name, isNative: false };
 }
 
 function findRow(
@@ -828,10 +766,6 @@ function chooseExpressionLabel(primary: string | null | undefined, secondary: st
   if (!primary) return secondary ?? null;
   if (!secondary) return primary ?? null;
   return primary.length >= secondary.length ? primary : secondary;
-}
-
-function looksLikeCustomElementTag(tag: string): boolean {
-  return tag.includes("-");
 }
 
 // ── Translation key parsing ─────────────────────────────────────────────
