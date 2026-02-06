@@ -83,6 +83,18 @@ async function withFileMutation(
   }
 }
 
+function replaceOnce(text: string, search: string, replacement: string, label: string): string {
+  const first = text.indexOf(search);
+  if (first < 0) {
+    throw new Error(`Mutation marker not found (${label}): ${search}`);
+  }
+  const second = text.indexOf(search, first + search.length);
+  if (second >= 0) {
+    throw new Error(`Mutation marker is ambiguous (${label}): ${search}`);
+  }
+  return `${text.slice(0, first)}${replacement}${text.slice(first + search.length)}`;
+}
+
 describe("workspace incremental churn (incremental-churn)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let alphaUri: DocumentUri;
@@ -211,6 +223,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
     it("invalidates templates that depend on a custom element when bindables change", async () => {
       const harness = await createWorkspaceHarness({
         fixtureId: asFixtureId("incremental-churn"),
+        isolateFixture: true,
         openTemplates: "none",
       });
       const workspace = harness.workspace;
@@ -223,7 +236,15 @@ describe("workspace incremental churn (incremental-churn)", () => {
 
       const alphaPath = harness.resolvePath("src/alpha.ts");
       await withFileMutation(alphaPath, (text) => {
-        return text.replace("template,", "template,\\n  bindables: { level: {} },");
+        if (text.includes("bindables: { level: {} }")) {
+          throw new Error("Fixture drift: expected alpha.ts baseline without level bindables.");
+        }
+        return replaceOnce(
+          text,
+          "template,",
+          "template,\n  bindables: { level: {} },",
+          "alpha customElement template entry",
+        );
       }, async () => {
         workspace.invalidateProject("alpha bindables");
         workspace.snapshot();
@@ -242,6 +263,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
     it("invalidates templates that depend on a custom attribute when bindables change", async () => {
       const harness = await createWorkspaceHarness({
         fixtureId: asFixtureId("incremental-churn"),
+        isolateFixture: true,
         openTemplates: "none",
       });
       const workspace = harness.workspace;
@@ -256,7 +278,15 @@ describe("workspace incremental churn (incremental-churn)", () => {
 
       const highlightPath = harness.resolvePath("src/shared/highlight.ts");
       await withFileMutation(highlightPath, (text) => {
-        return text.replace("@bindable value = \"\";", "@bindable value = \"\";\\n  @bindable tone = \"\";");
+        if (text.includes("@bindable tone = \"\";")) {
+          throw new Error("Fixture drift: expected highlight.ts baseline without tone bindable.");
+        }
+        return replaceOnce(
+          text,
+          "@bindable value = \"\";",
+          "@bindable value = \"\";\n  @bindable tone = \"\";",
+          "highlight primary bindable",
+        );
       }, async () => {
         workspace.invalidateProject("highlight bindables");
         workspace.snapshot();
@@ -278,6 +308,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
     it("invalidates templates that import a value converter when its definition changes", async () => {
       const harness = await createWorkspaceHarness({
         fixtureId: asFixtureId("incremental-churn"),
+        isolateFixture: true,
         openTemplates: "none",
       });
       const workspace = harness.workspace;
@@ -290,7 +321,15 @@ describe("workspace incremental churn (incremental-churn)", () => {
 
       const converterPath = harness.resolvePath("src/shared/titlecase.ts");
       await withFileMutation(converterPath, (text) => {
-        return text.replace('valueConverter("titlecase")', 'valueConverter("titlecase-v2")');
+        if (text.includes('valueConverter("titlecase-v2")')) {
+          throw new Error("Fixture drift: expected titlecase converter baseline before rename.");
+        }
+        return replaceOnce(
+          text,
+          'valueConverter("titlecase")',
+          'valueConverter("titlecase-v2")',
+          "titlecase converter name",
+        );
       }, async () => {
         workspace.invalidateProject("converter rename");
         workspace.snapshot();

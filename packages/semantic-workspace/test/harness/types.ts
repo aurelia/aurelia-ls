@@ -25,6 +25,7 @@ export interface WorkspaceHarnessOptions {
   readonly fixtureId?: FixtureId;
   readonly fixture?: FixtureDescriptor;
   readonly rootOverride?: string;
+  readonly isolateFixture?: boolean;
   readonly tsconfigPath?: string;
   readonly packageRoots?: PackageRootsOption;
   readonly resolution?: Partial<ResolutionConfigBase>;

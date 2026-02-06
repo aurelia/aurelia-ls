@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   asDocumentUri,
@@ -24,6 +25,8 @@ type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
 
 const cachedPackageRoots = new Map<string, ReadonlyMap<string, string>>();
 const cachedPackageRootsByPath = new Map<string, string>();
+const temporaryFixtureRoots = new Set<string>();
+let temporaryFixtureCleanupRegistered = false;
 
 export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): Promise<WorkspaceHarness> {
   const fixture = options.fixture ?? (options.fixtureId ? getFixture(options.fixtureId) : null);
@@ -31,13 +34,14 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     throw new Error("Workspace harness requires a fixture or fixtureId.");
   }
 
-  const root = options.rootOverride ?? resolveFixtureRoot(fixture);
-  if (!root) {
+  const sourceRoot = options.rootOverride ?? resolveFixtureRoot(fixture);
+  if (!sourceRoot) {
     throw new Error(`Fixture root not found for ${fixture.id}. Provide rootOverride or check out the fixture.`);
   }
+  const root = options.isolateFixture ? isolateFixtureRoot(sourceRoot) : sourceRoot;
   const tsconfigPath = options.tsconfigPath ?? path.join(root, "tsconfig.json");
   const packageRoots = options.resolution?.packageRoots
-    ?? await resolvePackageRoots(root, options.packageRoots);
+    ?? await resolvePackageRoots(sourceRoot, options.packageRoots);
 
   const logger = options.logger ?? SILENT_LOGGER;
   const inlineTextByUri = new Map<DocumentUri, string>();
@@ -133,6 +137,33 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     toDocumentUri,
     setResourceScope,
   };
+}
+
+function isolateFixtureRoot(sourceRoot: string): string {
+  const canonical = path.resolve(sourceRoot);
+  const tempParent = fs.mkdtempSync(path.join(os.tmpdir(), "aurelia-ws-fixture-"));
+  const isolatedRoot = path.join(tempParent, path.basename(canonical));
+  fs.cpSync(canonical, isolatedRoot, { recursive: true, force: true });
+  trackTemporaryFixtureRoot(tempParent);
+  return isolatedRoot;
+}
+
+function trackTemporaryFixtureRoot(root: string): void {
+  temporaryFixtureRoots.add(root);
+  if (temporaryFixtureCleanupRegistered) return;
+  temporaryFixtureCleanupRegistered = true;
+  process.once("exit", cleanupTemporaryFixtureRoots);
+}
+
+function cleanupTemporaryFixtureRoots(): void {
+  for (const root of temporaryFixtureRoots) {
+    try {
+      fs.rmSync(root, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
+  temporaryFixtureRoots.clear();
 }
 
 async function resolvePackageRoots(
