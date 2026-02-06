@@ -9,7 +9,6 @@ import {
   stableHash,
   toSourceFileId,
   type BindableDef,
-  type DOMNode,
   type ExprId,
   type LinkedInstruction,
   type LinkedRow,
@@ -20,14 +19,20 @@ import {
   type SourceSpan,
   type SymbolId,
   type TemplateCompilation,
-  type TemplateIR,
   type AttributeParser,
   type DocumentUri,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
 import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler";
 import type { WorkspaceLocation } from "./types.js";
-import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
+import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findDomNode } from "./template-dom.js";
+import {
+  attributeTargetNameFromSyntax,
+  collectInstructionHits,
+  findBindingBehaviorAtOffset,
+  findInstructionHitsAtOffset,
+  findValueConverterAtOffset,
+} from "./query-helpers.js";
 
 export interface ResourceDefinitionIndex {
   readonly elements: ReadonlyMap<string, ResourceDefinitionEntry[]>;
@@ -142,7 +147,7 @@ export function collectTemplateDefinitions(options: {
     if (location && tagSpan) results.push(location);
   }
 
-  const instructionHits = findInstructionsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
+  const instructionHits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
   for (const hit of instructionHits) {
     const nameSpan = hit.attrNameSpan ?? null;
     if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
@@ -285,7 +290,7 @@ export function collectTemplateResourceReferences(options: {
         const entry = res
           ? findEntry(resources.attributes, res.name, res.file ?? null)
           : (() => {
-            const name = attributeTargetName(hit.attrName ?? null, syntax);
+            const name = attributeTargetNameFromSyntax(hit.attrName ?? null, syntax);
             return name ? findEntry(resources.attributes, name, null, preferRoots) : null;
           })();
         if (!entry?.symbolId) break;
@@ -296,7 +301,7 @@ export function collectTemplateResourceReferences(options: {
       case "hydrateTemplateController": {
         const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots)
           ?? (() => {
-            const name = attributeTargetName(hit.attrName ?? null, syntax);
+            const name = attributeTargetNameFromSyntax(hit.attrName ?? null, syntax);
             return name ? findEntry(resources.controllers, name, null, preferRoots) : null;
           })();
         if (!entry?.symbolId) break;
@@ -332,78 +337,6 @@ export function collectTemplateResourceReferences(options: {
   }
 
   return results;
-}
-
-type InstructionHit = {
-  instruction: LinkedInstruction;
-  loc: SourceSpan;
-  len: number;
-  hostTag?: string;
-  hostKind?: "custom" | "native" | "none";
-  attrName?: string | null;
-  attrNameSpan?: SourceSpan | null;
-};
-
-function collectInstructionHits(
-  templates: readonly { rows: readonly LinkedRow[] }[],
-  irTemplates: readonly TemplateIR[],
-  domIndex: ReturnType<typeof buildDomIndex>,
-): InstructionHit[] {
-  const hits: InstructionHit[] = [];
-  const addHit = (
-    instruction: LinkedInstruction,
-    host: { hostTag?: string; hostKind?: "custom" | "native" | "none" },
-    node: DOMNode | null,
-  ) => {
-    const loc = instruction.loc ?? null;
-    if (!loc) return;
-    const attr = node && (node.kind === "element" || node.kind === "template") ? findAttrForSpan(node, loc) : null;
-    hits.push({
-      instruction,
-      loc,
-      len: spanLength(loc),
-      hostTag: host.hostTag,
-      hostKind: host.hostKind,
-      attrName: attr?.name ?? null,
-      attrNameSpan: attr?.nameLoc ?? null,
-    });
-  };
-  for (let ti = 0; ti < templates.length; ti += 1) {
-    const template = templates[ti];
-    const irTemplate = irTemplates[ti];
-    if (!template || !irTemplate) continue;
-    for (const row of template.rows ?? []) {
-      const domNode = findDomNode(domIndex, ti, row.target);
-      const host: { hostTag?: string; hostKind?: "custom" | "native" | "none" } =
-        row.node.kind === "element"
-          ? {
-            hostTag: row.node.tag,
-            hostKind: row.node.custom ? "custom" : row.node.native ? "native" : "none",
-          }
-          : {};
-      for (const instruction of row.instructions ?? []) {
-        addHit(instruction, host, domNode);
-        if (instruction.kind === "hydrateElement" || instruction.kind === "hydrateAttribute" || instruction.kind === "hydrateTemplateController") {
-          for (const prop of instruction.props ?? []) {
-            addHit(prop, host, domNode);
-          }
-        }
-      }
-    }
-  }
-  return hits;
-}
-
-function findInstructionsAtOffset(
-  templates: readonly { rows: readonly LinkedRow[] }[],
-  irTemplates: readonly TemplateIR[],
-  domIndex: ReturnType<typeof buildDomIndex>,
-  offset: number,
-): InstructionHit[] {
-  const hits = collectInstructionHits(templates, irTemplates, domIndex);
-  const filtered = hits.filter((hit) => spanContainsOffset(hit.loc, offset));
-  filtered.sort((a, b) => a.len - b.len);
-  return filtered;
 }
 
 function findRow(
@@ -461,7 +394,7 @@ function definitionsForInstruction(
         const location = entry ? resourceLocation(entry) : null;
         return location ? [location] : [];
       }
-      const fallback = attributeTargetName(ctx.attrName, ctx.syntax);
+      const fallback = attributeTargetNameFromSyntax(ctx.attrName, ctx.syntax);
       if (!fallback) return [];
       const entry = findEntry(resources.attributes, fallback, null, ctx.preferRoots);
       const location = entry ? resourceLocation(entry) : null;
@@ -469,7 +402,7 @@ function definitionsForInstruction(
     }
     case "hydrateTemplateController": {
       const entry = findEntry(resources.controllers, instruction.res, null, ctx.preferRoots)
-        ?? findEntry(resources.controllers, attributeTargetName(ctx.attrName, ctx.syntax) ?? "", null, ctx.preferRoots);
+        ?? findEntry(resources.controllers, attributeTargetNameFromSyntax(ctx.attrName, ctx.syntax) ?? "", null, ctx.preferRoots);
       const location = entry ? resourceLocation(entry) : null;
       return location ? [location] : [];
     }
@@ -697,18 +630,6 @@ function pickPreferredEntry(
   });
   if (matches.length === 1) return matches[0]!;
   return matches[0] ?? null;
-}
-
-function attributeTargetName(attrName: string | null, syntax: AttributeSyntaxContext): string | null {
-  if (!attrName) return null;
-  const analysis = analyzeAttributeName(attrName, syntax.syntax, syntax.parser);
-  if (analysis.targetSpan) {
-    return attrName.slice(analysis.targetSpan.start, analysis.targetSpan.end);
-  }
-  const target = analysis.syntax.target?.trim();
-  if (target && attrName.includes(target)) return target;
-  if (analysis.syntax.command) return null;
-  return attrName;
 }
 
 function resolveAttributeSpans(
@@ -1133,64 +1054,3 @@ function walkExprResourceRefs(
   }
 }
 
-function findValueConverterAtOffset(
-  exprTable: readonly { id: ExprId; ast: unknown }[],
-  offset: number,
-): { name: string; exprId: ExprId } | null {
-  for (const entry of exprTable) {
-    const hit = findConverterInAst(entry.ast as ExpressionAst, offset);
-    if (hit) return { name: hit, exprId: entry.id };
-  }
-  return null;
-}
-
-function findBindingBehaviorAtOffset(
-  exprTable: readonly { id: ExprId; ast: unknown }[],
-  offset: number,
-): { name: string; exprId: ExprId } | null {
-  for (const entry of exprTable) {
-    const hit = findBehaviorInAst(entry.ast as ExpressionAst, offset);
-    if (hit) return { name: hit, exprId: entry.id };
-  }
-  return null;
-}
-
-function findConverterInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
-  if (!node || !node.$kind) return null;
-  if (node.$kind === "ValueConverter") {
-    const ident = readIdentifier(node.name, node.span);
-    if (ident?.span && spanContainsOffset(ident.span, offset)) {
-      return ident.name;
-    }
-  }
-  return walkAstChildren(node, offset, findConverterInAst);
-}
-
-function findBehaviorInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
-  if (!node || !node.$kind) return null;
-  if (node.$kind === "BindingBehavior") {
-    const ident = readIdentifier(node.name, node.span);
-    if (ident?.span && spanContainsOffset(ident.span, offset)) {
-      return ident.name;
-    }
-  }
-  return walkAstChildren(node, offset, findBehaviorInAst);
-}
-
-function walkAstChildren(
-  node: ExpressionAst,
-  offset: number,
-  finder: (node: ExpressionAst, offset: number) => string | null,
-): string | null {
-  const queue: (ExpressionAst | null | undefined)[] = [];
-  queue.push(node.expression, node.object, node.func, node.left, node.right, node.condition, node.yes, node.no, node.target, node.value, node.key, node.declaration, node.iterable);
-  if (node.args) queue.push(...node.args);
-  if (node.parts) queue.push(...node.parts);
-  if (node.expressions) queue.push(...node.expressions);
-  for (const child of queue) {
-    if (!child) continue;
-    const hit = finder(child, offset);
-    if (hit) return hit;
-  }
-  return null;
-}

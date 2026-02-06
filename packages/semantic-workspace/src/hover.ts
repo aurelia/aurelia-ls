@@ -7,7 +7,6 @@ import {
   type AttrRes,
   type Bindable,
   type BindingMode,
-  type DOMNode,
   type ElementRes,
   type ExprId,
   type LinkedInstruction,
@@ -16,14 +15,20 @@ import {
   type NodeId,
   type SourceSpan,
   type TemplateCompilation,
-  type TemplateIR,
   type TemplateSyntaxRegistry,
   type TypeRef,
   type ValueConverterSig,
   spanContainsOffset,
-  spanLength,
 } from "@aurelia-ls/compiler";
-import { buildDomIndex, findAttrForSpan, findDomNode } from "./template-dom.js";
+import { buildDomIndex } from "./template-dom.js";
+import {
+  attributeTargetNameFromAnalysis,
+  collectExpressionAstChildren,
+  findBindingBehaviorAtOffset,
+  findInstructionHitsAtOffset,
+  findValueConverterAtOffset,
+  type TemplateInstructionHit,
+} from "./query-helpers.js";
 
 export interface TemplateHoverDetails {
   readonly lines: string[];
@@ -174,7 +179,7 @@ export function collectTemplateHover(options: {
 
   // ── Instructions (attributes, bindings, events, controllers) ─────────
   const domIndex = buildDomIndex(compilation.ir.templates ?? []);
-  const instructionHits = findInstructionsAtOffset(
+  const instructionHits = findInstructionHitsAtOffset(
     compilation.linked.templates,
     compilation.ir.templates ?? [],
     domIndex,
@@ -302,15 +307,7 @@ export function mergeHoverContents(
 
 // ── Instruction card builders ──────────────────────────────────────────
 
-type InstructionHit = {
-  instruction: LinkedInstruction;
-  loc: SourceSpan;
-  len: number;
-  hostTag?: string;
-  hostKind?: "custom" | "native" | "none";
-  attrName?: string | null;
-  attrNameSpan?: SourceSpan | null;
-};
+type InstructionHit = TemplateInstructionHit;
 
 function buildInstructionCards(
   instruction: LinkedInstruction,
@@ -343,7 +340,7 @@ function buildInstructionCards(
         cards.push(card);
         break;
       }
-      const fallbackName = attributeTargetName(attrName, analysis);
+      const fallbackName = attributeTargetNameFromAnalysis(attrName, analysis);
       if (fallbackName && ctx.debugEnabled) {
         debug.workspace("hover.fallback.custom-attribute", {
           attrName,
@@ -551,61 +548,6 @@ function describeBindableFallback(
   return { name, isNative: false };
 }
 
-// ── Instruction search ─────────────────────────────────────────────────
-
-function findInstructionsAtOffset(
-  templates: readonly { rows: readonly LinkedRow[] }[],
-  irTemplates: readonly TemplateIR[],
-  domIndex: ReturnType<typeof buildDomIndex>,
-  offset: number,
-): InstructionHit[] {
-  const hits: InstructionHit[] = [];
-  const addHit = (
-    instruction: LinkedInstruction,
-    host: { hostTag?: string; hostKind?: "custom" | "native" | "none" },
-    node: DOMNode | null,
-  ) => {
-    const loc = instruction.loc ?? null;
-    if (!loc) return;
-    if (!spanContainsOffset(loc, offset)) return;
-    const attr = node && (node.kind === "element" || node.kind === "template") ? findAttrForSpan(node, loc) : null;
-    hits.push({
-      instruction,
-      loc,
-      len: spanLength(loc),
-      hostTag: host.hostTag,
-      hostKind: host.hostKind,
-      attrName: attr?.name ?? null,
-      attrNameSpan: attr?.nameLoc ?? null,
-    });
-  };
-  for (let ti = 0; ti < templates.length; ti += 1) {
-    const template = templates[ti];
-    const irTemplate = irTemplates[ti];
-    if (!template || !irTemplate) continue;
-    for (const row of template.rows ?? []) {
-      const domNode = findDomNode(domIndex, ti, row.target);
-      const host: { hostTag?: string; hostKind?: "custom" | "native" | "none" } =
-        row.node.kind === "element"
-          ? {
-            hostTag: row.node.tag,
-            hostKind: row.node.custom ? "custom" : row.node.native ? "native" : "none",
-          }
-          : {};
-      for (const instruction of row.instructions ?? []) {
-        addHit(instruction, host, domNode);
-        if (instruction.kind === "hydrateElement" || instruction.kind === "hydrateAttribute" || instruction.kind === "hydrateTemplateController") {
-          for (const prop of instruction.props ?? []) {
-            addHit(prop, host, domNode);
-          }
-        }
-      }
-    }
-  }
-  hits.sort((a, b) => a.len - b.len);
-  return hits;
-}
-
 function findRow(
   templates: readonly { rows: readonly LinkedRow[] }[],
   templateIndex: number,
@@ -684,23 +626,6 @@ function appendConverterMeta(
   }
 }
 
-// ── Attribute analysis helpers ─────────────────────────────────────────
-
-function attributeTargetName(
-  attrName: string | null,
-  analysis: ReturnType<typeof analyzeAttributeName> | null,
-): string | null {
-  if (!attrName) return null;
-  if (!analysis) return attrName;
-  if (analysis.targetSpan) {
-    return attrName.slice(analysis.targetSpan.start, analysis.targetSpan.end);
-  }
-  const target = analysis.syntax.target?.trim();
-  if (target && attrName.includes(target)) return target;
-  if (analysis.syntax.command) return null;
-  return attrName;
-}
-
 function commandFromAttribute(
   attrName: string,
   syntax: TemplateSyntaxRegistry | null,
@@ -748,56 +673,6 @@ type ExpressionAst = {
   optional?: boolean;
 };
 
-function findValueConverterAtOffset(
-  exprTable: readonly { id: ExprId; ast: unknown }[],
-  offset: number,
-): { name: string; exprId: ExprId } | null {
-  for (const entry of exprTable) {
-    const hit = findConverterInAst(entry.ast as ExpressionAst, offset);
-    if (hit) return { name: hit, exprId: entry.id };
-  }
-  return null;
-}
-
-function findBindingBehaviorAtOffset(
-  exprTable: readonly { id: ExprId; ast: unknown }[],
-  offset: number,
-): { name: string; exprId: ExprId } | null {
-  for (const entry of exprTable) {
-    const hit = findBehaviorInAst(entry.ast as ExpressionAst, offset);
-    if (hit) return { name: hit, exprId: entry.id };
-  }
-  return null;
-}
-
-function findConverterInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
-  if (!node || !node.$kind) return null;
-  if (node.$kind === "ValueConverter" && node.name?.span) {
-    if (spanContainsOffset(node.name.span, offset)) return node.name.name;
-  }
-  return walkAstChildren(node, offset, findConverterInAst);
-}
-
-function findBehaviorInAst(node: ExpressionAst | null | undefined, offset: number): string | null {
-  if (!node || !node.$kind) return null;
-  if (node.$kind === "BindingBehavior" && node.name?.span) {
-    if (spanContainsOffset(node.name.span, offset)) return node.name.name;
-  }
-  return walkAstChildren(node, offset, findBehaviorInAst);
-}
-
-function walkAstChildren(
-  node: ExpressionAst,
-  offset: number,
-  finder: (node: ExpressionAst, offset: number) => string | null,
-): string | null {
-  for (const child of collectAstChildren(node)) {
-    const hit = finder(child, offset);
-    if (hit) return hit;
-  }
-  return null;
-}
-
 function findExpressionAst(
   exprTable: readonly { id: ExprId; ast: unknown }[],
   exprId: ExprId,
@@ -816,49 +691,12 @@ function expressionLabelAtOffset(ast: ExpressionAst, offset: number): string | n
 
 function findLabelAst(node: ExpressionAst | null | undefined, offset: number): ExpressionAst | null {
   if (!node || !node.span || !spanContainsOffset(node.span, offset)) return null;
-  const children = collectAstChildren(node);
+  const children = collectExpressionAstChildren(node) as ExpressionAst[];
   for (const child of children) {
     const hit = findLabelAst(child, offset);
     if (hit) return hit;
   }
   return isLabelCandidate(node) ? node : null;
-}
-
-function collectAstChildren(node: ExpressionAst): ExpressionAst[] {
-  const children: ExpressionAst[] = [];
-  const push = (child?: unknown) => {
-    if (isExpressionAst(child)) children.push(child);
-  };
-
-  push(node.expression);
-  push(node.object);
-  push(node.func);
-  push(node.left);
-  push(node.right);
-  push(node.condition);
-  push(node.yes);
-  push(node.no);
-  push(node.target);
-  push(node.value);
-  push(node.key);
-  push(node.declaration);
-  push(node.iterable);
-  push(node.body);
-  if (node.args) node.args.forEach(push);
-  if (node.parts) node.parts.forEach(push);
-  if (node.expressions) node.expressions.forEach(push);
-  if (node.elements) node.elements.forEach(push);
-  if (node.values) node.values.forEach(push);
-  if (node.params) node.params.forEach(push);
-
-  const patternDefault = node as ExpressionAst & { default?: ExpressionAst };
-  if (patternDefault.default) children.push(patternDefault.default);
-
-  return children;
-}
-
-function isExpressionAst(value: unknown): value is ExpressionAst {
-  return !!value && typeof value === "object" && "$kind" in (value as { $kind: unknown });
 }
 
 function isLabelCandidate(node: ExpressionAst): boolean {
