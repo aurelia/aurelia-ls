@@ -875,6 +875,7 @@ function isLabelCandidate(node: ExpressionAst): boolean {
     case "CallFunction":
     case "ValueConverter":
     case "BindingBehavior":
+    case "Unary":
       return true;
     default:
       return false;
@@ -913,6 +914,14 @@ function renderExpressionLabel(node: ExpressionAst): string | null {
     case "ValueConverter":
     case "BindingBehavior":
       return node.name?.name ?? null;
+    case "Unary": {
+      const inner = node.expression ? renderExpressionLabel(node.expression) : null;
+      const op = (node as { operation?: string }).operation ?? "";
+      if (!inner) return null;
+      // pos: 0 = prefix (e.g., !x), 1 = suffix (e.g., x++)
+      const pos = (node as { pos?: number }).pos ?? 0;
+      return pos === 0 ? `${op}${inner}` : `${inner}${op}`;
+    }
     default:
       return null;
   }

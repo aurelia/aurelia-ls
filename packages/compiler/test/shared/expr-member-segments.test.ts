@@ -281,6 +281,27 @@ describe("collectExprMemberSegments", () => {
       // The [c] part doesn't extend the path since c is dynamic
     });
 
+    test("keyed access with literal index followed by member access", () => {
+      // "filters[0].value" - this is the failing case from cortex-devices
+      // filters[0] is AccessKeyed, .value is AccessMember
+      const segments = getSegments("filters[0].value", 0);
+
+      console.log("Segments:", JSON.stringify(segments, null, 2));
+
+      const paths = segments.map((s) => s.path);
+      expect(paths).toContain("filters");
+      expect(paths).toContain('filters["0"]'); // Numeric index is stored as string
+
+      // The .value segment should exist and have correct span including the dot
+      const valueSeg = segments.find((s) => s.path.endsWith(".value"));
+      expect(valueSeg).toBeTruthy();
+
+      // Span should cover ".value" (6 chars), not just "." (1 char)
+      const spanLength = valueSeg!.end - valueSeg!.start;
+      expect(spanLength).toBe(6); // ".value" = 6 chars
+      expect(valueSeg!.text).toBe(".value");
+    });
+
     test("empty expression table returns empty map", () => {
       const result = collectExprMemberSegments([], new Map());
       expect(result.size).toBe(0);

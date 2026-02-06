@@ -233,9 +233,11 @@ function emitAccessKeyed(node: AccessKeyedExpression): EmitResult {
   const head = `${obj.code}${node.optional ? "?." : ""}[`;
   const close = "]";
   const memberSpan = spanFromBounds(head.length, head.length + key.code.length);
-  const keyPath = deepestPath(key.segments) ?? key.code;
   const basePath = deepestPath(obj.segments);
-  const path = basePath ? `${basePath}.${keyPath}` : keyPath;
+  // Use bracket notation with JSON.stringify to match collectExprMemberSegments path format.
+  // This ensures segment paths align for proper pairing in buildSegmentPairs.
+  const keyText = key.code;
+  const path = basePath ? `${basePath}[${JSON.stringify(keyText)}]` : `[${JSON.stringify(keyText)}]`;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
   return combine(node, [obj, head.slice(obj.code.length), key, close], segments);
 }
