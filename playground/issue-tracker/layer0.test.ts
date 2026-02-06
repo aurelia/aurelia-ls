@@ -111,6 +111,7 @@ function compileComponent(file: SourceFile): string {
     templatePath: file.templatePath,
     name: names.resourceName,
     semantics: BUILTIN_SEMANTICS,
+    moduleResolver: () => null,
   });
 
   // Transform TypeScript source to inject $au

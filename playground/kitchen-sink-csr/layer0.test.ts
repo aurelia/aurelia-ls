@@ -126,6 +126,7 @@ function compileComponent(fileName: string): string {
     templatePath: htmlPath,
     name: resourceName,
     semantics: BUILTIN_SEMANTICS,
+    moduleResolver: () => null,
   });
 
   // Transform TypeScript source to inject $au

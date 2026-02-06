@@ -11,6 +11,7 @@ const settings__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "profile",
@@ -23,6 +24,7 @@ const settings__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "profile",
@@ -58,6 +60,7 @@ const settings__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "opt",
@@ -70,6 +73,7 @@ const settings__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "opt",
@@ -152,6 +156,7 @@ const settings__e = [
     $kind: "Conditional",
     condition: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "notifications",
@@ -189,6 +194,7 @@ const settings__e = [
     $kind: "Conditional",
     condition: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "notifications",
@@ -226,6 +232,7 @@ const settings__e = [
     $kind: "Conditional",
     condition: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "notifications",
@@ -263,6 +270,7 @@ const settings__e = [
     $kind: "Conditional",
     condition: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "notifications",
@@ -300,6 +308,7 @@ const settings__e = [
     $kind: "Conditional",
     condition: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "notifications",
