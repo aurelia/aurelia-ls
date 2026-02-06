@@ -25,7 +25,7 @@ import {
   type DocumentUri,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
-import type { ResolutionResult } from "@aurelia-ls/compiler";
+import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler";
 import type { WorkspaceLocation } from "./types.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
 
@@ -48,8 +48,8 @@ type AttributeSyntaxContext = {
   parser: AttributeParser;
 };
 
-export function buildResourceDefinitionIndex(resolution: ResolutionResult): ResourceDefinitionIndex {
-  const symbols = buildSymbolIdMap(resolution);
+export function buildResourceDefinitionIndex(discovery: ProjectSemanticsDiscoveryResult): ResourceDefinitionIndex {
+  const symbols = buildSymbolIdMap(discovery);
   const elements = new Map<string, ResourceDefinitionEntry[]>();
   const attributes = new Map<string, ResourceDefinitionEntry[]>();
   const controllers = new Map<string, ResourceDefinitionEntry[]>();
@@ -57,7 +57,7 @@ export function buildResourceDefinitionIndex(resolution: ResolutionResult): Reso
   const bindingBehaviors = new Map<string, ResourceDefinitionEntry[]>();
   const bySymbolId = new Map<SymbolId, ResourceDefinitionEntry>();
 
-  for (const def of resolution.resources) {
+  for (const def of discovery.resources) {
     const name = unwrapSourced(def.name);
     if (!name) continue;
     const entry: ResourceDefinitionEntry = {
@@ -631,9 +631,9 @@ function findEntry(
   return list[0] ?? null;
 }
 
-function buildSymbolIdMap(resolution: ResolutionResult): Map<string, SymbolId> {
+function buildSymbolIdMap(discovery: ProjectSemanticsDiscoveryResult): Map<string, SymbolId> {
   const map = new Map<string, SymbolId>();
-  for (const symbol of resolution.semanticSnapshot.symbols) {
+  for (const symbol of discovery.semanticSnapshot.symbols) {
     const key = symbolKey(symbol.kind, symbol.name, symbol.source ?? null);
     if (!map.has(key)) map.set(key, symbol.id);
   }

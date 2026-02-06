@@ -228,7 +228,7 @@ describe("adapter contract (workspace-contract)", () => {
     harness = await createWorkspaceHarness({
       fixtureId: asFixtureId("workspace-contract"),
       openTemplates: "none",
-      resolution: { stripSourcedNodes },
+      discovery: { stripSourcedNodes },
     });
     appUri = harness.openTemplate("src/my-app.html");
     tableUri = harness.openTemplate("src/views/table-panel.html");
@@ -441,7 +441,7 @@ describe("adapter contract (template control scenarios)", () => {
     harness = await createWorkspaceHarness({
       fixtureId: asFixtureId("template-control-scenarios"),
       openTemplates: "none",
-      resolution: { stripSourcedNodes },
+      discovery: { stripSourcedNodes },
     });
     controllersUri = harness.openTemplate("src/components/controllers-branches.html");
     projectionUri = harness.openTemplate("src/components/projection-demo.html");
@@ -623,7 +623,7 @@ describe("adapter contract (binding shorthand syntax)", () => {
     harness = await createWorkspaceHarness({
       fixtureId: asFixtureId("binding-shorthand-syntax"),
       openTemplates: "none",
-      resolution: { stripSourcedNodes },
+      discovery: { stripSourcedNodes },
     });
     appUri = harness.openTemplate("src/my-app.html");
     const app = harness.readText(appUri);
@@ -733,7 +733,7 @@ describe("adapter contract (template local scopes)", () => {
     harness = await createWorkspaceHarness({
       fixtureId: asFixtureId("template-local-scopes"),
       openTemplates: "none",
-      resolution: { stripSourcedNodes },
+      discovery: { stripSourcedNodes },
     });
     appUri = harness.openTemplate("src/my-app.html");
     const app = harness.readText(appUri);
@@ -845,7 +845,7 @@ describe("adapter contract (portal chain)", () => {
     harness = await createWorkspaceHarness({
       fixtureId: asFixtureId("portal-chain"),
       openTemplates: "none",
-      resolution: { stripSourcedNodes },
+      discovery: { stripSourcedNodes },
     });
     appUri = harness.openTemplate("src/my-app.html");
     const app = harness.readText(appUri);
@@ -957,7 +957,7 @@ describe("adapter contract (portal deep nesting)", () => {
     harness = await createWorkspaceHarness({
       fixtureId: asFixtureId("portal-deep-nesting"),
       openTemplates: "none",
-      resolution: { stripSourcedNodes },
+      discovery: { stripSourcedNodes },
     });
     appUri = harness.openTemplate("src/my-app.html");
     const app = harness.readText(appUri);
@@ -1069,7 +1069,7 @@ describe("adapter contract (let edge cases)", () => {
     harness = await createWorkspaceHarness({
       fixtureId: asFixtureId("let-edge-cases"),
       openTemplates: "none",
-      resolution: { stripSourcedNodes },
+      discovery: { stripSourcedNodes },
     });
     appUri = harness.openTemplate("src/my-app.html");
     const app = harness.readText(appUri);

@@ -7,21 +7,21 @@ import {
   type DocumentUri,
   type ResourceScopeId,
 } from "@aurelia-ls/compiler";
-import { createNodeFileSystem, type ResolutionConfig, type ResolutionResult, type Logger as ResolutionLogger } from "@aurelia-ls/compiler";
+import { createNodeFileSystem, type ProjectSemanticsDiscoveryConfig, type ProjectSemanticsDiscoveryResult, type Logger as CompilerLogger } from "@aurelia-ls/compiler";
 import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/compiler";
 import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../../src/engine.js";
 import { inlineTemplatePath } from "../../src/templates.js";
 import { getFixture, resolveFixtureRoot } from "../fixtures/index.js";
 import type { WorkspaceHarness, WorkspaceHarnessOptions, WorkspaceTemplateEntry } from "./types.js";
 
-const SILENT_LOGGER: ResolutionLogger = {
+const SILENT_LOGGER: CompilerLogger = {
   log: () => {},
   info: () => {},
   warn: () => {},
   error: () => {},
 };
 
-type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
+type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
 const cachedPackageRoots = new Map<string, ReadonlyMap<string, string>>();
 const cachedPackageRootsByPath = new Map<string, string>();
@@ -40,24 +40,24 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
   }
   const root = options.isolateFixture ? isolateFixtureRoot(sourceRoot) : sourceRoot;
   const tsconfigPath = options.tsconfigPath ?? path.join(root, "tsconfig.json");
-  const packageRoots = options.resolution?.packageRoots
+  const packageRoots = options.discovery?.packageRoots
     ?? await resolvePackageRoots(sourceRoot, options.packageRoots);
 
   const logger = options.logger ?? SILENT_LOGGER;
   const inlineTextByUri = new Map<DocumentUri, string>();
-  const resolutionConfig: ResolutionConfigBase = {
+  const discoveryConfig: ProjectSemanticsDiscoveryConfigBase = {
     packagePath: root,
     packageRoots,
-    fileSystem: options.resolution?.fileSystem ?? createNodeFileSystem({ root }),
-    stripSourcedNodes: options.resolution?.stripSourcedNodes ?? true,
-    ...options.resolution,
+    fileSystem: options.discovery?.fileSystem ?? createNodeFileSystem({ root }),
+    stripSourcedNodes: options.discovery?.stripSourcedNodes ?? true,
+    ...options.discovery,
   };
 
   const workspace = createSemanticWorkspace({
     logger,
     workspaceRoot: root,
     tsconfigPath,
-    resolution: resolutionConfig,
+    discovery: discoveryConfig,
     lookupText: (uri) => lookupText(uri, inlineTextByUri),
     ...(options.workspace?.vm ? { vm: options.workspace.vm } : {}),
     ...(options.workspace?.typescript !== undefined ? { typescript: options.workspace.typescript } : {}),
@@ -66,13 +66,13 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     ...(options.workspace?.refactorOverrides !== undefined ? { refactorOverrides: options.workspace.refactorOverrides } : {}),
   });
 
-  const resolution = workspace.projectIndex.currentResolution();
+  const discovery = workspace.projectIndex.currentDiscovery();
   const {
     templates,
     templateByUri,
     externalTemplates,
     inlineTemplates,
-  } = buildTemplateEntries(resolution, inlineTextByUri);
+  } = buildTemplateEntries(discovery, inlineTextByUri);
 
   const openMode = options.openTemplates ?? "external";
   if (openMode !== "none") {
@@ -122,7 +122,7 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     fixture,
     root,
     tsconfigPath,
-    resolution,
+    discovery,
     workspace,
     templates,
     templateByUri,
@@ -194,7 +194,7 @@ async function resolvePackageRoots(
 }
 
 function buildTemplateEntries(
-  result: ResolutionResult,
+  result: ProjectSemanticsDiscoveryResult,
   inlineTextByUri: Map<DocumentUri, string>,
 ): {
   templates: WorkspaceTemplateEntry[];

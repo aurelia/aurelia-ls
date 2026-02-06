@@ -35,7 +35,7 @@ import {
   planOverlay,
 
   // Support
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   buildProjectSnapshot,
   getExpressionParser,
   DEFAULT_SYNTAX,
@@ -81,7 +81,7 @@ function createProgram(trace?: CompileTrace) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
+    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
     moduleResolver: noopModuleResolver,
     trace,
   });
@@ -112,7 +112,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
         diagnostics: diagnostics.forSource("lower"),
       });
 
@@ -120,7 +120,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
       expect(lowerDiags.length).toBe(0);
 
       // Stage 2: Resolve
-      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -173,11 +173,11 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+      linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -206,11 +206,11 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+      linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -239,7 +239,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
         diagnostics: diagnostics.forSource("lower"),
       });
     });
@@ -272,11 +272,11 @@ describe("Trace Integration: AOT Synthesis", () => {
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -335,11 +335,11 @@ describe("Trace Integration: Overlay Synthesis", () => {
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
         ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
@@ -616,7 +616,7 @@ describe("Trace Integration: NOOP_TRACE Zero-Cost", () => {
       exprParser,
       attrParser,
       file: "test.html",
-      catalog: DEFAULT_SEMANTICS.catalog,
+      catalog: BUILTIN_SEMANTICS.catalog,
       diagnostics: diagnostics.forSource("lower"),
     });
 
@@ -901,11 +901,11 @@ describe("Trace Integration: Multiple Template Compilation", () => {
             exprParser,
             attrParser,
             file,
-            catalog: DEFAULT_SEMANTICS.catalog,
+            catalog: BUILTIN_SEMANTICS.catalog,
             diagnostics: diagnostics.forSource("lower"),
           });
 
-          linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+          linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
             moduleResolver: noopModuleResolver,
             templateFilePath: file,
             trace,

@@ -20,7 +20,7 @@ const programMod = await import(pathToFileURL(path.resolve(
   "packages/compiler/out/program/index.js"
 )).href);
 
-const { DEFAULT_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } = compilerMod;
+const { BUILTIN_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } = compilerMod;
 const {
   DefaultTemplateProgram,
   DefaultTemplateBuildService,
@@ -36,7 +36,7 @@ const VM = {
 const program = new DefaultTemplateProgram({
   vm: VM,
   isJs: false,
-  semantics: DEFAULT_SEMANTICS,
+  semantics: BUILTIN_SEMANTICS,
   attrParser: DEFAULT_SYNTAX,
   exprParser: getExpressionParser(),
 });

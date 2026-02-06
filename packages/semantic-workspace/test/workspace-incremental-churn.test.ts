@@ -119,15 +119,15 @@ describe("workspace incremental churn (incremental-churn)", () => {
     }
     alphaText = alpha;
     betaText = beta;
-    rootScope = harness.resolution.resourceGraph.root;
+    rootScope = harness.discovery.resourceGraph.root;
   });
 
   function createKernel(scopeId: ResourceScopeId | null): Kernel {
     // Keep a fixed resource scope so cache assertions are not affected by template scope switching.
-    const project = buildProjectSnapshot(harness.resolution.semantics, {
-      catalog: harness.resolution.catalog,
-      syntax: harness.resolution.syntax,
-      resourceGraph: harness.resolution.resourceGraph,
+    const project = buildProjectSnapshot(harness.discovery.semantics, {
+      catalog: harness.discovery.catalog,
+      syntax: harness.discovery.syntax,
+      resourceGraph: harness.discovery.resourceGraph,
     });
     return createSemanticWorkspaceKernel({
       program: {
@@ -195,10 +195,10 @@ describe("workspace incremental churn (incremental-churn)", () => {
     const betaAfterContent = getDocStats(kernel, betaUri);
 
     const configBefore = kernel.snapshot().meta.configHash;
-    const project = buildProjectSnapshot(harness.resolution.semantics, {
-      catalog: harness.resolution.catalog,
-      syntax: harness.resolution.syntax,
-      resourceGraph: harness.resolution.resourceGraph,
+    const project = buildProjectSnapshot(harness.discovery.semantics, {
+      catalog: harness.discovery.catalog,
+      syntax: harness.discovery.syntax,
+      resourceGraph: harness.discovery.resourceGraph,
     });
     const updated = kernel.reconfigure({
       program: {

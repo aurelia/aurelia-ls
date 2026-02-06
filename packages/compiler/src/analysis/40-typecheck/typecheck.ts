@@ -332,7 +332,7 @@ function recordExpected(
 
 /**
  * Check if a target represents a failed resolution (cascade suppression).
- * When target.kind === "unknown", the resolve phase already emitted a diagnostic.
+ * When target.kind === "unknown", the link phase already emitted a diagnostic.
  */
 function isUnknownTarget(target: TargetSem | TypeRef | { kind: "style" } | undefined): boolean {
   if (!target) return false;

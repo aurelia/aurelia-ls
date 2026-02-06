@@ -85,7 +85,7 @@ import { buildExportBindingMap } from '../exports/export-resolver.js';
 import {
   buildFileScope,
   transformModuleExports,
-  buildResolutionContext,
+  buildValueResolutionContext,
   fullyResolve,
   isRegistryShape,
   getRegisterMethod,
@@ -1133,7 +1133,7 @@ function analyzeConfigurations(
   const exportBindings = buildExportBindingMap(allFacts);
 
   // Step 3: Build resolution context (Layer 3)
-  const resolutionContext = buildResolutionContext({
+  const valueResolutionContext = buildValueResolutionContext({
     fileScopes,
     exportBindings,
     fileFacts: allFacts,
@@ -1157,13 +1157,13 @@ function analyzeConfigurations(
     // Check each export for IRegistry pattern
     for (const [exportName, exportValue] of exports) {
       // Resolve through Layers 2-3
-      let resolved = fullyResolve(exportValue, scope, resolutionContext);
+      let resolved = fullyResolve(exportValue, scope, valueResolutionContext);
       let isFactory = false;
 
       // Check if resolved value is IRegistry-shaped
       if (!isRegistryShape(resolved)) {
         // Try factory analysis if it's a call expression
-        const factoryResult = tryResolveAsFactory(resolved, scope, resolutionContext);
+        const factoryResult = tryResolveAsFactory(resolved, scope, valueResolutionContext);
         gaps.push(...factoryResult.gaps);
 
         if (factoryResult.isFactory && factoryResult.value !== resolved) {
@@ -1233,7 +1233,7 @@ function analyzeConfigurations(
   }
 
   // Add gaps from cross-file resolution
-  gaps.push(...resolutionContext.gaps);
+  gaps.push(...valueResolutionContext.gaps);
 
   return { configurations, resources, gaps };
 }
@@ -1717,4 +1717,5 @@ function collectAnalyzedPaths(resources: AnalyzedResource[]): string[] {
 }
 
 import type { GapReason } from './types.js';
+
 

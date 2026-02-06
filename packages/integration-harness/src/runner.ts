@@ -16,9 +16,9 @@ import {
   type AnalysisResult,
   type FileSystemContext,
   type PackageAnalysis,
-  type ResolutionConfig,
-  type ResolutionDiagnostic,
-  type ResolutionResult,
+  type ProjectSemanticsDiscoveryConfig,
+  type ProjectSemanticsDiscoveryDiagnostic,
+  type ProjectSemanticsDiscoveryResult,
   type UsageByScope,
 } from "@aurelia-ls/compiler";
 import {
@@ -88,7 +88,7 @@ export interface IntegrationSnapshots {
 
 export interface IntegrationTimings {
   totalMs: number;
-  resolutionMs: number;
+  discoveryMs: number;
   externalMs: number;
   compileMs: number;
 }
@@ -97,7 +97,7 @@ export interface IntegrationRun {
   scenario: NormalizedScenario;
   program?: ts.Program;
   fileSystem?: FileSystemContext;
-  resolution: ResolutionResult;
+  discovery: ProjectSemanticsDiscoveryResult;
   semantics: MaterializedSemantics;
   resourceGraph: ResourceGraph;
   catalog: ResourceCatalog;
@@ -105,7 +105,7 @@ export interface IntegrationRun {
   external: readonly ExternalPackageResult[];
   compile: Readonly<Record<string, CompileRunResult>>;
   snapshots: IntegrationSnapshots;
-  diagnostics: readonly ResolutionDiagnostic[];
+  diagnostics: readonly ProjectSemanticsDiscoveryDiagnostic[];
   usageByScope?: UsageByScope;
   registrationPlan?: ReturnType<typeof buildRegistrationPlan>;
   timings: IntegrationTimings;
@@ -127,8 +127,8 @@ export interface HarnessRunOptions {
   retain?: {
     program?: boolean;
     fileSystem?: boolean;
-    resolutionFacts?: boolean;
-    resolutionRegistration?: boolean;
+    discoveryFacts?: boolean;
+    discoveryRegistration?: boolean;
     externalAnalysis?: boolean;
   };
 }
@@ -145,7 +145,7 @@ export async function runIntegrationScenario(
   const retention = resolveRetentionOptions(options.retain);
   const timings: IntegrationTimings = {
     totalMs: 0,
-    resolutionMs: 0,
+    discoveryMs: 0,
     externalMs: 0,
     compileMs: 0,
   };
@@ -162,16 +162,16 @@ export async function runIntegrationScenario(
   const moduleResolver = createModuleResolver(program, fileMap);
   memoryTracker.mark("program");
 
-  const resolutionStart = performance.now();
+  const discoveryStart = performance.now();
   const diagnostics = new DiagnosticsRuntime();
-  const baseResolution = discoverProjectSemantics(
+  const baseDiscovery = discoverProjectSemantics(
     program,
-    { ...buildResolutionConfig(resolvedScenario, fileSystem), diagnostics: diagnostics.forSource("project") },
+    { ...buildProjectSemanticsDiscoveryConfig(resolvedScenario, fileSystem), diagnostics: diagnostics.forSource("project") },
     options.logger,
   );
-  const resolution = baseResolution;
-  timings.resolutionMs = performance.now() - resolutionStart;
-  memoryTracker.mark("resolution");
+  const discovery = baseDiscovery;
+  timings.discoveryMs = performance.now() - discoveryStart;
+  memoryTracker.mark("discovery");
 
   const externalStart = performance.now();
   const external = await analyzeExternalPackages(resolvedScenario.externalPackages, retention.externalAnalysis);
@@ -179,15 +179,15 @@ export async function runIntegrationScenario(
   memoryTracker.mark("external");
 
   const merged = applyExternalResources(
-    resolution,
+    discovery,
     external.flatMap((pkg) => pkg.resources),
     resolvedScenario.externalResourcePolicy,
   );
-  const augmented = applyExplicitResources(merged, resolvedScenario.resolution.explicitResources);
+  const augmented = applyExplicitResources(merged, resolvedScenario.discovery.explicitResources);
   memoryTracker.mark("merge");
 
   const compileStart = performance.now();
-  const compile = compileTargets(resolvedScenario, resolution, augmented, moduleResolver, fileMap, {
+  const compile = compileTargets(resolvedScenario, discovery, augmented, moduleResolver, fileMap, {
     computeUsage: !!resolvedScenario.expect?.registrationPlan,
   });
   timings.compileMs = performance.now() - compileStart;
@@ -207,13 +207,13 @@ export async function runIntegrationScenario(
   timings.totalMs = performance.now() - startTotal;
   memoryTracker.mark("done");
   const memory = memoryTracker.trace();
-  const trimmedResolution = trimResolutionResult(resolution, retention);
+  const trimmedDiscovery = trimProjectSemanticsDiscoveryResult(discovery, retention);
 
   return {
     scenario: resolvedScenario,
     program: retention.program ? program : undefined,
     fileSystem: retention.fileSystem ? fileSystem : undefined,
-    resolution: trimmedResolution,
+    discovery: trimmedDiscovery,
     semantics: augmented.semantics,
     resourceGraph: augmented.resourceGraph,
     catalog: augmented.catalog,
@@ -221,7 +221,7 @@ export async function runIntegrationScenario(
     external,
     compile,
     snapshots,
-    diagnostics: trimmedResolution.diagnostics,
+    diagnostics: trimmedDiscovery.diagnostics,
     usageByScope,
     registrationPlan,
     timings,
@@ -233,13 +233,13 @@ function resolveScenarioFixtures(scenario: NormalizedScenario): NormalizedScenar
   if (scenario.externalPackages.length === 0) return scenario;
 
   const externalPackages = scenario.externalPackages.map(resolveExternalPackageSpec);
-  const packageRoots = mergePackageRoots(scenario.resolution.packageRoots, externalPackages);
+  const packageRoots = mergePackageRoots(scenario.discovery.packageRoots, externalPackages);
 
   return {
     ...scenario,
     externalPackages,
-    resolution: {
-      ...scenario.resolution,
+    discovery: {
+      ...scenario.discovery,
       packageRoots,
     },
   };
@@ -261,14 +261,14 @@ function createProgramFromScenario(
       scenario.source.rootNames,
       scenario.source.compilerOptions,
     );
-    const fileSystem = scenario.resolution.fileSystem === "mock"
+    const fileSystem = scenario.discovery.fileSystem === "mock"
       ? createMockFileSystem({ files: fileMap })
       : undefined;
     return { program, fileSystem, fileMap };
   }
 
   const program = createProgramFromTsconfig(scenario.source.tsconfigPath);
-  const fileSystem = scenario.resolution.fileSystem === "node"
+  const fileSystem = scenario.discovery.fileSystem === "node"
     ? createNodeFileSystem({ root: dirname(scenario.source.tsconfigPath) })
     : undefined;
   return { program, fileSystem };
@@ -304,17 +304,17 @@ function createModuleResolver(
   };
 }
 
-function buildResolutionConfig(
+function buildProjectSemanticsDiscoveryConfig(
   scenario: NormalizedScenario,
   fileSystem?: FileSystemContext,
-): Omit<ResolutionConfig, "diagnostics"> {
+): Omit<ProjectSemanticsDiscoveryConfig, "diagnostics"> {
   return {
-    conventions: scenario.resolution.conventions,
-    defines: scenario.resolution.defines,
+    conventions: scenario.discovery.conventions,
+    defines: scenario.discovery.defines,
     fileSystem,
-    templateExtensions: scenario.resolution.templateExtensions,
-    styleExtensions: scenario.resolution.styleExtensions,
-    packageRoots: scenario.resolution.packageRoots,
+    templateExtensions: scenario.discovery.templateExtensions,
+    styleExtensions: scenario.discovery.styleExtensions,
+    packageRoots: scenario.discovery.packageRoots,
     stripSourcedNodes: process.env.AURELIA_RESOLUTION_STRIP_SOURCED_NODES === "1",
   };
 }
@@ -327,10 +327,10 @@ function resolveRetentionOptions(
   return {
     program: resolveRetention("AURELIA_HARNESS_RETAIN_PROGRAM", overrides?.program, defaultRetain),
     fileSystem: resolveRetention("AURELIA_HARNESS_RETAIN_FILESYSTEM", overrides?.fileSystem, defaultRetain),
-    resolutionFacts: resolveRetention("AURELIA_HARNESS_RETAIN_FACTS", overrides?.resolutionFacts, defaultRetain),
-    resolutionRegistration: resolveRetention(
+    discoveryFacts: resolveRetention("AURELIA_HARNESS_RETAIN_FACTS", overrides?.discoveryFacts, defaultRetain),
+    discoveryRegistration: resolveRetention(
       "AURELIA_HARNESS_RETAIN_REGISTRATION",
-      overrides?.resolutionRegistration,
+      overrides?.discoveryRegistration,
       defaultRetain,
     ),
     externalAnalysis: resolveRetention("AURELIA_HARNESS_RETAIN_EXTERNAL", overrides?.externalAnalysis, defaultRetain),
@@ -354,18 +354,18 @@ function readEnvFlag(key: string): boolean | undefined {
   return undefined;
 }
 
-function trimResolutionResult(
-  result: ResolutionResult,
+function trimProjectSemanticsDiscoveryResult(
+  result: ProjectSemanticsDiscoveryResult,
   retention: Required<NonNullable<HarnessRunOptions["retain"]>>,
-): ResolutionResult {
-  if (retention.resolutionFacts && retention.resolutionRegistration) {
+): ProjectSemanticsDiscoveryResult {
+  if (retention.discoveryFacts && retention.discoveryRegistration) {
     return result;
   }
 
   return {
     ...result,
-    facts: retention.resolutionFacts ? result.facts : new Map(),
-    registration: retention.resolutionRegistration
+    facts: retention.discoveryFacts ? result.facts : new Map(),
+    registration: retention.discoveryRegistration
       ? result.registration
       : { sites: [], orphans: [], unresolved: [], activatedPlugins: [] },
   };
@@ -407,7 +407,7 @@ async function analyzeExternalPackages(
 }
 
 function applyExternalResources(
-  base: ResolutionResult,
+  base: ProjectSemanticsDiscoveryResult,
   external: readonly ResourceDef[],
   policy: ExternalResourcePolicy,
 ): {
@@ -460,7 +460,7 @@ function applyExternalResources(
 
 function compileTargets(
   scenario: NormalizedScenario,
-  resolution: ResolutionResult,
+  discovery: ProjectSemanticsDiscoveryResult,
   merged: {
     semantics: MaterializedSemantics;
     resourceGraph: ResourceGraph;
@@ -476,7 +476,7 @@ function compileTargets(
 
   for (const target of targets) {
     const { markup, templatePath } = resolveTemplateSource(target, scenario, fileMap);
-    const scopeId = resolveScopeId(target, scenario, resolution, merged.resourceGraph);
+    const scopeId = resolveScopeId(target, scenario, discovery, merged.resourceGraph);
     const localImports = target.localImports ? [...target.localImports] : undefined;
 
     const compileResult: CompileRunResult = {
@@ -558,7 +558,7 @@ function resolveTemplateSource(
 function resolveScopeId(
   target: CompileTargetSpec,
   scenario: NormalizedScenario,
-  resolution: ResolutionResult,
+  discovery: ProjectSemanticsDiscoveryResult,
   graph: ResourceGraph,
 ): ResourceScopeId {
   const scope = target.scope;
@@ -572,11 +572,11 @@ function resolveScopeId(
 
   const localOf = scope.localOf;
   const normalizedLocal = normalizePath(localOf);
-  const byPath = resolution.templates.find((t) => t.componentPath === normalizedLocal);
+  const byPath = discovery.templates.find((t) => t.componentPath === normalizedLocal);
   if (byPath) {
     return `local:${byPath.componentPath}` as ResourceScopeId;
   }
-  const byName = resolution.templates.find((t) => t.resourceName === localOf);
+  const byName = discovery.templates.find((t) => t.resourceName === localOf);
   if (byName) {
     return `local:${byName.componentPath}` as ResourceScopeId;
   }
@@ -600,10 +600,10 @@ function buildSnapshots(
   const semantic = buildSemanticSnapshot(merged.semantics, {
     graph: merged.resourceGraph,
     catalog: merged.catalog,
-    packageRoots: scenario.resolution.packageRoots,
+    packageRoots: scenario.discovery.packageRoots,
   });
   const apiSurface = buildApiSurfaceSnapshot(merged.semantics, {
-    packageRoots: scenario.resolution.packageRoots,
+    packageRoots: scenario.discovery.packageRoots,
   });
   return { semantic, apiSurface };
 }

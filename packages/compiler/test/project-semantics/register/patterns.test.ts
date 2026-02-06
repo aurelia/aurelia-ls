@@ -679,7 +679,7 @@ describe("Plugin Registration Patterns", () => {
     expect(analysis.activatedPlugins[0]!.exportName).toBe("RouterConfiguration");
     expect(analysis.activatedPlugins[0]!.package).toBe("@aurelia/router");
 
-    // No RegistrationSites created for plugin resources (they come from DEFAULT_SEMANTICS)
+    // No RegistrationSites created for plugin resources (they come from BUILTIN_SEMANTICS)
     const pluginSites = analysis.sites.filter(s => s.evidence.kind === "plugin");
     expect(pluginSites.length).toBe(0);
   });

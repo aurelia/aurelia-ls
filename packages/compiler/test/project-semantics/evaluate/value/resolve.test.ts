@@ -25,10 +25,10 @@ import {
   // Types
   type AnalyzableValue,
   type LexicalScope,
-  type ResolutionContext,
+  type ValueResolutionContext,
   type ExportBindingMap,
   // Layer 3
-  buildResolutionContext,
+  buildValueResolutionContext,
   resolveImportsCrossFile,
   resolveImport,
   fullyResolve,
@@ -115,14 +115,14 @@ function createExportBindings(
 }
 
 /**
- * Create a ResolutionContext for testing.
+ * Create a ValueResolutionContext for testing.
  */
 function createContext(options: {
   scopes: Array<{ path: NormalizedPath; scope: LexicalScope }>;
   exports: Array<{ file: NormalizedPath; exports: Record<string, { definitionPath: NormalizedPath; definitionName: string }> }>;
   facts: Array<FileFacts>;
   packagePath?: string;
-}): ResolutionContext {
+}): ValueResolutionContext {
   const fileScopes = new Map<NormalizedPath, LexicalScope>();
   for (const { path, scope } of options.scopes) {
     fileScopes.set(path, scope);
@@ -133,7 +133,7 @@ function createContext(options: {
     fileFacts.set(fact.path, fact);
   }
 
-  return buildResolutionContext({
+  return buildValueResolutionContext({
     fileScopes,
     exportBindings: createExportBindings(options.exports),
     fileFacts,
@@ -147,12 +147,12 @@ function createContext(options: {
 
 describe('Cross-File Resolution (Layer 3)', () => {
   // ===========================================================================
-  // buildResolutionContext
+  // buildValueResolutionContext
   // ===========================================================================
 
-  describe('buildResolutionContext', () => {
+  describe('buildValueResolutionContext', () => {
     it('creates context with empty collections', () => {
-      const ctx = buildResolutionContext({
+      const ctx = buildValueResolutionContext({
         fileScopes: new Map(),
         exportBindings: new Map(),
         fileFacts: new Map(),
@@ -169,7 +169,7 @@ describe('Cross-File Resolution (Layer 3)', () => {
 
     it('creates context with provided collections', () => {
       const scope = createScope({ Foo: classVal('Foo', '/foo.ts' as NormalizedPath) });
-      const ctx = buildResolutionContext({
+      const ctx = buildValueResolutionContext({
         fileScopes: new Map([['/foo.ts' as NormalizedPath, scope]]),
         exportBindings: createExportBindings([{
           file: '/foo.ts' as NormalizedPath,
@@ -554,7 +554,7 @@ describe('Cross-File Resolution (Layer 3)', () => {
   // ===========================================================================
 
   describe('resolveImportsCrossFile - nested structures', () => {
-    let ctx: ResolutionContext;
+    let ctx: ValueResolutionContext;
 
     beforeEach(() => {
       ctx = createContext({
@@ -911,5 +911,6 @@ describe('Cross-File Resolution (Layer 3)', () => {
     });
   });
 });
+
 
 

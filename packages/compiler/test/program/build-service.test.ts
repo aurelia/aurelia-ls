@@ -1,7 +1,7 @@
 import { test, expect } from "vitest";
 
 import {
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DefaultTemplateBuildService,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
@@ -118,7 +118,7 @@ function createProgram(opts = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
+    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
     moduleResolver: noopModuleResolver,
     ...opts,
   });

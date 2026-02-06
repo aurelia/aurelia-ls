@@ -23,7 +23,7 @@ import type { ExportBindingMap } from '../../exports/types.js';
 import type {
   AnalyzableValue,
   ImportValue,
-  ResolutionContext,
+  ValueResolutionContext,
   LexicalScope,
   StatementValue,
   MethodValue,
@@ -59,9 +59,9 @@ export interface BuildContextOptions {
  * Build a resolution context for cross-file value resolution.
  *
  * @param options - Context building options
- * @returns A new ResolutionContext ready for cross-file resolution
+ * @returns A new ValueResolutionContext ready for cross-file resolution
  */
-export function buildResolutionContext(options: BuildContextOptions): ResolutionContext {
+export function buildValueResolutionContext(options: BuildContextOptions): ValueResolutionContext {
   return {
     fileScopes: options.fileScopes,
     exportBindings: options.exportBindings,
@@ -92,7 +92,7 @@ export function buildResolutionContext(options: BuildContextOptions): Resolution
  */
 export function resolveImportsCrossFile(
   value: AnalyzableValue,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   fromFile: NormalizedPath
 ): AnalyzableValue {
   return resolveValueCrossFile(value, ctx, fromFile);
@@ -103,7 +103,7 @@ export function resolveImportsCrossFile(
  */
 function resolveValueCrossFile(
   value: AnalyzableValue,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   fromFile: NormalizedPath
 ): AnalyzableValue {
   switch (value.kind) {
@@ -242,7 +242,7 @@ function getResolvedTarget(value: AnalyzableValue): AnalyzableValue | undefined 
  */
 function resolveMethodCrossFile(
   method: MethodValue,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   fromFile: NormalizedPath
 ): MethodValue {
   const body = method.body.map(stmt => resolveStatementCrossFile(stmt, ctx, fromFile));
@@ -255,7 +255,7 @@ function resolveMethodCrossFile(
  */
 function resolveStatementCrossFile(
   stmt: StatementValue,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   fromFile: NormalizedPath
 ): StatementValue {
   switch (stmt.kind) {
@@ -332,7 +332,7 @@ function resolveStatementCrossFile(
  */
 export function resolveImport(
   imp: ImportValue,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   fromFile: NormalizedPath
 ): AnalyzableValue {
   // Step 1: Get the resolved path for the import specifier
@@ -483,7 +483,7 @@ export function resolveImport(
  */
 function tryOnDemandResolve(
   imp: ImportValue,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   fromFile: NormalizedPath
 ): AnalyzableValue | null {
   if (!ctx.onDemandResolve) {
@@ -536,7 +536,7 @@ function tryOnDemandResolve(
 function resolveNamespacePropertyAccess(
   nsImport: ImportValue,
   property: string,
-  ctx: ResolutionContext
+  ctx: ValueResolutionContext
 ): AnalyzableValue {
   // Create a synthetic named import for the property
   const syntheticImport: ImportValue = {
@@ -565,7 +565,7 @@ function lookupImportPath(
   specifier: string,
   exportName: string,
   fromFile: NormalizedPath,
-  ctx: ResolutionContext
+  ctx: ValueResolutionContext
 ): NormalizedPath | null {
   debug.project('lookupImportPath.start', {
     specifier,
@@ -644,7 +644,7 @@ function lookupImportPath(
 export function fullyResolve(
   value: AnalyzableValue,
   scope: LexicalScope,
-  ctx: ResolutionContext
+  ctx: ValueResolutionContext
 ): AnalyzableValue {
   // Layer 2: Scope resolution
   const scopeResolved = resolveInScope(value, scope);
@@ -652,4 +652,5 @@ export function fullyResolve(
   // Layer 3: Cross-file resolution
   return resolveImportsCrossFile(scopeResolved, ctx, scope.filePath);
 }
+
 

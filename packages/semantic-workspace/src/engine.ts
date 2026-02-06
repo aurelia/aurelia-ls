@@ -43,8 +43,8 @@ import {
   hasThirdPartyResources,
   type InlineTemplateInfo,
   type Logger,
-  type ResolutionConfig,
-  type ResolutionResult,
+  type ProjectSemanticsDiscoveryConfig,
+  type ProjectSemanticsDiscoveryResult,
   type TemplateInfo,
   type ThirdPartyOptions,
 } from "@aurelia-ls/compiler";
@@ -81,14 +81,14 @@ import {
   type TemplateIndex,
 } from "./template-edit-engine.js";
 
-type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
+type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
 export interface SemanticWorkspaceEngineOptions {
   readonly logger: Logger;
   readonly workspaceRoot?: string | null;
   readonly tsconfigPath?: string | null;
   readonly configFileName?: string;
-  readonly resolution?: ResolutionConfigBase;
+  readonly discovery?: ProjectSemanticsDiscoveryConfigBase;
   readonly typescript?: TypeScriptServices | false;
   readonly vm?: VmReflection;
   readonly lookupText?: (uri: DocumentUri) => string | null;
@@ -134,16 +134,16 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
     const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
     this.#workspaceRoot = workspaceRoot;
-    const resolution: ResolutionConfigBase = {
-      ...(options.resolution ?? {}),
-      packagePath: options.resolution?.packagePath ?? workspaceRoot,
-      fileSystem: options.resolution?.fileSystem ?? createNodeFileSystem({ root: workspaceRoot }),
+    const discovery: ProjectSemanticsDiscoveryConfigBase = {
+      ...(options.discovery ?? {}),
+      packagePath: options.discovery?.packagePath ?? workspaceRoot,
+      fileSystem: options.discovery?.fileSystem ?? createNodeFileSystem({ root: workspaceRoot }),
     };
 
     this.#projectIndex = new AureliaProjectIndex({
       ts: this.#env.project,
       logger: options.logger,
-      resolution,
+      discovery,
     });
     this.#projectVersion = this.#env.project.getProjectVersion();
 
@@ -158,9 +158,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#refactorOverrides = options.refactorOverrides ?? null;
 
     this.#lookupText = options.lookupText;
-    this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
+    this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentDiscovery());
     this.#componentHashes = buildComponentHashes(this.#templateIndex);
-    this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentResolution());
+    this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentDiscovery());
 
     this.#kernel = createSemanticWorkspaceKernel({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
@@ -201,9 +201,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       if (applied) {
         this.#logger.info("[workspace] Third-party overlay applied, refreshing workspace");
         // Rebuild derived indexes from updated project index
-        this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
+        this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentDiscovery());
         this.#componentHashes = buildComponentHashes(this.#templateIndex);
-        this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentResolution());
+        this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentDiscovery());
         this.#resourceReferenceIndex = null;
         this.#kernel.reconfigure({
           program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
@@ -239,7 +239,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const prevComponentHashes = this.#componentHashes;
     this.#projectIndex.refresh();
     this.#projectVersion = version;
-    this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentResolution());
+    this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentDiscovery());
     const nextComponentHashes = buildComponentHashes(this.#templateIndex);
     const componentInvalidations = collectComponentInvalidations(prevTemplateIndex, prevComponentHashes, this.#templateIndex, nextComponentHashes);
     if (componentInvalidations.length > 0) {
@@ -249,7 +249,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       this.#kernel.program.invalidateTemplate(uri);
     }
     this.#componentHashes = nextComponentHashes;
-    this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentResolution());
+    this.#definitionIndex = buildResourceDefinitionIndex(this.#projectIndex.currentDiscovery());
     this.#resourceReferenceIndex = null;
     this.#kernel.reconfigure({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
@@ -318,11 +318,11 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   snapshot(): WorkspaceSnapshot {
     this.#ensureIndexFresh();
     const base = this.#kernel.snapshot();
-    const resolution = this.#projectIndex.currentResolution();
+    const discovery = this.#projectIndex.currentDiscovery();
     return {
       ...base,
-      semanticSnapshot: resolution.semanticSnapshot,
-      apiSurface: resolution.apiSurfaceSnapshot,
+      semanticSnapshot: discovery.semanticSnapshot,
+      apiSurface: discovery.apiSurfaceSnapshot,
     };
   }
 
@@ -498,7 +498,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       workspaceRoot: this.#workspaceRoot,
       templateIndex: this.#templateIndex,
       definitionIndex: this.#definitionIndex,
-      facts: this.#projectIndex.currentResolution().facts,
+      facts: this.#projectIndex.currentDiscovery().facts,
       compilerOptions: this.#env.tsService.compilerOptions(),
       lookupText: this.lookupText.bind(this),
       getCompilation: (uri) => this.#kernel.getCompilation(uri),
@@ -1021,7 +1021,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     }
 
     this.#activateTemplate(active);
-    raw.push(...this.#projectIndex.currentResolution().diagnostics);
+    raw.push(...this.#projectIndex.currentDiscovery().diagnostics);
     return raw;
   }
 
@@ -1073,23 +1073,23 @@ function getActiveTemplateSetter(vm: VmReflection): ((path: string | null) => vo
   return typeof maybe.setActiveTemplate === "function" ? maybe.setActiveTemplate.bind(maybe) : null;
 }
 
-function buildTemplateIndex(resolution: ResolutionResult): TemplateIndex {
+function buildTemplateIndex(discovery: ProjectSemanticsDiscoveryResult): TemplateIndex {
   const templateToComponent = new Map<DocumentUri, string>();
   const templateToScope = new Map<DocumentUri, ResourceScopeId>();
-  for (const entry of resolution.templates) {
+  for (const entry of discovery.templates) {
     const uri = asDocumentUri(entry.templatePath);
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
   }
-  for (const entry of resolution.inlineTemplates) {
+  for (const entry of discovery.inlineTemplates) {
     const inlinePath = inlineTemplatePath(entry.componentPath);
     const uri = asDocumentUri(inlinePath);
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
   }
   return {
-    templates: resolution.templates,
-    inlineTemplates: resolution.inlineTemplates,
+    templates: discovery.templates,
+    inlineTemplates: discovery.inlineTemplates,
     templateToComponent,
     templateToScope,
   };

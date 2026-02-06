@@ -6,7 +6,7 @@
  *
  * Key scenarios:
  * - Custom elements from @aurelia/router resolve correctly
- * - Resolution uses DEFAULT_SEMANTICS properly
+ * - Resolution uses BUILTIN_SEMANTICS properly
  * - Emitted instructions have correct structure for runtime consumption
  */
 
@@ -21,7 +21,7 @@ import {
   collectNestedTemplateHtmlTree,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   type SerializedDefinition,
@@ -56,10 +56,10 @@ function compileTemplate(markup: string): CompileResult {
     exprParser,
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
     diagnostics: diagnostics.forSource("link"),
@@ -131,9 +131,9 @@ describe("au-viewport Resolution", () => {
     expect(hydrateElements[0]!.res).toBe("au-viewport");
   });
 
-  test("au-viewport in DEFAULT_SEMANTICS has correct structure", () => {
+  test("au-viewport in BUILTIN_SEMANTICS has correct structure", () => {
     // Directly verify the semantics entry
-    const viewport = DEFAULT_SEMANTICS.resources.elements["au-viewport"];
+    const viewport = BUILTIN_SEMANTICS.resources.elements["au-viewport"];
 
     expect(viewport).toBeDefined();
     expect(viewport?.kind).toBe("element");

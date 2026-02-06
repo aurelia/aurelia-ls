@@ -2,7 +2,7 @@
  * Conversion Functions for Resolution Diagnostics
  *
  * Converts internal data structures (OrphanResource, UnresolvedRegistration)
- * to user-facing ResolutionDiagnostic instances with actionable messages.
+ * to user-facing ProjectSemanticsDiscoveryDiagnostic instances with actionable messages.
  */
 
 import type { CompilerDiagnostic, DocumentUri, NormalizedPath, RawDiagnostic, SourceSpan } from '../compiler.js';
@@ -13,7 +13,7 @@ import {
   type DiagnosticsCatalog,
 } from '../compiler.js';
 import type { OrphanResource, UnresolvedRegistration, UnresolvedPattern } from "../register/types.js";
-import type { ResolutionDiagnostic, ResolutionDiagnosticEmitter } from "../resolve.js";
+import type { ProjectSemanticsDiscoveryDiagnostic, ProjectSemanticsDiscoveryDiagnosticEmitter } from "../resolve.js";
 import { unwrapSourced } from "../assemble/sourced.js";
 
 // =============================================================================
@@ -50,14 +50,14 @@ function isExternalPackage(source: NormalizedPath): boolean {
  */
 export function orphansToDiagnostics(
   orphans: readonly OrphanResource[],
-  emitter: ResolutionDiagnosticEmitter,
-): ResolutionDiagnostic[] {
+  emitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryDiagnostic[] {
   return orphans
     .filter(o => !o.resource.file || !isExternalPackage(o.resource.file))
     .map((orphan) => orphanToDiagnostic(orphan, emitter));
 }
 
-function orphanToDiagnostic(orphan: OrphanResource, emitter: ResolutionDiagnosticEmitter): ResolutionDiagnostic {
+function orphanToDiagnostic(orphan: OrphanResource, emitter: ProjectSemanticsDiscoveryDiagnosticEmitter): ProjectSemanticsDiscoveryDiagnostic {
   const { resource } = orphan;
   const kindLabel = getKindLabel(resource.kind);
   const name = unwrapSourced(resource.name) ?? "<unknown>";
@@ -109,8 +109,8 @@ function getKindLabel(kind: "custom-element" | "custom-attribute" | "template-co
  */
 export function unresolvedToDiagnostics(
   unresolved: readonly UnresolvedRegistration[],
-  emitter: ResolutionDiagnosticEmitter,
-): ResolutionDiagnostic[] {
+  emitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryDiagnostic[] {
   return unresolved
     .filter(u => !isExternalPackage(u.file))
     .map((entry) => unresolvedToDiagnostic(entry, emitter));
@@ -118,8 +118,8 @@ export function unresolvedToDiagnostics(
 
 function unresolvedToDiagnostic(
   registration: UnresolvedRegistration,
-  emitter: ResolutionDiagnosticEmitter,
-): ResolutionDiagnostic {
+  emitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryDiagnostic {
   const { pattern, file, reason } = registration;
   const code = getUnanalyzableDiagnosticCode(pattern.kind);
   const uri = toUri(file);
@@ -195,14 +195,14 @@ export interface UnresolvedResourceInfo {
  */
 export function unresolvedRefsToDiagnostics(
   refs: readonly UnresolvedResourceInfo[],
-  emitter: ResolutionDiagnosticEmitter,
-): ResolutionDiagnostic[] {
+  emitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryDiagnostic[] {
   return refs
     .filter(r => !isExternalPackage(r.file))
     .map((entry) => refToDiagnostic(entry, emitter));
 }
 
-function refToDiagnostic(ref: UnresolvedResourceInfo, emitter: ResolutionDiagnosticEmitter): ResolutionDiagnostic {
+function refToDiagnostic(ref: UnresolvedResourceInfo, emitter: ProjectSemanticsDiscoveryDiagnosticEmitter): ProjectSemanticsDiscoveryDiagnostic {
   const uri = toUri(ref.file);
   const diag = toRawDiagnostic(emitter.emit("aurelia/project/not-a-resource", {
     message: ref.reason,
@@ -224,7 +224,7 @@ const PROJECT_CATALOG = {
 
 type ProjectCode = keyof typeof PROJECT_CATALOG & string;
 
-function withUri(diag: RawDiagnostic, uri?: DocumentUri): ResolutionDiagnostic {
+function withUri(diag: RawDiagnostic, uri?: DocumentUri): ProjectSemanticsDiscoveryDiagnostic {
   return uri ? { ...diag, uri } : diag;
 }
 

@@ -941,7 +941,7 @@ function processRegistrationValue(
       const pluginResolution = context.pluginResolver.resolve(origin);
       if (pluginResolution.kind === "known") {
         // Record the activated plugin - don't create RegistrationSites
-        // The scope builder will add resources from DEFAULT_SEMANTICS
+        // The scope builder will add resources from BUILTIN_SEMANTICS
         plugins.push(pluginResolution.manifest);
         return { sites, unresolved, plugins };
       }
@@ -1168,4 +1168,3 @@ function processRegistrationValue(
 
   return { sites, unresolved, plugins };
 }
-

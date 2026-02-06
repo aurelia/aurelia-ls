@@ -401,9 +401,9 @@ function populateControllerFrame(
   diagEmitter: BindDiagnosticEmitter,
 ): void {
   // === Stub Propagation ===
-  // If the controller config is a stub (from aurelia/unknown-controller in resolve),
+  // If the controller config is a stub (from aurelia/unknown-controller in link),
   // we can't reliably extract iterator/value bindings or set up scope correctly.
-  // Skip gracefully — the root cause diagnostic was already emitted in resolve.
+  // Skip gracefully — the root cause diagnostic was already emitted in link.
   if (isStub(config)) {
     return;
   }

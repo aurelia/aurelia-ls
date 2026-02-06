@@ -475,7 +475,7 @@ describe("workspace diagnostics (gap reporting)", () => {
     harness = await createWorkspaceHarness({
       fixture,
       openTemplates: "none",
-      resolution: {
+      discovery: {
         partialEvaluation: { failOnFiles },
       },
     });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import type { Semantics } from "@aurelia-ls/compiler";
-import { DEFAULT_SEMANTICS, normalizePathForId } from "@aurelia-ls/compiler";
+import { BUILTIN_SEMANTICS, normalizePathForId } from "@aurelia-ls/compiler";
 import { buildApiSurfaceSnapshot, buildSemanticSnapshot, buildSemanticsArtifacts } from "@aurelia-ls/compiler";
 import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../src/project-semantics/assemble/resource-def.js";
 
@@ -12,12 +12,12 @@ function baseSemantics(): Semantics {
     attributes: {},
     valueConverters: {},
     bindingBehaviors: {},
-    commands: DEFAULT_SEMANTICS.commands,
-    patterns: DEFAULT_SEMANTICS.patterns,
-    dom: DEFAULT_SEMANTICS.dom,
-    events: DEFAULT_SEMANTICS.events,
-    naming: DEFAULT_SEMANTICS.naming,
-    twoWayDefaults: DEFAULT_SEMANTICS.twoWayDefaults,
+    commands: BUILTIN_SEMANTICS.commands,
+    patterns: BUILTIN_SEMANTICS.patterns,
+    dom: BUILTIN_SEMANTICS.dom,
+    events: BUILTIN_SEMANTICS.events,
+    naming: BUILTIN_SEMANTICS.naming,
+    twoWayDefaults: BUILTIN_SEMANTICS.twoWayDefaults,
   };
 }
 

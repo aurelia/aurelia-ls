@@ -173,7 +173,7 @@ export const DEFAULT_THIRD_PARTY_OPTIONS: {
 /**
  * Default convention options.
  *
- * Uses DEFAULT_CONVENTION_CONFIG from resolution as the base,
+ * Uses DEFAULT_CONVENTION_CONFIG from project semantics as the base,
  * plus vite-plugin specific thirdParty options.
  */
 export const DEFAULT_CONVENTION_OPTIONS: ResolvedConventionOptions = {
@@ -544,7 +544,7 @@ export interface NormalizeOptionsContext {
 export function normalizeOptions(
   options: AureliaPluginOptions | undefined,
   context: NormalizeOptionsContext,
-): Omit<ResolvedAureliaOptions, "resolution" | "routeTree"> {
+): Omit<ResolvedAureliaOptions, "projectSemantics" | "routeTree"> {
   const isDev = context.command === "serve";
   const opts = options ?? {};
   const packagePath = opts.packagePath

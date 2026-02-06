@@ -101,7 +101,7 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
   ctx.workspace = createSemanticWorkspace({
     logger: ctx.logger,
     workspaceRoot: ctx.workspaceRoot,
-    resolution: {
+    discovery: {
       stripSourcedNodes,
     },
   });

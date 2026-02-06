@@ -18,7 +18,7 @@ export type ScenarioSource =
 
 export type FileSystemMode = "mock" | "node" | "none";
 
-export interface ResolutionHarnessOptions {
+export interface DiscoveryHarnessOptions {
   conventions?: ConventionConfig;
   defines?: DefineMap;
   fileSystem?: FileSystemMode;
@@ -237,7 +237,7 @@ export interface IntegrationScenario {
   compile?: readonly CompileTargetSpec[];
   externalPackages?: readonly ExternalPackageSpec[];
   externalResourcePolicy?: ExternalResourcePolicy;
-  resolution?: ResolutionHarnessOptions;
+  discovery?: DiscoveryHarnessOptions;
   compiler?: CompilerHarnessOptions;
   expect?: ScenarioExpectations;
 }
@@ -247,7 +247,7 @@ export interface NormalizedScenario extends IntegrationScenario {
   compile: readonly CompileTargetSpec[];
   externalPackages: readonly ExternalPackageSpec[];
   externalResourcePolicy: ExternalResourcePolicy;
-  resolution: ResolutionHarnessOptions;
+  discovery: DiscoveryHarnessOptions;
   compiler: CompilerHarnessOptions;
 }
 

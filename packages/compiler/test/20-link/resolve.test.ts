@@ -8,7 +8,7 @@ import {
   getExpressionParser,
   DEFAULT_SYNTAX,
   lowerDocument,
-  BUILTIN_SEMANTICS as DEFAULT,
+  BUILTIN_SEMANTICS,
   linkTemplateSemantics, buildSemanticsSnapshot,
   materializeResourcesForScope,
   createSemanticsLookup,
@@ -84,7 +84,7 @@ runVectorTests<ResolveExpect, ResolveIntent, ResolveDiff>({
 describe("Resolve (20) - Resource Graph", () => {
   test("resource graph: local scope overlays root but not parent scopes", () => {
     const diagnostics = new DiagnosticsRuntime();
-    const baseSem = deepMergeSemantics(DEFAULT, {
+    const baseSem = deepMergeSemantics(BUILTIN_SEMANTICS, {
       resources: {
         elements: {},
         attributes: {},
@@ -171,7 +171,7 @@ describe("Resolve (20) - Resource Graph", () => {
 
   test("resource graph: local overrides root when names conflict", () => {
     const diagnostics = new DiagnosticsRuntime();
-    const baseSem = deepMergeSemantics(DEFAULT, {
+    const baseSem = deepMergeSemantics(BUILTIN_SEMANTICS, {
       resources: {
         elements: {},
         attributes: {},
@@ -248,7 +248,7 @@ describe("Resolve (20) - Controller Diagnostics", () => {
   test("resolveControllerSem returns aurelia/unknown-controller for unknown controller", () => {
     const diagnostics = new DiagnosticsRuntime();
     const { services } = createResolveServices({ diagnostics: diagnostics.forSource("link") });
-    const ctx = createResolveContext(DEFAULT, services, undefined, null, noopModuleResolver, "mem.html");
+    const ctx = createResolveContext(BUILTIN_SEMANTICS, services, undefined, null, noopModuleResolver, "mem.html");
     const result = resolveControllerSem(ctx, "unknown-tc", null);
 
     // Should have diagnostic
@@ -265,7 +265,7 @@ describe("Resolve (20) - Controller Diagnostics", () => {
   test("resolveControllerSem returns success for built-in controller", () => {
     const diagnostics = new DiagnosticsRuntime();
     const { services } = createResolveServices({ diagnostics: diagnostics.forSource("link") });
-    const ctx = createResolveContext(DEFAULT, services, undefined, null, noopModuleResolver, "mem.html");
+    const ctx = createResolveContext(BUILTIN_SEMANTICS, services, undefined, null, noopModuleResolver, "mem.html");
     const result = resolveControllerSem(ctx, "if", null);
 
     // Should not have diagnostic
@@ -278,7 +278,7 @@ describe("Resolve (20) - Controller Diagnostics", () => {
   });
 
   test("resolveControllerSem returns success for custom template controller", () => {
-    const customSem = deepMergeSemantics(DEFAULT, {
+    const customSem = deepMergeSemantics(BUILTIN_SEMANTICS, {
       resources: {
         attributes: {
           "my-tc": {
@@ -574,11 +574,11 @@ describe("Resolve (20) - Local Imports", () => {
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      catalog: DEFAULT.catalog,
+      catalog: BUILTIN_SEMANTICS.catalog,
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports });
+    const snapshot = buildSemanticsSnapshot(BUILTIN_SEMANTICS, { localImports });
     const linked = linkTemplateSemantics(ir, snapshot, {
       ...RESOLVE_OPTS,
       diagnostics: diagnostics.forSource("link"),
@@ -613,11 +613,11 @@ describe("Resolve (20) - Local Imports", () => {
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      catalog: DEFAULT.catalog,
+      catalog: BUILTIN_SEMANTICS.catalog,
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports });
+    const snapshot = buildSemanticsSnapshot(BUILTIN_SEMANTICS, { localImports });
     const linked = linkTemplateSemantics(ir, snapshot, {
       ...RESOLVE_OPTS,
       diagnostics: diagnostics.forSource("link"),
@@ -638,7 +638,7 @@ describe("Resolve (20) - Local Imports", () => {
   test("localImports: does not override existing global registration", () => {
     const diagnostics = new DiagnosticsRuntime();
     // Setup semantics with global "au-compose" element
-    const baseSem = deepMergeSemantics(DEFAULT, {
+    const baseSem = deepMergeSemantics(BUILTIN_SEMANTICS, {
       resources: {
         elements: {
           "au-compose": {
@@ -697,12 +697,12 @@ describe("Resolve (20) - Local Imports", () => {
         exprParser: getExpressionParser(),
         file: "mem.html",
         name: "mem",
-        catalog: DEFAULT.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
         diagnostics: diagnostics.forSource("lower"),
       }
     );
 
-    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports });
+    const snapshot = buildSemanticsSnapshot(BUILTIN_SEMANTICS, { localImports });
     const linked = linkTemplateSemantics(ir, snapshot, {
       ...RESOLVE_OPTS,
       diagnostics: diagnostics.forSource("link"),
@@ -731,11 +731,11 @@ describe("Resolve (20) - Local Imports", () => {
       exprParser: getExpressionParser(),
       file: "mem.html",
       name: "mem",
-      catalog: DEFAULT.catalog,
+      catalog: BUILTIN_SEMANTICS.catalog,
       diagnostics: diagnostics.forSource("lower"),
     });
 
-    const snapshot = buildSemanticsSnapshot(DEFAULT, { localImports: [] });
+    const snapshot = buildSemanticsSnapshot(BUILTIN_SEMANTICS, { localImports: [] });
     const linked = linkTemplateSemantics(ir, snapshot, {
       ...RESOLVE_OPTS,
       diagnostics: diagnostics.forSource("link"),
@@ -753,6 +753,7 @@ describe("Resolve (20) - Local Imports", () => {
     expect(intent.diags).toContain("aurelia/unknown-element");
   });
 });
+
 
 
 

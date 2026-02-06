@@ -20,7 +20,7 @@ import type { NormalizedPath } from '../compiler.js';
 import type {
   AnalyzableValue,
   LexicalScope,
-  ResolutionContext,
+  ValueResolutionContext,
   OnDemandResolver,
 } from "./value/types.js";
 import { transformExpression } from "./value/transform.js";
@@ -57,7 +57,7 @@ export interface PropertyResolutionContext {
    * If provided with an onDemandResolve callback, enables resolution of
    * imported identifiers by following imports using ts.Program.
    */
-  readonly resolutionContext?: ResolutionContext;
+  readonly valueResolutionContext?: ValueResolutionContext;
 }
 
 /**
@@ -99,9 +99,9 @@ export function buildContextWithProgram(
   const scope = buildFileScope(sf, filePath);
   const scopeWithResolvedImports = resolveImportPaths(scope, sf, program);
 
-  // Create a minimal ResolutionContext with on-demand resolution
+  // Create a minimal ValueResolutionContext with on-demand resolution
   // The pre-built maps are empty since we resolve everything on-demand
-  const resolutionContext: ResolutionContext = {
+  const valueResolutionContext: ValueResolutionContext = {
     fileScopes: new Map([[filePath, scopeWithResolvedImports]]),
     exportBindings: new Map(),
     fileFacts: new Map(),
@@ -114,7 +114,7 @@ export function buildContextWithProgram(
   return {
     sourceFile: sf,
     scope: scopeWithResolvedImports,
-    resolutionContext,
+    valueResolutionContext,
   };
 }
 
@@ -131,7 +131,7 @@ export function buildContextWithProgram(
  * The resolver caches scopes for files it visits to avoid rebuilding them.
  *
  * @param program - TypeScript program for module resolution
- * @returns OnDemandResolver callback for use in ResolutionContext
+ * @returns OnDemandResolver callback for use in ValueResolutionContext
  */
 export function createProgramResolver(program: ts.Program): OnDemandResolver {
   // Cache scopes for files we've visited
@@ -300,8 +300,8 @@ export function resolveToString(
   const value = transformExpression(expr, ctx.sourceFile);
 
   // Resolve through value model (unified Layer 2 + 3)
-  const resolved = ctx.resolutionContext
-    ? fullyResolve(value, ctx.scope, ctx.resolutionContext)
+  const resolved = ctx.valueResolutionContext
+    ? fullyResolve(value, ctx.scope, ctx.valueResolutionContext)
     : resolveInScope(value, ctx.scope);
 
   return extractLiteralString(resolved);
@@ -325,8 +325,8 @@ export function resolveToBoolean(
 
   // Transform and resolve (unified Layer 2 + 3)
   const value = transformExpression(expr, ctx.sourceFile);
-  const resolved = ctx.resolutionContext
-    ? fullyResolve(value, ctx.scope, ctx.resolutionContext)
+  const resolved = ctx.valueResolutionContext
+    ? fullyResolve(value, ctx.scope, ctx.valueResolutionContext)
     : resolveInScope(value, ctx.scope);
 
   return extractLiteralBoolean(resolved);
@@ -399,4 +399,5 @@ function extractLiteralBoolean(value: AnalyzableValue): boolean | undefined {
 
   return undefined;
 }
+
 

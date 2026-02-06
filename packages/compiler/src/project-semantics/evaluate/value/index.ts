@@ -53,7 +53,7 @@ export type {
   // Scope types
   LexicalScope,
   ImportBinding,
-  ResolutionContext,
+  ValueResolutionContext,
   OnDemandResolver,
   ExtractedString,
 } from './types.js';
@@ -135,7 +135,7 @@ export {
 
 // Re-export cross-file resolution functions (Layer 3)
 export {
-  buildResolutionContext,
+  buildValueResolutionContext,
   resolveImportsCrossFile,
   resolveImport,
   fullyResolve,
@@ -145,3 +145,4 @@ export type { BuildContextOptions } from './resolve.js';
 
 // Re-export class extraction (enriched ClassValue)
 export { extractClassValue } from './class-extraction.js';
+

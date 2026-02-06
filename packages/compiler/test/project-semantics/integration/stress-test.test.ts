@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { discoverProjectSemantics } from "@aurelia-ls/compiler";
 import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 import {
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   normalizePathForId,
   materializeSemanticsForScope,
   lowerDocument,
@@ -429,7 +429,7 @@ function compareEmitResults(actual, expected) {
 function compileTemplate(markup, options = {}) {
   const templatePath = options.templatePath ?? "template.html";
   const name = options.name ?? "template";
-  const semantics = options.semantics ?? DEFAULT_SEMANTICS;
+  const semantics = options.semantics ?? BUILTIN_SEMANTICS;
   const moduleResolver = options.moduleResolver ?? ((_specifier: string, _containingFile: string) => null);
 
   const exprParser = getExpressionParser();
@@ -595,7 +595,7 @@ describe("Stress Test: AOT Compiler Kitchen Sink", () => {
   let resolutionResult;
 
   const getSemanticsForScope = (scopeId) =>
-    materializeSemanticsForScope(DEFAULT_SEMANTICS, resolutionResult.resourceGraph, scopeId);
+    materializeSemanticsForScope(BUILTIN_SEMANTICS, resolutionResult.resourceGraph, scopeId);
 
   beforeAll(() => {
     program = createProgramFromApp(STRESS_APP);

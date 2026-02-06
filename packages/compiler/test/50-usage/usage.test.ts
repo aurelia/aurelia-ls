@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { compileTemplate, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { compileTemplate, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
 
 function createVmReflection() {
   return {
@@ -32,7 +32,7 @@ describe("FeatureUsageSet", () => {
       templateFilePath: "/app.html",
       isJs: false,
       vm: createVmReflection(),
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       moduleResolver: NOOP_MODULE_RESOLVER,
     });
 

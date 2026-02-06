@@ -3,7 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { AureliaProjectIndex } from "@aurelia-ls/semantic-workspace";
-import { DEFAULT_SEMANTICS, buildResourceGraphFromSemantics, type ResourceScopeId } from "@aurelia-ls/compiler";
+import { BUILTIN_SEMANTICS, buildResourceGraphFromSemantics, type ResourceScopeId } from "@aurelia-ls/compiler";
 
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 
@@ -72,7 +72,7 @@ test("produces a semantics + resource graph snapshot from TS project state", () 
   const semantics = index.currentSemantics();
   const graph = index.currentResourceGraph();
 
-  expect(semantics.version).toBe(DEFAULT_SEMANTICS.version);
+  expect(semantics.version).toBe(BUILTIN_SEMANTICS.version);
   expect(graph.root).toBeTruthy();
   expect(graph.version).toBe("aurelia-resource-graph@1");
   expect(graph.scopes[graph.root]).toBeTruthy();
@@ -172,9 +172,9 @@ test("discovers Aurelia resources from decorators and bindable members", () => {
 
 test("maps discoveries into the default resource scope when a graph is provided", () => {
   const featureScope = "feature-scope" as ResourceScopeId;
-  const baseGraph = buildResourceGraphFromSemantics(DEFAULT_SEMANTICS);
+  const baseGraph = buildResourceGraphFromSemantics(BUILTIN_SEMANTICS);
   baseGraph.scopes[featureScope] = { id: featureScope, parent: baseGraph.root, label: "feature", resources: {} };
-  const baseSemantics = { ...DEFAULT_SEMANTICS, resourceGraph: baseGraph, defaultScope: featureScope };
+  const baseSemantics = { ...BUILTIN_SEMANTICS, resourceGraph: baseGraph, defaultScope: featureScope };
   const tsProject = createTsProject({
     "src/components.ts": `
       const customElement = (options) => (target) => target;
@@ -186,7 +186,7 @@ test("maps discoveries into the default resource scope when a graph is provided"
   const index = new AureliaProjectIndex({
     ts: tsProject,
     logger,
-    resolution: { baseSemantics, defaultScope: featureScope },
+    discovery: { baseSemantics, defaultScope: featureScope },
   });
   const graph = index.currentResourceGraph();
   const sem = index.currentSemantics();

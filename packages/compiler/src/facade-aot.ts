@@ -111,13 +111,13 @@ export interface CompileAotResult {
  *
  * @example
  * ```typescript
- * import { compileAot, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+ * import { compileAot, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
  * import { transform } from "@aurelia-ls/transform";
  *
  * // Compile template
  * const aot = compileAot('<div>${message}</div>', {
  *   name: 'my-component',
- *   semantics: DEFAULT_SEMANTICS,
+ *   semantics: BUILTIN_SEMANTICS,
  * });
  *
  * // Transform TypeScript source to inject $au

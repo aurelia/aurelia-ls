@@ -47,9 +47,9 @@ import { buildApiSurfaceSnapshot, buildSemanticSnapshot } from "./snapshot/index
 export type { InlineTemplateInfo, TemplateInfo } from "./templates/types.js";
 
 /**
- * Configuration for resolution.
+ * Configuration for project-semantics discovery.
  */
-export interface ResolutionConfig {
+export interface ProjectSemanticsDiscoveryConfig {
   /** Convention configuration for inference */
   conventions?: ConventionConfig;
   /** Base semantics to build upon */
@@ -97,13 +97,13 @@ export interface ResolutionConfig {
    */
   styleExtensions?: readonly string[];
   /** Diagnostics emitter (required). */
-  diagnostics: ResolutionDiagnosticEmitter;
+  diagnostics: ProjectSemanticsDiscoveryDiagnosticEmitter;
 }
 
 /**
- * Result of running resolution.
+ * Result of running project-semantics discovery.
  */
-export interface ResolutionResult {
+export interface ProjectSemanticsDiscoveryResult {
   /** Full semantics with provenance */
   semantics: MaterializedSemantics;
   /** Minimal catalog for lowering */
@@ -124,18 +124,18 @@ export interface ResolutionResult {
   templates: readonly TemplateInfo[];
   /** Inline templates (string literals in decorators/static $au) */
   inlineTemplates: readonly InlineTemplateInfo[];
-  /** Diagnostics from resolution */
-  diagnostics: readonly ResolutionDiagnostic[];
+  /** Diagnostics from project-semantics discovery */
+  diagnostics: readonly ProjectSemanticsDiscoveryDiagnostic[];
   /** Extracted facts with partial evaluation applied */
   facts: Map<NormalizedPath, FileFacts>;
 }
 
 /**
- * Diagnostic from resolution.
+ * Diagnostic from project-semantics discovery.
  */
-export type ResolutionDiagnostic = RawDiagnostic;
+export type ProjectSemanticsDiscoveryDiagnostic = RawDiagnostic;
 
-export type ResolutionDiagnosticEmitter = DiagnosticEmitter<DiagnosticsCatalog>;
+export type ProjectSemanticsDiscoveryDiagnosticEmitter = DiagnosticEmitter<DiagnosticsCatalog>;
 
 /**
  * Main entry point: run the full project semantics discovery pipeline.
@@ -153,17 +153,17 @@ export type ResolutionDiagnosticEmitter = DiagnosticEmitter<DiagnosticsCatalog>;
  */
 export function discoverProjectSemantics(
   program: ts.Program,
-  config?: ResolutionConfig,
+  config?: ProjectSemanticsDiscoveryConfig,
   logger?: Logger,
-): ResolutionResult {
+): ProjectSemanticsDiscoveryResult {
   const diagEmitter = config?.diagnostics;
   if (!diagEmitter) {
-    throw new Error("discovery.resolve requires diagnostics emitter; missing emitter is a wiring error.");
+    throw new Error("discoverProjectSemantics requires diagnostics emitter; missing emitter is a wiring error.");
   }
   const trace = config?.trace ?? NOOP_TRACE;
   const log = logger ?? nullLogger;
 
-  return trace.span("discovery.resolve", () => {
+  return trace.span("discovery.project", () => {
     const sourceFileCount = program.getSourceFiles().length;
     trace.setAttributes({
       "discovery.sourceFileCount": sourceFileCount,
@@ -335,7 +335,7 @@ export function discoverProjectSemantics(
       }));
 
     // Merge all diagnostics: matcher gaps + orphans + unresolved patterns + unresolved refs
-    const allDiagnostics: ResolutionDiagnostic[] = [
+    const allDiagnostics: ProjectSemanticsDiscoveryDiagnostic[] = [
       ...analysisGaps.map((gap) => gapToDiagnostic(gap, diagEmitter)),
       ...orphansToDiagnostics(registration.orphans, diagEmitter),
       ...unresolvedToDiagnostics(registration.unresolved, diagEmitter),
@@ -381,12 +381,12 @@ export function discoverProjectSemantics(
 }
 
 /**
- * Convert an AnalysisGap to a ResolutionDiagnostic.
+ * Convert an AnalysisGap to a ProjectSemanticsDiscoveryDiagnostic.
  *
  * The uri field is only included when gap has location information.
  * The file path is normalized since GapLocation.file is a plain string.
  */
-function gapToDiagnostic(gap: AnalysisGap, emitter: ResolutionDiagnosticEmitter): ResolutionDiagnostic {
+function gapToDiagnostic(gap: AnalysisGap, emitter: ProjectSemanticsDiscoveryDiagnosticEmitter): ProjectSemanticsDiscoveryDiagnostic {
   const code = mapGapKindToCode(gap.why.kind);
   const uri = gap.where?.file
     ? asDocumentUri(normalizePathForId(gap.where.file))

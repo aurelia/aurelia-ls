@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   lowerDocument,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DEFAULT_SYNTAX,
   getExpressionParser,
   DiagnosticsRuntime,
@@ -19,7 +19,7 @@ function lower(html: string) {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
 }

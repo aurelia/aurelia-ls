@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildTemplateSyntaxRegistry, compileTemplate, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { buildTemplateSyntaxRegistry, compileTemplate, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
 import { collectSemanticTokens } from "../../src/semantic-tokens.js";
 
 /* ===========================
@@ -36,14 +36,14 @@ const VM = createVmReflection();
 const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 function compileForTokens(markup: string) {
-  const syntax = buildTemplateSyntaxRegistry(DEFAULT_SEMANTICS);
+  const syntax = buildTemplateSyntaxRegistry(BUILTIN_SEMANTICS);
   return {
     compilation: compileTemplate({
       html: markup,
       templateFilePath: "test.html",
       isJs: false,
       vm: VM,
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       moduleResolver: NOOP_MODULE_RESOLVER,
     }),
     syntax,

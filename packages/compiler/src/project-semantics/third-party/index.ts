@@ -12,7 +12,7 @@ export type {
   ExplicitResourceConfig,
   ExplicitElementConfig,
   ExplicitAttributeConfig,
-  ThirdPartyResolutionResult,
+  ThirdPartyDiscoveryResult,
   ResolvedPackageSpec,
   ThirdPartyLogger,
 } from "./types.js";
@@ -32,5 +32,5 @@ export {
   collectThirdPartyPackages,
   shouldScanPackage,
   buildAnalysisFingerprint,
-  type ThirdPartyResolutionContext,
+  type ThirdPartyDiscoveryContext,
 } from "./resolution.js";

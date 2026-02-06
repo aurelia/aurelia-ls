@@ -35,7 +35,7 @@ import type {
   MethodValue,
   StatementValue,
   LexicalScope,
-  ResolutionContext,
+  ValueResolutionContext,
 } from '../../evaluate/value/types.js';
 import { getResolvedValue } from '../../evaluate/value/types.js';
 import { resolveInScope } from '../../evaluate/value/scope.js';
@@ -77,7 +77,7 @@ export interface FactoryAnalysisResult {
 export function analyzeFactoryCall(
   call: CallValue,
   scope: LexicalScope,
-  ctx: ResolutionContext
+  ctx: ValueResolutionContext
 ): FactoryAnalysisResult {
   const gaps: AnalysisGap[] = [];
 
@@ -172,7 +172,7 @@ export function analyzeFactoryCall(
 function findReturnValue(
   body: readonly StatementValue[],
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   gaps: AnalysisGap[]
 ): AnalyzableValue | null {
   for (const stmt of body) {
@@ -200,7 +200,7 @@ function findReturnValue(
 function extractReturnFromStatement(
   stmt: StatementValue,
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   gaps: AnalysisGap[]
 ): AnalyzableValue | null {
   switch (stmt.kind) {
@@ -283,7 +283,7 @@ export function mightBeFactoryCall(value: AnalyzableValue): value is CallValue {
 export function tryResolveAsFactory(
   value: AnalyzableValue,
   scope: LexicalScope,
-  ctx: ResolutionContext
+  ctx: ValueResolutionContext
 ): { value: AnalyzableValue; isFactory: boolean; gaps: AnalysisGap[] } {
   if (!mightBeFactoryCall(value)) {
     return { value, isFactory: false, gaps: [] };
@@ -306,4 +306,5 @@ export function tryResolveAsFactory(
     gaps: result.gaps,
   };
 }
+
 

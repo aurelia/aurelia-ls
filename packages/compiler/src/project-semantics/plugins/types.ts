@@ -7,7 +7,7 @@
  *   import { RouterConfiguration as RC } from '@aurelia/router';
  *   Aurelia.register(RC);  // Still detected as RouterConfiguration
  *
- * The actual semantics (bindables, etc.) live in DEFAULT_SEMANTICS (compiler/registry.ts)
+ * The actual semantics (bindables, etc.) live in BUILTIN_SEMANTICS (compiler/registry.ts)
  * with a `package` field. When a plugin is registered, resources with matching package
  * are included in the ResourceGraph.
  *
@@ -19,7 +19,7 @@
 /**
  * A plugin manifest identifying a configuration object.
  *
- * The manifest doesn't include resource details - those live in DEFAULT_SEMANTICS
+ * The manifest doesn't include resource details - those live in BUILTIN_SEMANTICS
  * with a `package` field. The manifest just maps (package, export) → activation.
  */
 export interface PluginManifest {
@@ -31,7 +31,7 @@ export interface PluginManifest {
 
   /**
    * NPM package that provides this plugin (e.g., "@aurelia/router").
-   * Used both for import matching and to activate resources in DEFAULT_SEMANTICS.
+   * Used both for import matching and to activate resources in BUILTIN_SEMANTICS.
    */
   readonly package: string;
 
@@ -83,7 +83,7 @@ export interface PluginResolver {
 
   /**
    * Get all packages that have registered plugins.
-   * Used to activate resources in DEFAULT_SEMANTICS.
+   * Used to activate resources in BUILTIN_SEMANTICS.
    */
   getActivatedPackages(activatedPlugins: readonly PluginManifest[]): ReadonlySet<string>;
 }

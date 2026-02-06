@@ -10,7 +10,7 @@ import {
   collectNestedTemplateHtmlTree,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   type SerializedDefinition,
@@ -65,10 +65,10 @@ function compileDefinitionTree(markup: string): DefinitionTree {
     exprParser,
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
     diagnostics: diagnostics.forSource("link"),

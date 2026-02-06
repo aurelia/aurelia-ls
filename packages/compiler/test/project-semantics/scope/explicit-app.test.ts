@@ -8,7 +8,7 @@ import {
 } from "@aurelia-ls/compiler";
 import type { ResourceDef } from "@aurelia-ls/compiler";
 import { materializeResourcesForScope } from "@aurelia-ls/compiler";
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
 import {
   createProgramFromApp,
   getTestAppPath,
@@ -51,17 +51,17 @@ describe("Scope: explicit-app", () => {
 
   it("places global resources in the root scope", () => {
     // Materialize root scope resources
-    const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+    const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
     // Filter out built-in resources from semantics to get just app resources
     const appElements = Object.keys(resources.elements)
-      .filter(k => !DEFAULT_SEMANTICS.resources.elements[k]).sort();
+      .filter(k => !BUILTIN_SEMANTICS.resources.elements[k]).sort();
     const appAttributes = Object.keys(resources.attributes)
-      .filter(k => !DEFAULT_SEMANTICS.resources.attributes[k]).sort();
+      .filter(k => !BUILTIN_SEMANTICS.resources.attributes[k]).sort();
     const appValueConverters = Object.keys(resources.valueConverters)
-      .filter(k => !DEFAULT_SEMANTICS.resources.valueConverters[k]).sort();
+      .filter(k => !BUILTIN_SEMANTICS.resources.valueConverters[k]).sort();
     const appBindingBehaviors = Object.keys(resources.bindingBehaviors)
-      .filter(k => !DEFAULT_SEMANTICS.resources.bindingBehaviors[k]).sort();
+      .filter(k => !BUILTIN_SEMANTICS.resources.bindingBehaviors[k]).sort();
 
     // Assert exact app resources in root scope
     // Note: includes both globally registered and orphan resources
@@ -122,7 +122,7 @@ describe("Scope: explicit-app", () => {
 
     // Materialize resources for product-card's local scope
     const { resources } = materializeResourcesForScope(
-      DEFAULT_SEMANTICS,
+      BUILTIN_SEMANTICS,
       graph,
       productCardScopeId!
     );
@@ -142,7 +142,7 @@ describe("Scope: explicit-app", () => {
   });
 
   it("preserves bindable information in the resource graph", () => {
-    const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+    const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
     // Check user-card bindables (has name, avatar, selected)
     const userCard = resources.elements["user-card"];

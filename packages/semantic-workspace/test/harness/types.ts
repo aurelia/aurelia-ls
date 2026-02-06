@@ -6,7 +6,7 @@ import type {
   TypeScriptServices,
   VmReflection,
 } from "@aurelia-ls/compiler";
-import type { ResolutionConfig, ResolutionResult, Logger as ResolutionLogger } from "@aurelia-ls/compiler";
+import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult, Logger as CompilerLogger } from "@aurelia-ls/compiler";
 import type { SemanticWorkspaceEngine } from "../../src/engine.js";
 import type { RefactorOverrides } from "../../src/style-profile.js";
 import type { FixtureDescriptor, FixtureId } from "../fixtures/types.js";
@@ -19,7 +19,7 @@ export type PackageRootsOption =
   | ReadonlyMap<string, string>
   | Readonly<Record<string, string>>;
 
-type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
+type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
 export interface WorkspaceHarnessOptions {
   readonly fixtureId?: FixtureId;
@@ -28,9 +28,9 @@ export interface WorkspaceHarnessOptions {
   readonly isolateFixture?: boolean;
   readonly tsconfigPath?: string;
   readonly packageRoots?: PackageRootsOption;
-  readonly resolution?: Partial<ResolutionConfigBase>;
+  readonly discovery?: Partial<ProjectSemanticsDiscoveryConfigBase>;
   readonly openTemplates?: TemplateOpenMode;
-  readonly logger?: ResolutionLogger;
+  readonly logger?: CompilerLogger;
   readonly workspace?: {
     readonly vm?: VmReflection;
     readonly isJs?: boolean;
@@ -54,7 +54,7 @@ export interface WorkspaceHarness {
   readonly fixture: FixtureDescriptor;
   readonly root: string;
   readonly tsconfigPath: string;
-  readonly resolution: ResolutionResult;
+  readonly discovery: ProjectSemanticsDiscoveryResult;
   readonly workspace: SemanticWorkspaceEngine;
   readonly templates: readonly WorkspaceTemplateEntry[];
   readonly templateByUri: ReadonlyMap<DocumentUri, WorkspaceTemplateEntry>;

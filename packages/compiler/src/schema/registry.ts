@@ -826,8 +826,6 @@ export const BUILTIN_SEMANTICS: MaterializedSemantics = {
   catalog: buildResourceCatalog(BUILTIN_RESOURCES, BUILTIN_BINDING_COMMANDS, BUILTIN_ATTRIBUTE_PATTERNS),
 };
 
-export { BUILTIN_SEMANTICS as DEFAULT };
-
 export type {
   AttrRes,
   AttributePatternConfig,

@@ -23,7 +23,7 @@ export interface TypeScriptProjectOptions {
 }
 
 /**
- * File-system-backed TypeScript project for resolution and index building.
+ * File-system-backed TypeScript project for discovery and index building.
  * Keeps a cached Program and recreates it when configuration changes.
  */
 export class ProjectProgram implements TypeScriptProject {

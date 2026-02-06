@@ -10,7 +10,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { ResourceGraph, ResourceScopeId, MaterializedSemantics, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
+import type { ProjectSemanticsDiscoveryResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -319,7 +319,7 @@ export interface SSROptions {
 
   /**
    * Compile-time defines for conditional registration guards.
-   * Used by resolution partial evaluation (e.g. window.__AU_DEF__).
+   * Used by discovery partial evaluation (e.g. window.__AU_DEF__).
    *
    * @example
    * defines: ssrDefines()
@@ -406,7 +406,7 @@ export interface ExplicitAttributeConfig {
 }
 
 /**
- * Policy for merging third-party resources into the resolution artifacts.
+ * Policy for merging third-party resources into discovery artifacts.
  *
  * Controls how aggressively artifacts are rebuilt when third-party resources
  * are added. Trade-off is scope correctness vs rebuild cost.
@@ -530,7 +530,7 @@ export interface ThirdPartyOptions {
   resources?: ExplicitResourceConfig;
 
   /**
-   * Policy for how third-party resources are merged into resolution artifacts.
+   * Policy for how third-party resources are merged into discovery artifacts.
    *
    * - `"root-scope"` (default): Rebuild semantics and merge into root scope
    * - `"semantics"`: Rebuild semantics/catalog/syntax but keep graph
@@ -756,7 +756,7 @@ export interface HookContext {
   readonly command: "serve" | "build";
 
   /** Resolution context (when tsconfig provided) */
-  readonly resolution: ResolutionContext | null;
+  readonly projectSemantics: ProjectSemanticsContext | null;
 }
 
 /**
@@ -891,7 +891,7 @@ export interface AureliaPluginOptions {
 
   /**
    * Path to tsconfig.json for TypeScript project.
-   * Required for resource resolution (discovering custom elements).
+   * Required for resource discovery (discovering custom elements).
    * Auto-detected if not provided.
    *
    * @example './tsconfig.json'
@@ -899,7 +899,7 @@ export interface AureliaPluginOptions {
   tsconfig?: string;
 
   /**
-   * Package root path for resolution snapshots and npm analysis context.
+   * Package root path for discovery snapshots and npm analysis context.
    * Defaults to the Vite project root when not provided.
    */
   packagePath?: string;
@@ -1088,9 +1088,9 @@ export interface ResolvedTraceOptions {
  * Resolution context containing discovered resources.
  * Created when tsconfig is provided to the plugin.
  */
-export interface ResolutionContext {
-  /** The full resolution result */
-  result: ResolutionResult;
+export interface ProjectSemanticsContext {
+  /** The full project-semantics discovery result */
+  result: ProjectSemanticsDiscoveryResult;
   /** Resource graph for compilation */
   resourceGraph: ResourceGraph;
   /** Merged semantics with discovered resources */
@@ -1134,12 +1134,12 @@ export interface ResolvedSSRConfig {
 /**
  * Resolved convention options with defaults applied.
  *
- * This is the internal resolved form. Input uses ConventionConfig from resolution.
+ * This is the internal resolved form. Input uses ConventionConfig from discovery.
  */
 export interface ResolvedConventionOptions {
   /** Whether conventions are enabled */
   enabled: boolean;
-  /** Resolved ConventionConfig from resolution (with defaults applied) */
+  /** Resolved ConventionConfig from discovery (with defaults applied) */
   config: Required<Omit<ConventionConfig, "directories" | "templatePairing" | "stylesheetPairing">> & {
     directories: DirectoryConventionConfig;
     templatePairing: TemplatePairingConfig;
@@ -1210,7 +1210,7 @@ export interface ResolvedAureliaOptions {
   hooks: PluginHooks;
 
   /** Resolution context (when tsconfig provided) */
-  resolution: ResolutionContext | null;
+  projectSemantics: ProjectSemanticsContext | null;
 
   /** Discovered route tree (when ssg enabled) */
   routeTree: RouteTree | null;
@@ -1240,7 +1240,7 @@ export interface PluginState {
   /** HTML shell template */
   htmlShell: string;
   /** Resolution context (when tsconfig provided) */
-  resolution: ResolutionContext | null;
+  projectSemantics: ProjectSemanticsContext | null;
   /** Base href for routing */
   baseHref: string;
   /** Path to registration module */

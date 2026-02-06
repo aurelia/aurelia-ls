@@ -97,14 +97,14 @@ export interface RegistrationAnalysis {
    * Plugins that were detected as registered.
    *
    * When a plugin is registered (e.g., `Aurelia.register(RouterConfiguration)`),
-   * its package is "activated". Resources from DEFAULT_SEMANTICS with matching
+   * its package is "activated". Resources from BUILTIN_SEMANTICS with matching
    * `package` field should be included in the ResourceGraph.
    *
    * This enables conditional resource availability:
    * - RouterConfiguration registered → au-viewport, load, href available
    * - RouterConfiguration NOT registered → those elements/attributes are errors
    *
-   * The scope builder uses this to filter DEFAULT_SEMANTICS by package.
+   * The scope builder uses this to filter BUILTIN_SEMANTICS by package.
    */
   readonly activatedPlugins: readonly PluginManifest[];
 }

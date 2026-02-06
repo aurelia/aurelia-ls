@@ -1,7 +1,7 @@
 import { test, expect } from "vitest";
 
 import {
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DefaultTemplateProgram,
   buildProjectSnapshot,
   type BindingMode,
@@ -337,7 +337,7 @@ function builtinBindable(
   return { ...base, type: builtin(options.type) };
 }
 
-function stripSemanticsCaches(semantics: typeof DEFAULT_SEMANTICS): ProjectSemantics {
+function stripSemanticsCaches(semantics: typeof BUILTIN_SEMANTICS): ProjectSemantics {
   const {
     resources: _resources,
     bindingCommands: _bindingCommands,
@@ -349,7 +349,7 @@ function stripSemanticsCaches(semantics: typeof DEFAULT_SEMANTICS): ProjectSeman
 }
 
 function baseProjectSemantics(): ProjectSemantics {
-  return stripSemanticsCaches(DEFAULT_SEMANTICS);
+  return stripSemanticsCaches(BUILTIN_SEMANTICS);
 }
 
 function withElementBindable(elementName: string, bindableName: string): ProjectSemantics {
@@ -410,7 +410,7 @@ function createProgram(overrides = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
+    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
     moduleResolver: noopModuleResolver,
     ...overrides,
   });

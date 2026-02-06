@@ -35,10 +35,10 @@ import { compileWithAot, isSSRHandler, type SSRHandler } from "@aurelia-ls/ssr";
 import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
 import { mergeDefines, ssrDefines, type TemplateInfo, type RouteTree } from "@aurelia-ls/compiler";
 import { createSSRMiddleware } from "./middleware.js";
-import { createResolutionContext, discoverRoutes } from "./resolution.js";
+import { createProjectSemanticsContext, discoverRoutes } from "./project-semantics.js";
 import { componentCache } from "./loader.js";
 import { createBuildTrace, type ManagedTrace } from "./trace.js";
-import type { AureliaPluginOptions, PluginState, ResolutionContext, ResolvedTraceOptions } from "./types.js";
+import type { AureliaPluginOptions, PluginState, ProjectSemanticsContext, ResolvedTraceOptions } from "./types.js";
 import { convertToLocalImports } from "./local-imports.js";
 import { loadConfigFile, mergeConfigs, normalizeOptions } from "./defaults.js";
 
@@ -84,7 +84,7 @@ function transformComponent(
   code: string,
   id: string,
   templateInfo: TemplateInfo,
-  resolutionContext: ResolutionContext,
+  projectSemanticsContext: ProjectSemanticsContext,
   config: ResolvedConfig,
   trace?: CompileTrace,
   dumpPath?: string | false,
@@ -98,15 +98,15 @@ function transformComponent(
     const templateImports = convertToTemplateImports(templateMeta.imports);
     const localImports = convertToLocalImports(
       templateMeta.imports,
-      resolutionContext.semantics.resources.elements,
+      projectSemanticsContext.semantics.resources.elements,
     );
 
     // Compile with AOT
     const aot = compileWithAot(templateHtml, {
       templatePath: templateInfo.templatePath,
       name: templateInfo.resourceName,
-      semantics: resolutionContext.semantics,
-      resourceGraph: resolutionContext.resourceGraph,
+      semantics: projectSemanticsContext.semantics,
+      resourceGraph: projectSemanticsContext.resourceGraph,
       resourceScope: templateInfo.scopeId,
       localImports,
       trace,
@@ -118,7 +118,7 @@ function transformComponent(
       kind: "custom-element",
       name: templateInfo.resourceName,
       className: templateInfo.className,
-      bindables: [], // TODO: Get bindables from resolution
+      bindables: [], // TODO: Get bindables from project semantics
       declarationForm: "convention",
     };
 
@@ -322,8 +322,8 @@ const HTML_IMPORT_REGEX = /(from\s+|import\s+)(['"])([^'"]+\.html)\2/g;
 export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
   let resolvedConfig: ResolvedConfig;
   let pluginState: PluginState;
-  let resolutionContext: ResolutionContext | null = null;
-  let resolutionPromise: Promise<ResolutionContext | null> | null = null;
+  let projectSemanticsContext: ProjectSemanticsContext | null = null;
+  let projectSemanticsPromise: Promise<ProjectSemanticsContext | null> | null = null;
   let routeTree: RouteTree | null = null;
   let traceOptions: ResolvedTraceOptions;
   let buildTrace: ManagedTrace | null = null;
@@ -471,7 +471,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         include: ssrOptions.include,
         exclude: ssrOptions.exclude,
         htmlShell: ssrOptions.htmlShell,
-        resolution: null, // Will be set after async initialization
+        projectSemantics: null, // Will be set after async initialization
         baseHref: ssrOptions.baseHref,
         register,
         ssg: resolvedSSG,
@@ -501,7 +501,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         config.logger.info('[aurelia-ssr] SSG enabled');
       }
 
-      // Start resolution initialization if tsconfig provided
+      // Start project-semantics initialization if tsconfig provided
       if (resolvedOptions.tsconfig) {
         const tsconfigPath = resolve(config.root, resolvedOptions.tsconfig);
         const logger = {
@@ -510,8 +510,8 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
           error: (msg: string) => config.logger.error(msg),
         };
 
-        // Start async resolution (will complete before first request)
-          resolutionPromise = createResolutionContext(
+        // Start async project-semantics discovery (will complete before first request)
+          projectSemanticsPromise = createProjectSemanticsContext(
             tsconfigPath,
             logger,
             {
@@ -524,10 +524,10 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
               styleExtensions: resolvedOptions.conventions.config.styleExtensions,
             },
         ).then((ctx) => {
-          resolutionContext = ctx;
-          pluginState.resolution = ctx;
+          projectSemanticsContext = ctx;
+          pluginState.projectSemantics = ctx;
           if (ctx) {
-            config.logger.info('[aurelia-ssr] Resource resolution ready');
+            config.logger.info('[aurelia-ssr] Project semantics ready');
 
             // Discover routes if SSG is enabled
             if (resolvedSSG.enabled) {
@@ -658,14 +658,14 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         return null;
       }
 
-      // Wait for resolution context if not yet ready
-      if (resolutionPromise && !resolutionContext) {
-        resolutionContext = await resolutionPromise;
-        pluginState.resolution = resolutionContext;
+      // Wait for project-semantics context if not yet ready
+      if (projectSemanticsPromise && !projectSemanticsContext) {
+        projectSemanticsContext = await projectSemanticsPromise;
+        pluginState.projectSemantics = projectSemanticsContext;
       }
 
-      // No resolution context - can't determine component templates
-      if (!resolutionContext) {
+      // No project-semantics context - can't determine component templates
+      if (!projectSemanticsContext) {
         return null;
       }
 
@@ -673,13 +673,13 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       const normalizedPath = normalizePathForId(cleanId);
 
       // Find matching template info
-      let templateInfo = resolutionContext.result.templates.find(
+      let templateInfo = projectSemanticsContext.result.templates.find(
         (t) => t.componentPath === normalizedPath,
       );
       if (!templateInfo && (cleanId.endsWith(".js") || cleanId.endsWith(".jsx"))) {
         const sourcePath = cleanId.replace(/\.(js|jsx)$/, ".ts");
         const normalizedSource = normalizePathForId(sourcePath);
-        templateInfo = resolutionContext.result.templates.find(
+        templateInfo = projectSemanticsContext.result.templates.find(
           (t) => t.componentPath === normalizedSource,
         );
       }
@@ -689,7 +689,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
 
       // If this is an Aurelia component with external template, transform it
       if (templateInfo) {
-        return transformComponent(code, id, templateInfo, resolutionContext, resolvedConfig, trace, dumpArtifactsPath);
+        return transformComponent(code, id, templateInfo, projectSemanticsContext, resolvedConfig, trace, dumpArtifactsPath);
       }
 
       // Check if this is an entry point file (contains Aurelia initialization)
@@ -727,9 +727,9 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       }
 
       // Add middleware directly (before Vite's internal middleware)
-      // The middleware will wait for resolution if needed
+      // The middleware will wait for project semantics if needed
       server.middlewares.use(
-        createSSRMiddleware(server, pluginState, () => resolutionPromise),
+        createSSRMiddleware(server, pluginState, () => projectSemanticsPromise),
       );
 
       server.config.logger.info(
@@ -804,9 +804,9 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
         return;
       }
 
-      // Ensure resolution completed
-      if (resolutionPromise) {
-        await resolutionPromise;
+      // Ensure project semantics discovery completed
+      if (projectSemanticsPromise) {
+        await projectSemanticsPromise;
       }
 
       // Check we have route tree
@@ -877,7 +877,7 @@ export function aurelia(options: AureliaPluginOptions = {}): Plugin[] {
       };
 
       // Create static paths resolver
-      // TODO: Implement getStaticPaths resolution by loading component classes
+      // TODO: Implement getStaticPaths discovery by loading component classes
       const resolveStaticPaths = async (): Promise<string[]> => {
         return [];
       };

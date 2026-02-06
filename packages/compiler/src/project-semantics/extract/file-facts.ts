@@ -10,7 +10,7 @@
 
 import type { NormalizedPath, TextSpan, SourceSpan, BindingMode, Located } from '../compiler.js';
 import type { AnalysisGap } from '../evaluate/types.js';
-import type { ClassValue, LexicalScope, AnalyzableValue, ResolutionContext } from '../evaluate/value/types.js';
+import type { ClassValue, LexicalScope, AnalyzableValue, ValueResolutionContext } from '../evaluate/value/types.js';
 import type { SiblingFile } from '../project/types.js';
 
 // =============================================================================
@@ -328,14 +328,14 @@ export interface MatchContext {
   readonly fileContext: FileContext;
 
   /** For cross-file resolution (optional) */
-  readonly resolutionContext?: ResolutionContext;
+  readonly valueResolutionContext?: ValueResolutionContext;
 }
 
 /**
  * Context for cross-file value resolution.
  * (Re-exported from analysis/value/types.ts for convenience)
  */
-export type { ResolutionContext } from '../evaluate/value/types.js';
+export type { ValueResolutionContext } from '../evaluate/value/types.js';
 
 // =============================================================================
 // Constructors
@@ -369,4 +369,5 @@ export function emptyFileContext(): FileContext {
     templateImports: [],
   };
 }
+
 

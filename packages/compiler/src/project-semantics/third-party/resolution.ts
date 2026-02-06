@@ -2,7 +2,7 @@
  * Third-party resource resolution.
  *
  * Discovers, analyzes, and merges third-party npm package resources into
- * a ResolutionResult. Used by both the Vite plugin and semantic workspace.
+ * a ProjectSemanticsDiscoveryResult. Used by both the Vite plugin and semantic workspace.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -24,7 +24,7 @@ import {
   type ResourceCollections,
   type CompilerDiagnostic,
 } from "../compiler.js";
-import type { ResolutionResult } from "../resolve.js";
+import type { ProjectSemanticsDiscoveryResult } from "../resolve.js";
 import type { AnalysisGap } from "../npm/types.js";
 import { analyzePackages, isAureliaPackage } from "../npm/index.js";
 import { buildSemanticsArtifacts } from "../assemble/build.js";
@@ -33,7 +33,7 @@ import type { ConventionConfig } from "../conventions/types.js";
 import type {
   ThirdPartyOptions,
   ThirdPartyPolicy,
-  ThirdPartyResolutionResult,
+  ThirdPartyDiscoveryResult,
   ResolvedPackageSpec,
   ThirdPartyLogger,
 } from "./types.js";
@@ -51,7 +51,7 @@ import {
 const ANALYSIS_SCHEMA_VERSION = 1;
 const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "project" });
 
-export interface ThirdPartyResolutionContext {
+export interface ThirdPartyDiscoveryContext {
   packagePath: string;
   packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   logger: ThirdPartyLogger;
@@ -63,8 +63,8 @@ export interface ThirdPartyResolutionContext {
  */
 export async function resolveThirdPartyResources(
   options: ThirdPartyOptions | undefined,
-  ctx: ThirdPartyResolutionContext,
-): Promise<ThirdPartyResolutionResult> {
+  ctx: ThirdPartyDiscoveryContext,
+): Promise<ThirdPartyDiscoveryResult> {
   const explicitResources = buildThirdPartyResources(options?.resources);
   const packages = await collectThirdPartyPackages(options, ctx);
 
@@ -90,14 +90,14 @@ export async function resolveThirdPartyResources(
 }
 
 /**
- * Apply third-party resources to a ResolutionResult, producing a new result
+ * Apply third-party resources to a ProjectSemanticsDiscoveryResult, producing a new result
  * with merged semantics, catalog, syntax, and optionally resource graph.
  */
 export function applyThirdPartyResources(
-  result: ResolutionResult,
+  result: ProjectSemanticsDiscoveryResult,
   extra: Partial<ResourceCollections>,
   opts?: { gaps?: AnalysisGap[]; confidence?: CatalogConfidence; policy?: ThirdPartyPolicy },
-): ResolutionResult {
+): ProjectSemanticsDiscoveryResult {
   const gapList = opts?.gaps ?? [];
   const catalogGaps = gapList.filter((gap) => gap.why.kind !== "cache-corrupt");
   const extraCatalogGaps = catalogGaps.map(analysisGapToCatalogGap);
@@ -219,7 +219,7 @@ type ThirdPartyPackageEntry = NonNullable<ThirdPartyOptions["packages"]>[number]
 
 export async function collectThirdPartyPackages(
   options: ThirdPartyOptions | undefined,
-  ctx: ThirdPartyResolutionContext,
+  ctx: ThirdPartyDiscoveryContext,
 ): Promise<ResolvedPackageSpec[]> {
   const results: ResolvedPackageSpec[] = [];
   const packagePath = ctx.packagePath;
@@ -268,7 +268,7 @@ export async function shouldScanPackage(packageName: string, packagePath: string
 
 async function analyzeThirdPartyPackages(
   packages: ResolvedPackageSpec[],
-  ctx: ThirdPartyResolutionContext,
+  ctx: ThirdPartyDiscoveryContext,
 ): Promise<{ resources: ResourceCollections | null; gaps: AnalysisGap[]; confidence?: CatalogConfidence }> {
   const byPreferSource = new Map<boolean, string[]>();
   for (const spec of packages) {
@@ -278,7 +278,7 @@ async function analyzeThirdPartyPackages(
   }
 
   const gaps: AnalysisGap[] = [];
-  const resourceDefs: Array<ResolutionResult["resources"][number]> = [];
+  const resourceDefs: Array<ProjectSemanticsDiscoveryResult["resources"][number]> = [];
   const cacheDir = join(ctx.packagePath, ".aurelia-cache", "npm-analysis");
   const analysisLogger = {
     log: (msg: string) => ctx.logger.info(msg),
@@ -472,7 +472,7 @@ function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
     : { kind: gap.why.kind, message };
 }
 
-function analysisGapToDiagnostic(gap: AnalysisGap): ResolutionResult["diagnostics"][number] {
+function analysisGapToDiagnostic(gap: AnalysisGap): ProjectSemanticsDiscoveryResult["diagnostics"][number] {
   const code = mapGapKindToCode(gap.why.kind);
   const uri = gap.where?.file
     ? asDocumentUri(normalizePathForId(gap.where.file))
@@ -485,7 +485,7 @@ function analysisGapToDiagnostic(gap: AnalysisGap): ResolutionResult["diagnostic
   return uri ? { ...diagnostic, uri } : diagnostic;
 }
 
-function toRawDiagnostic(diag: CompilerDiagnostic): ResolutionResult["diagnostics"][number] {
+function toRawDiagnostic(diag: CompilerDiagnostic): ProjectSemanticsDiscoveryResult["diagnostics"][number] {
   const { span, ...rest } = diag;
   return span ? { ...rest, span } : { ...rest };
 }

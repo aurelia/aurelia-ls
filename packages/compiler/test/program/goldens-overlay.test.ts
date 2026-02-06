@@ -10,7 +10,7 @@ import {
   deriveTemplatePaths,
   buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
-import { DEFAULT_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } from "@aurelia-ls/compiler";
+import { BUILTIN_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } from "@aurelia-ls/compiler";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 const overlayFixtures = [
@@ -81,7 +81,7 @@ function createProgram(vmType = "RootVm") {
       getSyntheticPrefix: () => "__AU_TTC_",
     },
     isJs: false,
-    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
+    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
     moduleResolver: noopModuleResolver,

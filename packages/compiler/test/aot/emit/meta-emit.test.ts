@@ -14,7 +14,7 @@ import {
   emitAotCode,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
 import { noopModuleResolver } from "../../_helpers/test-utils.js";
@@ -28,10 +28,10 @@ function compileTemplate(markup: string) {
     exprParser,
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), {
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
     moduleResolver: noopModuleResolver,
     templateFilePath: "test.html",
     diagnostics: diagnostics.forSource("link"),

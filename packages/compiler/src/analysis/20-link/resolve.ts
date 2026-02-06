@@ -192,24 +192,24 @@ export function linkTemplateSemantics(ir: IrModule, snapshot: SemanticsSnapshot,
     }
 
     // Link all templates
-    trace.event("resolve.templates.start");
+    trace.event("link.templates.start");
     const templates: LinkedTemplate[] = ir.templates.map((t) => linkTemplate(t, ctx));
-    trace.event("resolve.templates.complete", { count: templates.length });
+    trace.event("link.templates.complete", { count: templates.length });
 
     // Validate branch controller relationships on ROOT template only.
     // Nested templates (controller defs) are validated via validateNestedIrRows during recursion.
     // ir.templates[0] is always the root; others are nested templates for controllers.
     if (templates[0]) {
-      trace.event("resolve.validateBranches.start");
+      trace.event("link.validateBranches.start");
       validateBranchControllers(templates[0].rows, ctx);
-      trace.event("resolve.validateBranches.complete");
+      trace.event("link.validateBranches.complete");
     }
 
     // Validate expression resources (canonical diagnostics)
     if (ir.exprTable) {
-      trace.event("resolve.validateExprResources.start");
+      trace.event("link.validateExprResources.start");
       validateExpressionResources(ir.exprTable, ctx);
-      trace.event("resolve.validateExprResources.complete");
+      trace.event("link.validateExprResources.complete");
     }
 
     // Count linked instructions

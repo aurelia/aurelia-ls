@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { discoverProjectSemantics, DiagnosticsRuntime } from "@aurelia-ls/compiler";
-import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { materializeResourcesForScope, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
 import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 
 const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);
@@ -73,7 +73,7 @@ describe("Full Pipeline: explicit-app", () => {
   it("produces a usable ResourceGraph for template compilation", () => {
     // Materialize resources at root scope
     const { resources } = materializeResourcesForScope(
-      DEFAULT_SEMANTICS,
+      BUILTIN_SEMANTICS,
       result.resourceGraph,
       result.resourceGraph.root
     );

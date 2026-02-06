@@ -1,8 +1,8 @@
 /**
- * Resolution integration for Vite SSR plugin.
+ * Project-semantics integration for the Vite SSR plugin.
  *
- * Creates a TypeScript program from a project and runs the resolution
- * pipeline to discover Aurelia resources for SSR compilation.
+ * Creates a TypeScript program from a project and runs project-semantics discovery
+ * to discover Aurelia resources for SSR compilation.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -20,7 +20,7 @@ import {
   discoverProjectSemantics,
   buildRouteTree,
   createNodeFileSystem,
-  type ResolutionResult,
+  type ProjectSemanticsDiscoveryResult,
   type TemplateInfo,
   type RouteTree,
   type DefineMap,
@@ -34,10 +34,10 @@ import {
   hasThirdPartyResources,
   buildAnalysisFingerprint,
 } from "@aurelia-ls/compiler";
-import type { ResolutionContext, ThirdPartyOptions } from "./types.js";
+import type { ProjectSemanticsContext, ThirdPartyOptions } from "./types.js";
 
 /**
- * Logger interface for resolution output.
+ * Logger interface for project-semantics output.
  */
 interface Logger {
   info(message: string): void;
@@ -45,7 +45,7 @@ interface Logger {
   error(message: string): void;
 }
 
-export interface ResolutionContextOptions {
+export interface ProjectSemanticsContextOptions {
   trace?: CompileTrace;
   defines?: DefineMap;
   thirdParty?: ThirdPartyOptions;
@@ -60,31 +60,31 @@ export interface ResolutionContextOptions {
 }
 
 /**
- * Create a resolution context from a tsconfig path.
+ * Create a project-semantics context from a tsconfig path.
  *
  * This function:
  * 1. Loads the tsconfig.json
  * 2. Creates a TypeScript program
- * 3. Runs the resolution pipeline
+ * 3. Runs project-semantics discovery
  * 4. Returns a context with ResourceGraph and helper methods
  *
  * @param tsconfigPath - Absolute path to tsconfig.json
  * @param logger - Logger for output
- * @param options - Optional resolution options
- * @returns Resolution context or null if resolution fails
+ * @param options - Optional discovery options
+ * @returns Project-semantics context or null if discovery fails
  */
-export async function createResolutionContext(
+export async function createProjectSemanticsContext(
   tsconfigPath: string,
   logger: Logger,
-  options?: ResolutionContextOptions,
-): Promise<ResolutionContext | null> {
+  options?: ProjectSemanticsContextOptions,
+): Promise<ProjectSemanticsContext | null> {
   // Dynamically import TypeScript (peer dependency)
   let ts: typeof import("typescript");
   try {
     ts = await import("typescript");
   } catch {
-    logger.warn("[aurelia-ssr] TypeScript not found. Resource resolution disabled.");
-    logger.warn("[aurelia-ssr] Install typescript as a dev dependency to enable resolution.");
+    logger.warn("[aurelia-ssr] TypeScript not found. Project-semantics discovery disabled.");
+    logger.warn("[aurelia-ssr] Install typescript as a dev dependency to enable discovery.");
     return null;
   }
 
@@ -118,9 +118,9 @@ export async function createResolutionContext(
   logger.info(`[aurelia-ssr] Creating TypeScript program (${parsedConfig.fileNames.length} files)`);
   const program = ts.createProgram(parsedConfig.fileNames, parsedConfig.options);
 
-  // Run resolution pipeline
-  logger.info("[aurelia-ssr] Running resource resolution...");
-  const resolutionLogger = {
+  // Run project-semantics discovery
+  logger.info("[aurelia-ssr] Running project-semantics discovery...");
+  const discoveryLogger = {
     log: () => {},
     info: (msg: string) => logger.info(msg),
     warn: (msg: string) => logger.warn(msg),
@@ -155,7 +155,7 @@ export async function createResolutionContext(
     styleExtensions: options?.styleExtensions,
     partialEvaluation: options?.partialEvaluation,
     diagnostics: diagnostics.forSource("project"),
-  }, resolutionLogger);
+  }, discoveryLogger);
 
   const thirdPartyResources = await resolveThirdPartyResources(
     options?.thirdParty,
@@ -179,7 +179,7 @@ export async function createResolutionContext(
     : result;
   const finalResult = nextResult;
 
-  // Log resolution results
+  // Log discovery results
   const globalCount = finalResult.registration.sites.filter(s => s.scope.kind === "global").length;
   const localCount = finalResult.registration.sites.filter(s => s.scope.kind === "local").length;
   logger.info(
@@ -199,7 +199,7 @@ export async function createResolutionContext(
   const semantics = finalResult.semantics;
 
   // Create context
-  const context: ResolutionContext = {
+  const context: ProjectSemanticsContext = {
     result: finalResult,
     resourceGraph: finalResult.resourceGraph,
     semantics,

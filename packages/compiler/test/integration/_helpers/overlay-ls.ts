@@ -160,7 +160,7 @@ export async function compileFromEntry({
     DefaultTemplateProgram,
     DefaultTemplateBuildService,
     canonicalDocumentUri,
-    DEFAULT_SEMANTICS,
+    BUILTIN_SEMANTICS,
     buildProjectSnapshot,
   } = await import(compilerIndexUrl.href);
 
@@ -177,7 +177,7 @@ export async function compileFromEntry({
     exprParser,
     attrParser,
     overlayBaseName,
-    project: buildProjectSnapshot(DEFAULT_SEMANTICS),
+    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
     moduleResolver,
   });
   const uri = canonicalDocumentUri(`C:/mem/${markupFile}`).uri;

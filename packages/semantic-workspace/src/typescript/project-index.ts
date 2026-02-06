@@ -17,24 +17,24 @@ import {
   discoverProjectSemantics,
   applyThirdPartyResources,
   hasThirdPartyResources,
-  type ResolutionConfig,
-  type ResolutionResult,
+  type ProjectSemanticsDiscoveryConfig,
+  type ProjectSemanticsDiscoveryResult,
   type ResourceDef,
   type Logger,
-  type ThirdPartyResolutionResult,
+  type ThirdPartyDiscoveryResult,
 } from "@aurelia-ls/compiler";
 import type { TypeScriptProject } from "./project.js";
 
 export interface AureliaProjectIndexOptions {
   readonly ts: TypeScriptProject;
   readonly logger: Logger;
-  readonly resolution?: ResolutionConfigBase;
+  readonly discovery?: ProjectSemanticsDiscoveryConfigBase;
 }
 
-type ResolutionConfigBase = Omit<ResolutionConfig, "diagnostics">;
+type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
 interface IndexSnapshot {
-  readonly resolution: ResolutionResult;
+  readonly discovery: ProjectSemanticsDiscoveryResult;
   readonly semantics: MaterializedSemantics;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
@@ -56,9 +56,9 @@ export class AureliaProjectIndex {
   #logger: Logger;
   #baseSemantics: MaterializedSemantics;
   #defaultScope: ResourceScopeId | null;
-  #resolutionConfig: ResolutionConfigBase;
+  #discoveryConfig: ProjectSemanticsDiscoveryConfigBase;
 
-  #resolution: ResolutionResult;
+  #discovery: ProjectSemanticsDiscoveryResult;
   #semantics: MaterializedSemantics;
   #catalog: ResourceCatalog;
   #syntax: TemplateSyntaxRegistry;
@@ -68,17 +68,17 @@ export class AureliaProjectIndex {
   constructor(options: AureliaProjectIndexOptions) {
     this.#ts = options.ts;
     this.#logger = options.logger;
-    const resolutionConfig = options.resolution ?? {};
-    this.#baseSemantics = prepareProjectSemantics(resolutionConfig.baseSemantics ?? BUILTIN_SEMANTICS);
-    this.#defaultScope = resolutionConfig.defaultScope ?? null;
-    this.#resolutionConfig = {
-      ...resolutionConfig,
+    const discoveryConfig = options.discovery ?? {};
+    this.#baseSemantics = prepareProjectSemantics(discoveryConfig.baseSemantics ?? BUILTIN_SEMANTICS);
+    this.#defaultScope = discoveryConfig.defaultScope ?? null;
+    this.#discoveryConfig = {
+      ...discoveryConfig,
       baseSemantics: this.#baseSemantics,
-      defaultScope: this.#defaultScope ?? resolutionConfig.defaultScope,
+      defaultScope: this.#defaultScope ?? discoveryConfig.defaultScope,
     };
 
     const snapshot = this.#computeSnapshot();
-    this.#resolution = snapshot.resolution;
+    this.#discovery = snapshot.discovery;
     this.#semantics = snapshot.semantics;
     this.#catalog = snapshot.catalog;
     this.#syntax = snapshot.syntax;
@@ -89,7 +89,7 @@ export class AureliaProjectIndex {
   refresh(): void {
     const snapshot = this.#computeSnapshot();
     const changed = snapshot.fingerprint !== this.#fingerprint;
-    this.#resolution = snapshot.resolution;
+    this.#discovery = snapshot.discovery;
     this.#semantics = snapshot.semantics;
     this.#catalog = snapshot.catalog;
     this.#syntax = snapshot.syntax;
@@ -103,8 +103,8 @@ export class AureliaProjectIndex {
     return this.#resourceGraph;
   }
 
-  currentResolution(): ResolutionResult {
-    return this.#resolution;
+  currentDiscovery(): ProjectSemanticsDiscoveryResult {
+    return this.#discovery;
   }
 
   currentCatalog(): ResourceCatalog {
@@ -137,21 +137,21 @@ export class AureliaProjectIndex {
    * Merge third-party npm resources into the current snapshot.
    *
    * Called after async npm analysis completes. Applies resources to
-   * the current resolution result and updates all derived artifacts.
+   * the current discovery result and updates all derived artifacts.
    *
    * @returns true if the overlay changed the snapshot
    */
-  applyThirdPartyOverlay(thirdParty: ThirdPartyResolutionResult): boolean {
+  applyThirdPartyOverlay(thirdParty: ThirdPartyDiscoveryResult): boolean {
     const hasResources = hasThirdPartyResources(thirdParty.resources);
     const hasGaps = thirdParty.gaps.length > 0;
     if (!hasResources && !hasGaps) return false;
 
-    const merged = applyThirdPartyResources(this.#resolution, thirdParty.resources, {
+    const merged = applyThirdPartyResources(this.#discovery, thirdParty.resources, {
       gaps: thirdParty.gaps,
       confidence: thirdParty.confidence,
     });
 
-    this.#resolution = merged;
+    this.#discovery = merged;
     this.#semantics = {
       ...merged.semantics,
       resourceGraph: merged.resourceGraph,
@@ -170,7 +170,7 @@ export class AureliaProjectIndex {
     const diagnostics = new DiagnosticsRuntime();
     const result = discoverProjectSemantics(
       program,
-      { ...this.#resolutionConfig, diagnostics: diagnostics.forSource("project") },
+      { ...this.#discoveryConfig, diagnostics: diagnostics.forSource("project") },
       this.#logger,
     );
 
@@ -217,7 +217,7 @@ export class AureliaProjectIndex {
     });
 
     return {
-      resolution: result,
+      discovery: result,
       semantics,
       catalog: result.catalog,
       syntax: result.syntax,

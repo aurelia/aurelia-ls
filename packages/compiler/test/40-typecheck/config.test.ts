@@ -12,7 +12,7 @@ import {
   typecheck,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   DiagnosticsRuntime,
   checkTypeCompatibility,
   resolveTypecheckConfig,
@@ -333,7 +333,7 @@ describe("cascade suppression", () => {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
   };
 
   test("no type diagnostic when target.kind === 'unknown' (resolve failed)", () => {
@@ -343,7 +343,7 @@ describe("cascade suppression", () => {
     const markup = '<div nonexistent.bind="42"></div>';
 
     const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
     const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
@@ -373,7 +373,7 @@ describe("cascade suppression", () => {
     const markup = '<input disabled.bind="\'yes\'">';
 
     const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
     const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
@@ -412,13 +412,13 @@ describe("style binding syntax", () => {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
   };
 
   test("width.style produces stylePropertyBinding with target.kind=style", () => {
     const diagnostics = new DiagnosticsRuntime();
     const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
     const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
 
     expect(ins?.kind).toBe("stylePropertyBinding");
@@ -428,7 +428,7 @@ describe("style binding syntax", () => {
   test("width.style expects type string (style.property context)", () => {
     const diagnostics = new DiagnosticsRuntime();
     const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
-    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(DEFAULT_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
     const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,

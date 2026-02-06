@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { buildResourceGraph, ROUTER_MANIFEST } from "@aurelia-ls/compiler";
-import { materializeResourcesForScope, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { materializeResourcesForScope, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
 import type { RegistrationAnalysis } from "@aurelia-ls/compiler";
 
 /**
  * Tests for plugin-based resource filtering in the scope builder.
  *
- * The scope builder filters resources from DEFAULT_SEMANTICS based on activated plugins:
+ * The scope builder filters resources from BUILTIN_SEMANTICS based on activated plugins:
  * - Resources without `package` field are always included (core resources)
  * - Resources with `package` field are only included if the corresponding plugin is activated
  *
@@ -24,7 +24,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("excludes au-viewport element from ResourceGraph", () => {
       const graph = buildResourceGraph(analysisWithoutRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       expect(
         resources.elements["au-viewport"],
@@ -34,7 +34,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("excludes load attribute from ResourceGraph", () => {
       const graph = buildResourceGraph(analysisWithoutRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       expect(
         resources.attributes["load"],
@@ -44,7 +44,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("excludes href attribute from ResourceGraph", () => {
       const graph = buildResourceGraph(analysisWithoutRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       expect(
         resources.attributes["href"],
@@ -54,7 +54,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("still includes core resources without package field", () => {
       const graph = buildResourceGraph(analysisWithoutRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       // Core template controllers should always be available
       expect(resources.controllers["if"], "if controller should be available").toBeTruthy();
@@ -83,7 +83,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("includes au-viewport element in ResourceGraph", () => {
       const graph = buildResourceGraph(analysisWithRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       expect(
         resources.elements["au-viewport"],
@@ -97,7 +97,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("includes load attribute in ResourceGraph", () => {
       const graph = buildResourceGraph(analysisWithRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       expect(
         resources.attributes["load"],
@@ -111,7 +111,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("includes href attribute in ResourceGraph", () => {
       const graph = buildResourceGraph(analysisWithRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       expect(
         resources.attributes["href"],
@@ -125,7 +125,7 @@ describe("Scope: Plugin Filtering", () => {
 
     it("still includes all core resources", () => {
       const graph = buildResourceGraph(analysisWithRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       // Core resources should still be available
       expect(resources.controllers["if"], "if controller should be available").toBeTruthy();
@@ -149,14 +149,14 @@ describe("Scope: Plugin Filtering", () => {
       };
 
       const graph = buildResourceGraph(analysisWithRouter);
-      const { resources } = materializeResourcesForScope(DEFAULT_SEMANTICS, graph, graph.root);
+      const { resources } = materializeResourcesForScope(BUILTIN_SEMANTICS, graph, graph.root);
 
       // Package field should be preserved so the compiler/LSP can generate helpful errors
       const viewport = resources.elements["au-viewport"];
       expect(viewport.package).toBe("@aurelia/router");
 
       // When the element IS available, the compiler knows it's from @aurelia/router
-      // When the element is NOT available (plugin not activated), DEFAULT_SEMANTICS
+      // When the element is NOT available (plugin not activated), BUILTIN_SEMANTICS
       // still has it as shadow knowledge for error recovery
     });
   });

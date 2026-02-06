@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSyn
 import { join, resolve as resolvePath } from "node:path";
 import { tmpdir } from "node:os";
 import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
-import type { AureliaPluginOptions, ResolutionContext } from "../src/types.js";
-import { createResolutionContext } from "../src/resolution.js";
+import type { AureliaPluginOptions, ProjectSemanticsContext } from "../src/types.js";
+import { createProjectSemanticsContext } from "../src/project-semantics.js";
 import { loadConfigFile, mergeConfigs, normalizeOptions } from "../src/defaults.js";
 
 type Workspace = {
@@ -135,7 +135,7 @@ describe("config precedence (config file vs inline)", () => {
         root: workspace.appRoot,
       });
 
-      const ctx = await createResolutionContext(workspace.tsconfigPath, LOGGER, {
+      const ctx = await createProjectSemanticsContext(workspace.tsconfigPath, LOGGER, {
         thirdParty: resolved.conventions.thirdParty,
         conventions: resolved.conventions.config,
         packagePath: resolved.packagePath,
@@ -606,7 +606,7 @@ function resolveWithOptions(
     root: workspace.appRoot,
   });
   const tsconfigPath = resolvePath(workspace.appRoot, resolved.tsconfig ?? "tsconfig.json");
-  return createResolutionContext(tsconfigPath, LOGGER, {
+  return createProjectSemanticsContext(tsconfigPath, LOGGER, {
     thirdParty: resolved.conventions.thirdParty,
     conventions: resolved.conventions.config,
     packagePath: resolved.packagePath,
@@ -617,14 +617,14 @@ function resolveWithOptions(
   });
 }
 
-function hasElement(ctx: ResolutionContext | null, name: string): boolean {
+function hasElement(ctx: ProjectSemanticsContext | null, name: string): boolean {
   if (!ctx) return false;
   const rootScope = ctx.resourceGraph.scopes[ctx.resourceGraph.root];
   return Boolean(rootScope?.resources?.elements?.[name]);
 }
 
 function hasGap(
-  ctx: ResolutionContext,
+  ctx: ProjectSemanticsContext,
   kind: string,
   code: string,
 ): boolean {
@@ -807,7 +807,7 @@ function writeLocalResources(appRoot: string): void {
   writeFileSync(join(appRoot, "src", "main.ts"), "import \"./my-app\";\n", "utf-8");
 }
 
-function collectLocalScopes(ctx: ResolutionContext): string[] {
+function collectLocalScopes(ctx: ProjectSemanticsContext): string[] {
   return Object.keys(ctx.resourceGraph.scopes).filter((id) => id.startsWith("local:"));
 }
 

@@ -66,7 +66,7 @@ export interface WorkspaceLocation {
 export interface WorkspaceHover {
   readonly contents: string;
   readonly location?: WorkspaceLocation;
-  // Analysis confidence (exact/high/partial/low/manual), aligned with resolution
+  // Analysis confidence (exact/high/partial/low/manual), aligned with discovery
   // analysis confidence. This is distinct from catalog confidence
   // (complete/high/partial/conservative).
   readonly confidence?: "exact" | "high" | "partial" | "low" | "manual";

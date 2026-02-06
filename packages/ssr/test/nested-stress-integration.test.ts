@@ -44,9 +44,9 @@ import { DI, Registration, LoggerConfiguration, LogLevel, ConsoleSink } from "@a
 import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
 
 import { compileWithAot } from "@aurelia-ls/ssr";
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/ssr";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/ssr";
 import { patchComponentDefinition } from "@aurelia-ls/ssr";
-import { renderWithComponents } from "@aurelia-ls/ssr";
+import { render } from "@aurelia-ls/ssr";
 import { countOccurrences, createHydrationContext } from "./_helpers/test-utils.js";
 
 // =============================================================================
@@ -223,11 +223,11 @@ const STRESS_APP_TEMPLATE = `<div class="stress-app">
  */
 function createStressTestSemantics() {
   return {
-    ...DEFAULT_SEMANTICS,
+    ...BUILTIN_SEMANTICS,
     resources: {
-      ...DEFAULT_SEMANTICS.resources,
+      ...BUILTIN_SEMANTICS.resources,
       elements: {
-        ...DEFAULT_SEMANTICS.resources.elements,
+        ...BUILTIN_SEMANTICS.resources.elements,
         "status-badge": {
           kind: "element",
           name: "status-badge",
@@ -382,7 +382,7 @@ describe("Nested Stress Test: Deep Component Hierarchy", () => {
     patchComponentDefinition(StressApp, stressAppAot);
 
     // Render
-    const result = await renderWithComponents(StressApp, {
+    const result = await render(StressApp, {
       childComponents: [SectionPanel, ItemCard, StatusBadge, InfoTag, FooterWidget],
     });
 
@@ -462,7 +462,7 @@ describe("Nested Stress Test: Deep Component Hierarchy", () => {
     patchComponentDefinition(FooterWidget, footerWidgetAot);
     patchComponentDefinition(StressApp, stressAppAot);
 
-    const result = await renderWithComponents(StressApp, {
+    const result = await render(StressApp, {
       childComponents: [SectionPanel, ItemCard, StatusBadge, InfoTag, FooterWidget],
     });
 
@@ -534,15 +534,15 @@ describe("Nested Stress Test: Multi-Request Stability", () => {
     patchComponentDefinition(PersistentStressApp, stressAppAot);
 
     // Render multiple times
-    const result1 = await renderWithComponents(PersistentStressApp, {
+    const result1 = await render(PersistentStressApp, {
       childComponents: [PersistentSectionPanel, PersistentItemCard, PersistentStatusBadge, PersistentInfoTag, PersistentFooterWidget],
     });
 
-    const result2 = await renderWithComponents(PersistentStressApp, {
+    const result2 = await render(PersistentStressApp, {
       childComponents: [PersistentSectionPanel, PersistentItemCard, PersistentStatusBadge, PersistentInfoTag, PersistentFooterWidget],
     });
 
-    const result3 = await renderWithComponents(PersistentStressApp, {
+    const result3 = await render(PersistentStressApp, {
       childComponents: [PersistentSectionPanel, PersistentItemCard, PersistentStatusBadge, PersistentInfoTag, PersistentFooterWidget],
     });
 
@@ -592,7 +592,7 @@ describe("Nested Stress Test: Server -> Client Hydration", () => {
     patchComponentDefinition(FooterWidget, footerWidgetAot);
     patchComponentDefinition(StressApp, stressAppAot);
 
-    const ssrResult = await renderWithComponents(StressApp, {
+    const ssrResult = await render(StressApp, {
       childComponents: [SectionPanel, ItemCard, StatusBadge, InfoTag, FooterWidget],
     });
 
@@ -822,7 +822,7 @@ describe("Nested Stress Test: Edge Cases", () => {
     patchComponentDefinition(FooterWidget, footerWidgetAot);
     patchComponentDefinition(StressApp, stressAppAot);
 
-    const result = await renderWithComponents(StressApp, {
+    const result = await render(StressApp, {
       childComponents: [SectionPanel, ItemCard, StatusBadge, InfoTag, FooterWidget],
     });
 
@@ -857,7 +857,7 @@ describe("Nested Stress Test: Edge Cases", () => {
     patchComponentDefinition(FooterWidget, footerWidgetAot);
     patchComponentDefinition(StressApp, stressAppAot);
 
-    const result = await renderWithComponents(StressApp, {
+    const result = await render(StressApp, {
       childComponents: [SectionPanel, ItemCard, StatusBadge, InfoTag, FooterWidget],
     });
 

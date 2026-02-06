@@ -36,7 +36,6 @@ export type { AttrCommandSpan, AttrPartSpan, AttributeNameAnalysis, ExpressionPa
 // === Language / Semantics ===
 export {
   BUILTIN_SEMANTICS,
-  DEFAULT as DEFAULT_SEMANTICS, // Legacy alias
   prepareProjectSemantics,
   createSemanticsLookup,
   buildResourceCatalog,

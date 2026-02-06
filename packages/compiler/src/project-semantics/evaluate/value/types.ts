@@ -434,7 +434,7 @@ export interface ImportBinding {
  * Carries the state needed to resolve imports across file boundaries
  * while detecting cycles.
  */
-export interface ResolutionContext {
+export interface ValueResolutionContext {
   /** Map of file paths to their module scopes */
   readonly fileScopes: ReadonlyMap<NormalizedPath, LexicalScope>;
 
@@ -916,4 +916,5 @@ export function forOfStmt(
 export function unknownStmt(reason: AnalysisGap, span?: TextSpan): UnknownStatement {
   return { kind: 'unknownStatement', reason, span };
 }
+
 

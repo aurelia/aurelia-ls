@@ -10,10 +10,10 @@ import type {
   ClassValue,
   DecoratorApplication,
   LexicalScope,
-  ResolutionContext,
+  ValueResolutionContext,
 } from "./value/types.js";
 import { extractBoolean, literal, object } from "./value/types.js";
-import { buildResolutionContext, fullyResolve } from "./value/resolve.js";
+import { buildValueResolutionContext, fullyResolve } from "./value/resolve.js";
 import { resolveInScope } from "./value/scope.js";
 
 export interface PartialEvaluationOptions {
@@ -56,7 +56,7 @@ export function evaluateFileFacts(
     fileScopes.set(path, scoped);
   }
 
-  const ctx = buildResolutionContext({
+  const ctx = buildValueResolutionContext({
     fileScopes,
     exportBindings,
     fileFacts: facts,
@@ -97,7 +97,7 @@ function normalizeFailOnFiles(
 function evaluateFile(
   fileFacts: FileFacts,
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
 ): FileFacts {
   const classes = fileFacts.classes.map((cls) => evaluateClass(cls, scope, ctx));
   const variables = fileFacts.variables.map((variable) => ({
@@ -126,7 +126,7 @@ function evaluateFile(
   };
 }
 
-function evaluateClass(cls: ClassValue, scope: LexicalScope, ctx: ResolutionContext): ClassValue {
+function evaluateClass(cls: ClassValue, scope: LexicalScope, ctx: ValueResolutionContext): ClassValue {
   const decorators = cls.decorators.map((dec) => evaluateDecorator(dec, scope, ctx));
 
   const staticMembers = new Map<string, AnalyzableValue>();
@@ -149,7 +149,7 @@ function evaluateClass(cls: ClassValue, scope: LexicalScope, ctx: ResolutionCont
 function evaluateDecorator(
   dec: DecoratorApplication,
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
 ): DecoratorApplication {
   return {
     ...dec,
@@ -160,7 +160,7 @@ function evaluateDecorator(
 function evaluateBindableMember(
   member: BindableMember,
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
 ): BindableMember {
   return {
     ...member,
@@ -171,7 +171,7 @@ function evaluateBindableMember(
 function resolveValue(
   value: AnalyzableValue,
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
 ): AnalyzableValue {
   return fullyResolve(value, scope, ctx);
 }
@@ -266,7 +266,7 @@ function applyGlobalBindings(
 function resolveOptionalValue(
   value: AnalyzableValue | null,
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
 ): AnalyzableValue | null {
   if (value === null) return null;
   return fullyResolve(value, scope, ctx);
@@ -277,7 +277,7 @@ type GuardStatus = "true" | "false" | "unknown";
 function evaluateRegistrationCalls(
   calls: readonly RegistrationCall[],
   scope: LexicalScope,
-  ctx: ResolutionContext,
+  ctx: ValueResolutionContext,
   filePath: NormalizedPath,
 ): RegistrationCall[] {
   const evaluated: RegistrationCall[] = [];
@@ -360,4 +360,5 @@ function createEvaluationFailureGap(filePath: NormalizedPath, error: unknown): A
     { file: filePath },
   );
 }
+
 

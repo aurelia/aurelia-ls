@@ -2,7 +2,7 @@
  * Plugin Resolution
  *
  * Identifies when official Aurelia plugins are registered by tracing imports
- * to (package, exportName) pairs. Activates resources from DEFAULT_SEMANTICS
+ * to (package, exportName) pairs. Activates resources from BUILTIN_SEMANTICS
  * that have matching `package` fields.
  */
 

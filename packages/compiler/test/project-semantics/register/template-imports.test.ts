@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { DiagnosticsRuntime } from "@aurelia-ls/compiler";
-import { discoverProjectSemantics, type ResolutionResult } from "../../../src/project-semantics/resolve.js";
+import { discoverProjectSemantics, type ProjectSemanticsDiscoveryResult } from "../../../src/project-semantics/resolve.js";
 import type { FileSystemContext } from "../../../src/project-semantics/project/context.js";
 
 // Test app with template imports
@@ -145,7 +145,7 @@ const resolveWithDiagnostics = (
 describe("Template Import Registration", () => {
   let program: ts.Program;
   let fileSystem: FileSystemContext;
-  let result: ResolutionResult;
+  let result: ProjectSemanticsDiscoveryResult;
 
   beforeAll(() => {
     program = createProgram();

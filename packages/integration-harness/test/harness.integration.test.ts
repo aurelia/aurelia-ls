@@ -185,7 +185,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: EXPLICIT_APP_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
     },
     compile: [
@@ -223,7 +223,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: EXPLICIT_APP_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
     },
     compile: [
@@ -305,7 +305,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: CONVENTION_APP_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
     },
     compile: [
@@ -348,7 +348,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: SIBLING_APP_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
     },
     compile: [
@@ -379,7 +379,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: BASIC_CSR_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
     },
     expect: {
@@ -413,7 +413,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: TEMPLATE_IMPORTS_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
     },
     compile: [
@@ -444,7 +444,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: TEMPLATE_IMPORTS_PKG_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
       packageRoots: {
         "@test/multi-class": FIXTURE_MULTI_CLASS,
@@ -485,7 +485,7 @@ const SCENARIOS: IntegrationScenario[] = [
       kind: "tsconfig",
       tsconfigPath: TEMPLATE_IMPORTS_MULTI_SUBPATH_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
       packageRoots: {
         "@test/multi-class": FIXTURE_MULTI_CLASS,
@@ -563,7 +563,7 @@ const SCENARIOS: IntegrationScenario[] = [
         ].join("\n"),
       },
     },
-    resolution: {
+    discovery: {
       defines: {
         __SSR__: true,
       },
@@ -764,7 +764,7 @@ const SCENARIOS: IntegrationScenario[] = [
         "/src/entry.ts": "export const marker = 0;",
       },
     },
-    resolution: {
+    discovery: {
       explicitResources: EXPLICIT_THIRD_PARTY_RESOURCES,
     },
     compile: [
@@ -841,7 +841,7 @@ if (HAS_AURELIA_TABLE) {
       kind: "tsconfig",
       tsconfigPath: TEMPLATE_IMPORTS_AURELIA_TABLE_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
       packageRoots: {
         "aurelia2-table": AURELIA_TABLE_PACKAGE,
@@ -938,7 +938,7 @@ if (HAS_AURELIA_TABLE) {
       kind: "tsconfig",
       tsconfigPath: SSR_TABLE_FIXTURE_TSCONFIG,
     },
-    resolution: {
+    discovery: {
       fileSystem: "node",
     },
     expect: {

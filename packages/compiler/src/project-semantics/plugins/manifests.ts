@@ -2,10 +2,10 @@
  * Known Plugin Manifests
  *
  * Maps (package, exportName) → manifest for official Aurelia plugins.
- * The actual resource semantics live in DEFAULT_SEMANTICS (compiler/registry.ts).
+ * The actual resource semantics live in BUILTIN_SEMANTICS (compiler/registry.ts).
  *
  * When a plugin is detected in registration analysis, its package is "activated",
- * causing resources with matching `package` field in DEFAULT_SEMANTICS to be
+ * causing resources with matching `package` field in BUILTIN_SEMANTICS to be
  * included in the ResourceGraph.
  */
 
@@ -14,7 +14,7 @@ import type { PluginManifest, PluginManifestRegistry } from "./types.js";
 /**
  * RouterConfiguration from @aurelia/router.
  *
- * Activates: au-viewport, load, href (defined in DEFAULT_SEMANTICS with package: "@aurelia/router")
+ * Activates: au-viewport, load, href (defined in BUILTIN_SEMANTICS with package: "@aurelia/router")
  */
 export const ROUTER_MANIFEST: PluginManifest = {
   exportName: "RouterConfiguration",

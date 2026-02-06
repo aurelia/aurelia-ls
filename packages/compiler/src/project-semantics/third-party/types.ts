@@ -70,7 +70,7 @@ export interface ThirdPartyOptions {
 // ============================================================================
 
 /** Result of resolving third-party resources. */
-export interface ThirdPartyResolutionResult {
+export interface ThirdPartyDiscoveryResult {
   resources: Partial<ResourceCollections>;
   gaps: AnalysisGap[];
   confidence?: CatalogConfidence;

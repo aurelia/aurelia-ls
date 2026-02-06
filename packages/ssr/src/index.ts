@@ -6,14 +6,13 @@
  *
  * Primary exports:
  * - createSSRHandler() - Production SSR entry point
- * - render() / renderWithComponents() - Low-level rendering
+ * - render() - Low-level rendering
  * - compileWithAot() - AOT compilation bridge
  */
 
 // Primary render API
 export {
   render,
-  renderWithComponents, // backwards compat alias
   type RenderOptions,
   type RenderResult,
   type ComponentClass,
@@ -104,7 +103,6 @@ export {
   getExpressionParser,
   DEFAULT_SYNTAX,
   BUILTIN_SEMANTICS,
-  DEFAULT_SEMANTICS, // Legacy alias
   type AotPlanModule,
   type AotCodeResult,
   type SerializedDefinition,

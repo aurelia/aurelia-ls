@@ -165,7 +165,7 @@ function parseMultiBindings(
           } as SetPropertyIR);
         }
       }
-      // Note: Unknown bindables are silently ignored here; diagnostics are handled in resolve phase
+      // Note: Unknown bindables are silently ignored here; diagnostics are handled in link phase
 
       // Skip whitespace after semicolon
       while (i < len && raw.charCodeAt(i + 1) <= Char_Space) i++;
