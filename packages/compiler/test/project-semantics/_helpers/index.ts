@@ -1,7 +1,7 @@
 /**
- * Resolution Test Helpers
+ * Project-Semantics Test Helpers
  *
- * Shared utilities for resolution package tests.
+ * Shared utilities for compiler project-semantics tests.
  */
 
 // TypeScript program creation

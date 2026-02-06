@@ -7,7 +7,7 @@
  * 1. Test suite - verifies extraction works
  * 2. Ground truth - documents what resources each package defines
  *
- * Run with: npm run test:resolution -- --test-name-pattern "aurelia-core"
+ * Run with: pnpm -w test:vitest -- packages/compiler/test/project-semantics --testNamePattern "aurelia-core"
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';

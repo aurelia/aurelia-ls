@@ -73,9 +73,11 @@ This prints the before/after of source transformation, showing how decorators be
 # All tests
 pnpm run test
 
-# Specific package
+# Common focused suites
 pnpm run test:compiler
-pnpm run test:resolution
+pnpm run test:20-link
+pnpm run test:language-server
+pnpm run test:ide
 pnpm run test:ssr
 ```
 

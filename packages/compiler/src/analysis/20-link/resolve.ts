@@ -582,7 +582,7 @@ function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
  * Walk the DOM tree to emit aurelia/unknown-element for truly unknown custom elements.
  * This catches elements that have no instruction rows (no bindings).
  *
- * TODO: For auto-import, the resolution package should track a third layer:
+ * TODO: For auto-import, compiler project-semantics should track a third layer:
  * resources that exist in the project or dependencies but aren't registered.
  * That would enable suggestions like "Did you mean to import 'x-widget'?"
  */
@@ -1110,4 +1110,3 @@ function linkHydrateLetElement(ins: HydrateLetElementIR): LinkedHydrateLetElemen
 /* ============================================================================
  * Target / Controller resolution
  * ============================================================================ */
-

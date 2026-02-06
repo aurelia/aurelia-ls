@@ -4,7 +4,7 @@
  * Real-world validation against the aurelia2-plugins monorepo submodule.
  * Tests extraction of Aurelia resources from community plugins.
  *
- * Run with: npm run test:resolution -- --test-name-pattern "aurelia2-plugins"
+ * Run with: pnpm -w test:vitest -- packages/compiler/test/project-semantics --testNamePattern "aurelia2-plugins"
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';

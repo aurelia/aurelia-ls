@@ -2,7 +2,7 @@
  * Static Site Generator
  *
  * Generates static HTML pages for all discovered routes.
- * Uses route discovery from the resolution package and the SSR
+ * Uses route discovery from compiler project-semantics and the SSR
  * rendering pipeline to produce pre-rendered pages.
  */
 

@@ -6,7 +6,8 @@
  * - JSONExporter: Structured data for build analysis (future)
  * - MetricsExporter: Aggregate statistics for production (future)
  *
- * See .claude/docs/instrumentation-architecture.md for design rationale.
+ * Instrumentation model: spans/events are stable primitives consumed by tooling
+ * and diagnostics surfaces.
  * ======================================================================================= */
 
 import type { Span, SpanEvent, TraceExporter } from "./trace.js";

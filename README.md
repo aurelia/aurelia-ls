@@ -58,12 +58,14 @@ The demo shows server-rendered HTML with client hydration. View source to see th
 
 | Package | Purpose |
 |---------|---------|
-| `@aurelia-ls/compiler` | Template analysis, resolution, and AOT code generation |
+| `@aurelia-ls/compiler` | Project-semantics + template analysis (`10-lower` → `20-link` → `30-bind` → `40-typecheck`) and AOT/overlay synthesis |
+| `@aurelia-ls/semantic-workspace` | Incremental semantic graph and query APIs used by IDE features |
+| `@aurelia-ls/language-server` | Language Server Protocol host and IDE integration |
 | `@aurelia-ls/transform` | Injects compiled artifacts into source files |
 | `@aurelia-ls/vite-plugin` | Vite integration for dev server and builds |
 | `@aurelia-ls/ssr` | Server-side rendering core |
 | `@aurelia-ls/ssg` | Static site generation |
-| `@aurelia-ls/language-server` | Language Server Protocol implementation |
+| `@aurelia-ls/integration-harness` | End-to-end fixture harness for cross-package scenarios |
 | `aurelia-2` | VS Code extension ([marketplace](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2)) |
 
 ## Documentation

@@ -4,7 +4,7 @@
  * Real-world validation against the Aurelia 2 monorepo submodule.
  * Tests cross-package import resolution within a monorepo context.
  *
- * Run with: npm run test:resolution -- --test-name-pattern "aurelia-internal"
+ * Run with: pnpm -w test:vitest -- packages/compiler/test/project-semantics --testNamePattern "aurelia-internal"
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';

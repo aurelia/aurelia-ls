@@ -4,8 +4,8 @@
  * Analyzes TypeScript source to find classes and their declaration forms.
  * Uses TypeScript compiler API for robust parsing.
  *
- * Semantic knowledge (decorators, conventions) is imported from resolution
- * to avoid duplication. See docs/transform-package-design.md.
+ * Semantic knowledge (decorators, conventions) is imported from compiler
+ * to avoid duplication.
  */
 
 import ts from "typescript";
@@ -77,7 +77,7 @@ export function detectDeclarationForm(
     return { form: "static-au", span: classInfo.existingAuSpan };
   }
 
-  // Check for Aurelia decorators (using resolution's authoritative list)
+  // Check for Aurelia decorators (using compiler-authoritative list)
   const aureliaDecorator = classInfo.decorators.find(d =>
     (RESOURCE_DECORATOR_NAMES as readonly string[]).includes(d.name)
   );
@@ -90,7 +90,7 @@ export function detectDeclarationForm(
     return { form: "decorator", decorator: aureliaDecorator };
   }
 
-  // Check for convention naming (using resolution's authoritative suffixes)
+  // Check for convention naming (using compiler-authoritative suffixes)
   if (isConventionName(className)) {
     return { form: "convention" };
   }

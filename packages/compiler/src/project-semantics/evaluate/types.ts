@@ -1,7 +1,7 @@
 /**
  * Analysis Result Types
  *
- * Shared types for analysis operations across the resolution package.
+ * Shared types for analysis operations across compiler project-semantics.
  * These are the stable, non-deprecated types from the original file.
  *
  * For file extraction types, use:

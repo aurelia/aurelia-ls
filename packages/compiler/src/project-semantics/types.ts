@@ -1,4 +1,4 @@
-// Shared types for the resolution package
+// Shared types for compiler project-semantics
 
 export interface Logger {
   log(message: string): void;

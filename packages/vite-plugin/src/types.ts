@@ -18,11 +18,11 @@ import type { SSRRequestContext } from "@aurelia-ls/ssr";
 // ============================================================================
 
 /**
- * Re-export convention types from resolution package.
+ * Re-export convention types from compiler.
  * Users can import these directly from vite-plugin for convenience.
  *
  * ConventionConfig is the canonical type for all convention configuration.
- * See resolution package for the authoritative definitions.
+ * Compiler exports remain the authoritative definitions.
  */
 export type {
   // Core convention config
@@ -961,7 +961,7 @@ export interface AureliaPluginOptions {
    * Convention configuration.
    * Controls resource discovery and classification.
    *
-   * Uses ConventionConfig from resolution package (canonical type).
+   * Uses ConventionConfig from compiler (canonical type).
    */
   conventions?: ConventionConfig;
 

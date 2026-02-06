@@ -1,332 +1,152 @@
 # Architecture
 
-This document explains how the Aurelia AOT compiler and language tooling work.
+This document describes the current architecture of the Aurelia language server and AOT compiler platform.
 
-## The Problem
+## System Overview
 
-Aurelia 2 compiles templates at runtime in the browser. This works well but has tradeoffs:
+The monorepo is organized around one core principle: shared compiler semantics power both IDE tooling and runtime/build outputs.
 
-- **Startup cost** — Templates must be parsed and compiled before rendering
-- **No SSR** — Server-side rendering requires a browser environment
-- **Limited IDE support** — The editor can't understand template semantics
+At the center is `@aurelia-ls/compiler`, which now includes both:
 
-## The Solution
+1. Project-semantics discovery (resources, routes, registration, scoping)
+2. Template analysis + synthesis (IDE overlay and AOT artifacts)
 
-Compile templates ahead of time. The AOT compiler runs at build time and produces:
+High-level flow:
 
-1. **Pre-compiled definitions** — Templates become static `$au` properties with instruction arrays
-2. **Hydration markers** — Comment nodes that let the client reconnect to server-rendered DOM
-3. **Type overlays** — Virtual `.d.ts` content that gives the IDE type information for templates
-
-## Package Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         vite-plugin                             │
-│                    (user-facing entry point)                    │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│   resolution  │   │   compiler    │   │   transform   │
-│  (discovery)  │   │  (templates)  │   │   (inject)    │
-└───────┬───────┘   └───────┬───────┘   └───────────────┘
-        │                   │
-        │           ┌───────┴───────┐
-        │           ▼               ▼
-        │   ┌─────────────┐ ┌─────────────┐
-        │   │     ssr     │ │ language-   │
-        │   │  (render)   │ │   server    │
-        │   └──────┬──────┘ └─────────────┘
-        │          │
-        └────┬─────┘
-             ▼
-     ┌─────────────┐
-     │     ssg     │
-     │  (static)   │
-     └─────────────┘
+```text
+TypeScript Project + HTML Templates
+               |
+               v
+      @aurelia-ls/compiler
+   +--------------------------+
+   | project-semantics        |
+   | template analysis        |
+   | overlay/aot synthesis    |
+   +--------------------------+
+      |                |
+      v                v
+semantic-workspace    transform/ssr/ssg/vite-plugin
+      |
+      v
+language-server + vscode
 ```
 
-| Package | Purpose |
-|---------|---------|
-| **compiler** | Template analysis and code generation (the core) |
-| **resolution** | Resource discovery from TypeScript sources |
-| **transform** | Injects compiled artifacts into source files |
-| **vite-plugin** | Vite integration for dev server and builds |
-| **ssr** | Server-side rendering with jsdom |
-| **ssg** | Static site generation for pre-rendering routes |
-| **language-server** | LSP implementation for IDE features |
+## Package Responsibilities
 
-## Compiler Pipeline
+| Package | Responsibility |
+|---------|----------------|
+| `@aurelia-ls/compiler` | Core semantic authority. Discovers project semantics and compiles templates through staged analysis and synthesis. |
+| `@aurelia-ls/semantic-workspace` | Incremental semantic graph and query layer used by IDE-facing features. |
+| `@aurelia-ls/language-server` | LSP host, diagnostics/completions/hover/definitions/references. |
+| `@aurelia-ls/transform` | Injects generated AOT artifacts into TypeScript source. |
+| `@aurelia-ls/vite-plugin` | Build/dev integration, wires compiler + SSR/SSG in Vite workflows. |
+| `@aurelia-ls/ssr` | Server rendering runtime and hydration integration. |
+| `@aurelia-ls/ssg` | Route-driven static generation on top of compiler semantics + SSR. |
+| `@aurelia-ls/integration-harness` | Cross-package integration test harness and scenario runner. |
+| `aurelia-2` | VS Code extension packaging and editor integration surface. |
 
-The compiler transforms HTML templates through four analysis stages, then synthesizes output for either IDE tooling or production builds.
+## Compiler Architecture
 
-```
-                         HTML Template
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                         ANALYSIS                                  │
-│                                                                   │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────────┐  │
-│  │ 10-lower │ → │20-resolve│ → │ 30-bind  │ → │ 40-typecheck │  │
-│  │  (parse) │   │ (link)   │   │ (scopes) │   │   (types)    │  │
-│  └──────────┘   └──────────┘   └──────────┘   └──────────────┘  │
-│                                                                   │
-└──────────────────────────────┬───────────────────────────────────┘
-                               │
-               ┌───────────────┴───────────────┐
-               ▼                               ▼
-       ┌───────────────┐               ┌───────────────┐
-       │    Overlay    │               │      AOT      │
-       │  (for IDE)    │               │ (for runtime) │
-       └───────────────┘               └───────────────┘
+### Dual Pipelines in `@aurelia-ls/compiler`
+
+`@aurelia-ls/compiler` runs two cooperating pipelines:
+
+1. Project-semantics pipeline (project-level resource understanding)
+2. Template pipeline (single-template semantic compilation)
+
+### Project-Semantics Pipeline
+
+Purpose: discover resource and route semantics from TypeScript programs.
+
+Conceptual layers:
+
+```text
+extract -> infer -> register -> scope
 ```
 
-### Stage 10: Lower (HTML → IR)
+Key outputs include:
 
-Parses the HTML template into an intermediate representation:
-- DOM tree with source locations and node IDs
-- Instruction rows (bindings, property setters, controllers)
-- Expression table with identity keys for later lookup
+- Resource graph and scoped registrations
+- Template information and conventions mapping
+- Route tree and route metadata
+- Diagnostics/provenance suitable for tooling and build integration
 
-### Stage 20: Resolve (IR → Linked Semantics)
+### Template Analysis Pipeline
 
-Links template elements to Aurelia semantics:
-- Resolves custom elements and attributes from the resource graph
-- Normalizes attribute-to-property mapping
-- Computes effective binding modes (one-way, two-way, etc.)
-- Identifies template controllers (repeat, if, with, etc.)
+Purpose: compile template text into linked semantics, scoped bindings, typechecked expressions, and synthesis-ready modules.
 
-### Stage 21: Hoist
-
-Lifts controller metadata (used by ssr for processing nested controllers).
-
-### Stage 30: Bind (Linked Semantics → Scope Module)
-
-Maps expressions to their evaluation context:
-- Creates scope frames for template controllers
-- Materializes local variables (`<let>`, iterator declarations, contextuals)
-- Tracks variable provenance for type checking
-
-### Stage 40: Typecheck (Scope Module → Typecheck Module)
-
-Validates expressions against TypeScript types:
-- Extracts types for component bindables
-- Reports type mismatches, missing properties, method arity errors
-- Configurable severity (error, warning, info)
-
-### Synthesis: Two Output Paths
-
-**Overlay synthesis** (for IDE):
-- Generates virtual TypeScript definitions
-- Maps expressions to types for hover, completions, diagnostics
-- Never written to disk—injected into TypeScript's module resolution
-
-**AOT synthesis** (for production):
-- Serializes instructions as JavaScript
-- Generates `$au` static property with template definition
-- Injected into component source by the transform package
-
-## Resolution Pipeline
-
-The resolution package discovers Aurelia resources in a project. It runs a four-layer pipeline:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 1: EXTRACTION                                             │
-│ Parse TypeScript AST → SourceFacts (decorators, $au, exports)   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 2: INFERENCE                                              │
-│ 3-resolver priority: decorators > static $au > conventions      │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 3: REGISTRATION                                           │
-│ Analyze import graph → RegistrationIntents                      │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Layer 4: SCOPE                                                  │
-│ Build ResourceGraph with per-module scoping                     │
-└─────────────────────────────────────────────────────────────────┘
+```text
+10-lower -> 20-link -> 30-bind -> 40-typecheck
+                    \
+                     -> 50-usage
 ```
 
-**Key outputs:**
-- `ResourceGraph` — Registry of all discovered resources with scope information
-- `TemplateInfo[]` — Convention-based template file mappings (e.g., `foo.ts` → `foo.html`)
-- `RouteTree` — Application routing structure (used by SSG)
-- `Semantics` — Combined view of resources available to the compiler
+- `10-lower`: Parse template and lower to IR with source/provenance.
+- `20-link`: Link nodes/attributes/expressions to project semantics.
+- `30-bind`: Build lexical scope frames and expression binding contexts.
+- `40-typecheck`: Validate expressions against TS types.
+- `50-usage`: Feature usage analysis derived from linked semantics.
 
-## SSR & Hydration
+### Synthesis Outputs
 
-Aurelia's SSR uses a manifest-based hydration approach:
+After analysis, synthesis splits into two output forms:
 
-1. **Server** — Renders components using jsdom, records a manifest of DOM node locations
-2. **Client** — Receives HTML + manifest, reconnects to existing DOM without re-rendering
+- Overlay synthesis: virtual typings for IDE tooling (not written to disk).
+- AOT synthesis: runtime-ready template artifacts for transform/SSR/SSG.
 
-This differs from virtual DOM frameworks which diff and patch. The manifest approach enables true resumability—the client picks up exactly where the server left off.
+## IDE Architecture
 
-```
-Server                              Client
-──────                              ──────
-Component + Template                HTML + Manifest
-       │                                  │
-       ▼                                  ▼
-┌─────────────┐                    ┌─────────────┐
-│ jsdom render│                    │   hydrate   │
-│ + manifest  │   ──── HTTP ────▶  │  (no diff)  │
-│  recording  │                    │             │
-└─────────────┘                    └─────────────┘
+IDE requests flow through shared semantics, not a separate adapter model.
+
+```text
+Editor request
+  -> language-server
+  -> semantic-workspace (incremental model)
+  -> compiler analysis/synthesis data
+  -> LSP response (diagnostic/completion/hover/etc.)
 ```
 
-## IDE Integration
+This keeps feature behavior aligned with compiler/runtime semantics.
 
-The language server uses the compiler's analysis stages to provide IDE features:
+## Build and Runtime Architecture
 
-| Feature | How it works |
-|---------|--------------|
-| **Completions** | Query semantics for available bindables, elements, expressions |
-| **Diagnostics** | Run typecheck stage, report errors |
-| **Hover** | Map cursor position to expression, look up type |
-| **Go to Definition** | Follow resource references to source locations |
-| **Find References** | Search for usages across templates |
+Vite/runtime flows reuse the same compiler semantics:
 
-### Virtual Overlay Filesystem
-
-The language server doesn't write overlay files to disk. Instead, it intercepts TypeScript's module resolution to inject virtual `.d.ts` content. This enables real-time type feedback as you edit templates.
-
-```
-Template Edit → Recompile → Update Overlay → TypeScript Sees New Types
+```text
+source
+  -> vite-plugin
+  -> compiler (project-semantics + template pipeline)
+  -> transform (inject AOT)
+  -> ssr/ssg as needed
+  -> output
 ```
 
-## Key Architectural Decisions
+This avoids divergence between build-time, runtime, and IDE semantics.
 
-### Data-Driven Template Controllers
+## Key Invariants
 
-Template controllers (repeat, if, with, promise, etc.) aren't hardcoded. They're defined by `ControllerConfig` objects that describe:
-- What scope variables they introduce
-- How they transform the DOM
-- What expressions they evaluate
+- Provenance-first: use `SourceSpan` and provenance APIs, not ad-hoc offsets.
+- Deterministic staged analysis: stages are pure and cache-friendly.
+- Configuration-driven syntax: controllers/commands/patterns come from config/semantics.
+- Unification over adapters: shared compiler primitives are preferred across packages.
+- Strict typing: preserve branded types and avoid `any` in semantic boundaries.
 
-This means custom template controllers get full IDE support automatically if they follow the same patterns.
+## Current Directory Map
 
-### Pure, Cacheable Stages
-
-Each analysis stage is pure and deterministic:
-- Same input always produces same output
-- Stages can be cached independently
-- Tests can inject seed values to skip earlier stages
-
-### Expression Identity
-
-Expressions are tracked by `ExprId` keys in a table. This enables:
-- Efficient lookup for tooling (hover, semantic tokens)
-- Deduplication of repeated expressions
-- Stable references across compilation stages
-
-### Instrumentation
-
-The codebase uses a span-based tracing system:
-- `CompileTrace` API for performance tracking
-- Pluggable exporters (console, JSON, collecting)
-- Debug channels for targeted logging
-
-## Data Flow Examples
-
-### Dev Server Request
-
-```
-HTTP Request
-    │
-    ▼
-Vite Middleware
-    │
-    ├─→ createResolutionContext (parse project, discover resources)
-    │
-    ├─→ compileWithAot (run 4-stage pipeline + AOT synthesis)
-    │
-    ├─→ createSSRHandler (setup jsdom platform)
-    │
-    ├─→ render (execute component, record manifest)
-    │
-    └─→ processSSROutput (clean HTML)
-           │
-           ▼
-      HTTP Response (HTML + hydration script)
-```
-
-### IDE Hover
-
-```
-User hovers over ${expression}
-    │
-    ▼
-Language Server
-    │
-    ├─→ Find template in workspace
-    │
-    ├─→ compileTemplate (run analysis pipeline)
-    │
-    ├─→ Query expression table by cursor position
-    │
-    ├─→ Look up type from overlay
-    │
-    └─→ Format hover response
-           │
-           ▼
-      Editor shows type information
-```
-
-### Production Build
-
-```
-Source Files
-    │
-    ▼
-Vite Build
-    │
-    ├─→ Resolution (discover all resources)
-    │
-    ├─→ For each component:
-    │      ├─→ Compile template (analysis + AOT synthesis)
-    │      └─→ Transform source (inject $au property)
-    │
-    └─→ Bundle
-           │
-           ▼
-      Optimized output (no runtime compilation needed)
-```
-
-## Directory Structure
-
-```
+```text
 packages/
-├── compiler/           # Template compilation core
-│   ├── analysis/       # 4-stage pipeline (10-lower through 40-typecheck)
-│   ├── synthesis/      # Overlay and AOT code generation
-│   ├── parsing/        # HTML, attribute, expression parsers
-│   ├── model/          # IR data structures
-│   ├── language/       # Semantics, resource definitions
-│   ├── pipeline/       # Caching engine, session management
-│   └── shared/         # Tracing, diagnostics, utilities
-├── resolution/         # Resource discovery
-│   ├── extraction/     # TypeScript AST analysis
-│   ├── inference/      # Resource type inference
-│   ├── registration/   # Import graph analysis
-│   ├── scope/          # Resource graph construction
-│   ├── conventions/    # Naming conventions (foo.ts → foo.html)
-│   └── routes/         # Route tree extraction for SSG
-├── transform/          # Source code injection
-├── vite-plugin/        # Vite integration
-├── ssr/                # Server-side rendering
-├── ssg/                # Static site generation
-├── language-server/    # LSP implementation
-└── vscode/             # VS Code extension
+  compiler/
+  semantic-workspace/
+  language-server/
+  transform/
+  vite-plugin/
+  ssr/
+  ssg/
+  integration-harness/
+  vscode/
 ```
+
+## Related Docs
+
+- [Getting Started](./getting-started.md)
+- Root docs: `AGENTS.md` and `.codex/README.md`

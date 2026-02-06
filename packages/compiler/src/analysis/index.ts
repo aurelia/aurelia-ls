@@ -6,7 +6,7 @@
 // Stage 10: Lower (HTML -> IR)
 export { lowerDocument, type BuildIrOptions } from "./10-lower/lower.js";
 
-// Meta element extraction (for resolution package)
+// Meta element extraction (for compiler project-semantics)
 export { extractMeta, extractTemplateMeta, stripMetaFromHtml } from "./10-lower/meta-extraction.js";
 
 // Stage 20: Link (IR -> LinkModule)

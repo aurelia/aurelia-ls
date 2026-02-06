@@ -101,7 +101,7 @@ export type {
   SymbolId,
 } from "./schema/index.js";
 
-// Resource definitions (for resolution package and external tooling)
+// Resource definitions (for compiler project-semantics and external tooling)
 export type {
   ElementRes,
   AttrRes,
@@ -237,7 +237,7 @@ export {
   checkTypeCompatibility,
   DEFAULT_TYPECHECK_CONFIG,
   TYPECHECK_PRESETS,
-  // Meta element extraction (for resolution package)
+  // Meta element extraction (for compiler project-semantics)
   extractMeta,
   extractTemplateMeta,
   stripMetaFromHtml,

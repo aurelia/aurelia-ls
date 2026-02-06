@@ -365,7 +365,7 @@ export function normalizeSSGOptions(
 /**
  * Normalize convention options.
  *
- * Converts user-provided ConventionConfig (from resolution package)
+ * Converts user-provided ConventionConfig (from compiler project-semantics)
  * to the internal ResolvedConventionOptions structure.
  */
 export function normalizeConventionOptions(

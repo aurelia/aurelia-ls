@@ -56,7 +56,7 @@ import type { TemplateProgram } from "./program.js";
  * - Treat ProvenanceIndex as the single source-map layer between generated artifacts and templates.
  * - Migrate remaining overlay offset/member heuristics in this file into ProvenanceIndex projection APIs.
  * - Stop scanning TemplateMappingArtifact directly in services once provenance has full projection coverage.
- * - Keep this in sync with docs/agents/appendix-provenance.md and docs/provenance-refactor-milestones.md.
+ * - Keep this in sync with provenance projection tests in packages/compiler/test/program/provenance.test.ts.
  */
 
 export type { DocumentSpan } from "./provenance.js";
