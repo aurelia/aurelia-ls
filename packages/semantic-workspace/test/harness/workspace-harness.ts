@@ -64,6 +64,8 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     ...(options.workspace?.isJs !== undefined ? { isJs: options.workspace.isJs } : {}),
     ...(options.workspace?.styleProfile !== undefined ? { styleProfile: options.workspace.styleProfile } : {}),
     ...(options.workspace?.refactorOverrides !== undefined ? { refactorOverrides: options.workspace.refactorOverrides } : {}),
+    ...(options.workspace?.refactorPolicy !== undefined ? { refactorPolicy: options.workspace.refactorPolicy } : {}),
+    ...(options.workspace?.refactorDecisions !== undefined ? { refactorDecisions: options.workspace.refactorDecisions } : {}),
   });
 
   const discovery = workspace.projectIndex.currentDiscovery();

@@ -42,6 +42,7 @@ import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler";
 import type { ResourceDefinitionIndex } from "./definition.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
+import type { RefactorTargetClass, SemanticRenameRoute } from "./refactor-policy.js";
 import {
   attributeTargetNameFromSyntax,
   collectExpressionResourceNameSpans,
@@ -182,6 +183,22 @@ type InsertContext = {
   indent: string;
 };
 
+type RenameOperationContext = {
+  text: string;
+  offset: number;
+  compilation: TemplateCompilation;
+  domIndex: ReturnType<typeof buildDomIndex>;
+  syntax: AttributeSyntaxContext;
+  preferRoots: readonly string[];
+};
+
+const DEFAULT_SEMANTIC_RENAME_ROUTE_ORDER: readonly SemanticRenameRoute[] = [
+  "custom-element",
+  "bindable-attribute",
+  "value-converter",
+  "binding-behavior",
+];
+
 export interface TemplateEditEngineContext {
   readonly workspaceRoot: string;
   readonly templateIndex: TemplateIndex;
@@ -194,6 +211,12 @@ export interface TemplateEditEngineContext {
   readonly getAttributeSyntax: () => AttributeSyntaxContext;
   readonly styleProfile?: StyleProfile | null;
   readonly refactorOverrides?: RefactorOverrides | null;
+  readonly semanticRenameRouteOrder?: readonly SemanticRenameRoute[] | null;
+}
+
+export interface TemplateRenameProbe {
+  readonly targetClass: RefactorTargetClass;
+  readonly hasSemanticProvenance: boolean;
 }
 
 export class TemplateEditEngine {
@@ -206,7 +229,52 @@ export class TemplateEditEngine {
     });
   }
 
+  probeRenameAt(request: WorkspaceRenameRequest): TemplateRenameProbe {
+    const op = this.#renameOperationContext(request);
+    if (!op) {
+      return {
+        targetClass: "unknown",
+        hasSemanticProvenance: false,
+      };
+    }
+
+    for (const route of this.#semanticRenameRouteOrder()) {
+      if (this.#isSemanticRenameTarget(route, op)) {
+        return {
+          targetClass: "resource",
+          hasSemanticProvenance: true,
+        };
+      }
+    }
+
+    if (op.compilation.query.exprAt(op.offset)) {
+      return {
+        targetClass: "expression-member",
+        hasSemanticProvenance: false,
+      };
+    }
+
+    return {
+      targetClass: "unknown",
+      hasSemanticProvenance: false,
+    };
+  }
+
   renameAt(request: WorkspaceRenameRequest): WorkspaceTextEdit[] | null {
+    const op = this.#renameOperationContext(request);
+    if (!op) return null;
+
+    for (const route of this.#semanticRenameRouteOrder()) {
+      const edits = this.#renameByRoute(route, op, request.newName);
+      if (edits?.length) {
+        return finalizeWorkspaceEdits(edits);
+      }
+    }
+
+    return null;
+  }
+
+  #renameOperationContext(request: WorkspaceRenameRequest): RenameOperationContext | null {
     const text = this.ctx.lookupText(request.uri);
     if (!text) return null;
     const offset = offsetAtPosition(text, request.position);
@@ -214,23 +282,103 @@ export class TemplateEditEngine {
     const compilation = this.ctx.getCompilation(request.uri);
     if (!compilation) return null;
     const domIndex = buildDomIndex(compilation.ir.templates ?? []);
-
     const syntax = this.ctx.getAttributeSyntax();
     const preferRoots = [this.ctx.workspaceRoot];
+    return { text, offset, compilation, domIndex, syntax, preferRoots };
+  }
 
-    const elementEdits = this.#renameElementAt(compilation, domIndex, text, offset, request.newName, preferRoots);
-    if (elementEdits?.length) return finalizeWorkspaceEdits(elementEdits);
+  #semanticRenameRouteOrder(): readonly SemanticRenameRoute[] {
+    const configured = this.ctx.semanticRenameRouteOrder ?? [];
+    const ordered: SemanticRenameRoute[] = [];
+    const seen = new Set<SemanticRenameRoute>();
+    for (const route of configured) {
+      if (seen.has(route)) continue;
+      seen.add(route);
+      ordered.push(route);
+    }
+    for (const route of DEFAULT_SEMANTIC_RENAME_ROUTE_ORDER) {
+      if (seen.has(route)) continue;
+      seen.add(route);
+      ordered.push(route);
+    }
+    return ordered;
+  }
 
-    const bindableEdits = this.#renameBindableAttributeAt(compilation, domIndex, text, offset, request.newName, syntax, preferRoots);
-    if (bindableEdits?.length) return finalizeWorkspaceEdits(bindableEdits);
+  #isSemanticRenameTarget(route: SemanticRenameRoute, op: RenameOperationContext): boolean {
+    switch (route) {
+      case "custom-element":
+        return this.#hasElementRenameTarget(op.compilation, op.domIndex, op.offset);
+      case "bindable-attribute":
+        return this.#hasBindableRenameTarget(op.compilation, op.domIndex, op.offset, op.preferRoots);
+      case "value-converter":
+        return findValueConverterHitAtOffset(op.compilation.exprTable ?? [], op.offset) !== null;
+      case "binding-behavior":
+        return findBindingBehaviorHitAtOffset(op.compilation.exprTable ?? [], op.offset) !== null;
+      default:
+        return false;
+    }
+  }
 
-    const converterEdits = this.#renameValueConverterAt(compilation, offset, request.newName, preferRoots);
-    if (converterEdits?.length) return finalizeWorkspaceEdits(converterEdits);
+  #renameByRoute(
+    route: SemanticRenameRoute,
+    op: RenameOperationContext,
+    newName: string,
+  ): WorkspaceTextEdit[] | null {
+    switch (route) {
+      case "custom-element":
+        return this.#renameElementAt(op.compilation, op.domIndex, op.text, op.offset, newName, op.preferRoots);
+      case "bindable-attribute":
+        return this.#renameBindableAttributeAt(
+          op.compilation,
+          op.domIndex,
+          op.text,
+          op.offset,
+          newName,
+          op.syntax,
+          op.preferRoots,
+        );
+      case "value-converter":
+        return this.#renameValueConverterAt(op.compilation, op.offset, newName, op.preferRoots);
+      case "binding-behavior":
+        return this.#renameBindingBehaviorAt(op.compilation, op.offset, newName, op.preferRoots);
+      default:
+        return null;
+    }
+  }
 
-    const behaviorEdits = this.#renameBindingBehaviorAt(compilation, offset, request.newName, preferRoots);
-    if (behaviorEdits?.length) return finalizeWorkspaceEdits(behaviorEdits);
+  #hasElementRenameTarget(
+    compilation: TemplateCompilation,
+    domIndex: ReturnType<typeof buildDomIndex>,
+    offset: number,
+  ): boolean {
+    const node = compilation.query.nodeAt(offset);
+    if (!node || node.kind !== "element") return false;
+    const row = findLinkedRow(compilation.linked.templates, node.templateIndex, node.id);
+    if (!row || row.node.kind !== "element") return false;
+    const domNode = findDomNode(domIndex, node.templateIndex, node.id);
+    if (!domNode || domNode.kind !== "element") return false;
+    const tagSpan = elementTagSpanAtOffset(domNode, offset);
+    if (!tagSpan) return false;
+    return !!row.node.custom?.def;
+  }
 
-    return null;
+  #hasBindableRenameTarget(
+    compilation: TemplateCompilation,
+    domIndex: ReturnType<typeof buildDomIndex>,
+    offset: number,
+    preferRoots: readonly string[],
+  ): boolean {
+    const hits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
+    for (const hit of hits) {
+      const nameSpan = hit.attrNameSpan ?? null;
+      if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
+      const attrName = hit.attrName ?? null;
+      if (!attrName) continue;
+      const target = resolveBindableTarget(hit.instruction, this.ctx.definitionIndex, preferRoots);
+      if (!target) continue;
+      return true;
+    }
+    return false;
   }
 
   codeActions(

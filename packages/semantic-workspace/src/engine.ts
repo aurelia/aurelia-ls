@@ -66,6 +66,7 @@ import {
   type WorkspaceRefactorResult,
   type WorkspaceSnapshot,
   type WorkspaceToken,
+  type WorkspaceErrorKind,
   type WorkspaceCodeAction,
   type WorkspaceCodeActionRequest,
   type WorkspaceRenameRequest,
@@ -82,6 +83,19 @@ import {
 } from "./definition.js";
 import type { RefactorOverrides } from "./style-profile.js";
 import { mergeTieredLocations, mergeTieredLocationsWithIds } from "./query-policy.js";
+import {
+  DEFAULT_REFACTOR_POLICY,
+  planCodeActionExecution,
+  planRenameExecution,
+  type CodeActionExecutionPlan,
+  type DecisionResolutionInput,
+  type RefactorBoundaryReason,
+  type RefactorDecisionPointId,
+  type RefactorDecisionSet,
+  type RefactorDecisionPoint,
+  type RenameExecutionContext,
+  type RefactorPolicy,
+} from "./refactor-policy.js";
 import {
   TemplateEditEngine,
   resolveModuleSpecifier,
@@ -105,6 +119,8 @@ export interface SemanticWorkspaceEngineOptions {
   readonly resourceScope?: ResourceScopeId | null;
   readonly styleProfile?: StyleProfile | null;
   readonly refactorOverrides?: RefactorOverrides | null;
+  readonly refactorPolicy?: RefactorPolicy | null;
+  readonly refactorDecisions?: RefactorDecisionSet | null;
 }
 
 export class SemanticWorkspaceEngine implements SemanticWorkspace {
@@ -130,6 +146,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #diagnosticsCache: DiagnosticsCache | null = null;
   readonly #styleProfile: StyleProfile | null;
   readonly #refactorOverrides: RefactorOverrides | null;
+  readonly #refactorPolicy: RefactorPolicy;
+  readonly #refactorDecisions: RefactorDecisionSet | null;
 
   constructor(options: SemanticWorkspaceEngineOptions) {
     this.#logger = options.logger;
@@ -164,6 +182,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#overlayBaseName = options.overlayBaseName;
     this.#styleProfile = options.styleProfile ?? null;
     this.#refactorOverrides = options.refactorOverrides ?? null;
+    this.#refactorPolicy = options.refactorPolicy ?? DEFAULT_REFACTOR_POLICY;
+    this.#refactorDecisions = options.refactorDecisions ?? null;
 
     this.#lookupText = options.lookupText;
     this.#templateIndex = buildTemplateIndex(this.#projectIndex.currentDiscovery());
@@ -406,6 +426,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return this.#refactorProxy;
   }
 
+  policy(): RefactorPolicy {
+    return this.#refactorPolicy;
+  }
+
   collectCodeActions(request: WorkspaceCodeActionRequest): readonly WorkspaceCodeAction[] {
     const canonical = canonicalDocumentUri(request.uri);
     this.#ensureTemplateContext(canonical.uri);
@@ -417,6 +441,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const canonical = canonicalDocumentUri(uri);
     this.#ensureTemplateContext(canonical.uri);
     this.#syncTemplateOverlaysForReferences(canonical.uri);
+    // TODO(refactor-policy): evolve this into a prepareRefactor(request) API
+    // that returns unresolved decision points + inferred defaults for adapters.
   }
 
   tryResourceRename(request: WorkspaceRenameRequest): WorkspaceRefactorResult | null {
@@ -425,6 +451,90 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const edits = this.#templateEditEngine().renameAt({ ...request, uri: canonical.uri });
     if (!edits?.length) return null;
     return { edit: { edits } };
+  }
+
+  planRename(request: WorkspaceRenameRequest) {
+    return planRenameExecution(
+      this.#refactorPolicy,
+      this.#renameExecutionContext(request),
+      this.#decisionResolution(request.refactorDecisions),
+    );
+  }
+
+  planCodeActions(request: WorkspaceCodeActionRequest) {
+    return planCodeActionExecution(
+      this.#refactorPolicy,
+      this.#decisionResolution(request.refactorDecisions),
+    );
+  }
+
+  #renameExecutionContext(request: WorkspaceRenameRequest): RenameExecutionContext {
+    const canonical = canonicalDocumentUri(request.uri);
+    const inWorkspace = isPathWithin(this.#workspaceRoot, canonical.path);
+    const text = this.lookupText(canonical.uri);
+    if (!text) {
+      return {
+        target: "unknown",
+        hasSemanticProvenance: false,
+        hasMappedProvenance: inWorkspace,
+        workspaceDocument: inWorkspace,
+      };
+    }
+
+    const offset = offsetAtPosition(text, request.position);
+    if (offset == null) {
+      return {
+        target: "unknown",
+        hasSemanticProvenance: false,
+        hasMappedProvenance: inWorkspace,
+        workspaceDocument: inWorkspace,
+      };
+    }
+
+    if (this.#isTemplateUri(canonical.uri)) {
+      this.#ensureTemplateContext(canonical.uri);
+      const probe = this.#templateEditEngine().probeRenameAt({ ...request, uri: canonical.uri });
+      return {
+        target: probe.targetClass,
+        hasSemanticProvenance: probe.hasSemanticProvenance,
+        hasMappedProvenance: this.#kernel.getMapping(canonical.uri) !== null,
+        workspaceDocument: inWorkspace,
+      };
+    }
+
+    const symbol = this.#symbolNameAt(this.#env.paths.canonical(canonical.path), offset, text);
+    return {
+      target: symbol ? "expression-member" : "unknown",
+      hasSemanticProvenance: false,
+      // Non-template docs are direct source edits, so mapping precondition is satisfied.
+      hasMappedProvenance: true,
+      workspaceDocument: inWorkspace,
+    };
+  }
+
+  #decisionResolution(provided?: RefactorDecisionSet | null): DecisionResolutionInput {
+    // Resolution precedence: request-level overrides > workspace defaults > inferred profile values.
+    return {
+      provided: mergeRefactorDecisions(this.#refactorDecisions, provided),
+      inferred: this.#inferredDecisionValues(),
+    };
+  }
+
+  #inferredDecisionValues(): RefactorDecisionSet {
+    const inferred: Partial<Record<RefactorDecisionPointId, string>> = {};
+    const renameStyle = this.#refactorOverrides?.renameStyle ?? this.#styleProfile?.refactors?.renameStyle;
+    if (renameStyle !== undefined) {
+      inferred["rename-style"] = renameStyle;
+    }
+    const importStyle = this.#styleProfile?.imports?.organize;
+    if (importStyle !== undefined) {
+      inferred["import-style"] = importStyle;
+    }
+    const aliasStrategy = this.#styleProfile?.imports?.aliasStyle;
+    if (aliasStrategy !== undefined) {
+      inferred["alias-strategy"] = aliasStrategy;
+    }
+    return inferred;
   }
 
   lookupText(uri: DocumentUri): string | null {
@@ -521,6 +631,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       getAttributeSyntax: this.#attributeSyntaxContext.bind(this),
       styleProfile: this.#styleProfile,
       refactorOverrides: this.#refactorOverrides,
+      semanticRenameRouteOrder: this.#refactorPolicy.rename.semantic.routeOrder,
     });
   }
 
@@ -1061,16 +1172,46 @@ class WorkspaceRefactorProxy implements RefactorEngine {
   rename(request: { uri: DocumentUri; position: { line: number; character: number }; newName: string }): WorkspaceRefactorResult {
     this.engine.refresh();
     this.engine.prepareRefactor(request.uri);
-    const resourceRename = this.engine.tryResourceRename(request);
-    if (resourceRename) return resourceRename;
-    return this.inner.rename(request);
+    const plan = this.engine.planRename(request);
+    if (!plan.allowOperation) {
+      return {
+        error: {
+          kind: refactorPolicyErrorKind(plan.reason, plan.unresolvedDecisionPoints),
+          message: buildRefactorPolicyErrorMessage("rename", plan.reason, plan.unresolvedDecisionPoints),
+          retryable: false,
+        },
+      };
+    }
+    if (plan.trySemanticRename) {
+      const resourceRename = this.engine.tryResourceRename(request);
+      if (resourceRename) return resourceRename;
+    }
+    if (plan.allowTypeScriptFallback) {
+      return this.inner.rename(request);
+    }
+    return {
+      error: {
+        kind: "refactor-policy-denied",
+        message: buildRefactorPolicyErrorMessage("rename", "fallback-disabled", plan.unresolvedDecisionPoints),
+        retryable: false,
+      },
+    };
   }
 
   codeActions(request: { uri: DocumentUri; position?: { line: number; character: number }; range?: SourceSpan; kinds?: readonly string[] }): readonly WorkspaceCodeAction[] {
     this.engine.refresh();
+    const plan = this.engine.planCodeActions(request);
     const custom = this.engine.collectCodeActions(request);
     const base = this.inner.codeActions(request);
-    return mergeCodeActions(custom, base, request.kinds);
+    const merged = mergeCodeActions(
+      {
+        workspace: custom,
+        typescript: base,
+      },
+      request.kinds,
+      plan,
+    );
+    return filterCodeActionsForRequiredDecisions(merged, plan.unresolvedDecisionPoints);
   }
 }
 
@@ -1425,17 +1566,27 @@ const DIAGNOSTICS_EXTERNAL_SPECS = {
 } as const satisfies Readonly<Record<string, DiagnosticSpec<DiagnosticDataRecord>>>;
 
 function mergeCodeActions(
-  primary: readonly WorkspaceCodeAction[],
-  secondary: readonly WorkspaceCodeAction[],
+  actions: {
+    workspace: readonly WorkspaceCodeAction[];
+    typescript: readonly WorkspaceCodeAction[];
+  },
   kinds: readonly string[] | undefined,
+  plan: CodeActionExecutionPlan,
 ): WorkspaceCodeAction[] {
   const results: WorkspaceCodeAction[] = [];
   const seen = new Set<string>();
-  for (const action of [...primary, ...secondary]) {
-    if (!matchesActionKind(action.kind, kinds)) continue;
-    if (seen.has(action.id)) continue;
-    seen.add(action.id);
-    results.push(action);
+  const buckets = {
+    workspace: actions.workspace,
+    typescript: actions.typescript,
+  } as const;
+  for (const source of plan.sourceOrder) {
+    const bucket = buckets[source];
+    for (const action of bucket) {
+      if (plan.filterByRequestedKinds && !matchesActionKind(action.kind, kinds)) continue;
+      if (plan.dedupeBy === "id" && seen.has(action.id)) continue;
+      seen.add(action.id);
+      results.push(action);
+    }
   }
   return results;
 }
@@ -1444,6 +1595,77 @@ function matchesActionKind(actionKind: string | undefined, kinds: readonly strin
   if (!kinds || kinds.length === 0) return true;
   if (!actionKind) return false;
   return kinds.some((kind) => actionKind === kind || actionKind.startsWith(`${kind}.`));
+}
+
+function buildRefactorPolicyErrorMessage(
+  operation: "rename" | "code-actions",
+  reason: RefactorBoundaryReason | undefined,
+  requiredDecisionPoints: readonly RefactorDecisionPoint[],
+): string {
+  if (requiredDecisionPoints.length > 0) {
+    const ids = requiredDecisionPoints.map((point) => point.id).join(", ");
+    return `${operation} denied: required decisions are unresolved (${ids}).`;
+  }
+  return `${operation} denied by refactor policy (${reason ?? "unknown"}).`;
+}
+
+function refactorPolicyErrorKind(
+  reason: RefactorBoundaryReason | undefined,
+  requiredDecisionPoints: readonly RefactorDecisionPoint[],
+): WorkspaceErrorKind {
+  if (requiredDecisionPoints.length > 0 || reason === "decision-required") {
+    return "refactor-decision-required";
+  }
+  return "refactor-policy-denied";
+}
+
+function filterCodeActionsForRequiredDecisions(
+  actions: readonly WorkspaceCodeAction[],
+  requiredDecisionPoints: readonly RefactorDecisionPoint[],
+): readonly WorkspaceCodeAction[] {
+  // Keep unrelated actions available; only suppress actions that depend on unresolved points.
+  if (requiredDecisionPoints.length === 0) return actions;
+  return actions.filter((action) => !codeActionDependsOnDecisionPoints(action, requiredDecisionPoints));
+}
+
+function codeActionDependsOnDecisionPoints(
+  action: WorkspaceCodeAction,
+  requiredDecisionPoints: readonly RefactorDecisionPoint[],
+): boolean {
+  for (const point of requiredDecisionPoints) {
+    switch (point.id) {
+      case "import-style":
+      case "alias-strategy":
+        // Current decision-dependent actions are import insertion/alias fixes.
+        if (action.id.startsWith("aurelia/add-import:")) return true;
+        break;
+      case "rename-style":
+      case "file-rename":
+        // No current workspace code-action producers depend on these points.
+        break;
+      default:
+        break;
+    }
+  }
+  return false;
+}
+
+function mergeRefactorDecisions(
+  base: RefactorDecisionSet | null | undefined,
+  override: RefactorDecisionSet | null | undefined,
+): RefactorDecisionSet | undefined {
+  if (!base && !override) return undefined;
+  return {
+    ...(base ?? {}),
+    ...(override ?? {}),
+  };
+}
+
+function isPathWithin(root: string, target: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  if (!relative) return true;
+  if (relative === ".") return true;
+  return !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 function toRawDiagnostic(diag: TemplateLanguageDiagnostic): RawDiagnostic {

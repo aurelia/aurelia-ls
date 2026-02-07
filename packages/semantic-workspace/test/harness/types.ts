@@ -8,6 +8,7 @@ import type {
 } from "@aurelia-ls/compiler";
 import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult, Logger as CompilerLogger } from "@aurelia-ls/compiler";
 import type { SemanticWorkspaceEngine } from "../../src/engine.js";
+import type { RefactorDecisionSet, RefactorPolicy } from "../../src/refactor-policy.js";
 import type { RefactorOverrides } from "../../src/style-profile.js";
 import type { FixtureDescriptor, FixtureId } from "../fixtures/types.js";
 
@@ -37,6 +38,8 @@ export interface WorkspaceHarnessOptions {
     readonly typescript?: TypeScriptServices | false;
     readonly styleProfile?: StyleProfile;
     readonly refactorOverrides?: RefactorOverrides;
+    readonly refactorPolicy?: RefactorPolicy;
+    readonly refactorDecisions?: RefactorDecisionSet;
   };
 }
 

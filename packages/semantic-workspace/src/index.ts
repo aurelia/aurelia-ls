@@ -2,6 +2,7 @@ export * from "./types.js";
 export { SemanticWorkspaceEngine, createSemanticWorkspace } from "./engine.js";
 export type { SemanticWorkspaceEngineOptions } from "./engine.js";
 export * from "./style-profile.js";
+export * from "./refactor-policy.js";
 export * from "./templates.js";
 export * from "./typescript/environment.js";
 export * from "./typescript/overlay-fs.js";

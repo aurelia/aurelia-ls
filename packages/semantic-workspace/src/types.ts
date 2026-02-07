@@ -16,6 +16,7 @@ import type {
   SymbolId,
   TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
+import type { RefactorDecisionSet } from "./refactor-policy.js";
 
 // Workspace contracts are headless and LSP-agnostic. These shapes intentionally
 // mirror LSP concepts without importing LSP types to keep the core reusable.
@@ -120,6 +121,8 @@ export interface WorkspaceRenameRequest {
   readonly position: SourcePosition;
   // newName is raw input; workspace applies naming/alias conventions as needed.
   readonly newName: string;
+  // Optional explicit decision values from adapters (future prepare/resolve flow).
+  readonly refactorDecisions?: RefactorDecisionSet;
 }
 
 export interface WorkspaceCodeActionRequest {
@@ -127,6 +130,8 @@ export interface WorkspaceCodeActionRequest {
   readonly position?: SourcePosition;
   readonly range?: SourceSpan;
   readonly kinds?: readonly string[];
+  // Optional explicit decision values from adapters (future prepare/resolve flow).
+  readonly refactorDecisions?: RefactorDecisionSet;
 }
 
 export interface WorkspaceCodeAction {
@@ -142,7 +147,9 @@ export type WorkspaceErrorKind =
   | "document-missing"
   | "stale-version"
   | "pipeline-failure"
-  | "overlay-failure";
+  | "overlay-failure"
+  | "refactor-policy-denied"
+  | "refactor-decision-required";
 
 export interface WorkspaceError {
   // Workspace errors are internal; they should not be surfaced as user diagnostics.
