@@ -1,5 +1,5 @@
 import type { ResourceDef, MaterializedSemantics, SymbolId } from '../compiler.js';
-import { normalizePathForId, stableHash } from '../compiler.js';
+import { createResourceSymbolId, normalizePathForId } from '../compiler.js';
 import { unwrapSourced } from "../assemble/sourced.js";
 
 export interface SnapshotIdOptions {
@@ -65,14 +65,13 @@ function buildSortKey(def: ResourceDef, name: string, sourceKey: string | null):
 }
 
 function createSymbolId(def: ResourceDef, name: string, sourceKey: string | null): SymbolId {
-  const key = {
+  return createResourceSymbolId({
     kind: def.kind,
     name,
     origin: def.name.origin,
-    source: sourceKey,
-    package: def.package ?? null,
-  };
-  return `sym:${stableHash(key)}` as SymbolId;
+    sourceKey,
+    packageName: def.package ?? null,
+  });
 }
 
 function resolveSourceKey(def: ResourceDef, options?: SnapshotIdOptions): string | null {

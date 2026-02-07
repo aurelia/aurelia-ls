@@ -19,6 +19,7 @@ import {
   type ResourceScopeId,
   type SourceLocation,
   type SourceSpan,
+  type SymbolId,
   type TextSpan,
   type StyleProfile,
   type TemplateCompilation,
@@ -75,7 +76,7 @@ export type AttributeSyntaxContext = {
 
 type ResourceDefinitionEntry = {
   def: ResourceDef;
-  symbolId?: string;
+  symbolId?: SymbolId;
 };
 
 type ResourceTarget = {

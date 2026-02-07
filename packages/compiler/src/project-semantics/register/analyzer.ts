@@ -66,6 +66,8 @@ class AnalysisContext {
 
   /** Map from (source file, class name) to ResourceDef for fast lookup */
   private resourceIndex = new Map<string, ResourceDef>();
+  /** Map from (source file, exported/declared alias) to ResourceDef for define() resources. */
+  private resourceAliasIndex = new Map<string, ResourceDef>();
 
   /** Plugin resolver for known plugin manifests */
   public readonly pluginResolver: PluginResolver;
@@ -115,6 +117,22 @@ class AnalysisContext {
       const key = `${file}::${className}`;
       this.resourceIndex.set(key, resource);
     }
+
+    // Index define() aliases by (source, variableName), e.g.
+    // `export const FooAttribute = CustomAttribute.define(..., Foo)` so imports of
+    // FooAttribute in static dependencies resolve to the underlying resource.
+    for (const [filePath, fileFacts] of this.facts) {
+      for (const variable of fileFacts.variables) {
+        const initializer = variable.initializer;
+        if (!initializer) continue;
+        const className = extractDefineClassName(initializer);
+        if (!className) continue;
+        const resource = this.findResource(filePath, className);
+        if (!resource) continue;
+        const aliasKey = `${filePath}::${variable.name}`;
+        this.resourceAliasIndex.set(aliasKey, resource);
+      }
+    }
   }
 
   /**
@@ -144,7 +162,10 @@ class AnalysisContext {
    * Used when we have a resolved import path.
    */
   findResourceByResolvedPath(resolvedPath: NormalizedPath, className: string): ResourceDef | undefined {
-    return this.findResource(resolvedPath, className);
+    const direct = this.findResource(resolvedPath, className);
+    if (direct) return direct;
+    const aliasKey = `${resolvedPath}::${className}`;
+    return this.resourceAliasIndex.get(aliasKey);
   }
 
   /**
@@ -174,6 +195,46 @@ class AnalysisContext {
     }
     return null;
   }
+}
+
+const DEFINE_RESOURCE_TYPES = new Set(["CustomElement", "CustomAttribute", "ValueConverter", "BindingBehavior"]);
+
+function extractDefineClassName(value: AnalyzableValue): string | null {
+  const resolved = unwrapResolvable(value);
+  if (resolved.kind !== "call") return null;
+
+  const callee = unwrapResolvable(resolved.callee);
+  if (callee.kind !== "propertyAccess" || callee.property !== "define") return null;
+
+  const defineTypeName = readAnalyzableName(callee.base);
+  if (!defineTypeName || !DEFINE_RESOURCE_TYPES.has(defineTypeName)) return null;
+
+  const classRef = resolved.args[1];
+  if (!classRef) return null;
+  return readAnalyzableName(classRef);
+}
+
+function unwrapResolvable(value: AnalyzableValue): AnalyzableValue {
+  let current = value;
+  while ((current.kind === "reference" || current.kind === "import") && current.resolved) {
+    current = current.resolved;
+  }
+  return current;
+}
+
+function readAnalyzableName(value: AnalyzableValue): string | null {
+  if (value.kind === "reference") {
+    const resolved = value.resolved ? readAnalyzableName(value.resolved) : null;
+    return resolved ?? value.name;
+  }
+  if (value.kind === "import") {
+    const resolved = value.resolved ? readAnalyzableName(value.resolved) : null;
+    return resolved ?? value.exportName;
+  }
+  if (value.kind === "class") {
+    return value.className;
+  }
+  return null;
 }
 
 /**

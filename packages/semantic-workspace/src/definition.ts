@@ -1,12 +1,13 @@
 import {
   analyzeAttributeName,
   canonicalDocumentUri,
+  createBindableSymbolId,
+  createLocalSymbolId,
   debug,
   isDebugEnabled,
   normalizePathForId,
   spanContainsOffset,
   spanLength,
-  stableHash,
   toSourceFileId,
   type BindableDef,
   type ExprId,
@@ -543,7 +544,8 @@ function buildSymbolIdMap(discovery: ProjectSemanticsDiscoveryResult): Map<strin
 }
 
 function symbolKey(kind: string, name: string, source: string | null): string {
-  return `${kind}|${name}|${source ?? ""}`;
+  const sourceKey = source ? String(normalizePathForId(source)) : "";
+  return `${kind}|${name}|${sourceKey}`;
 }
 
 function addEntry(
@@ -748,21 +750,15 @@ function localSymbolId(documentUri: DocumentUri | null, match: ScopeSymbolMatch)
   const canonical = documentUri ? canonicalDocumentUri(documentUri) : null;
   const file = match.symbol.span?.file ?? canonical?.file ?? null;
   if (!file) return null;
-  const normalized = String(normalizePathForId(file));
-  return stableHash({
-    kind: "local",
-    file: normalized,
+  return createLocalSymbolId({
+    file,
     frame: String(match.frame.id),
     name: match.symbol.name,
-  }) as SymbolId;
+  });
 }
 
 function bindableSymbolId(owner: SymbolId, property: string): SymbolId {
-  return stableHash({
-    kind: "bindable",
-    owner,
-    property,
-  }) as SymbolId;
+  return createBindableSymbolId({ owner, property });
 }
 
 function parseLocalPath(path: string): { name: string; ancestorDepth: number; rootOnly: boolean } | null {

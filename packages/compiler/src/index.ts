@@ -46,6 +46,13 @@ export {
   buildSemanticsSnapshot,
   buildSemanticsSnapshotFromProject,
   buildTemplateSyntaxRegistry,
+  createResourceSymbolId,
+  createLocalSymbolId,
+  createBindableSymbolId,
+  parseSymbolId,
+  symbolIdNamespace,
+  isSymbolId,
+  isSymbolIdNamespace,
 } from "./schema/index.js";
 export type {
   SourceLocation,
@@ -97,6 +104,10 @@ export type {
   BindingBehaviorDef,
   BindableDef,
   ResourceKey,
+  SymbolIdNamespace,
+  ResourceSymbolIdInput,
+  LocalSymbolIdInput,
+  BindableSymbolIdInput,
   SymbolId,
 } from "./schema/index.js";
 

@@ -334,6 +334,36 @@ describe("Registration Patterns: Local", () => {
     }
   });
 
+  it("static dependencies resolve CustomAttribute.define exported constants", () => {
+    const analysis = analyzeRegistration({
+      "/src/card.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+        import { CopyToClipboardAttribute } from "./resources.js";
+        @customElement("my-card")
+        export class MyCard {
+          static dependencies = [CopyToClipboardAttribute];
+        }
+      `,
+      "/src/resources.ts": `
+        import { CustomAttribute } from "@aurelia/runtime-html";
+
+        class CopyToClipboard {
+          value = "";
+        }
+
+        export const CopyToClipboardAttribute = CustomAttribute.define(
+          { name: "copy-to-clipboard", bindables: ["value"] },
+          CopyToClipboard,
+        );
+      `,
+    });
+
+    const site = findSiteByName(analysis.sites, "copy-to-clipboard");
+    expect(site, "Should resolve define() exported constant in static dependencies").toBeTruthy();
+    expect(site!.scope.kind).toBe("local");
+    expect(site!.evidence.kind).toBe("static-dependencies");
+  });
+
   it("@customElement({ dependencies: [X] }) - decorator dependencies", () => {
     const analysis = analyzeRegistration({
       "/src/parent.ts": `

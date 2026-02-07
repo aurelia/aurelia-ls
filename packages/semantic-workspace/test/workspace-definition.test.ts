@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { symbolIdNamespace } from "@aurelia-ls/compiler";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 
@@ -262,10 +263,12 @@ describe("workspace definition (workspace-contract)", () => {
   it("resolves bindable definitions", () => {
     const query = harness.workspace.query(appUri);
     const defs = query.definition(findPosition(appText, "updated-at.bind", 1));
-    expectDefinition(harness, defs, {
+    const hit = expectDefinition(harness, defs, {
       uriEndsWith: "/src/views/summary-panel.ts",
       textIncludes: "updatedAt",
     });
+    expect(typeof hit.symbolId).toBe("string");
+    expect(symbolIdNamespace(hit.symbolId ?? "")).toBe("bindable");
   });
 
   it("maps attribute, command, and expression segments distinctly", () => {

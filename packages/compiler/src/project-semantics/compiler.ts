@@ -8,6 +8,9 @@ export {
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
+  createResourceSymbolId,
+  createLocalSymbolId,
+  createBindableSymbolId,
 } from "../schema/index.js";
 export type {
   ApiSurfaceBindable,

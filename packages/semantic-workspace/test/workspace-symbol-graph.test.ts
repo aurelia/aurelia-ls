@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { spanContainsOffset, type DOMNode, type SourceSpan } from "@aurelia-ls/compiler";
+import { spanContainsOffset, symbolIdNamespace, type DOMNode, type SourceSpan } from "@aurelia-ls/compiler";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 
@@ -194,6 +194,7 @@ describe("workspace symbol graph (workspace-contract)", () => {
       textIncludes: "total.bind",
     });
     expect(typeof def.symbolId).toBe("string");
+    expect(symbolIdNamespace(def.symbolId ?? "")).toBe("local");
 
     const refs = query.references(findPosition(appText, "${total}", 2));
     const refsForId = refs.filter((loc) => loc.symbolId === def.symbolId);
@@ -260,6 +261,7 @@ describe("workspace symbol graph (workspace-contract)", () => {
       textIncludes: "SummaryPanel",
     });
     expect(typeof def.symbolId).toBe("string");
+    expect(symbolIdNamespace(def.symbolId ?? "")).toBe("sym");
 
     const refs = query.references(findPosition(appText, "<summary-panel", 1));
     const refsForId = refs.filter((loc) => loc.symbolId === def.symbolId);

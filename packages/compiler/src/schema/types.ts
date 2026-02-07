@@ -1,5 +1,5 @@
 import type ts from "typescript";
-import type { NormalizedPath } from "../model/identity.js";
+import type { NormalizedPath, StringId } from "../model/identity.js";
 
 export interface SourceLocation {
   readonly file: NormalizedPath;
@@ -58,7 +58,7 @@ export interface ResourceKey {
   readonly name: string;
 }
 
-export type SymbolId = string & { readonly __brand: 'SymbolId' };
+export type SymbolId = StringId<"SymbolId">;
 
 export interface ResourceDefBase {
   readonly className: Sourced<string>;

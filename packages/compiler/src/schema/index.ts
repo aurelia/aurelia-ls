@@ -12,5 +12,8 @@ export * from "./resource-graph.js";
 // Resource catalog helpers
 export * from "./catalog.js";
 
+// Symbol id policy (shared across snapshot and workspace surfaces)
+export * from "./symbol-id.js";
+
 // Semantics snapshots (project-level seam)
 export * from "./snapshot.js";
