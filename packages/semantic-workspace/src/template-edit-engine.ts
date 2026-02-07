@@ -40,6 +40,7 @@ import {
 } from "@aurelia-ls/compiler";
 import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler";
 import type { ResourceDefinitionIndex } from "./definition.js";
+import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
 import {
   attributeTargetNameFromSyntax,
@@ -1827,27 +1828,11 @@ function findResourceEntry(
   file: string | null,
   preferRoots: readonly string[],
 ): ResourceDefinitionEntry | null {
-  const entries = map.get(name);
-  if (!entries?.length) return null;
-
-  if (file) {
-    const normalized = normalizePathForId(file);
-    const exact = entries.find((entry) => entry.def.file && normalizePathForId(entry.def.file) === normalized);
-    if (exact) return exact;
-  }
-
-  if (preferRoots.length) {
-    const roots = preferRoots.map((root) => normalizePathForId(root));
-    const matches = entries.filter((entry) => {
-      if (!entry.def.file) return false;
-      const defPath = normalizePathForId(entry.def.file);
-      return roots.some((root) => defPath.startsWith(root));
-    });
-    if (matches.length === 1) return matches[0]!;
-    if (matches.length > 1) return matches[0]!;
-  }
-
-  return entries[0] ?? null;
+  const entries = map.get(name.toLowerCase()) ?? map.get(name);
+  return selectResourceCandidate(entries, {
+    file,
+    preferredRoots: preferRoots,
+  });
 }
 
 function buildResourceNameEdit(

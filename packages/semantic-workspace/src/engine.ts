@@ -72,8 +72,16 @@ import {
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
-import { buildResourceDefinitionIndex, collectTemplateDefinitions, collectTemplateReferences, collectTemplateResourceReferences, type ResourceDefinitionIndex } from "./definition.js";
+import {
+  buildResourceDefinitionIndex,
+  collectTemplateDefinitionSlices,
+  collectTemplateReferences,
+  collectTemplateResourceReferences,
+  type ResourceDefinitionIndex,
+  type TemplateDefinitionSlices,
+} from "./definition.js";
 import type { RefactorOverrides } from "./style-profile.js";
+import { mergeTieredLocations, mergeTieredLocationsWithIds } from "./query-policy.js";
 import {
   TemplateEditEngine,
   resolveModuleSpecifier,
@@ -350,19 +358,22 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       definition: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
         const meta = this.#metaDefinition(canonical.uri, pos) ?? [];
-        const local = this.#definitionAt(canonical.uri, pos);
+        const defs = this.#definitionSlicesAt(canonical.uri, pos);
         const baseDefs = base.definition(pos);
-        return mergeLocationsRanked(canonical.uri, [
-          { rank: 0, items: meta },
-          { rank: 1, items: local },
-          { rank: 2, items: baseDefs },
+        // Canonical definition ordering is policy-owned:
+        // meta -> local -> resource -> base.
+        return mergeTieredLocations(canonical.uri, [
+          { tier: "meta", items: meta },
+          { tier: "local", items: defs.local },
+          { tier: "resource", items: defs.resource },
+          { tier: "base", items: baseDefs },
         ]);
       },
       references: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
         if (!this.#isTemplateUri(canonical.uri)) {
           const baseRefs = this.#referencesFromTypeScript(canonical.uri, pos);
-          return mergeLocationsWithIdsRanked(canonical.uri, [{ rank: 0, items: baseRefs }]);
+          return mergeTieredLocationsWithIds(canonical.uri, [{ tier: "base", items: baseRefs }]);
         }
         const local = this.#localReferencesAt(canonical.uri, pos);
         const resourceRefs = this.#resourceReferencesAt(canonical.uri, pos);
@@ -371,10 +382,12 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
           this.#syncTemplateOverlaysForReferences(canonical.uri);
           baseRefs = base.references(pos);
         }
-        return mergeLocationsWithIdsRanked(canonical.uri, [
-          { rank: 0, items: local },
-          { rank: 1, items: resourceRefs },
-          { rank: 2, items: baseRefs },
+        // References preserve identity multiplicity and apply canonical tiering:
+        // local -> resource -> base, with symbol-aware dedupe.
+        return mergeTieredLocationsWithIds(canonical.uri, [
+          { tier: "local", items: local },
+          { tier: "resource", items: resourceRefs },
+          { tier: "base", items: baseRefs },
         ]);
       },
       completions: (pos) => {
@@ -595,15 +608,15 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return [loc];
   }
 
-  #definitionAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
+  #definitionSlicesAt(uri: DocumentUri, pos: { line: number; character: number }): TemplateDefinitionSlices {
     const text = this.lookupText(uri);
-    if (!text) return [];
+    if (!text) return EMPTY_DEFINITION_SLICES;
     const offset = offsetAtPosition(text, pos);
-    if (offset == null) return [];
+    if (offset == null) return EMPTY_DEFINITION_SLICES;
     const compilation = this.#kernel.getCompilation(uri);
-    if (!compilation) return [];
+    if (!compilation) return EMPTY_DEFINITION_SLICES;
     const syntax = this.#attributeSyntaxContext();
-    return collectTemplateDefinitions({
+    return collectTemplateDefinitionSlices({
       compilation,
       text,
       offset,
@@ -1067,6 +1080,7 @@ interface MetaHoverResult {
 }
 
 type TemplateMeta = NonNullable<TemplateCompilation["linked"]["templates"][0]["templateMeta"]>;
+const EMPTY_DEFINITION_SLICES: TemplateDefinitionSlices = { local: [], resource: [] };
 
 function getActiveTemplateSetter(vm: VmReflection): ((path: string | null) => void) | null {
   const maybe = vm as VmReflection & { setActiveTemplate?: (path: string | null) => void };
@@ -1334,94 +1348,6 @@ function findFirstExportSpan(filePath: string): SourceSpan | null {
 
 function isWithinSpan(offset: number, span: SourceSpan | undefined): boolean {
   return span ? spanContainsOffset(span, offset) : false;
-}
-
-type RankedLocationList = {
-  rank: number;
-  items: readonly WorkspaceLocation[];
-};
-
-function compareLocationOrder(
-  a: WorkspaceLocation,
-  b: WorkspaceLocation,
-  aRank: number,
-  bRank: number,
-  currentUri: DocumentUri | null,
-): number {
-  if (aRank !== bRank) return aRank - bRank;
-  if (currentUri) {
-    const current = String(currentUri);
-    const aCurrent = String(a.uri) === current ? 0 : 1;
-    const bCurrent = String(b.uri) === current ? 0 : 1;
-    if (aCurrent !== bCurrent) return aCurrent - bCurrent;
-  }
-  const uriDelta = String(a.uri).localeCompare(String(b.uri));
-  if (uriDelta !== 0) return uriDelta;
-  const startDelta = a.span.start - b.span.start;
-  if (startDelta !== 0) return startDelta;
-  return a.span.end - b.span.end;
-}
-
-function mergeLocationsRanked(
-  currentUri: DocumentUri | null,
-  lists: readonly RankedLocationList[],
-): WorkspaceLocation[] {
-  const canonicalCurrent = currentUri ? canonicalDocumentUri(currentUri).uri : null;
-  const bySpan = new Map<string, { loc: WorkspaceLocation; rank: number }>();
-  for (const list of lists) {
-    for (const loc of list.items) {
-      const key = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
-      const existing = bySpan.get(key);
-      if (!existing || list.rank < existing.rank) {
-        bySpan.set(key, { loc, rank: list.rank });
-      }
-    }
-  }
-  const results = Array.from(bySpan.values());
-  results.sort((a, b) => compareLocationOrder(a.loc, b.loc, a.rank, b.rank, canonicalCurrent));
-  return results.map((entry) => entry.loc);
-}
-
-function mergeLocationsWithIdsRanked(
-  currentUri: DocumentUri | null,
-  lists: readonly RankedLocationList[],
-): WorkspaceLocation[] {
-  const canonicalCurrent = currentUri ? canonicalDocumentUri(currentUri).uri : null;
-  const candidates: Array<{ loc: WorkspaceLocation; rank: number }> = [];
-  const spanHasIds = new Set<string>();
-  for (const list of lists) {
-    for (const loc of list.items) {
-      const spanKey = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
-      const hasIds = !!(loc.symbolId || loc.exprId || loc.nodeId);
-      if (hasIds) spanHasIds.add(spanKey);
-      candidates.push({ loc, rank: list.rank });
-    }
-  }
-
-  const byKey = new Map<string, { loc: WorkspaceLocation; rank: number }>();
-  for (const candidate of candidates) {
-    const { loc, rank } = candidate;
-    const spanKey = `${loc.uri}:${loc.span.start}:${loc.span.end}`;
-    const hasIds = !!(loc.symbolId || loc.exprId || loc.nodeId);
-    if (!hasIds && spanHasIds.has(spanKey)) continue;
-    const key = `${spanKey}:${loc.symbolId ?? ""}:${loc.exprId ?? ""}:${loc.nodeId ?? ""}`;
-    const existing = byKey.get(key);
-    if (!existing || rank < existing.rank) {
-      byKey.set(key, { loc, rank });
-    }
-  }
-
-  const results = Array.from(byKey.values());
-  results.sort((a, b) => {
-    const primary = compareLocationOrder(a.loc, b.loc, a.rank, b.rank, canonicalCurrent);
-    if (primary !== 0) return primary;
-    const symbolDelta = String(a.loc.symbolId ?? "").localeCompare(String(b.loc.symbolId ?? ""));
-    if (symbolDelta !== 0) return symbolDelta;
-    const exprDelta = String(a.loc.exprId ?? "").localeCompare(String(b.loc.exprId ?? ""));
-    if (exprDelta !== 0) return exprDelta;
-    return String(a.loc.nodeId ?? "").localeCompare(String(b.loc.nodeId ?? ""));
-  });
-  return results.map((entry) => entry.loc);
 }
 
 function buildOverlaySnapshot(

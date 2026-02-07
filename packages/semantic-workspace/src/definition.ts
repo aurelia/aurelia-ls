@@ -25,6 +25,7 @@ import {
 } from "@aurelia-ls/compiler";
 import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler";
 import type { WorkspaceLocation } from "./types.js";
+import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findDomNode } from "./template-dom.js";
 import {
   collectInstructionHits,
@@ -40,6 +41,11 @@ export interface ResourceDefinitionIndex {
   readonly valueConverters: ReadonlyMap<string, ResourceDefinitionEntry[]>;
   readonly bindingBehaviors: ReadonlyMap<string, ResourceDefinitionEntry[]>;
   readonly bySymbolId: ReadonlyMap<SymbolId, ResourceDefinitionEntry>;
+}
+
+export interface TemplateDefinitionSlices {
+  readonly local: WorkspaceLocation[];
+  readonly resource: WorkspaceLocation[];
 }
 
 type ResourceDefinitionEntry = {
@@ -116,10 +122,24 @@ export function collectTemplateDefinitions(options: {
   preferRoots?: readonly string[] | null;
   documentUri?: DocumentUri | null;
 }): WorkspaceLocation[] {
+  const slices = collectTemplateDefinitionSlices(options);
+  return [...slices.local, ...slices.resource];
+}
+
+export function collectTemplateDefinitionSlices(options: {
+  compilation: TemplateCompilation;
+  text: string;
+  offset: number;
+  resources: ResourceDefinitionIndex;
+  syntax: AttributeSyntaxContext;
+  preferRoots?: readonly string[] | null;
+  documentUri?: DocumentUri | null;
+}): TemplateDefinitionSlices {
   const { compilation, text, offset, resources } = options;
   const syntax = options.syntax;
-  const preferRoots = normalizeRoots(options.preferRoots ?? []);
-  const results: WorkspaceLocation[] = [];
+  const preferRoots = options.preferRoots ?? [];
+  const resource: WorkspaceLocation[] = [];
+  const local: WorkspaceLocation[] = [];
   const domIndex = buildDomIndex(compilation.ir.templates ?? []);
   const debugEnabled = isDebugEnabled("workspace");
   if (debugEnabled) {
@@ -143,7 +163,7 @@ export function collectTemplateDefinitions(options: {
       ? findEntry(resources.elements, resolved.name, resolved.file ?? null)
       : null;
     const location = entry ? resourceLocation(entry) : null;
-    if (location && tagSpan) results.push(location);
+    if (location && tagSpan) resource.push(location);
   }
 
   const instructionHits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
@@ -157,21 +177,21 @@ export function collectTemplateDefinitions(options: {
     if (!spanContainsOffset(matchSpan, offset)) continue;
     if (spans.command && spanContainsOffset(spans.command, offset)) continue;
     const defs = definitionsForInstruction(hit.instruction, resources, preferRoots);
-    if (defs.length) results.push(...defs);
+    if (defs.length) resource.push(...defs);
   }
 
   const converterHit = findValueConverterAtOffset(compilation.exprTable ?? [], offset);
   if (converterHit) {
     const entry = findEntry(resources.valueConverters, converterHit.name, null, preferRoots);
     const location = entry ? resourceLocation(entry) : null;
-    if (location) results.push(location);
+    if (location) resource.push(location);
   }
 
   const behaviorHit = findBindingBehaviorAtOffset(compilation.exprTable ?? [], offset);
   if (behaviorHit) {
     const entry = findEntry(resources.bindingBehaviors, behaviorHit.name, null, preferRoots);
     const location = entry ? resourceLocation(entry) : null;
-    if (location) results.push(location);
+    if (location) resource.push(location);
   }
 
   const resourceHits = collectTemplateResourceReferences({
@@ -185,13 +205,13 @@ export function collectTemplateDefinitions(options: {
     if (!hit.symbolId || !spanContainsOffset(hit.span, offset)) continue;
     const entry = resources.bySymbolId.get(hit.symbolId);
     const location = entry ? resourceLocation(entry) : null;
-    if (location) results.push(location);
+    if (location) resource.push(location);
   }
 
   const localDef = findLocalScopeDefinition(compilation, text, offset, options.documentUri ?? null);
-  if (localDef) results.push(localDef);
+  if (localDef) local.push(localDef);
 
-  return results;
+  return { local, resource };
 }
 
 export function collectTemplateReferences(options: {
@@ -245,7 +265,7 @@ export function collectTemplateResourceReferences(options: {
 }): WorkspaceLocation[] {
   const { compilation, resources } = options;
   const syntax = options.syntax;
-  const preferRoots = normalizeRoots(options.preferRoots ?? []);
+  const preferRoots = options.preferRoots ?? [];
   const results: WorkspaceLocation[] = [];
   const domIndex = buildDomIndex(compilation.ir.templates ?? []);
   const documentUri = options.documentUri ?? null;
@@ -507,19 +527,10 @@ function findEntry(
   preferRoots?: readonly string[] | null,
 ): ResourceDefinitionEntry | null {
   const list = map.get(name.toLowerCase());
-  if (!list || list.length === 0) return null;
-  if (file) {
-    const direct = list.find((entry) => entry.def.file === file);
-    if (direct) return direct;
-  }
-  if (list.length === 1) return list[0]!;
-  if (preferRoots && preferRoots.length > 0) {
-    const preferred = pickPreferredEntry(list, preferRoots);
-    if (preferred) return preferred;
-  }
-  const withFile = list.filter((entry) => !!entry.def.file);
-  if (withFile.length === 1) return withFile[0]!;
-  return list[0] ?? null;
+  return selectResourceCandidate(list, {
+    file,
+    preferredRoots: preferRoots ?? [],
+  });
 }
 
 function buildSymbolIdMap(discovery: ProjectSemanticsDiscoveryResult): Map<string, SymbolId> {
@@ -565,29 +576,6 @@ function readLocation(value: unknown): SourceLocation | null {
 function dashToCamel(value: string): string {
   if (!value.includes("-")) return value;
   return value.replace(/-([a-z])/g, (_match, chr: string) => chr.toUpperCase());
-}
-
-function normalizeRoots(roots: readonly string[]): string[] {
-  const normalized: string[] = [];
-  for (const root of roots) {
-    if (!root) continue;
-    const normalizedRoot = String(normalizePathForId(root));
-    normalized.push(normalizedRoot.endsWith("/") ? normalizedRoot : `${normalizedRoot}/`);
-  }
-  return normalized;
-}
-
-function pickPreferredEntry(
-  entries: readonly ResourceDefinitionEntry[],
-  roots: readonly string[],
-): ResourceDefinitionEntry | null {
-  const matches = entries.filter((entry) => {
-    const file = entry.def.file ? String(normalizePathForId(entry.def.file)) : "";
-    if (!file) return false;
-    return roots.some((root) => file.startsWith(root));
-  });
-  if (matches.length === 1) return matches[0]!;
-  return matches[0] ?? null;
 }
 
 function resolveAttributeSpans(
