@@ -113,29 +113,122 @@ describe("buildSemanticSnapshot", () => {
       cleanupWorkspace(workspaceB.root);
     }
   });
+
+  it("treats declaration file move as identity change", () => {
+    const packageName = "@demo/core";
+    const packageRoot = "/repo/workspaces/pkg-core";
+    const idA = buildSnapshotIdForResource({
+      rootDir: "/repo",
+      packageName,
+      packageRoots: { [packageName]: packageRoot },
+      filePath: `${packageRoot}/src/alpha.ts`,
+      resourceName: "core-element",
+    });
+    const idB = buildSnapshotIdForResource({
+      rootDir: "/repo",
+      packageName,
+      packageRoots: { [packageName]: packageRoot },
+      filePath: `${packageRoot}/src/beta.ts`,
+      resourceName: "core-element",
+    });
+
+    expect(idA).toBeDefined();
+    expect(idB).toBeDefined();
+    expect(idA).not.toBe(idB);
+  });
+
+  it("treats declaration rename as identity change", () => {
+    const packageName = "@demo/core";
+    const packageRoot = "/repo/workspaces/pkg-core";
+    const idA = buildSnapshotIdForResource({
+      rootDir: "/repo",
+      packageName,
+      packageRoots: { [packageName]: packageRoot },
+      filePath: `${packageRoot}/src/alpha.ts`,
+      resourceName: "core-element",
+    });
+    const idB = buildSnapshotIdForResource({
+      rootDir: "/repo",
+      packageName,
+      packageRoots: { [packageName]: packageRoot },
+      filePath: `${packageRoot}/src/alpha.ts`,
+      resourceName: "core-element-renamed",
+    });
+
+    expect(idA).toBeDefined();
+    expect(idB).toBeDefined();
+    expect(idA).not.toBe(idB);
+  });
+
+  it("uses node_modules package root fallback when packageRoots is missing", () => {
+    const packageName = "@demo/core";
+    const expectedId = `sym:${stableHash({
+      kind: "custom-element",
+      name: "core-element",
+      origin: "source",
+      source: "src/alpha.ts",
+      package: packageName,
+    })}`;
+
+    const id = buildSnapshotIdForResource({
+      rootDir: "/repo",
+      packageName,
+      filePath: `/repo/node_modules/${packageName}/src/alpha.ts`,
+      resourceName: "core-element",
+    });
+
+    expect(id).toBe(expectedId);
+  });
+
+  it("uses /packages/<pkgTail> fallback when packageRoots is missing", () => {
+    const packageName = "@demo/core";
+    const expectedId = `sym:${stableHash({
+      kind: "custom-element",
+      name: "core-element",
+      origin: "source",
+      source: "src/alpha.ts",
+      package: packageName,
+    })}`;
+
+    const id = buildSnapshotIdForResource({
+      rootDir: "/repo",
+      packageName,
+      filePath: "/repo/packages/core/src/alpha.ts",
+      resourceName: "core-element",
+    });
+
+    expect(id).toBe(expectedId);
+  });
+
+  it("falls back to project-root relative source when package root cannot be derived", () => {
+    const packageName = "@demo/core";
+    const expectedId = `sym:${stableHash({
+      kind: "custom-element",
+      name: "core-element",
+      origin: "source",
+      source: "packages/pkg-core/src/alpha.ts",
+      package: packageName,
+    })}`;
+
+    const id = buildSnapshotIdForResource({
+      rootDir: "/repo",
+      packageName,
+      filePath: "/repo/packages/pkg-core/src/alpha.ts",
+      resourceName: "core-element",
+    });
+
+    expect(id).toBe(expectedId);
+  });
 });
 
 function buildSnapshotId(rootDir: string, packageName: string): string | undefined {
-  const packageRoot = normalizePathForId(`${rootDir}/workspaces/pkg-core`);
-  const fileA = normalizePathForId(`${packageRoot}/src/alpha.ts`);
-
-  const element = {
-    ...buildCustomElementDef({
-      name: "core-element",
-      className: "CoreElement",
-      file: fileA,
-    }),
-    package: packageName,
-  };
-
-  const { semantics, catalog } = buildSemanticsArtifacts([element], baseSemantics());
-  const snapshot = buildSemanticSnapshot(semantics, {
-    catalog,
+  return buildSnapshotIdForResource({
     rootDir,
-    packageRoots: { [packageName]: packageRoot },
+    packageName,
+    packageRoots: { [packageName]: `${rootDir}/workspaces/pkg-core` },
+    filePath: `${rootDir}/workspaces/pkg-core/src/alpha.ts`,
+    resourceName: "core-element",
   });
-
-  return snapshot.symbols.find((symbol) => symbol.name === "core-element")?.id;
 }
 
 async function buildSnapshotIdFromMonorepo(
@@ -167,6 +260,56 @@ async function buildSnapshotIdFromMonorepo(
   });
 
   return snapshot.symbols.find((symbol) => symbol.name === "core-element")?.id;
+}
+
+function buildSnapshotIdForResource(options: {
+  rootDir: string;
+  packageName: string;
+  filePath: string;
+  resourceName: string;
+  packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
+}): string | undefined {
+  const normalizedFile = normalizePathForId(options.filePath);
+  const normalizedPackageRoots = options.packageRoots
+    ? normalizePackageRoots(options.packageRoots)
+    : undefined;
+
+  const element = {
+    ...buildCustomElementDef({
+      name: options.resourceName,
+      className: "CoreElement",
+      file: normalizedFile,
+    }),
+    package: options.packageName,
+  };
+
+  const { semantics, catalog } = buildSemanticsArtifacts([element], baseSemantics());
+  const snapshot = buildSemanticSnapshot(semantics, {
+    catalog,
+    rootDir: options.rootDir,
+    ...(normalizedPackageRoots ? { packageRoots: normalizedPackageRoots } : {}),
+  });
+
+  return snapshot.symbols.find((symbol) => symbol.name === options.resourceName)?.id;
+}
+
+function normalizePackageRoots(
+  roots: ReadonlyMap<string, string> | Readonly<Record<string, string>>,
+): ReadonlyMap<string, string> | Readonly<Record<string, string>> {
+  if (roots instanceof Map) {
+    const map = new Map<string, string>();
+    for (const [name, root] of roots) {
+      map.set(name, String(normalizePathForId(root)));
+    }
+    return map;
+  }
+
+  const record = roots as Readonly<Record<string, string>>;
+  const normalized: Record<string, string> = {};
+  for (const [name, root] of Object.entries(record)) {
+    normalized[name] = String(normalizePathForId(root));
+  }
+  return normalized;
 }
 
 function createMonorepoWorkspace(label: string, packageName: string): { root: string; packageRoot: string } {

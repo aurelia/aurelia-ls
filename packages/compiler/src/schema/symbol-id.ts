@@ -2,6 +2,14 @@ import { brandString, normalizePathForId } from "../model/identity.js";
 import { stableHash } from "../pipeline/hash.js";
 import type { SymbolId } from "./types.js";
 
+/**
+ * SymbolId policy:
+ * - Ids are deterministic + opaque, with explicit namespaces.
+ * - Ids are semantic-only; callers must not synthesize/fallback by string heuristics.
+ * - Declaration move/rename is treated as an identity change for this cycle.
+ * TODO(continuity): if cross-move continuity is needed, add a separate session
+ * continuity API instead of changing SymbolId semantics.
+ */
 export type SymbolIdNamespace = "sym" | "local" | "bindable";
 const SYMBOL_ID_SEPARATOR = ":";
 const SYMBOL_ID_HASH_PATTERN = /^[0-9a-f]{64}$/;

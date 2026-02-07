@@ -360,7 +360,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return this.#diagnosticsForUri(canonical.uri);
   }
 
-  // Debug/testing hook to assert normalization contract health (D16).
+  // Debug/testing hook to assert normalization contract health.
   debugDiagnosticsPipeline(uri: DocumentUri): DiagnosticsPipelineResult {
     const canonical = canonicalDocumentUri(uri);
     this.#ensureTemplateContext(canonical.uri);

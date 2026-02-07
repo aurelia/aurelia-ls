@@ -129,7 +129,7 @@ export interface DecisionResolutionResult {
  * - rename is semantic-first
  * - TS fallback is restricted to expression-member targets
  *
- * Tightening fallback target classes is expected as D7 hardens.
+ * Tightening fallback target classes is expected as the refactor trust boundary hardens.
  */
 export const DEFAULT_REFACTOR_POLICY: RefactorPolicy = {
   version: "aurelia-refactor-policy/1",
