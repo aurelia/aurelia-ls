@@ -1,26 +1,26 @@
 // Model imports (via barrel)
 import type { IrModule, ScopeModule } from "../model/index.js";
+import type { DiagnosticSource } from "../model/diagnostics.js";
 
 // Language imports (via barrel)
 import type {
   FeatureUsageSet,
-  LocalImportDef,
-  ResourceCatalog,
-  ResourceGraph,
-  ResourceScopeId,
-  Semantics,
-  TemplateSyntaxRegistry,
-} from "../language/index.js";
+  ProjectSnapshot,
+  TemplateContext,
+} from "../schema/index.js";
 
 // Parsing imports (via barrel)
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
 
+// Diagnostics imports
+import { DiagnosticsRuntime } from "../diagnostics/runtime.js";
+
 // Shared imports (via barrel)
-import type { VmReflection, SynthesisOptions, CompileTrace } from "../shared/index.js";
+import type { VmReflection, SynthesisOptions, CompileTrace, ModuleResolver } from "../shared/index.js";
 import { NOOP_TRACE, CompilerAttributes } from "../shared/index.js";
 
 // Analysis imports (via barrel)
-import type { LinkedSemanticsModule, TypecheckModule } from "../analysis/index.js";
+import type { LinkModule, TypecheckModule } from "../analysis/index.js";
 
 // Synthesis imports (via barrel)
 import type { OverlayPlanModule, OverlayEmitResult, AotPlanModule } from "../synthesis/index.js";
@@ -29,12 +29,14 @@ import type { OverlayPlanModule, OverlayEmitResult, AotPlanModule } from "../syn
 import { stableHash } from "./hash.js";
 import { FileStageCache, type StageCache, type StageCacheEntry, createDefaultCacheDir } from "./cache.js";
 
+export type { ModuleResolver } from "../shared/index.js";
+
 /**
  * Stage keys (loosely aligned to the original phases, with product-specific planning/emit steps).
  */
 export type StageKey =
   | "10-lower"
-  | "20-resolve"
+  | "20-link"
   | "30-bind"
   | "40-typecheck"
   | "50-usage"
@@ -47,13 +49,22 @@ export type StageKey =
  */
 export interface StageOutputs {
   "10-lower": IrModule;
-  "20-resolve": LinkedSemanticsModule;
+  "20-link": LinkModule;
   "30-bind": ScopeModule;
   "40-typecheck": TypecheckModule;
   "50-usage": FeatureUsageSet;
   "overlay:plan": OverlayPlanModule;
   "overlay:emit": OverlayEmitResult;
   "aot:plan": AotPlanModule;
+}
+
+export interface PipelineServices {
+  readonly diagnostics: DiagnosticsRuntime;
+}
+
+export interface CompilationContext {
+  readonly options: PipelineOptions;
+  readonly services: PipelineServices;
 }
 
 /**
@@ -65,12 +76,9 @@ export interface PipelineOptions {
   templateFilePath: string;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
-  semantics: Semantics;
-  catalog?: ResourceCatalog;
-  syntax?: TemplateSyntaxRegistry;
-  resourceGraph?: ResourceGraph;
-  resourceScope?: ResourceScopeId | null;
-  localImports?: readonly LocalImportDef[];
+  project: ProjectSnapshot;
+  templateContext?: TemplateContext;
+  moduleResolver: ModuleResolver;
   vm?: VmReflection;
   /** Pipeline-wide cache knobs. */
   cache?: CacheOptions;
@@ -126,6 +134,7 @@ export interface FingerprintHints {
   vm?: FingerprintToken;
   overlay?: FingerprintToken;
   analyze?: FingerprintToken;
+  moduleResolver?: FingerprintToken;
   [extra: string]: FingerprintToken | undefined;
 }
 
@@ -137,27 +146,46 @@ export interface StageDefinition<TKey extends StageKey> {
    * Pure fingerprint of authored inputs to the stage (deps are already resolved).
    * The final cache key is derived from this fingerprint + dep artifact hashes.
    */
-  fingerprint: (ctx: StageContext) => unknown;
-  run: (ctx: StageContext) => StageOutputs[TKey];
+  fingerprint: (ctx: StageContext<TKey>) => unknown;
+  run: (ctx: StageContext<TKey>) => StageOutputs[TKey];
 }
 
-export class StageContext {
-  #options: PipelineOptions;
+export class StageContext<TKey extends StageKey = StageKey> {
+  #stage: TKey;
+  #context: CompilationContext;
   #fetch: <K extends StageKey>(key: K) => StageOutputs[K];
   #meta: <K extends StageKey>(key: K) => StageArtifactMeta | undefined;
 
   constructor(
-    options: PipelineOptions,
+    stage: TKey,
+    context: CompilationContext,
     fetch: <K extends StageKey>(key: K) => StageOutputs[K],
     meta: <K extends StageKey>(key: K) => StageArtifactMeta | undefined,
   ) {
-    this.#options = options;
+    this.#stage = stage;
+    this.#context = context;
     this.#fetch = fetch;
     this.#meta = meta;
   }
 
+  get stage(): TKey {
+    return this.#stage;
+  }
+
   get options(): PipelineOptions {
-    return this.#options;
+    return this.#context.options;
+  }
+
+  get services(): PipelineServices {
+    return this.#context.services;
+  }
+
+  get diagnostics(): DiagnosticsRuntime {
+    return this.#context.services.diagnostics;
+  }
+
+  get diag() {
+    return this.#context.services.diagnostics.forSource(sourceForStage(this.#stage));
   }
 
   require<K extends StageKey>(key: K): StageOutputs[K] {
@@ -184,8 +212,25 @@ export interface StageArtifactMeta {
    * - "run": computed in this session
    * - "cache": loaded from persisted cache
    * - "seed": provided by the caller
-   */
+  */
   source: "run" | "cache" | "seed";
+}
+
+const STAGE_DIAGNOSTIC_SOURCE: Partial<Record<StageKey, DiagnosticSource>> = {
+  "10-lower": "lower",
+  "20-link": "link",
+  "30-bind": "bind",
+  "40-typecheck": "typecheck",
+  "overlay:plan": "overlay-plan",
+  "overlay:emit": "overlay-emit",
+};
+
+function sourceForStage(stage: StageKey): DiagnosticSource {
+  const source = STAGE_DIAGNOSTIC_SOURCE[stage];
+  if (!source) {
+    throw new Error(`No diagnostic source mapping configured for stage '${stage}'.`);
+  }
+  return source;
 }
 
 /** Represents one execution window with memoized stage results. */
@@ -193,6 +238,8 @@ export class PipelineSession {
   #stages: Map<StageKey, StageDefinition<StageKey>>;
   #results: Map<StageKey, unknown>;
   #meta: Map<StageKey, StageArtifactMeta>;
+  #services: PipelineServices;
+  #context: CompilationContext;
   #cacheEnabled: boolean;
   #persistCache: StageCache | null;
   #options: PipelineOptions;
@@ -202,11 +249,14 @@ export class PipelineSession {
     stages: Map<StageKey, StageDefinition<StageKey>>,
     options: PipelineOptions,
     seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+    services?: PipelineServices,
   ) {
     this.#stages = stages;
     this.#options = options;
     this.#results = new Map<StageKey, unknown>();
     this.#meta = new Map<StageKey, StageArtifactMeta>();
+    this.#services = services ?? { diagnostics: new DiagnosticsRuntime() };
+    this.#context = { options, services: this.#services };
     this.#cacheEnabled = options.cache?.enabled ?? true;
     this.#trace = options.trace ?? NOOP_TRACE;
     const persist = options.cache?.persist ?? false;
@@ -227,6 +277,14 @@ export class PipelineSession {
 
   get options(): PipelineOptions {
     return this.#options;
+  }
+
+  get services(): PipelineServices {
+    return this.#services;
+  }
+
+  get diagnostics(): DiagnosticsRuntime {
+    return this.#services.diagnostics;
   }
 
   peek<K extends StageKey>(key: K): StageOutputs[K] | undefined {
@@ -255,7 +313,8 @@ export class PipelineSession {
       // Ensure deps are resolved before computing fingerprint.
       for (const dep of def.deps) this.run(dep);
       const ctx = new StageContext(
-        this.#options,
+        key,
+        this.#context,
         <S extends StageKey>(k: S) => this.run(k),
         <S extends StageKey>(k: S) => this.#meta.get(k),
       );
@@ -324,11 +383,20 @@ export class PipelineEngine {
     for (const s of stages) this.#stages.set(s.key, s);
   }
 
-  createSession(options: PipelineOptions, seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>): PipelineSession {
-    return new PipelineSession(this.#stages, options, seed);
+  createSession(
+    options: PipelineOptions,
+    seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+    services?: PipelineServices,
+  ): PipelineSession {
+    return new PipelineSession(this.#stages, options, seed, services);
   }
 
-  run<K extends StageKey>(key: K, options: PipelineOptions, seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>): StageOutputs[K] {
-    return this.createSession(options, seed).run(key);
+  run<K extends StageKey>(
+    key: K,
+    options: PipelineOptions,
+    seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
+    services?: PipelineServices,
+  ): StageOutputs[K] {
+    return this.createSession(options, seed, services).run(key);
   }
 }

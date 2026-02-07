@@ -36,9 +36,9 @@ import {
 } from "@aurelia/router";
 
 import { compileWithAot } from "@aurelia-ls/ssr";
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/ssr";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/ssr";
 import { patchComponentDefinition } from "@aurelia-ls/ssr";
-import { renderWithComponents } from "@aurelia-ls/ssr";
+import { render } from "@aurelia-ls/ssr";
 import { countOccurrences } from "./_helpers/test-utils.js";
 
 // =============================================================================
@@ -200,11 +200,11 @@ function createSSRRouterConfiguration(requestUrl, baseHref = "/", activateRoutes
  */
 function createRouterSemantics() {
   return {
-    ...DEFAULT_SEMANTICS,
+    ...BUILTIN_SEMANTICS,
     resources: {
-      ...DEFAULT_SEMANTICS.resources,
+      ...BUILTIN_SEMANTICS.resources,
       elements: {
-        ...DEFAULT_SEMANTICS.resources.elements,
+        ...BUILTIN_SEMANTICS.resources.elements,
         "home-page": {
           kind: "element",
           name: "home-page",
@@ -219,7 +219,7 @@ function createRouterSemantics() {
           containerless: false,
           bindables: {},
         },
-        // au-viewport is already in DEFAULT_SEMANTICS from router registry
+        // au-viewport is already in BUILTIN_SEMANTICS from router registry
       },
     },
   };
@@ -298,7 +298,7 @@ describe("Router SSR: Server-Side Rendering", () => {
     // NOTE: Do NOT add ViewportCustomElement to childComponents - it comes from
     // @aurelia/router and has its own definition. childComponents goes through
     // clearDefinition which breaks external elements like ViewportCustomElement.
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/",
@@ -338,7 +338,7 @@ describe("Router SSR: Server-Side Rendering", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render for /home URL
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/home",
@@ -371,7 +371,7 @@ describe("Router SSR: Server-Side Rendering", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render for /about URL
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/about",
@@ -410,7 +410,7 @@ describe("Router SSR: Manifest Recording", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/",
@@ -454,7 +454,7 @@ describe("Router SSR: Manifest Recording", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render with route activation
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/",
@@ -506,7 +506,7 @@ describe("Router SSR: DOM Structure", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/",
@@ -553,7 +553,7 @@ describe("Router SSR: Route Activation", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render with route activation enabled
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/",
@@ -586,7 +586,7 @@ describe("Router SSR: Route Activation", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render with route activation for /about URL
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/about",
@@ -619,7 +619,7 @@ describe("Router SSR: Route Activation", () => {
     patchComponentDefinition(RouterApp, appAot);
 
     // Render with route activation
-    const result = await renderWithComponents(RouterApp, {
+    const result = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: {
         url: "/",

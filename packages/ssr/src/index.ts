@@ -6,14 +6,13 @@
  *
  * Primary exports:
  * - createSSRHandler() - Production SSR entry point
- * - render() / renderWithComponents() - Low-level rendering
+ * - render() - Low-level rendering
  * - compileWithAot() - AOT compilation bridge
  */
 
 // Primary render API
 export {
   render,
-  renderWithComponents, // backwards compat alias
   type RenderOptions,
   type RenderResult,
   type ComponentClass,
@@ -96,19 +95,19 @@ export {
   type CompileAotOptions,
   type CompileAotResult,
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics,
   bindScopes,
   planAot,
   emitAotCode,
   emitTemplate,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   type AotPlanModule,
   type AotCodeResult,
   type SerializedDefinition,
   type TemplateEmitResult,
-  type Semantics,
+  type ProjectSemantics,
   type ResourceGraph,
   type ResourceScopeId,
 } from "@aurelia-ls/compiler";

@@ -50,7 +50,7 @@
         { "code": "'yes'", "type": "string" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "'yes'", "expected": "boolean", "actual": "string" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "'yes'", "expected": "boolean", "actual": "string" }
       ]
     }
   },
@@ -78,7 +78,7 @@
         { "code": "'two'", "type": "string" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "'two'", "expected": "number", "actual": "string" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "'two'", "expected": "number", "actual": "string" }
       ]
     }
   },
@@ -93,7 +93,7 @@
         { "code": "false", "type": "boolean" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "false", "expected": "number", "actual": "boolean" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "false", "expected": "number", "actual": "boolean" }
       ]
     }
   },
@@ -121,7 +121,7 @@
         { "code": "'show'", "type": "string" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "'show'", "expected": "boolean", "actual": "string" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "'show'", "expected": "boolean", "actual": "string" }
       ]
     }
   },
@@ -149,7 +149,7 @@
         { "code": "1", "type": "number" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "1", "expected": "boolean", "actual": "number" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "1", "expected": "boolean", "actual": "number" }
       ]
     }
   },
@@ -166,7 +166,7 @@
         { "code": "99", "type": "number" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "99", "expected": "boolean", "actual": "number" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "99", "expected": "boolean", "actual": "number" }
       ]
     }
   },
@@ -207,7 +207,7 @@
         { "code": "'on'", "type": "string" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "'on'", "expected": "boolean", "actual": "string" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "'on'", "expected": "boolean", "actual": "string" }
       ]
     }
   },
@@ -236,10 +236,10 @@
         { "code": "null", "type": "null" }
       ],
       "diags": [
-        { "code": "AU1302", "expr": "null", "expected": "string", "actual": "null" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "null", "expected": "string", "actual": "null" }
       ]
     },
-    "_comment": "null→string is a warning (AU1302) since it renders as literal 'null' text"
+    "_comment": "null→string is a warning (severity=warning) since it renders as literal 'null' text"
   },
   {
     "name": "TC-TM-18 null literal mismatches boolean target",
@@ -252,7 +252,7 @@
         { "code": "null", "type": "null" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "null", "expected": "boolean", "actual": "null" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "null", "expected": "boolean", "actual": "null" }
       ]
     },
     "_comment": "null→boolean is an error (not a coercion case)"
@@ -296,7 +296,7 @@
         { "code": "true", "type": "boolean" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "true", "expected": "string", "actual": "boolean" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "true", "expected": "string", "actual": "boolean" }
       ]
     },
     "_comment": "Style properties expect string|number, boolean is a type mismatch"
@@ -316,7 +316,7 @@
         { "code": "true", "type": "boolean" }
       ],
       "diags": [
-        { "code": "AU1301", "expr": "true", "expected": "string", "actual": "boolean" }
+        { "code": "aurelia/expr-type-mismatch", "expr": "true", "expected": "string", "actual": "boolean" }
       ]
     },
     "_comment": "Style properties: number coerces, string matches, boolean errors"

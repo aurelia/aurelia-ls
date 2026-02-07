@@ -17,7 +17,7 @@
 import type { ViteDevServer } from "vite";
 import { readFile } from "node:fs/promises";
 import { debug, extractTemplateMeta, type CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionContext } from "./types.js";
+import type { ProjectSemanticsContext } from "./types.js";
 import { compileWithAot, type AotCompileResult, type ComponentClass } from "@aurelia-ls/ssr";
 import { convertToLocalImports } from "./local-imports.js";
 
@@ -178,7 +178,7 @@ export const componentCache = new ComponentCache();
  * to the client, not for patching classes.
  *
  * @param vite - The Vite dev server instance
- * @param resolution - The resolution context with discovered resources
+ * @param projectSemantics - The project-semantics context with discovered resources
  * @param rootTemplatePath - Path to the root template (entry point)
  * @returns Loaded components (already patched) ready for SSR
  *
@@ -186,19 +186,19 @@ export const componentCache = new ComponentCache();
  * ```typescript
  * const { root, children } = await loadProjectComponents(
  *   vite,
- *   resolution,
+ *   projectSemantics,
  *   './src/my-app.html'
  * );
  *
  * // Components are already patched - render directly
- * await renderWithComponents(root.ComponentClass, {
+ * await render(root.ComponentClass, {
  *   childComponents: children.map(c => c.ComponentClass),
  * });
  * ```
  */
 export async function loadProjectComponents(
   vite: ViteDevServer,
-  resolution: ResolutionContext,
+  projectSemantics: ProjectSemanticsContext,
   rootTemplatePath: string,
   trace?: CompileTrace,
 ): Promise<LoadProjectComponentsResult> {
@@ -213,16 +213,16 @@ export async function loadProjectComponents(
   debug.vite("loader.loadComponents", {
     rootTemplatePath,
     normalizedRootPath,
-    discoveredTemplates: resolution.result.templates.map(t => ({
+    discoveredTemplates: projectSemantics.result.templates.map(t => ({
       name: t.resourceName,
       templatePath: normalizePath(t.templatePath),
       className: t.className,
     })),
-    templateCount: resolution.result.templates.length,
+    templateCount: projectSemantics.result.templates.length,
   });
 
   // Process all discovered templates
-  for (const templateInfo of resolution.result.templates) {
+  for (const templateInfo of projectSemantics.result.templates) {
     try {
       // Check cache first
       const cached = componentCache.get(templateInfo.templatePath);
@@ -252,15 +252,15 @@ export async function loadProjectComponents(
       const templateMeta = extractTemplateMeta(templateHtml, templateInfo.templatePath);
       const localImports = convertToLocalImports(
         templateMeta.imports,
-        resolution.semantics.resources.elements,
+        projectSemantics.semantics.resources.elements,
       );
 
       // Compile with AOT using project semantics and scope
       const aot = compileWithAot(templateHtml, {
         templatePath: templateInfo.templatePath,
         name: templateInfo.resourceName,
-        semantics: resolution.semantics,
-        resourceGraph: resolution.resourceGraph,
+        semantics: projectSemantics.semantics,
+        resourceGraph: projectSemantics.resourceGraph,
         resourceScope: templateInfo.scopeId,
         localImports,
         trace,
@@ -377,7 +377,7 @@ function normalizePath(p: string): string {
  */
 export async function loadComponent(
   vite: ViteDevServer,
-  resolution: ResolutionContext,
+  projectSemantics: ProjectSemanticsContext,
   templatePath: string,
   trace?: CompileTrace,
 ): Promise<LoadedComponent | null> {
@@ -398,7 +398,7 @@ export async function loadComponent(
   }
 
   // Find the template info
-  const templateInfo = resolution.result.templates.find(
+  const templateInfo = projectSemantics.result.templates.find(
     (t) => normalizePath(t.templatePath) === normalizedPath,
   );
 
@@ -406,7 +406,7 @@ export async function loadComponent(
     debug.vite("loader.loadSingle.notFound", {
       templatePath,
       normalizedPath,
-      availableTemplates: resolution.result.templates.map(t => normalizePath(t.templatePath)),
+      availableTemplates: projectSemantics.result.templates.map(t => normalizePath(t.templatePath)),
     });
     console.warn(`[aurelia-ssr] No template info found for "${templatePath}"`);
     return null;
@@ -418,14 +418,14 @@ export async function loadComponent(
     const templateMeta = extractTemplateMeta(templateHtml, templateInfo.templatePath);
     const localImports = convertToLocalImports(
       templateMeta.imports,
-      resolution.semantics.resources.elements,
+      projectSemantics.semantics.resources.elements,
     );
 
     const aot = compileWithAot(templateHtml, {
       templatePath: templateInfo.templatePath,
       name: templateInfo.resourceName,
-      semantics: resolution.semantics,
-      resourceGraph: resolution.resourceGraph,
+      semantics: projectSemantics.semantics,
+      resourceGraph: projectSemantics.resourceGraph,
       resourceScope: templateInfo.scopeId,
       localImports,
       trace,

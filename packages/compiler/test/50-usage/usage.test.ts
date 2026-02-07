@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { compileTemplate, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { compileTemplate, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
 
 function createVmReflection() {
   return {
@@ -12,6 +12,8 @@ function createVmReflection() {
     },
   };
 }
+
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 describe("FeatureUsageSet", () => {
   it("captures used resources, syntax, and flags", () => {
@@ -30,7 +32,8 @@ describe("FeatureUsageSet", () => {
       templateFilePath: "/app.html",
       isJs: false,
       vm: createVmReflection(),
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     const usage = result.usage;

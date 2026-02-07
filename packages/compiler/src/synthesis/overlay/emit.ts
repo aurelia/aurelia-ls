@@ -96,7 +96,8 @@ export function emitOverlay(
           for (const l of f.lambdas) {
             totalLambdas++;
             const line = `__au$access<${typeRef}>(${l.lambda});`;
-            const lambdaStart = line.lastIndexOf("(") + 1; // point at lambda start
+            let lambdaStart = line.indexOf(l.lambda);
+            if (lambdaStart < 0) lambdaStart = line.indexOf("(") + 1; // fallback to first paren
             const start = offset + lambdaStart;
             const span = spanFromBounds(start, start + l.lambda.length);
             mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start) });
@@ -115,7 +116,8 @@ export function emitOverlay(
             totalLambdas++;
             const lambdaWithDoc = withJSDocParam(l.lambda);
             const line = `__au$access(${lambdaWithDoc});`;
-            const lambdaStart = line.lastIndexOf("(") + 1;
+            let lambdaStart = line.indexOf(lambdaWithDoc);
+            if (lambdaStart < 0) lambdaStart = line.indexOf("(") + 1;
             const start = offset + lambdaStart;
             const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan);
             const span = spanFromBounds(start, start + lambdaWithDoc.length);

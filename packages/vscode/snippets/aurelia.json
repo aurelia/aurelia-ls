@@ -12,7 +12,7 @@
     "prefix": "au-repeat-index",
     "body": [
       "<${1:div} repeat.for=\"${2:item} of ${3:items}\">",
-      "\t<span>\\${$index + 1}:</span> \\${${2:item}}$0",
+      "\t<span>\\${\\$index + 1}:</span> \\${$2}$0",
       "</${1:div}>"
     ],
     "description": "Aurelia repeat.for with $index"
@@ -100,8 +100,8 @@
     "body": [
       "<${1:div} promise.bind=\"${2:asyncOperation}\">",
       "\t<template pending>Loading...</template>",
-      "\t<template then.from-view=\"${3:result}\">\\${${3:result}}$0</template>",
-      "\t<template catch.from-view=\"${4:error}\">Error: \\${${4:error}.message}</template>",
+      "\t<template then.from-view=\"${3:result}\">\\${$3}$0</template>",
+      "\t<template catch.from-view=\"${4:error}\">Error: \\${$4.message}</template>",
       "</${1:div}>"
     ],
     "description": "Aurelia promise.bind with pending/then/catch"
@@ -186,7 +186,7 @@
   "au-interpolation": {
     "prefix": "au-interpolation",
     "body": [
-      "\\${${1:expression}}$0"
+      "\\${$1}$0"
     ],
     "description": "Aurelia interpolation expression"
   },
@@ -228,7 +228,7 @@
   "au-value-converter": {
     "prefix": "au-value-converter",
     "body": [
-      "\\${${1:value} | ${2:converterName}${3::arg}}$0"
+      "\\${$1 | $2$3}$0"
     ],
     "description": "Aurelia value converter (pipe)"
   },

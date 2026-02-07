@@ -5,6 +5,7 @@
 
 // VM Reflection - cross-cutting compiler input
 export type { VmReflection, SynthesisOptions } from "./vm-reflection.js";
+export type { ModuleResolver } from "./module-resolver.js";
 
 // Diagnostics
 export {
@@ -111,6 +112,7 @@ export {
 // Debug Channels (decision/data visibility)
 export {
   debug,
+  getDebugChannel,
   refreshDebugChannels,
   configureDebug,
   isDebugEnabled,

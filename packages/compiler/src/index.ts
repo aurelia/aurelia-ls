@@ -25,30 +25,34 @@ export {
   TokenType,
   splitInterpolationText,
   AttrSyntax,
+  analyzeAttributeName,
   AttributeParser,
   createDefaultSyntax,
   createAttributeParserFromRegistry,
   registerBuiltins,
 } from "./parsing/index.js";
-export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
+export type { AttrCommandSpan, AttrPartSpan, AttributeNameAnalysis, ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
 
 // === Language / Semantics ===
 export {
-  DEFAULT as DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  prepareProjectSemantics,
   createSemanticsLookup,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
   materializeResourcesForScope,
   materializeSemanticsForScope,
+  buildProjectSnapshot,
+  buildSemanticsSnapshot,
+  buildSemanticsSnapshotFromProject,
   buildTemplateSyntaxRegistry,
-} from "./language/index.js";
+} from "./schema/index.js";
 export type {
   SourceLocation,
   Configured,
   Sourced,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
   ResourceGraph,
   ResourceScope,
   ResourceScopeId,
@@ -59,6 +63,11 @@ export type {
   ResourceCatalog,
   CatalogGap,
   CatalogConfidence,
+  ProjectSnapshot,
+  ProjectSnapshotOptions,
+  SemanticsSnapshot,
+  TemplateContext,
+  SemanticsSnapshotOptions,
   TemplateSyntaxRegistry,
   TemplateSyntaxMatcher,
   TemplateSyntaxEmitter,
@@ -89,9 +98,9 @@ export type {
   BindableDef,
   ResourceKey,
   SymbolId,
-} from "./language/index.js";
+} from "./schema/index.js";
 
-// Resource definitions (for resolution package and external tooling)
+// Resource definitions (for compiler project-semantics and external tooling)
 export type {
   ElementRes,
   AttrRes,
@@ -117,7 +126,7 @@ export type {
   // Attribute pattern configuration
   AttributePatternConfig,
   PatternInterpret,
-} from "./language/index.js";
+} from "./schema/index.js";
 
 // Binding command configuration (values)
 export {
@@ -127,7 +136,7 @@ export {
   getCommandMode,
   // Attribute pattern configuration (values)
   BUILTIN_ATTRIBUTE_PATTERNS,
-} from "./language/index.js";
+} from "./schema/index.js";
 
 // === Synthesis (Overlay) ===
 export {
@@ -150,7 +159,7 @@ export type {
 } from "./synthesis/index.js";
 
 // VmReflection and SynthesisOptions are from shared (cross-cutting)
-export type { VmReflection, SynthesisOptions } from "./shared/index.js";
+export type { VmReflection, SynthesisOptions, ModuleResolver } from "./shared/index.js";
 
 // === Synthesis (AOT) ===
 export {
@@ -218,7 +227,7 @@ export type {
 // === Analysis ===
 export {
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics,
   bindScopes,
   typecheck,
   collectFeatureUsage,
@@ -227,15 +236,15 @@ export {
   checkTypeCompatibility,
   DEFAULT_TYPECHECK_CONFIG,
   TYPECHECK_PRESETS,
-  // Meta element extraction (for resolution package)
+  // Meta element extraction (for compiler project-semantics)
   extractMeta,
   extractTemplateMeta,
   stripMetaFromHtml,
 } from "./analysis/index.js";
 export type { BuildIrOptions, FeatureUsageOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {
-  // Linked semantics (for semantic tokens, etc.)
-  LinkedSemanticsModule,
+  // Link module (for semantic tokens, etc.)
+  LinkModule,
   LinkedTemplate,
   LinkedRow,
   NodeSem,
@@ -245,9 +254,15 @@ export type {
   LinkedHydrateTemplateController,
 } from "./analysis/index.js";
 
+// === Project Semantics (Code-driven resource discovery) ===
+export * from "./project-semantics/index.js";
+
 // === Shared Infrastructure ===
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./shared/index.js";
 export type { CompilerDiagnostic, ExprSpanIndex } from "./shared/index.js";
+
+// === Diagnostics Catalog ===
+export * from "./diagnostics/index.js";
 
 // === Instrumentation (Tracing) ===
 export {
@@ -274,6 +289,7 @@ export {
 // === Debug Channels ===
 export {
   debug,
+  getDebugChannel,
   refreshDebugChannels,
   configureDebug,
   isDebugEnabled,
@@ -310,6 +326,10 @@ export {
   normalizeSpanMaybe,
   narrowestContainingSpan,
   pickNarrowestContaining,
+  offsetAtPosition,
+  positionAtOffset,
+  spanToRange,
+  rangeToSpan,
   offsetSpan,
   toSourceSpan,
   toSourceLoc,
@@ -331,6 +351,7 @@ export type {
   CommentNode,
   BaseNode,
   Attr,
+  TemplateIR,
   NodeId,
 } from "./model/index.js";
 
@@ -358,6 +379,7 @@ export type {
   AccessMemberExpression,
   AccessKeyedExpression,
   AccessThisExpression,
+  Identifier,
   PrimitiveLiteralExpression,
   BinaryExpression,
   UnaryExpression,

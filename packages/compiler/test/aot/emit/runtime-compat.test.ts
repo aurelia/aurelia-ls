@@ -6,14 +6,14 @@
  *
  * Key scenarios:
  * - Custom elements from @aurelia/router resolve correctly
- * - Resolution uses DEFAULT_SEMANTICS properly
+ * - Resolution uses BUILTIN_SEMANTICS properly
  * - Emitted instructions have correct structure for runtime consumption
  */
 
 import { test, describe, expect } from "vitest";
 import {
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics, buildSemanticsSnapshot,
   bindScopes,
   planAot,
   emitAotCode,
@@ -21,7 +21,8 @@ import {
   collectNestedTemplateHtmlTree,
   getExpressionParser,
   DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
+  DiagnosticsRuntime,
   INSTRUCTION_TYPE,
   type SerializedDefinition,
   type SerializedInstruction,
@@ -29,6 +30,7 @@ import {
   type SerializedHydrateTemplateController,
   type NestedTemplateHtmlNode,
 } from "@aurelia-ls/compiler";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 // =============================================================================
 // Test Helpers
@@ -47,16 +49,22 @@ interface CompileResult {
 
 function compileTemplate(markup: string): CompileResult {
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
 
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
     exprParser,
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-  const scope = bindScopes(linked);
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("link"),
+  });
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
 
   // Emit both instructions AND template HTML (both are needed for runtime)
@@ -123,9 +131,9 @@ describe("au-viewport Resolution", () => {
     expect(hydrateElements[0]!.res).toBe("au-viewport");
   });
 
-  test("au-viewport in DEFAULT_SEMANTICS has correct structure", () => {
+  test("au-viewport in BUILTIN_SEMANTICS has correct structure", () => {
     // Directly verify the semantics entry
-    const viewport = DEFAULT_SEMANTICS.resources.elements["au-viewport"];
+    const viewport = BUILTIN_SEMANTICS.resources.elements["au-viewport"];
 
     expect(viewport).toBeDefined();
     expect(viewport?.kind).toBe("element");
@@ -325,3 +333,5 @@ describe("Debug Output Inspection", () => {
     expect(hydrateElements.length).toBe(1);
   });
 });
+
+

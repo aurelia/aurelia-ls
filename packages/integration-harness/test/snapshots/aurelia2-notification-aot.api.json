@@ -63,8 +63,8 @@
     },
     {
       "bindables": [
-        { "attribute": "containerClass", "name": "containerClass" },
-        { "attribute": "hostClass", "name": "hostClass" },
+        { "attribute": "container-class", "name": "containerClass" },
+        { "attribute": "host-class", "name": "hostClass" },
         { "attribute": "position", "name": "position" }
       ],
       "id": "sym:827e318668177cdb4a438c3c6ca7fae8146ee060addcac5578266cec5d503a4d",

@@ -30,7 +30,7 @@ const shouldEmit = args.includes("--emit") || args.includes("-e");
 // Import from local packages
 const ssrPath = pathToFileURL(resolve(rootDir, "packages/ssr/out/index.js")).href;
 const transformPath = pathToFileURL(resolve(rootDir, "packages/transform/out/index.js")).href;
-const resolutionPath = pathToFileURL(resolve(rootDir, "packages/resolution/out/index.js")).href;
+const resolutionPath = pathToFileURL(resolve(rootDir, "packages/compiler/out/index.js")).href;
 
 const { compileWithAot } = await import(ssrPath);
 const { transform } = await import(transformPath);

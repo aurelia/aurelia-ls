@@ -42,7 +42,7 @@ describe("config precedence (template-local vs root scope)", () => {
         kind: "tsconfig",
         tsconfigPath: TEMPLATE_IMPORTS_PKG_TSCONFIG,
       },
-      resolution: {
+      discovery: {
         fileSystem: "node",
         packageRoots: {
           "@test/multi-class": FIXTURE_MULTI_CLASS,
@@ -61,7 +61,7 @@ describe("config precedence (template-local vs root scope)", () => {
 
     const run = await runIntegrationScenario(scenario);
     const rootScope = run.resourceGraph.scopes[run.resourceGraph.root];
-    const template = run.resolution.templates.find((entry) => entry.resourceName === "my-app");
+    const template = run.discovery.templates.find((entry) => entry.resourceName === "my-app");
     expect(template).toBeDefined();
 
     const localScopeId = `local:${template!.componentPath}`;

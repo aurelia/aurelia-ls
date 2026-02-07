@@ -5,14 +5,14 @@
  * 1. Parent template uses child custom element
  * 2. Both parent and child are AOT-compiled
  * 3. Child class is patched with $au definition
- * 4. renderWithComponents renders the full tree
+ * 4. render renders the full tree
  */
 
 import { test, describe, expect } from "vitest";
 
 import { compileWithAot } from "@aurelia-ls/ssr";
 import { patchComponentDefinition } from "@aurelia-ls/ssr";
-import { renderWithComponents } from "@aurelia-ls/ssr";
+import { render } from "@aurelia-ls/ssr";
 
 // =============================================================================
 // Test Component Classes (using static $au pattern)
@@ -192,7 +192,7 @@ describe("Child Component SSR: Patching", () => {
 });
 
 // =============================================================================
-// Test: Minimal renderWithComponents
+// Test: Minimal render
 // =============================================================================
 
 describe("Child Component SSR: Minimal Rendering", () => {
@@ -213,7 +213,7 @@ describe("Child Component SSR: Minimal Rendering", () => {
 
     patchComponentDefinition(NoChildComponent, aot);
 
-    const result = await renderWithComponents(NoChildComponent, {
+    const result = await render(NoChildComponent, {
       childComponents: [],
     });
 
@@ -241,7 +241,7 @@ describe("Child Component SSR: Minimal Rendering", () => {
 
     patchComponentDefinition(StaticComponent, aot);
 
-    const result = await renderWithComponents(StaticComponent, {
+    const result = await render(StaticComponent, {
       childComponents: [],
     });
 
@@ -270,7 +270,7 @@ describe("Child Component SSR: Minimal Rendering", () => {
 
     patchComponentDefinition(CountTestComponent, aot);
 
-    const result = await renderWithComponents(CountTestComponent, {
+    const result = await render(CountTestComponent, {
       childComponents: [],
     });
 
@@ -322,7 +322,7 @@ describe("Child Component SSR: Parent-Child Rendering", () => {
     patchComponentDefinition(Parent, parentAot);
 
     // Render
-    const result = await renderWithComponents(Parent, {
+    const result = await render(Parent, {
       childComponents: [Child],
     });
 
@@ -378,7 +378,7 @@ describe("Diagnostic: AUR0757 Target Count Mismatch", () => {
     // Patch and try to render
     patchComponentDefinition(DiagChild, childAot);
 
-    const result = await renderWithComponents(DiagChild, {
+    const result = await render(DiagChild, {
       childComponents: [],
     });
 

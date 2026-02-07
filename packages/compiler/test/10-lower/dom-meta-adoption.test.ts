@@ -17,16 +17,19 @@ import {
   lowerDocument,
   DEFAULT_SYNTAX,
   getExpressionParser,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
+  DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
 
 function lower(html: string) {
+  const diagnostics = new DiagnosticsRuntime();
   return lowerDocument(html, {
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
 }
 

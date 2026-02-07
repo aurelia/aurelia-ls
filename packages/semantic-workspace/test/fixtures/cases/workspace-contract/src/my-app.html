@@ -1,0 +1,62 @@
+<import from="./views/summary-panel"></import>
+<import from="./views/table-panel"></import>
+<import from="./components/inline-note"></import>
+<import from="./resources"></import>
+
+<section class="app-shell">
+  <let total.bind="filteredItems.length"></let>
+
+  <header class="app-header">
+    <h1>${title | titlecase}</h1>
+    <p class="subtitle">Showing ${total} items</p>
+
+    <div class="toolbar">
+      <input
+        type="text"
+        value.bind="filters.search & debounce: 200"
+        placeholder="Search devices"
+        t="[placeholder]filters.searchDevices">
+      <select value.bind="filters.type">
+        <option value="all">All</option>
+        <option repeat.for="kind of deviceTypes" value.bind="kind">${kind}</option>
+      </select>
+      <button click.trigger="resetFilters()" copy-to-clipboard.bind="noteMessage">Reset</button>
+    </div>
+  </header>
+
+  <summary-panel
+    stats.bind="stats"
+    updated-at.bind="stats.updatedAt"
+    on-refresh.call="refreshStats()">
+  </summary-panel>
+
+  <div class="quick-actions">
+    <info-pill text.bind="stats.title" tone="info"></info-pill>
+    <inline-note message.bind="noteMessage"></inline-note>
+    <convention-widget label.bind="viewMode"></convention-widget>
+  </div>
+
+  <table-panel
+    items.bind="filteredItems"
+    filters.bind="filters"
+    view.bind="viewMode"
+    select.call="selectDevice($event)">
+  </table-panel>
+
+  <template if.bind="activeDevice">
+    <section class="detail">
+      <h2>${activeDevice.name | titlecase}</h2>
+      <au-compose component.bind="detailView" model.bind="activeDevice"></au-compose>
+    </section>
+  </template>
+  <div else class="empty-state">
+    <span>No selection</span>
+  </div>
+
+  <template switch.bind="viewMode">
+    <div case="list">List view</div>
+    <div case="grid">Grid view</div>
+    <div case="compact">Compact view</div>
+    <div default-case>Unknown view</div>
+  </template>
+</section>

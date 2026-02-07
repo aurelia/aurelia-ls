@@ -20,9 +20,9 @@ import { DI, Registration } from "@aurelia/kernel";
 import { Aurelia, IPlatform, StandardConfiguration } from "@aurelia/runtime-html";
 
 import { compileWithAot } from "@aurelia-ls/ssr";
-import { DEFAULT_SEMANTICS } from "@aurelia-ls/ssr";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/ssr";
 import { patchComponentDefinition } from "@aurelia-ls/ssr";
-import { renderWithComponents } from "@aurelia-ls/ssr";
+import { render } from "@aurelia-ls/ssr";
 import { countOccurrences, createHydrationContext } from "./_helpers/test-utils.js";
 
 // =============================================================================
@@ -103,11 +103,11 @@ const MY_APP_TEMPLATE = `<div class="app">
 function createSemanticsWithGreetingCard() {
   // Clone default semantics
   const sem = {
-    ...DEFAULT_SEMANTICS,
+    ...BUILTIN_SEMANTICS,
     resources: {
-      ...DEFAULT_SEMANTICS.resources,
+      ...BUILTIN_SEMANTICS.resources,
       elements: {
-        ...DEFAULT_SEMANTICS.resources.elements,
+        ...BUILTIN_SEMANTICS.resources.elements,
         "greeting-card": {
           kind: "element",
           name: "greeting-card",
@@ -208,8 +208,8 @@ describe("Child Component SSR E2E: Full App Structure", () => {
     console.log("# MyApp $au.template:", MyApp.$au.template);
     console.log("# GreetingCard $au.template:", GreetingCard.$au.template);
 
-    // Step 4: Render using renderWithComponents
-    const result = await renderWithComponents(MyApp, {
+    // Step 4: Render using render
+    const result = await render(MyApp, {
       childComponents: [GreetingCard],
     });
 
@@ -270,7 +270,7 @@ describe("Child Component SSR E2E: Full App Structure", () => {
     patchComponentDefinition(GreetingCard, childAot);
     patchComponentDefinition(MyApp, parentAot);
 
-    const result = await renderWithComponents(MyApp, {
+    const result = await render(MyApp, {
       childComponents: [GreetingCard],
     });
 
@@ -315,7 +315,7 @@ describe("Child Component SSR E2E: Full App Structure", () => {
     patchComponentDefinition(GreetingCard, childAot);
     patchComponentDefinition(MyApp, parentAot);
 
-    const result = await renderWithComponents(MyApp, {
+    const result = await render(MyApp, {
       childComponents: [GreetingCard],
     });
 
@@ -417,7 +417,7 @@ describe("Child Component SSR E2E: Multi-Request (Vite Cache Simulation)", () =>
     // In Vite, each HTTP request triggers a new render with cached classes
 
     console.log("\n# === FIRST REQUEST ===");
-    const result1 = await renderWithComponents(PersistentMyApp, {
+    const result1 = await render(PersistentMyApp, {
       childComponents: [PersistentGreetingCard],
     });
     console.log("# First request HTML:");
@@ -425,7 +425,7 @@ describe("Child Component SSR E2E: Multi-Request (Vite Cache Simulation)", () =>
 
     // Simulate a second request (like browser doing a refresh or HMR)
     console.log("\n# === SECOND REQUEST (same classes) ===");
-    const result2 = await renderWithComponents(PersistentMyApp, {
+    const result2 = await render(PersistentMyApp, {
       childComponents: [PersistentGreetingCard],
     });
     console.log("# Second request HTML:");
@@ -553,7 +553,7 @@ describe("Child Component SSR E2E: Server→Client Hydration (REAL BUG)", () => 
     patchComponentDefinition(GreetingCard, childAot);
     patchComponentDefinition(MyApp, parentAot);
 
-    const ssrResult = await renderWithComponents(MyApp, {
+    const ssrResult = await render(MyApp, {
       childComponents: [GreetingCard],
     });
 
@@ -753,7 +753,7 @@ describe("Child Component SSR E2E: Component Isolation", () => {
 
     patchComponentDefinition(IsolatedGreetingCard, childAot);
 
-    const result = await renderWithComponents(IsolatedGreetingCard, {
+    const result = await render(IsolatedGreetingCard, {
       childComponents: [],
     });
 
@@ -791,7 +791,7 @@ describe("Child Component SSR E2E: Component Isolation", () => {
 
     patchComponentDefinition(IsolatedMyApp, parentAot);
 
-    const result = await renderWithComponents(IsolatedMyApp, {
+    const result = await render(IsolatedMyApp, {
       childComponents: [],
     });
 

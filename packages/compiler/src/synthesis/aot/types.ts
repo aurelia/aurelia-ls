@@ -27,7 +27,8 @@ import type {
   AnyBindingExpression,
   TemplateMetaIR,
 } from "../../model/index.js";
-import type { ControllerConfig } from "../../language/registry.js";
+import type { ControllerConfig } from "../../schema/registry.js";
+import type { RuntimeAnyBindingExpression } from "./runtime-ast.js";
 
 /* =============================================================================
  * AOT PLAN MODULE - Top-level container
@@ -796,7 +797,8 @@ export interface SerializedLetBinding {
  */
 export interface SerializedExpression {
   id: ExprId;
-  ast: AnyBindingExpression;
+  /** Runtime-compatible AST (spans/Identifier nodes stripped) */
+  ast: RuntimeAnyBindingExpression;
 }
 
 /* =============================================================================
@@ -828,6 +830,8 @@ export interface AotMappingEntry {
  * PLANNING OPTIONS
  * ============================================================================= */
 
+import type { TemplateSyntaxRegistry } from "../../schema/index.js";
+import type { AttributeParser } from "../../parsing/index.js";
 import type { CompileTrace } from "../../shared/index.js";
 
 /**
@@ -839,6 +843,12 @@ export interface AotPlanOptions {
 
   /** Include source locations in plan nodes */
   includeLocations?: boolean;
+
+  /** Optional syntax registry (for binding attribute detection) */
+  syntax?: TemplateSyntaxRegistry;
+
+  /** Optional attribute parser (pre-configured with syntax patterns) */
+  attrParser?: AttributeParser;
 
   /** Optional trace for instrumentation */
   trace?: CompileTrace;

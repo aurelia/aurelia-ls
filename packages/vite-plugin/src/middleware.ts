@@ -4,7 +4,7 @@
  * This middleware intercepts HTML requests and renders the Aurelia
  * application server-side using the AOT compilation pipeline.
  *
- * When resolution is configured (tsconfig provided), uses real component
+ * When project-semantics discovery is configured (tsconfig provided), uses real component
  * classes loaded via Vite's ssrLoadModule for full child component support.
  *
  * NOTE: Component classes have their $au definitions injected by the Vite
@@ -22,13 +22,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 // dynamically via ssrLoadModule to share module instances with user components
 import type { AotCompileResult, RenderOptions, RenderResult, ComponentClass } from "@aurelia-ls/ssr";
 import type { ISSRManifest } from "@aurelia/runtime-html";
-import type { PluginState, ResolutionContext } from "./types.js";
+import type { PluginState, ProjectSemanticsContext } from "./types.js";
 import { loadProjectComponents } from "./loader.js";
 import { createRequestTrace } from "./trace.js";
 
 // Type for the dynamically loaded SSR module
 interface SSRModule {
-  renderWithComponents: (component: ComponentClass, options?: RenderOptions) => Promise<RenderResult>;
+  render: (component: ComponentClass, options?: RenderOptions) => Promise<RenderResult>;
 }
 
 // Type for the dynamically loaded register module
@@ -41,7 +41,7 @@ interface RegisterModule {
  *
  * The middleware:
  * 1. Checks if the request should be SSR'd (matching include/exclude)
- * 2. Waits for resolution (if configured) to get ResourceGraph
+ * 2. Waits for project semantics (if configured) to get ResourceGraph
  * 3. Loads the entry template
  * 4. Calls the state provider
  * 5. Renders via AOT compilation with project resources
@@ -50,10 +50,10 @@ interface RegisterModule {
 export function createSSRMiddleware(
   server: ViteDevServer,
   options: PluginState,
-  getResolutionPromise?: () => Promise<ResolutionContext | null> | null,
+  getProjectSemanticsPromise?: () => Promise<ProjectSemanticsContext | null> | null,
 ): Connect.NextHandleFunction {
-  // Track if resolution has been awaited
-  let resolutionReady = false;
+  // Track if project semantics has been awaited
+  let projectSemanticsReady = false;
 
   // Cache for the dynamically loaded SSR module
   // Loaded via ssrLoadModule to share module instances with user components
@@ -93,13 +93,13 @@ export function createSSRMiddleware(
       : null;
 
     try {
-      // Wait for resolution to complete on first request
-      if (!resolutionReady && getResolutionPromise) {
-        const promise = getResolutionPromise();
+      // Wait for project semantics to complete on first request
+      if (!projectSemanticsReady && getProjectSemanticsPromise) {
+        const promise = getProjectSemanticsPromise();
         if (promise) {
           await promise;
         }
-        resolutionReady = true;
+        projectSemanticsReady = true;
       }
 
       // Load SSR module dynamically via Vite's ssrLoadModule
@@ -124,8 +124,8 @@ export function createSSRMiddleware(
       // Get the register function from the loaded module
       const registerFn = registerModuleCache?.register;
 
-      // Get resolution context
-      const resolution = options.resolution;
+      // Get project-semantics context
+      const projectSemantics = options.projectSemantics;
 
       // Build URL object for state provider (used for legacy flow)
       const host = req.headers.host ?? "localhost";
@@ -135,13 +135,13 @@ export function createSSRMiddleware(
       let html: string;
       let renderMode: string;
 
-      if (resolution) {
+      if (projectSemantics) {
         // NEW FLOW: Use real component classes with child component support
         // Components are loaded and patched ONCE by the loader (cached)
         requestTrace?.trace.event("ssr.loadComponents");
         const { root, children } = await loadProjectComponents(
           server,
-          resolution,
+          projectSemantics,
           options.entry,
           requestTrace?.trace,
         );
@@ -153,7 +153,7 @@ export function createSSRMiddleware(
         // Render with real classes (classes have $au from transform hook)
         // Pass request context for URL-aware rendering (routing)
         requestTrace?.trace.event("ssr.render");
-        const renderResult = await ssrModule.renderWithComponents(root.ComponentClass, {
+        const renderResult = await ssrModule.render(root.ComponentClass, {
           childComponents: children.map((c) => c.ComponentClass),
           ssr: {
             stripMarkers: options.stripMarkers,
@@ -177,7 +177,7 @@ export function createSSRMiddleware(
         renderMode = ` (real classes, ${children.length} children)`;
       } else {
         throw new Error(
-          `[aurelia-ssr] Resolution is required. Configure the 'resolution' option in your Vite plugin.`
+          `[aurelia-ssr] Project semantics are required. Configure the 'projectSemantics' option in your Vite plugin.`
         );
       }
 

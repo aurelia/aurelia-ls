@@ -1,7 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts, createCompilerContext } from "../../_helpers/vector-runner.js";
-import { diffByKey } from "../../_helpers/test-utils.js";
+import { diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes, planAot } from "@aurelia-ls/compiler";
+import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, planAot } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -88,13 +88,18 @@ interface AotPlanDiff {
   extraScopes: string[];
 }
 
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
+
 runVectorTests<AotPlanExpect, AotPlanIntent, AotPlanDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "AOT Plan (aot:plan)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
-    const scope = bindScopes(linked);
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("link"),
+    });
+    const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const plan = planAot(linked, scope, { templateFilePath: "test.html" });
     return reducePlanIntent(plan);
   },
@@ -419,3 +424,5 @@ function exprKey(e: ExpressionIntent): string {
 function scopeKey(s: ScopeIntent): string {
   return `${s.frameId}:${s.kind}:parent=${s.parentFrameId}:locals=${s.locals.join(",")}:oc=${s.overrideContext.join(",")}`;
 }
+
+

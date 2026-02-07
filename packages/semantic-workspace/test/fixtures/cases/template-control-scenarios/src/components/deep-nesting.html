@@ -1,0 +1,18 @@
+<template>
+  <div promise.bind="fetchItems">
+    <template then="items">
+      <ul repeat.for="item of items">
+        <li>${item.label}</li>
+      </ul>
+    </template>
+  </div>
+
+  <template switch.bind="outer">
+    <template case="a">
+      <div switch.bind="inner">
+        <span case="x">${x}</span>
+        <span case="y">${y}</span>
+      </div>
+    </template>
+  </template>
+</template>

@@ -6,8 +6,7 @@
  *
  * Run: npm test -- --test-name-pattern "extract"
  *
- * See: docs/aot-build-requirements.md Phase A
- * See: docs/testing.md (Known Gaps > Transform Package)
+ * Coverage focuses on decorator metadata that must survive transform.
  */
 
 import { describe, it, expect } from "vitest";

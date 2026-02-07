@@ -75,7 +75,7 @@ describe("Server initialization", () => {
       expect(semanticTokensProvider).toBeDefined();
       expect(semanticTokensProvider?.full).toBe(true);
       const legend = semanticTokensProvider?.legend as { tokenTypes: string[]; tokenModifiers: string[] } | undefined;
-      expect(legend?.tokenTypes).toContain("namespace");
+      expect(legend?.tokenTypes).toContain("aureliaElement");
       expect(legend?.tokenModifiers).toContain("declaration");
     } finally {
       dispose();

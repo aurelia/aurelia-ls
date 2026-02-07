@@ -1,0 +1,14 @@
+<template>
+  <my-element
+    first-name.bind="firstName"
+    last-name.bind="lastName"
+    heading.bind="heading"
+    extra-value.two-way="extra"
+  ></my-element>
+  <my-element
+    :first-name="firstName"
+    last-name.bind="lastName"
+    heading.bind="heading"
+    extra-value.bind="extra"
+  ></my-element>
+</template>

@@ -14,13 +14,13 @@ import {
   toIdentifierPrefix,
   formatValue,
 } from "@aurelia-ls/transform";
-import type { AotCodeResult, SerializedExpression, SerializedDefinition, ExprId, AnyBindingExpression } from "@aurelia-ls/compiler";
+import type { AotCodeResult, SerializedExpression, SerializedDefinition, ExprId } from "@aurelia-ls/compiler";
 
 // Helper to create mock expressions
 function mockExpr(id: string, kind: string, name: string): SerializedExpression {
   return {
     id: id as ExprId,
-    ast: { $kind: kind, name, ancestor: 0, span: { start: 0, end: 1, loc: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } } } as unknown as AnyBindingExpression,
+    ast: { $kind: kind, name, ancestor: 0 } as SerializedExpression["ast"],
   };
 }
 

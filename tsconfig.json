@@ -2,13 +2,13 @@
   "files": [],
   "references": [
     { "path": "packages/compiler" },
-    { "path": "packages/resolution" },
     { "path": "packages/transform" },
     { "path": "packages/ssr" },
     { "path": "packages/ssg" },
     { "path": "packages/vite-plugin" },
     { "path": "packages/language-server" },
     { "path": "packages/vscode" },
-    { "path": "packages/integration-harness" }
+    { "path": "packages/integration-harness" },
+    { "path": "packages/semantic-workspace" }
   ]
 }

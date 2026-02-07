@@ -8,7 +8,7 @@
  * - StubMarker: Indicates a degraded/recovered value (suppress cascading errors)
  * - Combinators: pure, diag, map, flatMap, all for composition
  *
- * See .claude/docs/elm-style-errors.md for design rationale.
+ * This layer enables explicit recovery semantics without throwing away output.
  * ======================================================================================= */
 
 import type { CompilerDiagnostic } from "../model/diagnostics.js";

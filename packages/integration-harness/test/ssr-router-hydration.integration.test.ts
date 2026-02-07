@@ -16,7 +16,7 @@ import {
 import {
   compileWithAot,
   patchComponentDefinition,
-  renderWithComponents,
+  render,
 } from "@aurelia-ls/ssr";
 import {
   resolveExternalPackagePath,
@@ -309,7 +309,7 @@ describe("integration harness: router SSR + hydration", () => {
     patchComponentDefinition(AboutPage, aboutAot, { name: "about-page" });
     patchComponentDefinition(RouterApp, appAot, { name: "router-app" });
 
-    const renderResult = await renderWithComponents(RouterApp, {
+    const renderResult = await render(RouterApp, {
       childComponents: [HomePage, AboutPage],
       request: { url: "/about", baseHref: "/" },
       register: (container) => {
@@ -435,7 +435,7 @@ describe("integration harness: router SSR + hydration", () => {
     patchComponentDefinition(ThirdPartyPage, thirdPartyAot, { name: "third-party-page" });
     patchComponentDefinition(RouterAppWithThirdParty, appAot, { name: "router-app-third-party" });
 
-    const renderResult = await renderWithComponents(RouterAppWithThirdParty, {
+    const renderResult = await render(RouterAppWithThirdParty, {
       childComponents: [ThirdPartyPage],
       request: { url: "/", baseHref: "/" },
       register: (container) => {
@@ -641,7 +641,7 @@ describe("integration harness: router SSR + hydration", () => {
         container.register(StateDefaultConfiguration.init({ count: 0 }, counterHandler));
       };
 
-      const renderResult = await renderWithComponents(DecoratorRouterApp, {
+      const renderResult = await render(DecoratorRouterApp, {
         childComponents: [DecoratorTablePage],
         request: { url: "/table", baseHref: "/" },
         register: (container) => {

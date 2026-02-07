@@ -4,12 +4,11 @@
  * Determines injection strategy and generates the necessary edits
  * to inject pre-compiled $au definitions into TypeScript source.
  *
- * Decorator detection uses resolution's authoritative list.
- * See docs/transform-package-design.md.
+ * Decorator detection uses compiler-authoritative decorator names.
  */
 
 import ts from "typescript";
-import { RESOURCE_DECORATOR_NAMES } from "@aurelia-ls/resolution";
+import { RESOURCE_DECORATOR_NAMES } from "@aurelia-ls/compiler";
 import type {
   ClassInfo,
   DecoratorInfo,
