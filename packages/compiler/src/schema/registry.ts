@@ -646,8 +646,11 @@ export function prepareProjectSemantics(
   sem: ProjectSemantics,
   overrides?: Partial<Pick<MaterializedSemantics, "resources" | "bindingCommands" | "attributePatterns" | "catalog">>,
 ): MaterializedSemantics {
-  const resources = normalizeResourceCollections(
+  const rawResources = normalizeResourceCollections(
     overrides?.resources ?? sem.resources ?? buildResourceCollectionsFromSemantics(sem),
+  );
+  const resources = promoteTemplateControllerAttributes(
+    rawResources,
   );
   const bindingCommands = overrides?.bindingCommands ?? sem.bindingCommands ?? buildBindingCommandConfigs(sem);
   const attributePatterns = overrides?.attributePatterns ?? sem.attributePatterns ?? buildAttributePatternConfigs(sem);
@@ -659,6 +662,28 @@ export function prepareProjectSemantics(
       sem.catalog ? { gaps: sem.catalog.gaps, confidence: sem.catalog.confidence } : undefined,
     );
   return { ...sem, resources, bindingCommands, attributePatterns, catalog };
+}
+
+function promoteTemplateControllerAttributes(resources: ResourceCollections): ResourceCollections {
+  const controllers: Record<string, ControllerConfig> = { ...resources.controllers };
+  for (const attr of Object.values(resources.attributes)) {
+    if (!attr.isTemplateController) continue;
+    const primary = attr.primary ?? Object.keys(attr.bindables)[0] ?? "value";
+    const config =
+      getControllerConfig(attr.name) ??
+      createCustomControllerConfig(attr.name, primary, attr.bindables);
+    const nameKey = attr.name.toLowerCase();
+    if (!controllers[nameKey]) {
+      controllers[nameKey] = config;
+    }
+    for (const alias of attr.aliases ?? []) {
+      const aliasKey = alias.toLowerCase();
+      if (!controllers[aliasKey]) {
+        controllers[aliasKey] = config;
+      }
+    }
+  }
+  return { ...resources, controllers };
 }
 
 function normalizeEventType(value: TypeRef | string | undefined): TypeRef {

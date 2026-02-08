@@ -1,11 +1,10 @@
 import type { SourceSpan } from "../../model/ir.js";
 import type { BindingMode, HydrateAttributeIR, HydrateElementIR } from "../../model/ir.js";
-import type { Bindable } from "../../schema/registry.js";
+import type { Bindable, ControllerConfig } from "../../schema/registry.js";
 import { toTypeRefOptional } from "../../schema/convert.js";
 import {
   getControllerConfig,
   STUB_CONTROLLER_CONFIG,
-  createCustomControllerConfig,
 } from "../../schema/registry.js";
 import type {
   AttrResRef,
@@ -18,6 +17,10 @@ import type {
 import { camelCase } from "./name-normalizer.js";
 import { type Diagnosed, pure, diag, withStub } from "../../shared/diagnosed.js";
 import type { ResolveContext } from "./resolve-context.js";
+import {
+  planIteratorTailBinding,
+  resolveIteratorTarget,
+} from "../shared/controller-decisions.js";
 
 export function resolvePropertyTarget(
   ctx: ResolveContext,
@@ -69,8 +72,7 @@ export function resolveAttrTarget(host: NodeSem, to: string): TargetSem {
  * Resolve controller semantics using unified ControllerConfig.
  *
  * Resolution order:
- * 1. Built-in controller configs (if, repeat, with, etc.)
- * 2. Custom template controllers in attributes (via @templateController decorator)
+ * 1. Controller configs from semantic authority (lookup.controller)
  *
  * Returns Diagnosed<ControllerSem>:
  * - On success: pure({ res, config }) with no diagnostics
@@ -85,23 +87,17 @@ export function resolveControllerSem(
 ): Diagnosed<ControllerSem> {
   const lookup = ctx.lookup;
   const emitter = ctx.services.diagnostics;
-  // 1. Check built-in controller configs
+  // 1. Check scoped controller configs first (authoritative semantic source)
+  const scopedConfig = lookup.controller(res);
+  if (scopedConfig) {
+    ctx.services.debug.link("controller.scoped", { name: res, trigger: scopedConfig.trigger.kind });
+    return pure({ res, config: scopedConfig });
+  }
+  // 2. Fallback to builtins for defensive standalone usage
   const builtinConfig = getControllerConfig(res);
   if (builtinConfig) {
     ctx.services.debug.link("controller.builtin", { name: res, trigger: builtinConfig.trigger.kind });
     return pure({ res, config: builtinConfig });
-  }
-
-  // 2. Check custom TCs in attributes (discovered via @templateController decorator)
-  const customAttr = lookup.attribute(res);
-  if (customAttr?.isTemplateController) {
-    ctx.services.debug.link("controller.custom", { name: res, primary: customAttr.primary });
-    const customConfig = createCustomControllerConfig(
-      customAttr.name,
-      customAttr.primary,
-      customAttr.bindables
-    );
-    return pure({ res, config: customConfig });
   }
 
   // 3. Unknown controller - return stub + diagnostic
@@ -215,20 +211,21 @@ export function resolveBindableMode(mode: BindingMode, bindable: Bindable | null
 }
 
 export function resolveIteratorAuxSpec(
-  ctx: ResolveContext,
+  controller: ControllerConfig | null | undefined,
   name: string,
   authoredMode: BindingMode,
 ): IteratorAuxSpec | null {
-  const repeatConfig = ctx.lookup.sem.resources.controllers["repeat"];
-  const tailSpec = repeatConfig?.tailProps?.[name];
-  if (!tailSpec) return null;
-  const accepts = tailSpec.accepts ?? ["bind", null];
-  const incoming: "bind" | null = authoredMode === "default" ? null : "bind";
-  if (!accepts.includes(incoming)) return null;
-  // .bind overrides default to 'toView' unless spec says otherwise; literals stay as default
-  const mode: BindingMode | null = incoming === "bind" ? "toView" : null;
-  const type = tailSpec.type ? toTypeRefOptional(tailSpec.type) : undefined;
-  return { name: tailSpec.name, mode, type: type ?? null };
+  const decision = planIteratorTailBinding(controller, name, authoredMode);
+  if (!decision.accepted || !decision.normalized) return null;
+  const type = decision.normalized.type ? toTypeRefOptional(decision.normalized.type) : undefined;
+  return { name: decision.normalized.name, mode: decision.normalized.mode, type: type ?? null };
+}
+
+export function resolveIteratorTargetProp(
+  controller: ControllerConfig | null | undefined,
+  fallback = "items",
+): string {
+  return resolveIteratorTarget(controller, fallback).to;
 }
 
 function unreachable(_x: never): never {

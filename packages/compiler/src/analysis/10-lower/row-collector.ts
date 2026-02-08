@@ -7,6 +7,8 @@ import { lowerLetElement } from "./let-lowering.js";
 import { lowerTextNode } from "./text-lowering.js";
 import type { TemplateBuildContext } from "./template-builders.js";
 import type { LowerContext } from "./lower-context.js";
+import { getControllerConfig } from "../../schema/registry.js";
+import { resolvePromiseBranchKind } from "../shared/controller-decisions.js";
 
 export function collectRows(
   p: { childNodes?: P5Node[] },
@@ -18,7 +20,7 @@ export function collectRows(
   skipTags?: Set<string>,
   projectionMap?: ProjectionMap,
 ): void {
-  const { attrParser, table, catalog } = lowerCtx;
+  const { attrParser, catalog } = lowerCtx;
   ids.withinChildren(() => {
     const kids = p.childNodes ?? [];
     for (const n of kids) {
@@ -61,7 +63,7 @@ export function collectRows(
         if (!ctrlRows.length && !skipChildren) {
           if (tag === "template") {
             // Skip promise branch templates - their content is handled by injectPromiseBranchesIntoDef
-            const isPromiseBranch = findAttr(n, "then") || findAttr(n, "catch") || findAttr(n, "pending");
+            const isPromiseBranch = hasPromiseBranchMarker(n as P5Template, attrParser, catalog);
             if (!isPromiseBranch) {
               collectRows(
                 (n as P5Template).content,
@@ -94,4 +96,17 @@ export function collectRows(
       }
     }
   });
+}
+
+function hasPromiseBranchMarker(
+  template: P5Template,
+  attrParser: LowerContext["attrParser"],
+  catalog: LowerContext["catalog"],
+): boolean {
+  for (const attr of template.attrs ?? []) {
+    const parsed = attrParser.parse(attr.name, attr.value ?? "");
+    const config = getControllerConfig(parsed.target) ?? catalog.resources.controllers[parsed.target];
+    if (resolvePromiseBranchKind(config)) return true;
+  }
+  return false;
 }

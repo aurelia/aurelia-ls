@@ -38,7 +38,7 @@ import type {
   SourceSpan,
 } from "../../model/ir.js";
 
-import { getControllerConfig, type SemanticsLookupOptions } from "../../schema/registry.js";
+import { getControllerConfig, type ControllerConfig, type SemanticsLookupOptions } from "../../schema/registry.js";
 import type { ResourceGraph } from "../../schema/resource-graph.js";
 import type { ModuleResolver } from "../../shared/module-resolver.js";
 
@@ -80,6 +80,7 @@ import {
   resolveElementResRef,
   resolvePropertyTarget,
   resolveIteratorAuxSpec,
+  resolveIteratorTargetProp,
 } from "./resolution-helpers.js";
 import { reportDiagnostic } from "../../diagnostics/report.js";
 import { resolveNodeSem } from "./node-semantics.js";
@@ -650,7 +651,7 @@ function linkInstruction(ins: InstructionIR, host: NodeSem, ctx: ResolverContext
     case "hydrateAttribute":
       return linkHydrateAttribute(ins, host, ctx);
     case "iteratorBinding":
-      return merge(linkIteratorBinding(ins, ctx), ctx);
+      return merge(linkIteratorBinding(ins, ctx, null), ctx);
     case "hydrateTemplateController":
       return linkHydrateTemplateController(ins, host, ctx);
     case "hydrateLetElement":
@@ -947,23 +948,25 @@ function linkAttributeBindable(
 
 /* ---- IteratorBinding (repeat) ---- */
 
-function linkIteratorBinding(ins: IteratorBindingIR, ctx: ResolverContext): Diagnosed<LinkedIteratorBinding> {
-  // Get iterator prop from repeat controller config (config-driven)
-  const repeatConfig = ctx.lookup.sem.resources.controllers["repeat"];
-  const normalizedTo = repeatConfig?.trigger.kind === "iterator" ? repeatConfig.trigger.prop : "items";
+function linkIteratorBinding(
+  ins: IteratorBindingIR,
+  ctx: ResolverContext,
+  controllerConfig: ControllerConfig | null,
+): Diagnosed<LinkedIteratorBinding> {
+  const normalizedTo = resolveIteratorTargetProp(controllerConfig, ins.to);
   const aux: LinkedIteratorBinding["aux"] = [];
   const acc = new DiagnosticAccumulator();
 
   if (ins.props?.length) {
     for (const p of ins.props) {
       const authoredMode: BindingMode = p.command === "bind" ? "toView" : "default";
-        const spec = resolveIteratorAuxSpec(ctx, p.to, authoredMode);
-        if (!spec) {
-          acc.push(ctx.services.diagnostics.emit("aurelia/invalid-command-usage", {
-            message: `Unknown repeat option '${p.to}'.`,
-            span: p.loc,
-          }));
-        }
+      const spec = resolveIteratorAuxSpec(controllerConfig, p.to, authoredMode);
+      if (!spec) {
+        acc.push(ctx.services.diagnostics.emit("aurelia/invalid-command-usage", {
+          message: `Unknown iterator option '${p.to}'.`,
+          span: p.loc,
+        }));
+      }
       if (!p.from && p.value == null) continue;
       const from: LinkedIteratorBinding["aux"][number]["from"] = p.from ?? {
         id: ins.forOf.astId,
@@ -1002,7 +1005,7 @@ function linkHydrateTemplateController(
   const props = ins.props.map((p) => {
     if (p.type === "iteratorBinding") {
       // linkIteratorBinding now returns Diagnosed
-      return merge(linkIteratorBinding(p, ctx), ctx);
+      return merge(linkIteratorBinding(p, ctx, ctrlSem.config), ctx);
     } else if (p.type === "propertyBinding") {
       const to = normalizePropLikeName(host, p.to, ctx.lookup);
       const target: TargetSem = {

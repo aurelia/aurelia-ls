@@ -58,6 +58,10 @@ import type { Origin, Provenance } from "../../model/origin.js";
 import { isStub } from "../../shared/diagnosed.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { debug } from "../../shared/debug.js";
+import {
+  isPromiseParentController,
+  resolvePromiseBranchKind,
+} from "../shared/controller-decisions.js";
 
 function assertUnreachable(_x: never): never { throw new Error("unreachable"); }
 
@@ -462,57 +466,52 @@ function populateControllerFrame(
 
   // === Promise Branch Pattern ===
   // Controllers that are branches of promise (then, catch)
-  if (config.trigger.kind === "branch" && config.linksTo === "promise" && config.scope === "overlay") {
+  const promiseBranchKind = resolvePromiseBranchKind(config);
+  if (promiseBranchKind && promiseBranchKind !== "pending" && config.scope === "overlay") {
     const valueProp = findValueBinding(ins);
     const valueExprId = valueProp ? exprIdsOf(valueProp.from)[0] : undefined;
     const originSpan = normalizeSpanMaybe(valueProp?.loc ?? span);
 
-    // Determine branch type from the controller's branch metadata
     const branch = ins.branch;
-    if (branch && (branch.kind === "then" || branch.kind === "catch")) {
-      const branchKind = branch.kind;
-      setFrameOrigin(targetFrame, frames, {
-        kind: "promiseBranch",
-        branch: branchKind,
-        valueExprId,
-        controller: controllerName,
-        ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
-      });
+    const authoredAlias = branch && (branch.kind === "then" || branch.kind === "catch")
+      ? branch.local
+      : null;
+    setFrameOrigin(targetFrame, frames, {
+      kind: "promiseBranch",
+      branch: promiseBranchKind,
+      valueExprId,
+      controller: controllerName,
+      ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
+    });
 
-      // Add alias symbol (the variable that receives the resolved/rejected value)
-      const defaultAlias = config.injects?.alias?.defaultName ?? branchKind;
-      const aliasName = branch.local && branch.local.length > 0 ? branch.local : defaultAlias;
-      addUniqueSymbols(targetFrame, frames, [{
-        kind: "alias",
-        name: aliasName,
-        aliasKind: branchKind,
-        span,
-      }], diagEmitter);
-    }
+    // Add alias symbol (the variable that receives the resolved/rejected value)
+    const defaultAlias = config.injects?.alias?.defaultName ?? promiseBranchKind;
+    const aliasName = authoredAlias && authoredAlias.length > 0 ? authoredAlias : defaultAlias;
+    addUniqueSymbols(targetFrame, frames, [{
+      kind: "alias",
+      name: aliasName,
+      aliasKind: promiseBranchKind,
+      span,
+    }], diagEmitter);
     return;
   }
 
   // === Promise Value Pattern ===
   // The promise controller itself (parent of then/catch branches)
   // Identified by: has branches with relationship="child" AND branches include promise-related controllers
-  if (config.trigger.kind === "value" && config.scope === "overlay" && config.branches?.relationship === "child") {
-    const branchNames = config.branches.names;
-    const isPromiseLike = branchNames.includes("then") || branchNames.includes("catch");
-
-    if (isPromiseLike) {
-      const valueProp = findValueBinding(ins);
-      const valueExprId = valueProp ? exprIdsOf(valueProp.from)[0] : undefined;
-      if (valueExprId) {
-        const originSpan = normalizeSpanMaybe(valueProp?.loc ?? span);
-        setFrameOrigin(targetFrame, frames, {
-          kind: "promiseValue",
-          valueExprId,
-          controller: controllerName,
-          ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
-        });
-      }
-      return;
+  if (config.trigger.kind === "value" && config.scope === "overlay" && isPromiseParentController(config)) {
+    const valueProp = findValueBinding(ins);
+    const valueExprId = valueProp ? exprIdsOf(valueProp.from)[0] : undefined;
+    if (valueExprId) {
+      const originSpan = normalizeSpanMaybe(valueProp?.loc ?? span);
+      setFrameOrigin(targetFrame, frames, {
+        kind: "promiseValue",
+        valueExprId,
+        controller: controllerName,
+        ...provenanceFromSpan("bind", originSpan, `${controllerName} controller`),
+      });
     }
+    return;
   }
 
   // === Value Overlay Pattern ===

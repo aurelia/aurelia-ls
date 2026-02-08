@@ -6,11 +6,8 @@ import type {
   ControllerName,
   ResourceCatalog,
 } from "../../schema/registry.js";
+import { getControllerConfig } from "../../schema/registry.js";
 import { formatSuggestion } from "../../shared/suggestions.js";
-import {
-  BUILTIN_CONTROLLER_CONFIGS,
-  createCustomControllerConfig,
-} from "../../schema/registry.js";
 import type {
   AttributeBindableIR,
   BindingMode,
@@ -34,13 +31,17 @@ import {
 } from "./lower-shared.js";
 import { resolveAttrDef, resolveElementDef } from "./resource-utils.js";
 import type { LowerContext } from "./lower-context.js";
+import {
+  planControllerAttribute,
+  resolvePromiseBranchKind,
+} from "../shared/controller-decisions.js";
 
 function isPromiseBranchAttr(
   parsed: ReturnType<AttributeParser["parse"]>,
   catalog: ResourceCatalog,
 ): boolean {
-  const controller = catalog.resources.controllers[parsed.target];
-  return controller?.linksTo === "promise" && controller.trigger.kind === "branch";
+  const controller = getControllerConfig(parsed.target) ?? catalog.resources.controllers[parsed.target];
+  return resolvePromiseBranchKind(controller) != null;
 }
 
 // Character codes for multi-binding parsing
@@ -472,9 +473,8 @@ export function lowerElementAttributes(
  * Resolve an attribute to its controller configuration.
  *
  * Resolution order:
- * 1. Built-in controller configs (if, repeat, with, etc.)
- * 2. Custom template controllers in attributes (via @templateController decorator)
- * 3. Legacy controllers in catalog.resources.controllers (for backward compat)
+ * 1. Built-in controller configs (canonical controller semantics).
+ * 2. Scoped controller configs from semantic catalogs.
  *
  * Note: Branch controllers (else, case, then, catch, pending, default-case) are NOT
  * resolved here. They are only valid as children/siblings of their parent controller
@@ -488,45 +488,25 @@ export function resolveControllerAttr(
 ): ControllerConfig | null {
   const target = s.target;
 
-  // 1. Check built-in controller configs first
-  const builtin = BUILTIN_CONTROLLER_CONFIGS[target];
-  if (builtin) {
-    // Promise branch controllers (then, catch, pending) are NOT resolved here.
-    // They are detected by detectPromiseBranch() which handles the special
-    // branch injection logic. Other branch controllers (else, case, default-case)
-    // ARE resolved here and handled normally by collectControllers().
-    if (builtin.linksTo === "promise") {
-      return null;
-    }
-
-    // Special case: repeat requires "for" command
-    if (target === "repeat") {
-      return s.command === "for" ? builtin : null;
-    }
-    return builtin;
+  // 1. Built-ins first: avoid degrading known controllers (repeat/promise branches)
+  // when scoped resources only contain attribute-style template controller metadata.
+  const builtin = getControllerConfig(target);
+  const builtinDecision = planControllerAttribute(builtin, s.command);
+  if (builtinDecision.accepted) {
+    return builtin ?? null;
+  }
+  if (builtinDecision.reason !== "missing-controller") {
+    return null;
   }
 
-  // 2. Check custom TCs in attributes (discovered via @templateController decorator)
-  const customAttr = resolveAttrDef(target, catalog);
-  if (customAttr?.isTemplateController) {
-    // Create a config for this custom TC
-    return createCustomControllerConfig(
-      customAttr.name,
-      customAttr.primary,
-      customAttr.bindables
-    );
+  // 2. Fall back to scoped controller catalogs for project-defined controllers.
+  const scoped = catalog.resources.controllers[target];
+  const decision = planControllerAttribute(scoped, s.command);
+  if (decision.accepted) {
+    return scoped ?? null;
   }
-
-  // 3. Legacy fallback: check catalog.resources.controllers
-  // This maintains backward compatibility with existing code that adds to controllers directly
-  const legacyController = catalog.resources.controllers[target];
-  if (legacyController) {
-    // For legacy controllers, create a minimal config
-    // The toControllerConfig() function handles full conversion if needed
-    if (target === "repeat") {
-      return s.command === "for" ? BUILTIN_CONTROLLER_CONFIGS["repeat"]! : null;
-    }
-    return BUILTIN_CONTROLLER_CONFIGS[target] ?? null;
+  if (decision.reason !== "missing-controller") {
+    return null;
   }
 
   return null;

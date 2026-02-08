@@ -1,12 +1,12 @@
 import type { Token } from "parse5";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { BindingCommandConfig, ControllerConfig } from "../../schema/registry.js";
+import { getControllerConfig } from "../../schema/registry.js";
 import type {
   BindingMode,
   ControllerBindableIR,
   ControllerBranchInfo,
   DOMNode,
-  ExprRef,
   HydrateTemplateControllerIR,
   InstructionIR,
   IteratorBindingIR,
@@ -30,6 +30,13 @@ import {
 } from "./template-builders.js";
 import type { TemplateBuildContext } from "./template-builders.js";
 import type { LowerContext, LowerServices } from "./lower-context.js";
+import {
+  isPromiseBranchName,
+  isPromiseParentController,
+  planControllerBareValue,
+  planControllerBranchInfo,
+  resolvePromiseBranchKind,
+} from "../shared/controller-decisions.js";
 
 // -----------------------------------------------------------------------------
 // Trigger kind helpers
@@ -40,66 +47,7 @@ import type { LowerContext, LowerServices } from "./lower-context.js";
  * This determines whether special branch injection is needed.
  */
 function hasPromiseBranches(config: ControllerConfig): boolean {
-  return config.branches?.names.includes("then") ?? false;
-}
-
-/**
- * Type guard to check if a BindingSourceIR is an ExprRef (not InterpIR).
- */
-function isExprRef(source: PropertyBindingIR["from"]): source is ExprRef {
-  return !("kind" in source && source.kind === "interp");
-}
-
-/**
- * Build switch branch info for case/default-case controllers.
- * Returns null for non-switch-branch controllers.
- *
- * CONFIG-DRIVEN: Uses trigger.kind to distinguish case vs default:
- * - trigger.kind="branch" with linksTo="switch" → case (has expr)
- * - trigger.kind="marker" with linksTo="switch" → default (no expr)
- */
-function buildSwitchBranchInfo(
-  config: ControllerConfig,
-  props: ControllerBindableIR[]
-): ControllerBranchInfo | null {
-  // Only handle switch branch controllers
-  if (config.linksTo !== "switch") return null;
-
-  // Config-driven: branch trigger = case (has expression value)
-  if (config.trigger.kind === "branch") {
-    const valueProp = props.find(
-      (p): p is PropertyBindingIR => p.type === "propertyBinding" && p.to === "value"
-    );
-    if (valueProp && isExprRef(valueProp.from)) {
-      return { kind: "case", expr: valueProp.from };
-    }
-    // Fallback: branch controller without value (shouldn't happen but be defensive)
-    return null;
-  }
-
-  // Config-driven: marker trigger = default (no expression)
-  if (config.trigger.kind === "marker") {
-    return { kind: "default" };
-  }
-
-  return null;
-}
-
-/**
- * Build promise branch info for then/catch/pending controllers.
- * Uses the authored value as the alias when present.
- */
-function buildPromiseBranchInfo(
-  config: ControllerConfig,
-  raw: string,
-): ControllerBranchInfo | null {
-  if (config.linksTo !== "promise") return null;
-  if (config.trigger.kind !== "branch") return null;
-  const name = config.name;
-  if (name !== "then" && name !== "catch" && name !== "pending") return null;
-  if (name === "pending") return { kind: "pending" };
-  const alias = raw.trim();
-  return { kind: name, ...(alias.length > 0 ? { local: alias } : {}) };
+  return isPromiseParentController(config);
 }
 
 // -----------------------------------------------------------------------------
@@ -111,14 +59,16 @@ function buildIteratorProps(
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
+  propName: string,
+  includeTailProps: boolean,
   bindingCommands: Record<string, BindingCommandConfig>
 ): IteratorBindingIR {
   const forRef = table.add(raw, valueLoc, "IsIterator");
   const forOf = { astId: forRef.id, code: raw, loc: toSpan(valueLoc, table.source) };
-  const tailProps = toRepeatTailIR(raw, valueLoc, table, bindingCommands);
+  const tailProps = includeTailProps ? toRepeatTailIR(raw, valueLoc, table, bindingCommands) : null;
   return {
     type: "iteratorBinding",
-    to: "items",
+    to: propName,
     forOf,
     props: tailProps,
     loc: toSpan(loc, table.source),
@@ -160,18 +110,20 @@ function buildLiteralOrBindingProps(
  *    (empty value uses controller name, e.g., `<div if>` → expression "if")
  */
 function buildValueProps(
+  config: ControllerConfig,
   raw: string,
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
   propName: string,
-  controllerName: string,
   command: string | null,
   patternMode: BindingMode | null,
   bindingCommands: Record<string, BindingCommandConfig>
 ): ControllerBindableIR {
   const locSpan = toSpan(loc, table.source);
+  const controllerName = config.name;
   const exprText = raw.length === 0 ? controllerName : raw;
+  const bareValue = planControllerBareValue(config);
 
   // Case 1: Has binding command (e.g., if.bind="expr")
   if (command) {
@@ -196,9 +148,9 @@ function buildValueProps(
     };
   }
 
-  // Portal defaults to literal selector strings when no command/interpolation.
-  // Use a quoted string literal expression so AOT/SSR get a valid AST.
-  if (controllerName === "portal" && raw.length > 0) {
+  // Some controllers (for example teleported controllers) treat bare values as
+  // literal strings so runtime selectors remain valid.
+  if (raw.length > 0 && bareValue.mode === "literal-string") {
     return {
       type: "propertyBinding",
       to: propName,
@@ -271,7 +223,7 @@ export function collectControllers(
     const raw = a.value ?? "";
     const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, catalog.bindingCommands, services);
 
-    const branch = buildPromiseBranchInfo(config, raw) ?? buildSwitchBranchInfo(config, proto.props);
+    const branch = planControllerBranchInfo(config, raw, proto.props).branch;
 
     const nextLayer: HydrateTemplateControllerIR[] = [];
     for (const inner of current) {
@@ -328,7 +280,10 @@ function buildControllerPrototype(
       return { res: name, props: [] };
 
     case "iterator":
-      return { res: name, props: [buildIteratorProps(raw, valueLoc, loc, table, bindingCommands)] };
+      return {
+        res: name,
+        props: [buildIteratorProps(raw, valueLoc, loc, table, trigger.prop, !!config.tailProps, bindingCommands)],
+      };
 
     case "branch":
       // Branch controllers (else, case, then, etc.) may have literal or binding values
@@ -339,7 +294,10 @@ function buildControllerPrototype(
       return { res: name, props: [] };
 
     case "value":
-      return { res: name, props: [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, s.command, s.mode, bindingCommands)] };
+      return {
+        res: name,
+        props: [buildValueProps(config, raw, valueLoc, loc, table, trigger.prop, s.command, s.mode, bindingCommands)],
+      };
   }
 }
 
@@ -356,7 +314,7 @@ function buildRightmostController(
   ctx: TemplateBuildContext,
   host: TemplateHostRef,
 ): HydrateTemplateControllerIR[] {
-  const { attrParser, table, catalog } = lowerCtx;
+  const { table, catalog } = lowerCtx;
   const { a, s, config } = rightmost;
   const loc = attrLoc(el, a.name);
   const valueLoc = attrValueLoc(el, a.name, table.sourceText);
@@ -369,7 +327,17 @@ function buildRightmostController(
 
   // Promise needs special handling for branch injection
   if (hasPromiseBranches(config)) {
-    return buildPromiseController(el, props as PropertyBindingIR[], locSpan, lowerCtx, nestedTemplates, collectRows, ctx, host);
+    return buildPromiseController(
+      config.name,
+      el,
+      props as PropertyBindingIR[],
+      locSpan,
+      lowerCtx,
+      nestedTemplates,
+      collectRows,
+      ctx,
+      host,
+    );
   }
 
   // All other controllers just need the template definition
@@ -383,7 +351,7 @@ function buildRightmostController(
   );
 
   // Build switch branch info for case/default-case controllers
-  const branch = buildPromiseBranchInfo(config, raw) ?? buildSwitchBranchInfo(config, props);
+  const branch = planControllerBranchInfo(config, raw, props).branch;
 
   return [createHydrateInstruction(name, def, props, locSpan, branch)];
 }
@@ -399,13 +367,12 @@ function buildPropsForConfig(
   bindingCommands: Record<string, BindingCommandConfig>
 ): ControllerBindableIR[] {
   const trigger = config.trigger;
-  const name = config.name;
 
   switch (trigger.kind) {
     case "marker":
       return [];
     case "iterator":
-      return [buildIteratorProps(raw, valueLoc, loc, table, bindingCommands)];
+      return [buildIteratorProps(raw, valueLoc, loc, table, trigger.prop, !!config.tailProps, bindingCommands)];
     case "branch":
       // Branch controllers (case) may have literal or binding values
       if (config.props?.["value"]) {
@@ -413,7 +380,7 @@ function buildPropsForConfig(
       }
       return [];
     case "value":
-      return [buildValueProps(raw, valueLoc, loc, table, trigger.prop, name, command, patternMode, bindingCommands)];
+      return [buildValueProps(config, raw, valueLoc, loc, table, trigger.prop, command, patternMode, bindingCommands)];
   }
 }
 
@@ -437,6 +404,7 @@ function createHydrateInstruction(
 }
 
 function buildPromiseController(
+  controllerName: string,
   el: P5Element,
   props: PropertyBindingIR[],
   locSpan: SourceSpan | null,
@@ -452,10 +420,10 @@ function buildPromiseController(
     nestedTemplates,
     collectRows,
     ctx,
-    { kind: "controller", host, controller: "promise" },
+    { kind: "controller", host, controller: controllerName },
   );
   injectPromiseBranchesIntoDef(el, def, idMap, lowerCtx, nestedTemplates, props[0]!, collectRows, ctx);
-  return [createHydrateInstruction("promise", def, props, locSpan)];
+  return [createHydrateInstruction(controllerName, def, props, locSpan)];
 }
 
 // -----------------------------------------------------------------------------
@@ -519,7 +487,7 @@ function injectPromiseBranchesIntoDef(
   for (const kid of kids) {
     if (!isElementNode(kid)) continue;
 
-    const branch = detectPromiseBranch(kid, attrParser);
+    const branch = detectPromiseBranch(kid, attrParser, catalog);
     if (!branch) continue;
 
     const target = idMap.get(kid as P5Node);
@@ -611,20 +579,25 @@ type PromiseBranchInfo = {
   isTemplate: boolean;
 };
 
-function detectPromiseBranch(kid: P5Element, attrParser: AttributeParser): PromiseBranchInfo | null {
+function detectPromiseBranch(
+  kid: P5Element,
+  attrParser: AttributeParser,
+  catalog: LowerContext["catalog"],
+): PromiseBranchInfo | null {
   const isTemplate = kid.nodeName.toLowerCase() === "template";
 
   for (const a of kid.attrs ?? []) {
     const parsed = attrParser.parse(a.name, a.value ?? "");
-    if (parsed.target === "then" || parsed.target === "catch" || parsed.target === "pending") {
-      const raw = (a.value ?? "").trim();
-      return {
-        kind: parsed.target,
-        aliasVar: parsed.target === "pending" ? null : (raw.length ? raw : null),
-        loc: attrLoc(kid, a.name),
-        isTemplate,
-      };
-    }
+    const controller = getControllerConfig(parsed.target) ?? catalog.resources.controllers[parsed.target];
+    const kind = resolvePromiseBranchKind(controller);
+    if (!kind) continue;
+    const raw = (a.value ?? "").trim();
+    return {
+      kind,
+      aliasVar: kind === "pending" ? null : (raw.length ? raw : null),
+      loc: attrLoc(kid, a.name),
+      isTemplate,
+    };
   }
 
   return null;
@@ -632,10 +605,10 @@ function detectPromiseBranch(kid: P5Element, attrParser: AttributeParser): Promi
 
 function isBranchMarker(ins: InstructionIR): boolean {
   if (ins.type === "setAttribute") {
-    return ins.to === "then" || ins.to === "catch" || ins.to === "pending";
+    return isPromiseBranchName(ins.to);
   }
   if (ins.type === "propertyBinding") {
-    return ins.to === "then" || ins.to === "catch" || ins.to === "pending";
+    return isPromiseBranchName(ins.to);
   }
   return false;
 }
