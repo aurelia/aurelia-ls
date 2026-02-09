@@ -2,6 +2,36 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Dump Template (cortex all-table)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/scripts/dump-template.mjs",
+      "args": [
+        "../cortex-device-list",
+        "src/views/all-table.html",
+        "dumps/cortex-all-table"
+      ],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "build:tsc"
+    },
+    {
+      "name": "Dump Template (cortex devices)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/scripts/dump-template.mjs",
+      "args": [
+        "../cortex-device-list",
+        "src/cortex-devices.html",
+        "dumps/cortex-devices"
+      ],
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "build:tsc"
+    },
+    {
       "name": "Run Extension (with Hello World workspace)",
       "type": "extensionHost",
       "request": "launch",
