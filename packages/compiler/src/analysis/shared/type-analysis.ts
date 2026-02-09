@@ -175,6 +175,15 @@ export function buildFrameAnalysis(
       }
     }
 
+    // === Type synthetic writeback locals ===
+    // These come from two-way/from-view bindings using `$`-prefixed AccessScope
+    // expressions (e.g. display-data.bind: $displayData).
+    for (const s of f.symbols) {
+      if (s.kind === "syntheticLocal") {
+        env.set(s.name, s.type ?? "unknown");
+      }
+    }
+
     // === Type contextuals ===
     // These have known types based on their names ($index → number, etc.)
     for (const s of f.symbols) {

@@ -57,6 +57,8 @@ export function emitOverlay(
       : [
           "function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
           "function __au_bb<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",
+          "type __AU_DollarChangedValue<T> = T extends (newValue: infer V, ..._args: unknown[]) => unknown ? V : unknown;",
+          "type __AU_DollarChangedProps<T> = { [K in keyof T as K extends `$${infer Name}Changed` ? `$${Name}` : never]?: __AU_DollarChangedValue<T[K]> };",
         ];
     for (const line of helpers) {
       out.push(line);
@@ -71,6 +73,9 @@ export function emitOverlay(
         name: template.vmType?.alias ?? "anonymous",
         frameCount: template.frames.length,
       });
+      const dollarChangedType = !isJs && template.vmType?.alias
+        ? `__AU_DollarChangedProps<${template.vmType.alias}>`
+        : null;
       if (template.vmType?.alias && template.vmType?.typeExpr) {
         if (!isJs) {
           const aliasLine = `type ${template.vmType.alias} = ${template.vmType.typeExpr};`;
@@ -95,7 +100,8 @@ export function emitOverlay(
           const typeRef = f.frame === 0 ? f.typeExpr : f.typeName;
           for (const l of f.lambdas) {
             totalLambdas++;
-            const line = `__au$access<${typeRef}>(${l.lambda});`;
+            const accessType = augmentAccessType(typeRef, dollarChangedType, l.eventType);
+            const line = `__au$access<${accessType}>(${l.lambda});`;
             const lambdaStart = requireSubsequenceOffset(line, l.lambda, "ts-lambda");
             const start = offset + lambdaStart;
             const span = spanFromBounds(start, start + l.lambda.length);
@@ -105,15 +111,16 @@ export function emitOverlay(
           }
         } else {
           // JS flavor: JSDoc on the arrow function parameter (supported by TS checkJs).
-          const withJSDocParam = (lambda: string) => {
+          const withJSDocParam = (lambda: string, typeExpr: string) => {
             const idx = lambda.indexOf("=>");
             const head = lambda.slice(0, idx).trim();  // "o"
             const tail = lambda.slice(idx).trim();     // "=> <expr>"
-            return `/** @param {${f.typeExpr}} ${head} */ (${head}) ${tail}`;
+            return `/** @param {${typeExpr}} ${head} */ (${head}) ${tail}`;
           };
           for (const l of f.lambdas) {
             totalLambdas++;
-            const lambdaWithDoc = withJSDocParam(l.lambda);
+            const accessType = augmentAccessType(f.typeExpr, null, l.eventType);
+            const lambdaWithDoc = withJSDocParam(l.lambda, accessType);
             const line = `__au$access(${lambdaWithDoc});`;
             const lambdaStart = requireSubsequenceOffset(line, lambdaWithDoc, "js-lambda");
             const start = offset + lambdaStart;
@@ -249,4 +256,27 @@ function adjustMappingForEol(mapping: OverlayEmitMappingEntry[], text: string, e
     span: adjust(m.span),
     segments: m.segments?.map((seg) => ({ ...seg, span: adjust(seg.span) })),
   }));
+}
+
+function augmentAccessType(
+  baseType: string,
+  dollarChangedType: string | null,
+  listenerEventType: string | undefined,
+): string {
+  let typeExpr = baseType;
+  if (dollarChangedType) {
+    typeExpr = `${wrapTypeExpr(typeExpr)} & ${wrapTypeExpr(dollarChangedType)}`;
+  }
+  if (listenerEventType) {
+    typeExpr = `${wrapTypeExpr(typeExpr)} & { $event: ${listenerEventType} }`;
+  }
+  return typeExpr;
+}
+
+function wrapTypeExpr(typeExpr: string): string {
+  const trimmed = typeExpr.trim();
+  if (trimmed.length === 0) return "unknown";
+  return trimmed.startsWith("(") && trimmed.endsWith(")")
+    ? trimmed
+    : `(${trimmed})`;
 }

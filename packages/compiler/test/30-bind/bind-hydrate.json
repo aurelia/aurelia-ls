@@ -55,5 +55,39 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "B-H3 two-way custom-attribute binding materializes synthetic $ local in frame scope",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "aurelia-table": {
+            "kind": "attribute",
+            "name": "aurelia-table",
+            "isTemplateController": false,
+            "bindables": {
+              "displayData": {
+                "name": "displayData",
+                "attribute": "display-data",
+                "mode": "twoWay"
+              }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div aurelia-table=\"display-data.bind: $displayData\"></div><p>${$displayData}</p>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [
+        { "frame": "root", "kind": "syntheticLocal", "name": "$displayData" }
+      ],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "$displayData" }
+      ],
+      "diags": []
+    }
   }
 ]

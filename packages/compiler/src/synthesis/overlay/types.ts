@@ -41,6 +41,11 @@ export interface OverlayLambdaPlan {
   lambda: string;
   /** Start/end (within `lambda`) of the expression body (after `=>`). */
   exprSpan: TextSpan;
+  /**
+   * Optional event type for listener expressions.
+   * When present, emit augments the lambda context with `$event: <eventType>`.
+   */
+  eventType?: string;
   /** Optional member segments for rename/refs mapping (relative to `lambda`). */
   segments?: readonly OverlayLambdaSegment[] | undefined;
 }

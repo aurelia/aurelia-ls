@@ -22,7 +22,7 @@ import type { ReadonlyExprIdMap } from "../../model/identity.js";
 import type { ExprId, IsBindingBehavior, ExprTableEntry } from "../../model/ir.js";
 
 // Analysis imports (via barrel)
-import type { LinkModule } from "../../analysis/index.js";
+import type { LinkModule, LinkedInstruction } from "../../analysis/index.js";
 import { buildFrameAnalysis, wrap, type FrameTypingHints, type Env } from "../../analysis/index.js";
 
 // Shared imports
@@ -61,7 +61,7 @@ export function plan(linked: LinkModule, scope: ScopeModule, opts: SynthesisOpti
     for (let ti = 0; ti < roots.length; ti++) {
       const st = roots[ti]!;
       trace.event("overlay.plan.template", { index: ti, frameCount: st.frames.length });
-      templates.push(analyzeTemplate(st, exprIndex, ti, opts));
+      templates.push(analyzeTemplate(linked, st, exprIndex, ti, opts));
     }
 
     // Count total frames and lambdas
@@ -94,6 +94,7 @@ export function plan(linked: LinkModule, scope: ScopeModule, opts: SynthesisOpti
 /* ===================================================================================== */
 
 function analyzeTemplate(
+  linked: LinkModule,
   st: ScopeTemplate,
   exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
   templateIndex: number,
@@ -118,6 +119,7 @@ function analyzeTemplate(
 
   // Build envs + typing hints for all frames
   const analysis = buildFrameAnalysis(st, exprIndex, rootTypeRef);
+  const listenerEventTypes = collectListenerEventTypes(linked);
 
   // Emit overlays
   const typeExprByFrame = new Map<FrameId, string>();
@@ -126,7 +128,7 @@ function analyzeTemplate(
     const parentExpr = f.parent != null ? typeExprByFrame.get(f.parent) : undefined;
     const typeExpr = buildFrameTypeExpr(f, rootTypeRef, analysis.hints.get(f.id), analysis.envs, parentExpr);
     typeExprByFrame.set(f.id, typeExpr);
-    const lambdas = collectOneLambdaPerExpression(st, f.id, exprIndex);
+    const lambdas = collectOneLambdaPerExpression(st, f.id, exprIndex, listenerEventTypes);
     frames.push({ frame: f.id, typeName, typeExpr, lambdas });
   }
 
@@ -203,6 +205,7 @@ function collectOneLambdaPerExpression(
   st: ScopeTemplate,
   frameId: FrameId,
   exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
+  listenerEventTypes: ReadonlyMap<ExprId, string>,
 ): OverlayLambdaPlan[] {
   const out: OverlayLambdaPlan[] = [];
   const seen = new Set<ExprId>();
@@ -227,7 +230,10 @@ function collectOneLambdaPerExpression(
           const exprStart = lambda.length - expr.code.length;
           const exprSpan = spanFromBounds(exprStart, exprStart + expr.code.length);
           const segments = shiftSegments(expr.segments, exprStart);
-          out.push({ exprId: id, lambda, exprSpan, segments });
+          const eventType = listenerEventTypes.get(id);
+          out.push(eventType
+            ? { exprId: id, lambda, exprSpan, eventType, segments }
+            : { exprId: id, lambda, exprSpan, segments });
         }
         break;
       }
@@ -248,6 +254,43 @@ type PrintedExpression = { code: string; segments: readonly OverlayLambdaSegment
 function renderExpressionFromAst(ast: IsBindingBehavior): PrintedExpression | null {
   const emitted = emitPrintedExpression(ast);
   return emitted ? { ...emitted } : null;
+}
+
+function collectListenerEventTypes(linked: LinkModule): Map<ExprId, string> {
+  const out = new Map<ExprId, string>();
+  for (const template of linked.templates ?? []) {
+    for (const row of template.rows ?? []) {
+      for (const ins of row.instructions ?? []) {
+        collectListenerEventTypeFromInstruction(ins, out);
+      }
+    }
+  }
+  return out;
+}
+
+function collectListenerEventTypeFromInstruction(
+  ins: LinkedInstruction,
+  out: Map<ExprId, string>,
+): void {
+  if (ins.kind !== "listenerBinding") return;
+  if (!out.has(ins.from.id)) {
+    out.set(ins.from.id, normalizeListenerEventType(ins.eventType));
+  }
+}
+
+function normalizeListenerEventType(eventType: unknown): string {
+  if (!eventType || typeof eventType !== "object") return "any";
+  const kind = (eventType as { kind?: unknown }).kind;
+  switch (kind) {
+    case "ts": {
+      const name = (eventType as { name?: unknown }).name;
+      return typeof name === "string" && name.length > 0 ? name : "any";
+    }
+    case "any":
+    case "unknown":
+    default:
+      return "any";
+  }
 }
 
 function shiftSegments(segs: readonly OverlayLambdaSegment[], by: number): OverlayLambdaSegment[] {

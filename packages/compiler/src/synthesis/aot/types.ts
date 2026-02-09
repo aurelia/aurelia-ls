@@ -578,7 +578,8 @@ export type PlanLocalSource =
   | "let"        // <let name.bind="expr">
   | "iterator"   // repeat.for="item of items"
   | "contextual" // $index, $first, etc.
-  | "alias";     // promise then="result", catch="error"
+  | "alias"      // promise then="result", catch="error"
+  | "synthetic"; // two-way/from-view writeback local, e.g. $displayData
 
 /* =============================================================================
  * EMIT RESULTS

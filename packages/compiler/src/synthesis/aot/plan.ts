@@ -339,6 +339,7 @@ function symbolKindToSource(kind: ScopeSymbol["kind"]): PlanLocalSource {
     case "iteratorLocal": return "iterator";
     case "contextual": return "contextual";
     case "alias": return "alias";
+    case "syntheticLocal": return "synthetic";
   }
 }
 

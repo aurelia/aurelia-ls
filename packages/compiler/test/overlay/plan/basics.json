@@ -10,5 +10,36 @@
         { "frame": "root", "lambda": "o => o.user.name", "expr": "user.name" }
       ]
     }
+  },
+  {
+    "name": "PL-B-02 two-way custom-attribute writeback local is materialized in root frame type",
+    "semOverrides": {
+      "resources": {
+        "attributes": {
+          "aurelia-table": {
+            "kind": "attribute",
+            "name": "aurelia-table",
+            "isTemplateController": false,
+            "bindables": {
+              "displayData": {
+                "name": "displayData",
+                "attribute": "display-data",
+                "mode": "twoWay",
+                "type": "any[]"
+              }
+            }
+          }
+        }
+      }
+    },
+    "markup": "<div aurelia-table=\"display-data.bind: $displayData\"></div><p>${$displayData}</p>",
+    "expect": {
+      "frames": [
+        { "label": "root", "typeName": "__AU_TTC_T0_F0", "typeExpr": "(Omit<(RootVm), '$displayData'>) & {} & { $displayData: any[] } & { $parent: unknown } & { $vm: (RootVm) } & {}" }
+      ],
+      "lambdas": [
+        { "frame": "root", "lambda": "o => o.$displayData", "expr": "$displayData" }
+      ]
+    }
   }
 ]

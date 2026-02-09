@@ -209,6 +209,7 @@ function walkRows(
         // ---- Bindings with expressions evaluated in the *current* frame ----
         case "propertyBinding":
           mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
+          materializeSyntheticWritebackLocal(ins, currentFrame, frames, exprIndex);
           break;
         case "attributeBinding":
           mapBindingSource(ins.from, currentFrame, exprToFrame, badCtx);
@@ -268,6 +269,7 @@ function walkRows(
             switch (p.kind) {
               case "propertyBinding":
                 mapBindingSource(p.from, propFrame, exprToFrame, badCtx);
+                materializeSyntheticWritebackLocal(p, propFrame, frames, exprIndex);
                 break;
               case "iteratorBinding":
                 exprToFrame.set(p.forOf.astId, propFrame); // header evaluated in outer frame
@@ -316,7 +318,12 @@ function walkRows(
           break;
         }
         case "hydrateElement": {
-          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
+          for (const p of ins.props) {
+            mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
+            if (p.kind === "propertyBinding") {
+              materializeSyntheticWritebackLocal(p, currentFrame, frames, exprIndex);
+            }
+          }
           if (ins.projections) {
             for (const projection of ins.projections) {
               const linkedProjection = domToLinked.get(projection.def.dom);
@@ -340,7 +347,12 @@ function walkRows(
           break;
         }
         case "hydrateAttribute": {
-          for (const p of ins.props) mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
+          for (const p of ins.props) {
+            mapLinkedBindable(p, currentFrame, exprToFrame, badCtx);
+            if (p.kind === "propertyBinding") {
+              materializeSyntheticWritebackLocal(p, currentFrame, frames, exprIndex);
+            }
+          }
           break;
         }
         /* c8 ignore next 2 -- type exhaustiveness guard */
@@ -642,6 +654,139 @@ function createLetValueMap(): Record<string, ExprId> {
   const map: Record<string, ExprId> = {};
   Object.setPrototypeOf(map, null);
   return map;
+}
+
+type SyntheticLocalCandidate = {
+  name: string;
+  span: SourceSpan | null;
+};
+
+function materializeSyntheticWritebackLocal(
+  binding: LinkedPropertyBinding,
+  frameId: FrameId,
+  frames: ScopeFrame[],
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
+): void {
+  if (binding.effectiveMode !== "fromView" && binding.effectiveMode !== "twoWay") {
+    return;
+  }
+
+  const candidate = getSyntheticLocalCandidate(binding.from, exprIndex);
+  if (!candidate) return;
+
+  const type = targetTypeString(binding.target);
+  upsertSyntheticLocalSymbol(frameId, frames, {
+    kind: "syntheticLocal",
+    name: candidate.name,
+    type,
+    span: candidate.span,
+  });
+}
+
+function getSyntheticLocalCandidate(
+  source: BindingSourceIR,
+  exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
+): SyntheticLocalCandidate | null {
+  if (isInterpolation(source)) return null;
+
+  const entry = exprIndex.get(source.id);
+  if (!entry || (entry.expressionType !== "IsProperty" && entry.expressionType !== "IsFunction")) {
+    return null;
+  }
+
+  const ast = entry.ast as {
+    $kind?: string;
+    ancestor?: number;
+    name?: { name?: string; span?: SourceSpan | null } | null;
+    span?: SourceSpan | null;
+  };
+  if (ast.$kind !== "AccessScope") return null;
+  if (ast.ancestor !== 0) return null;
+
+  const localName = typeof ast.name?.name === "string" ? ast.name.name : null;
+  if (!localName || !localName.startsWith("$")) return null;
+
+  const span = normalizeSpanMaybe(ast.name?.span ?? source.loc ?? ast.span ?? null);
+  return { name: localName, span };
+}
+
+function upsertSyntheticLocalSymbol(
+  frameId: FrameId,
+  frames: ScopeFrame[],
+  symbol: Extract<ScopeSymbol, { kind: "syntheticLocal" }>,
+): void {
+  const frame = frames[frameId];
+  if (!frame) return;
+
+  const existingIndex = frame.symbols.findIndex((s) => s.name === symbol.name);
+  if (existingIndex < 0) {
+    frame.symbols.push(symbol);
+    return;
+  }
+
+  const existing = frame.symbols[existingIndex];
+  if (!existing || existing.kind !== "syntheticLocal") {
+    // Respect authored symbols (<let>, iterator locals, aliases) when names collide.
+    return;
+  }
+
+  const nextType = pickMoreSpecificType(existing.type, symbol.type);
+  const nextSymbol: ScopeSymbol = {
+    ...existing,
+    type: nextType,
+    span: existing.span ?? symbol.span ?? null,
+  };
+  frame.symbols[existingIndex] = nextSymbol;
+}
+
+function pickMoreSpecificType(current: string | undefined, incoming: string | undefined): string {
+  const a = normalizeTypeLabel(current);
+  const b = normalizeTypeLabel(incoming);
+  return typeSpecificity(b) > typeSpecificity(a) ? b : a;
+}
+
+function normalizeTypeLabel(type: string | undefined): string {
+  if (!type || type.length === 0) return "unknown";
+  return type;
+}
+
+function typeSpecificity(type: string): number {
+  if (type === "unknown") return 0;
+  if (type === "any") return 1;
+  return 2;
+}
+
+function targetTypeString(target: LinkedPropertyBinding["target"]): string {
+  switch (target.kind) {
+    case "element.bindable":
+    case "attribute.bindable":
+    case "controller.prop":
+      return typeRefToString(target.bindable.type);
+    case "element.nativeProp":
+      return typeRefToString(target.prop.type);
+    case "attribute":
+    case "unknown":
+    default:
+      return "unknown";
+  }
+}
+
+function typeRefToString(typeRef: unknown): string {
+  if (!typeRef) return "unknown";
+  if (typeof typeRef === "string") return typeRef;
+  if (typeof typeRef !== "object") return "unknown";
+  const kind = (typeRef as { kind?: unknown }).kind;
+  switch (kind) {
+    case "ts": {
+      const name = (typeRef as { name?: unknown }).name;
+      return typeof name === "string" && name.length > 0 ? name : "unknown";
+    }
+    case "any":
+      return "any";
+    case "unknown":
+    default:
+      return "unknown";
+  }
 }
 
 /* =============================================================================

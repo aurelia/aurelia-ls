@@ -1779,10 +1779,22 @@ function formatTypeScriptMessage(
   hit: TemplateProvenanceHit | null,
   typeNames: TypeNameMap,
 ): string {
-  if (hit?.memberPath) {
+  if (hit?.memberPath && shouldRewriteAsMissingMember(diag)) {
     return `Property '${hit.memberPath}' does not exist on ${vmDisplayName}`;
   }
   return rewriteTypeNames(flattenTsMessage(diag.messageText), typeNames);
+}
+
+function shouldRewriteAsMissingMember(diag: TsDiagnostic): boolean {
+  const code = normalizeTsDiagnosticCode(diag.code);
+  return code === 2339 || code === 2551;
+}
+
+function normalizeTsDiagnosticCode(code: TsDiagnostic["code"]): number | null {
+  if (typeof code === "number") return code;
+  if (typeof code !== "string" || code.length === 0) return null;
+  const parsed = Number(code);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeRange(range: TextRange | null | undefined): TextRange | null {

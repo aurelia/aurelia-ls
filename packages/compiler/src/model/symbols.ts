@@ -97,6 +97,7 @@ export type OverlayBase =
  * - 'iteratorLocal'    : Loop variable from iterator destructuring (repeat, virtual-repeat, etc.)
  * - 'contextual'  : Injected variable ($index, $first, etc.) from config.injects.contextuals
  * - 'alias'       : Named alias from config.injects.alias (with, then, catch, etc.)
+ * - 'syntheticLocal': Writeback local from two-way/from-view bindings (e.g. `$displayData`)
  *
  * NOTE(binding-context): `<let to-binding-context>` does not change lexical visibility;
  * it only affects the *write lane* at runtime. We track names uniformly here.
@@ -105,7 +106,8 @@ export type ScopeSymbol =
   | { kind: "let"; name: string; span?: SourceSpan | null }
   | { kind: "iteratorLocal"; name: string; span?: SourceSpan | null }
   | { kind: "contextual"; name: string; span?: SourceSpan | null }
-  | { kind: "alias"; name: string; aliasKind: "value" | "then" | "catch"; span?: SourceSpan | null };
+  | { kind: "alias"; name: string; aliasKind: "value" | "then" | "catch"; span?: SourceSpan | null }
+  | { kind: "syntheticLocal"; name: string; type?: string; span?: SourceSpan | null };
 
 export interface ScopeFrame {
   id: FrameId;
@@ -121,7 +123,7 @@ export interface ScopeFrame {
    */
   overlay?: OverlayBase | null;
 
-  /** Symbols introduced in this frame (let, iterator locals, contextuals, aliases). */
+  /** Symbols introduced in this frame (let, iterator locals, contextuals, aliases, synthetic locals). */
   symbols: ScopeSymbol[];
 
   /** Origin metadata for type inference. See FrameOrigin for pattern-based design. */
