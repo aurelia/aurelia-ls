@@ -129,6 +129,8 @@ export function compileWithAot(
   return trace.span("ssr.compileWithAot", () => {
     // 1. Run SSR-agnostic AOT compilation (analysis + synthesis)
     // This produces serialized instructions and template HTML
+    // TODO(tech-debt): replace direct compiler facade usage with the shared
+    // workspace/program authority path once SSR wiring is migrated.
     trace.event("ssr.compile.aot");
     const aotResult = compileAot(markup, {
       templatePath: options.templatePath,

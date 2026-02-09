@@ -7,8 +7,9 @@
  * the full attribute value.
  */
 
+import path from "node:path";
 import { describe, test, expect } from "vitest";
-import { lowerDocument, type ExprRef, type InstructionIR } from "@aurelia-ls/compiler";
+import { lowerDocument, toSourceFileId, type ExprRef, type InstructionIR } from "@aurelia-ls/compiler";
 import { createCompilerContext, lowerOpts, type TestVector } from "../_helpers/vector-runner.js";
 
 // Semantics override for `load` custom attribute with bindables
@@ -262,9 +263,10 @@ describe("Multi-binding expression spans (10-lower)", () => {
     expect(expr1Ref).toBeTruthy();
     expect(expr2Ref).toBeTruthy();
 
-    // Verify refs contain file information (absolute spans)
-    expect(expr1Ref!.loc!.file).toBe("mem.html");
-    expect(expr2Ref!.loc!.file).toBe("mem.html");
+    // Verify refs contain canonical file information for absolute spans.
+    const expectedFile = toSourceFileId(path.resolve(process.cwd(), "mem.html"));
+    expect(expr1Ref!.loc!.file).toBe(expectedFile);
+    expect(expr2Ref!.loc!.file).toBe(expectedFile);
 
     // Verify spans are absolute (matching source positions)
     const expr1Start = markup.indexOf("expr1");

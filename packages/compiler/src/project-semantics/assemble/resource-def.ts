@@ -11,7 +11,7 @@ import type {
   TextSpan,
 } from '../compiler.js';
 import { debug } from '../compiler.js';
-import { sourcedValue } from "./sourced.js";
+import { sourcedKnown, sourcedValue, unwrapSourced } from "./sourced.js";
 import { canonicalAttrName } from "../util/naming.js";
 
 export interface BindableInput {
@@ -112,7 +112,7 @@ export function buildCustomElementDef(input: ElementDefInput): CustomElementDef 
     name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     aliases: (input.aliases ?? []).map((alias) => sourcedValue(alias, input.file, input.span)),
     containerless: sourcedValue(input.containerless ?? false, input.file, input.span),
-    shadowOptions: sourcedValue(undefined, input.file, input.span),
+    shadowOptions: sourcedKnown<{ readonly mode: "open" | "closed" } | undefined>(undefined, input.file, input.span),
     capture: sourcedValue(false, input.file, input.span),
     processContent: sourcedValue(false, input.file, input.span),
     boundary: sourcedValue(input.boundary ?? false, input.file, input.span),
@@ -173,7 +173,7 @@ export function resourceDefName(def: ResourceDef): string | null {
     case "template-controller":
     case "value-converter":
     case "binding-behavior":
-      return def.name.value ?? null;
+      return unwrapSourced(def.name) ?? null;
   }
   return null;
 }

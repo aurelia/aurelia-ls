@@ -53,6 +53,9 @@ export {
   symbolIdNamespace,
   isSymbolId,
   isSymbolIdNamespace,
+  unwrapSourced,
+  stripSourcedNode,
+  sanitizeSourcedSnapshotValue,
 } from "./schema/index.js";
 export type {
   SourceLocation,

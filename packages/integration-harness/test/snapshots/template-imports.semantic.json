@@ -1609,25 +1609,30 @@
             "attribute": {
               "location": { "end": 283, "file": "playground/template-imports/src/counter.ts", "pos": 250 },
               "origin": "source",
+              "state": "known",
               "value": "label"
             },
             "mode": {
               "location": { "end": 283, "file": "playground/template-imports/src/counter.ts", "pos": 250 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 283, "file": "playground/template-imports/src/counter.ts", "pos": 250 },
               "origin": "source",
+              "state": "known",
               "value": true
             },
             "property": {
               "location": { "end": 283, "file": "playground/template-imports/src/counter.ts", "pos": 250 },
               "origin": "source",
+              "state": "known",
               "value": "label"
             },
             "type": {
               "location": { "end": 283, "file": "playground/template-imports/src/counter.ts", "pos": 250 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           }
@@ -1635,21 +1640,25 @@
         "boundary": {
           "location": { "end": 419, "file": "playground/template-imports/src/counter.ts", "pos": 184 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 419, "file": "playground/template-imports/src/counter.ts", "pos": 184 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 419, "file": "playground/template-imports/src/counter.ts", "pos": 184 },
           "origin": "source",
+          "state": "known",
           "value": "CounterCustomElement"
         },
         "containerless": {
           "location": { "end": 419, "file": "playground/template-imports/src/counter.ts", "pos": 184 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1658,16 +1667,19 @@
         "name": {
           "location": { "end": 208, "file": "playground/template-imports/src/counter.ts", "pos": 199 },
           "origin": "source",
+          "state": "known",
           "value": "counter"
         },
         "processContent": {
           "location": { "end": 419, "file": "playground/template-imports/src/counter.ts", "pos": 184 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 419, "file": "playground/template-imports/src/counter.ts", "pos": 184 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:3c923f1d7cbbc24d325d2ffedadb2c71998956d76c07d1490c7735f4423d38a7",
@@ -1682,21 +1694,25 @@
         "boundary": {
           "location": { "end": 245, "file": "playground/template-imports/src/my-app.ts", "pos": 166 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 245, "file": "playground/template-imports/src/my-app.ts", "pos": 166 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 245, "file": "playground/template-imports/src/my-app.ts", "pos": 166 },
           "origin": "source",
+          "state": "known",
           "value": "MyAppCustomElement"
         },
         "containerless": {
           "location": { "end": 245, "file": "playground/template-imports/src/my-app.ts", "pos": 166 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1705,16 +1721,19 @@
         "name": {
           "location": { "end": 245, "file": "playground/template-imports/src/my-app.ts", "pos": 166 },
           "origin": "source",
+          "state": "known",
           "value": "my-app"
         },
         "processContent": {
           "location": { "end": 245, "file": "playground/template-imports/src/my-app.ts", "pos": 166 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 245, "file": "playground/template-imports/src/my-app.ts", "pos": 166 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549",

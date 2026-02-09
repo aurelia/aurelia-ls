@@ -25,6 +25,7 @@ function sourcedString(value: string, origin: "builtin" | "config" | "source", f
     default:
       return {
         origin: "source",
+        state: "known",
         value,
         ...(file ? { location: sourceLocation(file) } : {}),
       };

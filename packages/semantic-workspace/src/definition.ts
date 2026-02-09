@@ -9,6 +9,7 @@ import {
   spanContainsOffset,
   spanLength,
   toSourceFileId,
+  unwrapSourced,
   type BindableDef,
   type ExprId,
   type LinkedInstruction,
@@ -560,10 +561,6 @@ function addEntry(
     return;
   }
   map.set(key, [entry]);
-}
-
-function unwrapSourced<T>(value: { value?: T } | undefined): T | undefined {
-  return value?.value;
 }
 
 function readLocation(value: unknown): SourceLocation | null {

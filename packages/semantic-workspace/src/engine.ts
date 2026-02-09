@@ -12,7 +12,8 @@ import {
   normalizePathForId,
   normalizeSpan,
   offsetAtPosition,
-  projectGeneratedSpanToDocumentSpan,
+  provenanceHitToDocumentSpan,
+  resolveGeneratedReferenceLocationWithPolicy,
   runDiagnosticsPipeline,
   spanContainsOffset,
   stableHash,
@@ -102,6 +103,7 @@ import {
   type AttributeSyntaxContext,
   type TemplateIndex,
 } from "./template-edit-engine.js";
+import { decideRenameMappedProvenance } from "./provenance-gate-policy.js";
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
@@ -494,10 +496,16 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (this.#isTemplateUri(canonical.uri)) {
       this.#ensureTemplateContext(canonical.uri);
       const probe = this.#templateEditEngine().probeRenameAt({ ...request, uri: canonical.uri });
+      const mappingPresent = this.#kernel.getMapping(canonical.uri) !== null;
+      const positionMapped = this.#kernel.provenance.lookupSource(canonical.uri, offset) !== null;
+      const mappedProvenance = decideRenameMappedProvenance({
+        mappingPresent,
+        positionMapped,
+      });
       return {
         target: probe.targetClass,
         hasSemanticProvenance: probe.hasSemanticProvenance,
-        hasMappedProvenance: this.#kernel.getMapping(canonical.uri) !== null,
+        hasMappedProvenance: mappedProvenance.hasMappedProvenance,
         workspaceDocument: inWorkspace,
       };
     }
@@ -770,18 +778,23 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
           refCanonical.file,
         ),
       );
-      const mapped = projectGeneratedSpanToDocumentSpan(provenance, refCanonical.uri, span);
-      if (mapped) {
-        results.push({
-          uri: mapped.uri,
-          span: mapped.span,
-          ...(mapped.exprId ? { exprId: mapped.exprId } : {}),
-          ...(mapped.nodeId ? { nodeId: mapped.nodeId } : {}),
-        });
-        continue;
-      }
-      if (isOverlayPath(refCanonical.path)) continue;
-      results.push({ uri: refCanonical.uri, span });
+      const hit = provenance.projectGeneratedSpan(refCanonical.uri, span);
+      const mapped = provenanceHitToDocumentSpan(hit);
+      const decision = resolveGeneratedReferenceLocationWithPolicy({
+        generatedUri: refCanonical.uri,
+        generatedSpan: span,
+        mappedLocation: mapped,
+        mappedEvidence: hit?.edge.evidence?.level ?? null,
+        provenance,
+      });
+      if (!decision.location) continue;
+      const location = decision.location;
+      results.push({
+        uri: location.uri,
+        span: location.span,
+        ...(location.exprId ? { exprId: location.exprId } : {}),
+        ...(location.nodeId ? { nodeId: location.nodeId } : {}),
+      });
     }
 
     const symbolName = this.#symbolNameAt(filePath, offset, text);
@@ -1503,10 +1516,6 @@ function buildOverlaySnapshot(
     text: overlay.text,
     templateUri: templateCanonical.uri,
   };
-}
-
-function isOverlayPath(path: string): boolean {
-  return path.includes(".__au.") && path.includes(".overlay.");
 }
 
 function extractIdentifierAt(text: string, offset: number): string | null {

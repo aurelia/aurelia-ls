@@ -30,6 +30,12 @@ export interface TemplateMappingSegment {
   path: string;
   htmlSpan: SourceSpan;
   overlaySpan: TextSpan;
+  degradation?: TemplateMappingDegradation | undefined;
+}
+
+export interface TemplateMappingDegradation {
+  readonly reason: "missing-html-member-span";
+  readonly projection: "proportional";
 }
 
 export interface BuildMappingInputs {
@@ -131,6 +137,7 @@ function buildSegmentPairs(
   for (const overlaySeg of overlaySegments) {
     const candidates = htmlByPath.get(overlaySeg.path);
     let htmlSpan: SourceSpan;
+    let degradation: TemplateMappingDegradation | undefined;
 
     if (candidates && candidates.length > 0) {
       // Prefer the first unused HTML segment for this path; fall back to the last one.
@@ -141,6 +148,10 @@ function buildSegmentPairs(
       // No AST-derived HTML span for this path; synthesize one by projecting
       // the overlay slice proportionally into the full expression HTML span.
       htmlSpan = projectOverlayMemberSegmentToHtml(overlaySeg.span, exprOverlaySpan, exprHtmlSpan);
+      degradation = {
+        reason: "missing-html-member-span",
+        projection: "proportional",
+      };
     }
 
     out.push({
@@ -148,6 +159,7 @@ function buildSegmentPairs(
       path: overlaySeg.path,
       htmlSpan,
       overlaySpan: overlayFile ? resolveSourceSpan(overlaySeg.span as SourceSpan, overlayFile) : normalizeSpan(overlaySeg.span),
+      ...(degradation ? { degradation } : {}),
     });
   }
 
@@ -165,6 +177,7 @@ function normalizeMappingEntry(entry: TemplateMappingEntry): TemplateMappingEntr
     path: seg.path,
     htmlSpan: normalizeSpan(seg.htmlSpan),
     overlaySpan: normalizeSpan(seg.overlaySpan),
+    ...(seg.degradation ? { degradation: seg.degradation } : {}),
   }));
   return { ...entry, htmlSpan, overlaySpan, segments };
 }
@@ -299,6 +312,12 @@ function mergeGroupSegments(
     let best = candidates[0]!;
     for (let i = 1; i < candidates.length; i += 1) {
       const current = candidates[i]!;
+      // Prefer exact mappings over degraded projections for the same path.
+      if (!current.degradation && best.degradation) {
+        best = current;
+        continue;
+      }
+      if (!best.degradation && current.degradation) continue;
       // Prefer segments that belong to the current expression.
       if (current.exprId === exprId && best.exprId !== exprId) {
         best = current;
@@ -323,7 +342,13 @@ function mergeGroupSegments(
   for (const [path, segs] of paths.entries()) {
     if (leavesOnly && !isLeaf(path)) continue;
     const chosen = pickBest(segs);
-    results.push({ kind: "member", path, htmlSpan: chosen.htmlSpan, overlaySpan: chosen.overlaySpan });
+    results.push({
+      kind: "member",
+      path,
+      htmlSpan: chosen.htmlSpan,
+      overlaySpan: chosen.overlaySpan,
+      ...(chosen.degradation ? { degradation: chosen.degradation } : {}),
+    });
   }
 
   return results;

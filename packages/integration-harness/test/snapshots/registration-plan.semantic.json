@@ -1258,21 +1258,25 @@
         "boundary": {
           "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
           "origin": "source",
+          "state": "known",
           "value": "AlphaElement"
         },
         "containerless": {
           "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1281,16 +1285,19 @@
         "name": {
           "location": { "end": 127, "file": "/src/entry.ts", "pos": 117 },
           "origin": "source",
+          "state": "known",
           "value": "alpha-el"
         },
         "processContent": {
           "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 157, "file": "/src/entry.ts", "pos": 102 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:b70eb5ef677882e0a36875f708191a069b21126c8097c619c773b2aab67ee154",
@@ -1453,21 +1460,25 @@
         "boundary": {
           "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
           "origin": "source",
+          "state": "known",
           "value": "BetaElement"
         },
         "containerless": {
           "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1476,16 +1487,19 @@
         "name": {
           "location": { "end": 183, "file": "/src/entry.ts", "pos": 174 },
           "origin": "source",
+          "state": "known",
           "value": "beta-el"
         },
         "processContent": {
           "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 212, "file": "/src/entry.ts", "pos": 159 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:162cbd8778176d56ab2d7b89dff36c2b98b7f6dfc51e3132d51016ab3307d7bc",

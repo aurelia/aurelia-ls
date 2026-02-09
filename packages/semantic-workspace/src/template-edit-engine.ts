@@ -8,6 +8,7 @@ import {
   offsetAtPosition,
   spanContainsOffset,
   toSourceFileId,
+  unwrapSourced,
   type AttributeParser,
   type BindableDef,
   type DOMNode,
@@ -466,7 +467,7 @@ export class TemplateEditEngine {
       const formattedName = this.#style.formatRenameTarget(newName);
       this.#collectBindableAttributeEdits(target, formattedName, syntax, edits);
 
-      const attrValue = target.bindable.attribute.value ?? target.property;
+      const attrValue = unwrapSourced(target.bindable.attribute) ?? target.property;
       const attrEdit = buildBindableAttributeEdit(target.bindable, attrValue, formattedName, this.ctx.lookupText);
       if (attrEdit) edits.push(attrEdit);
 
@@ -841,7 +842,7 @@ function collectBindableDeclarationSurfaces(
   const preferRoots = [ctx.workspaceRoot];
   const entry = findResourceEntry(ctx.definitionIndex.elements, candidate.ownerName, candidate.ownerFile, preferRoots);
   const def = entry?.def ?? null;
-  const className = def?.className.value ?? null;
+  const className = def ? unwrapSourced(def.className) ?? null : null;
   const resourceKind = def?.kind ?? null;
 
   const templateTarget = resolveTemplateBindableTarget(ctx, candidate);

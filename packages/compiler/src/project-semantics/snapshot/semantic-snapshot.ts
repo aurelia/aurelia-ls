@@ -7,6 +7,7 @@ import type {
   SemanticSymbolSnapshot,
   MaterializedSemantics,
 } from '../compiler.js';
+import { sanitizeSourcedSnapshotValue } from "../compiler.js";
 import { collectSnapshotResources, type SnapshotIdOptions, type SnapshotResource } from "./shared.js";
 
 const SEMANTIC_SNAPSHOT_VERSION = "aurelia-semantic-snapshot@1";
@@ -45,22 +46,6 @@ function toSemanticSymbolSnapshot(resource: SnapshotResource): SemanticSymbolSna
     kind: resource.def.kind,
     name: resource.name,
     ...(resource.def.file ? { source: resource.def.file } : {}),
-    data: sanitizeSnapshotData(resource.def) as Readonly<Record<string, unknown>>,
+    data: sanitizeSourcedSnapshotValue(resource.def) as Readonly<Record<string, unknown>>,
   };
-}
-
-function sanitizeSnapshotData(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((entry) => sanitizeSnapshotData(entry));
-  }
-  if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(obj)) {
-      if (key === "node") continue;
-      out[key] = sanitizeSnapshotData(obj[key]);
-    }
-    return out;
-  }
-  return value;
 }

@@ -4522,6 +4522,7 @@
         "className": {
           "location": { "end": 873, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "pos": 440 },
           "origin": "source",
+          "state": "known",
           "value": "AttrBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts",
@@ -4529,6 +4530,7 @@
         "name": {
           "location": { "end": 622, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "pos": 616 },
           "origin": "source",
+          "state": "known",
           "value": "attr"
         }
       },
@@ -4542,6 +4544,7 @@
         "className": {
           "location": { "end": 1543, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts", "pos": 455 },
           "origin": "source",
+          "state": "known",
           "value": "DebounceBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts",
@@ -4549,6 +4552,7 @@
         "name": {
           "location": { "end": 645, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts", "pos": 635 },
           "origin": "source",
+          "state": "known",
           "value": "debounce"
         }
       },
@@ -4572,6 +4576,7 @@
         "className": {
           "location": { "end": 1565, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1357 },
           "origin": "source",
+          "state": "known",
           "value": "FromViewBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
@@ -4579,6 +4584,7 @@
         "name": {
           "location": { "end": 1565, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1357 },
           "origin": "source",
+          "state": "known",
           "value": "fromview"
         }
       },
@@ -4602,6 +4608,7 @@
         "className": {
           "location": { "end": 1153, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 949 },
           "origin": "source",
+          "state": "known",
           "value": "OneTimeBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
@@ -4609,6 +4616,7 @@
         "name": {
           "location": { "end": 1153, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 949 },
           "origin": "source",
+          "state": "known",
           "value": "onetime"
         }
       },
@@ -4622,6 +4630,7 @@
         "className": {
           "location": { "end": 794, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "pos": 298 },
           "origin": "source",
+          "state": "known",
           "value": "SelfBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts",
@@ -4629,6 +4638,7 @@
         "name": {
           "location": { "end": 480, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "pos": 474 },
           "origin": "source",
+          "state": "known",
           "value": "self"
         }
       },
@@ -4642,6 +4652,7 @@
         "className": {
           "location": { "end": 1630, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "pos": 529 },
           "origin": "source",
+          "state": "known",
           "value": "SignalBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts",
@@ -4649,6 +4660,7 @@
         "name": {
           "location": { "end": 715, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "pos": 707 },
           "origin": "source",
+          "state": "known",
           "value": "signal"
         }
       },
@@ -4662,6 +4674,7 @@
         "className": {
           "location": { "end": 1598, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts", "pos": 454 },
           "origin": "source",
+          "state": "known",
           "value": "ThrottleBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts",
@@ -4669,6 +4682,7 @@
         "name": {
           "location": { "end": 644, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts", "pos": 634 },
           "origin": "source",
+          "state": "known",
           "value": "throttle"
         }
       },
@@ -4692,6 +4706,7 @@
         "className": {
           "location": { "end": 1355, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1155 },
           "origin": "source",
+          "state": "known",
           "value": "ToViewBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
@@ -4699,6 +4714,7 @@
         "name": {
           "location": { "end": 1355, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1155 },
           "origin": "source",
+          "state": "known",
           "value": "toview"
         }
       },
@@ -4722,6 +4738,7 @@
         "className": {
           "location": { "end": 1767, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1567 },
           "origin": "source",
+          "state": "known",
           "value": "TwoWayBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
@@ -4729,6 +4746,7 @@
         "name": {
           "location": { "end": 1767, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1567 },
           "origin": "source",
+          "state": "known",
           "value": "twoway"
         }
       },
@@ -4752,6 +4770,7 @@
         "className": {
           "location": { "end": 2382, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "pos": 537 },
           "origin": "source",
+          "state": "known",
           "value": "UpdateTriggerBindingBehavior"
         },
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts",
@@ -4759,6 +4778,7 @@
         "name": {
           "location": { "end": 737, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "pos": 722 },
           "origin": "source",
+          "state": "known",
           "value": "updatetrigger"
         }
       },
@@ -4775,20 +4795,24 @@
             "attribute": {
               "location": { "end": 636, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 631 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 636, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 631 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 636, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 631 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 636, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 631 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -4796,6 +4820,7 @@
         "className": {
           "location": { "end": 3746, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 439 },
           "origin": "source",
+          "state": "known",
           "value": "Focus"
         },
         "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts",
@@ -4803,16 +4828,19 @@
         "name": {
           "location": { "end": 606, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 599 },
           "origin": "source",
+          "state": "known",
           "value": "focus"
         },
         "noMultiBindings": {
           "location": { "end": 3746, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 439 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "primary": {
           "location": { "end": 3746, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts", "pos": 439 },
           "origin": "source",
+          "state": "known",
           "value": "value"
         }
       },
@@ -4898,6 +4926,7 @@
           {
             "location": { "end": 2947, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 438 },
             "origin": "source",
+            "state": "known",
             "value": "hide"
           }
         ],
@@ -4906,20 +4935,24 @@
             "attribute": {
               "location": { "end": 628, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 621 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 628, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 621 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 628, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 621 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 628, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 621 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -4927,6 +4960,7 @@
         "className": {
           "location": { "end": 2947, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 438 },
           "origin": "source",
+          "state": "known",
           "value": "Show"
         },
         "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts",
@@ -4934,16 +4968,19 @@
         "name": {
           "location": { "end": 603, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 597 },
           "origin": "source",
+          "state": "known",
           "value": "show"
         },
         "noMultiBindings": {
           "location": { "end": 2947, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 438 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "primary": {
           "location": { "end": 2947, "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts", "pos": 438 },
           "origin": "source",
+          "state": "known",
           "value": "value"
         }
       },
@@ -4960,20 +4997,24 @@
             "attribute": {
               "location": { "end": 2191, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2180 },
               "origin": "source",
+              "state": "known",
               "value": "component"
             },
             "mode": {
               "location": { "end": 2191, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2180 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2191, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2180 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2191, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2180 },
               "origin": "source",
+              "state": "known",
               "value": "component"
             }
           },
@@ -4981,20 +5022,24 @@
             "attribute": {
               "location": { "end": 2444, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2433 },
               "origin": "source",
+              "state": "known",
               "value": "composing"
             },
             "mode": {
               "location": { "end": 2444, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2433 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2444, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2433 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2444, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2433 },
               "origin": "source",
+              "state": "known",
               "value": "composing"
             }
           },
@@ -5002,20 +5047,24 @@
             "attribute": {
               "location": { "end": 2490, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2477 },
               "origin": "source",
+              "state": "known",
               "value": "composition"
             },
             "mode": {
               "location": { "end": 2490, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2477 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2490, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2477 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2490, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2477 },
               "origin": "source",
+              "state": "known",
               "value": "composition"
             }
           },
@@ -5023,20 +5072,24 @@
             "attribute": {
               "location": { "end": 2206, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2199 },
               "origin": "source",
+              "state": "known",
               "value": "model"
             },
             "mode": {
               "location": { "end": 2206, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2199 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2206, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2199 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2206, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2199 },
               "origin": "source",
+              "state": "known",
               "value": "model"
             }
           },
@@ -5044,20 +5097,24 @@
             "attribute": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
               "origin": "source",
+              "state": "known",
               "value": "scope-behavior"
             },
             "mode": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2237, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2222 },
               "origin": "source",
+              "state": "known",
               "value": "scopeBehavior"
             }
           },
@@ -5065,20 +5122,24 @@
             "attribute": {
               "location": { "end": 2521, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2516 },
               "origin": "source",
+              "state": "known",
               "value": "tag"
             },
             "mode": {
               "location": { "end": 2521, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2516 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2521, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2516 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2521, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2516 },
               "origin": "source",
+              "state": "known",
               "value": "tag"
             }
           },
@@ -5086,20 +5147,24 @@
             "attribute": {
               "location": { "end": 2172, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2162 },
               "origin": "source",
+              "state": "known",
               "value": "template"
             },
             "mode": {
               "location": { "end": 2172, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2162 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2172, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2162 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2172, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2162 },
               "origin": "source",
+              "state": "known",
               "value": "template"
             }
           }
@@ -5107,21 +5172,25 @@
         "boundary": {
           "location": { "end": 16714, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 1807 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 16714, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 1807 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 16714, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 1807 },
           "origin": "source",
+          "state": "known",
           "value": "AuCompose"
         },
         "containerless": {
           "location": { "end": 16714, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 1807 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "dependencies": [],
@@ -5130,16 +5199,19 @@
         "name": {
           "location": { "end": 2093, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 2081 },
           "origin": "source",
+          "state": "known",
           "value": "au-compose"
         },
         "processContent": {
           "location": { "end": 16714, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 1807 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 16714, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts", "pos": 1807 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:7f875c1c7f40d5fb9886ebc7134698998e267586550fa4f2acfebab73c576b72",
@@ -5155,20 +5227,24 @@
             "attribute": {
               "location": { "end": 2054, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2046 },
               "origin": "source",
+              "state": "known",
               "value": "expose"
             },
             "mode": {
               "location": { "end": 2054, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2046 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2054, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2046 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2054, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2046 },
               "origin": "source",
+              "state": "known",
               "value": "expose"
             }
           },
@@ -5176,20 +5252,24 @@
             "attribute": {
               "location": { "end": 2068, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2056 },
               "origin": "source",
+              "state": "known",
               "value": "slotchange"
             },
             "mode": {
               "location": { "end": 2068, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2056 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2068, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2056 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2068, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 2056 },
               "origin": "source",
+              "state": "known",
               "value": "slotchange"
             }
           }
@@ -5197,21 +5277,25 @@
         "boundary": {
           "location": { "end": 11210, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1088 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 11210, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1088 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 11210, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1088 },
           "origin": "source",
+          "state": "known",
           "value": "AuSlot"
         },
         "containerless": {
           "location": { "end": 11210, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1088 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "dependencies": [],
@@ -5220,16 +5304,19 @@
         "name": {
           "location": { "end": 1266, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1257 },
           "origin": "source",
+          "state": "known",
           "value": "au-slot"
         },
         "processContent": {
           "location": { "end": 11210, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1088 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 11210, "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts", "pos": 1088 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:53d9a2d0fd9ecb6f901020ba1e29795d038e9f5e4e7a7f5ba59611d2ef84bf8b",
@@ -5292,21 +5379,25 @@
         "boundary": {
           "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
+          "state": "known",
           "value": "InlineOnly"
         },
         "containerless": {
           "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -5314,22 +5405,26 @@
         "inlineTemplate": {
           "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
+          "state": "known",
           "value": "<div>Inline template</div>"
         },
         "kind": "custom-element",
         "name": {
           "location": { "end": 281, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 268 },
           "origin": "source",
+          "state": "known",
           "value": "inline-only"
         },
         "processContent": {
           "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 242 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/inline-only.ts", "pos": 242 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:b29a5180c72e80e6d162c8da61af2893f50cdb16822aabd2b4e0ac5c1a153b7b",
@@ -5344,21 +5439,25 @@
         "boundary": {
           "location": { "end": 263, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 263, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 263, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
+          "state": "known",
           "value": "MyApp"
         },
         "containerless": {
           "location": { "end": 263, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -5367,16 +5466,19 @@
         "name": {
           "location": { "end": 263, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
+          "state": "known",
           "value": "my-app"
         },
         "processContent": {
           "location": { "end": 263, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts", "pos": 200 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 263, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/my-app.ts", "pos": 200 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549",
@@ -5391,21 +5493,25 @@
         "boundary": {
           "location": { "end": 224, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 224, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 224, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
+          "state": "known",
           "value": "NavBar"
         },
         "containerless": {
           "location": { "end": 224, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -5414,16 +5520,19 @@
         "name": {
           "location": { "end": 224, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
+          "state": "known",
           "value": "nav-bar"
         },
         "processContent": {
           "location": { "end": 224, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 224, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/nav-bar.ts", "pos": 105 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:7ca0275eb8c38075f354435769d61872e3e383f9cc82eeecfd67612bad23a740",
@@ -5439,25 +5548,30 @@
             "attribute": {
               "location": { "end": 314, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": "age"
             },
             "mode": {
               "location": { "end": 314, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 288 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 314, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 314, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": "age"
             },
             "type": {
               "location": { "end": 314, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": "number"
             }
           },
@@ -5465,25 +5579,30 @@
             "attribute": {
               "location": { "end": 284, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
+              "state": "known",
               "value": "name"
             },
             "mode": {
               "location": { "end": 284, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 256 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 284, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 284, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
+              "state": "known",
               "value": "name"
             },
             "type": {
               "location": { "end": 284, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 256 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -5491,26 +5610,31 @@
             "attribute": {
               "location": { "end": 374, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
+              "state": "known",
               "value": "selected"
             },
             "mode": {
               "location": { "end": 374, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
+              "state": "known",
               "value": "twoWay"
             },
             "primary": {
               "location": { "end": 374, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 374, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
+              "state": "known",
               "value": "selected"
             },
             "type": {
               "location": { "end": 374, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 318 },
               "origin": "source",
+              "state": "known",
               "value": "boolean"
             }
           }
@@ -5518,21 +5642,25 @@
         "boundary": {
           "location": { "end": 453, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 453, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 453, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
+          "state": "known",
           "value": "UserCard"
         },
         "containerless": {
           "location": { "end": 453, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -5541,16 +5669,19 @@
         "name": {
           "location": { "end": 453, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
+          "state": "known",
           "value": "user-card"
         },
         "processContent": {
           "location": { "end": 453, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 229 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 453, "file": "packages/compiler/test/project-semantics/apps/sibling-app/src/user-card.ts", "pos": 229 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",
@@ -5597,6 +5728,7 @@
         "aliases": {
           "location": { "end": 11579, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 9861 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -5604,20 +5736,24 @@
             "attribute": {
               "location": { "end": 10111, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 10106 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 10111, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 10106 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 10111, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 10106 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 10111, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 10106 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -5625,6 +5761,7 @@
         "className": {
           "location": { "end": 11579, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 9861 },
           "origin": "source",
+          "state": "known",
           "value": "RejectedTemplateController"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
@@ -5632,11 +5769,13 @@
         "name": {
           "location": { "end": 10049, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 10042 },
           "origin": "source",
+          "state": "known",
           "value": "catch"
         },
         "noMultiBindings": {
           "location": { "end": 11579, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 9861 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -5678,12 +5817,14 @@
         "aliases": {
           "location": { "end": 7482, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 6593 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {},
         "className": {
           "location": { "end": 7482, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 6593 },
           "origin": "source",
+          "state": "known",
           "value": "Else"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
@@ -5691,11 +5832,13 @@
         "name": {
           "location": { "end": 6764, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 6758 },
           "origin": "source",
+          "state": "known",
           "value": "else"
         },
         "noMultiBindings": {
           "location": { "end": 7482, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 6593 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -5709,6 +5852,7 @@
         "aliases": {
           "location": { "end": 6591, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 843 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -5716,20 +5860,24 @@
             "attribute": {
               "location": { "end": 1085, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1080 },
               "origin": "source",
+              "state": "known",
               "value": "cache"
             },
             "mode": {
               "location": { "end": 1085, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1080 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1085, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1080 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1085, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1080 },
               "origin": "source",
+              "state": "known",
               "value": "cache"
             }
           },
@@ -5737,20 +5885,24 @@
             "attribute": {
               "location": { "end": 1066, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1061 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 1066, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1061 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1066, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1061 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1066, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1061 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -5758,6 +5910,7 @@
         "className": {
           "location": { "end": 6591, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 843 },
           "origin": "source",
+          "state": "known",
           "value": "If"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
@@ -5765,11 +5918,13 @@
         "name": {
           "location": { "end": 1004, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 1000 },
           "origin": "source",
+          "state": "known",
           "value": "if"
         },
         "noMultiBindings": {
           "location": { "end": 6591, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts", "pos": 843 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -5783,6 +5938,7 @@
         "aliases": {
           "location": { "end": 8122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6473 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -5790,20 +5946,24 @@
             "attribute": {
               "location": { "end": 6724, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6719 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 6724, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6719 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 6724, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6719 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 6724, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6719 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -5811,6 +5971,7 @@
         "className": {
           "location": { "end": 8122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6473 },
           "origin": "source",
+          "state": "known",
           "value": "PendingTemplateController"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
@@ -5818,11 +5979,13 @@
         "name": {
           "location": { "end": 6662, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6653 },
           "origin": "source",
+          "state": "known",
           "value": "pending"
         },
         "noMultiBindings": {
           "location": { "end": 8122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 6473 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -5836,6 +5999,7 @@
         "aliases": {
           "location": { "end": 8706, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 874 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -5843,20 +6007,24 @@
             "attribute": {
               "location": { "end": 1342, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1331 },
               "origin": "source",
+              "state": "known",
               "value": "activated"
             },
             "mode": {
               "location": { "end": 1342, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1331 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1342, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1331 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1342, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1331 },
               "origin": "source",
+              "state": "known",
               "value": "activated"
             }
           },
@@ -5864,20 +6032,24 @@
             "attribute": {
               "location": { "end": 1362, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1350 },
               "origin": "source",
+              "state": "known",
               "value": "activating"
             },
             "mode": {
               "location": { "end": 1362, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1350 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1362, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1350 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1362, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1350 },
               "origin": "source",
+              "state": "known",
               "value": "activating"
             }
           },
@@ -5885,20 +6057,24 @@
             "attribute": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
               "origin": "source",
+              "state": "known",
               "value": "callback-context"
             },
             "mode": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1387, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1370 },
               "origin": "source",
+              "state": "known",
               "value": "callbackContext"
             }
           },
@@ -5906,20 +6082,24 @@
             "attribute": {
               "location": { "end": 1484, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1471 },
               "origin": "source",
+              "state": "known",
               "value": "deactivated"
             },
             "mode": {
               "location": { "end": 1484, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1471 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1484, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1471 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1484, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1471 },
               "origin": "source",
+              "state": "known",
               "value": "deactivated"
             }
           },
@@ -5927,20 +6107,24 @@
             "attribute": {
               "location": { "end": 1506, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1492 },
               "origin": "source",
+              "state": "known",
               "value": "deactivating"
             },
             "mode": {
               "location": { "end": 1506, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1492 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1506, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1492 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1506, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1492 },
               "origin": "source",
+              "state": "known",
               "value": "deactivating"
             }
           },
@@ -5948,20 +6132,24 @@
             "attribute": {
               "location": { "end": 1323, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1313 },
               "origin": "source",
+              "state": "known",
               "value": "position"
             },
             "mode": {
               "location": { "end": 1323, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1313 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1323, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1313 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1323, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1313 },
               "origin": "source",
+              "state": "known",
               "value": "position"
             }
           },
@@ -5969,20 +6157,24 @@
             "attribute": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },
               "origin": "source",
+              "state": "known",
               "value": "render-context"
             },
             "mode": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1418, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1403 },
               "origin": "source",
+              "state": "known",
               "value": "renderContext"
             }
           },
@@ -5990,20 +6182,24 @@
             "attribute": {
               "location": { "end": 1463, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1455 },
               "origin": "source",
+              "state": "known",
               "value": "strict"
             },
             "mode": {
               "location": { "end": 1463, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1455 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1463, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1455 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1463, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1455 },
               "origin": "source",
+              "state": "known",
               "value": "strict"
             }
           },
@@ -6011,20 +6207,24 @@
             "attribute": {
               "location": { "end": 1305, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1297 },
               "origin": "source",
+              "state": "known",
               "value": "target"
             },
             "mode": {
               "location": { "end": 1305, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1297 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1305, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1297 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1305, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1297 },
               "origin": "source",
+              "state": "known",
               "value": "target"
             }
           }
@@ -6032,6 +6232,7 @@
         "className": {
           "location": { "end": 8706, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 874 },
           "origin": "source",
+          "state": "known",
           "value": "Portal"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts",
@@ -6039,11 +6240,13 @@
         "name": {
           "location": { "end": 1209, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 1201 },
           "origin": "source",
+          "state": "known",
           "value": "portal"
         },
         "noMultiBindings": {
           "location": { "end": 8706, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts", "pos": 874 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -6057,6 +6260,7 @@
         "aliases": {
           "location": { "end": 6471, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1176 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -6064,20 +6268,24 @@
             "attribute": {
               "location": { "end": 1422, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1415 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 1422, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1415 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1422, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1415 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1422, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1415 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -6085,6 +6293,7 @@
         "className": {
           "location": { "end": 6471, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1176 },
           "origin": "source",
+          "state": "known",
           "value": "PromiseTemplateController"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
@@ -6092,11 +6301,13 @@
         "name": {
           "location": { "end": 1365, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1356 },
           "origin": "source",
+          "state": "known",
           "value": "promise"
         },
         "noMultiBindings": {
           "location": { "end": 6471, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 1176 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -6110,6 +6321,7 @@
         "aliases": {
           "location": { "end": 24178, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 1832 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -6117,20 +6329,24 @@
             "attribute": {
               "location": { "end": 2122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 2115 },
               "origin": "source",
+              "state": "known",
               "value": "items"
             },
             "mode": {
               "location": { "end": 2122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 2115 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 2122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 2115 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 2122, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 2115 },
               "origin": "source",
+              "state": "known",
               "value": "items"
             }
           }
@@ -6138,6 +6354,7 @@
         "className": {
           "location": { "end": 24178, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 1832 },
           "origin": "source",
+          "state": "known",
           "value": "Repeat"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts",
@@ -6145,11 +6362,13 @@
         "name": {
           "location": { "end": 2035, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 2027 },
           "origin": "source",
+          "state": "known",
           "value": "repeat"
         },
         "noMultiBindings": {
           "location": { "end": 24178, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts", "pos": 1832 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -6163,6 +6382,7 @@
         "aliases": {
           "location": { "end": 8464, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1050 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -6170,20 +6390,24 @@
             "attribute": {
               "location": { "end": 1276, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1269 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 1276, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1269 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 1276, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1269 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 1276, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1269 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -6191,6 +6415,7 @@
         "className": {
           "location": { "end": 8464, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1050 },
           "origin": "source",
+          "state": "known",
           "value": "Switch"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts",
@@ -6198,11 +6423,13 @@
         "name": {
           "location": { "end": 1219, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1211 },
           "origin": "source",
+          "state": "known",
           "value": "switch"
         },
         "noMultiBindings": {
           "location": { "end": 8464, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts", "pos": 1050 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -6216,6 +6443,7 @@
         "aliases": {
           "location": { "end": 9859, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8124 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -6223,20 +6451,24 @@
             "attribute": {
               "location": { "end": 8374, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8369 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 8374, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8369 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 8374, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8369 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 8374, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8369 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -6244,6 +6476,7 @@
         "className": {
           "location": { "end": 9859, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8124 },
           "origin": "source",
+          "state": "known",
           "value": "FulfilledTemplateController"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
@@ -6251,11 +6484,13 @@
         "name": {
           "location": { "end": 8312, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8306 },
           "origin": "source",
+          "state": "known",
           "value": "then"
         },
         "noMultiBindings": {
           "location": { "end": 9859, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts", "pos": 8124 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -6269,6 +6504,7 @@
         "aliases": {
           "location": { "end": 3640, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 612 },
           "origin": "source",
+          "state": "known",
           "value": []
         },
         "bindables": {
@@ -6276,20 +6512,24 @@
             "attribute": {
               "location": { "end": 834, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 827 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             },
             "mode": {
               "location": { "end": 834, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 827 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 834, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 827 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 834, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 827 },
               "origin": "source",
+              "state": "known",
               "value": "value"
             }
           }
@@ -6297,6 +6537,7 @@
         "className": {
           "location": { "end": 3640, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 612 },
           "origin": "source",
+          "state": "known",
           "value": "With"
         },
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts",
@@ -6304,11 +6545,13 @@
         "name": {
           "location": { "end": 777, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 771 },
           "origin": "source",
+          "state": "known",
           "value": "with"
         },
         "noMultiBindings": {
           "location": { "end": 3640, "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts", "pos": 612 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -6322,6 +6565,7 @@
         "className": {
           "location": { "end": 1389, "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts", "pos": 804 },
           "origin": "source",
+          "state": "known",
           "value": "SanitizeValueConverter"
         },
         "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts",
@@ -6329,6 +6573,7 @@
         "name": {
           "location": { "end": 992, "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts", "pos": 982 },
           "origin": "source",
+          "state": "known",
           "value": "sanitize"
         }
       },

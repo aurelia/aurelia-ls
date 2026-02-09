@@ -2,11 +2,15 @@ import { test, expect } from "vitest";
 
 import {
   BUILTIN_SEMANTICS,
+  InMemoryProvenanceIndex,
+  emitOverlay,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
   canonicalDocumentUri,
   buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
+import { resolveSourceFile } from "../../src/model/source.js";
+import { buildTemplateMapping } from "../../src/synthesis/overlay/mapping.js";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
 
 function createVmReflection() {
@@ -386,6 +390,36 @@ test("references de-duplicate overlay hits and keep VM references", () => {
   expect(templateRef.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 });
 
+test("references drop unmapped overlay-only locations by policy", () => {
+  const program = createProgram();
+  const uri = "/app/refs-unmapped-overlay.html";
+  const markup = "<template><span>${value}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getReferences(overlay, offset) {
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
+        return [
+          // Overlay prelude has no provenance mapping; should be dropped.
+          { fileName: overlay.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } },
+          { fileName: "/app/vm.ts", range: { start: { line: 1, character: 0 }, end: { line: 1, character: 5 } } },
+        ];
+      },
+    },
+  });
+
+  const refs = service.getReferences(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
+  expect(refs.some((loc) => loc.uri === overlayUri), "unmapped overlay locations should be dropped").toBeFalsy();
+  expect(refs.some((loc) => loc.uri === canonicalDocumentUri("/app/vm.ts").uri), "VM references should remain").toBeTruthy();
+});
+
 test("references map overlay hits from other templates via provenance", () => {
   const program = createProgram();
   const markup = "<template>${shared}</template>";
@@ -586,6 +620,44 @@ test("completions map TypeScript entries without replacement spans to template s
   expect(item.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
 });
 
+test("completions omit range when replacement spans are unmapped", () => {
+  const program = createProgram();
+  const uri = "/app/completions-unmapped-replace.html";
+  const markup = "<template><span>${vmProp}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCompletions(overlay, offset) {
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
+        return [
+          {
+            name: "vmProp",
+            replacementSpan: {
+              start: mappingEntry.overlaySpan.end + 128,
+              length: 3,
+            },
+          },
+        ];
+      },
+    },
+  });
+
+  const pos = positionAtOffset(markup, mappingEntry.htmlSpan.start + 2);
+  const completions = service.getCompletions(uri, pos);
+  expect(completions.length).toBe(1);
+  const [item] = completions;
+  expect(item.label).toBe("vmProp");
+  expect(item.source).toBe("typescript");
+  expect(item.range).toBeUndefined();
+});
+
 test("completions do not invoke TypeScript when provenance misses", () => {
   const program = createProgram();
   const uri = "/app/completions-outside.html";
@@ -680,6 +752,56 @@ test("code actions drop edits when overlay changes cannot be mapped", () => {
 
   const actions = service.getCodeActions(uri, spanToRange(mappingEntry.htmlSpan, markup));
   expect(actions, "code actions should drop when overlay edits cannot be mapped").toEqual([]);
+});
+
+test("code actions map range-only edits from other template overlays", () => {
+  const program = createProgram();
+  const uriA = "/app/code-actions-cross-a.html";
+  const uriB = "/app/code-actions-cross-b.html";
+  const markup = "<template>${shared}</template>";
+  program.upsertTemplate(uriA, markup);
+  program.upsertTemplate(uriB, markup);
+
+  const compilationA = program.getCompilation(uriA);
+  const compilationB = program.getCompilation(uriB);
+  const mappingA = compilationA.mapping.entries[0];
+  const mappingB = compilationB.mapping.entries[0];
+  const overlayUriA = canonicalDocumentUri(compilationA.overlay.overlayPath).uri;
+  const overlayUriB = canonicalDocumentUri(compilationB.overlay.overlayPath).uri;
+  const overlayRangeA = spanToRange(mappingA.overlaySpan, compilationA.overlay.text);
+  const overlayRangeB = spanToRange(mappingB.overlaySpan, compilationB.overlay.text);
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCodeActions(tsOverlay) {
+        expect(tsOverlay.uri).toBe(overlayUriA);
+        return [
+          {
+            title: "cross-overlay fix",
+            edits: [
+              { fileName: overlayUriA, range: overlayRangeA, newText: "fixed" },
+              { fileName: overlayUriB, range: overlayRangeB, newText: "fixed" },
+            ],
+          },
+        ];
+      },
+    },
+  });
+
+  const actions = service.getCodeActions(uriA, spanToRange(mappingA.htmlSpan, markup));
+  expect(actions.length).toBe(1);
+  const [action] = actions;
+  expect(action.title).toBe("cross-overlay fix");
+
+  const templateUriA = canonicalDocumentUri(uriA).uri;
+  const templateUriB = canonicalDocumentUri(uriB).uri;
+  const editA = action.edits.find((edit) => edit.uri === templateUriA);
+  const editB = action.edits.find((edit) => edit.uri === templateUriB);
+  expect(editA, "primary overlay edit should map to template A").toBeTruthy();
+  expect(editB, "secondary overlay edit should map to template B").toBeTruthy();
+  expect(editA?.range).toEqual(spanToRange(mappingA.htmlSpan, markup));
+  expect(editB?.range).toEqual(spanToRange(mappingB.htmlSpan, markup));
 });
 
 test("rename maps overlay edits back to the template and preserves external edits", () => {
@@ -952,6 +1074,57 @@ test("buildTemplateMapping aligns $parent chain segments to authored spans", () 
   expect(markup.slice(parentSeg!.htmlSpan.start, parentSeg!.htmlSpan.end)).toBe("$parent.$parent");
   expect(markup.slice(vmSeg!.htmlSpan.start, vmSeg!.htmlSpan.end)).toBe("vm");
   expect(markup.slice(fullSeg!.htmlSpan.start, fullSeg!.htmlSpan.end)).toBe(".foo");
+});
+
+test("buildTemplateMapping preserves degradation evidence through grouping and provenance", () => {
+  const program = createProgram();
+  const uri = "/app/mapping-degradation.html";
+  const markup = "<template>${person.name}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const emitted = emitOverlay(compilation.overlayPlan, { isJs: false });
+  const first = emitted.mapping[0];
+  expect(first, "overlay emit should produce at least one mapping entry").toBeTruthy();
+  expect(first!.segments?.length, "overlay mapping entry should include member segments").toBeGreaterThan(0);
+
+  const firstSeg = first!.segments![0]!;
+  const degradedPath = `${firstSeg.path}.__missing__`;
+  const mutatedOverlayMapping = emitted.mapping.map((entry, idx) => {
+    if (idx !== 0 || !entry.segments?.length) return entry;
+    return {
+      ...entry,
+      segments: entry.segments.map((seg, segIdx) => (segIdx === 0 ? { ...seg, path: degradedPath } : seg)),
+    };
+  });
+
+  const rebuilt = buildTemplateMapping({
+    overlayMapping: mutatedOverlayMapping,
+    ir: compilation.ir,
+    exprTable: compilation.exprTable,
+    fallbackFile: resolveSourceFile(uri),
+    overlayFile: resolveSourceFile(compilation.overlay.overlayPath),
+    exprToFrame: compilation.scope.templates?.[0]?.exprToFrame ?? null,
+  });
+
+  const rebuiltEntry = rebuilt.mapping.entries.find((entry) => entry.exprId === first!.exprId);
+  const degradedSeg = rebuiltEntry?.segments?.find((seg) => seg.path === degradedPath);
+  expect(degradedSeg, "degraded segment should survive mapping normalization/grouping").toBeTruthy();
+  expect(degradedSeg?.degradation?.reason).toBe("missing-html-member-span");
+  expect(degradedSeg?.degradation?.projection).toBe("proportional");
+
+  const templateUri = canonicalDocumentUri(uri).uri;
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const provenance = new InMemoryProvenanceIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, rebuilt.mapping);
+
+  const hit = provenance.projectGeneratedSpan(overlayUri, {
+    start: degradedSeg!.overlaySpan.start,
+    end: degradedSeg!.overlaySpan.end,
+  });
+  expect(hit?.edge.kind).toBe("overlayMember");
+  expect(hit?.edge.evidence?.level).toBe("degraded");
+  expect(hit?.edge.evidence?.reason).toBe("missing-html-member-span");
 });
 
 function positionAtOffset(text, offset) {

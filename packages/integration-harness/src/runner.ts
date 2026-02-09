@@ -27,6 +27,7 @@ import {
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
   prepareProjectSemantics,
+  unwrapSourced,
   type ApiSurfaceSnapshot,
   type AotCodeResult,
   type CompileAotResult,
@@ -488,6 +489,8 @@ function compileTargets(
 
     const needsAnalysis = options.computeUsage || target.overlay;
     if (needsAnalysis) {
+      // TODO(tech-debt): migrate this direct facade call to workspace/program
+      // orchestration once integration harness consumes the unified authority path.
       const analysis = compileTemplate({
         html: markup,
         templateFilePath: templatePath,
@@ -508,6 +511,8 @@ function compileTargets(
     }
 
     if (target.aot !== false) {
+      // TODO(tech-debt): migrate this direct facade call to workspace/program
+      // orchestration once AOT integration paths are unified.
       compileResult.aot = compileAot(markup, {
         name: target.id,
         templatePath,
@@ -1027,10 +1032,6 @@ function toTypeRefOptional(typeName: string | undefined): TypeRef | undefined {
 
 function toTypeRef(typeName: string | undefined): TypeRef {
   return toTypeRefOptional(typeName) ?? { kind: "unknown" };
-}
-
-function unwrapSourced<T>(value: { value?: T } | undefined): T | undefined {
-  return value?.value;
 }
 
 function isString(value: string | undefined): value is string {

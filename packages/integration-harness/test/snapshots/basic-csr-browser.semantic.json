@@ -1384,21 +1384,25 @@
         "boundary": {
           "location": { "end": 272, "file": "playground/basic-csr/src/my-app.ts", "pos": 109 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 272, "file": "playground/basic-csr/src/my-app.ts", "pos": 109 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 272, "file": "playground/basic-csr/src/my-app.ts", "pos": 109 },
           "origin": "source",
+          "state": "known",
           "value": "MyAppCustomElement"
         },
         "containerless": {
           "location": { "end": 272, "file": "playground/basic-csr/src/my-app.ts", "pos": 109 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1407,16 +1411,19 @@
         "name": {
           "location": { "end": 272, "file": "playground/basic-csr/src/my-app.ts", "pos": 109 },
           "origin": "source",
+          "state": "known",
           "value": "my-app"
         },
         "processContent": {
           "location": { "end": 272, "file": "playground/basic-csr/src/my-app.ts", "pos": 109 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 272, "file": "playground/basic-csr/src/my-app.ts", "pos": 109 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549",

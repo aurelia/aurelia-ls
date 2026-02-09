@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 
 import {
@@ -44,6 +45,7 @@ function byOrigin(templates: readonly TemplateIR[], kind: TemplateIR["origin"]["
 
 describe("Template origins", () => {
   it("assigns origins for root, controller, branch, projection, and synthetic templates", () => {
+    const expectedFile = toSourceFileId(path.resolve(process.cwd(), "test.html"));
     const markup = [
       `<au-compose>`,
       `  <div au-slot="main">`,
@@ -64,7 +66,7 @@ describe("Template origins", () => {
     const root = templates[0]!;
     expect(root.origin.kind).toBe("root");
     if (root.origin.kind === "root") {
-      expect(root.origin.file).toBe(toSourceFileId("test.html"));
+      expect(root.origin.file).toBe(expectedFile);
     }
 
     const kinds = new Set(templates.map((t) => t.origin.kind));

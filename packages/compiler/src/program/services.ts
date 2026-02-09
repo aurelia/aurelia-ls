@@ -41,26 +41,31 @@ import type { TemplateCompilation } from "../facade.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
 import {
+  projectGeneratedLocationToDocumentSpanWithOffsetFallback,
+  projectGeneratedSpanToDocumentSpanWithOffsetFallback,
   provenanceHitToDocumentSpan,
-  projectGeneratedOffsetToDocumentSpan,
-  projectGeneratedSpanToDocumentSpan,
+  resolveGeneratedLocationSpan,
+  resolveTemplateUriForGenerated,
   type DocumentSpan,
   type OverlayProvenanceHit,
   type ProvenanceIndex,
   type TemplateProvenanceHit,
 } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
-
-/**
- * TODO(provenance-refactor)
- * - Treat ProvenanceIndex as the single source-map layer between generated artifacts and templates.
- * - Migrate remaining overlay offset/member heuristics in this file into ProvenanceIndex projection APIs.
- * - Stop scanning TemplateMappingArtifact directly in services once provenance has full projection coverage.
- * - Keep this in sync with provenance projection tests in packages/compiler/test/program/provenance.test.ts.
- */
+import {
+  DEFAULT_PROVENANCE_PROJECTION_POLICY,
+  projectTemplateOffsetToOverlayWithPolicy,
+  projectTemplateSpanToOverlayWithPolicy,
+  resolveGeneratedReferenceLocationWithPolicy,
+  resolveOverlayDiagnosticLocationWithPolicy,
+  resolveRelatedDiagnosticLocationWithPolicy,
+  shouldRejectOverlayEditBatch,
+} from "./provenance-policy.js";
 
 export type { DocumentSpan } from "./provenance.js";
 export type { Position, TextRange } from "../model/index.js";
+
+const PROVENANCE_POLICY = DEFAULT_PROVENANCE_PROJECTION_POLICY;
 
 export interface TextEdit {
   uri: DocumentUri;
@@ -370,8 +375,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (offset == null) return [];
 
     const query = this.program.getQuery(canonical.uri);
-    const compilation = this.program.getCompilation(canonical.uri);
-    const template = this.collectTemplateCompletions(query, snapshot, offset, compilation);
+    const template = this.collectTemplateCompletions(query, snapshot, offset);
     const typescript = this.collectTypeScriptCompletions(canonical, snapshot, offset);
     return dedupeCompletions([...template, ...typescript]);
   }
@@ -465,15 +469,13 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     query: TemplateQueryFacade,
     snapshot: DocumentSnapshot,
     offset: number,
-    compilation: TemplateCompilation | null,
   ): CompletionItem[] {
     const { sem, resources, syntax } = resolveCompletionContext(this.program, snapshot.uri);
     const attrParser = createAttributeParserFromRegistry(syntax);
 
     const exprInfo = query.exprAt(offset);
     if (exprInfo) {
-      const exprSpan = findExpressionSpan(compilation?.mapping ?? null, offset) ?? exprInfo.span;
-      return collectExpressionCompletions(snapshot.text, offset, exprSpan, resources);
+      return collectExpressionCompletions(snapshot.text, offset, exprInfo.span, resources);
     }
 
     const context = findTagContext(snapshot.text, offset);
@@ -510,7 +512,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const entries = ts.getCompletions(overlay, overlayOffset) ?? [];
     if (!entries.length) return [];
 
-    const fallbackSpan = overlayHit.edge.to.span ?? resolveSourceSpan({ start: offset, end: offset }, canonical.file);
+    const fallbackSpan = overlayHit.edge.to.span;
     const results: CompletionItem[] = [];
     for (const entry of entries) {
       const overlaySpan = entry.replacementSpan
@@ -520,15 +522,15 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         )
         : null;
       const mapped = overlaySpan
-        ? projectGeneratedSpanToDocumentSpan(this.program.provenance, overlay.uri, overlaySpan)
+        ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(this.program.provenance, overlay.uri, overlaySpan)
         : null;
-      const span = mapped?.span ?? fallbackSpan;
+      const span = mapped?.span ?? (overlaySpan ? null : fallbackSpan);
       const detail = entry.detail ?? entry.kind;
-      const range = spanToRange(span, snapshot.text);
+      const range = span ? spanToRange(span, snapshot.text) : undefined;
       results.push({
         label: entry.name,
         source: "typescript",
-        range,
+        ...(range ? { range } : {}),
         ...(detail ? { detail } : {}),
         ...(entry.documentation ? { documentation: entry.documentation } : {}),
         ...(entry.insertText ? { insertText: entry.insertText } : {}),
@@ -612,11 +614,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       { start: info.start ?? overlayOffset, end: (info.start ?? overlayOffset) + (info.length ?? 0) },
       overlay.file,
     );
-    const mapped = projectGeneratedSpanToDocumentSpan(this.program.provenance, overlay.uri, overlaySpan);
+    const mapped = projectGeneratedSpanToDocumentSpanWithOffsetFallback(this.program.provenance, overlay.uri, overlaySpan);
     const hoverSpan =
       mapped?.span && spanLength(mapped.span) > 0
         ? mapped.span
-        : overlayHit.edge.to.span ?? resolveSourceSpan({ start: offset, end: offset }, snapshot.uri);
+        : overlayHit.edge.to.span;
     const rewrittenText = rewriteTypeNames(info.text, typeNames);
     const text = info.documentation ? `${rewrittenText}\n\n${info.documentation}` : rewrittenText;
     return { text, span: hoverSpan };
@@ -625,25 +627,47 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   private mapTypeScriptLocations(locations: readonly TsLocation[], overlay: OverlayDocumentSnapshot): Location[] {
     const results: Location[] = [];
     const seen = new Set<string>();
+    const overlaySnapshots = new Map<DocumentUri, OverlayDocumentSnapshot>([[overlay.uri, overlay]]);
     for (const loc of locations ?? []) {
-      const locUri = canonicalDocumentUri(loc.fileName).uri;
-      let mapped: Location | null = null;
-      if (locUri !== overlay.uri) {
-        const span = tsSpan(loc, canonicalDocumentUri(loc.fileName).file);
-        if (span) {
-          const projected = projectGeneratedSpanToDocumentSpan(this.program.provenance, locUri, span);
-          if (projected) {
-            const snap = this.program.sources.get(projected.uri);
-            if (snap) {
-              mapped = { uri: projected.uri, range: spanToRange(projected.span, snap.text) };
-            }
-          }
-        }
-      }
-      if (!mapped) mapped = this.mapProvenanceLocation(loc, overlay);
-      const range = mapped?.range ?? normalizeRange(loc.range);
-      if (!range) continue;
-      const target = mapped ?? { uri: locUri, range };
+      const generated = canonicalDocumentUri(loc.fileName);
+      const range = normalizeRange(loc.range);
+      const templateUri = resolveTemplateUriForGenerated(this.program.provenance, generated.uri)
+        ?? (generated.uri === overlay.uri ? overlay.templateUri : null);
+      const generatedOverlay = templateUri
+        ? this.getGeneratedOverlaySnapshot(generated.uri, templateUri, overlaySnapshots)
+        : null;
+      const generatedText = generatedOverlay?.text ?? (generated.uri === overlay.uri ? overlay.text : null);
+      const generatedLocation = {
+        generatedUri: generated.uri,
+        generatedFile: generatedOverlay?.file ?? generated.file,
+        generatedText,
+        start: loc.start ?? null,
+        length: loc.length ?? null,
+        range,
+      };
+      const generatedSpan = resolveGeneratedLocationSpan(generatedLocation, generated.file);
+      const projectedHit = generatedSpan
+        ? this.program.provenance.projectGeneratedSpan(generated.uri, generatedSpan)
+        : null;
+      const projectedLocation = projectedHit
+        ? provenanceHitToDocumentSpan(projectedHit)
+        : projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, generatedLocation);
+      const projectedEvidence = projectedHit?.edge.evidence?.level ?? (projectedLocation ? "degraded" : null);
+      const decision = resolveGeneratedReferenceLocationWithPolicy({
+        generatedUri: generated.uri,
+        generatedSpan,
+        mappedLocation: projectedLocation,
+        mappedEvidence: projectedEvidence,
+        provenance: this.provenanceForReferenceDecision(generated.uri, templateUri),
+        policy: PROVENANCE_POLICY,
+      });
+      const target = this.locationFromReferenceDecision(
+        decision.location,
+        generatedLocation.generatedUri,
+        range,
+        generatedText,
+      ) ?? (templateUri == null && range ? { uri: generated.uri, range } : null);
+      if (!target) continue;
       const key = locationKey(target);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -652,47 +676,25 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return results;
   }
 
-  private mapProvenanceLocation(loc: TsLocation, overlay: OverlayDocumentSnapshot): Location | null {
-    const canonical = canonicalDocumentUri(loc.fileName).uri;
-    const overlaySpan = this.overlaySpanForLocation(loc, overlay);
-    if (overlaySpan) {
-      const mapped = projectGeneratedSpanToDocumentSpan(this.program.provenance, canonical, overlaySpan);
-      if (mapped) {
-        const snap = this.program.sources.get(mapped.uri);
-        if (snap) return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text) };
-      }
-    }
-    const overlayOffset = this.overlayOffsetForLocation(loc, overlay);
-    if (overlayOffset == null) return null;
-    return mapOverlayOffsetToTemplate(canonical, overlayOffset, this.program.provenance, this.program.sources);
-  }
-
   private mapTypeScriptEdits(
     edits: readonly TsTextEdit[],
     overlay: OverlayDocumentSnapshot,
     requireOverlayMapping: boolean,
   ): TextEdit[] | null {
     const results: TextEdit[] = [];
-    const overlayUri = overlay ? canonicalDocumentUri(overlay.uri).uri : null;
-    const overlayKey = overlayUri ? canonicalDocumentUri(overlayUri).path.toLowerCase() : null;
-    const overlayKeys = new Set<string>();
-    if (overlayKey) overlayKeys.add(overlayKey);
-    for (const uri of collectOverlayUris(this.program.provenance)) {
-      overlayKeys.add(canonicalDocumentUri(uri).path.toLowerCase());
-    }
+    const overlaySnapshots = new Map<DocumentUri, OverlayDocumentSnapshot>([[overlay.uri, overlay]]);
     let mappedOverlayEdits = 0;
     let unmappedOverlayEdits = 0;
     let overlayEdits = 0;
 
     for (const edit of edits) {
-      const normalized = canonicalDocumentUri(edit.fileName);
-      const normalizedUri = normalized.uri;
-      const normalizedKey = normalized.path.toLowerCase();
+      const generated = canonicalDocumentUri(edit.fileName);
       const range = normalizeRange(edit.range);
-      const isOverlayEdit = overlayKeys.has(normalizedKey);
-      if (isOverlayEdit) {
+      const templateUri = resolveTemplateUriForGenerated(this.program.provenance, generated.uri);
+      if (templateUri) {
         overlayEdits += 1;
-        const mapped = this.mapOverlayEdit(edit, normalizedUri, overlayKey !== null && normalizedKey === overlayKey ? overlay : null);
+        const generatedOverlay = this.getGeneratedOverlaySnapshot(generated.uri, templateUri, overlaySnapshots);
+        const mapped = this.mapGeneratedEdit(edit, generated, range, generatedOverlay);
         if (!mapped) {
           unmappedOverlayEdits += 1;
           continue;
@@ -703,38 +705,125 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       }
 
       if (!range) continue;
-      results.push({ uri: normalizedUri, range, newText: edit.newText });
+      results.push({ uri: generated.uri, range, newText: edit.newText });
     }
 
-    if (requireOverlayMapping && overlayEdits > 0 && (unmappedOverlayEdits > 0 || mappedOverlayEdits === 0)) {
+    if (
+      shouldRejectOverlayEditBatch(
+        {
+          requireOverlayMapping,
+          overlayEdits,
+          mappedOverlayEdits,
+          unmappedOverlayEdits,
+        },
+        PROVENANCE_POLICY,
+      )
+    ) {
       return null;
     }
     return results.length ? dedupeTextEdits(results) : null;
   }
 
-  private mapOverlayEdit(
+  private mapGeneratedEdit(
     edit: TsTextEdit,
-    overlayUri: DocumentUri,
-    overlay: OverlayDocumentSnapshot | null,
+    generated: CanonicalDocumentUri,
+    range: TextRange | null,
+    generatedOverlay: OverlayDocumentSnapshot | null,
   ): TextEdit | null {
-    const overlaySpan = this.overlaySpanForEdit(edit, overlayUri, overlay);
-    if (!overlaySpan) return null;
-    const mapped = projectGeneratedSpanToDocumentSpan(this.program.provenance, overlayUri, overlaySpan);
+    const mapped = this.mapGeneratedLocation({
+      generatedUri: generated.uri,
+      generatedFile: generatedOverlay?.file ?? generated.file,
+      generatedText: generatedOverlay?.text ?? null,
+      start: edit.start,
+      length: edit.length,
+      range,
+    });
+    if (!mapped) return null;
+    return { uri: mapped.uri, range: mapped.range, newText: edit.newText };
+  }
+
+  private mapGeneratedLocation(args: {
+    generatedUri: DocumentUri;
+    generatedFile: SourceFileId;
+    generatedText: string | null;
+    start?: number | null;
+    length?: number | null;
+    range?: TextRange | null;
+  }): Location | null {
+    const mapped = projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, {
+      generatedUri: args.generatedUri,
+      generatedFile: args.generatedFile,
+      generatedText: args.generatedText,
+      start: args.start ?? null,
+      length: args.length ?? null,
+      range: args.range ?? null,
+    });
     if (!mapped) return null;
     const snap = this.program.sources.get(mapped.uri);
     if (!snap) return null;
-    return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text), newText: edit.newText };
+    return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text) };
   }
 
-  private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlayProvenanceHit | null {
-    const hit = this.program.provenance.projectTemplateOffset(uri.uri, offset);
-    if (hit) return hit;
+  private locationFromReferenceDecision(
+    location: DocumentSpan | null,
+    generatedUri: DocumentUri,
+    fallbackRange: TextRange | null,
+    generatedText: string | null,
+  ): Location | null {
+    if (!location) return null;
+    const snap = this.program.sources.get(location.uri);
+    if (snap) {
+      return { uri: location.uri, range: spanToRange(location.span, snap.text) };
+    }
+    if (location.uri !== generatedUri) return null;
+    if (fallbackRange) return { uri: location.uri, range: fallbackRange };
+    if (!generatedText) return null;
+    return { uri: location.uri, range: spanToRange(location.span, generatedText) };
+  }
+
+  private provenanceForReferenceDecision(
+    generatedUri: DocumentUri,
+    templateUri: DocumentUri | null,
+  ): Pick<ProvenanceIndex, "getTemplateUriForGenerated"> {
+    if (!templateUri) return this.program.provenance;
+    const canonicalGeneratedUri = canonicalDocumentUri(generatedUri).uri;
+    return {
+      getTemplateUriForGenerated: (candidateUri) => {
+        const candidate = canonicalDocumentUri(candidateUri).uri;
+        if (candidate === canonicalGeneratedUri) return templateUri;
+        return resolveTemplateUriForGenerated(this.program.provenance, candidate);
+      },
+    };
+  }
+
+  private getGeneratedOverlaySnapshot(
+    generatedUri: DocumentUri,
+    templateUri: DocumentUri,
+    cache: Map<DocumentUri, OverlayDocumentSnapshot>,
+  ): OverlayDocumentSnapshot | null {
+    const cached = cache.get(generatedUri);
+    if (cached) return cached;
     try {
-      this.build.getOverlay(uri.uri);
+      const snapshot = this.overlaySnapshot(templateUri);
+      const canonicalOverlayUri = canonicalDocumentUri(snapshot.uri).uri;
+      cache.set(canonicalOverlayUri, snapshot);
+      return canonicalOverlayUri === generatedUri ? snapshot : null;
     } catch {
       return null;
     }
-    return this.program.provenance.projectTemplateOffset(uri.uri, offset);
+  }
+
+  private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlayProvenanceHit | null {
+    const decision = projectTemplateOffsetToOverlayWithPolicy({
+      provenance: this.program.provenance,
+      uri: uri.uri,
+      offset,
+      materializeOverlay: () => {
+        this.build.getOverlay(uri.uri);
+      },
+      policy: PROVENANCE_POLICY,
+    });
+    return decision.hit;
   }
 
   private projectTemplateSpanToOverlay(
@@ -743,56 +832,16 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     end: number,
   ): OverlayProvenanceHit | null {
     const span = resolveSourceSpan({ start, end }, uri.file);
-    const hit = this.program.provenance.projectTemplateSpan(uri.uri, span);
-    if (hit) return hit;
-    try {
-      this.build.getOverlay(uri.uri);
-    } catch {
-      return null;
-    }
-    return this.program.provenance.projectTemplateSpan(uri.uri, span);
-  }
-
-  private overlayOffsetForLocation(
-    loc: Pick<TsLocation, "start" | "range" | "fileName">,
-    overlay: OverlayDocumentSnapshot,
-  ): number | null {
-    if (loc.start != null) return loc.start;
-    const normalizedUri = canonicalDocumentUri(loc.fileName).uri;
-    if (normalizedUri !== overlay.uri || !loc.range) return null;
-    return offsetAtPosition(overlay.text, loc.range.start);
-  }
-
-  private overlaySpanForEdit(
-    edit: Pick<TsTextEdit, "start" | "length" | "range">,
-    overlayUri: DocumentUri,
-    overlay: OverlayDocumentSnapshot | null,
-  ): SourceSpan | null {
-    if (edit.start != null) {
-      const len = edit.length ?? 0;
-      const file = overlay?.file ?? canonicalDocumentUri(overlayUri).file;
-      return resolveSourceSpan({ start: edit.start, end: edit.start + len }, file);
-    }
-    if (!edit.range || !overlay || overlay.uri !== overlayUri) return null;
-    const start = offsetAtPosition(overlay.text, edit.range.start);
-    const end = offsetAtPosition(overlay.text, edit.range.end);
-    if (start == null || end == null) return null;
-    return resolveSourceSpan({ start, end }, overlay.file);
-  }
-
-  private overlaySpanForLocation(
-    loc: Pick<TsLocation, "start" | "length" | "range" | "fileName">,
-    overlay: OverlayDocumentSnapshot,
-  ): SourceSpan | null {
-    if (loc.start != null) {
-      const len = loc.length ?? 0;
-      return resolveSourceSpan({ start: loc.start, end: loc.start + len }, overlay.file);
-    }
-    if (!loc.range || canonicalDocumentUri(loc.fileName).uri !== overlay.uri) return null;
-    const start = offsetAtPosition(overlay.text, loc.range.start);
-    const end = offsetAtPosition(overlay.text, loc.range.end);
-    if (start == null || end == null) return null;
-    return resolveSourceSpan({ start, end }, overlay.file);
+    const decision = projectTemplateSpanToOverlayWithPolicy({
+      provenance: this.program.provenance,
+      uri: uri.uri,
+      span,
+      materializeOverlay: () => {
+        this.build.getOverlay(uri.uri);
+      },
+      policy: PROVENANCE_POLICY,
+    });
+    return decision.hit;
   }
 
   private collectTypeScriptDiagnostics(
@@ -1095,16 +1144,6 @@ function collectBindingCommandCompletions(
       range,
       ...(entry.detail ? { detail: entry.detail } : {}),
     }));
-}
-
-function findExpressionSpan(mapping: TemplateMappingArtifact | null, offset: number): SourceSpan | null {
-  if (!mapping) return null;
-  let best: SourceSpan | null = null;
-  for (const entry of mapping.entries ?? []) {
-    if (!spanContainsOffset(entry.htmlSpan, offset)) continue;
-    if (!best || spanLength(entry.htmlSpan) < spanLength(best)) best = entry.htmlSpan;
-  }
-  return best;
 }
 
 function findPipeContext(
@@ -1611,29 +1650,6 @@ function typeTextMatches(expected: string, actual: string): boolean {
   return false;
 }
 
-function mapOverlayOffsetToTemplate(
-  overlayUri: DocumentUri,
-  overlayOffset: number,
-  provenance: ProvenanceIndex,
-  sources: { get(uri: DocumentUri): DocumentSnapshot | null },
-): Location | null {
-  const mapped = projectGeneratedOffsetToDocumentSpan(provenance, overlayUri, overlayOffset);
-  if (!mapped) return null;
-  const snap = sources.get(mapped.uri);
-  if (!snap) return null;
-  return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text) };
-}
-
-function collectOverlayUris(provenance: ProvenanceIndex): Set<DocumentUri> {
-  const overlayUris = new Set<DocumentUri>();
-  const stats = provenance.stats();
-  for (const doc of stats.documents) {
-    const overlayUri = provenance.templateStats(doc.uri).overlayUri;
-    if (overlayUri) overlayUris.add(overlayUri);
-  }
-  return overlayUris;
-}
-
 function mapTypeScriptDiagnostic(
   diag: TsDiagnostic,
   overlay: OverlayDocumentSnapshot,
@@ -1645,7 +1661,9 @@ function mapTypeScriptDiagnostic(
   // Note: We intentionally do NOT use overlayLocation - the overlay file is an internal implementation detail.
   const _overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
   const provenanceHit = overlaySpan ? provenance.projectGeneratedSpan(overlay.uri, overlaySpan) : null;
-  const mappedLocation = provenanceHit ? provenanceHitToDocumentSpan(provenanceHit) : null;
+  const mappedLocation = overlaySpan
+    ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, overlay.uri, overlaySpan)
+    : null;
 
   const related: DiagnosticRelatedInfo[] = [];
   // Note: We intentionally do NOT add the overlay location as related info.
@@ -1655,38 +1673,42 @@ function mapTypeScriptDiagnostic(
     const relCanonical = rel.fileName ? canonicalDocumentUri(rel.fileName) : canonicalDocumentUri(overlay.uri);
     const relSpan = tsSpan(rel, relCanonical.file);
     const relUri = relCanonical.uri;
-    const relHit = relSpan ? provenance.projectGeneratedSpan(relUri, relSpan) : null;
-    const relMapped = relHit ? provenanceHitToDocumentSpan(relHit) : null;
-
-    // If provenance mapping succeeded, use the mapped location.
-    // If it failed but the location is in an overlay file, fall back to template URI.
-    // This ensures we never expose internal overlay file paths to users.
-    const isOverlayFile = relUri === overlay.uri || isOverlayPath(relCanonical.path);
-    const fallbackLocation = isOverlayFile && relSpan
-      ? { uri: overlay.templateUri, span: relSpan }
-      : relSpan ? { uri: relUri, span: relSpan } : null;
+    const relMapped = relSpan
+      ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, relUri, relSpan)
+      : null;
+    const relatedTemplateUri = resolveTemplateUriForGenerated(provenance, relUri);
+    const relatedLocation = resolveRelatedDiagnosticLocationWithPolicy({
+      relUri,
+      relSpan,
+      mappedLocation: relMapped,
+      overlayUri: overlay.uri,
+      templateUri: overlay.templateUri,
+      relatedTemplateUri,
+      policy: PROVENANCE_POLICY,
+    });
 
     related.push({
       message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames),
-      location: relMapped ?? fallbackLocation,
+      location: relatedLocation.location,
     });
   }
 
   const severity = tsCategoryToSeverity(diag.category);
   const message = formatTypeScriptMessage(diag, vmDisplayName, provenanceHit, typeNames);
 
-  // If provenance mapping failed, fall back to template URI instead of overlay URI.
-  // This ensures we never expose internal overlay file paths to users.
-  const fallbackLocation = overlaySpan
-    ? { uri: overlay.templateUri, span: overlaySpan }
-    : null;
+  const locationDecision = resolveOverlayDiagnosticLocationWithPolicy({
+    overlaySpan,
+    mappedLocation,
+    templateUri: overlay.templateUri,
+    policy: PROVENANCE_POLICY,
+  });
 
   return {
     code: diag.code ?? "TS",
     message,
     source: "typescript",
     severity,
-    location: mappedLocation ?? fallbackLocation,
+    location: locationDecision.location,
     ...(related.length ? { related } : {}),
     ...(diag.tags ? { tags: diag.tags } : {}),
   };
@@ -1803,12 +1825,4 @@ function dedupeTextEdits(edits: readonly TextEdit[]): TextEdit[] {
     results.push(edit);
   }
   return results;
-}
-
-/**
- * Checks if a path looks like an overlay file path.
- * Overlay files have patterns like `.__au.ttc.overlay.ts` or similar.
- */
-function isOverlayPath(path: string): boolean {
-  return path.includes(".__au.") && path.includes(".overlay.");
 }

@@ -1,12 +1,16 @@
 import type { DiagnosticsCatalog } from "../types.js";
 import type { DiagnosticCode } from "../catalog/index.js";
-import { AU_DIAGNOSTIC_MAP, type AuDiagnosticMapping } from "../mappings/au.js";
+import { AU_DIAGNOSTIC_MAP } from "../mappings/au.js";
 import type {
   DiagnosticCodeResolver,
   DiagnosticCodeResolution,
   DiagnosticIssue,
   RawDiagnostic,
 } from "./types.js";
+import {
+  DEFAULT_DIAGNOSTIC_RESOLUTION_POLICY,
+  resolveConditionalAuMappingWithPolicy,
+} from "./resolution-policy.js";
 
 type ResolverData = Readonly<Record<string, unknown>>;
 
@@ -55,45 +59,21 @@ function resolveAuCode(
   let resolvedData = mapping.data;
 
   if (isCodeList(mapping.canonical)) {
-    const conditional = resolveConditionalAuMapping(mapping, raw);
-    if (conditional) {
-      resolvedCode = conditional.code;
-      resolvedAurCode = conditional.aurCode;
-      resolvedData = mergeData(mapping.data, conditional.data);
-    } else {
-      resolvedCode = mapping.canonical[0] ?? null;
-      issues.push(conditionalCodeIssue(raw.code, mapping.canonical, resolvedCode));
-    }
+    const conditional = resolveConditionalAuMappingWithPolicy(
+      mapping,
+      raw,
+      DEFAULT_DIAGNOSTIC_RESOLUTION_POLICY,
+    );
+    resolvedCode = conditional.code;
+    resolvedAurCode = conditional.aurCode;
+    resolvedData = mergeData(mapping.data, conditional.data);
+    if (conditional.issue) issues.push(conditional.issue);
   } else {
     resolvedCode = mapping.canonical;
   }
 
   resolvedData = mergeData(resolvedData, resolvedAurCode ? { aurCode: resolvedAurCode } : undefined);
   return finalizeResolution(resolvedCode, catalog, raw.code, issues, resolvedData);
-}
-
-function resolveConditionalAuMapping(
-  mapping: AuDiagnosticMapping,
-  raw: RawDiagnostic,
-): { code: DiagnosticCode; aurCode?: string; data?: ResolverData } | null {
-  if (!isCodeList(mapping.canonical)) return null;
-  const data = toRecord(raw.data);
-  if (!data) return null;
-
-  const resourceKind = getStringValue(data, "resourceKind");
-  if (resourceKind === "custom-attribute" || resourceKind === "template-controller") {
-    const code = mapping.canonical[1] ?? mapping.canonical[0];
-    const aurCode = pickMappingValue(mapping.aurCode, 1);
-    return code ? { code, aurCode } : null;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(data, "bindable")) {
-    const code = mapping.canonical[0];
-    const aurCode = pickMappingValue(mapping.aurCode, 0);
-    return code ? { code, aurCode } : null;
-  }
-
-  return null;
 }
 
 function finalizeResolution(
@@ -111,21 +91,6 @@ function finalizeResolution(
     return { code: null, issues: nextIssues };
   }
   return { code, data, ...(issues.length ? { issues } : {}) };
-}
-
-function conditionalCodeIssue(
-  rawCode: string,
-  candidates: readonly DiagnosticCode[],
-  fallback: DiagnosticCode | null,
-): DiagnosticIssue {
-  const candidateList = candidates.join(", ");
-  const fallbackText = fallback ? ` Defaulted to '${fallback}'.` : "";
-  return {
-    kind: "conditional-code",
-    message: `Conditional diagnostic mapping for '${rawCode}' (${candidateList}).${fallbackText}`,
-    rawCode,
-    code: fallback ?? undefined,
-  };
 }
 
 function unknownCodeIssue(code: string, rawCode?: string): DiagnosticIssue {
@@ -157,19 +122,4 @@ function mergeData(
 ): ResolverData | undefined {
   if (!base && !next) return undefined;
   return { ...(base ?? {}), ...(next ?? {}) };
-}
-
-function toRecord(
-  data: Readonly<Record<string, unknown>> | undefined,
-): Readonly<Record<string, unknown>> | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  return data;
-}
-
-function getStringValue(
-  data: Readonly<Record<string, unknown>>,
-  key: string,
-): string | null {
-  const value = data[key];
-  return typeof value === "string" ? value : null;
 }

@@ -1,4 +1,4 @@
-import type { BindableDef, ResourceDef, Sourced } from '../compiler.js';
+import { stripSourcedNode, type BindableDef, type ResourceDef, type Sourced } from '../compiler.js';
 
 export interface StripSourcedNodesResult {
   removed: number;
@@ -89,8 +89,5 @@ function stripSourcedArray<T>(values: readonly Sourced<T>[]): number {
 }
 
 function stripSourced<T>(value: Sourced<T> | undefined): number {
-  if (!value || value.origin !== "source") return 0;
-  if (!("node" in value)) return 0;
-  delete (value as { node?: unknown }).node;
-  return 1;
+  return stripSourcedNode(value) ? 1 : 0;
 }

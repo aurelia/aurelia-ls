@@ -3,6 +3,7 @@ import {
   prepareProjectSemantics,
   stableHash,
   stableHashSemantics,
+  unwrapSourced,
   DiagnosticsRuntime,
   type ResourceCatalog,
   type ResourceGraph,
@@ -20,6 +21,7 @@ import {
   type ProjectSemanticsDiscoveryConfig,
   type ProjectSemanticsDiscoveryResult,
   type ResourceDef,
+  type Sourced,
   type Logger,
   type ThirdPartyDiscoveryResult,
 } from "@aurelia-ls/compiler";
@@ -209,10 +211,10 @@ export class AureliaProjectIndex {
       })),
       resources: result.resources.map((r) => ({
         kind: r.kind,
-        name: unwrapSourcedValue(r.name),
+        name: unwrapSourced(r.name),
         aliases: resourceAliasesForFingerprint(r),
         source: r.file,
-        className: unwrapSourcedValue(r.className),
+        className: unwrapSourced(r.className),
       })),
     });
 
@@ -240,14 +242,11 @@ function resourceAliasesForFingerprint(resource: ResourceDef): string[] {
   }
 }
 
-function aliasesFromSourcedList(aliases: readonly { value?: string }[]): string[] {
-  return aliases.map(alias => alias.value).filter((alias): alias is string => !!alias);
+function aliasesFromSourcedList(aliases: readonly Sourced<string>[]): string[] {
+  return aliases.map((alias) => unwrapSourced(alias)).filter((alias): alias is string => !!alias);
 }
 
-function aliasesFromSourcedValue(aliases: { value?: readonly string[] } | undefined): string[] {
-  return aliases?.value ? [...aliases.value] : [];
-}
-
-function unwrapSourcedValue<T>(value: { value?: T } | undefined): T | undefined {
-  return value?.value;
+function aliasesFromSourcedValue(aliases: Sourced<readonly string[]> | undefined): string[] {
+  const value = aliases ? unwrapSourced(aliases) : undefined;
+  return value ? [...value] : [];
 }

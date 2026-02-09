@@ -21,14 +21,14 @@ import type {
   ValueConverterDef,
   ValueConverterSig,
 } from "./types.js";
+import { unwrapSourced as unwrapSourcedValue } from "./sourced.js";
 
 export function unwrapConfigured<T>(value: Configured<T> | undefined): T | undefined {
   return value?.value;
 }
 
 export function unwrapSourced<T>(value: Sourced<T> | undefined): T | undefined {
-  if (!value) return undefined;
-  return value.value;
+  return unwrapSourcedValue(value);
 }
 
 export function toTypeRefOptional(typeName: string | undefined): TypeRef | undefined {

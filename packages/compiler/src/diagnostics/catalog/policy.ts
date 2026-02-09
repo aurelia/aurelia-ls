@@ -9,6 +9,12 @@ export type PolicyConfidenceData = DiagnosticDataBase & {
   actual?: CatalogConfidence;
 };
 
+export type DiagnosticMappingAmbiguousData = DiagnosticDataBase & {
+  rawCode: string;
+  candidates: readonly string[];
+  reason?: "missing-discriminator";
+};
+
 export const policyDiagnostics = {
   "aurelia/policy/gaps": defineDiagnostic<PolicyGapsData>({
     category: "policy",
@@ -38,6 +44,22 @@ export const policyDiagnostics = {
     description: "Analysis confidence does not meet the configured threshold.",
     data: {
       optional: ["min", "actual"],
+    },
+  }),
+  "aurelia/policy/diagnostic-mapping-ambiguous": defineDiagnostic<DiagnosticMappingAmbiguousData>({
+    category: "policy",
+    status: "canonical",
+    defaultSeverity: "warning",
+    impact: "degraded",
+    actionability: "manual",
+    span: "either",
+    stages: ["project"],
+    surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
+    defaultConfidence: "partial",
+    description: "Legacy AU diagnostic mapping could not be resolved unambiguously.",
+    data: {
+      required: ["rawCode", "candidates"],
+      optional: ["reason"],
     },
   }),
 } as const;

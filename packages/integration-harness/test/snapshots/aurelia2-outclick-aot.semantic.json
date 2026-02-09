@@ -1222,25 +1222,30 @@
             "attribute": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": "fn"
             },
             "mode": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": true
             },
             "property": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": "fn"
             },
             "type": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": "(event?: any) => string"
             }
           }
@@ -1248,6 +1253,7 @@
         "className": {
           "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
+          "state": "known",
           "value": "Outclick"
         },
         "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
@@ -1255,16 +1261,19 @@
         "name": {
           "location": { "end": 179, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 169 },
           "origin": "source",
+          "state": "known",
           "value": "outclick"
         },
         "noMultiBindings": {
           "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "primary": {
           "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
+          "state": "known",
           "value": "fn"
         }
       },

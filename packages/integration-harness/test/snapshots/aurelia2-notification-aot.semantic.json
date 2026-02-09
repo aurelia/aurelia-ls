@@ -1340,25 +1340,30 @@
             "attribute": {
               "location": { "end": 869, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 832 },
               "origin": "source",
+              "state": "known",
               "value": "container-class"
             },
             "mode": {
               "location": { "end": 869, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 832 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 869, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 832 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 869, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 832 },
               "origin": "source",
+              "state": "known",
               "value": "containerClass"
             },
             "type": {
               "location": { "end": 869, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 832 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -1366,25 +1371,30 @@
             "attribute": {
               "location": { "end": 829, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 797 },
               "origin": "source",
+              "state": "known",
               "value": "host-class"
             },
             "mode": {
               "location": { "end": 829, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 797 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 829, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 797 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 829, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 797 },
               "origin": "source",
+              "state": "known",
               "value": "hostClass"
             },
             "type": {
               "location": { "end": 829, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 797 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -1392,25 +1402,30 @@
             "attribute": {
               "location": { "end": 794, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 732 },
               "origin": "source",
+              "state": "known",
               "value": "position"
             },
             "mode": {
               "location": { "end": 794, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 732 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 794, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 732 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 794, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 732 },
               "origin": "source",
+              "state": "known",
               "value": "position"
             },
             "type": {
               "location": { "end": 794, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 732 },
               "origin": "source",
+              "state": "known",
               "value": "NotificationPosition"
             }
           }
@@ -1418,21 +1433,25 @@
         "boundary": {
           "location": { "end": 6415, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 543 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 6415, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 543 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 6415, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 543 },
           "origin": "source",
+          "state": "known",
           "value": "AuNotificationHostCustomElement"
         },
         "containerless": {
           "location": { "end": 6415, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 543 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1441,16 +1460,19 @@
         "name": {
           "location": { "end": 590, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 568 },
           "origin": "source",
+          "state": "known",
           "value": "au-notification-host"
         },
         "processContent": {
           "location": { "end": 6415, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 543 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 6415, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 543 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:827e318668177cdb4a438c3c6ca7fae8146ee060addcac5578266cec5d503a4d",

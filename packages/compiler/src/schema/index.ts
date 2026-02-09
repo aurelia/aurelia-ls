@@ -3,6 +3,9 @@
 // Types - analyzed source types with provenance
 export * from "./types.js";
 
+// Sourced helpers - provenance-safe value unwrap/sanitize primitives
+export * from "./sourced.js";
+
 // Registry - built-in defaults and lookup
 export * from "./registry.js";
 

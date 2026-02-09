@@ -11,6 +11,9 @@ export {
   createResourceSymbolId,
   createLocalSymbolId,
   createBindableSymbolId,
+  unwrapSourced,
+  stripSourcedNode,
+  sanitizeSourcedSnapshotValue,
 } from "../schema/index.js";
 export type {
   ApiSurfaceBindable,

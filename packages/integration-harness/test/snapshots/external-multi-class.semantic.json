@@ -1199,25 +1199,30 @@
             "attribute": {
               "location": { "end": 332, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 278 },
               "origin": "source",
+              "state": "known",
               "value": "color"
             },
             "mode": {
               "location": { "end": 332, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 278 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 332, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 278 },
               "origin": "source",
+              "state": "known",
               "value": true
             },
             "property": {
               "location": { "end": 332, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 278 },
               "origin": "source",
+              "state": "known",
               "value": "color"
             },
             "type": {
               "location": { "end": 332, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 278 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           }
@@ -1225,6 +1230,7 @@
         "className": {
           "location": { "end": 335, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 210 },
           "origin": "source",
+          "state": "known",
           "value": "HighlightAttribute"
         },
         "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts",
@@ -1232,16 +1238,19 @@
         "name": {
           "location": { "end": 238, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 227 },
           "origin": "source",
+          "state": "known",
           "value": "highlight"
         },
         "noMultiBindings": {
           "location": { "end": 335, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 210 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "primary": {
           "location": { "end": 335, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 210 },
           "origin": "source",
+          "state": "known",
           "value": "color"
         }
       },
@@ -1500,25 +1509,30 @@
             "attribute": {
               "location": { "end": 203, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 173 },
               "origin": "source",
+              "state": "known",
               "value": "avatar"
             },
             "mode": {
               "location": { "end": 203, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 173 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 203, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 173 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 203, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 173 },
               "origin": "source",
+              "state": "known",
               "value": "avatar"
             },
             "type": {
               "location": { "end": 203, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 173 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -1526,25 +1540,30 @@
             "attribute": {
               "location": { "end": 169, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 141 },
               "origin": "source",
+              "state": "known",
               "value": "name"
             },
             "mode": {
               "location": { "end": 169, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 141 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 169, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 141 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 169, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 141 },
               "origin": "source",
+              "state": "known",
               "value": "name"
             },
             "type": {
               "location": { "end": 169, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 141 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           }
@@ -1552,21 +1571,25 @@
         "boundary": {
           "location": { "end": 206, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 85 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 206, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 85 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 206, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 85 },
           "origin": "source",
+          "state": "known",
           "value": "UserCard"
         },
         "containerless": {
           "location": { "end": 206, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 85 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1575,16 +1598,19 @@
         "name": {
           "location": { "end": 111, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 100 },
           "origin": "source",
+          "state": "known",
           "value": "user-card"
         },
         "processContent": {
           "location": { "end": 206, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 85 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 206, "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts", "pos": 85 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:1757da4a6aff6386a9a776fbae95dacfc0408993bfa142fae806efb03469ee26",

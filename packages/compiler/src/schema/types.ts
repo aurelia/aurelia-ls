@@ -16,7 +16,8 @@ export type Configured<T> =
 export type Sourced<T> =
   | { origin: 'builtin'; value: T }
   | { origin: 'config'; value: T; location: SourceLocation }
-  | { origin: 'source'; value?: T; node?: ts.Node; location?: SourceLocation };
+  | { origin: 'source'; state: 'known'; value: T; node?: ts.Node; location?: SourceLocation }
+  | { origin: 'source'; state: 'unknown'; value?: undefined; node?: ts.Node; location?: SourceLocation };
 
 export type BindingMode = 'default' | 'oneTime' | 'toView' | 'fromView' | 'twoWay';
 

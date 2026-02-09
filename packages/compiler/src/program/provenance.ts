@@ -1,6 +1,6 @@
 // Model imports (via barrel)
 import type { ExprId, NodeId, SourceFileId, SourceSpan } from "../model/index.js";
-import { spanContainsOffset, spanEquals, spanLength, resolveSourceSpan } from "../model/index.js";
+import { offsetAtPosition, spanContainsOffset, spanEquals, spanLength, resolveSourceSpan, type TextRange } from "../model/index.js";
 
 // Synthesis imports (via barrel)
 import type {
@@ -29,11 +29,17 @@ export interface ProvenanceEdgeEnd {
   readonly nodeId?: NodeId;
 }
 
+export interface ProvenanceEdgeEvidence {
+  readonly level: "exact" | "degraded";
+  readonly reason?: "missing-html-member-span";
+}
+
 export interface ProvenanceEdge {
   readonly kind: ProvenanceKind;
   readonly from: ProvenanceEdgeEnd;
   readonly to: ProvenanceEdgeEnd;
   readonly tag?: string;
+  readonly evidence?: ProvenanceEdgeEvidence;
 }
 
 export interface OverlayProvenanceHit {
@@ -57,10 +63,25 @@ export interface DocumentSpan {
   readonly memberPath?: string;
 }
 
+export interface GeneratedLocation {
+  readonly generatedUri: DocumentUri;
+  readonly generatedFile?: SourceFileId | null;
+  readonly generatedText?: string | null;
+  readonly start?: number | null;
+  readonly length?: number | null;
+  readonly range?: TextRange | null;
+}
+
 export interface ProvenanceTemplateStats {
   readonly templateUri: DocumentUri;
   readonly overlayUri: DocumentUri | null;
   readonly runtimeUri: DocumentUri | null;
+  readonly runtimeStatus: "tracked" | "unsupported";
+  readonly runtimeReason:
+    | "runtime-uri-tracked"
+    | "runtime-synthesis-not-implemented"
+    | "runtime-edges-without-uri"
+    | "runtime-edges-ambiguous-uri";
   readonly totalEdges: number;
   readonly overlayEdges: number;
   readonly runtimeEdges: number;
@@ -101,8 +122,10 @@ export interface ProvenanceIndex {
   stats(): ProvenanceStats;
   templateStats(templateUri: DocumentUri): ProvenanceTemplateStats;
 
-  getOverlayMapping?(templateUri: DocumentUri): TemplateMappingArtifact | null;
-  getOverlayUri?(templateUri: DocumentUri): DocumentUri | null;
+  getOverlayMapping(templateUri: DocumentUri): TemplateMappingArtifact | null;
+  getOverlayUri(templateUri: DocumentUri): DocumentUri | null;
+  getTemplateUriForGenerated(generatedUri: DocumentUri): DocumentUri | null;
+  getOverlayUris(): readonly DocumentUri[];
 
   removeDocument(uri: DocumentUri): void;
 }
@@ -135,6 +158,69 @@ export function projectGeneratedOffsetToDocumentSpan(
   return provenanceHitToDocumentSpan(provenance.projectGeneratedOffset(uri, offset));
 }
 
+export function projectGeneratedSpanToDocumentSpanWithOffsetFallback(
+  provenance: Pick<ProvenanceIndex, "projectGeneratedSpan" | "projectGeneratedOffset">,
+  uri: DocumentUri,
+  span: SourceSpan,
+): DocumentSpan | null {
+  const direct = projectGeneratedSpanToDocumentSpan(provenance, uri, span);
+  if (direct) return direct;
+
+  const start = projectGeneratedOffsetToDocumentSpan(provenance, uri, span.start);
+  const endOffset = Math.max(span.start, span.end - 1);
+  const end = projectGeneratedOffsetToDocumentSpan(provenance, uri, endOffset);
+  if (!start && !end) return null;
+  if (!start) return end;
+  if (!end) return start;
+  if (start.uri !== end.uri) return start;
+  const mergedFile = start.span.file ?? end.span.file ?? canonicalDocumentUri(start.uri).file;
+
+  const merged = resolveSourceSpan(
+    {
+      start: Math.min(start.span.start, end.span.start),
+      end: Math.max(start.span.end, end.span.end),
+    },
+    mergedFile,
+  );
+  return {
+    uri: start.uri,
+    span: merged,
+    ...(start.exprId ?? end.exprId ? { exprId: start.exprId ?? end.exprId } : {}),
+    ...(start.nodeId ?? end.nodeId ? { nodeId: start.nodeId ?? end.nodeId } : {}),
+    ...(start.memberPath ?? end.memberPath ? { memberPath: start.memberPath ?? end.memberPath } : {}),
+  };
+}
+
+export function projectGeneratedLocationToDocumentSpanWithOffsetFallback(
+  provenance: Pick<ProvenanceIndex, "projectGeneratedSpan" | "projectGeneratedOffset">,
+  location: GeneratedLocation,
+): DocumentSpan | null {
+  const canonical = canonicalDocumentUri(location.generatedUri);
+  const span = resolveGeneratedLocationSpan(location, canonical.file);
+  if (span) {
+    const mapped = projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, canonical.uri, span);
+    if (mapped) return mapped;
+  }
+  const offset = resolveGeneratedLocationOffset(location);
+  if (offset == null) return null;
+  return projectGeneratedOffsetToDocumentSpan(provenance, canonical.uri, offset);
+}
+
+export function collectOverlayUrisFromProvenance(
+  provenance: Pick<ProvenanceIndex, "getOverlayUris">,
+): Set<DocumentUri> {
+  return new Set(provenance.getOverlayUris());
+}
+
+export function resolveTemplateUriForGenerated(
+  provenance: Pick<ProvenanceIndex, "getTemplateUriForGenerated">,
+  generatedUri: DocumentUri,
+): DocumentUri | null {
+  const normalizedGenerated = canonicalDocumentUri(generatedUri).uri;
+  const direct = provenance.getTemplateUriForGenerated(normalizedGenerated);
+  return direct ? canonicalDocumentUri(direct).uri : null;
+}
+
 /**
  * Naive in-memory provenance. Edges are indexed by URI for offset-aware queries;
  * overlay mappings cached by template.
@@ -144,6 +230,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   private readonly edgesByFrom = new Map<DocumentUri, ProvenanceEdge[]>();
   private readonly edgesByTo = new Map<DocumentUri, ProvenanceEdge[]>();
   private readonly overlayByTemplate = new Map<DocumentUri, OverlayMappingRecord>();
+  private readonly templateByOverlay = new Map<DocumentUri, DocumentUri>();
 
   addEdges(edges: Iterable<ProvenanceEdge>): void {
     for (const edge of edges) this.storeEdge(normalizeEdge(edge));
@@ -152,6 +239,10 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
   addOverlayMapping(templateUri: DocumentUri, overlayUri: DocumentUri, mapping: TemplateMappingArtifact): void {
     const template = canonicalDocumentUri(templateUri);
     const overlay = canonicalDocumentUri(overlayUri);
+    const existing = this.overlayByTemplate.get(template.uri);
+    if (existing) {
+      this.templateByOverlay.delete(existing.overlayUri);
+    }
     const normalized = normalizeTemplateMapping(mapping, template.file, overlay.file);
     this.overlayByTemplate.set(template.uri, {
       mapping: normalized,
@@ -159,6 +250,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
       templateFile: template.file,
       overlayFile: overlay.file,
     });
+    this.templateByOverlay.set(overlay.uri, template.uri);
     this.addEdges(expandOverlayMapping(template.uri, overlay.uri, normalized));
   }
 
@@ -365,6 +457,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     const canonical = canonicalDocumentUri(templateUri);
     const overlay = this.overlayByTemplate.get(canonical.uri);
     const trackedUris = new Set<DocumentUri>([canonical.uri]);
+    const runtimeUris = new Set<DocumentUri>();
 
     if (overlay) trackedUris.add(overlay.overlayUri);
 
@@ -379,13 +472,26 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
         overlayEdges += 1;
       } else if (edge.kind === "runtimeExpr" || edge.kind === "runtimeMember" || edge.kind === "runtimeNode") {
         runtimeEdges += 1;
+        collectRuntimeUriCandidates(edge, canonical.uri, overlay?.overlayUri ?? null, runtimeUris);
       }
     }
+
+    const runtimeUri = runtimeUris.size === 1 ? runtimeUris.values().next().value ?? null : null;
+    const runtimeStatus: ProvenanceTemplateStats["runtimeStatus"] = runtimeUri ? "tracked" : "unsupported";
+    const runtimeReason: ProvenanceTemplateStats["runtimeReason"] = runtimeUri
+      ? "runtime-uri-tracked"
+      : runtimeEdges === 0
+        ? "runtime-synthesis-not-implemented"
+        : runtimeUris.size === 0
+          ? "runtime-edges-without-uri"
+          : "runtime-edges-ambiguous-uri";
 
     return {
       templateUri: canonical.uri,
       overlayUri: overlay?.overlayUri ?? null,
-      runtimeUri: null, // TODO: add runtime provenance when runtime synthesis is implemented
+      runtimeUri,
+      runtimeStatus,
+      runtimeReason,
       totalEdges,
       overlayEdges,
       runtimeEdges,
@@ -397,6 +503,15 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return this.overlayByTemplate.get(canonical)?.overlayUri ?? null;
   }
 
+  getTemplateUriForGenerated(generatedUri: DocumentUri): DocumentUri | null {
+    const canonical = canonicalDocumentUri(generatedUri).uri;
+    return this.templateByOverlay.get(canonical) ?? null;
+  }
+
+  getOverlayUris(): readonly DocumentUri[] {
+    return Array.from(this.templateByOverlay.keys());
+  }
+
   removeDocument(uri: DocumentUri): void {
     const canonical = canonicalDocumentUri(uri).uri;
     const urisToDrop = new Set<DocumentUri>([canonical]);
@@ -405,6 +520,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
       if (templateUri === canonical || record.overlayUri === canonical) {
         urisToDrop.add(templateUri);
         urisToDrop.add(record.overlayUri);
+        this.templateByOverlay.delete(record.overlayUri);
         this.overlayByTemplate.delete(templateUri);
       }
     }
@@ -437,6 +553,8 @@ interface OverlayMappingRecord {
   readonly templateFile: SourceFileId;
   readonly overlayFile: SourceFileId;
 }
+
+const EXACT_EDGE_EVIDENCE: ProvenanceEdgeEvidence = { level: "exact" };
 
 function normalizeEdge(edge: ProvenanceEdge): ProvenanceEdge {
   const from = canonicalDocumentUri(edge.from.uri);
@@ -501,6 +619,7 @@ function buildOverlayExprEdge(
 ): ProvenanceEdge {
   return {
     kind: "overlayExpr",
+    evidence: EXACT_EDGE_EVIDENCE,
     from: { uri: overlayUri, span: entry.overlaySpan, exprId: entry.exprId },
     to: { uri: templateUri, span: entry.htmlSpan, exprId: entry.exprId },
   };
@@ -512,9 +631,16 @@ function buildOverlayMemberEdge(
   entry: TemplateMappingEntry,
   seg: TemplateMappingSegment,
 ): ProvenanceEdge {
+  const evidence = seg.degradation
+    ? {
+      level: "degraded" as const,
+      reason: seg.degradation.reason,
+    }
+    : EXACT_EDGE_EVIDENCE;
   return {
     kind: "overlayMember",
     tag: seg.path,
+    evidence,
     from: { uri: overlayUri, span: seg.overlaySpan, exprId: entry.exprId },
     to: { uri: templateUri, span: seg.htmlSpan, exprId: entry.exprId },
   };
@@ -549,6 +675,7 @@ function pickBestEdgeForSpan(
     overlap: number;
     specificity: [number, number];
     memberDepth: number;
+    memberTag: string;
   } | null = null;
 
   for (const edge of edges) {
@@ -562,6 +689,7 @@ function pickBestEdgeForSpan(
       overlap,
       specificity: edgeSpecificity(edge, side),
       memberDepth: memberDepth(edge),
+      memberTag: edge.tag ?? "",
     };
 
     if (!best || isBetterEdge(candidate, best)) best = candidate;
@@ -600,6 +728,9 @@ function compareEdgesForSpan(
   const memberDelta = memberDepth(b) - memberDepth(a);
   if (memberDelta !== 0) return memberDelta;
 
+  const memberTagDelta = (a.tag ?? "").localeCompare(b.tag ?? "");
+  if (memberTagDelta !== 0) return memberTagDelta;
+
   return 0;
 }
 
@@ -621,18 +752,29 @@ function edgePriority(kind: ProvenanceKind): number {
 }
 
 function memberDepth(edge: ProvenanceEdge): number {
-  return edge.kind === "overlayMember" || edge.kind === "runtimeMember" ? edge.tag?.length ?? 0 : 0;
+  return edge.kind === "overlayMember" || edge.kind === "runtimeMember" ? memberPathDepth(edge.tag) : 0;
+}
+
+function memberPathDepth(path: string | undefined): number {
+  if (!path) return 0;
+  let depth = 1;
+  for (let i = 0; i < path.length; i += 1) {
+    const ch = path.charCodeAt(i);
+    if (ch === 46 /* . */ || ch === 91 /* [ */) depth += 1;
+  }
+  return depth;
 }
 
 function isBetterEdge(
-  candidate: { priority: number; overlap: number; specificity: [number, number]; memberDepth: number },
-  current: { priority: number; overlap: number; specificity: [number, number]; memberDepth: number },
+  candidate: { priority: number; overlap: number; specificity: [number, number]; memberDepth: number; memberTag: string },
+  current: { priority: number; overlap: number; specificity: [number, number]; memberDepth: number; memberTag: string },
 ): boolean {
   if (candidate.priority !== current.priority) return candidate.priority < current.priority;
   if (candidate.overlap !== current.overlap) return candidate.overlap > current.overlap;
   if (candidate.specificity[0] !== current.specificity[0]) return candidate.specificity[0] < current.specificity[0];
   if (candidate.specificity[1] !== current.specificity[1]) return candidate.specificity[1] < current.specificity[1];
   if (candidate.memberDepth !== current.memberDepth) return candidate.memberDepth > current.memberDepth;
+  if (candidate.memberTag !== current.memberTag) return candidate.memberTag < current.memberTag;
   return false;
 }
 
@@ -693,6 +835,45 @@ function bumpDocCounts(
   const byKind = zeroedKindCounts();
   byKind[kind] = 1;
   map.set(uri, { edges: 1, byKind });
+}
+
+function collectRuntimeUriCandidates(
+  edge: ProvenanceEdge,
+  templateUri: DocumentUri,
+  overlayUri: DocumentUri | null,
+  target: Set<DocumentUri>,
+): void {
+  const record = (uri: DocumentUri) => {
+    if (uri === templateUri) return;
+    if (overlayUri && uri === overlayUri) return;
+    target.add(uri);
+  };
+  record(edge.from.uri);
+  record(edge.to.uri);
+}
+
+export function resolveGeneratedLocationSpan(
+  location: GeneratedLocation,
+  defaultFile: SourceFileId,
+): SourceSpan | null {
+  const file = location.generatedFile ?? defaultFile;
+  if (location.start != null) {
+    const start = Math.max(0, location.start);
+    const length = Math.max(0, location.length ?? 0);
+    return resolveSourceSpan({ start, end: start + length }, file);
+  }
+  if (!location.range || !location.generatedText) return null;
+  const start = offsetAtPosition(location.generatedText, location.range.start);
+  const end = offsetAtPosition(location.generatedText, location.range.end);
+  if (start == null || end == null) return null;
+  return resolveSourceSpan({ start, end }, file);
+}
+
+function resolveGeneratedLocationOffset(location: GeneratedLocation): number | null {
+  if (location.start != null) return Math.max(0, location.start);
+  if (!location.range || !location.generatedText) return null;
+  const start = offsetAtPosition(location.generatedText, location.range.start);
+  return start ?? null;
 }
 
 /**

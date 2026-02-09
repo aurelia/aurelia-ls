@@ -133,6 +133,8 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
 }
 
 /** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
+// TODO(tech-debt): direct facade entrypoints are transitional while workspace/program
+// becomes the single compilation authority path across packages.
 export function compileTemplate(
   opts: CompileOptions,
   seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,

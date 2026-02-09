@@ -158,6 +158,12 @@ export interface TemplateProgramProvenanceStats {
   readonly runtimeEdges: number;
   readonly overlayUri: DocumentUri | null;
   readonly runtimeUri: DocumentUri | null;
+  readonly runtimeStatus: "tracked" | "unsupported";
+  readonly runtimeReason:
+    | "runtime-uri-tracked"
+    | "runtime-synthesis-not-implemented"
+    | "runtime-edges-without-uri"
+    | "runtime-edges-ambiguous-uri";
 }
 
 export interface TemplateProgramDocumentStats {
@@ -202,6 +208,12 @@ export interface TemplateProgramProvenanceEvent {
   readonly templateUri: DocumentUri;
   readonly overlayUri: DocumentUri | null;
   readonly runtimeUri: DocumentUri | null;
+  readonly runtimeStatus: "tracked" | "unsupported";
+  readonly runtimeReason:
+    | "runtime-uri-tracked"
+    | "runtime-synthesis-not-implemented"
+    | "runtime-edges-without-uri"
+    | "runtime-edges-ambiguous-uri";
   readonly overlayEdges: number;
   readonly runtimeEdges: number;
   readonly totalEdges: number;
@@ -475,6 +487,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
           runtimeEdges: provenance.runtimeEdges,
           overlayUri: provenance.overlayUri,
           runtimeUri: provenance.runtimeUri,
+          runtimeStatus: provenance.runtimeStatus,
+          runtimeReason: provenance.runtimeReason,
         },
       });
     }
@@ -667,6 +681,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
       templateUri: stats.templateUri,
       overlayUri: stats.overlayUri,
       runtimeUri: stats.runtimeUri,
+      runtimeStatus: stats.runtimeStatus,
+      runtimeReason: stats.runtimeReason,
       overlayEdges: stats.overlayEdges,
       runtimeEdges: stats.runtimeEdges,
       totalEdges: stats.totalEdges,

@@ -135,6 +135,8 @@ export function compileAot(
   markup: string,
   options: CompileAotOptions,
 ): CompileAotResult {
+  // TODO(tech-debt): direct AOT facade usage is transitional; migrate callers to
+  // workspace/program-owned orchestration as the long-term authority path.
   const trace = options.trace ?? NOOP_TRACE;
 
   return trace.span("compiler.compileAot", () => {

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 
 import {
@@ -110,6 +111,7 @@ function buildDomMaps(templates: readonly TemplateIR[]): Map<TemplateId, Map<Nod
 
 describe("Template origins invariants", () => {
   it("assigns origin + id for every template and validates host references", () => {
+    const expectedFile = toSourceFileId(path.resolve(process.cwd(), "test.html"));
     const markup = [
       `<au-compose>`,
       `  <div au-slot="main">`,
@@ -139,7 +141,7 @@ describe("Template origins invariants", () => {
 
       switch (template.origin.kind) {
         case "root":
-          expect(template.origin.file).toBe(toSourceFileId("test.html"));
+          expect(template.origin.file).toBe(expectedFile);
           break;
         case "controller": {
           const host = template.origin.host;

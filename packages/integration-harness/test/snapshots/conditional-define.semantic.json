@@ -1384,21 +1384,25 @@
         "boundary": {
           "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
           "origin": "source",
+          "state": "known",
           "value": "GuardedElement"
         },
         "containerless": {
           "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1407,16 +1411,19 @@
         "name": {
           "location": { "end": 169, "file": "/src/entry.ts", "pos": 157 },
           "origin": "source",
+          "state": "known",
           "value": "guarded-el"
         },
         "processContent": {
           "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 201, "file": "/src/entry.ts", "pos": 142 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:00cd9fa8b7e4267ffa0ed0b9a0123610732c71905518efa52cf0a96d91bd9fd3",

@@ -1,4 +1,4 @@
-import { normalizePathForId, type ResourceDef } from "@aurelia-ls/compiler";
+import { normalizePathForId, unwrapSourced, type ResourceDef } from "@aurelia-ls/compiler";
 
 export interface ResourceCandidate {
   readonly def: ResourceDef;
@@ -65,8 +65,8 @@ function compareCandidates<T extends ResourceCandidate>(
   const packageDelta = aPackage.localeCompare(bPackage);
   if (packageDelta !== 0) return packageDelta;
 
-  const aName = String(a.def.name.value ?? "");
-  const bName = String(b.def.name.value ?? "");
+  const aName = String(unwrapSourced(a.def.name) ?? "");
+  const bName = String(unwrapSourced(b.def.name) ?? "");
   const nameDelta = aName.localeCompare(bName);
   if (nameDelta !== 0) return nameDelta;
 
