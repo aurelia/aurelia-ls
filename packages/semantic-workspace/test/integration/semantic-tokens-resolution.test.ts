@@ -136,21 +136,21 @@ describe("Semantic Tokens + Resolution Integration", () => {
 
   describe("Resolution discovers custom elements", () => {
     it("discovers nav-bar element", () => {
-      const navBar = resolutionResult.resources.find(
+      const navBar = resolutionResult.definition.authority.find(
         (c) => c.kind === "custom-element" && c.name.value === "nav-bar",
       );
       expect(navBar, "nav-bar discovered").toBeTruthy();
     });
 
     it("discovers user-card element", () => {
-      const userCard = resolutionResult.resources.find(
+      const userCard = resolutionResult.definition.authority.find(
         (c) => c.kind === "custom-element" && c.name.value === "user-card",
       );
       expect(userCard, "user-card discovered").toBeTruthy();
     });
 
     it("discovers data-grid element with aliases", () => {
-      const dataGrid = resolutionResult.resources.find(
+      const dataGrid = resolutionResult.definition.authority.find(
         (c) => c.kind === "custom-element" && c.name.value === "data-grid",
       );
       expect(dataGrid, "data-grid discovered").toBeTruthy();

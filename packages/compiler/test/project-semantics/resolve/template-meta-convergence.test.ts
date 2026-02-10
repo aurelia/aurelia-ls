@@ -84,7 +84,7 @@ describe("Template Meta Convergence", () => {
     expect(unwrapSourced(element!.bindables.displayData?.mode)).toBe("toView");
     expect(unwrapSourced(element!.bindables.status?.mode)).toBe("twoWay");
     expect(unwrapSourced(element!.containerless)).toBe(false);
-    expect(result.definitionConvergence.some((entry) =>
+    expect(result.definition.convergence.some((entry) =>
       entry.resourceKind === "custom-element"
       && entry.resourceName === "device-list"
       && entry.candidates.some((candidate) => candidate.file?.endsWith(".html"))
@@ -152,6 +152,10 @@ describe("Template Meta Convergence", () => {
     if (localDefinitionSite?.resourceRef.kind === "resolved") {
       expect(unwrapSourced(localDefinitionSite.resourceRef.resource.name)).toBe("local-card");
       expect(unwrapSourced(localDefinitionSite.resourceRef.resource.bindables.status?.mode)).toBe("twoWay");
+      expect(unwrapSourced(localDefinitionSite.resourceRef.resource.containerless)).toBeUndefined();
+      expect(unwrapSourced(localDefinitionSite.resourceRef.resource.capture)).toBeUndefined();
+      expect(unwrapSourced(localDefinitionSite.resourceRef.resource.shadowOptions)).toBeUndefined();
+      expect(localDefinitionSite.resourceRef.resource.aliases).toHaveLength(0);
     }
 
     const rootProjection = materializeResourcesForScope(
@@ -167,5 +171,14 @@ describe("Template Meta Convergence", () => {
       "local:/app/my-page.ts",
     );
     expect(localProjection.resources.elements["local-card"]).toBeDefined();
+    expect(localProjection.resources.elements["local-card"]?.containerless).toBeUndefined();
+    expect(localProjection.resources.elements["local-card"]?.aliases).toBeUndefined();
+
+    expect(
+      result.diagnostics.some((diagnostic) =>
+        diagnostic.code === "aurelia/gap/unknown-registration"
+        && diagnostic.message.includes("local template non-bindable metadata"),
+      ),
+    ).toBe(true);
   });
 });

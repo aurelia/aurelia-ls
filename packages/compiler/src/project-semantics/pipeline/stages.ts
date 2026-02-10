@@ -9,16 +9,19 @@ import type {
   TemplateSyntaxRegistry,
 } from '../compiler.js';
 import type { FileContext, FileFacts } from "../extract/file-facts.js";
+import type { TemplateFactCollection } from "../extract/template-facts.js";
 import type { ExportBindingMap } from "../exports/index.js";
 import type { AnalysisGap, PartialEvaluationResult } from "../evaluate/index.js";
 import type { RegistrationAnalysis } from "../register/types.js";
 import type { InlineTemplateInfo, TemplateInfo } from "../templates/types.js";
+import type { DefinitionConvergenceRecord } from "../assemble/build.js";
 
 export const DISCOVERY_STAGES = {
   extract: "extract",
   exports: "exports",
   evaluate: "evaluate",
   recognize: "recognize",
+  templateFacts: "templateFacts",
   assemble: "assemble",
   register: "register",
   scope: "scope",
@@ -33,6 +36,7 @@ export const DISCOVERY_STAGE_ORDER: readonly DiscoveryStageKey[] = [
   DISCOVERY_STAGES.exports,
   DISCOVERY_STAGES.evaluate,
   DISCOVERY_STAGES.recognize,
+  DISCOVERY_STAGES.templateFacts,
   DISCOVERY_STAGES.assemble,
   DISCOVERY_STAGES.register,
   DISCOVERY_STAGES.scope,
@@ -55,10 +59,15 @@ export interface DiscoveryStageOutputs {
   };
   evaluate: PartialEvaluationResult;
   recognize: PatternMatchOutput;
+  templateFacts: {
+    templateFacts: TemplateFactCollection;
+  };
   assemble: {
     semantics: ProjectSemantics;
     catalog: ResourceCatalog;
     syntax: TemplateSyntaxRegistry;
+    definitionAuthority: readonly ResourceDef[];
+    definitionConvergence: readonly DefinitionConvergenceRecord[];
   };
   register: RegistrationAnalysis;
   scope: ResourceGraph;

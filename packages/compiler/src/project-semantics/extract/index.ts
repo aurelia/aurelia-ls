@@ -33,3 +33,13 @@ export {
   resolveTemplateImportPaths,
   extractComponentTemplateImports,
 } from "./template-imports.js";
+
+export type {
+  TemplateFactCollection,
+  TemplateFactOrigin,
+  TemplateFactOwnerAmbiguity,
+  TemplateFactOwnerMissing,
+  TemplateFactOwnerRecord,
+} from "./template-facts.js";
+
+export { collectTemplateFactCollection } from "./template-facts.js";

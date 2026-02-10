@@ -40,3 +40,17 @@ export {
   type ResourceDefinitionCandidate,
   type ResourceDefinitionMergeResult,
 } from "./convergence.js";
+export {
+  createConvergenceReplayOverrides,
+  createDiscoveryConvergenceOverrides,
+  createEvidenceConvergenceOverrides,
+  createReplayConvergenceOverrides,
+  mergeDefinitionCandidateOverrides,
+} from "./candidate-overrides.js";
+export {
+  createLocalTemplateDeclarationIdentity,
+  createLocalTemplateDeclarationKey,
+  createOwnerResourceId,
+  serializeLocalTemplateDeclarationIdentity,
+  type LocalTemplateDeclarationIdentity,
+} from "./local-template-identity.js";

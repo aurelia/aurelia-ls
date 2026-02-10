@@ -15,6 +15,7 @@ import {
 import type { OrphanResource, UnresolvedRegistration, UnresolvedPattern } from "../register/types.js";
 import type { ProjectSemanticsDiscoveryDiagnostic, ProjectSemanticsDiscoveryDiagnosticEmitter } from "../resolve.js";
 import { unwrapSourced } from "../assemble/sourced.js";
+import type { DefinitionConvergenceRecord } from "../assemble/build.js";
 
 // =============================================================================
 // Orphan Conversion
@@ -182,6 +183,48 @@ export interface UnresolvedResourceInfo {
   readonly reason: string;
   readonly file: NormalizedPath;
   readonly span: SourceSpan;
+}
+
+// =============================================================================
+// Definition Convergence Conversion
+// =============================================================================
+
+const ACTIONABLE_CONVERGENCE_REASONS = new Set([
+  "field-conflict",
+  "kind-mismatch",
+  "unknown-backfilled",
+]);
+
+export function definitionConvergenceToDiagnostics(
+  records: readonly DefinitionConvergenceRecord[],
+  emitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryDiagnostic[] {
+  return records
+    .filter((record) => record.reasons.some((reason) => ACTIONABLE_CONVERGENCE_REASONS.has(reason.code)))
+    .map((record) => definitionConvergenceToDiagnostic(record, emitter));
+}
+
+function definitionConvergenceToDiagnostic(
+  record: DefinitionConvergenceRecord,
+  emitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryDiagnostic {
+  const reasonCodes = [...new Set(record.reasons.map((reason) => reason.code))].sort();
+  const conflict = reasonCodes.some((code) => code === "field-conflict" || code === "kind-mismatch");
+  const kindLabel = getKindLabel(record.resourceKind);
+  const name = record.resourceName || "<unknown>";
+  const uri = toUri(record.candidates.find((candidate) => candidate.file)?.file);
+  const diag = toRawDiagnostic(emitter.emit("aurelia/project/definition-convergence", {
+    message: conflict
+      ? `${kindLabel} '${name}' has conflicting definition inputs; convergence selected one source.`
+      : `${kindLabel} '${name}' used fallback definition convergence behavior.`,
+    severity: conflict ? "warning" : "info",
+    data: {
+      resourceKind: record.resourceKind,
+      resourceName: record.resourceName,
+      reasonCodes,
+    },
+  }));
+  return withUri(diag, uri);
 }
 
 /**

@@ -183,7 +183,7 @@ export async function createProjectSemanticsContext(
   const globalCount = finalResult.registration.sites.filter(s => s.scope.kind === "global").length;
   const localCount = finalResult.registration.sites.filter(s => s.scope.kind === "local").length;
   logger.info(
-    `[aurelia-ssr] Resolved ${finalResult.resources.length} resources (${globalCount} global, ${localCount} local)`,
+    `[aurelia-ssr] Resolved ${finalResult.definition.authority.length} authority resources (${globalCount} global, ${localCount} local)`,
   );
   logger.info(
     `[aurelia-ssr] Discovered ${finalResult.templates.length} external + ${finalResult.inlineTemplates.length} inline templates`,

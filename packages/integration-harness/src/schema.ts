@@ -24,6 +24,7 @@ export interface DiscoveryHarnessOptions {
   fileSystem?: FileSystemMode;
   templateExtensions?: readonly string[];
   styleExtensions?: readonly string[];
+  packagePath?: string;
   packageRoots?: Readonly<Record<string, string>>;
   explicitResources?: Partial<ResourceCollections>;
 }

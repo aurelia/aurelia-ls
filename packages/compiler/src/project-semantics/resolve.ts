@@ -32,17 +32,24 @@ import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
 import { extractAllFileFacts, extractFileContext } from "./extract/file-facts-extractor.js";
+import { collectTemplateFactCollection } from "./extract/template-facts.js";
 import { evaluateFileFacts } from "./evaluate/index.js";
 import { buildExportBindingMap } from "./exports/export-resolver.js";
 import { matchFileFacts } from "./recognize/pipeline.js";
 import { createRegistrationAnalyzer } from "./register/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
-import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
+import {
+  definitionConvergenceToDiagnostics,
+  orphansToDiagnostics,
+  unresolvedToDiagnostics,
+  unresolvedRefsToDiagnostics,
+  type UnresolvedResourceInfo,
+} from "./diagnostics/index.js";
 import { buildSemanticsArtifacts } from "./assemble/build.js";
 import type {
-  DefinitionCandidateOverride,
   DefinitionConvergenceRecord,
 } from "./assemble/build.js";
+import { createDiscoveryConvergenceOverrides } from "./definition/candidate-overrides.js";
 import { collectTemplateMetaDefinitionCandidates } from "./definition/template-meta-candidates.js";
 import { stripSourcedNodes } from "./assemble/strip.js";
 import { discoverTemplates } from "./templates/index.js";
@@ -115,14 +122,22 @@ export interface ProjectSemanticsDiscoveryResult {
   catalog: ResourceCatalog;
   /** Syntax registry for parsing and emitting */
   syntax: TemplateSyntaxRegistry;
+  /** Package root used for project-local precedence evaluation. */
+  packagePath?: NormalizedPath;
   /** The constructed resource graph */
   resourceGraph: ResourceGraph;
   /** Stable semantic snapshot (for diffing/manifests) */
   semanticSnapshot: SemanticSnapshot;
   /** API surface summary snapshot */
   apiSurfaceSnapshot: ApiSurfaceSnapshot;
-  /** All resource definitions identified */
-  resources: readonly ResourceDef[];
+  /**
+   * Definition channels for explicit authority/evidence/convergence contracts.
+   *
+   * `authority`: converged definitions used for semantic truth.
+   * `evidence`: all candidates that entered convergence.
+   * `convergence`: winner/loser reasons from convergence.
+   */
+  definition: ProjectSemanticsDefinitionChannels;
   /** Registration analysis results */
   registration: RegistrationAnalysis;
   /** External template files (convention-based: foo.ts -> foo.html) */
@@ -131,14 +146,17 @@ export interface ProjectSemanticsDiscoveryResult {
   inlineTemplates: readonly InlineTemplateInfo[];
   /** Diagnostics from project-semantics discovery */
   diagnostics: readonly ProjectSemanticsDiscoveryDiagnostic[];
-  /**
-   * Definition convergence reasons emitted while merging resource candidates.
-   *
-   * Includes losing-source traces so surfaces can route policy diagnostics.
-   */
-  definitionConvergence: readonly DefinitionConvergenceRecord[];
   /** Extracted facts with partial evaluation applied */
   facts: Map<NormalizedPath, FileFacts>;
+}
+
+export interface ProjectSemanticsDefinitionChannels {
+  /** Converged definitions consumed as semantic authority. */
+  authority: readonly ResourceDef[];
+  /** Raw candidates that entered definition convergence. */
+  evidence: readonly ResourceDef[];
+  /** Convergence reason traces produced by the definition solver. */
+  convergence: readonly DefinitionConvergenceRecord[];
 }
 
 /**
@@ -156,6 +174,7 @@ export type ProjectSemanticsDiscoveryDiagnosticEmitter = DiagnosticEmitter<Diagn
  * exports: FileFacts -> ExportBindingMap
  * evaluate: FileFacts -> resolved FileFacts + gaps
  * recognize: FileFacts -> ResourceDef[] + gaps
+ * template-facts: recognized resources + contexts -> routed template facts
  * assemble: ResourceDef[] -> Semantics + Catalog + Syntax
  * register: ResourceDef[] + FileFacts -> RegistrationAnalysis
  * scope: RegistrationAnalysis -> ResourceGraph
@@ -252,12 +271,34 @@ export function discoverProjectSemantics(
       gapCount: matcherGaps.length,
     });
 
-    const templateMetaCandidates = collectTemplateMetaDefinitionCandidates(
+    // Stage: template-facts
+    log.info("[discovery] collecting template facts...");
+    trace.event("discovery.templateFacts.start");
+    const templateFacts = collectTemplateFactCollection(
       recognizedResources,
       contexts,
       config?.fileSystem,
+      (specifier, fromFile) => resolveProjectModulePath(program, specifier, fromFile),
     );
-    const candidateOverrides = createConvergenceOverrides(templateMetaCandidates.candidates);
+    trace.event("discovery.templateFacts.done", {
+      ownedCount: templateFacts.owned.length,
+      ambiguityCount: templateFacts.ambiguities.length,
+      missingOwnerCount: templateFacts.missingOwners.length,
+    });
+    debug.project("templateFacts.complete", {
+      ownedCount: templateFacts.owned.length,
+      ambiguityCount: templateFacts.ambiguities.length,
+      missingOwnerCount: templateFacts.missingOwners.length,
+    });
+
+    const templateMetaCandidates = collectTemplateMetaDefinitionCandidates(
+      templateFacts,
+    );
+    const candidateOverrides = createDiscoveryConvergenceOverrides(
+      recognizedResources,
+      templateMetaCandidates.candidates,
+      config?.packagePath,
+    );
     const convergedResources = [
       ...recognizedResources,
       ...templateMetaCandidates.candidates,
@@ -274,7 +315,7 @@ export function discoverProjectSemantics(
     // Stage: assemble
     log.info("[discovery] building semantics artifacts...");
     trace.event("discovery.semantics.start");
-    const { semantics, catalog, syntax, definitionConvergence } = buildSemanticsArtifacts(
+    const { semantics, catalog, syntax, definitionAuthority, definitionConvergence } = buildSemanticsArtifacts(
       convergedResources,
       config?.baseSemantics,
       {
@@ -284,7 +325,7 @@ export function discoverProjectSemantics(
       },
     );
     trace.event("discovery.semantics.done", {
-      resourceCount: convergedResources.length,
+      resourceCount: definitionAuthority.length,
     });
 
     // Stage: register
@@ -292,11 +333,11 @@ export function discoverProjectSemantics(
     trace.event("discovery.registration.start");
     const analyzer = createRegistrationAnalyzer();
     const registration = analyzer.analyze(
-      recognizedResources,
+      definitionAuthority,
       facts,
       exportBindings,
-      contexts,
-      (specifier, fromFile) => resolveProjectModulePath(program, specifier, fromFile),
+      templateFacts,
+      templateMetaCandidates.localTemplateAuthorities,
     );
     trace.event("discovery.registration.done", {
       siteCount: registration.sites.length,
@@ -356,7 +397,7 @@ export function discoverProjectSemantics(
     });
 
     log.info(
-      `[discovery] complete: ${recognizedResources.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
+      `[discovery] complete: authority=${definitionAuthority.length} evidence=${convergedResources.length} (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
     );
 
     // Extract unresolved resource refs from registration sites
@@ -371,16 +412,20 @@ export function discoverProjectSemantics(
         span: s.span,
       }));
 
-    // Merge all diagnostics: matcher gaps + orphans + unresolved patterns + unresolved refs
+    const convergenceDiagnostics = definitionConvergenceToDiagnostics(definitionConvergence, diagEmitter);
+
+    // Merge all diagnostics: matcher gaps + convergence + orphans + unresolved patterns + unresolved refs
     const allDiagnostics: ProjectSemanticsDiscoveryDiagnostic[] = [
       ...analysisGaps.map((gap) => gapToDiagnostic(gap, diagEmitter)),
+      ...convergenceDiagnostics,
       ...orphansToDiagnostics(registration.orphans, diagEmitter),
       ...unresolvedToDiagnostics(registration.unresolved, diagEmitter),
       ...unresolvedRefsToDiagnostics(unresolvedRefs, diagEmitter),
     ];
 
     trace.setAttributes({
-      "discovery.resourceCount": recognizedResources.length,
+      "discovery.resourceCount": definitionAuthority.length,
+      "discovery.resourceEvidenceCount": convergedResources.length,
       "discovery.globalCount": globalCount,
       "discovery.localCount": localCount,
       "discovery.orphanCount": registration.orphans.length,
@@ -404,15 +449,19 @@ export function discoverProjectSemantics(
       semantics,
       catalog,
       syntax,
+      ...(config?.packagePath ? { packagePath: normalizePathForId(config.packagePath) } : {}),
       resourceGraph,
       semanticSnapshot,
       apiSurfaceSnapshot,
-      resources: recognizedResources,
+      definition: {
+        authority: definitionAuthority,
+        evidence: convergedResources,
+        convergence: definitionConvergence,
+      },
       registration,
       templates,
       inlineTemplates,
       diagnostics: allDiagnostics,
-      definitionConvergence,
       facts,
     };
   });
@@ -554,20 +603,6 @@ const nullLogger: Logger = {
   error: () => {},
 };
 
-function createConvergenceOverrides(
-  templateMetaResources: readonly ResourceDef[],
-): ReadonlyMap<ResourceDef, DefinitionCandidateOverride> {
-  const overrides = new Map<ResourceDef, DefinitionCandidateOverride>();
-  for (const resource of templateMetaResources) {
-    overrides.set(resource, {
-      sourceKind: "analysis-convention",
-      evidenceRank: 4,
-    });
-  }
-  return overrides;
-}
-
-
 function mapGapKindToCode(kind: string): "aurelia/gap/partial-eval" | "aurelia/gap/unknown-registration" | "aurelia/gap/cache-corrupt" {
   if (kind === "cache-corrupt") return "aurelia/gap/cache-corrupt";
   if (UNKNOWN_REGISTRATION_GAP_KINDS.has(kind)) return "aurelia/gap/unknown-registration";
@@ -605,17 +640,3 @@ const PARTIAL_EVAL_GAP_KINDS = new Set([
   "analysis-failed",
   "parse-error",
 ]);
-
-
-/**
- * Compute the scope ID for a resource based on its registration site.
- */
-function computeScopeId(site: RegistrationSite, resourceGraph: ResourceGraph): ResourceScopeId {
-  if (site.scope.kind === "local") {
-    // Local scope: "local:{componentPath}"
-    return `local:${site.scope.owner}` as ResourceScopeId;
-  }
-
-  // Global: use root scope
-  return resourceGraph.root;
-}

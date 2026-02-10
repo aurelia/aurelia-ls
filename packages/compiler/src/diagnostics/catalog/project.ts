@@ -40,6 +40,12 @@ export type ProjectPluginRequiredData = DiagnosticDataBase & {
   resourceName?: string;
 };
 
+export type ProjectDefinitionConvergenceData = DiagnosticDataBase & {
+  resourceKind?: DiagnosticResourceKind;
+  resourceName?: string;
+  reasonCodes?: string[];
+};
+
 export const projectDiagnostics = {
   "aurelia/project/orphan-element": defineDiagnostic<ProjectOrphanData>({
     category: "project",
@@ -244,6 +250,21 @@ export const projectDiagnostics = {
     description: "Resource requires a plugin that is not registered.",
     data: {
       optional: ["plugin", "resourceName"],
+    },
+  }),
+  "aurelia/project/definition-convergence": defineDiagnostic<ProjectDefinitionConvergenceData>({
+    category: "project",
+    status: "proposed",
+    defaultSeverity: "warning",
+    impact: "degraded",
+    actionability: "manual",
+    span: "either",
+    stages: ["project"],
+    surfaces: PROJECT_SURFACES,
+    defaultConfidence: "high",
+    description: "Multiple resource definitions conflicted during convergence.",
+    data: {
+      optional: ["resourceKind", "resourceName", "reasonCodes"],
     },
   }),
 } as const;

@@ -57,6 +57,10 @@ export interface SemanticsArtifacts {
   readonly semantics: MaterializedSemantics;
   readonly catalog: ResourceCatalog;
   readonly syntax: TemplateSyntaxRegistry;
+  /**
+   * Converged resource definitions that form semantic authority for this build.
+   */
+  readonly definitionAuthority: readonly ResourceDef[];
   readonly definitionConvergence: readonly DefinitionConvergenceRecord[];
 }
 
@@ -73,6 +77,7 @@ export function buildSemanticsArtifacts(
   const controllers: Record<string, TemplateControllerDef> = {};
   const valueConverters: Record<string, ValueConverterDef> = {};
   const bindingBehaviors: Record<string, BindingBehaviorDef> = {};
+  const definitionAuthority: ResourceDef[] = [];
   const definitionConvergence: DefinitionConvergenceRecord[] = [];
 
   const grouped = groupDefinitionCandidates(resources, opts?.candidateOverrides);
@@ -97,6 +102,7 @@ export function buildSemanticsArtifacts(
     if (!merged) continue;
     const name = unwrapSourced(merged.name);
     if (!name) continue;
+    definitionAuthority.push(merged);
     switch (merged.kind) {
       case "custom-element":
         elements[name] = merged;
@@ -147,6 +153,7 @@ export function buildSemanticsArtifacts(
     semantics: withCatalog,
     catalog: withCatalog.catalog,
     syntax,
+    definitionAuthority,
     definitionConvergence,
   };
 }

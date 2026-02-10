@@ -9,6 +9,7 @@
 // - exports: FileFacts -> ExportBindingMap
 // - evaluate: FileFacts -> resolved FileFacts + gaps
 // - recognize: FileFacts -> ResourceDef[] + gaps
+// - template-facts: recognized resources + contexts -> routed template facts
 // - assemble: ResourceDef[] -> Semantics + Catalog + Syntax
 // - register: ResourceDef[] + FileFacts -> RegistrationAnalysis
 // - scope: RegistrationAnalysis -> ResourceGraph

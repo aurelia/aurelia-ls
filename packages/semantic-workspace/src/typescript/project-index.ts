@@ -209,7 +209,7 @@ export class AureliaProjectIndex {
         severity: d.severity,
         source: d.source ?? null,
       })),
-      resources: result.resources.map((r) => ({
+      resources: result.definition.authority.map((r) => ({
         kind: r.kind,
         name: unwrapSourced(r.name),
         aliases: resourceAliasesForFingerprint(r),

@@ -24,6 +24,15 @@ export function hasNonImportTemplateMeta(meta: TemplateMetaIR): boolean {
   );
 }
 
+export function hasLocalTemplateSurfaceOnlyMeta(meta: TemplateMetaIR): boolean {
+  return Boolean(
+    meta.aliases.length > 0
+    || meta.containerless
+    || meta.capture
+    || meta.shadowDom,
+  );
+}
+
 export function buildCustomElementTemplateMetaOverlay(
   owner: CustomElementDef,
   templateFile: NormalizedPath,
@@ -68,20 +77,10 @@ export function buildLocalTemplateCustomElementDefinition(
     kind: "custom-element",
     className: sourcedValue(className, templateFile, toTextSpan(localTemplateName.loc)),
     name: sourcedValue(localElementName, templateFile, toTextSpan(localTemplateName.loc)),
-    aliases: toAliasSourced(templateMeta, templateFile),
-    containerless: templateMeta.containerless
-      ? sourcedKnown(true, templateFile, toTextSpan(templateMeta.containerless.tagLoc))
-      : sourcedUnknown<boolean>(templateFile),
-    shadowOptions: templateMeta.shadowDom
-      ? sourcedKnown(
-        { mode: templateMeta.shadowDom.mode.value },
-        templateFile,
-        toTextSpan(templateMeta.shadowDom.mode.loc),
-      )
-      : sourcedUnknown<{ readonly mode: "open" | "closed" } | undefined>(templateFile),
-    capture: templateMeta.capture
-      ? sourcedKnown(true, templateFile, toTextSpan(templateMeta.capture.tagLoc))
-      : sourcedUnknown<boolean>(templateFile),
+    aliases: [],
+    containerless: sourcedUnknown<boolean>(templateFile),
+    shadowOptions: sourcedUnknown<{ readonly mode: "open" | "closed" } | undefined>(templateFile),
+    capture: sourcedUnknown<boolean>(templateFile),
     processContent: sourcedUnknown<boolean>(templateFile),
     boundary: sourcedUnknown<boolean>(templateFile),
     bindables: buildBindableDefs(toBindableInputs(templateMeta), templateFile),

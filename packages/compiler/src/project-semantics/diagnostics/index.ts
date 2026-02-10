@@ -10,6 +10,7 @@
 
 // Conversion functions
 export {
+  definitionConvergenceToDiagnostics,
   orphansToDiagnostics,
   unresolvedToDiagnostics,
   unresolvedRefsToDiagnostics,

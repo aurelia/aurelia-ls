@@ -11,23 +11,41 @@ import { dirname, join, resolve as resolvePath } from "node:path";
 import { createRequire } from "node:module";
 import {
   BUILTIN_SEMANTICS,
-  buildResourceCatalog,
   buildResourceGraphFromSemantics,
-  buildTemplateSyntaxRegistry,
-  prepareProjectSemantics,
   asDocumentUri,
   normalizePathForId,
   createDiagnosticEmitter,
   diagnosticsByCategory,
+  diagnosticsByCategoryFuture,
   type CatalogConfidence,
   type CatalogGap,
+  type Bindable,
+  type BindableDef,
+  type BindingBehaviorDef,
+  type BindingMode,
+  type ControllerConfig,
+  type CustomAttributeDef,
+  type CustomElementDef,
   type ResourceCollections,
+  type ResourceDef,
+  type Sourced,
+  type TemplateControllerDef,
+  type TypeRef,
+  type ValueConverterDef,
   type CompilerDiagnostic,
 } from "../compiler.js";
 import type { ProjectSemanticsDiscoveryResult } from "../resolve.js";
 import type { AnalysisGap } from "../npm/types.js";
 import { analyzePackages, isAureliaPackage } from "../npm/index.js";
-import { buildSemanticsArtifacts } from "../assemble/build.js";
+import {
+  buildSemanticsArtifacts,
+  type DefinitionCandidateOverride,
+  type DefinitionConvergenceRecord,
+} from "../assemble/build.js";
+import {
+  createReplayConvergenceOverrides,
+  mergeDefinitionCandidateOverrides,
+} from "../definition/candidate-overrides.js";
 import { hashObject } from "../fingerprint/index.js";
 import type { ConventionConfig } from "../conventions/types.js";
 import type {
@@ -43,6 +61,8 @@ import {
   mergeResourceCollections,
   mergeScopeResources,
 } from "./merge.js";
+import { unwrapSourced } from "../assemble/sourced.js";
+import { definitionConvergenceToDiagnostics } from "../diagnostics/convert.js";
 
 // ============================================================================
 // Public API
@@ -50,6 +70,7 @@ import {
 
 const ANALYSIS_SCHEMA_VERSION = 1;
 const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "project" });
+const CONVERGENCE_EMITTER = createDiagnosticEmitter(diagnosticsByCategoryFuture.project, { source: "project" });
 
 export interface ThirdPartyDiscoveryContext {
   packagePath: string;
@@ -110,52 +131,65 @@ export function applyThirdPartyResources(
   const diagnostics = gapList.length > 0
     ? [...result.diagnostics, ...gapList.map(analysisGapToDiagnostic)]
     : result.diagnostics;
-
-  const mergedResources = mergeResourceCollections(result.semantics.resources, extra);
   const policy = opts?.policy ?? "root-scope";
-
-  const buildSemanticsWithResources = () => {
-    const sem = prepareProjectSemantics(
-      { ...result.semantics },
-      { resources: mergedResources },
-    );
-    const catalog = buildResourceCatalog(
-      sem.resources,
-      sem.bindingCommands,
-      sem.attributePatterns,
-      mergedCatalogGaps.length || mergedConfidence
+  const overlayCandidates = resourceCollectionsToResourceDefs(extra);
+  const evidence = overlayCandidates.length > 0
+    ? [...result.definition.evidence, ...overlayCandidates]
+    : result.definition.evidence;
+  const overlayOverrides = createOverlayCandidateOverrides(overlayCandidates);
+  const candidateOverrides = mergeDefinitionCandidateOverrides(
+    createReplayConvergenceOverrides(
+      evidence,
+      result.definition.convergence,
+      result.packagePath,
+    ),
+    overlayOverrides,
+  );
+  const artifacts = buildSemanticsArtifacts(
+    evidence,
+    result.semantics,
+    {
+      ...(mergedCatalogGaps.length || mergedConfidence
         ? {
             gaps: mergedCatalogGaps.length ? mergedCatalogGaps : undefined,
             confidence: mergedConfidence,
           }
-        : undefined,
-    );
-    const semantics = { ...sem, catalog };
-    const syntax = buildTemplateSyntaxRegistry(semantics);
-    return { semantics, catalog, syntax };
-  };
+        : {}),
+      ...(candidateOverrides.size > 0 ? { candidateOverrides } : {}),
+    },
+  );
+  const definition = {
+    authority: artifacts.definitionAuthority,
+    evidence,
+    convergence: artifacts.definitionConvergence,
+  } as const;
+  const newConvergence = diffConvergenceRecords(result.definition.convergence, definition.convergence);
+  const convergenceDiagnostics = definitionConvergenceToDiagnostics(newConvergence, CONVERGENCE_EMITTER);
+  const mergedDiagnostics = convergenceDiagnostics.length > 0
+    ? [...diagnostics, ...convergenceDiagnostics]
+    : diagnostics;
 
   if (policy === "rebuild-graph") {
-    const { semantics, catalog, syntax } = buildSemanticsWithResources();
-    const nextGraph = buildResourceGraphFromSemantics(semantics);
+    const nextGraph = buildResourceGraphFromSemantics(artifacts.semantics);
     return {
       ...result,
-      semantics,
-      catalog,
-      syntax,
+      semantics: artifacts.semantics,
+      catalog: artifacts.catalog,
+      syntax: artifacts.syntax,
+      definition,
       resourceGraph: nextGraph,
-      diagnostics,
+      diagnostics: mergedDiagnostics,
     };
   }
 
   if (policy === "semantics") {
-    const { semantics, catalog, syntax } = buildSemanticsWithResources();
     return {
       ...result,
-      semantics,
-      catalog,
-      syntax,
-      diagnostics,
+      semantics: artifacts.semantics,
+      catalog: artifacts.catalog,
+      syntax: artifacts.syntax,
+      definition,
+      diagnostics: mergedDiagnostics,
     };
   }
 
@@ -175,15 +209,15 @@ export function applyThirdPartyResources(
       },
     },
   };
-  const { semantics, catalog, syntax } = buildSemanticsWithResources();
 
   return {
     ...result,
-    semantics,
-    catalog,
-    syntax,
+    semantics: artifacts.semantics,
+    catalog: artifacts.catalog,
+    syntax: artifacts.syntax,
+    definition,
     resourceGraph: nextGraph,
-    diagnostics,
+    diagnostics: mergedDiagnostics,
   };
 }
 
@@ -278,7 +312,7 @@ async function analyzeThirdPartyPackages(
   }
 
   const gaps: AnalysisGap[] = [];
-  const resourceDefs: Array<ProjectSemanticsDiscoveryResult["resources"][number]> = [];
+  const resourceDefs: ResourceDef[] = [];
   const cacheDir = join(ctx.packagePath, ".aurelia-cache", "npm-analysis");
   const analysisLogger = {
     log: (msg: string) => ctx.logger.info(msg),
@@ -458,6 +492,282 @@ function findLockfile(startDir: string): string | null {
     }
     current = parent;
   }
+}
+
+// ============================================================================
+// Overlay candidate recomputation
+// ============================================================================
+
+function resourceCollectionsToResourceDefs(
+  resources: Partial<ResourceCollections>,
+): ResourceDef[] {
+  const defs: ResourceDef[] = [];
+  const templateControllerNames = new Set<string>();
+
+  const elementEntries = Object.entries(resources.elements ?? {})
+    .sort(([left], [right]) => left.localeCompare(right));
+  for (const [name, element] of elementEntries) {
+    defs.push(toCustomElementDef(name, element));
+  }
+
+  const attributeEntries = Object.entries(resources.attributes ?? {})
+    .sort(([left], [right]) => left.localeCompare(right));
+  for (const [name, attribute] of attributeEntries) {
+    if (attribute.isTemplateController) {
+      const controller = resources.controllers?.[name];
+      defs.push(toTemplateControllerDef(name, attribute, controller));
+      templateControllerNames.add(normalizeName(attribute.name || name));
+      continue;
+    }
+    defs.push(toCustomAttributeDef(name, attribute));
+  }
+
+  const controllerEntries = Object.entries(resources.controllers ?? {})
+    .sort(([left], [right]) => left.localeCompare(right));
+  for (const [name, controller] of controllerEntries) {
+    const normalized = normalizeName(controller.name || name);
+    if (templateControllerNames.has(normalized)) continue;
+    defs.push(toControllerOnlyDefinition(normalized, controller));
+  }
+
+  const converterEntries = Object.entries(resources.valueConverters ?? {})
+    .sort(([left], [right]) => left.localeCompare(right));
+  for (const [name, converter] of converterEntries) {
+    defs.push(toValueConverterDef(name, converter));
+  }
+
+  const behaviorEntries = Object.entries(resources.bindingBehaviors ?? {})
+    .sort(([left], [right]) => left.localeCompare(right));
+  for (const [name, behavior] of behaviorEntries) {
+    defs.push(toBindingBehaviorDef(name, behavior));
+  }
+
+  return defs;
+}
+
+function createOverlayCandidateOverrides(
+  resources: readonly ResourceDef[],
+): ReadonlyMap<ResourceDef, DefinitionCandidateOverride> {
+  const overrides = new Map<ResourceDef, DefinitionCandidateOverride>();
+  for (let i = 0; i < resources.length; i += 1) {
+    const resource = resources[i]!;
+    overrides.set(resource, {
+      sourceKind: "explicit-config",
+      evidenceRank: 0,
+      candidateId: createOverlayCandidateId(resource, i + 1),
+    });
+  }
+  return overrides;
+}
+
+function createOverlayCandidateId(resource: ResourceDef, ordinal: number): string {
+  const name = unwrapSourced(resource.name) ?? "";
+  const className = unwrapSourced(resource.className) ?? "";
+  const file = resource.file ?? "";
+  return `overlay|${resource.kind}|${name}|${className}|${file}|${ordinal}`;
+}
+
+function toCustomElementDef(name: string, element: ResourceCollections["elements"][string]): CustomElementDef {
+  const resolvedName = normalizeName(element.name || name);
+  return {
+    kind: "custom-element",
+    name: sourcedKnown(resolvedName),
+    className: sourcedKnown(element.className || toPascalCase(resolvedName)),
+    aliases: (element.aliases ?? []).map((alias) => sourcedKnown(normalizeName(alias))),
+    containerless: sourcedKnown(Boolean(element.containerless)),
+    shadowOptions: sourcedKnown(element.shadowOptions),
+    capture: sourcedKnown(Boolean(element.capture)),
+    processContent: sourcedKnown(Boolean(element.processContent)),
+    boundary: sourcedKnown(Boolean(element.boundary)),
+    bindables: toBindableDefs(element.bindables),
+    dependencies: (element.dependencies ?? []).map((dep) => sourcedKnown(dep)),
+    ...(element.file ? { file: element.file } : {}),
+    ...(element.package ? { package: element.package } : {}),
+  };
+}
+
+function toCustomAttributeDef(name: string, attribute: ResourceCollections["attributes"][string]): CustomAttributeDef {
+  const resolvedName = normalizeName(attribute.name || name);
+  return {
+    kind: "custom-attribute",
+    name: sourcedKnown(resolvedName),
+    className: sourcedKnown(attribute.className || toPascalCase(resolvedName)),
+    aliases: (attribute.aliases ?? []).map((alias) => sourcedKnown(normalizeName(alias))),
+    noMultiBindings: sourcedKnown(Boolean(attribute.noMultiBindings)),
+    ...(attribute.primary ? { primary: sourcedKnown(attribute.primary) } : {}),
+    bindables: toBindableDefs(attribute.bindables),
+    ...(attribute.file ? { file: attribute.file } : {}),
+    ...(attribute.package ? { package: attribute.package } : {}),
+  };
+}
+
+function toTemplateControllerDef(
+  name: string,
+  attribute: ResourceCollections["attributes"][string],
+  controller?: ControllerConfig,
+): TemplateControllerDef {
+  const resolvedName = normalizeName(attribute.name || name);
+  const aliases = (attribute.aliases ?? []).map((alias) => normalizeName(alias));
+  const bindables = mergeBindableDefs(
+    toBindableDefs(attribute.bindables),
+    controller ? toBindableDefs(controller.props ?? {}) : {},
+  );
+  return {
+    kind: "template-controller",
+    name: sourcedKnown(resolvedName),
+    className: sourcedKnown(attribute.className || toPascalCase(resolvedName)),
+    aliases: sourcedKnown(aliases),
+    noMultiBindings: sourcedKnown(Boolean(attribute.noMultiBindings)),
+    bindables,
+    ...(controller ? { semantics: toControllerSemantics(controller) } : {}),
+    ...(attribute.file ? { file: attribute.file } : {}),
+    ...(attribute.package ? { package: attribute.package } : {}),
+  };
+}
+
+function toControllerOnlyDefinition(
+  name: string,
+  controller: ControllerConfig,
+): TemplateControllerDef {
+  return {
+    kind: "template-controller",
+    name: sourcedKnown(name),
+    className: sourcedKnown(toPascalCase(name)),
+    aliases: sourcedKnown([]),
+    noMultiBindings: sourcedKnown(false),
+    bindables: toBindableDefs(controller.props ?? {}),
+    semantics: toControllerSemantics(controller),
+  };
+}
+
+function toControllerSemantics(controller: ControllerConfig): TemplateControllerDef["semantics"] {
+  return {
+    origin: "third-party-overlay",
+    trigger: controller.trigger,
+    scope: controller.scope,
+    ...(controller.cardinality ? { cardinality: controller.cardinality } : {}),
+    ...(controller.placement ? { placement: controller.placement } : {}),
+    ...(controller.branches ? { branches: controller.branches } : {}),
+    ...(controller.linksTo ? { linksTo: controller.linksTo } : {}),
+    ...(controller.injects ? { injects: controller.injects } : {}),
+    ...(controller.tailProps ? { tailProps: controller.tailProps } : {}),
+  };
+}
+
+function toValueConverterDef(
+  name: string,
+  converter: ResourceCollections["valueConverters"][string],
+): ValueConverterDef {
+  const resolvedName = normalizeName(converter.name || name);
+  const fromType = toTypeSourced(converter.in);
+  const toType = toTypeSourced(converter.out);
+  return {
+    kind: "value-converter",
+    name: sourcedKnown(resolvedName),
+    className: sourcedKnown(converter.className || toPascalCase(resolvedName)),
+    ...(fromType ? { fromType } : {}),
+    ...(toType ? { toType } : {}),
+    ...(converter.file ? { file: converter.file } : {}),
+    ...(converter.package ? { package: converter.package } : {}),
+  };
+}
+
+function toBindingBehaviorDef(
+  name: string,
+  behavior: ResourceCollections["bindingBehaviors"][string],
+): BindingBehaviorDef {
+  const resolvedName = normalizeName(behavior.name || name);
+  return {
+    kind: "binding-behavior",
+    name: sourcedKnown(resolvedName),
+    className: sourcedKnown(behavior.className || toPascalCase(resolvedName)),
+    ...(behavior.file ? { file: behavior.file } : {}),
+    ...(behavior.package ? { package: behavior.package } : {}),
+  };
+}
+
+function toBindableDefs(bindables: Readonly<Record<string, Bindable>>): Readonly<Record<string, BindableDef>> {
+  const defs: Record<string, BindableDef> = {};
+  const entries = Object.entries(bindables).sort(([left], [right]) => left.localeCompare(right));
+  for (const [key, bindable] of entries) {
+    const name = bindable.name || key;
+    const type = toTypeSourced(bindable.type);
+    defs[name] = {
+      property: sourcedKnown(name),
+      attribute: sourcedKnown(bindable.attribute || name),
+      mode: sourcedKnown(bindable.mode ?? "default"),
+      primary: sourcedKnown(bindable.primary ?? false),
+      ...(type ? { type } : {}),
+      ...(bindable.doc ? { doc: sourcedKnown(bindable.doc) } : {}),
+    };
+  }
+  return defs;
+}
+
+function mergeBindableDefs(
+  primary: Readonly<Record<string, BindableDef>>,
+  secondary: Readonly<Record<string, BindableDef>>,
+): Readonly<Record<string, BindableDef>> {
+  return { ...secondary, ...primary };
+}
+
+function toTypeSourced(type: TypeRef | undefined): Sourced<string> | undefined {
+  if (!type) return undefined;
+  switch (type.kind) {
+    case "ts":
+      return sourcedKnown(type.name);
+    case "any":
+      return sourcedKnown("any");
+    case "unknown":
+      return sourcedUnknown();
+  }
+}
+
+function sourcedKnown<T>(value: T): Sourced<T> {
+  return {
+    origin: "source",
+    state: "known",
+    value,
+  };
+}
+
+function sourcedUnknown<T>(): Sourced<T> {
+  return {
+    origin: "source",
+    state: "unknown",
+  };
+}
+
+function toPascalCase(value: string): string {
+  return value
+    .split(/[^a-zA-Z0-9]/)
+    .filter(Boolean)
+    .map((segment) => segment.slice(0, 1).toUpperCase() + segment.slice(1))
+    .join("");
+}
+
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function diffConvergenceRecords(
+  previous: readonly DefinitionConvergenceRecord[],
+  next: readonly DefinitionConvergenceRecord[],
+): DefinitionConvergenceRecord[] {
+  const previousKeys = new Set(previous.map((record) => convergenceRecordKey(record)));
+  return next.filter((record) => !previousKeys.has(convergenceRecordKey(record)));
+}
+
+function convergenceRecordKey(record: DefinitionConvergenceRecord): string {
+  const reasons = record.reasons
+    .map((reason) => `${reason.code}:${reason.field}:${reason.detail ?? ""}`)
+    .sort()
+    .join("|");
+  const candidates = record.candidates
+    .map((candidate) => `${candidate.candidateId}:${candidate.sourceKind}:${candidate.file ?? ""}`)
+    .sort()
+    .join("|");
+  return `${record.resourceKind}:${record.resourceName}:${reasons}:${candidates}`;
 }
 
 // ============================================================================

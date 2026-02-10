@@ -1,9 +1,6 @@
 import {
   debug,
-  extractTemplateMeta,
-  normalizePathForId,
   toSourceFileId,
-  type ImportMetaIR,
   type NormalizedPath,
   type ResourceDef,
   type SourceSpan,
@@ -11,17 +8,17 @@ import {
 } from '../compiler.js';
 import type {
   FileFacts,
-  FileContext,
   ImportDeclaration,
   LocalTemplateDefinition,
   LocalTemplateImport,
   RegistrationCall,
   TemplateImport,
 } from "../extract/file-facts.js";
-import {
-  extractLocalTemplateDefinitionsFromHtml,
-  extractLocalTemplateImportsFromHtml,
-} from "../extract/template-imports.js";
+import type {
+  TemplateFactCollection,
+  TemplateFactOwnerAmbiguity,
+  TemplateFactOwnerRecord,
+} from "../extract/template-facts.js";
 import type { ClassValue, AnalyzableValue } from "../evaluate/value/types.js";
 import { extractStringArrayProp, getProperty } from "../evaluate/value/types.js";
 import type { ExportBindingMap } from "../exports/types.js";
@@ -43,12 +40,7 @@ import type {
   UnresolvedPattern,
 } from "./types.js";
 import { sourcedValue, unwrapSourced } from "../assemble/sourced.js";
-import { resolveExternalTemplateOwners } from "./template-owner.js";
-import {
-  buildLocalTemplateCustomElementDefinition,
-  hasNonImportTemplateMeta,
-  ownerClassName,
-} from "../definition/template-meta-resource.js";
+import { createLocalTemplateDeclarationKey } from "../definition/local-template-identity.js";
 
 /**
  * Registration analyzer interface.
@@ -61,8 +53,8 @@ export interface RegistrationAnalyzer {
     resources: readonly ResourceDef[],
     facts: Map<NormalizedPath, FileFacts>,
     exportBindings: ExportBindingMap,
-    contexts?: Map<NormalizedPath, FileContext>,
-    resolveModule?: (specifier: string, fromFile: NormalizedPath) => NormalizedPath | null,
+    templateFacts?: TemplateFactCollection,
+    localTemplateAuthorities?: ReadonlyMap<string, ResourceDef>,
   ): RegistrationAnalysis;
 }
 
@@ -72,12 +64,18 @@ export interface RegistrationAnalyzer {
  * The analyzer expects:
  * - facts to have import resolvedPath populated
  * - exportBindings to be pre-built (via buildExportBindingMap)
- * - contexts (optional) for template import analysis
+ * - templateFacts (optional) for routed template import/definition analysis
  */
 export function createRegistrationAnalyzer(): RegistrationAnalyzer {
   return {
-    analyze(resources, facts, exportBindings, contexts, resolveModule) {
-      const context = new AnalysisContext(facts, resources, exportBindings, contexts, resolveModule);
+    analyze(resources, facts, exportBindings, templateFacts, localTemplateAuthorities) {
+      const context = new AnalysisContext(
+        facts,
+        resources,
+        exportBindings,
+        templateFacts,
+        localTemplateAuthorities,
+      );
       return analyzeRegistrations(context);
     },
   };
@@ -105,18 +103,11 @@ class AnalysisContext {
     public readonly facts: Map<NormalizedPath, FileFacts>,
     public readonly resources: readonly ResourceDef[],
     public readonly exportBindings: ExportBindingMap,
-    public readonly contexts?: Map<NormalizedPath, FileContext>,
-    public readonly resolveModule?: (specifier: string, fromFile: NormalizedPath) => NormalizedPath | null,
+    public readonly templateFacts?: TemplateFactCollection,
+    public readonly localTemplateAuthorities?: ReadonlyMap<string, ResourceDef>,
   ) {
     this.pluginResolver = createPluginResolver();
     this.buildIndexes();
-  }
-
-  /**
-   * Get the FileContext for a file path.
-   */
-  getFileContext(filePath: NormalizedPath): FileContext | undefined {
-    return this.contexts?.get(filePath);
   }
 
   private buildIndexes(): void {
@@ -290,79 +281,26 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
     }
   }
 
-  // 1.5. Find template import registration sites (from <import>/<require> in sibling templates)
-  // Only process if contexts are provided (they come from resolve.ts)
-  if (context.contexts) {
-    for (const [filePath, fileContext] of context.contexts) {
-      const templateFile = resolveTemplateImportTemplateFile(filePath, fileContext);
-      const localTemplateImports = fileContext.localTemplateImports ?? [];
-      const localTemplateDefinitions = fileContext.localTemplateDefinitions ?? [];
-      const rootTemplateImports = fileContext.templateImports;
-      if (rootTemplateImports.length === 0 && localTemplateImports.length === 0 && localTemplateDefinitions.length === 0) continue;
-
-      const ownerResolution = resolveExternalTemplateOwners(filePath, templateFile, context.resources);
-      if (ownerResolution.kind === "none") {
+  // 1.5. Find template import/definition registration sites from routed template facts.
+  if (context.templateFacts) {
+    for (const ambiguity of context.templateFacts.ambiguities) {
+      if (
+        ambiguity.rootTemplateImports.length === 0
+        && ambiguity.localTemplateImports.length === 0
+        && ambiguity.localTemplateDefinitions.length === 0
+      ) {
         continue;
       }
-
-      if (ownerResolution.kind === "ambiguous") {
-        unresolved.push(
-          createTemplateImportOwnerAmbiguity(
-            filePath,
-            templateFile,
-            [
-              ...rootTemplateImports,
-              ...localTemplateImports.map((entry) => entry.import),
-            ],
-            ownerResolution.candidates,
-          ),
-        );
-        continue;
-      }
-
-      for (const resource of ownerResolution.owners) {
-        const className = unwrapSourced(resource.className) ?? "unknown";
-        const rootSites = findTemplateImportSites(
-          rootTemplateImports,
-          filePath,
-          className,
-          templateFile,
-          context,
-        );
-        const localSites = findLocalTemplateImportSites(
-          localTemplateImports,
-          filePath,
-          className,
-          templateFile,
-          context,
-          "sibling",
-        );
-        const localDefinitionSites = findLocalTemplateDefinitionSites(
-          localTemplateDefinitions,
-          filePath,
-          className,
-          templateFile,
-          "sibling",
-        );
-        for (const site of [...rootSites, ...localSites, ...localDefinitionSites]) {
-          sites.push(site);
-          if (site.resourceRef.kind === "resolved") {
-            registeredResources.add(site.resourceRef.resource);
-          }
-        }
-      }
+      unresolved.push(createTemplateImportOwnerAmbiguity(ambiguity));
     }
-  }
 
-  // 1.6. Find template import registration sites from inline root templates.
-  for (const resource of context.resources) {
-    const inlineSites = findInlineTemplateImportSites(resource, context);
-    const inlineLocalDefinitionSites = findInlineTemplateDefinitionSites(resource);
-    for (const site of [...inlineSites, ...inlineLocalDefinitionSites]) {
-      sites.push(site);
-      if (site.resourceRef.kind === "resolved") {
-        registeredResources.add(site.resourceRef.resource);
-      }
+    for (const templateOwner of context.templateFacts.owned) {
+      registerTemplateOwnerSites(
+        templateOwner,
+        context,
+        sites,
+        registeredResources,
+      );
     }
   }
 
@@ -407,40 +345,21 @@ function analyzeRegistrations(context: AnalysisContext): RegistrationAnalysis {
   return { sites, orphans, unresolved, activatedPlugins };
 }
 
-function resolveTemplateImportTemplateFile(
-  sourceFile: NormalizedPath,
-  fileContext: FileContext,
-): NormalizedPath {
-  const firstImport = fileContext.templateImports[0];
-  if (firstImport) {
-    return normalizePathForId(String(firstImport.span.file));
-  }
-
-  const firstLocalImport = fileContext.localTemplateImports?.[0];
-  if (firstLocalImport) {
-    return normalizePathForId(String(firstLocalImport.import.span.file));
-  }
-
-  const htmlSibling = [...fileContext.siblings]
-    .filter((s) => s.extension.toLowerCase() === ".html")
-    .sort((a, b) => a.path.localeCompare(b.path))[0];
-  return htmlSibling?.path ?? sourceFile;
-}
-
 function createTemplateImportOwnerAmbiguity(
-  sourceFile: NormalizedPath,
-  templateFile: NormalizedPath,
-  templateImports: readonly TemplateImport[],
-  candidates: readonly ResourceDef[],
+  ambiguity: TemplateFactOwnerAmbiguity,
 ): UnresolvedRegistration {
-  const candidateNames = candidates.map((resource) => {
+  const candidateNames = ambiguity.candidates.map((resource) => {
     const resourceName = unwrapSourced(resource.name) ?? "<unknown>";
     const className = unwrapSourced(resource.className) ?? "<unknown>";
     return `${resourceName} (${className})`;
   });
+  const templateImports = [
+    ...ambiguity.rootTemplateImports,
+    ...ambiguity.localTemplateImports.map((entry) => entry.import),
+  ];
 
   const span = templateImports[0]?.span ?? {
-    file: toSourceFileId(templateFile),
+    file: toSourceFileId(ambiguity.templateFile),
     start: 0,
     end: 0,
   };
@@ -450,10 +369,10 @@ function createTemplateImportOwnerAmbiguity(
       kind: "other",
       description: "template-import-owner-ambiguous",
     },
-    file: templateFile,
+    file: ambiguity.templateFile,
     span,
     reason:
-      `Template imports in '${templateFile}' are ambiguous for source file '${sourceFile}'. ` +
+      `Template imports in '${ambiguity.templateFile}' are ambiguous for source file '${ambiguity.sourcePath}'. ` +
       `Candidate owners: ${candidateNames.join(", ")}.`,
   };
 }
@@ -465,118 +384,76 @@ function localTemplateScopeOwner(
   return `${componentPath}::local-template:${localTemplateName.toLowerCase()}` as NormalizedPath;
 }
 
-function findInlineTemplateImportSites(
-  resource: ResourceDef,
+function registerTemplateOwnerSites(
+  templateOwner: TemplateFactOwnerRecord,
   context: AnalysisContext,
-): RegistrationSite[] {
-  if (resource.kind !== "custom-element") {
-    return [];
-  }
-
-  if (!resource.file) {
-    return [];
-  }
-
-  const inlineTemplate = resource.inlineTemplate;
-  if (!inlineTemplate) {
-    return [];
-  }
-
-  const inlineContent = unwrapSourced(inlineTemplate);
-  if (inlineContent === undefined) {
-    return [];
-  }
-
-  const className = unwrapSourced(resource.className) ?? "unknown";
-  const componentFile = resource.file;
-  const templateSpan = spanFromSourced(inlineTemplate, componentFile);
-  const imports = extractTemplateMeta(inlineContent, componentFile).imports.map((imp) =>
-    toInlineTemplateImport(imp, componentFile, templateSpan, context.resolveModule),
-  );
-  const localTemplateImports = extractLocalTemplateImportsFromHtml(inlineContent, componentFile).map((entry) => ({
-    ...entry,
-    import: {
-      ...entry.import,
-      resolvedPath: context.resolveModule
-        ? context.resolveModule(entry.import.moduleSpecifier, componentFile)
-        : entry.import.resolvedPath,
-    },
-  }));
-
-  if (imports.length === 0 && localTemplateImports.length === 0) {
-    return [];
-  }
-
+  sites: RegistrationSite[],
+  registeredResources: Set<ResourceDef>,
+): void {
+  const className = unwrapSourced(templateOwner.owner.className) ?? "unknown";
   const rootSites = findTemplateImportSites(
-    imports,
-    componentFile,
+    templateOwner.rootTemplateImports,
+    templateOwner.sourcePath,
     className,
-    componentFile,
+    templateOwner.templateFile,
     context,
-    "inline",
+    templateOwner.origin,
   );
   const localSites = findLocalTemplateImportSites(
-    localTemplateImports,
-    componentFile,
+    templateOwner.localTemplateImports,
+    templateOwner.sourcePath,
     className,
-    componentFile,
+    templateOwner.templateFile,
     context,
-    "inline",
+    templateOwner.origin,
   );
-  return [...rootSites, ...localSites];
-}
-
-function findInlineTemplateDefinitionSites(
-  resource: ResourceDef,
-): RegistrationSite[] {
-  if (resource.kind !== "custom-element") {
-    return [];
-  }
-  if (!resource.file) {
-    return [];
-  }
-  const inlineTemplate = resource.inlineTemplate;
-  if (!inlineTemplate) {
-    return [];
-  }
-  const inlineContent = unwrapSourced(inlineTemplate);
-  if (!inlineContent) {
-    return [];
-  }
-
-  const className = ownerClassName(resource);
-  const componentFile = resource.file;
-  const definitions = extractLocalTemplateDefinitionsFromHtml(inlineContent, componentFile);
-  return findLocalTemplateDefinitionSites(
-    definitions,
-    componentFile,
+  const localDefinitionSites = findLocalTemplateDefinitionSites(
+    templateOwner.localTemplateDefinitions,
+    templateOwner.owner,
+    templateOwner.sourcePath,
     className,
-    componentFile,
-    "inline",
+    templateOwner.templateFile,
+    context,
+    templateOwner.origin,
   );
+
+  for (const site of [...rootSites, ...localSites, ...localDefinitionSites]) {
+    sites.push(site);
+    if (site.resourceRef.kind === "resolved") {
+      registeredResources.add(site.resourceRef.resource);
+    }
+  }
 }
 
 function findLocalTemplateDefinitionSites(
   localTemplateDefinitions: readonly LocalTemplateDefinition[],
+  ownerResource: ResourceDef,
   componentPath: NormalizedPath,
   className: string,
   templateFile: NormalizedPath,
+  context: AnalysisContext,
   origin: "sibling" | "inline",
 ): RegistrationSite[] {
   const sites: RegistrationSite[] = [];
 
   for (const definition of localTemplateDefinitions) {
-    if (!hasNonImportTemplateMeta(definition.templateMeta)) {
-      continue;
-    }
-    const localTemplateResource = buildLocalTemplateCustomElementDefinition(
-      definition.localTemplateName,
-      templateFile,
-      className,
-      definition.templateMeta,
+    const definitionKey = createLocalTemplateDeclarationKey(
+      ownerResource,
+      definition.localTemplateName.value,
+      definition.span,
     );
+    const localTemplateResource = context.localTemplateAuthorities?.get(definitionKey);
+    const resourceRef: ResourceRef = localTemplateResource
+      ? { kind: "resolved", resource: localTemplateResource }
+      : {
+          kind: "unresolved",
+          name: definition.localTemplateName.value,
+          reason:
+            `Local template '${definition.localTemplateName.value}' has no resolved definition authority for declaration key '${definitionKey}'.`,
+        };
+
     sites.push({
-      resourceRef: { kind: "resolved", resource: localTemplateResource },
+      resourceRef,
       scope: { kind: "local", owner: componentPath },
       evidence: {
         kind: "local-template-definition",
@@ -591,48 +468,6 @@ function findLocalTemplateDefinitionSites(
   }
 
   return sites;
-}
-
-function toInlineTemplateImport(
-  imp: ImportMetaIR,
-  componentFile: NormalizedPath,
-  templateSpan: SourceSpan,
-  resolveModule?: (specifier: string, fromFile: NormalizedPath) => NormalizedPath | null,
-): TemplateImport {
-  const locatedAtTemplate = <T extends string>(value: T) => ({ value, loc: templateSpan });
-  const namedAliases = imp.namedAliases.map((alias) => ({
-    exportName: locatedAtTemplate(alias.exportName.value),
-    alias: locatedAtTemplate(alias.alias.value),
-    asLoc: null,
-  }));
-
-  return {
-    moduleSpecifier: imp.from.value,
-    resolvedPath: resolveModule ? resolveModule(imp.from.value, componentFile) : null,
-    defaultAlias: imp.defaultAlias ? locatedAtTemplate(imp.defaultAlias.value) : null,
-    namedAliases,
-    span: templateSpan,
-    moduleSpecifierSpan: templateSpan,
-  };
-}
-
-function spanFromSourced(
-  value: Sourced<unknown>,
-  fallbackFile: NormalizedPath,
-): SourceSpan {
-  const location = "location" in value ? value.location : undefined;
-  if (location) {
-    return {
-      file: toSourceFileId(location.file),
-      start: location.pos,
-      end: location.end,
-    };
-  }
-  return {
-    file: toSourceFileId(fallbackFile),
-    start: 0,
-    end: 0,
-  };
 }
 
 function resourceDefinitionSpan(resource: ResourceDef): SourceSpan {

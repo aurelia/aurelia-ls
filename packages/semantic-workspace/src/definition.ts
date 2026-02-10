@@ -69,7 +69,7 @@ export function buildResourceDefinitionIndex(discovery: ProjectSemanticsDiscover
   const bindingBehaviors = new Map<string, ResourceDefinitionEntry[]>();
   const bySymbolId = new Map<SymbolId, ResourceDefinitionEntry>();
 
-  for (const def of discovery.resources) {
+  for (const def of discovery.definition.authority) {
     const name = unwrapSourced(def.name);
     if (!name) continue;
     const entry: ResourceDefinitionEntry = {

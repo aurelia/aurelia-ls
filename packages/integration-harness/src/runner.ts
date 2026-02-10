@@ -8,6 +8,7 @@ import {
   buildApiSurfaceSnapshot,
   buildSemanticSnapshot,
   buildSemanticsArtifacts,
+  createReplayConvergenceOverrides,
   createMockFileSystem,
   createNodeFileSystem,
   DiagnosticsRuntime,
@@ -309,6 +310,8 @@ function buildProjectSemanticsDiscoveryConfig(
   scenario: NormalizedScenario,
   fileSystem?: FileSystemContext,
 ): Omit<ProjectSemanticsDiscoveryConfig, "diagnostics"> {
+  const packagePath = scenario.discovery.packagePath
+    ?? (scenario.source.kind === "tsconfig" ? dirname(scenario.source.tsconfigPath) : undefined);
   return {
     conventions: scenario.discovery.conventions,
     defines: scenario.discovery.defines,
@@ -316,6 +319,7 @@ function buildProjectSemanticsDiscoveryConfig(
     templateExtensions: scenario.discovery.templateExtensions,
     styleExtensions: scenario.discovery.styleExtensions,
     packageRoots: scenario.discovery.packageRoots,
+    packagePath,
     stripSourcedNodes: process.env.AURELIA_RESOLUTION_STRIP_SOURCED_NODES === "1",
   };
 }
@@ -426,8 +430,17 @@ function applyExternalResources(
     };
   }
 
-  const mergedResources = [...base.resources, ...external];
-  const artifacts = buildSemanticsArtifacts(mergedResources, base.semantics);
+  const mergedResources = [...base.definition.evidence, ...external];
+  const candidateOverrides = createReplayConvergenceOverrides(
+    mergedResources,
+    base.definition.convergence,
+    base.packagePath,
+  );
+  const artifacts = buildSemanticsArtifacts(
+    mergedResources,
+    base.semantics,
+    candidateOverrides.size > 0 ? { candidateOverrides } : undefined,
+  );
 
   if (policy === "rebuild-graph") {
     const graph = buildResourceGraphFromSemantics(artifacts.semantics);

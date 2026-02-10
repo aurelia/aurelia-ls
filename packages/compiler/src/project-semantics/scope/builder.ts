@@ -53,9 +53,10 @@ type LocalScopeData = {
 /**
  * Build a ResourceGraph from registration analysis.
  *
- * Enforces the two-level scope model:
- * - Global scope: resources registered globally (Aurelia.register, container.register)
- * - Local scopes: resources registered locally (static dependencies, decorator deps)
+ * Builds parent-chained scopes with explicit boundaries:
+ * - Root scope: resources registered globally (Aurelia.register, container.register)
+ * - Component-local scopes: resources registered locally (static dependencies, decorator deps)
+ * - Optional local-template child scopes: lexical children of their component owner
  *
  * Plugin resources (those with `package` field in BUILTIN_SEMANTICS) are only included
  * when the corresponding plugin is activated via registration.activatedPlugins.

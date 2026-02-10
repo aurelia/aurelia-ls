@@ -1,14 +1,16 @@
 function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }
 function __au_bb<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }
+type __AU_DollarChangedValue<T> = T extends (newValue: infer V, ..._args: unknown[]) => unknown ? V : unknown;
+type __AU_DollarChangedProps<T> = { [K in keyof T as K extends `$${infer Name}Changed` ? `$${Name}` : never]?: __AU_DollarChangedValue<T[K]> };
 type __AU_TTC_VM = AppVm;
 type __AU_TTC_T0_F0 = (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {};
-__au$access<(__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}>(o => o.cardTitle);
+__au$access<((__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.cardTitle);
 type __AU_TTC_T0_F1 = (Omit<(Omit<(__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}, '$parent' | '$vm' | '$this'>), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & {} & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {};
-__au$access<__AU_TTC_T0_F1>(o => o.select(o.item));
-__au$access<__AU_TTC_T0_F1>(o => o.item.label);
-__au$access<__AU_TTC_T0_F1>(o => o.item.details);
+__au$access<(__AU_TTC_T0_F1) & (__AU_DollarChangedProps<__AU_TTC_VM>) & { $event: MouseEvent }>(o => o.select(o.item));
+__au$access<(__AU_TTC_T0_F1) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.item.label);
+__au$access<(__AU_TTC_T0_F1) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.item.details);
 type __AU_TTC_T0_F2 = (Omit<(Omit<(Omit<(Omit<(Omit<(__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}, '$parent' | '$vm' | '$this'>), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & {} & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {}, '$parent' | '$vm' | '$this'>), keyof (NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['details'])>), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & (Omit<(NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['details']), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (Omit<(Omit<(__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}, '$parent' | '$vm' | '$this'>), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle'>) & {} & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean } & { $parent: (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & { $this: (NonNullable<((CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>))>['details']) };
-__au$access<__AU_TTC_T0_F2>(o => o.color);
-__au$access<__AU_TTC_T0_F2>(o => o.summary);
+__au$access<(__AU_TTC_T0_F2) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.color);
+__au$access<(__AU_TTC_T0_F2) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.summary);
 
 export {}
