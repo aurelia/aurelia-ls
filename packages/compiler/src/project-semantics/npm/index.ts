@@ -125,16 +125,17 @@ import {
   debug,
   type NormalizedPath,
   type ResourceDef,
-  type BindableDef,
-  type CustomAttributeDef,
-  type CustomElementDef,
-  type TemplateControllerDef,
-  type Sourced,
 } from '../compiler.js';
 import type { AnalyzedResource, ResourceEvidence, ResourcePattern } from './types.js';
 import { explicitEvidence, inferredEvidence } from './evidence.js';
-import { sourcedValue, unwrapSourced } from '../assemble/sourced.js';
+import { unwrapSourced } from '../assemble/sourced.js';
 import { hashObject } from '../fingerprint/fingerprint.js';
+import {
+  mergeResourceDefinitionCandidates,
+  sortResourceDefinitionCandidates,
+  type DefinitionSourceKind,
+  type ResourceDefinitionCandidate,
+} from "../definition/index.js";
 
 /**
  * Analyze an npm package to extract Aurelia resource semantics.
@@ -317,36 +318,26 @@ function mergeResources(
  * Takes the best data from each.
  */
 function mergeResource(a: AnalyzedResource, b: AnalyzedResource): AnalyzedResource {
-  const aBindables = countBindables(a.resource);
-  const bBindables = countBindables(b.resource);
+  const candidates: ResourceDefinitionCandidate[] = [
+    {
+      candidateId: "a",
+      resource: a.resource,
+      sourceKind: definitionSourceKindFromEvidence(a.evidence),
+      evidenceRank: evidenceRankFromNpmEvidence(a.evidence),
+    },
+    {
+      candidateId: "b",
+      resource: b.resource,
+      sourceKind: definitionSourceKindFromEvidence(b.evidence),
+      evidenceRank: evidenceRankFromNpmEvidence(b.evidence),
+    },
+  ];
+  const ordered = sortResourceDefinitionCandidates(candidates);
+  const merged = mergeResourceDefinitionCandidates(ordered).value ?? a.resource;
+  const primary = ordered[0]?.candidateId === "b" ? b : a;
 
-  // Rank evidence by confidence
-  function getEvidenceRank(evidence: ResourceEvidence): number {
-    if (evidence.source === 'declared') {
-      return 5; // Highest - explicit declaration/manifest
-    }
-    // Analyzed evidence
-    if (evidence.kind === 'explicit') {
-      // Explicit patterns: decorator, static-au, define
-      if (evidence.pattern === 'decorator') return 4;
-      if (evidence.pattern === 'define') return 4;
-      if (evidence.pattern === 'static-au') return 3;
-      return 3;
-    }
-    // Inferred (convention)
-    return 1;
-  }
-  const aRank = getEvidenceRank(a.evidence);
-  const bRank = getEvidenceRank(b.evidence);
-
-  // Choose primary based on evidence, then bindable count
-  const primary = (aRank > bRank) ? a : (bRank > aRank) ? b :
-                  (aBindables >= bBindables) ? a : b;
-  const secondary = primary === a ? b : a;
-
-  // Merge aliases from both
   return {
-    resource: mergeResourceDefs(primary.resource, secondary.resource),
+    resource: merged,
     evidence: primary.evidence,
   };
 }
@@ -445,87 +436,24 @@ function getResourceBindables(resource: ResourceDef): InspectedBindable[] {
   return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function countBindables(resource: ResourceDef): number {
-  if (resource.kind === "value-converter" || resource.kind === "binding-behavior") {
+function evidenceRankFromNpmEvidence(evidence: ResourceEvidence): number {
+  if (evidence.source === "declared") {
     return 0;
   }
-  return Object.keys(resource.bindables).length;
-}
-
-function mergeResourceDefs(primary: ResourceDef, secondary: ResourceDef): ResourceDef {
-  if (primary.kind !== secondary.kind) return primary;
-
-  switch (primary.kind) {
-    case "custom-element": {
-      const other = secondary as CustomElementDef;
-      return {
-        ...primary,
-        aliases: mergeSourcedAliases(primary.aliases, other.aliases),
-        bindables: mergeBindableDefs(primary.bindables, other.bindables),
-      };
-    }
-    case "custom-attribute": {
-      const other = secondary as CustomAttributeDef;
-      return {
-        ...primary,
-        aliases: mergeSourcedAliases(primary.aliases, other.aliases),
-        bindables: mergeBindableDefs(primary.bindables, other.bindables),
-      };
-    }
-    case "template-controller": {
-      const other = secondary as TemplateControllerDef;
-      const mergedAliases = mergeStringList(
-        unwrapSourced(primary.aliases) ?? [],
-        unwrapSourced(other.aliases) ?? [],
-      );
-      const file = primary.file ?? other.file;
-      return {
-        ...primary,
-        aliases: file ? sourcedValue(mergedAliases, file) : primary.aliases,
-        bindables: mergeBindableDefs(primary.bindables, other.bindables),
-      };
-    }
-    case "value-converter":
-    case "binding-behavior":
-      return primary;
+  if (evidence.kind === "explicit") {
+    if (evidence.pattern === "decorator") return 1;
+    if (evidence.pattern === "define") return 1;
+    if (evidence.pattern === "static-au") return 2;
+    return 2;
   }
+  return 4;
 }
 
-function mergeSourcedAliases(
-  primary: readonly Sourced<string>[],
-  secondary: readonly Sourced<string>[],
-): readonly Sourced<string>[] {
-  const result: Sourced<string>[] = [];
-  const seen = new Set<string>();
-  const append = (aliases: readonly Sourced<string>[]) => {
-    for (const alias of aliases) {
-      const value = unwrapSourced(alias);
-      if (!value || seen.has(value)) continue;
-      seen.add(value);
-      result.push(alias);
-    }
-  };
-  append(primary);
-  append(secondary);
-  return result;
-}
-
-function mergeBindableDefs(
-  primary: Readonly<Record<string, BindableDef>>,
-  secondary: Readonly<Record<string, BindableDef>>,
-): Readonly<Record<string, BindableDef>> {
-  return { ...secondary, ...primary };
-}
-
-function mergeStringList(primary: readonly string[], secondary: readonly string[]): string[] {
-  const result: string[] = [];
-  const seen = new Set<string>();
-  for (const value of [...primary, ...secondary]) {
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    result.push(value);
+function definitionSourceKindFromEvidence(evidence: ResourceEvidence): DefinitionSourceKind {
+  if (evidence.source === "declared") {
+    return "manifest-resource";
   }
-  return result;
+  return evidence.kind === "explicit" ? "analysis-explicit" : "analysis-convention";
 }
 
 /**

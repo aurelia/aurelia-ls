@@ -24,6 +24,8 @@ import type {
   DefineCall,
   FileContext,
   SiblingFile,
+  LocalTemplateDefinition,
+  LocalTemplateImport,
   TemplateImport,
 } from './file-facts.js';
 import { emptyFileFacts, emptyFileContext } from './file-facts.js';
@@ -35,7 +37,12 @@ import { buildFileScope } from '../evaluate/value/scope.js';
 import { transformExpression } from '../evaluate/value/transform.js';
 import { canonicalPath } from '../util/naming.js';
 import type { FileSystemContext } from '../project/context.js';
-import { extractTemplateImports, resolveTemplateImportPaths } from './template-imports.js';
+import {
+  extractTemplateImports,
+  extractLocalTemplateDefinitions,
+  extractLocalTemplateImports,
+  resolveTemplateImportPaths,
+} from './template-imports.js';
 
 // =============================================================================
 // Types
@@ -226,12 +233,16 @@ export function extractFileContext(
   }
 
   const siblings = detectSiblingFiles(sourcePath, options);
-  const templateImports = extractSiblingTemplateImports(siblings, options, program, sourcePath);
+  const templateImports = extractSiblingTemplateImports(siblings, options, program);
+  const localTemplateImports = extractSiblingLocalTemplateImports(siblings, options, program);
+  const localTemplateDefinitions = extractSiblingLocalTemplateDefinitions(siblings, options);
 
   return {
     siblings,
     template: null, // TODO: Parse template content if needed
     templateImports,
+    localTemplateImports,
+    localTemplateDefinitions,
   };
 }
 
@@ -662,14 +673,11 @@ function extractSiblingTemplateImports(
   siblings: SiblingFile[],
   options: ExtractionOptions,
   program: ts.Program | undefined,
-  sourcePath: string
 ): readonly TemplateImport[] {
   if (!options.fileSystem) return [];
 
   const templateExtensions = options.templateExtensions ?? ['.html'];
-  const templateSibling = siblings.find(s =>
-    templateExtensions.includes(s.extension.toLowerCase())
-  );
+  const templateSibling = selectPrimaryTemplateSibling(siblings, templateExtensions);
 
   if (!templateSibling) return [];
 
@@ -706,6 +714,94 @@ function extractSiblingTemplateImports(
     span: imp.span,
     moduleSpecifierSpan: imp.moduleSpecifierSpan,
   }));
+}
+
+function extractSiblingLocalTemplateImports(
+  siblings: SiblingFile[],
+  options: ExtractionOptions,
+  program: ts.Program | undefined,
+): readonly LocalTemplateImport[] {
+  if (!options.fileSystem) return [];
+
+  const templateExtensions = options.templateExtensions ?? ['.html'];
+  const templateSibling = selectPrimaryTemplateSibling(siblings, templateExtensions);
+
+  if (!templateSibling) return [];
+
+  const imports = extractLocalTemplateImports(templateSibling.path, options.fileSystem);
+
+  debug.project('fileFacts.localTemplateImports', {
+    templatePath: templateSibling.path,
+    importCount: imports.length,
+  });
+
+  if (program && imports.length > 0) {
+    const resolveModule = (specifier: string, fromFile: NormalizedPath) =>
+      resolveModulePath(specifier, fromFile, program, options.moduleResolutionHost);
+
+    return imports.map((entry) => ({
+      ...entry,
+      import: {
+        ...entry.import,
+        resolvedPath: resolveModule(entry.import.moduleSpecifier, templateSibling.path),
+      },
+    }));
+  }
+
+  return imports.map((entry) => ({
+    ...entry,
+    import: {
+      ...entry.import,
+      resolvedPath: null,
+    },
+  }));
+}
+
+function extractSiblingLocalTemplateDefinitions(
+  siblings: SiblingFile[],
+  options: ExtractionOptions,
+): readonly LocalTemplateDefinition[] {
+  if (!options.fileSystem) return [];
+
+  const templateExtensions = options.templateExtensions ?? ['.html'];
+  const templateSibling = selectPrimaryTemplateSibling(siblings, templateExtensions);
+
+  if (!templateSibling) return [];
+
+  const definitions = extractLocalTemplateDefinitions(templateSibling.path, options.fileSystem);
+
+  debug.project('fileFacts.localTemplateDefinitions', {
+    templatePath: templateSibling.path,
+    definitionCount: definitions.length,
+  });
+
+  return definitions;
+}
+
+function selectPrimaryTemplateSibling(
+  siblings: readonly SiblingFile[],
+  templateExtensions: readonly string[],
+): SiblingFile | undefined {
+  const extensionOrder = new Map(
+    templateExtensions.map((extension, index) => [extension.toLowerCase(), index]),
+  );
+
+  const templateSiblings = siblings.filter((sibling) =>
+    extensionOrder.has(sibling.extension.toLowerCase()),
+  );
+
+  if (templateSiblings.length === 0) {
+    return undefined;
+  }
+
+  templateSiblings.sort((a, b) => {
+    const aOrder = extensionOrder.get(a.extension.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    const bOrder = extensionOrder.get(b.extension.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.path.localeCompare(b.path);
+  });
+
+  return templateSiblings[0];
 }
 
 // =============================================================================
@@ -764,4 +860,3 @@ function resolveModulePath(
 
   return null;
 }
-

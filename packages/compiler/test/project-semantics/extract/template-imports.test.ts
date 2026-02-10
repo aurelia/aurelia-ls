@@ -5,7 +5,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { extractTemplateImports } from "../../../src/project-semantics/extract/template-imports.js";
+import {
+  extractLocalTemplateDefinitions,
+  extractTemplateImports,
+  extractLocalTemplateImports,
+} from "../../../src/project-semantics/extract/template-imports.js";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import type { FileSystemContext } from "../../../src/project-semantics/project/context.js";
 
@@ -174,6 +178,65 @@ describe("Template Import Extraction", () => {
       // Should only find the global import
       expect(imports).toHaveLength(1);
       expect(imports[0]!.moduleSpecifier).toBe("./global");
+    });
+  });
+
+  describe("extractLocalTemplateImports", () => {
+    it("extracts only imports inside as-custom-element templates", () => {
+      const fs = createMockFs({
+        "/app/my.html": `
+          <import from="./root-only">
+          <template as-custom-element="local-widget">
+            <import from="./local-one">
+            <require from="./local-two">
+          </template>
+        `,
+      });
+
+      const imports = extractLocalTemplateImports("/app/my.html" as NormalizedPath, fs);
+
+      expect(imports).toHaveLength(2);
+      expect(imports.map((imp) => imp.import.moduleSpecifier).sort()).toEqual([
+        "./local-one",
+        "./local-two",
+      ]);
+      expect(imports.every((imp) => imp.localTemplateName.value === "local-widget")).toBe(true);
+    });
+
+    it("returns empty array when there are no local-template imports", () => {
+      const fs = createMockFs({
+        "/app/my.html": `
+          <import from="./root-only">
+          <div>content</div>
+        `,
+      });
+
+      const imports = extractLocalTemplateImports("/app/my.html" as NormalizedPath, fs);
+      expect(imports).toHaveLength(0);
+    });
+  });
+
+  describe("extractLocalTemplateDefinitions", () => {
+    it("extracts local-template metadata for non-import fields", () => {
+      const fs = createMockFs({
+        "/app/my.html": `
+          <template as-custom-element="local-card" containerless bindable="value, status">
+            <bindable name="display-data" mode="two-way" attribute="display-data">
+            <alias name="local-alias">
+            <use-shadow-dom mode="closed">
+          </template>
+        `,
+      });
+
+      const defs = extractLocalTemplateDefinitions("/app/my.html" as NormalizedPath, fs);
+      expect(defs).toHaveLength(1);
+
+      const localDef = defs[0]!;
+      expect(localDef.localTemplateName.value).toBe("local-card");
+      expect(localDef.templateMeta.bindables.length).toBe(3);
+      expect(localDef.templateMeta.aliases.length).toBe(1);
+      expect(localDef.templateMeta.shadowDom?.mode.value).toBe("closed");
+      expect(localDef.templateMeta.containerless).not.toBeNull();
     });
   });
 });

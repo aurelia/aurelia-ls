@@ -37,14 +37,25 @@ export interface ExplicitResourceConfig {
   bindingBehaviors?: string[];
 }
 
+export type ExplicitBindingModeConfig = "one-time" | "to-view" | "from-view" | "two-way";
+
+export interface ExplicitBindableConfig {
+  property?: string;
+  attribute?: string;
+  mode?: ExplicitBindingModeConfig;
+  primary?: boolean;
+  type?: string;
+  doc?: string;
+}
+
 export interface ExplicitElementConfig {
-  bindables?: Record<string, { mode?: "one-time" | "to-view" | "from-view" | "two-way" }>;
+  bindables?: Record<string, ExplicitBindableConfig>;
   containerless?: boolean;
   shadowOptions?: { mode: "open" | "closed" } | null;
 }
 
 export interface ExplicitAttributeConfig {
-  bindables?: Record<string, { mode?: "one-time" | "to-view" | "from-view" | "two-way" }>;
+  bindables?: Record<string, ExplicitBindableConfig>;
   isTemplateController?: boolean;
   noMultiBindings?: boolean;
 }

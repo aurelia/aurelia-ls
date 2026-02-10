@@ -32,6 +32,7 @@ export {
   type PatternMatchOutput,
 } from "./pipeline/index.js";
 export { buildSemanticsArtifacts, type SemanticsArtifacts } from "./assemble/build.js";
+export * from "./definition/index.js";
 
 // === Snapshots ===
 export { buildSemanticSnapshot, buildApiSurfaceSnapshot, type SemanticSnapshotOptions, type SnapshotIdOptions } from "./snapshot/index.js";
@@ -128,6 +129,8 @@ export type {
   DefineCall,
   FileContext,
   // SiblingFile exported from project/index.js (canonical source)
+  LocalTemplateDefinition,
+  LocalTemplateImport,
   TemplateImport,
   MatchContext,
 } from "./extract/file-facts.js";
@@ -373,6 +376,8 @@ export type {
   ThirdPartyPolicy,
   ThirdPartyPackageSpec,
   ExplicitResourceConfig,
+  ExplicitBindableConfig,
+  ExplicitBindingModeConfig,
   ExplicitElementConfig,
   ExplicitAttributeConfig,
   ThirdPartyDiscoveryResult,
@@ -380,4 +385,3 @@ export type {
   ThirdPartyLogger,
   ThirdPartyDiscoveryContext,
 } from "./third-party/index.js";
-

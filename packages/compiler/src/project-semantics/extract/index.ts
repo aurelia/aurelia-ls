@@ -16,6 +16,8 @@ export type {
   RegistrationCall,
   DefineCall,
   FileContext,
+  LocalTemplateDefinition,
+  LocalTemplateImport,
   TemplateImport,
   MatchContext,
 } from "./file-facts.js";
@@ -24,6 +26,10 @@ export { emptyFileFacts, emptyFileContext } from "./file-facts.js";
 
 export {
   extractTemplateImports,
+  extractLocalTemplateDefinitions,
+  extractLocalTemplateDefinitionsFromHtml,
+  extractLocalTemplateImports,
+  extractLocalTemplateImportsFromHtml,
   resolveTemplateImportPaths,
   extractComponentTemplateImports,
 } from "./template-imports.js";

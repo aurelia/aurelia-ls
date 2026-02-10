@@ -1,4 +1,4 @@
-import type ts from "typescript";
+import ts from "typescript";
 import type {
   CatalogConfidence,
   CatalogGap,
@@ -39,6 +39,11 @@ import { createRegistrationAnalyzer } from "./register/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
 import { orphansToDiagnostics, unresolvedToDiagnostics, unresolvedRefsToDiagnostics, type UnresolvedResourceInfo } from "./diagnostics/index.js";
 import { buildSemanticsArtifacts } from "./assemble/build.js";
+import type {
+  DefinitionCandidateOverride,
+  DefinitionConvergenceRecord,
+} from "./assemble/build.js";
+import { collectTemplateMetaDefinitionCandidates } from "./definition/template-meta-candidates.js";
 import { stripSourcedNodes } from "./assemble/strip.js";
 import { discoverTemplates } from "./templates/index.js";
 import type { InlineTemplateInfo, TemplateInfo } from "./templates/types.js";
@@ -126,6 +131,12 @@ export interface ProjectSemanticsDiscoveryResult {
   inlineTemplates: readonly InlineTemplateInfo[];
   /** Diagnostics from project-semantics discovery */
   diagnostics: readonly ProjectSemanticsDiscoveryDiagnostic[];
+  /**
+   * Definition convergence reasons emitted while merging resource candidates.
+   *
+   * Includes losing-source traces so surfaces can route policy diagnostics.
+   */
+  definitionConvergence: readonly DefinitionConvergenceRecord[];
   /** Extracted facts with partial evaluation applied */
   facts: Map<NormalizedPath, FileFacts>;
 }
@@ -215,7 +226,7 @@ export function discoverProjectSemantics(
     // Stage: recognize
     log.info("[discovery] matching patterns...");
     trace.event("discovery.patternMatching.start");
-    const allResources: ResourceDef[] = [];
+    const recognizedResources: ResourceDef[] = [];
     const matcherGaps: AnalysisGap[] = [];
     const contexts = new Map<NormalizedPath, FileContext>();
 
@@ -232,35 +243,61 @@ export function discoverProjectSemantics(
 
       // Run pattern matchers on classes AND define calls
       const matchResult = matchFileFacts(fileFacts, context);
-      allResources.push(...matchResult.resources);
+      recognizedResources.push(...matchResult.resources);
       matcherGaps.push(...matchResult.gaps);
     }
-    trace.event("discovery.patternMatching.done", { resourceCount: allResources.length });
+    trace.event("discovery.patternMatching.done", { resourceCount: recognizedResources.length });
     debug.project("patternMatching.complete", {
-      resourceCount: allResources.length,
+      resourceCount: recognizedResources.length,
       gapCount: matcherGaps.length,
     });
 
-    const analysisGaps = [...evaluation.gaps, ...matcherGaps];
+    const templateMetaCandidates = collectTemplateMetaDefinitionCandidates(
+      recognizedResources,
+      contexts,
+      config?.fileSystem,
+    );
+    const candidateOverrides = createConvergenceOverrides(templateMetaCandidates.candidates);
+    const convergedResources = [
+      ...recognizedResources,
+      ...templateMetaCandidates.candidates,
+    ];
+
+    const analysisGaps = [
+      ...evaluation.gaps,
+      ...matcherGaps,
+      ...templateMetaCandidates.gaps,
+    ];
     const catalogGaps = analysisGaps.map(analysisGapToCatalogGap);
     const catalogConfidence = catalogConfidenceFromGaps(analysisGaps);
 
     // Stage: assemble
     log.info("[discovery] building semantics artifacts...");
     trace.event("discovery.semantics.start");
-    const { semantics, catalog, syntax } = buildSemanticsArtifacts(allResources, config?.baseSemantics, {
-      confidence: catalogConfidence,
-      ...(catalogGaps.length ? { gaps: catalogGaps } : {}),
-    });
+    const { semantics, catalog, syntax, definitionConvergence } = buildSemanticsArtifacts(
+      convergedResources,
+      config?.baseSemantics,
+      {
+        confidence: catalogConfidence,
+        ...(catalogGaps.length ? { gaps: catalogGaps } : {}),
+        ...(candidateOverrides.size > 0 ? { candidateOverrides } : {}),
+      },
+    );
     trace.event("discovery.semantics.done", {
-      resourceCount: allResources.length,
+      resourceCount: convergedResources.length,
     });
 
     // Stage: register
     log.info("[discovery] analyzing registration...");
     trace.event("discovery.registration.start");
     const analyzer = createRegistrationAnalyzer();
-    const registration = analyzer.analyze(allResources, facts, exportBindings, contexts);
+    const registration = analyzer.analyze(
+      recognizedResources,
+      facts,
+      exportBindings,
+      contexts,
+      (specifier, fromFile) => resolveProjectModulePath(program, specifier, fromFile),
+    );
     trace.event("discovery.registration.done", {
       siteCount: registration.sites.length,
       orphanCount: registration.orphans.length,
@@ -319,7 +356,7 @@ export function discoverProjectSemantics(
     });
 
     log.info(
-      `[discovery] complete: ${allResources.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
+      `[discovery] complete: ${recognizedResources.length} resources (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
     );
 
     // Extract unresolved resource refs from registration sites
@@ -343,7 +380,7 @@ export function discoverProjectSemantics(
     ];
 
     trace.setAttributes({
-      "discovery.resourceCount": allResources.length,
+      "discovery.resourceCount": recognizedResources.length,
       "discovery.globalCount": globalCount,
       "discovery.localCount": localCount,
       "discovery.orphanCount": registration.orphans.length,
@@ -358,7 +395,7 @@ export function discoverProjectSemantics(
     });
 
     if (config?.stripSourcedNodes) {
-      const stripped = stripSourcedNodes(allResources);
+      const stripped = stripSourcedNodes(recognizedResources);
       trace.event("discovery.stripSourcedNodes", { removed: stripped.removed });
       debug.project("stripSourcedNodes.complete", { removed: stripped.removed });
     }
@@ -370,11 +407,12 @@ export function discoverProjectSemantics(
       resourceGraph,
       semanticSnapshot,
       apiSurfaceSnapshot,
-      resources: allResources,
+      resources: recognizedResources,
       registration,
       templates,
       inlineTemplates,
       diagnostics: allDiagnostics,
+      definitionConvergence,
       facts,
     };
   });
@@ -465,8 +503,48 @@ function getFileFromEvidence(evidence: RegistrationEvidence): NormalizedPath {
     case "decorator-dependencies":
     case "static-au-dependencies":
     case "template-import":
+    case "local-template-definition":
       return evidence.component;
   }
+}
+
+function resolveProjectModulePath(
+  program: ts.Program,
+  specifier: string,
+  fromFile: NormalizedPath,
+): NormalizedPath | null {
+  const result = ts.resolveModuleName(
+    specifier,
+    fromFile,
+    program.getCompilerOptions(),
+    ts.sys,
+  );
+
+  if (result.resolvedModule?.resolvedFileName) {
+    let resolved = result.resolvedModule.resolvedFileName;
+    if (resolved.endsWith(".js")) {
+      const tsCandidate = resolved.slice(0, -3) + ".ts";
+      if (ts.sys.fileExists(tsCandidate)) {
+        resolved = tsCandidate;
+      }
+    }
+    return normalizePathForId(resolved);
+  }
+
+  if (specifier.endsWith(".js") && (specifier.startsWith("./") || specifier.startsWith("../"))) {
+    const tsSpecifier = specifier.slice(0, -3) + ".ts";
+    const mapped = ts.resolveModuleName(
+      tsSpecifier,
+      fromFile,
+      program.getCompilerOptions(),
+      ts.sys,
+    );
+    if (mapped.resolvedModule?.resolvedFileName) {
+      return normalizePathForId(mapped.resolvedModule.resolvedFileName);
+    }
+  }
+
+  return null;
 }
 
 const nullLogger: Logger = {
@@ -475,6 +553,19 @@ const nullLogger: Logger = {
   warn: () => {},
   error: () => {},
 };
+
+function createConvergenceOverrides(
+  templateMetaResources: readonly ResourceDef[],
+): ReadonlyMap<ResourceDef, DefinitionCandidateOverride> {
+  const overrides = new Map<ResourceDef, DefinitionCandidateOverride>();
+  for (const resource of templateMetaResources) {
+    overrides.set(resource, {
+      sourceKind: "analysis-convention",
+      evidenceRank: 4,
+    });
+  }
+  return overrides;
+}
 
 
 function mapGapKindToCode(kind: string): "aurelia/gap/partial-eval" | "aurelia/gap/unknown-registration" | "aurelia/gap/cache-corrupt" {

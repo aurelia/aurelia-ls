@@ -15,10 +15,15 @@ import type {
   ValueConverterSig,
 } from "../compiler.js";
 import type {
+  ExplicitBindableConfig,
   ExplicitResourceConfig,
   ExplicitElementConfig,
   ExplicitAttributeConfig,
 } from "./types.js";
+import {
+  mergePartialResourceCollections as mergeDefinitionPartialResourceCollections,
+  mergeResolvedResourceCollections as mergeDefinitionResolvedResourceCollections,
+} from "../definition/index.js";
 
 type MutableResourceCollections = {
   elements?: Record<string, ElementRes>;
@@ -83,17 +88,7 @@ export function mergeResourceCollections(
   base: ResourceCollections,
   extra: Partial<ResourceCollections>,
 ): ResourceCollections {
-  return {
-    elements: extra.elements ? { ...base.elements, ...extra.elements } : base.elements,
-    attributes: extra.attributes ? { ...base.attributes, ...extra.attributes } : base.attributes,
-    controllers: extra.controllers ? { ...base.controllers, ...extra.controllers } : base.controllers,
-    valueConverters: extra.valueConverters
-      ? { ...base.valueConverters, ...extra.valueConverters }
-      : base.valueConverters,
-    bindingBehaviors: extra.bindingBehaviors
-      ? { ...base.bindingBehaviors, ...extra.bindingBehaviors }
-      : base.bindingBehaviors,
-  };
+  return mergeDefinitionResolvedResourceCollections(base, extra);
 }
 
 /**
@@ -103,23 +98,7 @@ export function mergeScopeResources(
   base: Partial<ResourceCollections> | undefined,
   extra: Partial<ResourceCollections>,
 ): Partial<ResourceCollections> {
-  const merged: MutableResourceCollections = { ...(base ?? {}) };
-  if (extra.elements) {
-    merged.elements = { ...(base?.elements ?? {}), ...extra.elements };
-  }
-  if (extra.attributes) {
-    merged.attributes = { ...(base?.attributes ?? {}), ...extra.attributes };
-  }
-  if (extra.controllers) {
-    merged.controllers = { ...(base?.controllers ?? {}), ...extra.controllers };
-  }
-  if (extra.valueConverters) {
-    merged.valueConverters = { ...(base?.valueConverters ?? {}), ...extra.valueConverters };
-  }
-  if (extra.bindingBehaviors) {
-    merged.bindingBehaviors = { ...(base?.bindingBehaviors ?? {}), ...extra.bindingBehaviors };
-  }
-  return merged;
+  return mergeDefinitionPartialResourceCollections(base, extra);
 }
 
 // ============================================================================
@@ -199,23 +178,54 @@ function normalizeResourceName(name: string): string {
 }
 
 function toBindables(
-  bindables: Record<string, { mode?: "one-time" | "to-view" | "from-view" | "two-way" }> | undefined,
+  bindables: Record<string, ExplicitBindableConfig> | undefined,
 ): Record<string, Bindable> {
   const output: Record<string, Bindable> = {};
   if (!bindables) return output;
 
-  for (const [name, def] of Object.entries(bindables)) {
+  for (const key of Object.keys(bindables).sort((left, right) => left.localeCompare(right))) {
+    const def = bindables[key] ?? {};
+    const name = normalizeBindablePropertyName(def.property, key);
+    if (!name) continue;
+    const attribute = normalizeOptionalString(def.attribute);
     const mode = toBindingMode(def.mode);
+    const primary = def.primary;
+    const type = toTypeRef(def.type);
+    const doc = normalizeOptionalString(def.doc);
     output[name] = {
       name,
+      ...(attribute ? { attribute } : {}),
       ...(mode ? { mode } : {}),
+      ...(primary !== undefined ? { primary } : {}),
+      ...(type ? { type } : {}),
+      ...(doc ? { doc } : {}),
     };
   }
 
   return output;
 }
 
-function toBindingMode(mode: string | undefined): BindingMode | undefined {
+function toBindingMode(mode: ExplicitBindableConfig["mode"] | undefined): BindingMode | undefined {
   if (!mode) return undefined;
   return MODE_MAP[mode];
+}
+
+function toTypeRef(type: string | undefined): Bindable["type"] {
+  const normalized = normalizeOptionalString(type);
+  if (!normalized) return undefined;
+  if (normalized === "any") return { kind: "any" };
+  if (normalized === "unknown") return { kind: "unknown" };
+  return { kind: "ts", name: normalized };
+}
+
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeBindablePropertyName(property: string | undefined, fallbackKey: string): string | undefined {
+  const normalizedProperty = normalizeOptionalString(property);
+  if (normalizedProperty) return normalizedProperty;
+  return normalizeOptionalString(fallbackKey);
 }

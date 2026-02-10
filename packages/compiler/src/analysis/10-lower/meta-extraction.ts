@@ -43,6 +43,16 @@ export interface MetaExtractionResult {
   removeRanges: Array<[number, number]>;
 }
 
+export interface MetaExtractionOptions {
+  /**
+   * Include `<template as-custom-element="...">` roots in extraction.
+   *
+   * Default behavior skips local-template roots to preserve current root-template
+   * extraction semantics.
+   */
+  includeLocalTemplateRoots?: boolean;
+}
+
 /**
  * Extract meta elements from a parsed HTML document.
  *
@@ -52,7 +62,8 @@ export interface MetaExtractionResult {
 export function extractMeta(
   root: P5DocumentFragment,
   source: SourceFile,
-  sourceText: string
+  sourceText: string,
+  options: MetaExtractionOptions = {},
 ): MetaExtractionResult {
   const imports: ImportMetaIR[] = [];
   const bindables: BindableMetaIR[] = [];
@@ -75,7 +86,7 @@ export function extractMeta(
     }
 
     // Skip <template as-custom-element> - those are local element definitions
-    if (tag === "template" && hasAttr(node, "as-custom-element")) {
+    if (!options.includeLocalTemplateRoots && tag === "template" && hasAttr(node, "as-custom-element")) {
       return;
     }
 
@@ -139,7 +150,7 @@ export function extractMeta(
         }
       }
     }
-  });
+  }, options);
 
   return {
     meta: {
@@ -161,7 +172,8 @@ export function extractMeta(
  */
 function traverse(
   node: P5DocumentFragment | P5Element,
-  callback: (el: P5Element) => void
+  callback: (el: P5Element) => void,
+  options: MetaExtractionOptions = {},
 ): void {
   const children = "childNodes" in node ? node.childNodes : [];
   for (const child of children) {
@@ -171,19 +183,19 @@ function traverse(
     callback(el);
 
     // Skip descending into <template as-custom-element>
-    if (el.tagName === "template" && hasAttr(el, "as-custom-element")) {
+    if (!options.includeLocalTemplateRoots && el.tagName === "template" && hasAttr(el, "as-custom-element")) {
       continue;
     }
 
     // Descend into children
     if (el.childNodes) {
-      traverse(el, callback);
+      traverse(el, callback, options);
     }
 
     // For <template>, also descend into content
     const template = child as DefaultTreeAdapterMap["template"];
     if (template.content?.childNodes) {
-      traverse(template.content, callback);
+      traverse(template.content, callback, options);
     }
   }
 }
@@ -703,9 +715,13 @@ import { resolveSourceFile } from "../../model/source.js";
  * console.log(meta.imports[0].from.value); // "./foo"
  * ```
  */
-export function extractTemplateMeta(html: string, filePath: string): TemplateMetaIR {
+export function extractTemplateMeta(
+  html: string,
+  filePath: string,
+  options: MetaExtractionOptions = {},
+): TemplateMetaIR {
   const p5 = parseFragment(html, { sourceCodeLocationInfo: true });
   const source = resolveSourceFile(filePath);
-  const { meta } = extractMeta(p5, source, html);
+  const { meta } = extractMeta(p5, source, html, options);
   return meta;
 }

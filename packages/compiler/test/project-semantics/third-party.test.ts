@@ -91,7 +91,14 @@ describe("buildThirdPartyResources", () => {
       elements: {
         "my-element": {
           bindables: {
-            value: { mode: "two-way" },
+            value: {
+              property: "displayData",
+              attribute: "display-data",
+              mode: "two-way",
+              primary: true,
+              type: "DisplayData",
+              doc: "Display payload",
+            },
             label: {},
           },
         },
@@ -101,16 +108,46 @@ describe("buildThirdPartyResources", () => {
     const el = result.elements!["my-element"];
     expect(el).toBeDefined();
     expect(el!.name).toBe("my-element");
-    expect(el!.bindables["value"]!.mode).toBe("twoWay");
+    expect(el!.bindables["displayData"]!.attribute).toBe("display-data");
+    expect(el!.bindables["displayData"]!.mode).toBe("twoWay");
+    expect(el!.bindables["displayData"]!.primary).toBe(true);
+    expect(el!.bindables["displayData"]!.type).toEqual({ kind: "ts", name: "DisplayData" });
+    expect(el!.bindables["displayData"]!.doc).toBe("Display payload");
     expect(el!.bindables["label"]!.name).toBe("label");
     expect(el!.bindables["label"]!.mode).toBeUndefined();
+  });
+
+  it("normalizes bindable type aliases for any and unknown", () => {
+    const result = buildThirdPartyResources({
+      elements: {
+        "typed-el": {
+          bindables: {
+            anyProp: { type: "any" },
+            unknownProp: { type: "unknown" },
+          },
+        },
+      },
+    });
+
+    const el = result.elements!["typed-el"]!;
+    expect(el.bindables["anyProp"]!.type).toEqual({ kind: "any" });
+    expect(el.bindables["unknownProp"]!.type).toEqual({ kind: "unknown" });
   });
 
   it("builds attributes with template controller flag", () => {
     const result = buildThirdPartyResources({
       attributes: {
         "my-if": {
-          bindables: { condition: {} },
+          bindables: {
+            condition: {
+              property: "condition",
+              attribute: "if",
+              mode: "to-view",
+              primary: true,
+              type: "boolean",
+              doc: "Template branch condition",
+            },
+          },
           isTemplateController: true,
         },
       },
@@ -119,6 +156,11 @@ describe("buildThirdPartyResources", () => {
     expect(attr).toBeDefined();
     expect(attr!.name).toBe("my-if");
     expect((attr as any).isTemplateController).toBe(true);
+    expect(attr!.bindables["condition"]!.attribute).toBe("if");
+    expect(attr!.bindables["condition"]!.mode).toBe("toView");
+    expect(attr!.bindables["condition"]!.primary).toBe(true);
+    expect(attr!.bindables["condition"]!.type).toEqual({ kind: "ts", name: "boolean" });
+    expect(attr!.bindables["condition"]!.doc).toBe("Template branch condition");
   });
 
   it("builds value converters", () => {
@@ -203,6 +245,52 @@ describe("mergeResourceCollections", () => {
     };
     const result = mergeResourceCollections(base, extra);
     expect(result.elements["el-a"]!.name).toBe("el-a-override");
+  });
+
+  it("merges explicit bindable fields into resolved collections", () => {
+    const baseWithBindable: ResourceCollections = {
+      elements: {
+        "el-a": {
+          kind: "element",
+          name: "el-a",
+          bindables: {
+            displayData: {
+              name: "displayData",
+              mode: "toView",
+            },
+          },
+        },
+      },
+      attributes: {},
+      controllers: {},
+      valueConverters: {},
+      bindingBehaviors: {},
+    };
+
+    const extra = buildThirdPartyResources({
+      elements: {
+        "el-a": {
+          bindables: {
+            displayData: {
+              mode: "two-way",
+              primary: true,
+              attribute: "display-data",
+              type: "DisplayData",
+              doc: "Payload from explicit config",
+            },
+          },
+        },
+      },
+    });
+
+    const result = mergeResourceCollections(baseWithBindable, extra);
+    const bindable = result.elements["el-a"]!.bindables["displayData"]!;
+    expect(bindable.name).toBe("displayData");
+    expect(bindable.attribute).toBe("display-data");
+    expect(bindable.mode).toBe("twoWay");
+    expect(bindable.primary).toBe(true);
+    expect(bindable.type).toEqual({ kind: "ts", name: "DisplayData" });
+    expect(bindable.doc).toBe("Payload from explicit config");
   });
 });
 

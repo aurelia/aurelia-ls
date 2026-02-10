@@ -8,7 +8,14 @@
  * - FileContext: Project-level context (siblings, templates) — assembled separately
  */
 
-import type { NormalizedPath, TextSpan, SourceSpan, BindingMode, Located } from '../compiler.js';
+import type {
+  NormalizedPath,
+  TextSpan,
+  SourceSpan,
+  BindingMode,
+  Located,
+  TemplateMetaIR,
+} from '../compiler.js';
 import type { AnalysisGap } from '../evaluate/types.js';
 import type { ClassValue, LexicalScope, AnalyzableValue, ValueResolutionContext } from '../evaluate/value/types.js';
 import type { SiblingFile } from '../project/types.js';
@@ -279,6 +286,20 @@ export interface FileContext {
 
   /** Template imports from sibling .html */
   readonly templateImports: readonly TemplateImport[];
+
+  /**
+   * Imports nested inside <template as-custom-element> blocks.
+   *
+   * These are tracked separately because local-template import scope behavior
+   * is owned by local-template scope policy in registration analysis.
+   */
+  readonly localTemplateImports?: readonly LocalTemplateImport[];
+
+  /**
+   * Local-template declaration metadata from
+   * `<template as-custom-element="...">` blocks.
+   */
+  readonly localTemplateDefinitions?: readonly LocalTemplateDefinition[];
 }
 
 // SiblingFile is imported from project/types.ts (canonical definition)
@@ -308,6 +329,26 @@ export interface TemplateImport {
   }[];
   readonly span: SourceSpan;
   readonly moduleSpecifierSpan: SourceSpan;
+}
+
+/**
+ * Template import from inside <template as-custom-element="...">.
+ *
+ * Carries the local template owner name to support lexical scope ownership.
+ */
+export interface LocalTemplateImport {
+  readonly localTemplateName: Located<string>;
+  readonly import: TemplateImport;
+}
+
+/**
+ * Local-template declaration metadata extracted from
+ * `<template as-custom-element="...">` blocks.
+ */
+export interface LocalTemplateDefinition {
+  readonly localTemplateName: Located<string>;
+  readonly span: SourceSpan;
+  readonly templateMeta: TemplateMetaIR;
 }
 
 // =============================================================================
@@ -367,6 +408,8 @@ export function emptyFileContext(): FileContext {
     siblings: [],
     template: null,
     templateImports: [],
+    localTemplateImports: [],
+    localTemplateDefinitions: [],
   };
 }
 

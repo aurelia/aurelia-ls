@@ -298,12 +298,32 @@ export type RegistrationEvidence =
     }
   | {
       readonly kind: "template-import";
+      /** Template origin that produced this import signal */
+      readonly origin?: "sibling" | "inline";
       /** Component class that owns this template */
       readonly component: NormalizedPath;
       /** Class name of the component */
       readonly className: string;
       /** Template file containing the <import> element */
       readonly templateFile: NormalizedPath;
+      /**
+       * Local template owner name when import comes from
+       * <template as-custom-element="...">.
+       */
+      readonly localTemplateName?: string;
+    }
+  | {
+      readonly kind: "local-template-definition";
+      /** Template origin that produced this local template definition */
+      readonly origin?: "sibling" | "inline";
+      /** Component class that owns this local template declaration */
+      readonly component: NormalizedPath;
+      /** Class name of the component */
+      readonly className: string;
+      /** Template file containing the local template declaration */
+      readonly templateFile: NormalizedPath;
+      /** The local template name from as-custom-element */
+      readonly localTemplateName: string;
     };
 
 // =============================================================================

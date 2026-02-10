@@ -160,4 +160,59 @@ describe("Scope: Plugin Filtering", () => {
       // still has it as shadow knowledge for error recovery
     });
   });
+
+  describe("package gating for all package-capable kinds", () => {
+    const packageScopedBaseSemantics = {
+      ...BUILTIN_SEMANTICS,
+      resources: {
+        ...BUILTIN_SEMANTICS.resources,
+        valueConverters: {
+          ...BUILTIN_SEMANTICS.resources.valueConverters,
+          "router-only-vc": {
+            name: "router-only-vc",
+            in: { kind: "unknown" },
+            out: { kind: "unknown" },
+            package: "@aurelia/router",
+          },
+        },
+        bindingBehaviors: {
+          ...BUILTIN_SEMANTICS.resources.bindingBehaviors,
+          "router-only-bb": {
+            name: "router-only-bb",
+            package: "@aurelia/router",
+          },
+        },
+      },
+    };
+
+    it("excludes package-scoped value converters and binding behaviors when plugin is not activated", () => {
+      const analysisWithoutRouter: RegistrationAnalysis = {
+        sites: [],
+        orphans: [],
+        unresolved: [],
+        activatedPlugins: [],
+      };
+      const graph = buildResourceGraph(analysisWithoutRouter, packageScopedBaseSemantics);
+      const { resources } = materializeResourcesForScope(packageScopedBaseSemantics, graph, graph.root);
+
+      expect(resources.valueConverters["router-only-vc"]).toBeUndefined();
+      expect(resources.bindingBehaviors["router-only-bb"]).toBeUndefined();
+    });
+
+    it("includes package-scoped value converters and binding behaviors when plugin is activated", () => {
+      const analysisWithRouter: RegistrationAnalysis = {
+        sites: [],
+        orphans: [],
+        unresolved: [],
+        activatedPlugins: [ROUTER_MANIFEST],
+      };
+      const graph = buildResourceGraph(analysisWithRouter, packageScopedBaseSemantics);
+      const { resources } = materializeResourcesForScope(packageScopedBaseSemantics, graph, graph.root);
+
+      expect(resources.valueConverters["router-only-vc"]).toBeTruthy();
+      expect(resources.valueConverters["router-only-vc"]!.package).toBe("@aurelia/router");
+      expect(resources.bindingBehaviors["router-only-bb"]).toBeTruthy();
+      expect(resources.bindingBehaviors["router-only-bb"]!.package).toBe("@aurelia/router");
+    });
+  });
 });

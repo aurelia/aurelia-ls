@@ -62,6 +62,7 @@ export {
 export type {
   BindingMode,
   ImportMetaIR,
+  TemplateMetaIR,
   Located,
   NormalizedPath,
   SourceSpan,

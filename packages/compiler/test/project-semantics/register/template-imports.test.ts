@@ -134,6 +134,49 @@ function createProgram(): ts.Program {
   return ts.createProgram(tsFiles, compilerOptions, host);
 }
 
+function createProgramFromFiles(files: Record<string, string>): ts.Program {
+  const host = ts.createCompilerHost({});
+  host.fileExists = (fileName) => fileName in files;
+  host.readFile = (fileName) => files[fileName];
+  host.getSourceFile = (fileName, languageVersion) => {
+    const content = files[fileName];
+    return content ? ts.createSourceFile(fileName, content, languageVersion) : undefined;
+  };
+
+  return ts.createProgram(
+    Object.keys(files).filter((filePath) => filePath.endsWith(".ts")),
+    { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext },
+    host,
+  );
+}
+
+function createMockFileSystemForFiles(files: Record<string, string>): FileSystemContext {
+  return {
+    fileExists: (path) => path in files,
+    readFile: (path) => files[path],
+    readDirectory: () => [],
+    getSiblingFiles: (sourcePath, extensions) => {
+      const dir = sourcePath.substring(0, sourcePath.lastIndexOf("/") + 1);
+      const baseName = sourcePath.substring(sourcePath.lastIndexOf("/") + 1).replace(/\.(ts|js)$/, "");
+      return extensions
+        .map((extension) => {
+          const siblingPath = `${dir}${baseName}${extension}`;
+          if (!(siblingPath in files)) {
+            return null;
+          }
+          return {
+            path: siblingPath as NormalizedPath,
+            extension,
+            baseName,
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+    },
+    normalizePath: (path) => path as NormalizedPath,
+    caseSensitive: true,
+  };
+}
+
 const resolveWithDiagnostics = (
   program: Parameters<typeof discoverProjectSemantics>[0],
   config?: Omit<NonNullable<Parameters<typeof discoverProjectSemantics>[1]>, "diagnostics">,
@@ -322,5 +365,273 @@ describe("Template Import - Edge Cases", () => {
       (s) => s.evidence.kind === "template-import"
     );
     expect(templateImportSites).toHaveLength(0);
+  });
+
+  it("creates template-import sites from inline root templates", () => {
+    const files: Record<string, string> = {
+      "/app/inline-owner.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({
+          name: "inline-owner",
+          template: "<import from='./widget'><my-widget></my-widget>"
+        })
+        export class InlineOwner {}
+      `,
+      "/app/widget.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "my-widget" })
+        export class MyWidget {}
+      `,
+    };
+
+    const program = createProgramFromFiles(files);
+    const fs = createMockFileSystemForFiles(files);
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
+
+    const templateImportSites = result.registration.sites.filter(
+      (site) => site.evidence.kind === "template-import"
+    );
+    expect(templateImportSites).toHaveLength(1);
+
+    const evidence = templateImportSites[0]!.evidence;
+    if (evidence.kind === "template-import") {
+      expect(evidence.origin).toBe("inline");
+      expect(evidence.component).toBe("/app/inline-owner.ts");
+      expect(evidence.templateFile).toBe("/app/inline-owner.ts");
+      expect(evidence.className).toBe("InlineOwner");
+    }
+  });
+
+  it("applies sibling template imports only to external-template owners in mixed inline/sibling files", () => {
+    const files: Record<string, string> = {
+      "/app/my-page.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "inline-owner", template: "<div>inline</div>" })
+        export class InlineOwner {}
+
+        @customElement({ name: "my-page" })
+        export class MyPage {}
+      `,
+      "/app/my-page.html": `
+        <import from="./widget">
+        <my-widget></my-widget>
+      `,
+      "/app/widget.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "my-widget" })
+        export class MyWidget {}
+      `,
+    };
+
+    const program = createProgramFromFiles(files);
+    const fs = createMockFileSystemForFiles(files);
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
+
+    const templateImportSites = result.registration.sites.filter(
+      (site) => site.evidence.kind === "template-import"
+    );
+
+    expect(templateImportSites).toHaveLength(1);
+    const evidence = templateImportSites[0]!.evidence;
+    if (evidence.kind === "template-import") {
+      expect(evidence.className).toBe("MyPage");
+      expect(evidence.component).toBe("/app/my-page.ts");
+      expect(evidence.templateFile).toBe("/app/my-page.html");
+    }
+  });
+
+  it("emits unresolved ownership when multiple external-template owners are ambiguous", () => {
+    const files: Record<string, string> = {
+      "/app/multi-owner.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "first-owner" })
+        export class FirstOwner {}
+
+        @customElement({ name: "second-owner" })
+        export class SecondOwner {}
+      `,
+      "/app/multi-owner.html": `
+        <import from="./widget">
+      `,
+      "/app/widget.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "my-widget" })
+        export class MyWidget {}
+      `,
+    };
+
+    const program = createProgramFromFiles(files);
+    const fs = createMockFileSystemForFiles(files);
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
+
+    const templateImportSites = result.registration.sites.filter(
+      (site) => site.evidence.kind === "template-import"
+    );
+    expect(templateImportSites).toHaveLength(0);
+
+    const ambiguousOwnership = result.registration.unresolved.filter(
+      (entry) =>
+        entry.pattern.kind === "other" &&
+        entry.pattern.description === "template-import-owner-ambiguous"
+    );
+
+    expect(ambiguousOwnership).toHaveLength(1);
+    expect(ambiguousOwnership[0]!.file).toBe("/app/multi-owner.html");
+    expect(ambiguousOwnership[0]!.reason).toContain("Candidate owners");
+  });
+
+  it("selects the basename-matching resource as template-import owner", () => {
+    const files: Record<string, string> = {
+      "/app/dashboard.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "dashboard" })
+        export class DashboardPage {}
+
+        @customElement({ name: "secondary-panel" })
+        export class SecondaryPanel {}
+      `,
+      "/app/dashboard.html": `
+        <import from="./widget">
+      `,
+      "/app/widget.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "my-widget" })
+        export class MyWidget {}
+      `,
+    };
+
+    const program = createProgramFromFiles(files);
+    const fs = createMockFileSystemForFiles(files);
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
+
+    const templateImportSites = result.registration.sites.filter(
+      (site) => site.evidence.kind === "template-import"
+    );
+    expect(templateImportSites).toHaveLength(1);
+
+    const evidence = templateImportSites[0]!.evidence;
+    if (evidence.kind === "template-import") {
+      expect(evidence.className).toBe("DashboardPage");
+      expect(evidence.templateFile).toBe("/app/dashboard.html");
+    }
+
+    const ambiguousOwnership = result.registration.unresolved.filter(
+      (entry) =>
+        entry.pattern.kind === "other" &&
+        entry.pattern.description === "template-import-owner-ambiguous"
+    );
+    expect(ambiguousOwnership).toHaveLength(0);
+  });
+
+  it("creates active local-template import sites for sibling templates with lexical scope ownership", () => {
+    const files: Record<string, string> = {
+      "/app/my-page.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({ name: "my-page" })
+        export class MyPage {}
+      `,
+      "/app/my-page.html": `
+        <import from="./root-import">
+        <template as-custom-element="local-widget">
+          <import from="./local-import">
+        </template>
+      `,
+      "/app/root-import.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+        @customElement({ name: "root-import" })
+        export class RootImport {}
+      `,
+      "/app/local-import.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+        @customElement({ name: "local-import" })
+        export class LocalImport {}
+      `,
+    };
+
+    const program = createProgramFromFiles(files);
+    const fs = createMockFileSystemForFiles(files);
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
+
+    const templateImportSites = result.registration.sites.filter(
+      (site) => site.evidence.kind === "template-import",
+    );
+
+    expect(templateImportSites).toHaveLength(2);
+
+    const localTemplateSite = templateImportSites.find(
+      (site) =>
+        site.evidence.kind === "template-import" &&
+        site.evidence.localTemplateName === "local-widget",
+    );
+    expect(localTemplateSite).toBeDefined();
+    expect(localTemplateSite?.scope.kind).toBe("local");
+    if (localTemplateSite?.scope.kind === "local") {
+      expect(localTemplateSite.scope.owner).toContain("::local-template:local-widget");
+    }
+    if (localTemplateSite?.evidence.kind === "template-import") {
+      expect(localTemplateSite.evidence.origin).toBe("sibling");
+      expect(localTemplateSite.evidence.localTemplateName).toBe("local-widget");
+    }
+    const deferred = result.registration.unresolved.filter(
+      (entry) =>
+        entry.pattern.kind === "other" &&
+        entry.pattern.description === "template-import-local-template-deferred",
+    );
+    expect(deferred).toHaveLength(0);
+  });
+
+  it("creates active local-template import sites for inline templates", () => {
+    const files: Record<string, string> = {
+      "/app/inline-owner.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+
+        @customElement({
+          name: "inline-owner",
+          template: "<template as-custom-element='local-widget'><import from='./local-import'></template><div></div>"
+        })
+        export class InlineOwner {}
+      `,
+      "/app/local-import.ts": `
+        import { customElement } from "@aurelia/runtime-html";
+        @customElement({ name: "local-import" })
+        export class LocalImport {}
+      `,
+    };
+
+    const program = createProgramFromFiles(files);
+    const fs = createMockFileSystemForFiles(files);
+    const result = resolveWithDiagnostics(program, { fileSystem: fs });
+
+    const localTemplateSites = result.registration.sites.filter(
+      (site) =>
+        site.evidence.kind === "template-import" &&
+        site.evidence.localTemplateName === "local-widget",
+    );
+
+    expect(localTemplateSites).toHaveLength(1);
+    const localTemplateSite = localTemplateSites[0]!;
+    if (localTemplateSite.evidence.kind === "template-import") {
+      expect(localTemplateSite.evidence.origin).toBe("inline");
+      expect(localTemplateSite.evidence.localTemplateName).toBe("local-widget");
+    }
+    expect(localTemplateSite.scope.kind).toBe("local");
+    if (localTemplateSite.scope.kind === "local") {
+      expect(localTemplateSite.scope.owner).toContain("::local-template:local-widget");
+    }
+    const deferred = result.registration.unresolved.filter(
+      (entry) =>
+        entry.pattern.kind === "other" &&
+        entry.pattern.description === "template-import-local-template-deferred",
+    );
+    expect(deferred).toHaveLength(0);
   });
 });

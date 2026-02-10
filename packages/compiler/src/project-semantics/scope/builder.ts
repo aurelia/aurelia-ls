@@ -22,6 +22,7 @@ import {
   type ValueConverterSig,
   type BindingBehaviorSig,
   type Sourced,
+  type NormalizedPath,
 } from '../compiler.js';
 import type { RegistrationAnalysis, RegistrationEvidence } from "../register/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
@@ -41,6 +42,12 @@ type MutablePartialResourceCollections = {
   controllers?: Record<string, ControllerConfig>;
   valueConverters?: Record<string, ValueConverterSig>;
   bindingBehaviors?: Record<string, BindingBehaviorSig>;
+};
+
+type LocalScopeData = {
+  className: string;
+  parentOwner: NormalizedPath | null;
+  resources: MutableResourceCollections;
 };
 
 /**
@@ -71,7 +78,7 @@ export function buildResourceGraph(
 
   // Separate sites by scope
   const globalResources = createEmptyCollections();
-  const localScopes = new Map<string, { className: string; resources: MutableResourceCollections }>();
+  const localScopes = new Map<NormalizedPath, LocalScopeData>();
 
   for (const site of registration.sites) {
     // Only process resolved resource references
@@ -83,15 +90,18 @@ export function buildResourceGraph(
       // Add to global scope
       addToCollections(globalResources, resource);
     } else {
-      // Local scope - use owner path as scope key
+      // Local scope - owner may be a component or a local-template synthetic owner.
       const scopeKey = site.scope.owner;
-      let scopeData = localScopes.get(scopeKey);
-      if (!scopeData) {
-        // Extract class name from evidence if available
-        const className = extractClassNameFromEvidence(site.evidence);
-        scopeData = { className, resources: createEmptyCollections() };
-        localScopes.set(scopeKey, scopeData);
+      let className = extractClassNameFromEvidence(site.evidence);
+      let parentOwner: NormalizedPath | null = null;
+
+      if (site.evidence.kind === "template-import" && site.evidence.localTemplateName) {
+        className = localTemplateScopeLabel(site.evidence.className, site.evidence.localTemplateName);
+        parentOwner = site.evidence.component;
+        ensureLocalScopeEntry(localScopes, site.evidence.component, site.evidence.className, null);
       }
+
+      const scopeData = ensureLocalScopeEntry(localScopes, scopeKey, className, parentOwner);
       addToCollections(scopeData.resources, resource, site.alias ?? null);
     }
   }
@@ -108,6 +118,7 @@ export function buildResourceGraph(
   const fullBaseGraph = semantics.resourceGraph ?? buildResourceGraphFromSemantics(semantics);
   const baseGraph = cloneResourceGraphWithFilter(fullBaseGraph, activatedPackages);
   const scopes: Record<ResourceScopeId, ResourceScope> = { ...baseGraph.scopes };
+  const filteredGlobalResources = filterMutableCollectionsByActivatedPackages(globalResources, activatedPackages);
 
   // Determine target scope for global resources
   const targetScopeId = defaultScope ?? semantics.defaultScope ?? baseGraph.root;
@@ -115,7 +126,7 @@ export function buildResourceGraph(
 
   // Add global resources to target scope
   if (targetScope) {
-    const overlay = diffResourceCollections(semantics.resources, globalResources);
+    const overlay = diffResourceCollections(semantics.resources, filteredGlobalResources);
     if (!isResourceOverlayEmpty(overlay)) {
       scopes[targetScope.id] = {
         id: targetScope.id,
@@ -126,25 +137,39 @@ export function buildResourceGraph(
     }
   }
 
-  // Create local scopes for each component with dependencies
-  for (const [componentPath, scopeData] of localScopes) {
-    const scopeId = `local:${componentPath}` as ResourceScopeId;
+  // Create local scopes (components first, then local-template child scopes).
+  const createLocalScopesPass = (withParentOwner: boolean) => {
+    for (const [owner, scopeData] of localScopes) {
+      const isChild = scopeData.parentOwner !== null;
+      if (withParentOwner !== isChild) continue;
 
-    const existing = scopes[scopeId];
-    const baseScope: ResourceScope = existing ?? {
-      id: scopeId,
-      parent: baseGraph.root,
-      label: scopeData.className,
-      resources: {},
-    };
+      const scopeId = `local:${owner}` as ResourceScopeId;
+      const parentScopeId = scopeData.parentOwner
+        ? (`local:${scopeData.parentOwner}` as ResourceScopeId)
+        : baseGraph.root;
+      const resolvedParent = scopes[parentScopeId] ? parentScopeId : baseGraph.root;
 
-    scopes[scopeId] = {
-      id: baseScope.id,
-      parent: baseScope.parent,
-      ...(baseScope.label ? { label: baseScope.label } : {}),
-      resources: overlayScopeResources(baseScope.resources, scopeData.resources),
-    };
-  }
+      const existing = scopes[scopeId];
+      const baseScope: ResourceScope = existing ?? {
+        id: scopeId,
+        parent: resolvedParent,
+        label: scopeData.className,
+        resources: {},
+      };
+
+      scopes[scopeId] = {
+        id: baseScope.id,
+        parent: resolvedParent,
+        ...(scopeData.className ? { label: scopeData.className } : {}),
+        resources: overlayScopeResources(
+          baseScope.resources,
+          filterMutableCollectionsByActivatedPackages(scopeData.resources, activatedPackages),
+        ),
+      };
+    }
+  };
+  createLocalScopesPass(false);
+  createLocalScopesPass(true);
 
   return { version: baseGraph.version, root: baseGraph.root, scopes };
 }
@@ -159,6 +184,35 @@ function createEmptyCollections(): MutableResourceCollections {
     valueConverters: {},
     bindingBehaviors: {},
   };
+}
+
+function ensureLocalScopeEntry(
+  localScopes: Map<NormalizedPath, LocalScopeData>,
+  owner: NormalizedPath,
+  className: string,
+  parentOwner: NormalizedPath | null,
+): LocalScopeData {
+  const existing = localScopes.get(owner);
+  if (existing) {
+    if (!existing.parentOwner && parentOwner) {
+      existing.parentOwner = parentOwner;
+    }
+    if (existing.className === "unknown" && className !== "unknown") {
+      existing.className = className;
+    }
+    return existing;
+  }
+  const created: LocalScopeData = {
+    className,
+    parentOwner,
+    resources: createEmptyCollections(),
+  };
+  localScopes.set(owner, created);
+  return created;
+}
+
+function localTemplateScopeLabel(componentClassName: string, localTemplateName: string): string {
+  return `${componentClassName}:${localTemplateName}`;
 }
 
 function addToCollections(
@@ -401,62 +455,63 @@ function cloneResourceGraphWithFilter(
       id: scope.id,
       parent: scope.parent,
       ...(scope.label ? { label: scope.label } : {}),
-      resources: filterPartialResources(scope.resources, activatedPackages),
+      resources: filterResourceCollectionsByActivatedPackages(scope.resources, activatedPackages),
     };
   }
   return { version: graph.version, root: graph.root, scopes };
 }
 
-/**
- * Filter resources by activated packages.
- *
- * - Resources without `package` field are always included (core resources).
- * - Resources with `package` field are only included if package is activated.
- */
-function filterPartialResources(
+function filterResourceCollectionsByActivatedPackages(
   resources: Partial<ResourceCollections> | undefined,
   activatedPackages: Set<string>,
 ): Partial<ResourceCollections> {
   if (!resources) return {};
   const filtered: MutablePartialResourceCollections = {};
 
-  if (resources.elements) {
-    const elements: Record<string, ElementRes> = {};
-    for (const [name, el] of Object.entries(resources.elements)) {
-      if (!el.package || activatedPackages.has(el.package)) {
-        elements[name] = el;
-      }
-    }
-    if (Object.keys(elements).length > 0) {
-      filtered.elements = elements;
-    }
-  }
+  const elements = filterRecordByActivatedPackages(resources.elements, activatedPackages);
+  if (elements) filtered.elements = elements;
 
-  if (resources.attributes) {
-    const attributes: Record<string, AttrRes> = {};
-    for (const [name, attr] of Object.entries(resources.attributes)) {
-      if (!attr.package || activatedPackages.has(attr.package)) {
-        attributes[name] = attr;
-      }
-    }
-    if (Object.keys(attributes).length > 0) {
-      filtered.attributes = attributes;
-    }
-  }
+  const attributes = filterRecordByActivatedPackages(resources.attributes, activatedPackages);
+  if (attributes) filtered.attributes = attributes;
 
-  // Controllers, value converters, and binding behaviors don't have package field
-  // (they're part of StandardConfiguration which is always assumed "on")
   if (resources.controllers) {
     filtered.controllers = { ...resources.controllers };
   }
-  if (resources.valueConverters) {
-    filtered.valueConverters = { ...resources.valueConverters };
-  }
-  if (resources.bindingBehaviors) {
-    filtered.bindingBehaviors = { ...resources.bindingBehaviors };
-  }
+
+  const valueConverters = filterRecordByActivatedPackages(resources.valueConverters, activatedPackages);
+  if (valueConverters) filtered.valueConverters = valueConverters;
+
+  const bindingBehaviors = filterRecordByActivatedPackages(resources.bindingBehaviors, activatedPackages);
+  if (bindingBehaviors) filtered.bindingBehaviors = bindingBehaviors;
 
   return filtered;
+}
+
+function filterMutableCollectionsByActivatedPackages(
+  resources: MutableResourceCollections,
+  activatedPackages: Set<string>,
+): MutableResourceCollections {
+  return {
+    elements: filterRecordByActivatedPackages(resources.elements, activatedPackages) ?? {},
+    attributes: filterRecordByActivatedPackages(resources.attributes, activatedPackages) ?? {},
+    controllers: { ...resources.controllers },
+    valueConverters: filterRecordByActivatedPackages(resources.valueConverters, activatedPackages) ?? {},
+    bindingBehaviors: filterRecordByActivatedPackages(resources.bindingBehaviors, activatedPackages) ?? {},
+  };
+}
+
+function filterRecordByActivatedPackages<T extends { package?: string }>(
+  records: Readonly<Record<string, T>> | undefined,
+  activatedPackages: Set<string>,
+): Record<string, T> | undefined {
+  if (!records) return undefined;
+  const filtered: Record<string, T> = {};
+  for (const [name, record] of Object.entries(records)) {
+    if (!record.package || activatedPackages.has(record.package)) {
+      filtered[name] = record;
+    }
+  }
+  return Object.keys(filtered).length > 0 ? filtered : undefined;
 }
 
 function clonePartialResources(resources: Partial<ResourceCollections> | undefined): MutablePartialResourceCollections {
@@ -502,7 +557,8 @@ function extractClassNameFromEvidence(evidence: RegistrationEvidence): string {
     evidence.kind === "static-dependencies" ||
     evidence.kind === "static-au-dependencies" ||
     evidence.kind === "decorator-dependencies" ||
-    evidence.kind === "template-import"
+    evidence.kind === "template-import" ||
+    evidence.kind === "local-template-definition"
   ) {
     return evidence.className;
   }

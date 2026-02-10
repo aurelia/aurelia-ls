@@ -10,6 +10,8 @@ export type {
   ThirdPartyPolicy,
   ThirdPartyPackageSpec,
   ExplicitResourceConfig,
+  ExplicitBindableConfig,
+  ExplicitBindingModeConfig,
   ExplicitElementConfig,
   ExplicitAttributeConfig,
   ThirdPartyDiscoveryResult,
