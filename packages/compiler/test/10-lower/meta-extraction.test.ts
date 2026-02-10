@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { parseFragment } from "parse5";
-import { extractMeta, stripMetaFromHtml } from "../../src/analysis/10-lower/meta-extraction.js";
+import {
+  extractMeta,
+  extractTemplateMeta,
+  stripMetaFromHtml,
+} from "../../src/analysis/10-lower/meta-extraction.js";
 import { resolveSourceFile } from "../../src/model/source.js";
 
 function extract(html: string) {
@@ -320,6 +324,15 @@ describe("Meta Extraction", () => {
       // Should only find the global import, not the one inside as-custom-element
       expect(meta.imports).toHaveLength(1);
       expect(meta.imports[0]!.from.value).toBe("./global");
+    });
+
+    it("can include local element roots when explicitly requested", () => {
+      const html = `<template as-custom-element="local-card" containerless><bindable name="value"></template>`;
+      const meta = extractTemplateMeta(html, "test.html", { includeLocalTemplateRoots: true });
+
+      expect(meta.bindables).toHaveLength(1);
+      expect(meta.bindables[0]!.name.value).toBe("value");
+      expect(meta.containerless).not.toBeNull();
     });
   });
 

@@ -201,6 +201,7 @@
             { "$kind": "PrimitiveLiteral", "value": 300 }
           ],
           "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "query" },
+          "key": "_bb_debounce",
           "name": "debounce"
         },
         "id": "expr_0010"
@@ -212,6 +213,7 @@
             { "$kind": "PrimitiveLiteral", "value": 100 }
           ],
           "expression": { "$kind": "AccessScope", "ancestor": 0, "name": "position" },
+          "key": "_bb_throttle",
           "name": "throttle"
         },
         "id": "expr_0011"

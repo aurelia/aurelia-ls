@@ -33,3 +33,9 @@ examples/**/aot-source.js
 
 # Dev scripts (local inspection tools)
 scripts/inspect-aot.mjs
+dumps/
+
+AGENTS.md
+CLAUDE.md
+.codex
+.claude

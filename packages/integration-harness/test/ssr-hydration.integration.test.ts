@@ -7,7 +7,7 @@ import {
   compileAndRenderAot,
   compileWithAot,
   patchComponentDefinition,
-  renderWithComponents,
+  render,
 } from "@aurelia-ls/ssr";
 
 import {
@@ -622,7 +622,7 @@ const MATRIX_SCENARIO: IntegrationScenario = {
   title: "SSR + hydration parity matrix",
   tags: ["ssr", "hydration", "aot"],
   source: BASE_SOURCE,
-  resolution: {
+  discovery: {
     explicitResources: EXPLICIT_CE_RESOURCES,
   },
   compile: Object.entries(TEMPLATE_MAP).map(([id, markup]) => ({
@@ -686,7 +686,7 @@ describe("integration harness: third-party hydration parity", () => {
     });
     patchComponentDefinition(ThirdPartyHydrationApp, rootAot, { name: "third-party-hydration-app" });
 
-    const renderResult = await renderWithComponents(ThirdPartyHydrationApp, {
+    const renderResult = await render(ThirdPartyHydrationApp, {
       register: (container) => {
         container.register(AureliaTableConfiguration);
       },
@@ -789,7 +789,7 @@ describe("integration harness: third-party hydration parity", () => {
     });
     patchComponentDefinition(ThirdPartyTableApp, rootAot, { name: "third-party-table-app" });
 
-    const renderResult = await renderWithComponents(ThirdPartyTableApp, {
+    const renderResult = await render(ThirdPartyTableApp, {
       register: (container) => {
         container.register(AureliaTableConfiguration);
       },
@@ -915,7 +915,7 @@ describe("integration harness: third-party hydration parity", () => {
       }
       patchComponentDefinition(MultiPackageApp, rootAot, { name: "multi-package-app" });
 
-      const renderResult = await renderWithComponents(MultiPackageApp, {
+      const renderResult = await render(MultiPackageApp, {
         register: (container) => {
           container.register(
             AureliaTableConfiguration,
@@ -1051,7 +1051,7 @@ describe("integration harness: state plugin SSR + hydration", () => {
       container.register(StateDefaultConfiguration.init({ count: 0 }, counterHandler));
     };
 
-    const renderResult = await renderWithComponents(StateApp, {
+    const renderResult = await render(StateApp, {
       register: registerState,
     });
 
@@ -1147,7 +1147,7 @@ async function runSsrHydrationCase(
     });
     patchComponentDefinition(Component, rootAot, { name: componentName });
 
-    const renderResult = await renderWithComponents(Component, {
+    const renderResult = await render(Component, {
       childComponents: dependencies,
       ssr: expectation.ssrOptions,
     });

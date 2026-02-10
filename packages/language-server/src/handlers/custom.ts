@@ -5,10 +5,67 @@
  * the LSP connection. Errors are logged and graceful fallbacks are returned.
  */
 import type { Position } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri, deriveTemplatePaths } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import type {
+  DiagnosticActionability,
+  DiagnosticCategory,
+  DiagnosticImpact,
+  DiagnosticSeverity,
+  DiagnosticStage,
+  DiagnosticStatus,
+  DiagnosticSurface,
+  SourceSpan,
+} from "@aurelia-ls/compiler";
+import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
+import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 
 type MaybeUriParam = { uri?: string } | string | null;
+
+type DiagnosticsSnapshotRelated = {
+  code?: string;
+  message: string;
+  span?: SourceSpan;
+};
+
+type DiagnosticsSnapshotIssue = {
+  kind: string;
+  message: string;
+  code?: string;
+  rawCode?: string;
+  field?: string;
+};
+
+type DiagnosticsSnapshotItem = {
+  code: string;
+  message: string;
+  severity?: DiagnosticSeverity;
+  impact?: DiagnosticImpact;
+  actionability?: DiagnosticActionability;
+  category?: DiagnosticCategory;
+  status?: DiagnosticStatus;
+  stage?: DiagnosticStage;
+  source?: string;
+  uri?: string;
+  span?: SourceSpan;
+  data?: Readonly<Record<string, unknown>>;
+  related?: readonly DiagnosticsSnapshotRelated[];
+  surfaces?: readonly DiagnosticSurface[];
+  suppressed?: boolean;
+  suppressionReason?: string;
+  issues?: readonly DiagnosticsSnapshotIssue[];
+};
+
+type DiagnosticsSnapshotBundle = {
+  bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
+  suppressed: readonly DiagnosticsSnapshotItem[];
+};
+
+type DiagnosticsSnapshotResponse = {
+  uri: string;
+  fingerprint: string;
+  diagnostics: DiagnosticsSnapshotBundle;
+};
 
 function uriFromParam(params: MaybeUriParam): string | undefined {
   if (typeof params === "string") return params;
@@ -21,15 +78,59 @@ function formatError(e: unknown): string {
   return String(e);
 }
 
+function toSnapshotRelated(diag: WorkspaceDiagnostic): DiagnosticsSnapshotRelated[] | undefined {
+  if (!diag.related?.length) return undefined;
+  return diag.related.map((entry) => ({
+    code: entry.code,
+    message: entry.message,
+    span: entry.span ?? undefined,
+  }));
+}
+
+function toSnapshotItem(diag: WorkspaceDiagnostic): DiagnosticsSnapshotItem {
+  return {
+    code: diag.code,
+    message: diag.message,
+    severity: diag.severity,
+    impact: diag.impact,
+    actionability: diag.actionability,
+    category: diag.spec.category,
+    status: diag.spec.status,
+    stage: diag.stage,
+    source: diag.source,
+    uri: diag.uri,
+    span: diag.span ?? undefined,
+    data: diag.data,
+    related: toSnapshotRelated(diag),
+    surfaces: diag.spec.surfaces,
+    suppressed: diag.suppressed,
+    suppressionReason: diag.suppressionReason,
+    issues: diag.issues,
+  };
+}
+
+function serializeDiagnosticsSnapshot(diagnostics: WorkspaceDiagnostics): DiagnosticsSnapshotBundle {
+  const bySurface: Record<string, readonly DiagnosticsSnapshotItem[]> = {};
+  const entries = Array.from(diagnostics.bySurface.entries()).sort(([a], [b]) => a.localeCompare(b));
+  for (const [surface, items] of entries) {
+    bySurface[surface] = items.map(toSnapshotItem);
+  }
+  return {
+    bySurface,
+    suppressed: diagnostics.suppressed.map(toSnapshotItem),
+  };
+}
+
 export function handleGetOverlay(ctx: ServerContext, params: MaybeUriParam) {
   try {
     const uri = uriFromParam(params);
     ctx.logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
     if (!uri) return null;
-    ctx.syncWorkspaceWithIndex();
-    const artifact = ctx.materializeOverlay(uri);
+    const canonical = canonicalDocumentUri(uri);
+    ctx.ensureProgramDocument(uri);
+    const artifact = ctx.workspace.getOverlay(canonical.uri);
     return artifact
-      ? { fingerprint: ctx.workspace.fingerprint, artifact }
+      ? { fingerprint: ctx.workspace.snapshot().meta.fingerprint, artifact }
       : null;
   } catch (e) {
     ctx.logger.error(`[getOverlay] failed: ${formatError(e)}`);
@@ -41,14 +142,13 @@ export function handleGetMapping(ctx: ServerContext, params: MaybeUriParam) {
   try {
     const uri = uriFromParam(params);
     if (!uri) return null;
-    ctx.syncWorkspaceWithIndex();
     const canonical = canonicalDocumentUri(uri);
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
-    const mapping = ctx.workspace.program.getMapping(canonical.uri);
+    const mapping = ctx.workspace.getMapping(canonical.uri);
     if (!mapping) return null;
-    const derived = deriveTemplatePaths(canonical.uri, ctx.overlayPathOptions());
-    return { overlayPath: derived.overlay.path, mapping };
+    const overlay = ctx.workspace.getOverlay(canonical.uri);
+    return { overlayPath: overlay.overlay.path, mapping };
   } catch (e) {
     ctx.logger.error(`[getMapping] failed: ${formatError(e)}`);
     return null;
@@ -59,18 +159,18 @@ export function handleQueryAtPosition(ctx: ServerContext, params: { uri: string;
   try {
     const uri = params?.uri;
     if (!uri || !params.position) return null;
-    ctx.syncWorkspaceWithIndex();
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
     const canonical = canonicalDocumentUri(uri);
-    const query = ctx.workspace.program.getQuery(canonical.uri);
+    const query = ctx.workspace.getQueryFacade(canonical.uri);
+    if (!query) return null;
     const offset = doc.offsetAt(params.position);
     return {
       expr: query.exprAt(offset),
       node: query.nodeAt(offset),
       controller: query.controllerAt(offset),
       bindables: query.nodeAt(offset) ? query.bindablesFor(query.nodeAt(offset)!) : null,
-      mappingSize: ctx.workspace.program.getMapping(canonical.uri)?.entries.length ?? 0,
+      mappingSize: ctx.workspace.getMapping(canonical.uri)?.entries.length ?? 0,
     };
   } catch (e) {
     ctx.logger.error(`[queryAtPosition] failed for ${params?.uri}: ${formatError(e)}`);
@@ -85,21 +185,45 @@ export function handleGetSsr(ctx: ServerContext, params: MaybeUriParam) {
   return null;
 }
 
+export function handleGetDiagnostics(
+  ctx: ServerContext,
+  params: MaybeUriParam,
+): DiagnosticsSnapshotResponse | null {
+  try {
+    const uri = uriFromParam(params);
+    if (!uri) return null;
+    const canonical = canonicalDocumentUri(uri);
+    ctx.ensureProgramDocument(uri);
+    const diagnostics = serializeDiagnosticsSnapshot(ctx.workspace.diagnostics(canonical.uri));
+    const fingerprint = ctx.workspace.snapshot().meta.fingerprint;
+    return { uri: canonical.uri, fingerprint, diagnostics };
+  } catch (e) {
+    ctx.logger.error(`[getDiagnostics] failed: ${formatError(e)}`);
+    return null;
+  }
+}
+
 export function handleDumpState(ctx: ServerContext) {
   try {
-    const roots = ctx.tsService.getService().getProgram()?.getRootFileNames() ?? [];
     return {
       workspaceRoot: ctx.workspaceRoot,
-      caseSensitive: ctx.paths.isCaseSensitive(),
-      projectVersion: ctx.tsService.getProjectVersion(),
-      overlayRoots: ctx.overlayFs.listScriptRoots(),
-      overlays: ctx.overlayFs.listOverlays(),
-      programRoots: roots,
-      programCache: ctx.workspace.program.getCacheStats(),
+      fingerprint: ctx.workspace.snapshot().meta.fingerprint,
+      templateCount: ctx.workspace.templates.length,
+      inlineTemplateCount: ctx.workspace.inlineTemplates.length,
+      programCache: ctx.workspace.getCacheStats(),
     };
   } catch (e) {
     ctx.logger.error(`[dumpState] failed: ${formatError(e)}`);
     return { error: formatError(e) };
+  }
+}
+
+export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
+  try {
+    return buildCapabilities(ctx);
+  } catch (e) {
+    ctx.logger.error(`[capabilities] failed: ${formatError(e)}`);
+    return buildCapabilitiesFallback();
   }
 }
 
@@ -111,5 +235,7 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/getMapping", (params: MaybeUriParam) => handleGetMapping(ctx, params));
   ctx.connection.onRequest("aurelia/queryAtPosition", (params: { uri: string; position: Position }) => handleQueryAtPosition(ctx, params));
   ctx.connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => handleGetSsr(ctx, params));
+  ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam) => handleGetDiagnostics(ctx, params));
   ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
+  ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
 }

@@ -1,6 +1,13 @@
 // Model imports (via barrel)
-import type { NormalizedPath, SourceFileId, SourceSpan } from "../model/index.js";
-import { resolveSourceSpan, spanLength } from "../model/index.js";
+import type { NormalizedPath, SourceFileId, SourceSpan, Position, TextRange, Origin } from "../model/index.js";
+import {
+  offsetAtPosition,
+  positionAtOffset,
+  resolveSourceSpan,
+  spanContainsOffset,
+  spanLength,
+  spanToRange,
+} from "../model/index.js";
 
 // Shared imports (via barrel)
 import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../shared/index.js";
@@ -8,11 +15,24 @@ import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from
 // Pipeline imports (via barrel)
 import { stableHash } from "../pipeline/index.js";
 
-// Analysis imports (via barrel)
-import type { TypecheckDiagnostic } from "../analysis/index.js";
+
+// Language imports (via barrel)
+import {
+  buildSemanticsSnapshotFromProject,
+  type AttrRes,
+  type Bindable,
+  type ElementRes,
+  type ResourceCollections,
+  type MaterializedSemantics,
+  type TemplateSyntaxRegistry,
+  type TypeRef,
+} from "../schema/index.js";
+
+// Parsing imports (via barrel)
+import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../parsing/index.js";
 
 // Synthesis imports (via barrel)
-import type { TemplateBindableInfo, TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/index.js";
+import type { TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/index.js";
 
 // Compiler facade
 import type { TemplateCompilation } from "../facade.js";
@@ -21,35 +41,31 @@ import type { TemplateCompilation } from "../facade.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
 import {
+  projectGeneratedLocationToDocumentSpanWithOffsetFallback,
+  projectGeneratedSpanToDocumentSpanWithOffsetFallback,
   provenanceHitToDocumentSpan,
-  projectGeneratedOffsetToDocumentSpan,
-  projectGeneratedSpanToDocumentSpan,
+  resolveGeneratedLocationSpan,
+  resolveTemplateUriForGenerated,
   type DocumentSpan,
   type OverlayProvenanceHit,
   type ProvenanceIndex,
   type TemplateProvenanceHit,
 } from "./provenance.js";
 import type { TemplateProgram } from "./program.js";
-
-/**
- * TODO(provenance-refactor)
- * - Treat ProvenanceIndex as the single source-map layer between generated artifacts and templates.
- * - Migrate remaining overlay offset/member heuristics in this file into ProvenanceIndex projection APIs.
- * - Stop scanning TemplateMappingArtifact directly in services once provenance has full projection coverage.
- * - Keep this in sync with docs/agents/appendix-provenance.md and docs/provenance-refactor-milestones.md.
- */
+import {
+  DEFAULT_PROVENANCE_PROJECTION_POLICY,
+  projectTemplateOffsetToOverlayWithPolicy,
+  projectTemplateSpanToOverlayWithPolicy,
+  resolveGeneratedReferenceLocationWithPolicy,
+  resolveOverlayDiagnosticLocationWithPolicy,
+  resolveRelatedDiagnosticLocationWithPolicy,
+  shouldRejectOverlayEditBatch,
+} from "./provenance-policy.js";
 
 export type { DocumentSpan } from "./provenance.js";
+export type { Position, TextRange } from "../model/index.js";
 
-export interface Position {
-  line: number;
-  character: number;
-}
-
-export interface TextRange {
-  start: Position;
-  end: Position;
-}
+const PROVENANCE_POLICY = DEFAULT_PROVENANCE_PROJECTION_POLICY;
 
 export interface TextEdit {
   uri: DocumentUri;
@@ -113,10 +129,12 @@ export interface TemplateLanguageDiagnostic {
   code: string | number;
   message: string;
   source: LanguageDiagnosticSource;
-  severity: DiagnosticSeverity;
+  severity?: DiagnosticSeverity;
   location: DocumentSpan | null;
   related?: readonly DiagnosticRelatedInfo[];
   tags?: readonly string[];
+  data?: Readonly<Record<string, unknown>>;
+  origin?: Origin | null;
 }
 
 export interface TemplateLanguageDiagnostics {
@@ -196,6 +214,7 @@ export interface OverlayDocumentSnapshot {
 
 export interface TypeScriptServices {
   getDiagnostics(overlay: OverlayDocumentSnapshot): readonly TsDiagnostic[];
+  syncOverlay?(overlay: OverlayDocumentSnapshot): void;
   getQuickInfo?(overlay: OverlayDocumentSnapshot, offset: number): TsQuickInfo | null;
   getDefinition?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
   getReferences?(overlay: OverlayDocumentSnapshot, offset: number): readonly TsLocation[] | null;
@@ -325,8 +344,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (offset == null) return null;
 
     const expr = query.exprAt(offset);
-    const node = query.nodeAt(offset);
-    const controller = query.controllerAt(offset);
 
     const contents: string[] = [];
     if (expr) {
@@ -334,11 +351,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       const member = expr.memberPath ? `${expr.memberPath}` : "expression";
       contents.push(type ? `${member}: ${type}` : member);
     }
-    if (node) {
-      const host = node.hostKind !== "none" ? ` (${node.hostKind})` : "";
-      contents.push(`node: ${node.kind}${host}`);
-    }
-    if (controller) contents.push(`controller: ${controller.kind}`);
 
     const tsHover = this.collectTypeScriptHover(canonical, snapshot, offset);
     if (tsHover) contents.push(tsHover.text);
@@ -348,8 +360,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const span =
       tsHover?.span ??
       expr?.span ??
-      node?.span ??
-      controller?.span ??
       resolveSourceSpan({ start: offset, end: offset }, snapshot.uri);
 
     return {
@@ -434,29 +444,56 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const edits = ts.getRenameEdits(overlay, overlayOffset, newName) ?? [];
     if (!edits.length) return [];
 
-    const mapped = this.mapTypeScriptEdits(edits, overlay, true);
-    return mapped ?? [];
+    const mapped = this.mapTypeScriptEdits(edits, overlay, true) ?? [];
+    const refs = ts.getReferences ? ts.getReferences(overlay, overlayOffset) ?? [] : [];
+    if (!refs.length) return mapped;
+
+    const locations = this.mapTypeScriptLocations(refs, overlay);
+    if (!locations.length) return mapped;
+
+    const seen = new Set(mapped.map((edit) => `${edit.uri}:${rangeKey(edit.range)}`));
+    const extras: TextEdit[] = [];
+    for (const loc of locations) {
+      if (!loc.range) continue;
+      if (!this.program.sources.get(loc.uri)) continue;
+      const key = `${loc.uri}:${rangeKey(loc.range)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      extras.push({ uri: loc.uri, range: loc.range, newText: newName });
+    }
+
+    return extras.length ? dedupeTextEdits([...mapped, ...extras]) : mapped;
   }
 
-  private collectTemplateCompletions(query: TemplateQueryFacade, snapshot: DocumentSnapshot, offset: number): CompletionItem[] {
-    // If we're inside an expression, lean on TypeScript completions instead of guesswork.
-    if (query.exprAt(offset)) return [];
-    const node = query.nodeAt(offset);
-    if (!node) return [];
-    const bindables = query.bindablesFor(node);
-    if (!bindables?.length) return [];
+  private collectTemplateCompletions(
+    query: TemplateQueryFacade,
+    snapshot: DocumentSnapshot,
+    offset: number,
+  ): CompletionItem[] {
+    const { sem, resources, syntax } = resolveCompletionContext(this.program, snapshot.uri);
+    const attrParser = createAttributeParserFromRegistry(syntax);
 
-    const range = wordRangeAtOffset(snapshot.text, offset);
-    return bindables.map((bindable) => {
-      const detail = describeBindable(bindable);
-      return {
-        label: bindable.name,
-        source: "template" as const,
-        range,
-        ...(detail ? { detail } : {}),
-        ...(bindable.type ? { documentation: bindable.type } : {}),
-      };
-    });
+    const exprInfo = query.exprAt(offset);
+    if (exprInfo) {
+      return collectExpressionCompletions(snapshot.text, offset, exprInfo.span, resources);
+    }
+
+    const context = findTagContext(snapshot.text, offset);
+    if (!context) return [];
+
+    if (context.kind === "tag-name") {
+      return collectTagNameCompletions(snapshot.text, context, resources, sem);
+    }
+
+    if (context.kind === "attr-name") {
+      return collectAttributeNameCompletions(snapshot.text, context, resources, sem, syntax, attrParser);
+    }
+
+    if (context.kind === "attr-value") {
+      return collectAttributeValueCompletions(snapshot.text, context, resources, syntax, attrParser);
+    }
+
+    return [];
   }
 
   private collectTypeScriptCompletions(
@@ -475,7 +512,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const entries = ts.getCompletions(overlay, overlayOffset) ?? [];
     if (!entries.length) return [];
 
-    const fallbackSpan = overlayHit.edge.to.span ?? resolveSourceSpan({ start: offset, end: offset }, canonical.file);
+    const fallbackSpan = overlayHit.edge.to.span;
     const results: CompletionItem[] = [];
     for (const entry of entries) {
       const overlaySpan = entry.replacementSpan
@@ -485,15 +522,15 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         )
         : null;
       const mapped = overlaySpan
-        ? projectGeneratedSpanToDocumentSpan(this.program.provenance, overlay.uri, overlaySpan)
+        ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(this.program.provenance, overlay.uri, overlaySpan)
         : null;
-      const span = mapped?.span ?? fallbackSpan;
+      const span = mapped?.span ?? (overlaySpan ? null : fallbackSpan);
       const detail = entry.detail ?? entry.kind;
-      const range = spanToRange(span, snapshot.text);
+      const range = span ? spanToRange(span, snapshot.text) : undefined;
       results.push({
         label: entry.name,
         source: "typescript",
-        range,
+        ...(range ? { range } : {}),
         ...(detail ? { detail } : {}),
         ...(entry.documentation ? { documentation: entry.documentation } : {}),
         ...(entry.insertText ? { insertText: entry.insertText } : {}),
@@ -577,11 +614,11 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       { start: info.start ?? overlayOffset, end: (info.start ?? overlayOffset) + (info.length ?? 0) },
       overlay.file,
     );
-    const mapped = projectGeneratedSpanToDocumentSpan(this.program.provenance, overlay.uri, overlaySpan);
+    const mapped = projectGeneratedSpanToDocumentSpanWithOffsetFallback(this.program.provenance, overlay.uri, overlaySpan);
     const hoverSpan =
       mapped?.span && spanLength(mapped.span) > 0
         ? mapped.span
-        : overlayHit.edge.to.span ?? resolveSourceSpan({ start: offset, end: offset }, snapshot.uri);
+        : overlayHit.edge.to.span;
     const rewrittenText = rewriteTypeNames(info.text, typeNames);
     const text = info.documentation ? `${rewrittenText}\n\n${info.documentation}` : rewrittenText;
     return { text, span: hoverSpan };
@@ -590,25 +627,47 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   private mapTypeScriptLocations(locations: readonly TsLocation[], overlay: OverlayDocumentSnapshot): Location[] {
     const results: Location[] = [];
     const seen = new Set<string>();
+    const overlaySnapshots = new Map<DocumentUri, OverlayDocumentSnapshot>([[overlay.uri, overlay]]);
     for (const loc of locations ?? []) {
-      const locUri = canonicalDocumentUri(loc.fileName).uri;
-      let mapped: Location | null = null;
-      if (locUri !== overlay.uri) {
-        const span = tsSpan(loc, canonicalDocumentUri(loc.fileName).file);
-        if (span) {
-          const projected = projectGeneratedSpanToDocumentSpan(this.program.provenance, locUri, span);
-          if (projected) {
-            const snap = this.program.sources.get(projected.uri);
-            if (snap) {
-              mapped = { uri: projected.uri, range: spanToRange(projected.span, snap.text) };
-            }
-          }
-        }
-      }
-      if (!mapped) mapped = this.mapProvenanceLocation(loc, overlay);
-      const range = mapped?.range ?? normalizeRange(loc.range);
-      if (!range) continue;
-      const target = mapped ?? { uri: locUri, range };
+      const generated = canonicalDocumentUri(loc.fileName);
+      const range = normalizeRange(loc.range);
+      const templateUri = resolveTemplateUriForGenerated(this.program.provenance, generated.uri)
+        ?? (generated.uri === overlay.uri ? overlay.templateUri : null);
+      const generatedOverlay = templateUri
+        ? this.getGeneratedOverlaySnapshot(generated.uri, templateUri, overlaySnapshots)
+        : null;
+      const generatedText = generatedOverlay?.text ?? (generated.uri === overlay.uri ? overlay.text : null);
+      const generatedLocation = {
+        generatedUri: generated.uri,
+        generatedFile: generatedOverlay?.file ?? generated.file,
+        generatedText,
+        start: loc.start ?? null,
+        length: loc.length ?? null,
+        range,
+      };
+      const generatedSpan = resolveGeneratedLocationSpan(generatedLocation, generated.file);
+      const projectedHit = generatedSpan
+        ? this.program.provenance.projectGeneratedSpan(generated.uri, generatedSpan)
+        : null;
+      const projectedLocation = projectedHit
+        ? provenanceHitToDocumentSpan(projectedHit)
+        : projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, generatedLocation);
+      const projectedEvidence = projectedHit?.edge.evidence?.level ?? (projectedLocation ? "degraded" : null);
+      const decision = resolveGeneratedReferenceLocationWithPolicy({
+        generatedUri: generated.uri,
+        generatedSpan,
+        mappedLocation: projectedLocation,
+        mappedEvidence: projectedEvidence,
+        provenance: this.provenanceForReferenceDecision(generated.uri, templateUri),
+        policy: PROVENANCE_POLICY,
+      });
+      const target = this.locationFromReferenceDecision(
+        decision.location,
+        generatedLocation.generatedUri,
+        range,
+        generatedText,
+      ) ?? (templateUri == null && range ? { uri: generated.uri, range } : null);
+      if (!target) continue;
       const key = locationKey(target);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -617,47 +676,25 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return results;
   }
 
-  private mapProvenanceLocation(loc: TsLocation, overlay: OverlayDocumentSnapshot): Location | null {
-    const canonical = canonicalDocumentUri(loc.fileName).uri;
-    const overlaySpan = this.overlaySpanForLocation(loc, overlay);
-    if (overlaySpan) {
-      const mapped = projectGeneratedSpanToDocumentSpan(this.program.provenance, canonical, overlaySpan);
-      if (mapped) {
-        const snap = this.program.sources.get(mapped.uri);
-        if (snap) return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text) };
-      }
-    }
-    const overlayOffset = this.overlayOffsetForLocation(loc, overlay);
-    if (overlayOffset == null) return null;
-    return mapOverlayOffsetToTemplate(canonical, overlayOffset, this.program.provenance, this.program.sources);
-  }
-
   private mapTypeScriptEdits(
     edits: readonly TsTextEdit[],
     overlay: OverlayDocumentSnapshot,
     requireOverlayMapping: boolean,
   ): TextEdit[] | null {
     const results: TextEdit[] = [];
-    const overlayUri = overlay ? canonicalDocumentUri(overlay.uri).uri : null;
-    const overlayKey = overlayUri ? canonicalDocumentUri(overlayUri).path.toLowerCase() : null;
-    const overlayKeys = new Set<string>();
-    if (overlayKey) overlayKeys.add(overlayKey);
-    for (const uri of collectOverlayUris(this.program.provenance)) {
-      overlayKeys.add(canonicalDocumentUri(uri).path.toLowerCase());
-    }
+    const overlaySnapshots = new Map<DocumentUri, OverlayDocumentSnapshot>([[overlay.uri, overlay]]);
     let mappedOverlayEdits = 0;
     let unmappedOverlayEdits = 0;
     let overlayEdits = 0;
 
     for (const edit of edits) {
-      const normalized = canonicalDocumentUri(edit.fileName);
-      const normalizedUri = normalized.uri;
-      const normalizedKey = normalized.path.toLowerCase();
+      const generated = canonicalDocumentUri(edit.fileName);
       const range = normalizeRange(edit.range);
-      const isOverlayEdit = overlayKeys.has(normalizedKey);
-      if (isOverlayEdit) {
+      const templateUri = resolveTemplateUriForGenerated(this.program.provenance, generated.uri);
+      if (templateUri) {
         overlayEdits += 1;
-        const mapped = this.mapOverlayEdit(edit, normalizedUri, overlayKey !== null && normalizedKey === overlayKey ? overlay : null);
+        const generatedOverlay = this.getGeneratedOverlaySnapshot(generated.uri, templateUri, overlaySnapshots);
+        const mapped = this.mapGeneratedEdit(edit, generated, range, generatedOverlay);
         if (!mapped) {
           unmappedOverlayEdits += 1;
           continue;
@@ -668,38 +705,125 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       }
 
       if (!range) continue;
-      results.push({ uri: normalizedUri, range, newText: edit.newText });
+      results.push({ uri: generated.uri, range, newText: edit.newText });
     }
 
-    if (requireOverlayMapping && overlayEdits > 0 && (unmappedOverlayEdits > 0 || mappedOverlayEdits === 0)) {
+    if (
+      shouldRejectOverlayEditBatch(
+        {
+          requireOverlayMapping,
+          overlayEdits,
+          mappedOverlayEdits,
+          unmappedOverlayEdits,
+        },
+        PROVENANCE_POLICY,
+      )
+    ) {
       return null;
     }
     return results.length ? dedupeTextEdits(results) : null;
   }
 
-  private mapOverlayEdit(
+  private mapGeneratedEdit(
     edit: TsTextEdit,
-    overlayUri: DocumentUri,
-    overlay: OverlayDocumentSnapshot | null,
+    generated: CanonicalDocumentUri,
+    range: TextRange | null,
+    generatedOverlay: OverlayDocumentSnapshot | null,
   ): TextEdit | null {
-    const overlaySpan = this.overlaySpanForEdit(edit, overlayUri, overlay);
-    if (!overlaySpan) return null;
-    const mapped = projectGeneratedSpanToDocumentSpan(this.program.provenance, overlayUri, overlaySpan);
+    const mapped = this.mapGeneratedLocation({
+      generatedUri: generated.uri,
+      generatedFile: generatedOverlay?.file ?? generated.file,
+      generatedText: generatedOverlay?.text ?? null,
+      start: edit.start,
+      length: edit.length,
+      range,
+    });
+    if (!mapped) return null;
+    return { uri: mapped.uri, range: mapped.range, newText: edit.newText };
+  }
+
+  private mapGeneratedLocation(args: {
+    generatedUri: DocumentUri;
+    generatedFile: SourceFileId;
+    generatedText: string | null;
+    start?: number | null;
+    length?: number | null;
+    range?: TextRange | null;
+  }): Location | null {
+    const mapped = projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, {
+      generatedUri: args.generatedUri,
+      generatedFile: args.generatedFile,
+      generatedText: args.generatedText,
+      start: args.start ?? null,
+      length: args.length ?? null,
+      range: args.range ?? null,
+    });
     if (!mapped) return null;
     const snap = this.program.sources.get(mapped.uri);
     if (!snap) return null;
-    return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text), newText: edit.newText };
+    return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text) };
   }
 
-  private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlayProvenanceHit | null {
-    const hit = this.program.provenance.projectTemplateOffset(uri.uri, offset);
-    if (hit) return hit;
+  private locationFromReferenceDecision(
+    location: DocumentSpan | null,
+    generatedUri: DocumentUri,
+    fallbackRange: TextRange | null,
+    generatedText: string | null,
+  ): Location | null {
+    if (!location) return null;
+    const snap = this.program.sources.get(location.uri);
+    if (snap) {
+      return { uri: location.uri, range: spanToRange(location.span, snap.text) };
+    }
+    if (location.uri !== generatedUri) return null;
+    if (fallbackRange) return { uri: location.uri, range: fallbackRange };
+    if (!generatedText) return null;
+    return { uri: location.uri, range: spanToRange(location.span, generatedText) };
+  }
+
+  private provenanceForReferenceDecision(
+    generatedUri: DocumentUri,
+    templateUri: DocumentUri | null,
+  ): Pick<ProvenanceIndex, "getTemplateUriForGenerated"> {
+    if (!templateUri) return this.program.provenance;
+    const canonicalGeneratedUri = canonicalDocumentUri(generatedUri).uri;
+    return {
+      getTemplateUriForGenerated: (candidateUri) => {
+        const candidate = canonicalDocumentUri(candidateUri).uri;
+        if (candidate === canonicalGeneratedUri) return templateUri;
+        return resolveTemplateUriForGenerated(this.program.provenance, candidate);
+      },
+    };
+  }
+
+  private getGeneratedOverlaySnapshot(
+    generatedUri: DocumentUri,
+    templateUri: DocumentUri,
+    cache: Map<DocumentUri, OverlayDocumentSnapshot>,
+  ): OverlayDocumentSnapshot | null {
+    const cached = cache.get(generatedUri);
+    if (cached) return cached;
     try {
-      this.build.getOverlay(uri.uri);
+      const snapshot = this.overlaySnapshot(templateUri);
+      const canonicalOverlayUri = canonicalDocumentUri(snapshot.uri).uri;
+      cache.set(canonicalOverlayUri, snapshot);
+      return canonicalOverlayUri === generatedUri ? snapshot : null;
     } catch {
       return null;
     }
-    return this.program.provenance.projectTemplateOffset(uri.uri, offset);
+  }
+
+  private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlayProvenanceHit | null {
+    const decision = projectTemplateOffsetToOverlayWithPolicy({
+      provenance: this.program.provenance,
+      uri: uri.uri,
+      offset,
+      materializeOverlay: () => {
+        this.build.getOverlay(uri.uri);
+      },
+      policy: PROVENANCE_POLICY,
+    });
+    return decision.hit;
   }
 
   private projectTemplateSpanToOverlay(
@@ -708,56 +832,16 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     end: number,
   ): OverlayProvenanceHit | null {
     const span = resolveSourceSpan({ start, end }, uri.file);
-    const hit = this.program.provenance.projectTemplateSpan(uri.uri, span);
-    if (hit) return hit;
-    try {
-      this.build.getOverlay(uri.uri);
-    } catch {
-      return null;
-    }
-    return this.program.provenance.projectTemplateSpan(uri.uri, span);
-  }
-
-  private overlayOffsetForLocation(
-    loc: Pick<TsLocation, "start" | "range" | "fileName">,
-    overlay: OverlayDocumentSnapshot,
-  ): number | null {
-    if (loc.start != null) return loc.start;
-    const normalizedUri = canonicalDocumentUri(loc.fileName).uri;
-    if (normalizedUri !== overlay.uri || !loc.range) return null;
-    return offsetAtPosition(overlay.text, loc.range.start);
-  }
-
-  private overlaySpanForEdit(
-    edit: Pick<TsTextEdit, "start" | "length" | "range">,
-    overlayUri: DocumentUri,
-    overlay: OverlayDocumentSnapshot | null,
-  ): SourceSpan | null {
-    if (edit.start != null) {
-      const len = edit.length ?? 0;
-      const file = overlay?.file ?? canonicalDocumentUri(overlayUri).file;
-      return resolveSourceSpan({ start: edit.start, end: edit.start + len }, file);
-    }
-    if (!edit.range || !overlay || overlay.uri !== overlayUri) return null;
-    const start = offsetAtPosition(overlay.text, edit.range.start);
-    const end = offsetAtPosition(overlay.text, edit.range.end);
-    if (start == null || end == null) return null;
-    return resolveSourceSpan({ start, end }, overlay.file);
-  }
-
-  private overlaySpanForLocation(
-    loc: Pick<TsLocation, "start" | "length" | "range" | "fileName">,
-    overlay: OverlayDocumentSnapshot,
-  ): SourceSpan | null {
-    if (loc.start != null) {
-      const len = loc.length ?? 0;
-      return resolveSourceSpan({ start: loc.start, end: loc.start + len }, overlay.file);
-    }
-    if (!loc.range || canonicalDocumentUri(loc.fileName).uri !== overlay.uri) return null;
-    const start = offsetAtPosition(overlay.text, loc.range.start);
-    const end = offsetAtPosition(overlay.text, loc.range.end);
-    if (start == null || end == null) return null;
-    return resolveSourceSpan({ start, end }, overlay.file);
+    const decision = projectTemplateSpanToOverlayWithPolicy({
+      provenance: this.program.provenance,
+      uri: uri.uri,
+      span,
+      materializeOverlay: () => {
+        this.build.getOverlay(uri.uri);
+      },
+      policy: PROVENANCE_POLICY,
+    });
+    return decision.hit;
   }
 
   private collectTypeScriptDiagnostics(
@@ -815,16 +899,6 @@ function getVmRootTypeExpr(vm: TemplateProgram["options"]["vm"]): string {
   return vm.getRootVmTypeExpr();
 }
 
-function describeBindable(bindable: TemplateBindableInfo): string | undefined {
-  const mode = bindable.mode ? `[${bindable.mode}]` : null;
-  const source = bindable.source;
-  const type = bindable.type ? `: ${bindable.type}` : "";
-  const parts: string[] = [source];
-  if (mode) parts.push(mode);
-  if (!parts.length && !type) return undefined;
-  return `${parts.join(" ")}${type}`;
-}
-
 function dedupeCompletions(items: readonly CompletionItem[]): CompletionItem[] {
   const seen = new Set<string>();
   const results: CompletionItem[] = [];
@@ -842,28 +916,602 @@ function rangeKey(range: TextRange | undefined): string {
   return `${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
 }
 
-function wordRangeAtOffset(text: string, offset: number): TextRange {
+type TagContext =
+  | {
+      kind: "tag-name";
+      tagName: string;
+      nameStart: number;
+      nameEnd: number;
+      prefix: string;
+    }
+  | {
+      kind: "attr-name";
+      tagName: string;
+      attrName: string;
+      attrStart: number;
+      attrEnd: number;
+      prefix: string;
+    }
+  | {
+      kind: "attr-value";
+      tagName: string;
+      attrName: string;
+      valueStart: number;
+      valueEnd: number;
+      prefix: string;
+    };
+
+function resolveCompletionContext(
+  program: TemplateProgram,
+  uri: DocumentUri,
+): { sem: MaterializedSemantics; resources: ResourceCollections; syntax: TemplateSyntaxRegistry } {
+  const context = program.options.templateContext?.(uri) ?? {};
+  const snapshot = buildSemanticsSnapshotFromProject(program.options.project, context);
+  return { sem: snapshot.semantics, resources: snapshot.semantics.resources, syntax: snapshot.syntax };
+}
+
+function collectExpressionCompletions(
+  text: string,
+  offset: number,
+  exprSpan: SourceSpan,
+  resources: ResourceCollections,
+): CompletionItem[] {
+  if (!spanContainsOffset(exprSpan, offset)) return [];
+  const exprText = text.slice(exprSpan.start, exprSpan.end);
+  const relativeOffset = offset - exprSpan.start;
+  const hit = findPipeContext(exprText, relativeOffset);
+  if (!hit) return [];
+  const range = rangeFromOffsets(text, exprSpan.start + hit.nameStart, exprSpan.start + hit.nameEnd);
+  const prefix = hit.prefix.toLowerCase();
+  const labels = hit.kind === "value-converter"
+    ? Object.keys(resources.valueConverters ?? {})
+    : Object.keys(resources.bindingBehaviors ?? {});
+  const detail = hit.kind === "value-converter" ? "Value Converter" : "Binding Behavior";
+  return labels
+    .filter((label) => label.toLowerCase().startsWith(prefix))
+    .sort()
+    .map((label) => ({ label, source: "template", range, detail }));
+}
+
+function collectTagNameCompletions(
+  text: string,
+  context: Extract<TagContext, { kind: "tag-name" }>,
+  resources: ResourceCollections,
+  sem: MaterializedSemantics,
+): CompletionItem[] {
+  const range = rangeFromOffsets(text, context.nameStart, context.nameEnd);
+  const prefix = context.prefix.toLowerCase();
+  const items: CompletionItem[] = [];
+  const seen = new Set<string>();
+
+  for (const [key, element] of Object.entries(resources.elements)) {
+    const names = new Set(
+      [key, element.name, ...(element.aliases ?? [])].filter((name): name is string => !!name),
+    );
+    for (const name of names) {
+      if (!name.toLowerCase().startsWith(prefix)) continue;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      items.push({ label: name, source: "template", range, detail: "Custom Element" });
+    }
+  }
+
+  for (const name of Object.keys(sem.dom.elements ?? {})) {
+    if (!name.toLowerCase().startsWith(prefix)) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    items.push({ label: name, source: "template", range, detail: "HTML Element" });
+  }
+
+  return items;
+}
+
+function collectAttributeNameCompletions(
+  text: string,
+  context: Extract<TagContext, { kind: "attr-name" }>,
+  resources: ResourceCollections,
+  sem: MaterializedSemantics,
+  syntax: TemplateSyntaxRegistry,
+  attrParser: AttributeParser,
+): CompletionItem[] {
+  const typed = context.prefix;
+  const command = parseBindingCommandContext(typed, context.attrName, syntax);
+  if (command) {
+    return collectBindingCommandCompletions(
+      syntax,
+      typed.slice(command.commandOffset),
+      rangeFromOffsets(text, context.attrStart + command.rangeStart, context.attrStart + command.rangeEnd),
+    );
+  }
+
+  const analysis = analyzeAttributeName(context.attrName, syntax, attrParser);
+  let targetSpan = analysis.targetSpan;
+  if (!targetSpan && !analysis.syntax.command) {
+    const symbol = leadingAttributeSymbol(context.attrName, syntax);
+    targetSpan = symbol
+      ? { start: symbol.length, end: context.attrName.length }
+      : { start: 0, end: context.attrName.length };
+  }
+  if (!targetSpan) return [];
+  if (typed.length > targetSpan.end) return [];
+  const range = rangeFromOffsets(text, context.attrStart + targetSpan.start, context.attrStart + targetSpan.end);
+  const lowerPrefix = typed.slice(targetSpan.start, Math.min(typed.length, targetSpan.end)).toLowerCase();
+
+  const items: CompletionItem[] = [];
+  const seen = new Set<string>();
+  const push = (label: string, detail?: string, documentation?: string) => {
+    if (!label.toLowerCase().startsWith(lowerPrefix)) return;
+    if (seen.has(label)) return;
+    seen.add(label);
+    items.push({
+      label,
+      source: "template",
+      range,
+      ...(detail ? { detail } : {}),
+      ...(documentation ? { documentation } : {}),
+    });
+  };
+
+  const element = context.tagName ? resolveElement(resources, context.tagName) : null;
+  if (element) {
+    for (const bindable of Object.values(element.bindables ?? {})) {
+      const label = (bindable.attribute ?? bindable.name).trim();
+      if (!label) continue;
+      push(label, "Bindable", typeRefToString(bindable.type));
+    }
+  }
+
+  for (const [key, attr] of Object.entries(resources.attributes ?? {})) {
+    const detail = attr.isTemplateController ? "Template Controller" : "Custom Attribute";
+    const names = new Set(
+      [key, attr.name, ...(attr.aliases ?? [])].filter((name): name is string => !!name),
+    );
+    for (const name of names) {
+      push(name, detail);
+    }
+  }
+
+  const dom = context.tagName ? sem.dom.elements[context.tagName] : null;
+  if (dom) {
+    for (const name of Object.keys(dom.props ?? {})) {
+      push(name, "Native Attribute");
+    }
+    for (const name of Object.keys(dom.attrToProp ?? {})) {
+      push(name, "Native Attribute");
+    }
+    for (const name of Object.keys(sem.naming.attrToPropGlobal ?? {})) {
+      push(name, "Native Attribute");
+    }
+    const perTag = sem.naming.perTag?.[context.tagName];
+    if (perTag) {
+      for (const name of Object.keys(perTag)) {
+        push(name, "Native Attribute");
+      }
+    }
+  }
+
+  return items;
+}
+
+function collectAttributeValueCompletions(
+  text: string,
+  context: Extract<TagContext, { kind: "attr-value" }>,
+  resources: ResourceCollections,
+  syntax: TemplateSyntaxRegistry,
+  attrParser: AttributeParser,
+): CompletionItem[] {
+  const attrTarget = normalizeAttributeTarget(context.attrName, syntax, attrParser);
+  if (!attrTarget) return [];
+
+  const range = rangeFromOffsets(text, context.valueStart, context.valueEnd);
+  const prefix = context.prefix.toLowerCase();
+
+  const element = context.tagName ? resolveElement(resources, context.tagName) : null;
+  const elementBindable = element ? findBindableForAttribute(element.bindables, attrTarget) : null;
+
+  const attribute = resolveAttribute(resources, attrTarget);
+  const attributeBindable = attribute ? findPrimaryBindable(attribute) : null;
+
+  const bindable = elementBindable ?? attributeBindable;
+  if (!bindable) return [];
+
+  const literals = extractStringLiteralUnion(bindable.type);
+  if (!literals.length) return [];
+
+  return literals
+    .filter((value) => value.toLowerCase().startsWith(prefix))
+    .sort()
+    .map((value) => ({ label: value, source: "template", range }));
+}
+
+function collectBindingCommandCompletions(
+  syntax: TemplateSyntaxRegistry,
+  prefix: string,
+  range: TextRange,
+): CompletionItem[] {
+  const lowerPrefix = prefix.toLowerCase();
+  return Object.entries(syntax.bindingCommands ?? {})
+    .filter(([name, cmd]) => !name.includes(".") && cmd.kind !== "translation")
+    .map(([name, cmd]) => ({
+      name,
+      detail: cmd.kind,
+    }))
+    .filter((entry) => entry.name.toLowerCase().startsWith(lowerPrefix))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((entry) => ({
+      label: entry.name,
+      source: "template",
+      range,
+      ...(entry.detail ? { detail: entry.detail } : {}),
+    }));
+}
+
+function findPipeContext(
+  text: string,
+  offset: number,
+): { kind: "value-converter" | "binding-behavior"; nameStart: number; nameEnd: number; prefix: string } | null {
+  if (offset <= 0) return null;
+  for (let i = Math.min(offset - 1, text.length - 1); i >= 0; i -= 1) {
+    const code = text.charCodeAt(i);
+    if (code === 124 /* | */) {
+      if (text.charCodeAt(i - 1) === 124 || text.charCodeAt(i + 1) === 124) continue;
+      return resolvePipeName(text, offset, i, "value-converter");
+    }
+    if (code === 38 /* & */) {
+      if (text.charCodeAt(i - 1) === 38 || text.charCodeAt(i + 1) === 38) continue;
+      return resolvePipeName(text, offset, i, "binding-behavior");
+    }
+  }
+  return null;
+}
+
+function resolvePipeName(
+  text: string,
+  offset: number,
+  operatorIndex: number,
+  kind: "value-converter" | "binding-behavior",
+): { kind: "value-converter" | "binding-behavior"; nameStart: number; nameEnd: number; prefix: string } | null {
+  let i = operatorIndex + 1;
+  while (i < text.length && isWhitespace(text.charCodeAt(i))) i += 1;
+  const nameStart = i;
+  while (i < text.length && isResourceNameChar(text.charCodeAt(i))) i += 1;
+  const nameEnd = i;
+  if (offset < nameStart || offset > nameEnd) return null;
+  const prefix = text.slice(nameStart, Math.min(offset, nameEnd));
+  return { kind, nameStart, nameEnd, prefix };
+}
+
+function findTagContext(text: string, offset: number): TagContext | null {
   const clamped = Math.max(0, Math.min(offset, text.length));
-  let start = clamped;
-  while (start > 0 && isIdentifierChar(text.charCodeAt(start - 1))) start -= 1;
-  let end = clamped;
-  while (end < text.length && isIdentifierChar(text.charCodeAt(end))) end += 1;
+  const tagStart = text.lastIndexOf("<", clamped);
+  if (tagStart < 0) return null;
+  const lastClose = text.lastIndexOf(">", clamped);
+  if (lastClose > tagStart) return null;
+
+  let i = tagStart + 1;
+  const first = text.charCodeAt(i);
+  if (first === 47 /* / */ || first === 33 /* ! */ || first === 63 /* ? */) return null;
+
+  while (i < text.length && isWhitespace(text.charCodeAt(i))) i += 1;
+  const nameStart = i;
+  while (i < text.length && isTagNameChar(text.charCodeAt(i))) i += 1;
+  const nameEnd = i;
+  const rawTagName = text.slice(nameStart, nameEnd);
+  const tagName = rawTagName.toLowerCase();
+
+  if (clamped <= nameEnd) {
+    return {
+      kind: "tag-name",
+      tagName,
+      nameStart,
+      nameEnd,
+      prefix: text.slice(nameStart, clamped),
+    };
+  }
+
+  const tagEnd = text.indexOf(">", tagStart + 1);
+  const limit = tagEnd === -1 ? text.length : tagEnd;
+
+  while (i < limit) {
+    while (i < limit && isWhitespace(text.charCodeAt(i))) {
+      if (clamped <= i) {
+        return { kind: "attr-name", tagName, attrName: "", attrStart: clamped, attrEnd: clamped, prefix: "" };
+      }
+      i += 1;
+    }
+    if (i >= limit) break;
+    if (text.charCodeAt(i) === 47 /* / */) {
+      if (clamped <= i) {
+        return { kind: "attr-name", tagName, attrName: "", attrStart: clamped, attrEnd: clamped, prefix: "" };
+      }
+      i += 1;
+      continue;
+    }
+
+    const attrStart = i;
+    while (i < limit && isAttrNameChar(text.charCodeAt(i))) i += 1;
+    const attrEnd = i;
+    const attrName = text.slice(attrStart, attrEnd);
+
+    if (clamped <= attrEnd) {
+      return {
+        kind: "attr-name",
+        tagName,
+        attrName,
+        attrStart,
+        attrEnd,
+        prefix: text.slice(attrStart, Math.min(clamped, attrEnd)),
+      };
+    }
+
+    while (i < limit && isWhitespace(text.charCodeAt(i))) i += 1;
+    if (i >= limit) break;
+    if (text.charCodeAt(i) !== 61 /* = */) continue;
+    i += 1;
+    while (i < limit && isWhitespace(text.charCodeAt(i))) i += 1;
+    if (i >= limit) break;
+
+    const valueStart = i;
+    const quote = text.charCodeAt(i);
+    if (quote === 34 /* " */ || quote === 39 /* ' */) {
+      i += 1;
+      const contentStart = i;
+      while (i < limit && text.charCodeAt(i) !== quote) i += 1;
+      const contentEnd = i;
+      if (clamped >= contentStart && clamped <= contentEnd) {
+        return {
+          kind: "attr-value",
+          tagName,
+          attrName,
+          valueStart: contentStart,
+          valueEnd: contentEnd,
+          prefix: text.slice(contentStart, Math.min(clamped, contentEnd)),
+        };
+      }
+      if (i < limit) i += 1;
+      continue;
+    }
+
+    while (i < limit && !isWhitespace(text.charCodeAt(i)) && text.charCodeAt(i) !== 62 /* > */) i += 1;
+    const contentEnd = i;
+    if (clamped >= valueStart && clamped <= contentEnd) {
+      return {
+        kind: "attr-value",
+        tagName,
+        attrName,
+        valueStart,
+        valueEnd: contentEnd,
+        prefix: text.slice(valueStart, Math.min(clamped, contentEnd)),
+      };
+    }
+  }
+
+  return { kind: "attr-name", tagName, attrName: "", attrStart: clamped, attrEnd: clamped, prefix: "" };
+}
+
+function parseBindingCommandContext(
+  typed: string,
+  attrName: string,
+  syntax: TemplateSyntaxRegistry,
+): { commandOffset: number; rangeStart: number; rangeEnd: number } | null {
+  const candidates = commandDelimitersForPatterns(syntax);
+  let best: { commandOffset: number; rangeStart: number; rangeEnd: number } | null = null;
+
+  for (const candidate of candidates) {
+    const { delimiter, symbols } = candidate;
+    const typedIndex = typed.lastIndexOf(delimiter);
+    if (typedIndex < 0) continue;
+
+    const afterTyped = typed.slice(typedIndex + delimiter.length);
+    if (containsSymbol(afterTyped, symbols)) continue;
+
+    const fullIndex = attrName.lastIndexOf(delimiter);
+    if (fullIndex < 0) continue;
+
+    const rangeStart = fullIndex + delimiter.length;
+    const rangeEnd = findNextSymbol(attrName, symbols, rangeStart) ?? attrName.length;
+    const commandOffset = typedIndex + delimiter.length;
+
+    if (!best || commandOffset > best.commandOffset) {
+      best = { commandOffset, rangeStart, rangeEnd };
+    }
+  }
+
+  return best;
+}
+
+function commandDelimitersForPatterns(
+  syntax: TemplateSyntaxRegistry,
+): Array<{ delimiter: string; symbols: string }> {
+  const results: Array<{ delimiter: string; symbols: string }> = [];
+  const seen = new Set<string>();
+  for (const pattern of syntax.attributePatterns ?? []) {
+    if (pattern.interpret.kind !== "target-command") continue;
+    const delimiter = commandDelimiter(pattern.pattern);
+    if (!delimiter) continue;
+    const key = `${delimiter}|${pattern.symbols}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push({ delimiter, symbols: pattern.symbols });
+  }
+  return results;
+}
+
+function commandDelimiter(pattern: string): string | null {
+  const positions: number[] = [];
+  let idx = 0;
+  while (idx < pattern.length) {
+    const found = pattern.indexOf("PART", idx);
+    if (found < 0) break;
+    positions.push(found);
+    idx = found + 4;
+  }
+  if (positions.length < 2) return null;
+  const prevEnd = positions[positions.length - 2]! + 4;
+  const lastStart = positions[positions.length - 1]!;
+  const delimiter = pattern.slice(prevEnd, lastStart);
+  return delimiter.length ? delimiter : null;
+}
+
+function containsSymbol(text: string, symbols: string): boolean {
+  if (!symbols) return false;
+  for (let i = 0; i < text.length; i += 1) {
+    if (symbols.includes(text[i]!)) return true;
+  }
+  return false;
+}
+
+function findNextSymbol(text: string, symbols: string, start: number): number | null {
+  if (!symbols) return null;
+  for (let i = start; i < text.length; i += 1) {
+    if (symbols.includes(text[i]!)) return i;
+  }
+  return null;
+}
+
+function leadingAttributeSymbol(attrName: string, syntax: TemplateSyntaxRegistry): string | null {
+  for (const pattern of syntax.attributePatterns ?? []) {
+    const isSymbolPattern = pattern.interpret.kind === "fixed-command"
+      || (pattern.interpret.kind === "event-modifier" && pattern.interpret.injectCommand);
+    if (!isSymbolPattern) continue;
+    const symbol = leadingPatternSymbol(pattern.pattern, pattern.symbols);
+    if (symbol && attrName.startsWith(symbol)) return symbol;
+  }
+  return null;
+}
+
+function leadingPatternSymbol(pattern: string, symbols: string): string | null {
+  const partIndex = pattern.indexOf("PART");
+  if (partIndex <= 0) return null;
+  const prefix = pattern.slice(0, partIndex);
+  if (!prefix) return null;
+  if (symbols) {
+    for (let i = 0; i < prefix.length; i += 1) {
+      if (!symbols.includes(prefix[i]!)) return null;
+    }
+  }
+  return prefix;
+}
+
+function normalizeAttributeTarget(
+  attrName: string,
+  syntax: TemplateSyntaxRegistry,
+  attrParser: AttributeParser,
+): string {
+  const trimmed = attrName.trim();
+  if (!trimmed) return "";
+  const analysis = analyzeAttributeName(trimmed, syntax, attrParser);
+  const targetSpan = analysis.targetSpan ?? (analysis.syntax.command ? null : { start: 0, end: trimmed.length });
+  if (!targetSpan) return "";
+  return trimmed.slice(targetSpan.start, targetSpan.end).toLowerCase();
+}
+
+function resolveElement(resources: ResourceCollections, tagName: string): ElementRes | null {
+  const normalized = tagName.toLowerCase();
+  const direct = resources.elements[normalized];
+  if (direct) return direct;
+  for (const el of Object.values(resources.elements)) {
+    if (!el.aliases) continue;
+    if (el.aliases.some((alias) => alias.toLowerCase() === normalized)) return el;
+  }
+  return null;
+}
+
+function resolveAttribute(resources: ResourceCollections, name: string): AttrRes | null {
+  const normalized = name.toLowerCase();
+  const direct = resources.attributes[normalized];
+  if (direct) return direct;
+  for (const attr of Object.values(resources.attributes)) {
+    if (!attr.aliases) continue;
+    if (attr.aliases.some((alias) => alias.toLowerCase() === normalized)) return attr;
+  }
+  return null;
+}
+
+function findBindableForAttribute(
+  bindables: Readonly<Record<string, Bindable>> | undefined,
+  attrName: string,
+): Bindable | null {
+  if (!bindables) return null;
+  const normalized = attrName.toLowerCase();
+  for (const bindable of Object.values(bindables)) {
+    const attr = (bindable.attribute ?? bindable.name).toLowerCase();
+    if (attr === normalized) return bindable;
+  }
+  return null;
+}
+
+function findPrimaryBindable(attr: AttrRes): Bindable | null {
+  const key = attr.primary ?? Object.keys(attr.bindables ?? {})[0];
+  if (!key) return null;
+  return attr.bindables[key] ?? null;
+}
+
+function extractStringLiteralUnion(type: TypeRef | undefined): string[] {
+  if (!type || type.kind !== "ts") return [];
+  const values: string[] = [];
+  const regex = /(['"])([^'"]+)\1/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(type.name)) !== null) {
+    const value = match[2];
+    if (value) values.push(value);
+  }
+  return Array.from(new Set(values));
+}
+
+function typeRefToString(type: TypeRef | undefined): string | undefined {
+  if (!type) return undefined;
+  switch (type.kind) {
+    case "ts":
+      return type.name;
+    case "any":
+      return "any";
+    case "unknown":
+      return "unknown";
+    default:
+      return undefined;
+  }
+}
+
+function rangeFromOffsets(text: string, start: number, end: number): TextRange {
+  const safeStart = Math.max(0, Math.min(start, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(end, text.length));
   return {
-    start: positionAtOffset(text, start),
-    end: positionAtOffset(text, end),
+    start: positionAtOffset(text, safeStart),
+    end: positionAtOffset(text, safeEnd),
   };
 }
 
-function isIdentifierChar(code: number): boolean {
+function isWhitespace(code: number): boolean {
+  return code === 32 /* space */ || code === 9 /* tab */ || code === 10 /* lf */ || code === 13 /* cr */;
+}
+
+function isTagNameChar(code: number): boolean {
   return (
-    (code >= 48 && code <= 57) || // 0-9
-    (code >= 65 && code <= 90) || // A-Z
-    (code >= 97 && code <= 122) || // a-z
-    code === 95 /* _ */ ||
-    code === 36 /* $ */ ||
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
     code === 45 /* - */ ||
-    code === 46 /* . */ ||
     code === 58 /* : */
+  );
+}
+
+function isAttrNameChar(code: number): boolean {
+  return (
+    isTagNameChar(code) ||
+    code === 46 /* . */ ||
+    code === 64 /* @ */ ||
+    code === 95 /* _ */
+  );
+}
+
+function isResourceNameChar(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 45 /* - */ ||
+    code === 95 /* _ */
   );
 }
 
@@ -888,6 +1536,7 @@ function mapCompilerDiagnostic(
     message: rel.message,
     location: rel.span ? { uri: templateUri, span: resolveSourceSpan(rel.span, templateFile) } : null,
   }));
+  const code = String(diag.code);
 
   if (isTypecheckMismatch(diag)) {
     const vmDisplayName = context?.vmDisplayName ?? "Component";
@@ -903,39 +1552,66 @@ function mapCompilerDiagnostic(
       hit,
       context?.typeNames ?? EMPTY_TYPE_NAMES,
     );
-    const expected = diag.expected ?? null;
-    const actual = quickInfoType ?? diag.actual ?? null;
+    const expected = getDataString(diag.data, "expected");
+    const actualFromData = getDataString(diag.data, "actual");
+    const actual = quickInfoType ?? actualFromData;
 
     if (quickInfoType && expected && typeTextMatches(expected, quickInfoType)) {
       return null;
     }
 
     const subject = hit?.memberPath ? `${vmDisplayName}.${hit.memberPath}` : vmDisplayName;
+    const data = withTypeMismatchData(diag.data ?? {}, expected, actual);
     return {
-      code: diag.code,
+      code,
       message: hit?.memberPath
         ? `Type mismatch on ${subject}: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`
         : `Type mismatch: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`,
       source: diag.source,
       severity: diag.severity,
       location,
+      origin: diag.origin ?? null,
       ...(related.length ? { related } : {}),
+      ...(data && Object.keys(data).length > 0 ? { data } : {}),
     };
   }
 
+  const data = diag.data ?? null;
   return {
-    code: diag.code,
+    code,
     message: diag.message,
     source: diag.source,
     severity: diag.severity,
     location,
+    origin: diag.origin ?? null,
     ...(related.length ? { related } : {}),
+    ...(data && Object.keys(data).length > 0 ? { data } : {}),
   };
 }
 
-function isTypecheckMismatch(diag: CompilerDiagnostic): diag is TypecheckDiagnostic {
-  // AU1301 = error, AU1302 = warning, AU1303 = info (all are type mismatches)
-  return (diag.code === "AU1301" || diag.code === "AU1302" || diag.code === "AU1303") && diag.source === "typecheck";
+function isTypecheckMismatch(diag: CompilerDiagnostic): boolean {
+  return diag.code === "aurelia/expr-type-mismatch" && diag.source === "typecheck";
+}
+
+function getDataString(
+  data: Readonly<Record<string, unknown>> | undefined,
+  key: string,
+): string | null {
+  if (!data) return null;
+  const value = data[key];
+  return typeof value === "string" ? value : null;
+}
+
+function withTypeMismatchData(
+  data: Readonly<Record<string, unknown>>,
+  expected: string | null,
+  actual: string | null,
+): Readonly<Record<string, unknown>> {
+  if (!expected && !actual) return data;
+  const next = { ...data };
+  if (expected) next.expected = expected;
+  if (actual) next.actual = actual;
+  return next;
 }
 
 function lookupQuickInfoType(
@@ -974,29 +1650,6 @@ function typeTextMatches(expected: string, actual: string): boolean {
   return false;
 }
 
-function mapOverlayOffsetToTemplate(
-  overlayUri: DocumentUri,
-  overlayOffset: number,
-  provenance: ProvenanceIndex,
-  sources: { get(uri: DocumentUri): DocumentSnapshot | null },
-): Location | null {
-  const mapped = projectGeneratedOffsetToDocumentSpan(provenance, overlayUri, overlayOffset);
-  if (!mapped) return null;
-  const snap = sources.get(mapped.uri);
-  if (!snap) return null;
-  return { uri: mapped.uri, range: spanToRange(mapped.span, snap.text) };
-}
-
-function collectOverlayUris(provenance: ProvenanceIndex): Set<DocumentUri> {
-  const overlayUris = new Set<DocumentUri>();
-  const stats = provenance.stats();
-  for (const doc of stats.documents) {
-    const overlayUri = provenance.templateStats(doc.uri).overlayUri;
-    if (overlayUri) overlayUris.add(overlayUri);
-  }
-  return overlayUris;
-}
-
 function mapTypeScriptDiagnostic(
   diag: TsDiagnostic,
   overlay: OverlayDocumentSnapshot,
@@ -1008,7 +1661,9 @@ function mapTypeScriptDiagnostic(
   // Note: We intentionally do NOT use overlayLocation - the overlay file is an internal implementation detail.
   const _overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
   const provenanceHit = overlaySpan ? provenance.projectGeneratedSpan(overlay.uri, overlaySpan) : null;
-  const mappedLocation = provenanceHit ? provenanceHitToDocumentSpan(provenanceHit) : null;
+  const mappedLocation = overlaySpan
+    ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, overlay.uri, overlaySpan)
+    : null;
 
   const related: DiagnosticRelatedInfo[] = [];
   // Note: We intentionally do NOT add the overlay location as related info.
@@ -1018,38 +1673,42 @@ function mapTypeScriptDiagnostic(
     const relCanonical = rel.fileName ? canonicalDocumentUri(rel.fileName) : canonicalDocumentUri(overlay.uri);
     const relSpan = tsSpan(rel, relCanonical.file);
     const relUri = relCanonical.uri;
-    const relHit = relSpan ? provenance.projectGeneratedSpan(relUri, relSpan) : null;
-    const relMapped = relHit ? provenanceHitToDocumentSpan(relHit) : null;
-
-    // If provenance mapping succeeded, use the mapped location.
-    // If it failed but the location is in an overlay file, fall back to template URI.
-    // This ensures we never expose internal overlay file paths to users.
-    const isOverlayFile = relUri === overlay.uri || isOverlayPath(relCanonical.path);
-    const fallbackLocation = isOverlayFile && relSpan
-      ? { uri: overlay.templateUri, span: relSpan }
-      : relSpan ? { uri: relUri, span: relSpan } : null;
+    const relMapped = relSpan
+      ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, relUri, relSpan)
+      : null;
+    const relatedTemplateUri = resolveTemplateUriForGenerated(provenance, relUri);
+    const relatedLocation = resolveRelatedDiagnosticLocationWithPolicy({
+      relUri,
+      relSpan,
+      mappedLocation: relMapped,
+      overlayUri: overlay.uri,
+      templateUri: overlay.templateUri,
+      relatedTemplateUri,
+      policy: PROVENANCE_POLICY,
+    });
 
     related.push({
       message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames),
-      location: relMapped ?? fallbackLocation,
+      location: relatedLocation.location,
     });
   }
 
   const severity = tsCategoryToSeverity(diag.category);
   const message = formatTypeScriptMessage(diag, vmDisplayName, provenanceHit, typeNames);
 
-  // If provenance mapping failed, fall back to template URI instead of overlay URI.
-  // This ensures we never expose internal overlay file paths to users.
-  const fallbackLocation = overlaySpan
-    ? { uri: overlay.templateUri, span: overlaySpan }
-    : null;
+  const locationDecision = resolveOverlayDiagnosticLocationWithPolicy({
+    overlaySpan,
+    mappedLocation,
+    templateUri: overlay.templateUri,
+    policy: PROVENANCE_POLICY,
+  });
 
   return {
     code: diag.code ?? "TS",
     message,
     source: "typescript",
     severity,
-    location: mappedLocation ?? fallbackLocation,
+    location: locationDecision.location,
     ...(related.length ? { related } : {}),
     ...(diag.tags ? { tags: diag.tags } : {}),
   };
@@ -1120,10 +1779,22 @@ function formatTypeScriptMessage(
   hit: TemplateProvenanceHit | null,
   typeNames: TypeNameMap,
 ): string {
-  if (hit?.memberPath) {
+  if (hit?.memberPath && shouldRewriteAsMissingMember(diag)) {
     return `Property '${hit.memberPath}' does not exist on ${vmDisplayName}`;
   }
   return rewriteTypeNames(flattenTsMessage(diag.messageText), typeNames);
+}
+
+function shouldRewriteAsMissingMember(diag: TsDiagnostic): boolean {
+  const code = normalizeTsDiagnosticCode(diag.code);
+  return code === 2339 || code === 2551;
+}
+
+function normalizeTsDiagnosticCode(code: TsDiagnostic["code"]): number | null {
+  if (typeof code === "number") return code;
+  if (typeof code !== "string" || code.length === 0) return null;
+  const parsed = Number(code);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeRange(range: TextRange | null | undefined): TextRange | null {
@@ -1139,47 +1810,6 @@ function normalizeRange(range: TextRange | null | undefined): TextRange | null {
 
 function locationKey(loc: Location): string {
   return `${loc.uri}:${loc.range.start.line}:${loc.range.start.character}-${loc.range.end.line}:${loc.range.end.character}`;
-}
-
-function spanToRange(span: SourceSpan, text: string): TextRange {
-  return {
-    start: positionAtOffset(text, span.start),
-    end: positionAtOffset(text, span.end),
-  };
-}
-
-function positionAtOffset(text: string, offset: number): Position {
-  const length = text.length;
-  const clamped = Math.max(0, Math.min(offset, length));
-  const lineStarts = computeLineStarts(text);
-  let line = 0;
-  while (line + 1 < lineStarts.length && (lineStarts[line + 1] ?? Number.POSITIVE_INFINITY) <= clamped) line += 1;
-  const lineStart = lineStarts[line] ?? 0;
-  const character = clamped - lineStart;
-  return { line, character };
-}
-
-function offsetAtPosition(text: string, position: Position): number | null {
-  if (position.line < 0 || position.character < 0) return null;
-  const lineStarts = computeLineStarts(text);
-  if (position.line >= lineStarts.length) return null;
-  const lineStart = lineStarts[position.line];
-  if (lineStart === undefined) return null;
-  const nextLine = lineStarts[position.line + 1];
-  const lineEnd = nextLine ?? text.length;
-  return Math.min(lineEnd, lineStart + position.character);
-}
-
-function computeLineStarts(text: string): number[] {
-  const starts = [0];
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charCodeAt(i);
-    if (ch === 13 /* CR */ || ch === 10 /* LF */) {
-      if (ch === 13 /* CR */ && text.charCodeAt(i + 1) === 10 /* LF */) i += 1;
-      starts.push(i + 1);
-    }
-  }
-  return starts;
 }
 
 function tsCategoryToSeverity(cat: TsDiagnosticCategory): DiagnosticSeverity {
@@ -1207,12 +1837,4 @@ function dedupeTextEdits(edits: readonly TextEdit[]): TextEdit[] {
     results.push(edit);
   }
   return results;
-}
-
-/**
- * Checks if a path looks like an overlay file path.
- * Overlay files have patterns like `.__au.ttc.overlay.ts` or similar.
- */
-function isOverlayPath(path: string): boolean {
-  return path.includes(".__au.") && path.includes(".overlay.");
 }

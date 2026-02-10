@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "paths": {
+      "aurelia": ["../../../../../../aurelia/packages/aurelia/src"],
+      "@aurelia/kernel": ["../../../../../../aurelia/packages/kernel/src"],
+      "@aurelia/runtime-html": ["../../../../../../aurelia/packages/runtime-html/src"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

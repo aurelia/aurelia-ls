@@ -13,11 +13,6 @@
 import { createConnection, ProposedFeatures, TextDocuments } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { createServerContext } from "./context.js";
-import { createPathUtils } from "./services/paths.js";
-import { OverlayFs } from "./services/overlay-fs.js";
-import { TsService } from "./services/ts-service.js";
-import { TsServicesAdapter } from "./services/typescript-services.js";
-import { VmReflectionService } from "./services/vm-reflection.js";
 import type { Logger } from "./services/types.js";
 import { registerFeatureHandlers } from "./handlers/features.js";
 import { registerCustomHandlers } from "./handlers/custom.js";
@@ -35,23 +30,11 @@ const logger: Logger = {
   error: (m: string) => connection.console.error(`[aurelia-ls] ${m}`),
 };
 
-// Create core services
-const paths = createPathUtils();
-const overlayFs = new OverlayFs(paths);
-const tsService = new TsService(overlayFs, paths, logger);
-const tsAdapter = new TsServicesAdapter(tsService, paths);
-const vmReflection = new VmReflectionService(tsService, paths, logger);
-
 // Create server context with all dependencies
 const ctx = createServerContext({
   connection,
   documents,
   logger,
-  paths,
-  overlayFs,
-  tsService,
-  tsAdapter,
-  vmReflection,
 });
 
 // Register all handlers

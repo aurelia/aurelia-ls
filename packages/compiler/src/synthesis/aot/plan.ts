@@ -1,7 +1,7 @@
 /* =============================================================================
  * AOT PLAN - Transform analysis output to AotPlanModule
  * -----------------------------------------------------------------------------
- * Consumes: LinkedSemanticsModule (20-resolve), ScopeModule (30-bind)
+ * Consumes: LinkModule (20-link), ScopeModule (30-bind)
  * Produces: AotPlanModule (abstract instruction graph)
  *
  * Key responsibilities:
@@ -30,7 +30,7 @@ import type { ScopeModule, ScopeTemplate, ScopeFrame, ScopeSymbol } from "../../
 import type { ReadonlyExprIdMap } from "../../model/identity.js";
 
 import type {
-  LinkedSemanticsModule,
+  LinkModule,
   LinkedTemplate,
   LinkedInstruction,
   LinkedPropertyBinding,
@@ -50,7 +50,8 @@ import type {
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
 import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
 import { debug } from "../../shared/debug.js";
-import { BUILTIN_BINDING_COMMANDS } from "../../language/registry.js";
+import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry, type TemplateSyntaxRegistry } from "../../schema/registry.js";
+import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../../parsing/index.js";
 
 import type {
   AotPlanModule,
@@ -93,7 +94,7 @@ import type {
  * Build an AotPlanModule from linked semantics and scope analysis.
  */
 export function planAot(
-  linked: LinkedSemanticsModule,
+  linked: LinkModule,
   scope: ScopeModule,
   options: AotPlanOptions,
 ): AotPlanModule {
@@ -169,9 +170,11 @@ export function planAot(
  * ============================================================================= */
 
 class PlanningContext {
-  readonly linked: LinkedSemanticsModule;
+  readonly linked: LinkModule;
   readonly scope: ScopeModule;
   readonly options: AotPlanOptions;
+  readonly syntax: TemplateSyntaxRegistry;
+  readonly attrParser: AttributeParser;
 
   /** Expression index for AST lookups */
   readonly exprIndex: ReadonlyExprIdMap<ExprTableEntry>;
@@ -192,13 +195,15 @@ class PlanningContext {
   private targetCounterStack: number[] = [0];
 
   constructor(
-    linked: LinkedSemanticsModule,
+    linked: LinkModule,
     scope: ScopeModule,
     options: AotPlanOptions,
   ) {
     this.linked = linked;
     this.scope = scope;
     this.options = options;
+    this.syntax = options.syntax ?? buildTemplateSyntaxRegistry(BUILTIN_SEMANTICS);
+    this.attrParser = options.attrParser ?? createAttributeParserFromRegistry(this.syntax);
     this.exprIndex = indexExprTable(linked.exprTable);
 
     // Build map from DOM node to linked template for nested template lookup
@@ -334,6 +339,7 @@ function symbolKindToSource(kind: ScopeSymbol["kind"]): PlanLocalSource {
     case "iteratorLocal": return "iterator";
     case "contextual": return "contextual";
     case "alias": return "alias";
+    case "syntheticLocal": return "synthetic";
   }
 }
 
@@ -501,7 +507,7 @@ function transformElement(
 
   for (const attr of node.attrs) {
     // Skip attributes that are binding commands (e.g., 'if.bind', 'repeat.for', 'value.bind')
-    if (isBindingAttribute(attr.name)) {
+    if (isBindingAttribute(attr.name, ctx)) {
       continue;
     }
     // Skip attributes that have interpolation bindings - the binding's parts
@@ -645,7 +651,7 @@ function transformTemplateAsElement(
 
   // Add static attrs from DOM node, but filter out binding attributes
   for (const attr of node.attrs) {
-    if (isBindingAttribute(attr.name)) {
+    if (isBindingAttribute(attr.name, ctx)) {
       continue;
     }
     if (!staticAttrs.some(a => a.name === attr.name)) {
@@ -1299,13 +1305,6 @@ function extractIteratorLocals(forOfExprId: ExprId, ctx: PlanningContext): strin
  * ============================================================================= */
 
 /**
- * Binding command suffixes derived from config.
- * Used to identify binding attributes that should NOT be included in staticAttrs.
- * Computed once at module load from the config-driven binding command registry.
- */
-const BINDING_COMMANDS = new Set(Object.keys(BUILTIN_BINDING_COMMANDS));
-
-/**
  * Check if an attribute name is a binding attribute.
  *
  * Binding attributes come in two forms:
@@ -1314,17 +1313,8 @@ const BINDING_COMMANDS = new Set(Object.keys(BUILTIN_BINDING_COMMANDS));
  *
  * Both forms should be stripped from the template HTML since they're compiled into instructions.
  */
-function isBindingAttribute(attrName: string): boolean {
-  // Check if the attribute name itself is a binding command (standalone usage)
-  // Examples: t="key", ref="varName"
-  if (BINDING_COMMANDS.has(attrName)) {
-    return true;
-  }
-
-  // Check for "target.command" format
-  // Examples: click.trigger, value.bind, repeat.for
-  const dotIndex = attrName.lastIndexOf(".");
-  if (dotIndex === -1) return false;
-  const command = attrName.slice(dotIndex + 1);
-  return BINDING_COMMANDS.has(command);
+function isBindingAttribute(attrName: string, ctx: PlanningContext): boolean {
+  if (!attrName) return false;
+  const analysis = analyzeAttributeName(attrName, ctx.syntax, ctx.attrParser);
+  return !!analysis.syntax.command;
 }

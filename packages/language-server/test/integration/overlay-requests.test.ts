@@ -26,11 +26,8 @@ interface OverlayArtifact {
   calls: unknown[];
 }
 
-interface DumpStateResult {
-  overlays?: string[];
-}
 
-test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async () => {
+test("aurelia/getOverlay returns build artifacts", async () => {
   const fixture = createFixture({
     "tsconfig.json": JSON.stringify({
       compilerOptions: {
@@ -71,10 +68,6 @@ test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async
       "overlay path should use overlay naming convention",
     ).toBe(true);
 
-    const state = (await connection.sendRequest("aurelia/dumpState")) as DumpStateResult;
-    const overlays = Array.isArray(state?.overlays) ? state.overlays : [];
-    const normalized = overlays.map((o) => normalizePath(o));
-    expect(normalized.includes(normalizePath(artifact.overlay!.path)), "overlay FS should contain the materialized overlay path").toBe(true);
   } finally {
     dispose();
     child.kill("SIGKILL");
@@ -86,8 +79,4 @@ test("aurelia/getOverlay returns build artifacts and hydrates overlay FS", async
 async function openTemplate(connection: MessageConnection, fixtureRoot: string, uri: string, relativePath: string) {
   const htmlText = fs.readFileSync(path.join(fixtureRoot, relativePath), "utf8");
   await openDocument(connection, uri, "html", htmlText);
-}
-
-function normalizePath(p: string) {
-  return path.normalize(p).toLowerCase();
 }

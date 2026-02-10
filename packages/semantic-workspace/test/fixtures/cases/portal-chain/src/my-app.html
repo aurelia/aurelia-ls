@@ -1,0 +1,8 @@
+<template>
+  <div if.bind="showPortal" with.bind="host" portal.bind="target">
+    <h2>${title}</h2>
+    <span>${note}</span>
+    <button click.trigger="close()">Close</button>
+  </div>
+  <div id="overlay"></div>
+</template>

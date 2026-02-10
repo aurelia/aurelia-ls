@@ -1,0 +1,56 @@
+export {
+  DEFAULT_DEFINITION_COMPARATOR_ORDER,
+  getDefinitionFieldRule,
+  isBindableFieldPath,
+  normalizeDefinitionRuleKey,
+  type DefinitionComparatorStage,
+  type DefinitionConflictReason,
+  type DefinitionFieldOperator,
+  type DefinitionFieldPath,
+  type DefinitionFieldRule,
+  type StaticDefinitionFieldPath,
+  type BindableLeafField,
+  type BindableDefinitionFieldPath,
+} from "./rules.js";
+export {
+  DEFINITION_SOURCE_PRIORITY,
+  compareDefinitionAtoms,
+  reduceDefinitionAtoms,
+  sortDefinitionAtoms,
+  sourcePriorityRank,
+  type DefinitionSourceKind,
+  type DefinitionValueState,
+  type DefinitionSubjectKey,
+  type DefinitionEvidenceAtom,
+  type DefinitionReductionReasonCode,
+  type DefinitionReductionReason,
+  type DefinitionReductionTrace,
+  type DefinitionReductionResult,
+} from "./solver.js";
+export {
+  canonicalSourceSortKey,
+  createCanonicalSourceIdV1,
+  serializeCanonicalSourceIdV1,
+  type CanonicalSourceIdV1,
+  type CanonicalSourceIdentityCandidate,
+  mergePartialResourceCollections,
+  mergeResolvedResourceCollections,
+  mergeResourceDefinitionCandidates,
+  sortResourceDefinitionCandidates,
+  type ResourceDefinitionCandidate,
+  type ResourceDefinitionMergeResult,
+} from "./convergence.js";
+export {
+  createConvergenceReplayOverrides,
+  createDiscoveryConvergenceOverrides,
+  createEvidenceConvergenceOverrides,
+  createReplayConvergenceOverrides,
+  mergeDefinitionCandidateOverrides,
+} from "./candidate-overrides.js";
+export {
+  createLocalTemplateDeclarationIdentity,
+  createLocalTemplateDeclarationKey,
+  createOwnerResourceId,
+  serializeLocalTemplateDeclarationIdentity,
+  type LocalTemplateDeclarationIdentity,
+} from "./local-template-identity.js";

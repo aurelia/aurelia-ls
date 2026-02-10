@@ -1,8 +1,9 @@
-import type { DOMNode, TemplateNode, NodeId } from "../../model/ir.js";
+import type { DOMNode, TemplateNode, NodeId, SourceSpan } from "../../model/ir.js";
 import type { P5Element, P5Node, P5Template, ProjectionMap } from "./lower-shared.js";
 import type { DomIdAllocator } from "./lower-shared.js";
-import { isComment, isElement, isText, toSpan } from "./lower-shared.js";
+import { attrLoc, attrNameLoc, attrValueLoc, isComment, isElement, isText, toSpan } from "./lower-shared.js";
 import type { SourceFile } from "../../model/source.js";
+import { spanFromOffsets } from "../../model/source.js";
 
 /** Meta element tags to skip during DOM building */
 export const META_ELEMENT_TAGS = new Set([
@@ -19,6 +20,7 @@ export function buildDomRoot(
   rootLike: { childNodes?: P5Node[] },
   ids: DomIdAllocator,
   file: SourceFile,
+  sourceText: string,
   idMap?: WeakMap<P5Node, NodeId>,
   skipTags?: Set<string>,
   projectionMap?: ProjectionMap,
@@ -28,7 +30,7 @@ export function buildDomRoot(
     id: ids.current(),
     ns: "html",
     attrs: [],
-    children: buildDomChildren(rootLike, ids, file, idMap, skipTags, projectionMap),
+    children: buildDomChildren(rootLike, ids, file, sourceText, idMap, skipTags, projectionMap),
     loc: null,
   };
 }
@@ -37,6 +39,7 @@ export function buildDomChildren(
   p: { childNodes?: P5Node[] },
   ids: DomIdAllocator,
   file: SourceFile,
+  sourceText: string,
   idMap?: WeakMap<P5Node, NodeId>,
   skipTags?: Set<string>,
   projectionMap?: ProjectionMap,
@@ -53,7 +56,7 @@ export function buildDomChildren(
         // But adopt their children - parse5 may have nested content inside them
         if (skipTags?.has(tag)) {
           // Recursively process children and add to output
-          out.push(...buildDomChildren(n, ids, file, idMap, skipTags, projectionMap));
+          out.push(...buildDomChildren(n, ids, file, sourceText, idMap, skipTags, projectionMap));
           continue;
         }
 
@@ -66,9 +69,12 @@ export function buildDomChildren(
             kind: "template",
             id,
             ns: toNs(n),
-            attrs: mapStaticAttrs(n),
-            children: buildDomChildren(t.content, ids, file, idMap, skipTags, projectionMap),
+            attrs: mapStaticAttrs(n, file, sourceText),
+            children: buildDomChildren(t.content, ids, file, sourceText, idMap, skipTags, projectionMap),
             loc: toSpan(n.sourceCodeLocation, file),
+            tagLoc: tagNameSpan(n, file, sourceText, false),
+            closeTagLoc: tagNameSpan(n, file, sourceText, true),
+            openTagEnd: openTagEndSpan(n, file),
           });
         } else {
           out.push({
@@ -76,12 +82,15 @@ export function buildDomChildren(
             id,
             ns: toNs(n),
             tag,
-            attrs: mapStaticAttrs(n),
+            attrs: mapStaticAttrs(n, file, sourceText),
             children: projectionMap?.has(n)
               ? []
-              : buildDomChildren(n, ids, file, idMap, skipTags, projectionMap),
+              : buildDomChildren(n, ids, file, sourceText, idMap, skipTags, projectionMap),
             selfClosed: false,
             loc: toSpan(n.sourceCodeLocation, file),
+            tagLoc: tagNameSpan(n, file, sourceText, false),
+            closeTagLoc: tagNameSpan(n, file, sourceText, true),
+            openTagEnd: openTagEndSpan(n, file),
           });
         }
         ids.exitElement();
@@ -123,9 +132,64 @@ function toNs(_el: P5Element): "html" | "svg" | "mathml" {
 }
 
 function mapStaticAttrs(
-  el: P5Element
-): { name: string; value: string | null; caseSensitive?: boolean }[] {
-  const out: { name: string; value: string | null; caseSensitive?: boolean }[] = [];
-  for (const a of el.attrs ?? []) out.push({ name: a.name, value: a.value ?? null });
+  el: P5Element,
+  source: SourceFile,
+  sourceText: string,
+): { name: string; value: string | null; caseSensitive?: boolean; loc?: SourceSpan | null; nameLoc?: SourceSpan | null; valueLoc?: SourceSpan | null }[] {
+  const out: { name: string; value: string | null; caseSensitive?: boolean; loc?: SourceSpan | null; nameLoc?: SourceSpan | null; valueLoc?: SourceSpan | null }[] = [];
+  for (const a of el.attrs ?? []) {
+    const loc = attrLoc(el, a.name);
+    const nameLoc = attrNameLoc(el, a.name, sourceText);
+    const valueLoc = attrValueLoc(el, a.name, sourceText);
+    out.push({
+      name: a.name,
+      value: a.value ?? null,
+      loc: toSpan(loc, source),
+      nameLoc: toSpan(nameLoc, source),
+      valueLoc: toSpan(valueLoc, source),
+    });
+  }
   return out;
+}
+
+function tagNameSpan(
+  el: P5Element,
+  source: SourceFile,
+  sourceText: string,
+  isEndTag: boolean,
+): SourceSpan | null {
+  const loc = el.sourceCodeLocation;
+  const tagLoc = isEndTag ? loc?.endTag : loc?.startTag;
+  if (!tagLoc) return null;
+  return tagNameSpanFromOffsets(tagLoc.startOffset, tagLoc.endOffset, sourceText, source);
+}
+
+function tagNameSpanFromOffsets(
+  startOffset: number,
+  endOffset: number,
+  sourceText: string,
+  source: SourceFile,
+): SourceSpan | null {
+  if (startOffset == null || endOffset == null) return null;
+  const text = sourceText.slice(startOffset, endOffset);
+  let i = text.indexOf("<");
+  if (i === -1) i = 0;
+  i += 1;
+  if (text[i] === "/") i += 1;
+  while (i < text.length && /\s/.test(text[i]!)) i += 1;
+  const nameStart = i;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch === ">" || ch === "/" || /\s/.test(ch)) break;
+    i += 1;
+  }
+  const nameEnd = i;
+  if (nameEnd <= nameStart) return null;
+  return spanFromOffsets({ start: startOffset + nameStart, end: startOffset + nameEnd }, source);
+}
+
+function openTagEndSpan(el: P5Element, source: SourceFile): SourceSpan | null {
+  const endOffset = el.sourceCodeLocation?.startTag?.endOffset;
+  if (endOffset == null) return null;
+  return spanFromOffsets({ start: endOffset, end: endOffset }, source);
 }

@@ -1,7 +1,7 @@
 [
   {
     "name": "LS-01 containerless controller stack",
-    "spec": "docs/template-lowering-and-binding.md",
+    "spec": "docs/architecture.md",
     "markup": "<spec-panel containerless state.two-way=\"panel\" title.bind=\"heading\" analytics=\"session\">\n  <let to-binding-context foo.bind=\"'literal'\" bar.bind=\"barVal\" baz.bind=\"bazVal\"></let>\n  <section repeat.for=\"item of items; key: item.id\" class=\"section ${dyn}\" style=\"color:${color}; padding:4px\" ref=\"sectionRef\">\n    <span class=\"label ${item.cls}\" ref=\"rowRef\">${item.label}</span>\n    <button if.bind=\"item.show\" click.trigger=\"select(item)\" disabled.bind=\"item.disabled\" class.bind=\"item.btnClass\"></button>\n  </section>\n  <footer promise.bind=\"load()\">\n    <template then=\"result\">\n      <div with.bind=\"result.detail\">\n        ${result.message}\n      </div>\n    </template>\n    <template catch=\"err\">\n      Error ${err.code}\n    </template>\n  </footer>\n</spec-panel>",
     "semOverrides": {
       "resources": {

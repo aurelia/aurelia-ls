@@ -347,5 +347,3 @@ function restoreGlobalDom(snapshot: GlobalDomSnapshot): void {
   globals.HTMLSelectElement = snapshot.HTMLSelectElement;
 }
 
-// Re-export for backwards compatibility during transition
-export { render as renderWithComponents };

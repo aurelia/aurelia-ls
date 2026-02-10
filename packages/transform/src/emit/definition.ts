@@ -5,7 +5,7 @@
  * Handles the main component definition and nested templates.
  *
  * Instruction codes and binding modes are imported from compiler
- * to avoid duplication. See docs/transform-package-design.md.
+ * to avoid duplication.
  */
 
 import {

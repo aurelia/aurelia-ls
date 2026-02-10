@@ -1,31 +1,60 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { normalizePathForId, toSourceFileId, type NormalizedPath, type SourceFileId } from "./identity.js";
 import { normalizeSpan, offsetSpan, toSourceSpan, type SourceSpan, type TextSpan } from "./span.js";
 
 export interface SourceFile {
+  /** Identity authority for deterministic IDs and hash keys (canonical absolute path). */
   readonly id: SourceFileId;
+  /** Absolute runtime file path resolved against the caller cwd. */
   readonly absolutePath: string;
+  /** Canonical normalized absolute path (slash-normalized, platform-cased). */
   readonly normalizedPath: NormalizedPath;
+  /** Cwd-relative normalized path for UI/reporting surfaces. */
   readonly relativePath: NormalizedPath;
-  /** Stable key for hashing/deterministic ids (normalized, cwd-relative when possible). */
+  /** Stable normalized hash key derived from canonical absolute path authority. */
   readonly hashKey: NormalizedPath;
 }
 
 type OffsetLike = { startOffset: number; endOffset: number } | { start: number; end: number };
 
 export function resolveSourceFile(filePath: string | undefined | null, cwd: string = process.cwd()): SourceFile {
-  const absolutePath = path.resolve(cwd, filePath ?? "");
+  const inputPath = filePath ?? "";
+  const fsPath = coerceFsPath(inputPath);
+  const absolutePath = isPathLikeAbsolute(fsPath) ? fsPath : path.resolve(cwd, fsPath);
   const normalizedPath = normalizePathForId(absolutePath);
-  const relativeRaw = path.isAbsolute(absolutePath) ? path.relative(cwd, absolutePath) : absolutePath;
+  const relativeRaw = path.relative(cwd, absolutePath);
   const relativePath = normalizePathForId(relativeRaw);
+  // Source identity authority is canonical absolute path.
+  const identity = toSourceFileId(normalizedPath);
+  const hashKey = normalizedPath;
   return {
-    id: toSourceFileId(relativeRaw),
+    id: identity,
     absolutePath,
     normalizedPath,
     relativePath,
-    hashKey: relativePath,
+    hashKey,
   };
+}
+
+function coerceFsPath(inputPath: string): string {
+  if (inputPath.startsWith("file:")) {
+    try {
+      return fileURLToPath(inputPath);
+    } catch {
+      return inputPath;
+    }
+  }
+  return inputPath;
+}
+
+function isPathLikeAbsolute(filePath: string): boolean {
+  if (!filePath) return false;
+  // Keep POSIX-rooted pseudo-document paths (e.g. "/app/template.html")
+  // stable across platforms instead of re-rooting to the current drive.
+  if (filePath.startsWith("/")) return true;
+  return path.isAbsolute(filePath);
 }
 
 export function spanFromOffsets(

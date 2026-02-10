@@ -1,7 +1,7 @@
 /* =======================================================================================
  * SCOPE GRAPH MODEL (editor-agnostic)
  * ---------------------------------------------------------------------------------------
- * - Diagnostics for scoping stage (AU12xx)
+ * - Diagnostics for scoping stage
  * - Frame ids/kinds and provenance (origin)
  * - Overlay base metadata
  * - Locals (let/iterator/contextual/alias)
@@ -36,6 +36,7 @@ import type { SourceSpan, BindingSourceIR } from "./ir.js";
 import type { FrameId, ExprId, ReadonlyExprIdMap } from "./identity.js";
 import type { Provenance } from "./origin.js";
 import type { CompilerDiagnostic } from "./diagnostics.js";
+import type { DiagnosticCodeForStage, DiagnosticDataFor } from "../diagnostics/catalog/index.js";
 
 export type { FrameId } from "./identity.js";
 
@@ -43,13 +44,10 @@ export type { FrameId } from "./identity.js";
  * Diagnostics (scoping only)
  * =========================== */
 
-/** AU12xx = ScopeGraph diagnostics (scoping-only; type errors belong to Typecheck). */
-export type ScopeDiagCode =
-  | "AU1201" // Invalid/unsupported repeat destructuring pattern (MVP: shallow only)
-  | "AU1202" // Duplicate local name in the same frame
-  | "AU1203"; // Invalid or unsupported expression (parser error)
+/** ScopeGraph diagnostics (scoping-only; type errors belong to Typecheck). */
+export type ScopeDiagCode = DiagnosticCodeForStage<"bind">;
 
-export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode>;
+export type ScopeDiagnostic = CompilerDiagnostic<ScopeDiagCode, DiagnosticDataFor<ScopeDiagCode>>;
 
 /* ===========================
  * Frames & templates
@@ -99,6 +97,7 @@ export type OverlayBase =
  * - 'iteratorLocal'    : Loop variable from iterator destructuring (repeat, virtual-repeat, etc.)
  * - 'contextual'  : Injected variable ($index, $first, etc.) from config.injects.contextuals
  * - 'alias'       : Named alias from config.injects.alias (with, then, catch, etc.)
+ * - 'syntheticLocal': Writeback local from two-way/from-view bindings (e.g. `$displayData`)
  *
  * NOTE(binding-context): `<let to-binding-context>` does not change lexical visibility;
  * it only affects the *write lane* at runtime. We track names uniformly here.
@@ -107,7 +106,8 @@ export type ScopeSymbol =
   | { kind: "let"; name: string; span?: SourceSpan | null }
   | { kind: "iteratorLocal"; name: string; span?: SourceSpan | null }
   | { kind: "contextual"; name: string; span?: SourceSpan | null }
-  | { kind: "alias"; name: string; aliasKind: "value" | "then" | "catch"; span?: SourceSpan | null };
+  | { kind: "alias"; name: string; aliasKind: "value" | "then" | "catch"; span?: SourceSpan | null }
+  | { kind: "syntheticLocal"; name: string; type?: string; span?: SourceSpan | null };
 
 export interface ScopeFrame {
   id: FrameId;
@@ -123,7 +123,7 @@ export interface ScopeFrame {
    */
   overlay?: OverlayBase | null;
 
-  /** Symbols introduced in this frame (let, iterator locals, contextuals, aliases). */
+  /** Symbols introduced in this frame (let, iterator locals, contextuals, aliases, synthetic locals). */
   symbols: ScopeSymbol[];
 
   /** Origin metadata for type inference. See FrameOrigin for pattern-based design. */
@@ -156,6 +156,4 @@ export interface ScopeTemplate {
 export interface ScopeModule {
   version: "aurelia-scope@1";
   templates: ScopeTemplate[];
-  /** Flat diagnostics related to scoping (not type analysis). */
-  diags: ScopeDiagnostic[];
 }

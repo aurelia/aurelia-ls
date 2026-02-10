@@ -14,16 +14,17 @@
 
 import {
   compileAot,
-  DEFAULT_SEMANTICS,
+  BUILTIN_SEMANTICS,
   NOOP_TRACE,
   type AotPlanModule,
   type AotCodeResult,
-  type Semantics,
+  type ProjectSemantics,
   type ResourceGraph,
   type ResourceScopeId,
   type NestedTemplateHtmlNode,
   type CompileTrace,
   type LocalImportDef,
+  type ModuleResolver,
 } from "@aurelia-ls/compiler";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./instruction-translator.js";
@@ -41,8 +42,10 @@ export interface AotCompileOptions {
   templatePath?: string;
   /** Component name */
   name?: string;
-  /** Custom semantics (defaults to DEFAULT_SEMANTICS) */
-  semantics?: Semantics;
+  /** Custom semantics (defaults to BUILTIN_SEMANTICS) */
+  semantics?: ProjectSemantics;
+  /** Module resolver for template meta imports. */
+  moduleResolver?: ModuleResolver;
   /** Resource graph for project-specific components */
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
@@ -94,7 +97,7 @@ export interface AotCompileResult {
  *
  * This runs the full compilation pipeline:
  * 1. Parse and lower (10-lower)
- * 2. Resolve semantics (20-resolve)
+ * 2. Resolve semantics (20-link)
  * 3. Bind scopes (30-bind)
  * 4. Build AOT plan
  * 5. Emit instructions and template HTML
@@ -120,16 +123,20 @@ export function compileWithAot(
   options: AotCompileOptions = {},
 ): AotCompileResult {
   const trace = options.trace ?? NOOP_TRACE;
-  const semantics = options.semantics ?? DEFAULT_SEMANTICS;
+  const semantics = options.semantics ?? BUILTIN_SEMANTICS;
+  const moduleResolver = options.moduleResolver ?? ((_specifier: string, _containingFile: string) => null);
 
   return trace.span("ssr.compileWithAot", () => {
     // 1. Run SSR-agnostic AOT compilation (analysis + synthesis)
     // This produces serialized instructions and template HTML
+    // TODO(tech-debt): replace direct compiler facade usage with the shared
+    // workspace/program authority path once SSR wiring is migrated.
     trace.event("ssr.compile.aot");
     const aotResult = compileAot(markup, {
       templatePath: options.templatePath,
       name: options.name,
       semantics,
+      moduleResolver,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
       localImports: options.localImports,
@@ -177,8 +184,10 @@ export interface CompileAndRenderAotOptions {
   name?: string;
   /** Template file path (for source maps) */
   templatePath?: string;
-  /** Custom semantics (defaults to DEFAULT_SEMANTICS) */
-  semantics?: Semantics;
+  /** Custom semantics (defaults to BUILTIN_SEMANTICS) */
+  semantics?: ProjectSemantics;
+  /** Module resolver for template meta imports. */
+  moduleResolver?: ModuleResolver;
   /** Resource graph for project-specific components */
   resourceGraph?: ResourceGraph;
   /** Scope to use for resource lookup (defaults to root) */
@@ -273,6 +282,7 @@ export async function compileAndRenderAot(
       name: componentName,
       templatePath: options.templatePath,
       semantics: options.semantics,
+      moduleResolver: options.moduleResolver,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
       trace,

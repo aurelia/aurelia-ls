@@ -396,7 +396,7 @@
         "catch": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "catch",
@@ -530,7 +530,7 @@
         "then": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "then",
@@ -787,7 +787,7 @@
             "catch": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "error", "prop": "value" }
+                "alias": { "defaultName": "catch", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "catch",
@@ -921,7 +921,7 @@
             "then": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "data", "prop": "value" }
+                "alias": { "defaultName": "then", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "then",
@@ -1270,21 +1270,25 @@
         "boundary": {
           "location": { "end": 248, "file": "packages/integration-harness/test/fixtures/ssr-aurelia2-table/src/app-root.ts", "pos": 0 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 248, "file": "packages/integration-harness/test/fixtures/ssr-aurelia2-table/src/app-root.ts", "pos": 0 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 248, "file": "packages/integration-harness/test/fixtures/ssr-aurelia2-table/src/app-root.ts", "pos": 0 },
           "origin": "source",
+          "state": "known",
           "value": "AppRoot"
         },
         "containerless": {
           "location": { "end": 248, "file": "packages/integration-harness/test/fixtures/ssr-aurelia2-table/src/app-root.ts", "pos": 0 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "dependencies": [],
@@ -1293,16 +1297,19 @@
         "name": {
           "location": { "end": 248, "file": "packages/integration-harness/test/fixtures/ssr-aurelia2-table/src/app-root.ts", "pos": 0 },
           "origin": "source",
+          "state": "known",
           "value": "app-root"
         },
         "processContent": {
           "location": { "end": 248, "file": "packages/integration-harness/test/fixtures/ssr-aurelia2-table/src/app-root.ts", "pos": 0 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 248, "file": "packages/integration-harness/test/fixtures/ssr-aurelia2-table/src/app-root.ts", "pos": 0 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:06c0b2b17d4b6fffda16dd966ed7ea539ce9b8009a1d393a3c8877c4c56ff605",
@@ -1503,7 +1510,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "catch",
@@ -1750,7 +1757,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "then",

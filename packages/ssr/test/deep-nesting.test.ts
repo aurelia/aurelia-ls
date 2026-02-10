@@ -557,7 +557,7 @@ describe("Deep Nesting SSR: Portal", () => {
     // Portal content is teleported - in SSR the portal marker appears but content
     // is rendered at target location. The target div should be present.
     expect(result.html).toBe(
-      `<!--au--><!--au-start--><!--au-end-->\n      <div id="target"></div>`,
+      `<!--au--><!--au-start--><!--au-end-->\n      <div id="target"><!--au-start-->\n        <!--au--><!--au-start--><div class="portal-content"><!--au-->Portaled content</div><!--au-end-->\n      <!--au-end--></div>`,
     );
   });
 
