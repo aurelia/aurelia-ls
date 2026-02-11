@@ -1,5 +1,5 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr, type TestVector, type CompilerContext } from "../_helpers/vector-runner.js";
-import { diffByKey, noopModuleResolver } from "../_helpers/test-utils.js";
+import { diffByKeyCounts, noopModuleResolver } from "../_helpers/test-utils.js";
 
 import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, typecheck, buildExprSpanIndex } from "@aurelia-ls/compiler";
 
@@ -150,13 +150,12 @@ function getDataString(
 
 function compareTypecheckIntent(actual: TypecheckIntent, expected: TypecheckIntent): TypecheckDiff {
   const { missing: missingExpected, extra: extraExpected } =
-    diffByKey(actual.expected, expected.expected, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
+    diffByKeyCounts(actual.expected, expected.expected, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
   const { missing: missingInferred, extra: extraInferred } =
-    diffByKey(actual.inferred, expected.inferred, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
+    diffByKeyCounts(actual.inferred, expected.inferred, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
   const { missing: missingDiags, extra: extraDiags } =
-    diffByKey(actual.diags, expected.diags, (d: DiagEntry) => `${d.code ?? ""}|${d.expr ?? ""}|${d.expected ?? ""}|${d.actual ?? ""}`);
+    diffByKeyCounts(actual.diags, expected.diags, (d: DiagEntry) => `${d.code ?? ""}|${d.expr ?? ""}|${d.expected ?? ""}|${d.actual ?? ""}`);
 
   return { missingExpected, extraExpected, missingInferred, extraInferred, missingDiags, extraDiags };
 }
-
 

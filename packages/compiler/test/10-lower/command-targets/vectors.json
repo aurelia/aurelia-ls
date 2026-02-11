@@ -1,0 +1,56 @@
+[
+  {
+    "name": "LCMD-01 class command preserves explicit target in to",
+    "markup": "<div active.class=\"isActive\"></div>",
+    "expect": {
+      "bindings": [
+        { "kind": "attributeBinding", "attr": "class", "to": "active", "code": "isActive" }
+      ]
+    }
+  },
+  {
+    "name": "LCMD-02 class command keeps dashed target",
+    "markup": "<div is-active.class=\"flag\"></div>",
+    "expect": {
+      "bindings": [
+        { "kind": "attributeBinding", "attr": "class", "to": "is-active", "code": "flag" }
+      ]
+    }
+  },
+  {
+    "name": "LCMD-03 class command normalizes comma list to spaces",
+    "markup": "<div foo,bar.class=\"flag\"></div>",
+    "expect": {
+      "bindings": [
+        { "kind": "attributeBinding", "attr": "class", "to": "foo bar", "code": "flag" }
+      ]
+    }
+  },
+  {
+    "name": "LCMD-04 style command preserves authored css property target",
+    "markup": "<div background-color.style=\"bgColor\"></div>",
+    "expect": {
+      "bindings": [
+        { "kind": "stylePropertyBinding", "to": "background-color", "code": "bgColor" }
+      ]
+    }
+  },
+  {
+    "name": "LCMD-05 attr command keeps attr/target parity",
+    "markup": "<div title.attr=\"titleExpr\"></div>",
+    "expect": {
+      "bindings": [
+        { "kind": "attributeBinding", "attr": "title", "to": "title", "code": "titleExpr" }
+      ]
+    }
+  },
+  {
+    "name": "LCMD-06 class.attr remains class target (negative control)",
+    "markup": "<div class.attr=\"klassExpr\"></div>",
+    "expect": {
+      "bindings": [
+        { "kind": "attributeBinding", "attr": "class", "to": "class", "code": "klassExpr" }
+      ]
+    }
+  }
+]

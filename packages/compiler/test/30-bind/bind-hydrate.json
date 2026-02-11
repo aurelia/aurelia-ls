@@ -85,6 +85,7 @@
         { "frame": "root", "kind": "syntheticLocal", "name": "$displayData" }
       ],
       "exprs": [
+        { "kind": "expr", "frame": "root", "code": "$displayData" },
         { "kind": "expr", "frame": "root", "code": "$displayData" }
       ],
       "diags": []

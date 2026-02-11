@@ -72,6 +72,15 @@ function hasInlineBindings(value: string): boolean {
   return false;
 }
 
+function normalizeClassCommandTarget(target: string): string {
+  if (!target.includes(",")) return target;
+  const classes = target
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  return classes.length > 0 ? classes.join(" ") : target;
+}
+
 /**
  * Computes a sub-span within a multi-binding attribute value for a single binding expression.
  * Trims leading/trailing whitespace from the slice to produce a tight span.
@@ -307,10 +316,13 @@ export function lowerElementAttributes(
           case "attribute": {
             // Use forceAttribute if specified (e.g., "class" command always uses "class")
             const attrName = cmdConfig.forceAttribute ?? s.target;
+            const target = s.command === "class"
+              ? normalizeClassCommandTarget(s.target)
+              : s.target;
             tail.push({
               type: "attributeBinding",
               attr: attrName,
-              to: attrName,
+              to: target,
               from: toBindingSource(raw, valueLoc, table, "IsProperty"),
               loc: toSpan(loc, table.source),
             });

@@ -26,5 +26,60 @@
         { "code": "aurelia/expr-type-mismatch", "expr": "123", "expected": "boolean", "actual": "number" }
       ]
     }
+  },
+  {
+    "name": "TC-B-03 duplicate expression/type pairs preserve cardinality",
+    "markup": "<input value.bind=\"'same'\"><input value.bind=\"'same'\">",
+    "expect": {
+      "expected": [
+        { "code": "'same'", "type": "string" },
+        { "code": "'same'", "type": "string" }
+      ],
+      "inferred": [
+        { "code": "'same'", "type": "string" },
+        { "code": "'same'", "type": "string" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "TC-B-04 active.class keeps identifier expression semantics",
+    "markup": "<div active.class=\"active\"></div>",
+    "expect": {
+      "expected": [
+        { "code": "active", "type": "string" }
+      ],
+      "inferred": [
+        { "code": "active", "type": "NonNullable<(RootVm)>['active']" }
+      ],
+      "diags": [
+        {
+          "code": "aurelia/expr-type-mismatch",
+          "expr": "active",
+          "expected": "string",
+          "actual": "NonNullable<(RootVm)>['active']"
+        }
+      ]
+    }
+  },
+  {
+    "name": "TC-B-05 width.style keeps identifier expression semantics",
+    "markup": "<div width.style=\"width\"></div>",
+    "expect": {
+      "expected": [
+        { "code": "width", "type": "string" }
+      ],
+      "inferred": [
+        { "code": "width", "type": "NonNullable<(RootVm)>['width']" }
+      ],
+      "diags": [
+        {
+          "code": "aurelia/expr-type-mismatch",
+          "expr": "width",
+          "expected": "string",
+          "actual": "NonNullable<(RootVm)>['width']"
+        }
+      ]
+    }
   }
 ]

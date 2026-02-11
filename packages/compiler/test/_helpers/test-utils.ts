@@ -22,6 +22,46 @@ export function diffByKey<T>(
 }
 
 /**
+ * Multiset diff by key.
+ * Preserves duplicate cardinality (same key may appear multiple times).
+ */
+export function diffByKeyCounts<T>(
+  actualArr: T[] | undefined,
+  expectedArr: T[] | undefined,
+  keyFn: (item: T) => string
+): { missing: string[]; extra: string[] } {
+  const actual = toCountMap(actualArr, keyFn);
+  const expected = toCountMap(expectedArr, keyFn);
+  const keys = new Set([...actual.keys(), ...expected.keys()]);
+  const missing: string[] = [];
+  const extra: string[] = [];
+
+  for (const key of keys) {
+    const actualCount = actual.get(key) ?? 0;
+    const expectedCount = expected.get(key) ?? 0;
+    if (expectedCount > actualCount) {
+      for (let i = 0; i < expectedCount - actualCount; i++) missing.push(key);
+    } else if (actualCount > expectedCount) {
+      for (let i = 0; i < actualCount - expectedCount; i++) extra.push(key);
+    }
+  }
+
+  return { missing, extra };
+}
+
+function toCountMap<T>(
+  values: T[] | undefined,
+  keyFn: (item: T) => string
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const value of values ?? []) {
+    const key = keyFn(value);
+    map.set(key, (map.get(key) ?? 0) + 1);
+  }
+  return map;
+}
+
+/**
  * Pretty-print helper for assertion messages.
  */
 export function fmtList(label: string, arr: string[] | undefined): string {

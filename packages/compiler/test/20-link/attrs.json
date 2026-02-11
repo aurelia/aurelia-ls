@@ -193,11 +193,11 @@
     }
   },
   {
-    "name": "R-A-17 .class override -> class (native)",
+    "name": "R-A-17 .class override preserves authored target while resolving class channel",
     "markup": "<div d.class=\"expr\"></div>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
+        { "kind": "attr", "attr": "class", "to": "d", "target": "native" }
       ]
     }
   },
@@ -216,6 +216,24 @@
     "expect": {
       "items": [
         { "kind": "style", "to": "background-color", "target": "style" }
+      ]
+    }
+  },
+  {
+    "name": "R-A-19b .class target preserved for active.class",
+    "markup": "<div active.class=\"isActive\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "class", "to": "active", "target": "native" }
+      ]
+    }
+  },
+  {
+    "name": "R-A-19c .class comma list normalized then preserved",
+    "markup": "<div foo,bar.class=\"expr\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "class", "to": "foo bar", "target": "native" }
       ]
     }
   },
@@ -441,6 +459,17 @@
         { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "twoWay" },
         { "kind": "attr", "attr": "fancy-attr", "to": "value", "target": "bindable" }
       ]
+    }
+  },
+  {
+    "name": "R-A-31 duplicate native attr resolutions preserve cardinality",
+    "markup": "<div class=\"a ${b}\"></div><div class=\"x ${y}\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" },
+        { "kind": "attr", "attr": "class", "to": "class", "target": "native" }
+      ],
+      "diags": []
     }
   }
 ]

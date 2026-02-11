@@ -715,8 +715,12 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
     });
   }
 
-  const to = normalizeAttrToProp(host, ins.attr, ctx.lookup);
-  const target = resolveAttrTarget(host, to);
+  // Resolve host target semantics from the output attribute channel (`attr`),
+  // but preserve command-authored binding targets in `to` (e.g. active.class).
+  const resolvedAttrTarget = normalizeAttrToProp(host, ins.attr, ctx.lookup);
+  const fromInterpolation = "kind" in ins.from && ins.from.kind === "interp";
+  const to = fromInterpolation ? resolvedAttrTarget : ins.to;
+  const target = resolveAttrTarget(host, resolvedAttrTarget);
   const linked: LinkedAttributeBinding = {
     kind: "attributeBinding",
     attr: ins.attr,

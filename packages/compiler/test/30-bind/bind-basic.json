@@ -175,5 +175,20 @@
       ],
       "diags": []
     }
+  },
+  {
+    "name": "B-12 duplicate text expressions preserve cardinality in same frame",
+    "markup": "<div>${item}${item}</div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "frame": "root", "code": "item" },
+        { "kind": "expr", "frame": "root", "code": "item" }
+      ],
+      "diags": []
+    }
   }
 ]

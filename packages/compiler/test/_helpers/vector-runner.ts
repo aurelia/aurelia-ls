@@ -67,14 +67,44 @@ export interface VectorTestConfig<TExpect, TIntent, TDiff> {
   execute: (vector: TestVector<TExpect>, ctx: CompilerContext) => TIntent;
   compare: (actual: TIntent, expected: TExpect) => TDiff;
   categories: string[];
+  diffChannels?: Record<string, { missingKey: string; extraKey: string }>;
+  requiredVectorKeys?: readonly string[];
+  allowedVectorKeys?: readonly string[];
+  requiredExpectKeys?: readonly string[];
+  allowedExpectKeys?: readonly string[];
   normalizeExpect?: (expect: TExpect | undefined) => TExpect;
   beforeAll?: () => void;
 }
 
+interface VectorValidationOptions {
+  suiteName?: string;
+  categories?: readonly string[];
+  requiredVectorKeys?: readonly string[];
+  allowedVectorKeys?: readonly string[];
+  requiredExpectKeys?: readonly string[];
+  allowedExpectKeys?: readonly string[];
+}
+
+const DEFAULT_REQUIRED_VECTOR_KEYS = ["name", "markup"] as const;
+const DEFAULT_ALLOWED_VECTOR_KEYS = [
+  "name",
+  "markup",
+  "expect",
+  "semOverrides",
+  "rootVmType",
+  "syntheticPrefix",
+  "comment",
+  "_comment",
+  "spec",
+] as const;
+
 /**
  * Load test vectors from JSON files in a directory.
  */
-export function loadVectors<TExpect = unknown>(dirname: string): TestVector<TExpect>[] {
+export function loadVectors<TExpect = unknown>(
+  dirname: string,
+  options: VectorValidationOptions = {}
+): TestVector<TExpect>[] {
   const vectorFiles = fs
     .readdirSync(dirname)
     .filter((f) => f.endsWith(".json") && f !== "failures.json")
@@ -82,7 +112,8 @@ export function loadVectors<TExpect = unknown>(dirname: string): TestVector<TExp
 
   return vectorFiles.flatMap((file) => {
     const full = path.join(dirname, file);
-    const vectors = JSON.parse(fs.readFileSync(full, "utf8")) as TestVector<TExpect>[];
+    const payload = JSON.parse(fs.readFileSync(full, "utf8")) as unknown;
+    const vectors = validateVectorsInFile(payload, file, options) as TestVector<TExpect>[];
     return vectors.map((v) => ({ ...v, file }));
   });
 }
@@ -137,11 +168,23 @@ export function runVectorTests<TExpect, TIntent, TDiff>(
     execute,
     compare,
     categories,
+    diffChannels,
+    requiredVectorKeys,
+    allowedVectorKeys,
+    requiredExpectKeys,
+    allowedExpectKeys,
     normalizeExpect = (e) => e as TExpect,
     beforeAll: beforeAllFn,
   } = config;
 
-  const vectors = loadVectors<TExpect>(dirname);
+  const vectors = loadVectors<TExpect>(dirname, {
+    suiteName,
+    categories,
+    requiredVectorKeys,
+    allowedVectorKeys,
+    requiredExpectKeys,
+    allowedExpectKeys,
+  });
   const { recordFailure, attachWriter } = createFailureRecorder(
     dirname,
     "failures.json"
@@ -170,15 +213,22 @@ export function runVectorTests<TExpect, TIntent, TDiff>(
         let anyMismatch = false;
 
         const diffRecord = diff as Record<string, unknown>;
+        const channelSpecs = createDiffChannelSpecs(categories, diffChannels);
         for (const cat of categories) {
-          const missing =
-            (diffRecord[`missing${capitalize(cat)}`] as string[] | undefined) ??
-            (diffRecord[`missing_${cat}`] as string[] | undefined) ??
-            [];
-          const extra =
-            (diffRecord[`extra${capitalize(cat)}`] as string[] | undefined) ??
-            (diffRecord[`extra_${cat}`] as string[] | undefined) ??
-            [];
+          const missing = readDiffChannel(
+            diffRecord,
+            channelSpecs[cat]!.missingKey,
+            suiteName,
+            v.name,
+            cat
+          );
+          const extra = readDiffChannel(
+            diffRecord,
+            channelSpecs[cat]!.extraKey,
+            suiteName,
+            v.name,
+            cat
+          );
 
           if (missing.length || extra.length) {
             anyMismatch = true;
@@ -200,14 +250,20 @@ export function runVectorTests<TExpect, TIntent, TDiff>(
 
         // Assert each category
         for (const cat of categories) {
-          const missing =
-            (diffRecord[`missing${capitalize(cat)}`] as string[] | undefined) ??
-            (diffRecord[`missing_${cat}`] as string[] | undefined) ??
-            [];
-          const extra =
-            (diffRecord[`extra${capitalize(cat)}`] as string[] | undefined) ??
-            (diffRecord[`extra_${cat}`] as string[] | undefined) ??
-            [];
+          const missing = readDiffChannel(
+            diffRecord,
+            channelSpecs[cat]!.missingKey,
+            suiteName,
+            v.name,
+            cat
+          );
+          const extra = readDiffChannel(
+            diffRecord,
+            channelSpecs[cat]!.extraKey,
+            suiteName,
+            v.name,
+            cat
+          );
 
           expect(
             !missing.length && !extra.length,
@@ -224,6 +280,141 @@ export function runVectorTests<TExpect, TIntent, TDiff>(
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export function createDiffChannelSpecs(
+  categories: readonly string[],
+  overrides: Record<string, { missingKey: string; extraKey: string }> | undefined
+): Record<string, { missingKey: string; extraKey: string }> {
+  const specs: Record<string, { missingKey: string; extraKey: string }> = {};
+  for (const category of categories) {
+    specs[category] = overrides?.[category] ?? {
+      missingKey: `missing${capitalize(category)}`,
+      extraKey: `extra${capitalize(category)}`,
+    };
+  }
+  return specs;
+}
+
+export function validateVectorsInFile(
+  payload: unknown,
+  fileName: string,
+  options: VectorValidationOptions = {}
+): TestVector[] {
+  if (!Array.isArray(payload)) {
+    throw new Error(`${formatVectorErrorPrefix(options.suiteName, fileName)} vector file must be a JSON array.`);
+  }
+
+  const requiredVectorKeys = new Set(options.requiredVectorKeys ?? DEFAULT_REQUIRED_VECTOR_KEYS);
+  const allowedVectorKeys = new Set(options.allowedVectorKeys ?? DEFAULT_ALLOWED_VECTOR_KEYS);
+  const requiredExpectKeys = new Set(options.requiredExpectKeys ?? []);
+  const allowedExpectKeys = new Set(options.allowedExpectKeys ?? options.categories ?? []);
+  const enforceExpectKeys = allowedExpectKeys.size > 0 || requiredExpectKeys.size > 0;
+
+  const vectors: TestVector[] = [];
+  payload.forEach((entry, index) => {
+    if (!isPlainObject(entry)) {
+      throw new Error(
+        `${formatVectorErrorPrefix(options.suiteName, fileName)} vector #${index + 1} must be an object.`
+      );
+    }
+    const vector = entry as TestVector;
+
+    for (const key of requiredVectorKeys) {
+      if (!(key in vector)) {
+        throw new Error(
+          `${formatVectorErrorPrefix(options.suiteName, fileName)} vector "${vector.name ?? `#${index + 1}`}" is missing required key "${key}".`
+        );
+      }
+    }
+
+    if (typeof vector.name !== "string" || vector.name.trim().length === 0) {
+      throw new Error(
+        `${formatVectorErrorPrefix(options.suiteName, fileName)} vector #${index + 1} must provide non-empty string "name".`
+      );
+    }
+    if (typeof vector.markup !== "string") {
+      throw new Error(
+        `${formatVectorErrorPrefix(options.suiteName, fileName)} vector "${vector.name}" must provide string "markup".`
+      );
+    }
+
+    for (const key of Object.keys(vector)) {
+      if (!allowedVectorKeys.has(key)) {
+        throw new Error(
+          `${formatVectorErrorPrefix(options.suiteName, fileName)} vector "${vector.name}" has unknown top-level key "${key}".`
+        );
+      }
+    }
+
+    if (vector.expect !== undefined) {
+      if (!isPlainObject(vector.expect)) {
+        throw new Error(
+          `${formatVectorErrorPrefix(options.suiteName, fileName)} vector "${vector.name}" must provide object "expect" when present.`
+        );
+      }
+      const expectRecord = vector.expect as Record<string, unknown>;
+      if (enforceExpectKeys) {
+        for (const key of requiredExpectKeys) {
+          if (!(key in expectRecord)) {
+            throw new Error(
+              `${formatVectorErrorPrefix(options.suiteName, fileName)} vector "${vector.name}" expect is missing required key "${key}".`
+            );
+          }
+        }
+        for (const key of Object.keys(expectRecord)) {
+          if (!allowedExpectKeys.has(key)) {
+            throw new Error(
+              `${formatVectorErrorPrefix(options.suiteName, fileName)} vector "${vector.name}" expect has unknown key "${key}".`
+            );
+          }
+        }
+      }
+    }
+
+    vectors.push(vector);
+  });
+
+  return vectors;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function formatVectorErrorPrefix(suiteName: string | undefined, fileName: string): string {
+  return suiteName ? `${suiteName}: ${fileName}` : fileName;
+}
+
+export function readDiffChannel(
+  diff: Record<string, unknown>,
+  key: string,
+  suiteName: string,
+  vectorName: string,
+  category: string
+): string[] {
+  if (!(key in diff)) {
+    throw new Error(
+      `${suiteName}: compare() must provide diff channel "${key}" for category "${category}" (vector "${vectorName}").`
+    );
+  }
+
+  const value = diff[key];
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `${suiteName}: diff channel "${key}" must be an array for category "${category}" (vector "${vectorName}").`
+    );
+  }
+
+  if (!value.every((entry) => typeof entry === "string")) {
+    throw new Error(
+      `${suiteName}: diff channel "${key}" must contain strings for category "${category}" (vector "${vectorName}").`
+    );
+  }
+
+  return value;
 }
 
 /**

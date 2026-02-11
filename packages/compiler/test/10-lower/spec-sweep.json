@@ -49,6 +49,8 @@
         { "kind": "propCommand", "command": "bind", "code": "item.disabled" },
         { "kind": "propCommand", "command": "bind", "code": "item.btnClass" },
         { "kind": "controllerValue", "code": "load()", "command": "bind" },
+        { "kind": "controllerValue", "code": "load()", "command": "bind" },
+        { "kind": "controllerValue", "code": "load()", "command": "bind" },
         { "kind": "controllerValue", "code": "result.detail", "command": "bind" },
         { "kind": "text", "code": "result.message" },
         { "kind": "text", "code": "err.code" }
