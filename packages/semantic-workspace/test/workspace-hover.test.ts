@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
+import type { SemanticWorkspaceEngine } from "../src/engine.js";
 
 function insertBefore(text: string, marker: string, insert: string): string {
   const index = text.indexOf(marker);
@@ -436,5 +437,419 @@ describe("workspace hover (meta elements)", () => {
     const hover = metaHarness.workspace.query(uri).hover(findPosition(text, "<bindable", 1));
     expect(hover?.contents ?? "").toContain("<bindable>");
     expect(hover?.contents ?? "").toContain("Declare a bindable property");
+  });
+});
+
+// ── R7: Hover channel switch — definition authority and confidence ─────────
+
+describe("R7: hover provenance from definition authority (workspace-contract)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const text = harness.readText(appUri);
+    if (!text) {
+      throw new Error("Expected template text for workspace-contract my-app.html");
+    }
+    appText = text;
+  });
+
+  // Pattern T: Hover on a resource from the definition authority shows provenance origin
+  it("shows provenance origin for custom elements (Pattern T)", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "<summary-panel", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    // Provenance indicator from Sourced<T>.origin
+    expect(contents).toContain("Discovered via source analysis");
+    // Existing content preserved: signature, bindables, file path
+    expect(contents).toMatch(/```ts\s*\n\(custom element\) summary-panel/);
+    expect(contents).toContain("Bindables");
+    // Card structure preserved: fenced code block + separator + metadata
+    expect(contents).toContain("```ts");
+    expect(contents).toContain("---");
+  });
+
+  // Pattern T variant: provenance for custom attributes (programmatic define)
+  it("shows provenance origin for custom attributes (Pattern T)", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "copy-to-clipboard.bind", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    // Custom attributes defined via CustomAttribute.define() should have provenance
+    expect(contents).toContain("(custom attribute)");
+    expect(contents).toContain("copy-to-clipboard");
+    // Programmatic define is 'source' origin — assert specifically, not alternation
+    expect(contents).toContain("Discovered via source analysis");
+  });
+
+  // Pattern V: Hover on a non-gapped resource does not set confidence
+  it("does not set confidence for non-gapped resources (Pattern V)", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "<summary-panel", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    // The workspace-contract fixture has fully-resolved resources — no gaps
+    expect(hover?.confidence).toBeUndefined();
+    // Provenance is still present
+    expect(hover?.contents ?? "").toContain("Discovered via source analysis");
+  });
+
+  // Pattern W: Hover on native HTML elements remains null
+  it("returns null for native HTML elements (Pattern W)", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, '<div class="toolbar">', 1);
+    const hover = query.hover(pos);
+    // Native elements produce no hover — unchanged by R7
+    expect(hover).toBeNull();
+  });
+
+  // Pattern X: Hover augmentation preserves existing content structure
+  it("preserves existing content structure with provenance added (Pattern X)", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "<summary-panel", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+
+    // All existing content elements must be present
+    expect(contents).toMatch(/```ts\s*\n\(custom element\) summary-panel/);
+    expect(contents).toContain("Bindables");
+    expect(contents).toContain("`stats`");
+    expect(contents).toContain("Show overlay");
+
+    // Provenance line is present and does not duplicate file path
+    expect(contents).toContain("Discovered via source analysis");
+    // Only one occurrence of provenance — no duplication
+    const provenanceCount = (contents.match(/Discovered via source analysis/g) ?? []).length;
+    expect(provenanceCount).toBe(1);
+
+    // Span and node id still work
+    expect(hover?.location?.span).toBeDefined();
+    expect(hover?.location?.nodeId).toBeDefined();
+  });
+
+  // Pattern X variant: value converter hover preserves structure
+  it("shows provenance for value converters (Pattern X)", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "titlecase", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    expect(contents).toMatch(/```ts\s*\n\(value converter\) titlecase/);
+    // VC defined via @valueConverter("titlecase") — source origin
+    expect(contents).toContain("Discovered via source analysis");
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // Pattern X variant: binding behavior hover preserves structure
+  it("shows provenance for binding behaviors (Pattern X)", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, "debounce", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    expect(contents).toMatch(/```ts\s*\n\(binding behavior\) debounce/);
+    // BB defined via @bindingBehavior("debounce") — source origin
+    expect(contents).toContain("Discovered via source analysis");
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // Verify degradation field is structurally accessible (R6 prerequisite for R7)
+  it("compilation degradation is accessible and clean for non-gapped fixture", () => {
+    const engine = harness.workspace as SemanticWorkspaceEngine;
+    const compilation = engine.getCompilation(appUri);
+    expect(compilation).not.toBeNull();
+    expect(compilation!.degradation).toBeDefined();
+    expect(compilation!.degradation.hasGaps).toBe(false);
+    expect(compilation!.degradation.gapQualifiedCount).toBe(0);
+    expect(compilation!.degradation.affectedResources).toEqual([]);
+  });
+
+  // ── Seam-crossing property test ──────────────────────────────────────────
+  // The adversarial testing landscape says: "zero tests that Sourced<T>
+  // wrappings survive any pipeline stage transition." This test reads
+  // Sourced<T>.origin from the definition authority, then verifies the
+  // corresponding provenance text appears in hover — proving the origin
+  // survived the definition-authority → engine → hover content seam.
+  it("Sourced<T>.origin from definition authority survives to hover content", () => {
+    const engine = harness.workspace as SemanticWorkspaceEngine;
+    const authority = engine.projectIndex.currentDiscovery().definition.authority;
+
+    // Find summary-panel in the definition authority
+    const summaryDef = authority.find(
+      (def) => def.kind === "custom-element" && def.name.origin === "source" && def.name.value === "summary-panel",
+    );
+    expect(summaryDef).toBeDefined();
+    expect(summaryDef!.name.origin).toBe("source");
+
+    // Now hover and verify the origin survived to the hover content
+    const query = harness.workspace.query(appUri);
+    const hover = query.hover(findPosition(appText, "<summary-panel", 1));
+    expect(hover).not.toBeNull();
+    // "source" origin → "Discovered via source analysis" — exact correspondence
+    expect(hover?.contents ?? "").toContain("Discovered via source analysis");
+    // The other origins must NOT appear — tests the mapping, not just presence
+    expect(hover?.contents ?? "").not.toContain("Declared in configuration");
+    expect(hover?.contents ?? "").not.toContain("Built-in Aurelia resource");
+  });
+
+  // ── Template controller provenance ────────────────────────────────────────
+  // Framework TCs (if, repeat, switch) are discovered through source analysis
+  // of the Aurelia packages (they carry @templateController decorators).
+  // They appear in the definition authority and get provenance augmentation.
+  it("framework template controllers get provenance from definition authority", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, 'if.bind="activeDevice"', 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(template controller) if");
+    // Framework TCs are discovered via source analysis of @aurelia packages
+    expect(contents).toContain("Discovered via source analysis");
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // ── Expression hover is unaugmented (fallback path) ──────────────────────
+  // Interpolation expressions (${total}) produce hover with type info from
+  // the TypeScript language service. #identifyHoveredResource returns null
+  // because expressions aren't resource elements/attributes/VCs/BBs. The
+  // engine returns the base result unaugmented — no provenance, no confidence.
+  it("expression hover is unaugmented — no provenance or confidence (fallback path)", () => {
+    const query = harness.workspace.query(appUri);
+    // Hover on the 'total' variable in ${total}
+    const pos = findPosition(appText, "${total}", 3);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    // Expression hover shows label/type — no resource provenance
+    expect(contents).not.toContain("Discovered via source analysis");
+    expect(contents).not.toContain("Declared in configuration");
+    expect(contents).not.toContain("Built-in Aurelia resource");
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // ── Meta-hover bypass ────────────────────────────────────────────────────
+  // <import> is handled by #metaHover, which returns before #augmentHover
+  // is called. Verify no provenance or confidence leaks into meta hover.
+  it("meta-hover elements (<import>) bypass augmentation — no provenance or confidence", () => {
+    const query = harness.workspace.query(appUri);
+    const pos = findPosition(appText, '<import from="./views/summary-panel">', 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    // Meta-hover content structure
+    expect(contents).toContain("<import>");
+    // No provenance — meta hover is not augmented
+    expect(contents).not.toContain("Discovered via source analysis");
+    expect(contents).not.toContain("Declared in configuration");
+    expect(contents).not.toContain("Built-in Aurelia resource");
+    // No confidence — meta hover bypasses degradation check
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // ── Binding command hover stability ──────────────────────────────────────
+  // Binding commands (bind, trigger, call) produce hover through the kernel.
+  // #identifyHoveredResource returns null for binding commands (they aren't
+  // in any definition index map). Verify R7 doesn't break binding command hover.
+  it("binding command hover is unaugmented by R7 — no provenance or confidence", () => {
+    const query = harness.workspace.query(appUri);
+    // Hover on the '.trigger' part of click.trigger
+    const pos = findPosition(appText, "click.trigger", 6);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(binding command) trigger");
+    // No provenance — binding commands have no definition authority entry
+    expect(contents).not.toContain("Discovered via source analysis");
+    expect(contents).not.toContain("Declared in configuration");
+    expect(contents).not.toContain("Built-in Aurelia resource");
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // ── Convention-based resource provenance ──────────────────────────────────
+  // convention-widget has no decorator, no static $au — pure convention.
+  // It should still appear in definition authority with origin: 'source'
+  // and receive provenance augmentation.
+  it("convention-based resources get provenance from definition authority", () => {
+    const engine = harness.workspace as SemanticWorkspaceEngine;
+    const authority = engine.projectIndex.currentDiscovery().definition.authority;
+
+    // Verify convention-widget is in definition authority
+    const conventionDef = authority.find(
+      (def) => def.kind === "custom-element" && def.name.value === "convention-widget",
+    );
+    expect(conventionDef).toBeDefined();
+    // Convention discovery is still source analysis
+    expect(conventionDef!.name.origin).toBe("source");
+
+    // Hover shows provenance
+    const query = harness.workspace.query(appUri);
+    const hover = query.hover(findPosition(appText, "<convention-widget", 1));
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+    expect(contents).toContain("(custom element) convention-widget");
+    expect(contents).toContain("Discovered via source analysis");
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // ── Provenance uniqueness across resource kinds ──────────────────────────
+  // Different resource kinds all get provenance from definition authority,
+  // verifying the channel switch covers the full resource vocabulary.
+  it("all five resource kinds exercise provenance when in definition authority", () => {
+    const query = harness.workspace.query(appUri);
+
+    // Custom element
+    const elHover = query.hover(findPosition(appText, "<summary-panel", 1));
+    expect(elHover?.contents ?? "").toContain("Discovered via source analysis");
+
+    // Custom attribute
+    const attrHover = query.hover(findPosition(appText, "copy-to-clipboard.bind", 1));
+    expect(attrHover?.contents ?? "").toContain("Discovered via source analysis");
+
+    // Value converter
+    const vcHover = query.hover(findPosition(appText, "titlecase", 1));
+    expect(vcHover?.contents ?? "").toContain("Discovered via source analysis");
+
+    // Binding behavior
+    const bbHover = query.hover(findPosition(appText, "debounce", 1));
+    expect(bbHover?.contents ?? "").toContain("Discovered via source analysis");
+
+    // Template controller (locally defined if-not is in the fixture)
+    // Builtin TCs are NOT in definition authority, but local TCs should be.
+    // The workspace-contract fixture has if-not in src/attributes/if-not.ts
+    // but it's used in summary-panel.html, not my-app.html. So we verify
+    // by checking the definition authority has entries for controllers.
+    const engine = harness.workspace as SemanticWorkspaceEngine;
+    const authority = engine.projectIndex.currentDiscovery().definition.authority;
+    const localControllers = authority.filter((d) => d.kind === "template-controller");
+    // At minimum if-not should be there as a locally-defined TC
+    expect(localControllers.length).toBeGreaterThan(0);
+    expect(localControllers.every((c) => c.name.origin === "source")).toBe(true);
+  });
+});
+
+// Pattern U: Hover on a gap-affected resource populates WorkspaceHover.confidence
+describe("R7: hover confidence from degradation (gap injection)", () => {
+  it("sets confidence to 'partial' for gap-affected resources (Pattern U)", async () => {
+    const gapHarness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    const engine = gapHarness.workspace as SemanticWorkspaceEngine;
+
+    // Inject third-party gaps targeting summary-panel via applyThirdPartyOverlay.
+    // This simulates discovering a third-party package with incomplete analysis
+    // for the 'summary-panel' custom element.
+    engine.projectIndex.applyThirdPartyOverlay({
+      resources: {},
+      gaps: [
+        {
+          what: "bindables for summary-panel",
+          why: { kind: "dynamic-value" as any, expression: "test" },
+          suggestion: "Add explicit bindable declarations",
+          resource: { kind: "custom-element", name: "summary-panel" },
+        },
+      ],
+    });
+    // Propagate the overlay to the kernel without wiping it.
+    // engine.refresh() would call projectIndex.refresh() which recomputes
+    // from scratch and destroys the overlay. setResourceScope(null) triggers
+    // kernel.reconfigure() with the current (gap-containing) snapshot.
+    engine.setResourceScope(null);
+
+    const uri = gapHarness.openTemplate("src/my-app.html");
+    const originalText = gapHarness.readText(uri);
+    if (!originalText) {
+      throw new Error("Expected template text");
+    }
+
+    // Insert an unknown binding on the gap-annotated element.
+    // Gaps produce confidence:"partial" diagnostics only when the link stage
+    // encounters an UNRESOLVED binding on an element with catalog gaps.
+    // The fixture's summary-panel has all bindables fully resolved, so we
+    // add one that doesn't exist to trigger the gap qualification path.
+    const text = originalText.replace(
+      `on-refresh.call="refreshStats()">`,
+      `on-refresh.call="refreshStats()" gap-probe.bind="x">`,
+    );
+    engine.update(uri, text);
+
+    // Verify degradation now reports gaps
+    const compilation = engine.getCompilation(uri);
+    expect(compilation).not.toBeNull();
+    expect(compilation!.degradation.hasGaps).toBe(true);
+    expect(compilation!.degradation.affectedResources.some(
+      (r) => r.name === "summary-panel",
+    )).toBe(true);
+
+    // Hover on the gap-affected resource
+    const query = gapHarness.workspace.query(uri);
+    const pos = findPosition(text, "<summary-panel", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+
+    // R7: confidence is populated from degradation data
+    expect(hover?.confidence).toBe("partial");
+
+    // Content still renders normally — provenance and card structure preserved
+    expect(hover?.contents ?? "").toContain("(custom element) summary-panel");
+    expect(hover?.contents ?? "").toContain("Bindables");
+  });
+
+  it("does not set confidence for non-affected resources in gapped workspace (Pattern U negative)", async () => {
+    const gapHarness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    const engine = gapHarness.workspace as SemanticWorkspaceEngine;
+
+    // Inject gaps for summary-panel only — other resources should not be affected
+    engine.projectIndex.applyThirdPartyOverlay({
+      resources: {},
+      gaps: [
+        {
+          what: "bindables for summary-panel",
+          why: { kind: "dynamic-value" as any, expression: "test" },
+          suggestion: "Add explicit bindable declarations",
+          resource: { kind: "custom-element", name: "summary-panel" },
+        },
+      ],
+    });
+    engine.setResourceScope(null);
+
+    const uri = gapHarness.openTemplate("src/my-app.html");
+    const originalText = gapHarness.readText(uri);
+    if (!originalText) {
+      throw new Error("Expected template text");
+    }
+
+    // Add an unresolved binding on summary-panel to trigger gap qualification
+    const text = originalText.replace(
+      `on-refresh.call="refreshStats()">`,
+      `on-refresh.call="refreshStats()" gap-probe.bind="x">`,
+    );
+    engine.update(uri, text);
+
+    // Verify the workspace IS gapped (guards against false-positive from broken injection)
+    const compilation = engine.getCompilation(uri);
+    expect(compilation).not.toBeNull();
+    expect(compilation!.degradation.hasGaps).toBe(true);
+
+    // Hover on convention-widget — NOT gap-affected
+    const query = gapHarness.workspace.query(uri);
+    const pos = findPosition(text, "<convention-widget", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    // Non-affected resource should NOT have confidence set
+    expect(hover?.confidence).toBeUndefined();
   });
 });

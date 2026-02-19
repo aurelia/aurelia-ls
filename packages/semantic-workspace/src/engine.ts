@@ -18,6 +18,7 @@ import {
   spanContainsOffset,
   stableHash,
   toSourceSpan,
+  unwrapSourced,
   type DiagnosticDataRecord,
   type DiagnosticSpec,
   type DiagnosticSurface,
@@ -35,6 +36,7 @@ import {
   type TemplateSyntaxRegistry,
   type VmReflection,
   type ResourceScopeId,
+  type Sourced,
   type SymbolId,
   type StyleProfile,
 } from "@aurelia-ls/compiler";
@@ -79,7 +81,9 @@ import {
   collectTemplateDefinitionSlices,
   collectTemplateReferences,
   collectTemplateResourceReferences,
+  findEntry,
   type ResourceDefinitionIndex,
+  type ResourceDefinitionEntry,
   type TemplateDefinitionSlices,
 } from "./definition.js";
 import type { RefactorOverrides } from "./style-profile.js";
@@ -104,6 +108,12 @@ import {
   type TemplateIndex,
 } from "./template-edit-engine.js";
 import { decideRenameMappedProvenance } from "./provenance-gate-policy.js";
+import {
+  findValueConverterAtOffset,
+  findBindingBehaviorAtOffset,
+  findInstructionHitsAtOffset,
+} from "./query-helpers.js";
+import { buildDomIndex } from "./template-dom.js";
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
@@ -375,7 +385,11 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return {
       hover: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
-        return this.#metaHover(canonical.uri, pos) ?? base.hover(pos);
+        const metaResult = this.#metaHover(canonical.uri, pos);
+        if (metaResult) return metaResult;
+        const baseResult = base.hover(pos);
+        if (!baseResult) return null;
+        return this.#augmentHover(canonical.uri, pos, baseResult);
       },
       definition: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
@@ -700,6 +714,107 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       contents: metaHover.contents,
       location: { uri, span: metaHover.span },
     };
+  }
+
+  #augmentHover(uri: DocumentUri, pos: { line: number; character: number }, baseResult: WorkspaceHover): WorkspaceHover {
+    const text = this.lookupText(uri);
+    if (!text) return baseResult;
+    const offset = offsetAtPosition(text, pos);
+    if (offset == null) return baseResult;
+    const compilation = this.#kernel.getCompilation(uri);
+    if (!compilation) return baseResult;
+
+    const resource = this.#identifyHoveredResource(compilation, offset);
+    if (!resource) return baseResult;
+
+    const entry = findEntry(resource.map, resource.name, resource.file, [this.#workspaceRoot]);
+    if (!entry) return baseResult;
+
+    // Extract provenance origin from Sourced<T> on the resource name
+    const provenanceLine = formatProvenanceOrigin(entry.def.name);
+
+    // Check degradation for confidence
+    const confidence = deriveHoverConfidence(compilation, resource.name);
+
+    // Augment content with provenance
+    let contents = baseResult.contents;
+    if (provenanceLine) {
+      contents = augmentHoverContent(contents, provenanceLine);
+    }
+
+    return {
+      ...baseResult,
+      contents,
+      ...(confidence ? { confidence } : {}),
+    };
+  }
+
+  #identifyHoveredResource(compilation: TemplateCompilation, offset: number): HoveredResourceIdentity | null {
+    // Custom elements
+    const node = compilation.query.nodeAt(offset);
+    if (node) {
+      const template = compilation.linked.templates[node.templateIndex];
+      if (template) {
+        const row = template.rows.find((r) => r.target === node.id);
+        if (row?.node.kind === "element" && row.node.custom?.def) {
+          return {
+            name: row.node.custom.def.name,
+            file: row.node.custom.def.file ?? null,
+            map: this.#definitionIndex.elements,
+          };
+        }
+      }
+    }
+
+    // Instruction-based resources (attributes, controllers)
+    const domIndex = buildDomIndex(compilation.ir.templates ?? []);
+    const instructionHits = findInstructionHitsAtOffset(
+      compilation.linked.templates,
+      compilation.ir.templates ?? [],
+      domIndex,
+      offset,
+    );
+    for (const hit of instructionHits) {
+      if (hit.instruction.kind === "hydrateAttribute") {
+        const res = hit.instruction.res?.def;
+        if (res) {
+          return {
+            name: res.name,
+            file: res.file ?? null,
+            map: this.#definitionIndex.attributes,
+          };
+        }
+      }
+      if (hit.instruction.kind === "hydrateTemplateController") {
+        return {
+          name: hit.instruction.res,
+          file: null,
+          map: this.#definitionIndex.controllers,
+        };
+      }
+    }
+
+    // Value converters
+    const converterHit = findValueConverterAtOffset(compilation.exprTable, offset);
+    if (converterHit) {
+      return {
+        name: converterHit.name,
+        file: null,
+        map: this.#definitionIndex.valueConverters,
+      };
+    }
+
+    // Binding behaviors
+    const behaviorHit = findBindingBehaviorAtOffset(compilation.exprTable, offset);
+    if (behaviorHit) {
+      return {
+        name: behaviorHit.name,
+        file: null,
+        map: this.#definitionIndex.bindingBehaviors,
+      };
+    }
+
+    return null;
   }
 
   #metaDefinition(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] | null {
@@ -1233,6 +1348,12 @@ interface MetaHoverResult {
   span: SourceSpan;
 }
 
+type HoveredResourceIdentity = {
+  name: string;
+  file: string | null;
+  map: ReadonlyMap<string, ResourceDefinitionEntry[]>;
+};
+
 type TemplateMeta = NonNullable<TemplateCompilation["linked"]["templates"][0]["templateMeta"]>;
 const EMPTY_DEFINITION_SLICES: TemplateDefinitionSlices = { local: [], resource: [] };
 
@@ -1502,6 +1623,46 @@ function findFirstExportSpan(filePath: string): SourceSpan | null {
 
 function isWithinSpan(offset: number, span: SourceSpan | undefined): boolean {
   return span ? spanContainsOffset(span, offset) : false;
+}
+
+// ── R7: Hover augmentation helpers ──────────────────────────────────────
+
+function formatProvenanceOrigin(name: Sourced<string>): string | null {
+  switch (name.origin) {
+    case "source":
+      return "*Discovered via source analysis*";
+    case "config":
+      return "*Declared in configuration*";
+    case "builtin":
+      return "*Built-in Aurelia resource*";
+    default:
+      return null;
+  }
+}
+
+function deriveHoverConfidence(
+  compilation: TemplateCompilation,
+  resourceName: string,
+): WorkspaceHover["confidence"] | undefined {
+  const degradation = compilation.degradation;
+  if (!degradation?.hasGaps) return undefined;
+  const affected = degradation.affectedResources.some((r) => r.name === resourceName);
+  return affected ? "partial" : undefined;
+}
+
+function augmentHoverContent(contents: string, provenanceLine: string): string {
+  // Insert provenance before the overlay command link (always last in resource cards)
+  const overlayMarker = "[$(file-code) Show overlay]";
+  const idx = contents.lastIndexOf(overlayMarker);
+  if (idx > 0) {
+    return contents.slice(0, idx) + provenanceLine + "\n\n" + contents.slice(idx);
+  }
+  // No overlay link — append after separator if present, else add separator
+  const sepIdx = contents.lastIndexOf("\n\n---\n\n");
+  if (sepIdx >= 0) {
+    return contents + "\n\n" + provenanceLine;
+  }
+  return contents + "\n\n---\n\n" + provenanceLine;
 }
 
 function buildOverlaySnapshot(

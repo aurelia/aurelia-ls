@@ -50,7 +50,7 @@ export interface TemplateDefinitionSlices {
   readonly resource: WorkspaceLocation[];
 }
 
-type ResourceDefinitionEntry = {
+export type ResourceDefinitionEntry = {
   readonly def: ResourceDef;
   readonly symbolId?: SymbolId;
 };
@@ -522,7 +522,7 @@ function resourceDebugName(def: ResourceDef): string | null {
   return unwrapSourced(def.name) ?? null;
 }
 
-function findEntry(
+export function findEntry(
   map: ReadonlyMap<string, ResourceDefinitionEntry[]>,
   name: string,
   file: string | null,
