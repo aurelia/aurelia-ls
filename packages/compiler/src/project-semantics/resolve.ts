@@ -491,12 +491,16 @@ function toRawDiagnostic(diag: CompilerDiagnostic): RawDiagnostic {
   return span ? { ...rest, span } : { ...rest };
 }
 
-function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
+/** Exported for testing (Pattern B: gap identity survival through catalog boundary). */
+export function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
   const message = `${gap.what}: ${gap.suggestion}`;
   const resource = gap.where?.file;
-  return resource
-    ? { kind: gap.why.kind, message, resource }
-    : { kind: gap.why.kind, message };
+  return {
+    kind: gap.why.kind,
+    message,
+    ...(resource != null && { resource }),
+    ...(gap.resource != null && { resourceKind: gap.resource.kind, resourceName: gap.resource.name }),
+  };
 }
 
 function catalogConfidenceFromGaps(gaps: AnalysisGap[]): CatalogConfidence {

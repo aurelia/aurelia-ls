@@ -86,6 +86,8 @@ export interface GapExpectation {
   kind: string;
   contains?: string;
   file?: string;
+  resourceKind?: string;
+  resourceName?: string;
 }
 
 export interface AotExpectation {

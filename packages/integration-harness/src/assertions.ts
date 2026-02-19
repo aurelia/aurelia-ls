@@ -151,6 +151,8 @@ function assertGaps(run: IntegrationRun, expectations: ScenarioExpectations): As
       if (gap.kind !== expected.kind) return false;
       if (expected.contains && !gap.message.includes(expected.contains)) return false;
       if (expected.file && gap.resource !== expected.file) return false;
+      if (expected.resourceKind && gap.resourceKind !== expected.resourceKind) return false;
+      if (expected.resourceName && gap.resourceName !== expected.resourceName) return false;
       return true;
     });
     if (!match) {

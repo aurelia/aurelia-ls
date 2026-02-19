@@ -777,9 +777,12 @@ function convergenceRecordKey(record: DefinitionConvergenceRecord): string {
 function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
   const message = `${gap.what}: ${gap.suggestion}`;
   const resource = gap.where?.file;
-  return resource
-    ? { kind: gap.why.kind, message, resource }
-    : { kind: gap.why.kind, message };
+  return {
+    kind: gap.why.kind,
+    message,
+    ...(resource != null && { resource }),
+    ...(gap.resource != null && { resourceKind: gap.resource.kind, resourceName: gap.resource.name }),
+  };
 }
 
 function analysisGapToDiagnostic(gap: AnalysisGap): ProjectSemanticsDiscoveryResult["diagnostics"][number] {

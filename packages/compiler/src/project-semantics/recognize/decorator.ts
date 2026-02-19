@@ -372,6 +372,7 @@ function buildElementDef(
       what: `element name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid element name' },
       suggestion: `Provide an explicit name in the @customElement decorator.`,
+      resource: { kind: 'custom-element', name: cls.className },
     });
     return null;
   }
@@ -413,6 +414,7 @@ function buildAttributeDef(
       what: `attribute name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid attribute name' },
       suggestion: `Provide an explicit name in the @customAttribute decorator.`,
+      resource: { kind: 'custom-attribute', name: cls.className },
     });
     return null;
   }
@@ -466,6 +468,7 @@ function buildValueConverterDefFromMeta(
       what: `value converter name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid value converter name' },
       suggestion: `Provide an explicit name in the @valueConverter decorator.`,
+      resource: { kind: 'value-converter', name: cls.className },
     });
     return null;
   }
@@ -490,6 +493,7 @@ function buildBindingBehaviorDefFromMeta(
       what: `binding behavior name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid binding behavior name' },
       suggestion: `Provide an explicit name in the @bindingBehavior decorator.`,
+      resource: { kind: 'binding-behavior', name: cls.className },
     });
     return null;
   }

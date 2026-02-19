@@ -377,7 +377,12 @@ export interface ProjectSemantics {
 export interface CatalogGap {
   readonly kind: string;
   readonly message: string;
+  /** Source file path where the gap originates */
   readonly resource?: string;
+  /** Resource kind affected by this gap (same vocabulary as ResourceDef) */
+  readonly resourceKind?: ResourceKind;
+  /** Resource name affected by this gap (registration name, not class name) */
+  readonly resourceName?: string;
 }
 
 export type CatalogConfidence = 'complete' | 'high' | 'partial' | 'conservative';

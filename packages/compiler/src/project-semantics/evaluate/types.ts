@@ -10,7 +10,7 @@
  * - SiblingFile from project/types.ts
  */
 
-import type { NormalizedPath } from '../compiler.js';
+import type { NormalizedPath, ResourceKind } from '../compiler.js';
 
 // Re-export BindingMode for consumers of this module
 export type { BindingMode } from '../compiler.js';
@@ -59,6 +59,11 @@ export interface AnalysisGap {
   where?: GapLocation;
   /** Actionable suggestion for the user */
   suggestion: string;
+  /** Resource this gap affects. Present when identity is known at gap creation time. */
+  resource?: {
+    readonly kind: ResourceKind;
+    readonly name: string;
+  };
 }
 
 /**
@@ -197,7 +202,8 @@ export function gap(
   what: string,
   why: GapReason,
   suggestion: string,
-  where?: GapLocation
+  where?: GapLocation,
+  resource?: AnalysisGap['resource'],
 ): AnalysisGap {
-  return { what, why, suggestion, where };
+  return { what, why, suggestion, where, resource };
 }

@@ -136,6 +136,7 @@ function buildElementDef(
       what: `element name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid element name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
+      resource: { kind: 'custom-element', name: cls.className },
     });
     return { resource: null, gaps };
   }
@@ -186,6 +187,7 @@ function buildAttributeDef(
       what: `attribute name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid attribute name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
+      resource: { kind: 'custom-attribute', name: cls.className },
     });
     return { resource: null, gaps };
   }
@@ -252,6 +254,7 @@ function buildValueConverterDefFromAu(
       what: `value converter name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid value converter name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
+      resource: { kind: 'value-converter', name: cls.className },
     });
     return { resource: null, gaps };
   }
@@ -285,6 +288,7 @@ function buildBindingBehaviorDefFromAu(
       what: `binding behavior name for ${cls.className}`,
       why: { kind: 'invalid-resource-name', className: cls.className, reason: 'Could not derive valid binding behavior name from static $au' },
       suggestion: `Provide an explicit name in static $au.`,
+      resource: { kind: 'binding-behavior', name: cls.className },
     });
     return { resource: null, gaps };
   }

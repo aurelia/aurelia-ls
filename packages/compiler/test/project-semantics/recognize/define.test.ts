@@ -416,6 +416,8 @@ describe("matchDefine - error handling", () => {
     expect(result.resource).toBeNull();
     expect(result.gaps.length).toBe(1);
     expect(result.gaps[0]?.why.kind).toBe("dynamic-value");
+    // R1: pre-recognition gap — className unknown, identity honestly absent
+    expect(result.gaps[0]?.resource).toBeUndefined();
   });
 
   it("reports a gap for non-object definitions", () => {
@@ -427,6 +429,9 @@ describe("matchDefine - error handling", () => {
     expect(result.resource).toBeNull();
     expect(result.gaps.length).toBe(1);
     expect(result.gaps[0]?.why.kind).toBe("dynamic-value");
+    // R1: gap carries resource identity (className known, kind from context)
+    expect(result.gaps[0]?.resource?.kind).toBe("custom-element");
+    expect(result.gaps[0]?.resource?.name).toBe("FooBar");
   });
 
   it("reports a gap for empty names", () => {
@@ -438,5 +443,8 @@ describe("matchDefine - error handling", () => {
     expect(result.resource).toBeNull();
     expect(result.gaps.length).toBe(1);
     expect(result.gaps[0]?.why.kind).toBe("invalid-resource-name");
+    // R1: invalidNameGap carries resource identity
+    expect(result.gaps[0]?.resource?.kind).toBe("custom-element");
+    expect(result.gaps[0]?.resource?.name).toBe("EmptyName");
   });
 });
