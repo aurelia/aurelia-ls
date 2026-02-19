@@ -36,7 +36,7 @@ import { extractAllFileFacts, extractFileContext } from "./extract/file-facts-ex
 import { collectTemplateFactCollection } from "./extract/template-facts.js";
 import { evaluateFileFacts } from "./evaluate/index.js";
 import { buildExportBindingMap } from "./exports/export-resolver.js";
-import { matchFileFacts } from "./recognize/pipeline.js";
+import { matchFileFacts, type MatchSource } from "./recognize/pipeline.js";
 import { createRegistrationAnalyzer } from "./register/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
 import {
@@ -248,6 +248,7 @@ export function discoverProjectSemantics(
     trace.event("discovery.patternMatching.start");
     const recognizedResources: ResourceDef[] = [];
     const matcherGaps: AnalysisGap[] = [];
+    const matchSources = new Map<ResourceDef, MatchSource>();
     const contexts = new Map<NormalizedPath, FileContext>();
 
     for (const [filePath, fileFacts] of facts) {
@@ -265,6 +266,9 @@ export function discoverProjectSemantics(
       const matchResult = matchFileFacts(fileFacts, context);
       recognizedResources.push(...matchResult.resources);
       matcherGaps.push(...matchResult.gaps);
+      for (const [resource, source] of matchResult.matchSources) {
+        matchSources.set(resource, source);
+      }
     }
     trace.event("discovery.patternMatching.done", { resourceCount: recognizedResources.length });
     debug.project("patternMatching.complete", {
@@ -299,6 +303,7 @@ export function discoverProjectSemantics(
       recognizedResources,
       templateMetaCandidates.candidates,
       config?.packagePath,
+      matchSources,
     );
     const convergedResources = [
       ...recognizedResources,

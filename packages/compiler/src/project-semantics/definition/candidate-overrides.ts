@@ -6,11 +6,25 @@ export function createDiscoveryConvergenceOverrides(
   recognizedResources: readonly ResourceDef[],
   templateMetaResources: readonly ResourceDef[],
   packagePath?: string,
+  matchSources?: ReadonlyMap<ResourceDef, string>,
 ): ReadonlyMap<ResourceDef, DefinitionCandidateOverride> {
   const overrides = new Map<ResourceDef, DefinitionCandidateOverride>();
   const base = createEvidenceConvergenceOverrides(recognizedResources, packagePath);
   for (const [resource, override] of base) {
     overrides.set(resource, override);
+  }
+  // Convention-matched resources get lower priority than explicit analysis.
+  // Applied after evidence overrides so convention classification wins over
+  // the external-package "analysis-explicit" tag.
+  if (matchSources) {
+    for (const resource of recognizedResources) {
+      if (matchSources.get(resource) === "convention") {
+        overrides.set(resource, {
+          sourceKind: "analysis-convention",
+          evidenceRank: 4,
+        });
+      }
+    }
   }
   for (const resource of templateMetaResources) {
     overrides.set(resource, {

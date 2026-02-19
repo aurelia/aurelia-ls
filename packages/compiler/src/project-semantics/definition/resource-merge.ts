@@ -16,7 +16,7 @@ import {
   type DefinitionSourceKind,
   type DefinitionValueState,
 } from "./solver.js";
-import type { DefinitionFieldPath } from "./rules.js";
+import { getDefinitionFieldRule, type DefinitionFieldPath } from "./rules.js";
 import { sortResourceDefinitionCandidates, type ResourceDefinitionCandidate } from "./candidate-order.js";
 
 export interface ResourceDefinitionMergeResult {
@@ -329,6 +329,10 @@ function reduceSourcedField<T>(
   secondaryMeta: CandidateMeta,
   reasons: DefinitionReductionReason[],
 ): Sourced<T> | undefined {
+  const rule = getDefinitionFieldRule(field);
+  if (rule.operator === "patch-object") {
+    return reduceSourcedPatchObject(field, primary, secondary, primaryMeta, secondaryMeta, reasons);
+  }
   return reduceResolvedField(
     field,
     primary,
@@ -339,6 +343,40 @@ function reduceSourcedField<T>(
     toSourcedState,
     toSourcedConflictValue,
   );
+}
+
+/**
+ * Sourced-aware patch-object reduction.
+ *
+ * The generic `reducePatchObject` operator uses `Object.assign` on atom values.
+ * When atoms wrap `Sourced<T>` envelopes (via `toSourcedState`), it would merge
+ * provenance properties instead of inner values. This function unwraps the
+ * Sourced<T> inner values, runs the generic reducer on those, and re-wraps the
+ * result in the winning candidate's provenance envelope.
+ */
+function reduceSourcedPatchObject<T>(
+  field: DefinitionFieldPath,
+  primary: Sourced<T> | undefined,
+  secondary: Sourced<T> | undefined,
+  primaryMeta: CandidateMeta,
+  secondaryMeta: CandidateMeta,
+  reasons: DefinitionReductionReason[],
+): Sourced<T> | undefined {
+  const innerPrimary = primary ? unwrapSourced(primary) : undefined;
+  const innerSecondary = secondary ? unwrapSourced(secondary) : undefined;
+  const merged = reduceResolvedField(
+    field,
+    innerPrimary,
+    innerSecondary,
+    primaryMeta,
+    secondaryMeta,
+    reasons,
+  );
+  if (merged === undefined) return undefined;
+  // Re-wrap in the strongest available envelope's provenance.
+  const template = primary ?? secondary;
+  if (!template) return undefined;
+  return cloneSourcedWithValue(template, merged);
 }
 
 function reduceResolvedField<T>(

@@ -24,5 +24,6 @@ export {
   matchDefineCalls,
   matchFileFacts,
   type MatchResult,
+  type MatchSource,
   type FileMatchResult,
 } from './pipeline.js';

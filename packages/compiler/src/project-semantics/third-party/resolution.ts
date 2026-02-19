@@ -29,6 +29,8 @@ import {
   type CustomElementDef,
   type ResourceCollections,
   type ResourceDef,
+  type NormalizedPath,
+  type SourceLocation,
   type Sourced,
   type TemplateControllerDef,
   type TypeRef,
@@ -133,7 +135,8 @@ export function applyThirdPartyResources(
     ? [...result.diagnostics, ...gapList.map(analysisGapToDiagnostic)]
     : result.diagnostics;
   const policy = opts?.policy ?? "root-scope";
-  const overlayCandidates = resourceCollectionsToResourceDefs(extra);
+  const configFile = result.packagePath ?? normalizePathForId("/");
+  const overlayCandidates = resourceCollectionsToResourceDefs(extra, configFile);
   const evidence = overlayCandidates.length > 0
     ? [...result.definition.evidence, ...overlayCandidates]
     : result.definition.evidence;
@@ -501,6 +504,7 @@ function findLockfile(startDir: string): string | null {
 
 function resourceCollectionsToResourceDefs(
   resources: Partial<ResourceCollections>,
+  configFile: NormalizedPath,
 ): ResourceDef[] {
   const defs: ResourceDef[] = [];
   const templateControllerNames = new Set<string>();
@@ -508,19 +512,20 @@ function resourceCollectionsToResourceDefs(
   const elementEntries = Object.entries(resources.elements ?? {})
     .sort(([left], [right]) => left.localeCompare(right));
   for (const [name, element] of elementEntries) {
-    defs.push(toCustomElementDef(name, element));
+    defs.push(toCustomElementDef(name, element, element.file ?? configFile));
   }
 
   const attributeEntries = Object.entries(resources.attributes ?? {})
     .sort(([left], [right]) => left.localeCompare(right));
   for (const [name, attribute] of attributeEntries) {
+    const file = attribute.file ?? configFile;
     if (attribute.isTemplateController) {
       const controller = resources.controllers?.[name];
-      defs.push(toTemplateControllerDef(name, attribute, controller));
+      defs.push(toTemplateControllerDef(name, attribute, file, controller));
       templateControllerNames.add(normalizeName(attribute.name || name));
       continue;
     }
-    defs.push(toCustomAttributeDef(name, attribute));
+    defs.push(toCustomAttributeDef(name, attribute, file));
   }
 
   const controllerEntries = Object.entries(resources.controllers ?? {})
@@ -528,19 +533,19 @@ function resourceCollectionsToResourceDefs(
   for (const [name, controller] of controllerEntries) {
     const normalized = normalizeName(controller.name || name);
     if (templateControllerNames.has(normalized)) continue;
-    defs.push(toControllerOnlyDefinition(normalized, controller));
+    defs.push(toControllerOnlyDefinition(normalized, controller, configFile));
   }
 
   const converterEntries = Object.entries(resources.valueConverters ?? {})
     .sort(([left], [right]) => left.localeCompare(right));
   for (const [name, converter] of converterEntries) {
-    defs.push(toValueConverterDef(name, converter));
+    defs.push(toValueConverterDef(name, converter, converter.file ?? configFile));
   }
 
   const behaviorEntries = Object.entries(resources.bindingBehaviors ?? {})
     .sort(([left], [right]) => left.localeCompare(right));
   for (const [name, behavior] of behaviorEntries) {
-    defs.push(toBindingBehaviorDef(name, behavior));
+    defs.push(toBindingBehaviorDef(name, behavior, behavior.file ?? configFile));
   }
 
   return defs;
@@ -568,35 +573,35 @@ function createOverlayCandidateId(resource: ResourceDef, ordinal: number): strin
   return `overlay|${resource.kind}|${name}|${className}|${file}|${ordinal}`;
 }
 
-function toCustomElementDef(name: string, element: ResourceCollections["elements"][string]): CustomElementDef {
+function toCustomElementDef(name: string, element: ResourceCollections["elements"][string], file: NormalizedPath): CustomElementDef {
   const resolvedName = normalizeName(element.name || name);
   return {
     kind: "custom-element",
-    name: sourcedKnown(resolvedName),
-    className: sourcedKnown(element.className || toPascalCase(resolvedName)),
-    aliases: (element.aliases ?? []).map((alias) => sourcedKnown(normalizeName(alias))),
-    containerless: sourcedKnown(Boolean(element.containerless)),
-    shadowOptions: sourcedKnown(element.shadowOptions),
-    capture: sourcedKnown(Boolean(element.capture)),
-    processContent: sourcedKnown(Boolean(element.processContent)),
-    boundary: sourcedKnown(Boolean(element.boundary)),
-    bindables: toBindableDefs(element.bindables),
-    dependencies: (element.dependencies ?? []).map((dep) => sourcedKnown(dep)),
+    name: configSourced(resolvedName, file),
+    className: configSourced(element.className || toPascalCase(resolvedName), file),
+    aliases: (element.aliases ?? []).map((alias) => configSourced(normalizeName(alias), file)),
+    containerless: configSourced(Boolean(element.containerless), file),
+    shadowOptions: configSourced(element.shadowOptions, file),
+    capture: configSourced(Boolean(element.capture), file),
+    processContent: configSourced(Boolean(element.processContent), file),
+    boundary: configSourced(Boolean(element.boundary), file),
+    bindables: toBindableDefs(element.bindables, file),
+    dependencies: (element.dependencies ?? []).map((dep) => configSourced(dep, file)),
     ...(element.file ? { file: element.file } : {}),
     ...(element.package ? { package: element.package } : {}),
   };
 }
 
-function toCustomAttributeDef(name: string, attribute: ResourceCollections["attributes"][string]): CustomAttributeDef {
+function toCustomAttributeDef(name: string, attribute: ResourceCollections["attributes"][string], file: NormalizedPath): CustomAttributeDef {
   const resolvedName = normalizeName(attribute.name || name);
   return {
     kind: "custom-attribute",
-    name: sourcedKnown(resolvedName),
-    className: sourcedKnown(attribute.className || toPascalCase(resolvedName)),
-    aliases: (attribute.aliases ?? []).map((alias) => sourcedKnown(normalizeName(alias))),
-    noMultiBindings: sourcedKnown(Boolean(attribute.noMultiBindings)),
-    ...(attribute.primary ? { primary: sourcedKnown(attribute.primary) } : {}),
-    bindables: toBindableDefs(attribute.bindables),
+    name: configSourced(resolvedName, file),
+    className: configSourced(attribute.className || toPascalCase(resolvedName), file),
+    aliases: (attribute.aliases ?? []).map((alias) => configSourced(normalizeName(alias), file)),
+    noMultiBindings: configSourced(Boolean(attribute.noMultiBindings), file),
+    ...(attribute.primary ? { primary: configSourced(attribute.primary, file) } : {}),
+    bindables: toBindableDefs(attribute.bindables, file),
     ...(attribute.file ? { file: attribute.file } : {}),
     ...(attribute.package ? { package: attribute.package } : {}),
   };
@@ -605,20 +610,21 @@ function toCustomAttributeDef(name: string, attribute: ResourceCollections["attr
 function toTemplateControllerDef(
   name: string,
   attribute: ResourceCollections["attributes"][string],
+  file: NormalizedPath,
   controller?: ControllerConfig,
 ): TemplateControllerDef {
   const resolvedName = normalizeName(attribute.name || name);
   const aliases = (attribute.aliases ?? []).map((alias) => normalizeName(alias));
   const bindables = mergeBindableDefs(
-    toBindableDefs(attribute.bindables),
-    controller ? toBindableDefs(controller.props ?? {}) : {},
+    toBindableDefs(attribute.bindables, file),
+    controller ? toBindableDefs(controller.props ?? {}, file) : {},
   );
   return {
     kind: "template-controller",
-    name: sourcedKnown(resolvedName),
-    className: sourcedKnown(attribute.className || toPascalCase(resolvedName)),
-    aliases: sourcedKnown(aliases),
-    noMultiBindings: sourcedKnown(Boolean(attribute.noMultiBindings)),
+    name: configSourced(resolvedName, file),
+    className: configSourced(attribute.className || toPascalCase(resolvedName), file),
+    aliases: configSourced(aliases, file),
+    noMultiBindings: configSourced(Boolean(attribute.noMultiBindings), file),
     bindables,
     ...(controller ? { semantics: toControllerSemantics(controller) } : {}),
     ...(attribute.file ? { file: attribute.file } : {}),
@@ -629,14 +635,15 @@ function toTemplateControllerDef(
 function toControllerOnlyDefinition(
   name: string,
   controller: ControllerConfig,
+  file: NormalizedPath,
 ): TemplateControllerDef {
   return {
     kind: "template-controller",
-    name: sourcedKnown(name),
-    className: sourcedKnown(toPascalCase(name)),
-    aliases: sourcedKnown([]),
-    noMultiBindings: sourcedKnown(false),
-    bindables: toBindableDefs(controller.props ?? {}),
+    name: configSourced(name, file),
+    className: configSourced(toPascalCase(name), file),
+    aliases: configSourced([], file),
+    noMultiBindings: configSourced(false, file),
+    bindables: toBindableDefs(controller.props ?? {}, file),
     semantics: toControllerSemantics(controller),
   };
 }
@@ -658,14 +665,15 @@ function toControllerSemantics(controller: ControllerConfig): TemplateController
 function toValueConverterDef(
   name: string,
   converter: ResourceCollections["valueConverters"][string],
+  file: NormalizedPath,
 ): ValueConverterDef {
   const resolvedName = normalizeName(converter.name || name);
-  const fromType = toTypeSourced(converter.in);
-  const toType = toTypeSourced(converter.out);
+  const fromType = toTypeSourced(converter.in, file);
+  const toType = toTypeSourced(converter.out, file);
   return {
     kind: "value-converter",
-    name: sourcedKnown(resolvedName),
-    className: sourcedKnown(converter.className || toPascalCase(resolvedName)),
+    name: configSourced(resolvedName, file),
+    className: configSourced(converter.className || toPascalCase(resolvedName), file),
     ...(fromType ? { fromType } : {}),
     ...(toType ? { toType } : {}),
     ...(converter.file ? { file: converter.file } : {}),
@@ -676,30 +684,31 @@ function toValueConverterDef(
 function toBindingBehaviorDef(
   name: string,
   behavior: ResourceCollections["bindingBehaviors"][string],
+  file: NormalizedPath,
 ): BindingBehaviorDef {
   const resolvedName = normalizeName(behavior.name || name);
   return {
     kind: "binding-behavior",
-    name: sourcedKnown(resolvedName),
-    className: sourcedKnown(behavior.className || toPascalCase(resolvedName)),
+    name: configSourced(resolvedName, file),
+    className: configSourced(behavior.className || toPascalCase(resolvedName), file),
     ...(behavior.file ? { file: behavior.file } : {}),
     ...(behavior.package ? { package: behavior.package } : {}),
   };
 }
 
-function toBindableDefs(bindables: Readonly<Record<string, Bindable>>): Readonly<Record<string, BindableDef>> {
+function toBindableDefs(bindables: Readonly<Record<string, Bindable>>, file: NormalizedPath): Readonly<Record<string, BindableDef>> {
   const defs: Record<string, BindableDef> = {};
   const entries = Object.entries(bindables).sort(([left], [right]) => left.localeCompare(right));
   for (const [key, bindable] of entries) {
     const name = bindable.name || key;
-    const type = toTypeSourced(bindable.type);
+    const type = toTypeSourced(bindable.type, file);
     defs[name] = {
-      property: sourcedKnown(name),
-      attribute: sourcedKnown(bindable.attribute || name),
-      mode: sourcedKnown(bindable.mode ?? "default"),
-      primary: sourcedKnown(bindable.primary ?? false),
+      property: configSourced(name, file),
+      attribute: configSourced(bindable.attribute || name, file),
+      mode: configSourced(bindable.mode ?? "default", file),
+      primary: configSourced(bindable.primary ?? false, file),
       ...(type ? { type } : {}),
-      ...(bindable.doc ? { doc: sourcedKnown(bindable.doc) } : {}),
+      ...(bindable.doc ? { doc: configSourced(bindable.doc, file) } : {}),
     };
   }
   return defs;
@@ -712,31 +721,21 @@ function mergeBindableDefs(
   return { ...secondary, ...primary };
 }
 
-function toTypeSourced(type: TypeRef | undefined): Sourced<string> | undefined {
+function toTypeSourced(type: TypeRef | undefined, file: NormalizedPath): Sourced<string> | undefined {
   if (!type) return undefined;
   switch (type.kind) {
     case "ts":
-      return sourcedKnown(type.name);
+      return configSourced(type.name, file);
     case "any":
-      return sourcedKnown("any");
+      return configSourced("any", file);
     case "unknown":
-      return sourcedUnknown();
+      return undefined;
   }
 }
 
-function sourcedKnown<T>(value: T): Sourced<T> {
-  return {
-    origin: "source",
-    state: "known",
-    value,
-  };
-}
-
-function sourcedUnknown<T>(): Sourced<T> {
-  return {
-    origin: "source",
-    state: "unknown",
-  };
+function configSourced<T>(value: T, file: NormalizedPath): Sourced<T> {
+  const location: SourceLocation = { file, pos: 0, end: 0 };
+  return { origin: "config", value, location };
 }
 
 function toPascalCase(value: string): string {

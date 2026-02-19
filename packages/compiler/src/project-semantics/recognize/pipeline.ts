@@ -23,6 +23,9 @@ import { matchDefine } from './define.js';
 // Types
 // =============================================================================
 
+/** Which pattern matcher produced a resource match. */
+export type MatchSource = "decorator" | "static-au" | "define" | "convention";
+
 /**
  * Result of pattern matching on a single class.
  */
@@ -32,6 +35,9 @@ export interface MatchResult {
 
   /** All gaps encountered during matching */
   gaps: AnalysisGap[];
+
+  /** Which matcher produced the resource, if any */
+  matchSource?: MatchSource;
 }
 
 /**
@@ -43,6 +49,9 @@ export interface FileMatchResult {
 
   /** All gaps encountered */
   gaps: AnalysisGap[];
+
+  /** Per-resource match source tracking */
+  matchSources: ReadonlyMap<ResourceDef, MatchSource>;
 }
 
 // =============================================================================
@@ -66,21 +75,21 @@ export function matchAll(cls: ClassValue, context?: FileContext): MatchResult {
   const decoratorResult = matchDecorator(cls);
   gaps.push(...decoratorResult.gaps);
   if (decoratorResult.resource) {
-    return { resource: decoratorResult.resource, gaps };
+    return { resource: decoratorResult.resource, gaps, matchSource: "decorator" };
   }
 
   // 2. Try static $au pattern
   const staticAuResult = matchStaticAu(cls);
   gaps.push(...staticAuResult.gaps);
   if (staticAuResult.resource) {
-    return { resource: staticAuResult.resource, gaps };
+    return { resource: staticAuResult.resource, gaps, matchSource: "static-au" };
   }
 
   // 3. Try convention pattern (lowest priority)
   const conventionResult = matchConvention(cls, context);
   gaps.push(...conventionResult.gaps);
   if (conventionResult.resource) {
-    return { resource: conventionResult.resource, gaps };
+    return { resource: conventionResult.resource, gaps, matchSource: "convention" };
   }
 
   // No match
@@ -100,6 +109,7 @@ export function matchFile(
 ): FileMatchResult {
   const resources: ResourceDef[] = [];
   const gaps: AnalysisGap[] = [];
+  const matchSources = new Map<ResourceDef, MatchSource>();
 
   for (const cls of classes) {
     // Propagate class-level extraction gaps
@@ -110,10 +120,13 @@ export function matchFile(
 
     if (result.resource) {
       resources.push(result.resource);
+      if (result.matchSource) {
+        matchSources.set(result.resource, result.matchSource);
+      }
     }
   }
 
-  return { resources, gaps };
+  return { resources, gaps, matchSources };
 }
 
 /**
@@ -156,6 +169,7 @@ export function matchDefineCalls(
 ): FileMatchResult {
   const resources: ResourceDef[] = [];
   const gaps: AnalysisGap[] = [];
+  const matchSources = new Map<ResourceDef, MatchSource>();
 
   for (const call of defineCalls) {
     const result = matchDefine(call, filePath, classes);
@@ -163,10 +177,11 @@ export function matchDefineCalls(
 
     if (result.resource) {
       resources.push(result.resource);
+      matchSources.set(result.resource, "define");
     }
   }
 
-  return { resources, gaps };
+  return { resources, gaps, matchSources };
 }
 
 // =============================================================================
@@ -189,20 +204,27 @@ export function matchFileFacts(
 ): FileMatchResult {
   const resources: ResourceDef[] = [];
   const gaps: AnalysisGap[] = [];
+  const matchSources = new Map<ResourceDef, MatchSource>();
 
   // 1. Match class-based patterns (decorator, static $au, convention)
   const classResult = matchFile(facts.classes, context);
   resources.push(...classResult.resources);
   gaps.push(...classResult.gaps);
+  for (const [resource, source] of classResult.matchSources) {
+    matchSources.set(resource, source);
+  }
 
   // 2. Match define calls
   const defineResult = matchDefineCalls(facts.defineCalls, facts.path, facts.classes);
   resources.push(...defineResult.resources);
   gaps.push(...defineResult.gaps);
+  for (const [resource, source] of defineResult.matchSources) {
+    matchSources.set(resource, source);
+  }
 
   // 3. Include file-level gaps
   gaps.push(...facts.gaps);
 
-  return { resources, gaps };
+  return { resources, gaps, matchSources };
 }
 
