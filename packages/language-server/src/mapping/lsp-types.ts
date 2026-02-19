@@ -2,6 +2,7 @@
  * Type mapping utilities: workspace/compiler types -> LSP types
  */
 import {
+  CompletionItemKind,
   DiagnosticSeverity as LspDiagnosticSeverity,
   type CompletionItem,
   type Hover,
@@ -121,9 +122,25 @@ function mapRelatedDiagnostics(
   return results;
 }
 
+const DETAIL_TO_COMPLETION_KIND: Record<string, CompletionItemKind> = {
+  "Custom Element": CompletionItemKind.Class,
+  "HTML Element": CompletionItemKind.Keyword,
+  "Bindable": CompletionItemKind.Property,
+  "Template Controller": CompletionItemKind.Struct,
+  "Custom Attribute": CompletionItemKind.Interface,
+  "Native Attribute": CompletionItemKind.Field,
+  "Value Converter": CompletionItemKind.Function,
+  "Binding Behavior": CompletionItemKind.Module,
+};
+
 export function mapWorkspaceCompletions(items: readonly WorkspaceCompletionItem[]): CompletionItem[] {
   return items.map((item) => {
     const completion: CompletionItem = { label: item.label };
+    const kindSource = item.kind ?? item.detail;
+    if (kindSource) {
+      const kind = DETAIL_TO_COMPLETION_KIND[kindSource];
+      if (kind !== undefined) completion.kind = kind;
+    }
     if (item.detail) completion.detail = item.detail;
     if (item.documentation) completion.documentation = item.documentation;
     if (item.sortText) completion.sortText = item.sortText;

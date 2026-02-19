@@ -5,6 +5,7 @@
  * workspace results into LSP types and handles transport-level safety.
  */
 import {
+  ResponseError,
   SemanticTokensRequest,
   type CompletionItem,
   type Hover,
@@ -100,9 +101,10 @@ export function handleRename(ctx: ServerContext, params: RenameParams): Workspac
       position: params.position,
       newName: params.newName,
     });
-    if ("error" in result) return null;
+    if ("error" in result) throw new ResponseError(0, result.error.message);
     return mapSemanticWorkspaceEdit(result.edit, lookupText);
   } catch (e) {
+    if (e instanceof ResponseError) throw e;
     ctx.logger.error(`[rename] failed for ${params.textDocument.uri}: ${formatError(e)}`);
     return null;
   }

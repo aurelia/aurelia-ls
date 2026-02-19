@@ -2,6 +2,7 @@
  * Unit tests for LSP mapping utilities that consume semantic-workspace types.
  */
 import { describe, test, expect } from "vitest";
+import { CompletionItemKind } from "vscode-languageserver/node.js";
 import {
   toLspUri,
   guessLanguage,
@@ -174,6 +175,64 @@ describe("mapWorkspaceCompletions", () => {
     expect(mapped).toHaveLength(2);
     expect(mapped[0]?.detail).toBe("string");
     expect(mapped[1]?.documentation).toBe("A number");
+  });
+
+  // Pattern AM: known detail strings → CompletionItemKind set
+  test("derives CompletionItemKind from known detail strings (Pattern AM)", () => {
+    const items: WorkspaceCompletionItem[] = [
+      { label: "my-el", detail: "Custom Element" },
+      { label: "div", detail: "HTML Element" },
+      { label: "value", detail: "Bindable" },
+      { label: "if", detail: "Template Controller" },
+      { label: "tooltip", detail: "Custom Attribute" },
+      { label: "id", detail: "Native Attribute" },
+      { label: "date", detail: "Value Converter" },
+      { label: "throttle", detail: "Binding Behavior" },
+    ];
+
+    const mapped = mapWorkspaceCompletions(items);
+    expect(mapped[0]?.kind).toBe(CompletionItemKind.Class);
+    expect(mapped[1]?.kind).toBe(CompletionItemKind.Keyword);
+    expect(mapped[2]?.kind).toBe(CompletionItemKind.Property);
+    expect(mapped[3]?.kind).toBe(CompletionItemKind.Struct);
+    expect(mapped[4]?.kind).toBe(CompletionItemKind.Interface);
+    expect(mapped[5]?.kind).toBe(CompletionItemKind.Field);
+    expect(mapped[6]?.kind).toBe(CompletionItemKind.Function);
+    expect(mapped[7]?.kind).toBe(CompletionItemKind.Module);
+  });
+
+  // Pattern AN: unknown detail → no kind (safe fallback)
+  test("omits kind for unknown detail strings (Pattern AN)", () => {
+    const items: WorkspaceCompletionItem[] = [
+      { label: "x", detail: "Something Unknown" },
+      { label: "y" },
+    ];
+
+    const mapped = mapWorkspaceCompletions(items);
+    expect(mapped[0]?.kind).toBeUndefined();
+    expect(mapped[1]?.kind).toBeUndefined();
+    expect(mapped).toHaveLength(2);
+  });
+
+  // Pattern AO: existing fields still mapped alongside kind
+  test("preserves all existing fields when kind is derived (Pattern AO)", () => {
+    const items: WorkspaceCompletionItem[] = [
+      {
+        label: "my-el",
+        detail: "Custom Element",
+        documentation: "A custom element",
+        sortText: "0001",
+        insertText: "my-el",
+      },
+    ];
+
+    const mapped = mapWorkspaceCompletions(items);
+    expect(mapped[0]?.label).toBe("my-el");
+    expect(mapped[0]?.detail).toBe("Custom Element");
+    expect(mapped[0]?.documentation).toBe("A custom element");
+    expect(mapped[0]?.sortText).toBe("0001");
+    expect(mapped[0]?.insertText).toBe("my-el");
+    expect(mapped[0]?.kind).toBe(CompletionItemKind.Class);
   });
 });
 

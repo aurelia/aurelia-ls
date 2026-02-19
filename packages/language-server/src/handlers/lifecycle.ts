@@ -90,7 +90,6 @@ export async function refreshDocument(
   } catch (e: unknown) {
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`refreshDocument failed: ${message}`);
-    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
   }
 }
 
