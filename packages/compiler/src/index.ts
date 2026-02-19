@@ -8,7 +8,7 @@ export { PRELUDE_TS } from "./prelude.js";
 
 // === Facade ===
 export { compileTemplate } from "./facade.js";
-export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from "./facade.js";
+export type { TemplateCompilation, TemplateDegradation, TemplateDiagnostics, StageMetaSnapshot } from "./facade.js";
 
 // === AOT Facade (SSR-agnostic) ===
 export { compileAot } from "./facade-aot.js";

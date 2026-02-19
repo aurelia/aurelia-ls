@@ -24,6 +24,9 @@ import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
 // Shared imports (via barrel)
 import type { VmReflection, CompilerDiagnostic, ModuleResolver } from "./shared/index.js";
 
+// Diagnostics imports (via barrel)
+import type { DiagnosticResourceKind } from "./diagnostics/index.js";
+
 // Pipeline imports (via barrel)
 import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints, StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/index.js";
 
@@ -71,6 +74,19 @@ export interface TemplateDiagnostics {
 
 export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
+/** Gap/degradation summary derived from diagnostic confidence qualifications. */
+export interface TemplateDegradation {
+  /** True when at least one diagnostic has gap-qualified confidence. */
+  readonly hasGaps: boolean;
+  /** Number of diagnostics with data.confidence below the default. */
+  readonly gapQualifiedCount: number;
+  /** Deduplicated resources with at least one gap-qualified diagnostic. */
+  readonly affectedResources: ReadonlyArray<{
+    readonly kind: DiagnosticResourceKind;
+    readonly name: string;
+  }>;
+}
+
 export interface TemplateCompilation {
   ir: StageOutputs["10-lower"];
   linked: StageOutputs["20-link"];
@@ -85,6 +101,8 @@ export interface TemplateCompilation {
   exprTable: readonly ExprTableEntry[];
   exprSpans: ExprIdMap<SourceSpan>;
   diagnostics: TemplateDiagnostics;
+  /** Gap/degradation summary derived from diagnostic confidence. */
+  degradation: TemplateDegradation;
   meta: StageMetaSnapshot;
 }
 
@@ -165,6 +183,7 @@ export function compileTemplate(
     exprTable: overlayArtifacts.exprTable,
     exprSpans: overlayArtifacts.exprSpans,
     diagnostics: buildDiagnostics(session.diagnostics.all),
+    degradation: buildDegradation(session.diagnostics.all),
     meta: collectStageMeta(session, [
       "10-lower",
       "20-link",
@@ -190,6 +209,43 @@ function buildDiagnostics(
     bySource[d.source]!.push(d);
   }
   return { all: [...diagnostics], bySource };
+}
+
+/** Maps DiagnosticBindableOwnerKind to DiagnosticResourceKind for bindable-level diagnostics. */
+const OWNER_KIND_TO_RESOURCE_KIND: Record<string, DiagnosticResourceKind> = {
+  element: "custom-element",
+  attribute: "custom-attribute",
+  controller: "template-controller",
+};
+
+function buildDegradation(
+  diagnostics: readonly CompilerDiagnostic[],
+): TemplateDegradation {
+  const seen = new Map<string, { kind: DiagnosticResourceKind; name: string }>();
+  let count = 0;
+  for (const d of diagnostics) {
+    const data = d.data as Record<string, unknown> | undefined;
+    if (data?.confidence === "partial") {
+      count++;
+      let kind = data.resourceKind as DiagnosticResourceKind | undefined;
+      let name = data.name as string | undefined;
+      // For bindable-level diagnostics, the affected resource is the owner element/attribute.
+      if (!kind && data.bindable) {
+        const b = data.bindable as Record<string, unknown>;
+        kind = OWNER_KIND_TO_RESOURCE_KIND[b.ownerKind as string];
+        name = b.ownerName as string | undefined;
+      }
+      if (kind && name) {
+        const key = `${kind}:${name}`;
+        if (!seen.has(key)) seen.set(key, { kind, name });
+      }
+    }
+  }
+  return {
+    hasGaps: count > 0,
+    gapQualifiedCount: count,
+    affectedResources: [...seen.values()],
+  };
 }
 
 function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMetaSnapshot {

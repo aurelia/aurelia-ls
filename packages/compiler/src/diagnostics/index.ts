@@ -9,6 +9,7 @@ export type {
   DiagnosticDataRecord,
   DiagnosticDataRequirement,
   DiagnosticImpact,
+  DiagnosticResourceKind,
   DiagnosticsCatalog,
   DiagnosticSeverity,
   DiagnosticSpanRequirement,
