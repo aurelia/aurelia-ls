@@ -13,11 +13,13 @@ import type {
   BindingCommandKind,
   AttributePatternDef,
   PatternInterpret,
+  CatalogGap,
   CustomElementDef,
   CustomAttributeDef,
   ElementRes,
   ResourceCatalog,
   ResourceCollections,
+  ResourceKind,
   ValueConverterDef,
   BindingBehaviorDef,
   DomSchema,
@@ -766,6 +768,18 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
         if (attr.startsWith(prefix)) return true;
       }
       return false;
+    },
+    gapsFor(kind: ResourceKind, name: string): readonly CatalogGap[] {
+      const key = `${kind}:${name}`;
+      return catalog.gapsByResource?.[key] ?? [];
+    },
+    hasGaps(kind: ResourceKind, name: string): boolean {
+      const key = `${kind}:${name}`;
+      const gaps = catalog.gapsByResource?.[key];
+      return gaps != null && gaps.length > 0;
+    },
+    projectLevelGaps(): readonly CatalogGap[] {
+      return catalog.projectLevelGaps ?? [];
     },
   };
 }

@@ -393,6 +393,10 @@ export interface ResourceCatalog {
   readonly attributePatterns: readonly AttributePatternConfig[];
   readonly gaps?: readonly CatalogGap[];
   readonly confidence?: CatalogConfidence;
+  /** Per-resource gap index, keyed by `${resourceKind}:${resourceName}` */
+  readonly gapsByResource?: Readonly<Record<string, readonly CatalogGap[]>>;
+  /** Gaps without resource identity — project-level analysis uncertainty */
+  readonly projectLevelGaps?: readonly CatalogGap[];
 }
 
 // ============================================================================
@@ -459,6 +463,12 @@ export interface SemanticsLookup {
   domElement(tag: string): DomElement | null;
   event(name: string, tag?: string): { name: string; type: TypeRef };
   hasPreservedPrefix(attr: string): boolean;
+  /** Returns gaps that affect a specific resource, identified by kind and registration name. */
+  gapsFor(kind: ResourceKind, name: string): readonly CatalogGap[];
+  /** Returns true if any gaps exist for a specific resource. */
+  hasGaps(kind: ResourceKind, name: string): boolean;
+  /** Returns gaps without resource identity — project-level analysis uncertainty. */
+  projectLevelGaps(): readonly CatalogGap[];
 }
 
 // ============================================================================
