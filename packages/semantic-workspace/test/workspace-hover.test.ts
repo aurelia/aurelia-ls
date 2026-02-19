@@ -945,3 +945,111 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
     expect(gappedHover?.confidence).not.toBe(cleanHover?.confidence);
   });
 });
+
+// R-LS4: Confidence indicator embedded in hover markdown contents
+describe("R-LS4: confidence indicator in hover contents", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/my-app.html");
+    const text = harness.readText(appUri);
+    if (!text) throw new Error("Expected template text");
+    appText = text;
+  });
+
+  // Pattern AF + AI + AJ: reduced confidence embeds indicator in contents
+  // with level, reason, and correct ordering relative to provenance and overlay
+  it("embeds confidence indicator with level and reason for gap-affected resources (Pattern AF/AI/AJ)", async () => {
+    const gapHarness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    const engine = gapHarness.workspace as SemanticWorkspaceEngine;
+
+    engine.projectIndex.applyThirdPartyOverlay({
+      resources: {},
+      gaps: [
+        {
+          what: "bindables for summary-panel",
+          why: { kind: "dynamic-value" as any, expression: "test" },
+          suggestion: "Add explicit bindable declarations",
+          resource: { kind: "custom-element", name: "summary-panel" },
+        },
+      ],
+    });
+    engine.setResourceScope(null);
+
+    const uri = gapHarness.openTemplate("src/my-app.html");
+    const originalText = gapHarness.readText(uri);
+    if (!originalText) throw new Error("Expected template text");
+    const text = originalText.replace(
+      `on-refresh.call="refreshStats()">`,
+      `on-refresh.call="refreshStats()" gap-probe.bind="x">`,
+    );
+    engine.update(uri, text);
+
+    const query = gapHarness.workspace.query(uri);
+    const pos = findPosition(text, "<summary-panel", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+
+    // AF: confidence indicator appears in the rendered contents
+    expect(contents).toContain("**Confidence:**");
+    expect(contents).toContain("partial");
+
+    // AJ: reason from R12 derivation included — gap kind, not just level
+    expect(contents).toContain("dynamic-value");
+
+    // AI: provenance → confidence → overlay ordering
+    const provenanceIdx = contents.indexOf("Discovered via source analysis");
+    const confidenceIdx = contents.indexOf("**Confidence:**");
+    const overlayIdx = contents.indexOf("Show overlay");
+    expect(provenanceIdx).toBeGreaterThanOrEqual(0);
+    expect(confidenceIdx).toBeGreaterThan(provenanceIdx);
+    expect(overlayIdx).toBeGreaterThan(confidenceIdx);
+
+    // Property 6: structured fields preserved alongside rendered indicator
+    expect(hover?.confidence).toBe("partial");
+    expect(hover?.confidenceReason).toContain("dynamic-value");
+  });
+
+  // Pattern AG: high/exact confidence → no confidence indicator in contents
+  it("does not embed confidence indicator for non-gapped resources (Pattern AG)", () => {
+    const query = harness.workspace.query(appUri);
+    const hover = query.hover(findPosition(appText, "<summary-panel", 1));
+    expect(hover).not.toBeNull();
+    const contents = hover?.contents ?? "";
+
+    // No confidence indicator — silence means full confidence
+    expect(contents).not.toContain("**Confidence:**");
+    // Structured field absent (R12 semantics)
+    expect(hover?.confidence).toBeUndefined();
+  });
+
+  // Pattern AH: non-resource hovers have no confidence indicator
+  it("non-resource hovers have no confidence indicator (Pattern AH)", () => {
+    const query = harness.workspace.query(appUri);
+
+    // Expression hover (interpolation — bypasses #augmentHover)
+    const exprHover = query.hover(findPosition(appText, "${total}", 3));
+    expect(exprHover).not.toBeNull();
+    expect(exprHover?.contents ?? "").not.toContain("**Confidence:**");
+
+    // Meta-element hover (<import> — handled by #metaHover, not #augmentHover)
+    const metaHover = query.hover(findPosition(appText, '<import from="./views/summary-panel">', 1));
+    expect(metaHover).not.toBeNull();
+    expect(metaHover?.contents ?? "").not.toContain("**Confidence:**");
+
+    // Binding command hover (bypasses #augmentHover)
+    const cmdHover = query.hover(findPosition(appText, "click.trigger", 6));
+    expect(cmdHover).not.toBeNull();
+    expect(cmdHover?.contents ?? "").not.toContain("**Confidence:**");
+  });
+});

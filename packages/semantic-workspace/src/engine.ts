@@ -743,10 +743,14 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const confidence = derived.level === "exact" || derived.level === "high" ? undefined : derived.level;
     const confidenceReason = confidence ? derived.reason : undefined;
 
-    // Augment content with provenance
+    // Augment content with provenance, then confidence indicator
     let contents = baseResult.contents;
     if (provenanceLine) {
       contents = augmentHoverContent(contents, provenanceLine);
+    }
+    const confidenceLine = formatConfidenceLine(confidence, confidenceReason);
+    if (confidenceLine) {
+      contents = augmentHoverContent(contents, confidenceLine);
     }
 
     return {
@@ -1647,6 +1651,15 @@ function formatProvenanceOrigin(name: Sourced<string>): string | null {
   }
 }
 
+
+function formatConfidenceLine(
+  confidence: "partial" | "low" | undefined,
+  reason: string | undefined,
+): string | null {
+  if (!confidence || !reason) return null;
+  const icon = confidence === "low" ? "$(warning)" : "$(info)";
+  return `${icon} **Confidence:** ${confidence} — ${reason}`;
+}
 
 function augmentHoverContent(contents: string, provenanceLine: string): string {
   // Insert provenance before the overlay command link (always last in resource cards)
